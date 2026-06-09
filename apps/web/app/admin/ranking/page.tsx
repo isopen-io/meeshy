@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Trophy } from 'lucide-react';
+import { useI18n } from '@/hooks/use-i18n';
 import { useRankingData } from '@/hooks/use-ranking-data';
 import { useRankingFilters } from '@/hooks/use-ranking-filters';
 import {
@@ -15,6 +16,7 @@ import {
 } from '@/components/admin/ranking';
 
 export default function AdminRankingPage() {
+  const { t } = useI18n('admin');
   const router = useRouter();
 
   const {
@@ -49,15 +51,15 @@ export default function AdminRankingPage() {
                 className="text-white hover:bg-white/20"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Retour
+                {t('rankingPage.back')}
               </Button>
               <div>
                 <h1 className="text-2xl font-bold flex items-center space-x-2">
                   <Trophy className="h-7 w-7" />
-                  <span>Classements</span>
+                  <span>{t('rankingPage.title')}</span>
                 </h1>
                 <p className="text-yellow-100 mt-1">
-                  Classez les utilisateurs, conversations, messages et liens selon différents critères
+                  {t('rankingPage.description')}
                 </p>
               </div>
             </div>

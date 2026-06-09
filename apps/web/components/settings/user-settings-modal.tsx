@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { User } from '@/types';
 import { Settings } from 'lucide-react';
 import { UserSettingsContent } from './user-settings-content';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface UserSettingsModalProps {
   user: User | null;
@@ -15,6 +16,7 @@ interface UserSettingsModalProps {
 }
 
 export function UserSettingsModal({ user, onUserUpdate, onClose, children }: UserSettingsModalProps) {
+  const { t } = useI18n('admin');
   const [open, setOpen] = useState(false);
   const [localSettings, setLocalSettings] = useState<Partial<User>>({});
 
@@ -47,7 +49,7 @@ export function UserSettingsModal({ user, onUserUpdate, onClose, children }: Use
         {children || (
           <Button variant="outline" size="sm" className="gap-2">
             <Settings className="h-4 w-4" />
-            Paramètres
+            {t('settingsModal.triggerButton')}
           </Button>
         )}
       </DialogTrigger>
@@ -55,14 +57,14 @@ export function UserSettingsModal({ user, onUserUpdate, onClose, children }: Use
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5" />
-            Paramètres de {user.username}
+            {t('settingsModal.title', { username: user.username })}
           </DialogTitle>
           <DialogDescription>
-            Configurez vos préférences de langue et de traduction automatique
+            {t('settingsModal.description')}
           </DialogDescription>
         </DialogHeader>
 
-        <UserSettingsContent 
+        <UserSettingsContent
           user={user}
           localSettings={localSettings}
           onSettingUpdate={updateSetting}
@@ -70,10 +72,10 @@ export function UserSettingsModal({ user, onUserUpdate, onClose, children }: Use
 
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>
-            Annuler
+            {t('settingsModal.cancelButton')}
           </Button>
           <Button onClick={handleSave}>
-            Sauvegarder
+            {t('settingsModal.saveButton')}
           </Button>
         </DialogFooter>
       </DialogContent>

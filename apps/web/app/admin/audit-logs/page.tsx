@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useI18n } from '@/hooks/use-i18n';
 import { ArrowLeft, Shield, Activity, AlertCircle, CheckCircle, XCircle, User, Settings, Key, FileText, Search, Filter, Download, Clock } from 'lucide-react';
+import { useI18n } from '@/hooks/use-i18n';
 
 import { StatsGrid, type StatItem } from '@/components/admin/Charts';
 
@@ -365,7 +366,7 @@ export default function AuditLogsPage() {
 
               <Select value={actionFilter} onValueChange={setActionFilter}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Type d'action" />
+                  <SelectValue placeholder={t('auditLogs.actionTypeLabel')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('auditLogs.actionAll')}</SelectItem>
@@ -380,7 +381,7 @@ export default function AuditLogsPage() {
 
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Statut" />
+                  <SelectValue placeholder={t('auditLogs.allStatuses')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('auditLogs.statusAll')}</SelectItem>
@@ -392,7 +393,7 @@ export default function AuditLogsPage() {
 
               <Select value={severityFilter} onValueChange={setSeverityFilter}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Sévérité" />
+                  <SelectValue placeholder={t('auditLogs.allSeverities')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('auditLogs.severityAll')}</SelectItem>
@@ -463,7 +464,7 @@ export default function AuditLogsPage() {
                         </div>
 
                         <div className="flex items-center text-xs text-gray-500">
-                          <span>IP: {log.ipAddress}</span>
+                          <span>{t('auditLogs.ipLabel', { ip: log.ipAddress })}</span>
                         </div>
 
                         {log.changes && log.changes.length > 0 && (
