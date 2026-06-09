@@ -913,6 +913,77 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertTrue(rows[0].isEncrypted)
     }
 
+    // MARK: - No-op upsert (anti re-render cascade)
+
+    /// The same payload routinely reaches the upsert several times (socket
+    /// handler + global SyncEngine persistor + REST refresh). A pass that
+    /// changes NOTHING must write nothing and post NO refresh — every no-op
+    /// pass used to bump `changeVersion`/`updatedAt`, which defeated
+    /// MessageStore's `newRecords != messages` skip and triggered a full
+    /// applySnapshot reconfiguring every visible cell (main-thread jank
+    /// felt while typing).
+    func test_upsertFromAPIMessages_identicalEcho_doesNotDirtyRowNorPostRefresh() async throws {
+        let conv = "conv_noop_echo"
+        let msg = makeAPIMessage(id: "m_noop_echo", conversationId: conv)
+        try await actor.upsertFromAPIMessages([msg])
+        let afterFirst = try actor.messages(for: conv, limit: 10)[0]
+
+        // Drain the first upsert's (legitimate) refresh, which is dispatched
+        // async onto the main queue, before arming the inverted observer.
+        await drainMainQueueNotifications()
+
+        let noRefresh = expectation(description: "no refresh for a no-op upsert")
+        noRefresh.isInverted = true
+        let observer = NotificationCenter.default.addObserver(
+            forName: .messageStoreShouldRefresh, object: nil, queue: .main
+        ) { notif in
+            guard let cid = notif.userInfo?["conversationId"] as? String,
+                  cid == conv else { return }
+            noRefresh.fulfill()
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        try await actor.upsertFromAPIMessages([msg])
+
+        await fulfillment(of: [noRefresh], timeout: 0.3)
+        let afterSecond = try actor.messages(for: conv, limit: 10)[0]
+        XCTAssertEqual(afterSecond.changeVersion, afterFirst.changeVersion,
+            "an identical echo must not dirty the row (changeVersion bump)")
+        XCTAssertEqual(afterSecond.updatedAt, afterFirst.updatedAt,
+            "an identical echo must not re-stamp updatedAt")
+    }
+
+    /// Counterpart: a payload that DOES change the row still writes and
+    /// posts the scoped refresh.
+    func test_upsertFromAPIMessages_changedContent_bumpsVersionAndPostsRefresh() async throws {
+        let conv = "conv_real_change"
+        try await actor.upsertFromAPIMessages(
+            [makeAPIMessage(id: "m_change", conversationId: conv, content: "v1")]
+        )
+        let afterFirst = try actor.messages(for: conv, limit: 10)[0]
+        await drainMainQueueNotifications()
+
+        let refreshed = expectation(description: "refresh fires for a real change")
+        refreshed.assertForOverFulfill = false
+        let observer = NotificationCenter.default.addObserver(
+            forName: .messageStoreShouldRefresh, object: nil, queue: .main
+        ) { notif in
+            guard let cid = notif.userInfo?["conversationId"] as? String,
+                  cid == conv else { return }
+            refreshed.fulfill()
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        try await actor.upsertFromAPIMessages(
+            [makeAPIMessage(id: "m_change", conversationId: conv, content: "v2")]
+        )
+
+        await fulfillment(of: [refreshed], timeout: 1.0)
+        let afterSecond = try actor.messages(for: conv, limit: 10)[0]
+        XCTAssertEqual(afterSecond.content, "v2")
+        XCTAssertGreaterThan(afterSecond.changeVersion, afterFirst.changeVersion)
+    }
+
     // MARK: - Story-reply citation (A.2)
 
     /// A.2 — un message qui répond à une story (payload serveur enrichi

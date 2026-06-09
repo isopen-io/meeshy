@@ -123,6 +123,58 @@ Session exécutée depuis l'environnement web (Linux, AUCUNE toolchain Swift) :
 `./apps/ios/meeshy.sh build` et `meeshy.sh test` n'ont PAS pu être lancés ici —
 à exécuter sur machine de dev avant merge. Relecture statique complète faite.
 
+---
+
+# Cascade de re-rendu continue (2026-06-09, suite — « la frappe freeze »)
+
+## Cause racine PROUVÉE (fichiers:lignes)
+`upsertFromAPIMessages` (branche update) faisait `changeVersion += 1` +
+`updatedAt = api.updatedAt ?? Date()` + `update(db)` **inconditionnellement**,
+et postait le refresh pour tout le batch via `defer` — même quand RIEN n'avait
+changé. Or le même payload passe par cet upsert jusqu'à 3× pour la conversation
+ouverte (ConversationSocketHandler + persistor SyncEngine + backfill observeSync)
+et 2× par refresh REST (VM + ensureMessages). Chaîne de coût par passage no-op :
+1. write GRDB de chaque ligne (bump changeVersion)
+2. `messageStoreShouldRefresh` → `MessageStore.refreshFromDB`
+3. garde `newRecords != messages` DÉFAIT — `MessageRecord ==` est O(1) sur
+   (localId, changeVersion) précisément → publish
+4. `_domainCache` (mémoïsation domain keyed sur changeVersion,
+   `MessageStore.swift:483`) invalidé → re-décodage JSON attachments/réactions
+5. `applySnapshot` → `reconfigureItems(TOUTES les cellules)` → cellConfig ×
+   cellules visibles sur le main thread
+Le tout répété pour chaque event entrant (message, écho, read-receipt,
+delivery) pendant que l'utilisateur tape → frappe qui freeze.
+
+## Fix (au niveau source)
+- `upsertFromAPIMessages` : snapshot `before` pré-mutation + comparaison de
+  champs explicite `upsertMutatedFieldsEqual` (PAS `MessageRecord ==`, qui est
+  O(1) localId+changeVersion et aurait répondu « inchangé » à tout) ; write +
+  bump + PendingIdRecord + refresh UNIQUEMENT si changement réel ; refresh
+  scopé aux conversations effectivement modifiées (pattern retour-de-closure
+  Swift 6, comme deleteExpiredEphemeral).
+- `reconcileBatchSync` : skip quand state/content inchangés ; retourne le set
+  des conversations modifiées ; worker ne poste que celles-là.
+- `batchDeliverySync` : retourne `didChange` ; worker ne poste que si vrai
+  (les read-receipts redondants ne déclenchent plus de cascade).
+
+## Gain (structurel, vérifiable via les signposts existants applySnapshot/
+## snapshot.apply sur device)
+- Avant : N passages × (writes + refresh + re-lecture fenêtre + re-décodage
+  JSON + applySnapshot full-reconfigure). Après : 1 seule cascade par
+  changement réel ; échos/duplicatas/receipts redondants = ZÉRO travail UI.
+- La mémoïsation `_domainCache` redevient effective (elle était invalidée par
+  les bumps systématiques).
+
+## Tests ajoutés
+- `test_upsertFromAPIMessages_identicalEcho_doesNotDirtyRowNorPostRefresh`
+  (inverted expectation + changeVersion/updatedAt stables)
+- `test_upsertFromAPIMessages_changedContent_bumpsVersionAndPostsRefresh`
+
+## Restes connus pour la frappe (non traités ici, hors scope/collision)
+- `messageText` @State à la racine de ConversationView : chaque caractère
+  ré-évalue l'arbre racine (option 3 « isoler le composer », non retenue).
+- `typeWave` squish par frappe (assumé par l'utilisateur).
+
 Autres sources d'optimisation identifiées, NON traitées (collision routine / scope) :
 1. `APIClient.swift:427` pose `Accept-Encoding: br, gzip, deflate` manuellement alors
    que le commentaire l.389-397 l'interdit explicitement (« Never add Accept-Encoding
