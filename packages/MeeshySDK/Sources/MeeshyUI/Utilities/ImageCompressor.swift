@@ -22,6 +22,15 @@ public enum ImageCompressor {
             ImageCompressor.compress(box.image, maxSizeKB: maxSizeKB)
         }.value
     }
+
+    /// Off-main single-pass JPEG encode. `jpegData` is CPU-bound; on `@MainActor`
+    /// send paths it blocked the UI for each thumbnail it re-encoded.
+    public static func jpegOffMain(_ image: UIImage, quality: CGFloat) async -> Data? {
+        let box = SendableImageBox(image: image)
+        return await Task.detached(priority: .utility) {
+            box.image.jpegData(compressionQuality: quality)
+        }.value
+    }
 }
 
 private struct SendableImageBox: @unchecked Sendable {
