@@ -929,7 +929,7 @@ export function registerCoreRoutes(
       try {
         const socketIOHandler = fastify.socketIOHandler;
         const socketIOManager = socketIOHandler?.getManager?.();
-        const io = socketIOManager?.io || (socketIOHandler as any)?.io;
+        const io = (socketIOManager as any)?.io || (socketIOHandler as any)?.io;
         if (io) {
           const allParticipantIds = [userId, ...uniqueParticipantIds];
           const conversationNewPayload = {
@@ -1108,7 +1108,7 @@ export function registerCoreRoutes(
 
       const socketIOHandler = fastify.socketIOHandler
       const socketIOManager = socketIOHandler?.getManager?.()
-      const io = socketIOManager?.io || (socketIOHandler as any)?.io
+      const io = (socketIOManager as any)?.io || (socketIOHandler as any)?.io
       if (io) {
         const room = ROOMS.conversation(id)
         io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
@@ -1200,7 +1200,7 @@ export function registerCoreRoutes(
 
       // Broadcast closure to all members
       const socketIOManager = fastify.socketIOHandler?.getManager?.()
-      const io = socketIOManager?.io || (fastify.socketIOHandler as any)?.io
+      const io = (socketIOManager as any)?.io || (fastify.socketIOHandler as any)?.io
       if (io) {
         io.to(ROOMS.conversation(conversationId)).emit(
           SERVER_EVENTS.CONVERSATION_CLOSED,

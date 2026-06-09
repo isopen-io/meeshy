@@ -1034,7 +1034,7 @@ export function registerMessagesAdvancedRoutes(
 
         if (socketIOHandler) {
           const socketIOManager = socketIOHandler.getManager?.();
-          const io = socketIOManager?.io || (socketIOHandler as any).io;
+          const io = (socketIOManager as any)?.io || (socketIOHandler as any).io;
           if (io) {
             io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
           }
@@ -1180,7 +1180,7 @@ export function registerMessagesAdvancedRoutes(
 
         if (socketIOHandler) {
           const socketIOManager = socketIOHandler.getManager?.();
-          const io = socketIOManager?.io || (socketIOHandler as any).io;
+          const io = (socketIOManager as any)?.io || (socketIOHandler as any).io;
           if (io) {
             io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, updateEvent);
           }

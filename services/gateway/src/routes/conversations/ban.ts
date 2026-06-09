@@ -81,7 +81,7 @@ export function registerBanRoutes(
       })
 
       const socketIOManager = socketIOHandler?.getManager?.()
-      const io = socketIOManager?.io || (socketIOHandler as any)?.io
+      const io = (socketIOManager as any)?.io || (socketIOHandler as any)?.io
       const room = ROOMS.conversation(id)
 
       if (io) {
@@ -156,7 +156,7 @@ export function registerBanRoutes(
       })
 
       const socketIOManager = socketIOHandler?.getManager?.()
-      const io = socketIOManager?.io || (socketIOHandler as any)?.io
+      const io = (socketIOManager as any)?.io || (socketIOHandler as any)?.io
       const room = ROOMS.conversation(id)
 
       if (io) {

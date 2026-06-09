@@ -45,8 +45,8 @@ export function createPreferenceRouter<T>(
     const emitPreferencesUpdated = (userId: string) => {
       try {
         const manager = fastify.socketIOHandler?.getManager?.();
-        if (manager?.io) {
-          manager.io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.USER_PREFERENCES_UPDATED, {
+        if ((manager as any)?.io) {
+          (manager as any).io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.USER_PREFERENCES_UPDATED, {
             userId,
             category,
           });
