@@ -881,6 +881,13 @@ struct ConversationView: View {
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
                 keyboardHeight = 0
             }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+                // Le debounce de 400 ms a remplacé la persistance par frappe :
+                // sans ce flush, backgrounder l'app (ou la tuer depuis
+                // l'app-switcher) dans la fenêtre de debounce perdrait la fin
+                // de la saisie — onDisappear ne couvre que la navigation.
+                flushPendingDraft()
+            }
             .onDisappear {
                 flushPendingDraft()
             }

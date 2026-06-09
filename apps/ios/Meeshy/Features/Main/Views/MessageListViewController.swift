@@ -71,11 +71,6 @@ final class MessageListViewController: UIViewController {
     /// server id (which is what `ReplyReference.messageId` carries —
     /// gateway sends `replyTo.id`, not the local UUID).
     private var serverIdToLocalId: [String: String] = [:]
-    private var lastMessageTranslations: [String: [MessageTranslation]] = [:]
-    private var lastMessageTranscriptions: [String: MessageTranscription] = [:]
-    private var lastMessageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:]
-    private var lastActiveTranslationOverrides: [String: MessageTranslation?] = [:]
-    private var lastBubbleLanguageSelections: [String: ConversationViewModel.BubbleLanguageSelection] = [:]
     private var pendingReconfigureMessageIds = Set<String>()
     private var reconfigureDebounceTimer: Timer?
 
@@ -721,121 +716,15 @@ final class MessageListViewController: UIViewController {
         // collapsed re-snapshots is the worst case).
         guard let vm = conversationViewModel else { return }
 
-        // Initialize cache values to avoid stale diffing on subscription
-        lastMessageTranslations = vm.messageTranslations
-        lastMessageTranscriptions = vm.messageTranscriptions
-        lastMessageTranslatedAudios = vm.messageTranslatedAudios
-        lastActiveTranslationOverrides = vm.activeTranslationOverrides
-        lastBubbleLanguageSelections = vm.bubbleLanguageSelections
-
-        vm.$messageTranslations
-            .receive(on: DispatchQueue.main)
-            .dropFirst()
-            .sink { [weak self] newTranslations in
-                guard let self = self else { return }
-                var changed: Set<String> = []
-                for (msgId, val) in newTranslations {
-                    if self.lastMessageTranslations[msgId] != val {
-                        changed.insert(msgId)
-                    }
-                }
-                for msgId in self.lastMessageTranslations.keys {
-                    if newTranslations[msgId] == nil {
-                        changed.insert(msgId)
-                    }
-                }
-                self.lastMessageTranslations = newTranslations
-                self.queueReconfigure(for: changed)
-            }
-            .store(in: &cancellables)
-
-        vm.$messageTranscriptions
-            .receive(on: DispatchQueue.main)
-            .dropFirst()
-            .sink { [weak self] newTranscriptions in
-                guard let self = self else { return }
-                var changed: Set<String> = []
-                for (msgId, val) in newTranscriptions {
-                    if self.lastMessageTranscriptions[msgId] != val {
-                        changed.insert(msgId)
-                    }
-                }
-                for msgId in self.lastMessageTranscriptions.keys {
-                    if newTranscriptions[msgId] == nil {
-                        changed.insert(msgId)
-                    }
-                }
-                self.lastMessageTranscriptions = newTranscriptions
-                self.queueReconfigure(for: changed)
-            }
-            .store(in: &cancellables)
-
-        vm.$messageTranslatedAudios
-            .receive(on: DispatchQueue.main)
-            .dropFirst()
-            .sink { [weak self] newAudios in
-                guard let self = self else { return }
-                var changed: Set<String> = []
-                for (msgId, val) in newAudios {
-                    if self.lastMessageTranslatedAudios[msgId] != val {
-                        changed.insert(msgId)
-                    }
-                }
-                for msgId in self.lastMessageTranslatedAudios.keys {
-                    if newAudios[msgId] == nil {
-                        changed.insert(msgId)
-                    }
-                }
-                self.lastMessageTranslatedAudios = newAudios
-                self.queueReconfigure(for: changed)
-            }
-            .store(in: &cancellables)
-
-        vm.$activeTranslationOverrides
-            .receive(on: DispatchQueue.main)
-            .dropFirst()
-            .sink { [weak self] newOverrides in
-                guard let self = self else { return }
-                var changed: Set<String> = []
-                for (msgId, val) in newOverrides {
-                    if self.lastActiveTranslationOverrides[msgId] != val {
-                        changed.insert(msgId)
-                    }
-                }
-                for msgId in self.lastActiveTranslationOverrides.keys {
-                    if newOverrides[msgId] == nil {
-                        changed.insert(msgId)
-                    }
-                }
-                self.lastActiveTranslationOverrides = newOverrides
-                self.queueReconfigure(for: changed)
-            }
-            .store(in: &cancellables)
-
+        observePerMessageDictionary(vm.$messageTranslations, initial: vm.messageTranslations)
+        observePerMessageDictionary(vm.$messageTranscriptions, initial: vm.messageTranscriptions)
+        observePerMessageDictionary(vm.$messageTranslatedAudios, initial: vm.messageTranslatedAudios)
+        observePerMessageDictionary(vm.$activeTranslationOverrides, initial: vm.activeTranslationOverrides)
         // Flag-strip selection lifted out of the bubble's @State — a tap
         // writes to the VM; reconfigure the touched cell so the bubble
         // re-renders with the fresh snapped inputs (the Equatable gate sees
         // them change and lets the body re-run).
-        vm.$bubbleLanguageSelections
-            .receive(on: DispatchQueue.main)
-            .dropFirst()
-            .sink { [weak self] newSelections in
-                guard let self = self else { return }
-                var changed: Set<String> = []
-                for (msgId, val) in newSelections {
-                    if self.lastBubbleLanguageSelections[msgId] != val {
-                        changed.insert(msgId)
-                    }
-                }
-                for msgId in self.lastBubbleLanguageSelections.keys {
-                    if newSelections[msgId] == nil {
-                        changed.insert(msgId)
-                    }
-                }
-                self.lastBubbleLanguageSelections = newSelections
-                self.queueReconfigure(for: changed)
-            }
-            .store(in: &cancellables)
+        observePerMessageDictionary(vm.$bubbleLanguageSelections, initial: vm.bubbleLanguageSelections)
 
         vm.$preferredLanguageRevision
             .receive(on: DispatchQueue.main)
@@ -854,6 +743,36 @@ final class MessageListViewController: UIViewController {
             .dropFirst()
             .sink { [weak self] _ in
                 self?.applySnapshot(animated: true)
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Diffe un dictionnaire `[messageId: Value]` publié par le ViewModel et
+    /// queue un reconfigure ciblé pour chaque clé dont la valeur a changé ou
+    /// disparu. Mutualise les cinq flux de métadonnées par message
+    /// (traductions, transcriptions, audios traduits, overrides, sélection
+    /// drapeaux) — avant, chaque flux dupliquait ce diff sur 18 lignes avec
+    /// sa propre propriété `lastX`. Le snapshot précédent vit dans la closure
+    /// (capture `var`), le sink s'exécute sur le main via `receive(on:)`.
+    private func observePerMessageDictionary<Value: Equatable>(
+        _ publisher: Published<[String: Value]>.Publisher,
+        initial: [String: Value]
+    ) {
+        var last = initial
+        publisher
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] new in
+                guard let self else { return }
+                var changed: Set<String> = []
+                for (msgId, val) in new where last[msgId] != val {
+                    changed.insert(msgId)
+                }
+                for msgId in last.keys where new[msgId] == nil {
+                    changed.insert(msgId)
+                }
+                last = new
+                self.queueReconfigure(for: changed)
             }
             .store(in: &cancellables)
     }
