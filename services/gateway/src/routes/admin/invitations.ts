@@ -4,6 +4,7 @@ import { validatePagination, buildPaginationMeta } from '../../utils/pagination'
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
 import { InvitationsListQuerySchema, InvitationIdParamSchema, UpdateInvitationBodySchema } from '../../validation/admin-schemas.js';
+import { sendSuccess } from '../../utils/response.js';
 
 // Middleware pour vérifier les permissions admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -164,9 +165,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
         ? Math.round((acceptedInvitations / totalInvitations) * 100)
         : 0;
 
-      return reply.send({
-        success: true,
-        data: {
+      return sendSuccess(reply, {
           total: totalInvitations,
           pending: pendingInvitations,
           accepted: acceptedInvitations,
@@ -177,8 +176,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
             acc[item.status] = item._count.id;
             return acc;
           }, {} as Record<string, number>)
-        }
-      });
+        });
     } catch (error) {
       logError(fastify.log, 'Get invitation stats error:', error);
       return reply.status(500).send({
@@ -234,9 +232,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
         });
       }
 
-      return reply.send({
-        success: true,
-        data: {
+      return sendSuccess(reply, {
           id: invitation.id,
           senderId: invitation.senderId,
           receiverId: invitation.receiverId,
@@ -247,8 +243,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
           updatedAt: invitation.updatedAt,
           sender: invitation.sender,
           receiver: invitation.receiver
-        }
-      });
+        });
     } catch (error) {
       logError(fastify.log, 'Get invitation details error:', error);
       return reply.status(500).send({
@@ -364,10 +359,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
         rejected: data.rejected
       }));
 
-      return reply.send({
-        success: true,
-        data: timeline
-      });
+      return sendSuccess(reply, timeline);
     } catch (error) {
       logError(fastify.log, 'Get invitations timeline error:', error);
       return reply.status(500).send({
