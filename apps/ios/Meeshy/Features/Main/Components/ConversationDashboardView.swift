@@ -945,32 +945,53 @@ struct ConversationDashboardView: View {
         let count: Int
     }
 
+    // Formatters memoises : `activityData` / `clientComputedActivityData` sont des
+    // computed properties re-evaluees a chaque toggle de periode du chart ; creer
+    // des DateFormatter (setup ICU couteux) a chaque acces etait du gaspillage.
+    // Config constante par usage -> instances statiques reutilisees (lecture seule,
+    // thread-safe comme tout DateFormatter configure une fois puis non mute).
+    private static let activityDateParser: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "fr_FR")
+        return f
+    }()
+    private static let weekdayLabelFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "EEE"
+        return f
+    }()
+    private static let dayMonthLabelFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "dd/MM"
+        return f
+    }()
+
+    /// Label formatter for the active chart period (weekday for the 7-day view,
+    /// day/month otherwise). Mirrors the original per-case `dateFormat` setup.
+    private var periodLabelFormatter: DateFormatter {
+        chartPeriod == .week ? Self.weekdayLabelFormatter : Self.dayMonthLabelFormatter
+    }
+
     private var activityData: [ActivityPoint] {
         if let serverDaily = serverStats?.dailyActivity, !serverDaily.isEmpty {
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyy-MM-dd"
-            dateFormatter.locale = Locale(identifier: "fr_FR")
-
-            let labelFormatter = DateFormatter()
-            labelFormatter.locale = Locale(identifier: "fr_FR")
-
             let calendar = Calendar.current
             let now = Date()
             let cutoff: Date
             switch chartPeriod {
             case .week:
                 cutoff = calendar.date(byAdding: .day, value: -7, to: now) ?? now
-                labelFormatter.dateFormat = "EEE"
             case .month:
                 cutoff = calendar.date(byAdding: .day, value: -30, to: now) ?? now
-                labelFormatter.dateFormat = "dd/MM"
             case .all:
                 cutoff = .distantPast
-                labelFormatter.dateFormat = "dd/MM"
             }
+            let labelFormatter = periodLabelFormatter
 
             return serverDaily.compactMap { entry in
-                guard let date = dateFormatter.date(from: entry.date), date >= cutoff else { return nil }
+                guard let date = Self.activityDateParser.date(from: entry.date), date >= cutoff else { return nil }
                 return ActivityPoint(date: date, label: labelFormatter.string(from: date), count: entry.count)
             }
             .sorted { $0.date < $1.date }
@@ -981,8 +1002,7 @@ struct ConversationDashboardView: View {
     private var clientComputedActivityData: [ActivityPoint] {
         let calendar = Calendar.current
         let now = Date()
-        let dateFormatter = DateFormatter()
-        dateFormatter.locale = Locale(identifier: "fr_FR")
+        let dateFormatter = periodLabelFormatter
 
         let cutoff: Date
         let grouping: Calendar.Component
@@ -990,15 +1010,12 @@ struct ConversationDashboardView: View {
         case .week:
             cutoff = calendar.date(byAdding: .day, value: -7, to: now) ?? now
             grouping = .day
-            dateFormatter.dateFormat = "EEE"
         case .month:
             cutoff = calendar.date(byAdding: .day, value: -30, to: now) ?? now
             grouping = .day
-            dateFormatter.dateFormat = "dd/MM"
         case .all:
             cutoff = .distantPast
             grouping = .weekOfYear
-            dateFormatter.dateFormat = "dd/MM"
         }
 
         let filtered = messages.filter { $0.createdAt >= cutoff }
@@ -1119,14 +1136,18 @@ struct ConversationDashboardView: View {
 
     // MARK: - Helpers
 
+    private static let groupingNumberFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.groupingSeparator = " "
+        return f
+    }()
+
     private func formatNumber(_ n: Int) -> String {
         if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
         if n >= 10_000 { return String(format: "%.1fk", Double(n) / 1_000) }
         if n >= 1_000 {
-            let formatter = NumberFormatter()
-            formatter.numberStyle = .decimal
-            formatter.groupingSeparator = " "
-            return formatter.string(from: NSNumber(value: n)) ?? "\(n)"
+            return Self.groupingNumberFormatter.string(from: NSNumber(value: n)) ?? "\(n)"
         }
         return "\(n)"
     }
