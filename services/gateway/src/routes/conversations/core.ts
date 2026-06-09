@@ -547,7 +547,7 @@ export function registerCoreRoutes(
 
     } catch (error) {
       logger.error('error fetching conversations', { error });
-      sendInternalError(reply, 'Error retrieving conversations');
+      return sendInternalError(reply, 'Error retrieving conversations');
     }
   });
 
@@ -716,7 +716,7 @@ export function registerCoreRoutes(
 
     } catch (error) {
       logger.error('error fetching conversation', { error });
-      sendInternalError(reply, 'Error retrieving conversation');
+      return sendInternalError(reply, 'Error retrieving conversation');
     }
   });
 
@@ -1125,7 +1125,7 @@ export function registerCoreRoutes(
 
     } catch (error) {
       logger.error('error updating conversation', { error });
-      sendInternalError(reply, 'Error updating conversation');
+      return sendInternalError(reply, 'Error updating conversation');
     }
   });
 
@@ -1214,7 +1214,7 @@ export function registerCoreRoutes(
 
     } catch (error) {
       logger.error('error deleting conversation', { error });
-      sendInternalError(reply, 'Erreur lors de la suppression de la conversation');
+      return sendInternalError(reply, 'Erreur lors de la suppression de la conversation');
     }
   });
 
@@ -1365,7 +1365,7 @@ export function registerCoreRoutes(
 
     } catch (error) {
       logger.error('error fetching conversation analysis', { error });
-      sendInternalError(reply, 'Error fetching conversation analysis');
+      return sendInternalError(reply, 'Error fetching conversation analysis');
     }
   });
 }

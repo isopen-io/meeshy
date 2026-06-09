@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
+import { sendSuccess } from '../../utils/response.js';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest
@@ -146,15 +147,12 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
 
       const formattedMessages = messages.map(formatMessageWithSeparateSenders);
 
-      return reply.send({
-        success: true,
-        data: {
+      return sendSuccess(reply, {
           messages: formattedMessages.reverse(),
           conversation: shareLink.conversation,
           hasMore: totalMessages > parseInt(offset.toString()) + messages.length,
           total: totalMessages
-        }
-      });
+        });
 
     } catch (error) {
       logError(fastify.log, 'Get link messages error:', error);

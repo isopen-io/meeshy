@@ -14,6 +14,7 @@ import { userPreferencesRoutes } from './preferences';
 import { deleteAccountRoutes } from './delete-account';
 import { dataExportRoutes } from './export';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { sendSuccess } from '../../utils/response.js';
 
 export default async function meRoutes(fastify: FastifyInstance) {
   // Register preferences routes under /me/preferences
@@ -99,10 +100,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
         });
       }
 
-      return reply.send({
-        success: true,
-        data: user
-      });
+      return sendSuccess(reply, user);
     }
   );
 }

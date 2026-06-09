@@ -5,6 +5,7 @@ import { FastifyInstance } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { validatePagination } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { sendPaginatedSuccess, sendInternalError, createPaginationMeta } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'CommunitySearchRoutes' });
 
@@ -89,7 +90,7 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
       const { q, offset = '0', limit = '20' } = request.query as { q?: string; offset?: string; limit?: string };
 
       if (!q || q.trim().length === 0) {
-        return reply.send({ success: true, data: [], pagination: { total: 0, limit: 20, offset: 0, hasMore: false } });
+        return sendPaginatedSuccess(reply, [], createPaginationMeta(0, 0, 20, 0));
       }
 
       const { offsetNum, limitNum } = validatePagination(offset, limit);
@@ -174,22 +175,10 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
         members: community.members
       }));
 
-      reply.send({
-        success: true,
-        data: communitiesWithCount,
-        pagination: {
-          total: totalCount,
-          limit: limitNum,
-          offset: offsetNum,
-          hasMore: offsetNum + communities.length < totalCount
-        }
-      });
+      return sendPaginatedSuccess(reply, communitiesWithCount, createPaginationMeta(totalCount, offsetNum, limitNum, communities.length));
     } catch (error) {
       logger.error('Error searching communities', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to search communities'
-      });
+      return sendInternalError(reply, 'Failed to search communities');
     }
   });
 }

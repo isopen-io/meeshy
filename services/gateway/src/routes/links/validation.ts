@@ -4,6 +4,7 @@ import {
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { sendSuccess, sendInternalError } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'LinkValidationRoutes' });
 
@@ -69,19 +70,13 @@ export async function registerValidationRoutes(fastify: FastifyInstance) {
         }
       });
 
-      return reply.send({
-        success: true,
-        data: {
-          available: !existingLink,
-          identifier
-        }
+      return sendSuccess(reply, {
+        available: !existingLink,
+        identifier
       });
     } catch (error) {
       logger.error('Error checking identifier availability', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to check identifier availability'
-      });
+      return sendInternalError(reply, 'Failed to check identifier availability');
     }
   });
 }

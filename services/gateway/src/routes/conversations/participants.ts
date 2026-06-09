@@ -218,7 +218,7 @@ export function registerParticipantsRoutes(
 
     } catch (error) {
       logger.error('Error fetching conversation participants', error as Error);
-      sendInternalError(reply, 'Error retrieving participants');
+      return sendInternalError(reply, 'Error retrieving participants');
     }
   });
 
@@ -379,7 +379,7 @@ export function registerParticipantsRoutes(
 
     } catch (error) {
       logger.error('Error adding participant', error as Error);
-      sendInternalError(reply, 'Erreur lors de l\'ajout du participant');
+      return sendInternalError(reply, 'Erreur lors de l\'ajout du participant');
     }
   });
 
@@ -527,7 +527,7 @@ export function registerParticipantsRoutes(
 
     } catch (error) {
       logger.error('Error removing participant', error as Error);
-      sendInternalError(reply, 'Erreur lors de la suppression du participant');
+      return sendInternalError(reply, 'Erreur lors de la suppression du participant');
     }
   });
 
@@ -694,7 +694,7 @@ export function registerParticipantsRoutes(
 
     } catch (error) {
       logger.error('Error updating participant role', error as Error);
-      sendInternalError(reply, 'Error updating participant role');
+      return sendInternalError(reply, 'Error updating participant role');
     }
   });
 
