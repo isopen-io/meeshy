@@ -15,6 +15,8 @@ import { useI18n } from '@/hooks/useI18n';
 interface CallControlsProps {
   audioEnabled: boolean;
   videoEnabled: boolean;
+  /** Outbound video auto-suspended by the adaptive controller (weak link). */
+  videoSuspended?: boolean;
   onToggleAudio: () => void;
   onToggleVideo: () => void;
   onSwitchCamera?: () => void;
@@ -28,6 +30,7 @@ interface CallControlsProps {
 export function CallControls({
   audioEnabled,
   videoEnabled,
+  videoSuspended = false,
   onToggleAudio,
   onToggleVideo,
   onSwitchCamera,
@@ -40,6 +43,7 @@ export function CallControls({
   const { t } = useI18n('calls');
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
   const [supportsCameraSwitch, setSupportsCameraSwitch] = useState(false);
+  const videoAutoPaused = videoEnabled && videoSuspended;
 
   React.useEffect(() => {
     if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
@@ -94,24 +98,47 @@ export function CallControls({
         )}
       </Button>
 
-      {/* Toggle Video */}
+      {/* Toggle Video — amber "auto-paused" state when the controller suspended
+          outbound video while the user still wants it (weak link). */}
       <Button
         size="icon"
+        data-testid="toggle-video"
         variant={videoEnabled ? 'default' : 'destructive'}
         onClick={onToggleVideo}
         className={cn(
-          'w-12 h-12 md:w-14 md:h-14 rounded-full transition-colors touch-manipulation',
-          videoEnabled
-            ? 'bg-gray-700 hover:bg-gray-600 text-white'
-            : 'bg-red-600 hover:bg-red-700 text-white'
+          'relative w-12 h-12 md:w-14 md:h-14 rounded-full transition-colors touch-manipulation',
+          videoAutoPaused
+            ? 'bg-amber-600 hover:bg-amber-700 text-white'
+            : videoEnabled
+              ? 'bg-gray-700 hover:bg-gray-600 text-white'
+              : 'bg-red-600 hover:bg-red-700 text-white'
         )}
-        aria-label={videoEnabled ? t('calls.controls.videoOff') : t('calls.controls.videoOn')}
-        title={videoEnabled ? t('calls.controls.videoOff') : t('calls.controls.videoOn')}
+        aria-label={
+          videoAutoPaused
+            ? t('calls.controls.videoPausedWeak')
+            : videoEnabled
+              ? t('calls.controls.videoOff')
+              : t('calls.controls.videoOn')
+        }
+        title={
+          videoAutoPaused
+            ? t('calls.controls.videoPausedWeak')
+            : videoEnabled
+              ? t('calls.controls.videoOff')
+              : t('calls.controls.videoOn')
+        }
       >
-        {videoEnabled ? (
+        {videoEnabled && !videoAutoPaused ? (
           <Video className="w-5 h-5 md:w-6 md:h-6" />
         ) : (
           <VideoOff className="w-5 h-5 md:w-6 md:h-6" />
+        )}
+        {videoAutoPaused && (
+          <span
+            data-testid="video-autopaused-dot"
+            className="absolute -right-0.5 -top-0.5 w-3 h-3 rounded-full bg-amber-300 ring-2 ring-black/60 animate-pulse"
+            aria-hidden="true"
+          />
         )}
       </Button>
 

@@ -41,6 +41,7 @@
       "unmute": "Activar micrófono",
       "videoOff": "Desactivar vídeo",
       "videoOn": "Activar vídeo",
+      "videoPausedWeak": "Vídeo en pausa (conexión débil)",
       "switchCamera": "Cambiar cámara",
       "speakerOff": "Desactivar altavoz",
       "speakerOn": "Activar altavoz",
@@ -68,6 +69,8 @@
       "participant": "Participante",
       "micMuted": "Micrófono silenciado",
       "videoOff": "Cámara desactivada",
+      "videoSuspended": "Vídeo en pausa",
+      "videoSuspendedHint": "Conexión débil · reanudación auto",
       "fullscreen": "Pantalla completa",
       "dragToMove": "Arrastrar para mover"
     },
@@ -75,7 +78,9 @@
       "connectionError": "Error de conexión",
       "videoSwitchFailed": "Error al cambiar el vídeo",
       "cameraSwitched": "Cámara cambiada",
-      "cameraSwitchFailed": "Error al cambiar la cámara"
+      "cameraSwitchFailed": "Error al cambiar la cámara",
+      "videoSuspendedPoorConnection": "Conexión débil — vídeo en pausa para mantener la llamada",
+      "videoResumed": "Conexión recuperada — vídeo reactivado"
     },
     "permissions": {
       "title": {

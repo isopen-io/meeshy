@@ -966,8 +966,25 @@ class ConversationViewModel: ObservableObject {
     private func mergeIntoMessages(_ incoming: [Message]) -> [Message] {
         let incomingIds = Set(incoming.map(\.id))
         let preserved = messages.filter { !incomingIds.contains($0.id) }
-        guard !preserved.isEmpty else { return incoming }
-        return (incoming + preserved).sorted { $0.createdAt < $1.createdAt }
+        let result = preserved.isEmpty ? incoming : (incoming + preserved).sorted { $0.createdAt < $1.createdAt }
+
+        // BUG1 diagnostics — this merge is supposed to NEVER drop a displayed row
+        // (it preserves anything not in `incoming`). If this fires, the loss is an
+        // id-identity problem (e.g. an optimistic cid replaced by a serverId so
+        // the "same" message changes id and the old row is neither matched nor
+        // preserved). Logs the count delta + a sample of dropped ids + how many
+        // were in-flight/failed so we can correlate with the send timeline.
+        let beforeIds = Set(messages.map(\.id))
+        let droppedIds = beforeIds.subtracting(Set(result.map(\.id)))
+        if !droppedIds.isEmpty {
+            let inFlight = messages.filter { droppedIds.contains($0.id) }
+                .filter { m in
+                    let s = String(describing: m.deliveryStatus)
+                    return s.contains("sending") || s.contains("clock") || s.contains("failed") || s.contains("sent") || s.contains("queued")
+                }
+            Logger.messages.error("[ConversationViewModel][BUG1] merge DROPPED \(droppedIds.count) display row(s) before=\(self.messages.count) incoming=\(incoming.count) result=\(result.count) inFlightOrSent=\(inFlight.count) ids=\(droppedIds.sorted().prefix(8).joined(separator: ","))")
+        }
+        return result
     }
 
     private func subscribeToQueueReconciliation() {

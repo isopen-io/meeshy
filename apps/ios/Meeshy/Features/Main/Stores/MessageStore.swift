@@ -273,15 +273,43 @@ public final class MessageStore: ObservableObject {
     /// in `.around(date:)` mode (jump-to-message) and on explicit straight
     /// replaces (window transitions) so a stale slice never pollutes the view.
     private func publish(records: [MessageRecord], mergeInMemory: Bool) {
+        // BUG1 diagnostics — capture the pre-state to detect any publish that
+        // DROPS currently-displayed messages (the suspected "all sent messages
+        // vanish while one is pending" path). Cheap: only sets/array maps.
+        let beforeCount = messages.count
+        let beforeById = Dictionary(messages.map { ($0.localId, $0) }, uniquingKeysWith: { a, _ in a })
+
+        let next: [MessageRecord]
         if mergeInMemory, windowMode == .latest {
             let snapshotIds = Set(records.map(\.localId))
             let preserved = messages.filter { !snapshotIds.contains($0.localId) }
-            messages = preserved.isEmpty
+            next = preserved.isEmpty
                 ? records
                 : (records + preserved).sorted { $0.createdAt < $1.createdAt }
         } else {
-            messages = records
+            next = records
         }
+
+        let afterIds = Set(next.map(\.localId))
+        let droppedIds = Set(beforeById.keys).subtracting(afterIds)
+        if !droppedIds.isEmpty {
+            // What did we drop, and was any of it still in-flight / failed? That
+            // distinguishes a benign window scroll from the real bug (losing a
+            // sent/pending row the user can see).
+            let droppedInFlight = droppedIds.compactMap { beforeById[$0] }
+                .filter { ["sending", "queued", "failed", "sent"].contains(String(describing: $0.state)) }
+            Logger.messages.error("""
+            [MessageStore][BUG1] publish DROPPED \(droppedIds.count) displayed row(s) \
+            before=\(beforeCount) records=\(records.count) result=\(next.count) \
+            merge=\(mergeInMemory) window=\(String(describing: self.windowMode)) \
+            droppedInFlightOrSent=\(droppedInFlight.count) \
+            ids=\(droppedIds.sorted().prefix(8).joined(separator: ","))
+            """)
+        } else if next.count != beforeCount {
+            Logger.messages.debug("[MessageStore] publish before=\(beforeCount) -> after=\(next.count) records=\(records.count) merge=\(mergeInMemory) window=\(String(describing: self.windowMode))")
+        }
+
+        messages = next
         _idIndex = nil
         recomputeSections()
         messagesDidChange.send()

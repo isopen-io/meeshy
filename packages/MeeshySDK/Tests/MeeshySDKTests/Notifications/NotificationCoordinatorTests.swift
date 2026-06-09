@@ -142,6 +142,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         id: String,
         unread: Int = 0,
         pinned: Bool = false,
+        muted: Bool = false,
         type: MeeshyConversation.ConversationType = .direct
     ) -> MeeshyConversation {
         MeeshyConversation(
@@ -150,7 +151,8 @@ final class NotificationCoordinatorTests: XCTestCase {
             type: type,
             title: "Conv \(id)",
             unreadCount: unread,
-            isPinned: pinned
+            isPinned: pinned,
+            isMuted: muted
         )
     }
 
@@ -170,6 +172,50 @@ final class NotificationCoordinatorTests: XCTestCase {
         XCTAssertEqual(sut.conversationUnreadCounts["c2"], 5)
         XCTAssertEqual(sut.conversationUnreadCounts["c3"], 0)
         XCTAssertEqual(sut.badgeTotal, 8)
+    }
+
+    // MARK: - Muted conversations excluded from the badge
+
+    /// A muted conversation keeps its per-row unread (still tracked in
+    /// `conversationUnreadCounts`) but must NOT inflate the app-icon / widget
+    /// badge — the user muted it precisely to silence that nag.
+    func test_registerConversations_mutedUnread_excludedFromBadgeTotal() async {
+        let (sut, _, _, _) = makeSUT()
+
+        sut.registerConversations([
+            makeConversation(id: "c1", unread: 3),
+            makeConversation(id: "c2", unread: 5, muted: true)
+        ])
+
+        XCTAssertEqual(sut.conversationUnreadTotal, 3,
+                       "muted c2's 5 unread must not count toward the badge")
+        XCTAssertEqual(sut.conversationUnreadCounts["c2"], 5,
+                       "the muted conversation still tracks its real unread for its own row")
+        XCTAssertEqual(sut.badgeTotal, 3)
+    }
+
+    /// Muting a previously-unmuted conversation must drop its unread out of the
+    /// badge on the next snapshot.
+    func test_registerConversations_muteToggle_recomputesBadge() async {
+        let (sut, _, _, _) = makeSUT()
+
+        sut.registerConversations([makeConversation(id: "c1", unread: 4)])
+        XCTAssertEqual(sut.conversationUnreadTotal, 4)
+
+        sut.registerConversations([makeConversation(id: "c1", unread: 4, muted: true)])
+        XCTAssertEqual(sut.conversationUnreadTotal, 0,
+                       "muting the conversation removes its unread from the badge")
+
+        sut.registerConversations([makeConversation(id: "c1", unread: 4, muted: false)])
+        XCTAssertEqual(sut.conversationUnreadTotal, 4,
+                       "un-muting restores it to the badge")
+    }
+
+    func test_unmutedTotal_sumsOnlyUnmuted() {
+        let counts = ["a": 2, "b": 5, "c": 1]
+        XCTAssertEqual(NotificationCoordinator.unmutedTotal(counts: counts, mutedIds: []), 8)
+        XCTAssertEqual(NotificationCoordinator.unmutedTotal(counts: counts, mutedIds: ["b"]), 3)
+        XCTAssertEqual(NotificationCoordinator.unmutedTotal(counts: counts, mutedIds: ["a", "b", "c"]), 0)
     }
 
     func test_registerConversations_pushesToWidgetSink() async {

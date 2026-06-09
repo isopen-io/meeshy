@@ -15,6 +15,7 @@ import {
   TooltipTrigger,
 } from '../ui/tooltip';
 import { useI18n } from '@/hooks/useI18n';
+import { buildImageSrcSet } from '@/lib/images/srcset';
 
 export interface ImageAttachmentProps {
   attachment: Attachment;
@@ -75,6 +76,14 @@ export const ImageAttachment = React.memo(function ImageAttachment({
     ? attachment.fileUrl
     : (attachment.thumbnailUrl || attachment.fileUrl);
 
+  // D4 — when the server generated responsive WebP variants, drive a native
+  // <img srcset> so the browser fetches the smallest sufficient image (tens of
+  // KB) instead of the multi-MB original. Falls back to the existing NextImage
+  // path for images without variants (encrypted / legacy) — zero regression.
+  const srcSet = buildImageSrcSet(attachment.imageVariants, attachment.fileUrl, {
+    fullWidth: attachment.width,
+  });
+
   return (
     <TooltipProvider>
       <Tooltip delayDuration={300}>
@@ -96,23 +105,51 @@ export const ImageAttachment = React.memo(function ImageAttachment({
           >
             <div className={`relative bg-gray-100 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden hover:border-blue-400 dark:hover:border-blue-500 transition-[border-color,box-shadow] hover:shadow-lg dark:hover:shadow-blue-500/30 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${imageCount <= 2 ? 'inline-flex items-center justify-center max-h-[320px]' : sizeClasses} ${aspectRatioClass}`}>
               {imageCount <= 2 ? (
-                <NextImage
-                  src={imageUrl}
-                  alt={attachment.originalName}
-                  width={attachment.width ?? 320}
-                  height={attachment.height ?? 320}
-                  className="max-w-full max-h-[320px] w-auto h-auto object-contain"
-                  loading="lazy"
-                />
+                srcSet ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={imageUrl}
+                    srcSet={srcSet}
+                    sizes="(max-width: 768px) 90vw, 320px"
+                    alt={attachment.originalName}
+                    width={attachment.width ?? 320}
+                    height={attachment.height ?? 320}
+                    className="max-w-full max-h-[320px] w-auto h-auto object-contain"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : (
+                  <NextImage
+                    src={imageUrl}
+                    alt={attachment.originalName}
+                    width={attachment.width ?? 320}
+                    height={attachment.height ?? 320}
+                    className="max-w-full max-h-[320px] w-auto h-auto object-contain"
+                    loading="lazy"
+                  />
+                )
               ) : (
-                <NextImage
-                  src={imageUrl}
-                  alt={attachment.originalName}
-                  fill
-                  sizes="(max-width: 768px) 45vw, 200px"
-                  className="object-cover"
-                  loading="lazy"
-                />
+                srcSet ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={imageUrl}
+                    srcSet={srcSet}
+                    sizes="(max-width: 768px) 45vw, 200px"
+                    alt={attachment.originalName}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : (
+                  <NextImage
+                    src={imageUrl}
+                    alt={attachment.originalName}
+                    fill
+                    sizes="(max-width: 768px) 45vw, 200px"
+                    className="object-cover"
+                    loading="lazy"
+                  />
+                )
               )}
 
               {canDelete && (

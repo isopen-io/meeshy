@@ -61,7 +61,12 @@ class ConversationListViewModel: ObservableObject {
     /// + ThemedConversationRow are Equatable with .equatable() applied
     /// (ConversationListView+Rows.swift:70), so only the row whose typingUsername
     /// changed re-evaluates its body. The full list does NOT re-render.
-    @Published var typingUsernames: [String: String] = [:]  // conversationId → displayName
+    @Published var typingUsernames: [String: String] = [:]  // conversationId → displayName (derived view of `typers`)
+    /// Per-user source of truth: conversationId → (userId → displayName). The
+    /// public `typingUsernames` is derived from this so a `typing:stop` from ONE
+    /// member of a group no longer wipes the whole row's indicator while OTHER
+    /// members are still typing (displayed "personne n'écrit" ≠ real "B écrit").
+    private var typers: [String: [String: String]] = [:]
     var previewMessages: [String: [Message]] = [:]  // conversationId → recent messages (non-Published — only used in context menu preview)
     private var previewLoadingInFlight: Set<String> = []
     private var typingTimers: [String: Timer] = [:]
@@ -645,7 +650,8 @@ class ConversationListViewModel: ObservableObject {
                 // "<You> écrit…" on your own conversation row. Mirror the per-conversation
                 // guard in ConversationSocketHandler.
                 guard event.userId != currentUserId else { return }
-                typingUsernames[event.conversationId] = event.preferredDisplayName
+                typers[event.conversationId, default: [:]][event.userId] = event.preferredDisplayName
+                typingUsernames[event.conversationId] = Self.typingDisplayName(for: typers[event.conversationId])
                 scheduleTypingCleanup(for: event.conversationId)
             }
             .store(in: &cancellables)
@@ -653,7 +659,7 @@ class ConversationListViewModel: ObservableObject {
         messageSocket.typingStopped
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                self?.clearTyping(for: event.conversationId)
+                self?.handleTypingStopped(userId: event.userId, conversationId: event.conversationId)
             }
             .store(in: &cancellables)
 
@@ -879,10 +885,38 @@ class ConversationListViewModel: ObservableObject {
         }
     }
 
+    /// A `typing:stop` removes ONLY the member who stopped. The row's indicator
+    /// stays up (re-derived from the remaining typers) until the last one stops.
+    /// Falls back to a full clear when we have no per-user tracking for the
+    /// conversation (e.g. the display was seeded out-of-band), preserving the
+    /// legacy "a stop clears the row" contract for that case.
+    private func handleTypingStopped(userId: String, conversationId: String) {
+        guard var convTypers = typers[conversationId], !convTypers.isEmpty else {
+            clearTyping(for: conversationId)
+            return
+        }
+        convTypers.removeValue(forKey: userId)
+        if convTypers.isEmpty {
+            clearTyping(for: conversationId)
+            return
+        }
+        typers[conversationId] = convTypers
+        typingUsernames[conversationId] = Self.typingDisplayName(for: convTypers)
+    }
+
     private func clearTyping(for conversationId: String) {
         typingTimers[conversationId]?.invalidate()
         typingTimers[conversationId] = nil
         typingUsernames.removeValue(forKey: conversationId)
+        typers.removeValue(forKey: conversationId)
+    }
+
+    /// Picks the single name surfaced on the row from the set of current typers.
+    /// The row API is single-name; sorting keeps the choice deterministic (and
+    /// stable across re-renders) when several members type at once.
+    nonisolated static func typingDisplayName(for typers: [String: String]?) -> String? {
+        guard let typers, !typers.isEmpty else { return nil }
+        return typers.values.sorted().first
     }
 
     // MARK: - Badge Sync

@@ -907,6 +907,25 @@ public enum EphemeralDuration: Int, CaseIterable, Identifiable {
 
 // MARK: - Message Attachment
 
+/// D4 — a responsive downscaled WebP variant of an image attachment, used to
+/// pick the smallest sufficient image instead of fetching the multi-MB original
+/// for inline previews. Non-encrypted images only. Mirrors the gateway payload.
+public struct MeeshyImageVariant: Codable, Sendable, Hashable {
+    public let width: Int
+    public let height: Int
+    public let url: String
+    public let size: Int
+    public let format: String
+
+    public init(width: Int, height: Int, url: String, size: Int, format: String = "webp") {
+        self.width = width
+        self.height = height
+        self.url = url
+        self.size = size
+        self.format = format
+    }
+}
+
 public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public let id: String
     public var messageId: String?
@@ -927,6 +946,8 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public var isBlurred: Bool = false
     public var width: Int?
     public var height: Int?
+    /// D4 — responsive downscaled WebP variants for picking a lighter image.
+    public var imageVariants: [MeeshyImageVariant]?
     public var thumbnailPath: String?
     public var thumbnailUrl: String?
     public var thumbHash: String?
@@ -1009,7 +1030,8 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
                 isEncrypted: Bool = false, encryptionMode: String? = nil,
                 latitude: Double? = nil, longitude: Double? = nil, thumbnailColor: String = "4ECDC4",
                 transcription: EmbeddedTranscription? = nil,
-                audioTranslations: [String: EmbeddedAudioTranslation]? = nil) {
+                audioTranslations: [String: EmbeddedAudioTranslation]? = nil,
+                imageVariants: [MeeshyImageVariant]? = nil) {
         self.id = id; self.messageId = messageId; self.fileName = fileName; self.originalName = originalName
         self.mimeType = mimeType; self.fileSize = fileSize; self.filePath = filePath; self.fileUrl = fileUrl
         self.title = title; self.alt = alt; self.caption = caption
@@ -1023,6 +1045,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
         self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
         self.latitude = latitude; self.longitude = longitude; self.thumbnailColor = thumbnailColor
         self.transcription = transcription; self.audioTranslations = audioTranslations
+        self.imageVariants = imageVariants
     }
 
     public static func image(color: String = "4ECDC4") -> MeeshyMessageAttachment {

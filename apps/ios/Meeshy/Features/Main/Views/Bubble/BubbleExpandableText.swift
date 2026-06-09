@@ -53,7 +53,9 @@ struct BubbleExpandableText: View, Equatable {
                 MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm)
                     .fixedSize(horizontal: false, vertical: true)
                     .tint(linkTint)
-                    .textSelection(.enabled)
+                    // BUG4: no `.textSelection(.enabled)` — it surfaces iOS's system
+                    // "Copy" callout on long-press, doubling up with the custom
+                    // context overlay. Copy lives in the overlay actions instead.
 
                 // Hit-area élargie via `.frame(minHeight: 28).contentShape(Rectangle())`
                 // pour rester au-dessus du minimum thumb-friendly (24pt) sans grossir
@@ -82,7 +84,9 @@ struct BubbleExpandableText: View, Equatable {
                 MessageTextRenderer.render(content, fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm)
                     .fixedSize(horizontal: false, vertical: true)
                     .tint(linkTint)
-                    .textSelection(.enabled)
+                    // BUG4: no `.textSelection(.enabled)` — it surfaces iOS's system
+                    // "Copy" callout on long-press, doubling up with the custom
+                    // context overlay. Copy lives in the overlay actions instead.
 
                 if isExpanded && content.count > Self.truncateLimit {
                     Button {

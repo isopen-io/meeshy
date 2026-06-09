@@ -41,6 +41,7 @@
       "unmute": "Unmute",
       "videoOff": "Turn off video",
       "videoOn": "Turn on video",
+      "videoPausedWeak": "Video paused (weak connection)",
       "switchCamera": "Switch camera",
       "speakerOff": "Turn off speaker",
       "speakerOn": "Turn on speaker",
@@ -68,6 +69,8 @@
       "participant": "Participant",
       "micMuted": "Microphone muted",
       "videoOff": "Camera off",
+      "videoSuspended": "Video paused",
+      "videoSuspendedHint": "Weak connection · auto-resume",
       "fullscreen": "Toggle fullscreen",
       "dragToMove": "Drag to move"
     },
@@ -75,7 +78,9 @@
       "connectionError": "Connection error",
       "videoSwitchFailed": "Failed to switch video",
       "cameraSwitched": "Camera switched",
-      "cameraSwitchFailed": "Failed to switch camera"
+      "cameraSwitchFailed": "Failed to switch camera",
+      "videoSuspendedPoorConnection": "Weak connection — video paused to keep the call going",
+      "videoResumed": "Connection recovered — video back on"
     },
     "permissions": {
       "title": {

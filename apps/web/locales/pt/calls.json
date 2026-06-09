@@ -41,6 +41,7 @@
       "unmute": "Ativar microfone",
       "videoOff": "Desativar vídeo",
       "videoOn": "Ativar vídeo",
+      "videoPausedWeak": "Vídeo pausado (conexão fraca)",
       "switchCamera": "Trocar câmera",
       "speakerOff": "Desativar alto-falante",
       "speakerOn": "Ativar alto-falante",
@@ -68,6 +69,8 @@
       "participant": "Participante",
       "micMuted": "Microfone silenciado",
       "videoOff": "Câmera desativada",
+      "videoSuspended": "Vídeo pausado",
+      "videoSuspendedHint": "Conexão fraca · retomada auto",
       "fullscreen": "Tela cheia",
       "dragToMove": "Arrastar para mover"
     },
@@ -75,7 +78,9 @@
       "connectionError": "Erro de conexão",
       "videoSwitchFailed": "Falha ao trocar vídeo",
       "cameraSwitched": "Câmera trocada",
-      "cameraSwitchFailed": "Falha ao trocar câmera"
+      "cameraSwitchFailed": "Falha ao trocar câmera",
+      "videoSuspendedPoorConnection": "Conexão fraca — vídeo pausado para manter a chamada",
+      "videoResumed": "Conexão recuperada — vídeo reativado"
     },
     "permissions": {
       "title": {
