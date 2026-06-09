@@ -1184,12 +1184,21 @@ class ConversationViewModel: ObservableObject {
             // Surface GRDB data immediately (fast path for returning to a conversation).
             // Pré-hydrate les traductions AVANT loadInitial : les bulles
             // s'affichent dès le premier rendu avec le Prisme Linguistique.
-            await hydratePersistedTranslations()
+            // Overlap the two independent pre-paint GRDB reads instead of
+            // awaiting them in series: persisted translations (must land before
+            // `apply` so bubbles paint with the Prisme already applied — no
+            // untranslated flash) and the message snapshot. They touch disjoint
+            // state (the translations dict vs the message store) and are pure
+            // reads on the WAL pool, so they run concurrently; awaiting BOTH
+            // before `apply` keeps the exact ordering invariant while cutting the
+            // sequential read latency when reopening a cached conversation.
+            async let translationsHydrated: Void = hydratePersistedTranslations()
             // Atomic publish — read off-MainActor, then apply messages +
             // dependent metadata in a single MainActor slice so no
             // intermediate frame ever renders audio bubbles without their
             // transcription / translated audios dictionaries.
             let freshSnapshot = await messageStore.loadInitialSnapshot()
+            await translationsHydrated
             messageStore.apply(records: freshSnapshot)
             hydrateMetadataFromGRDB(from: freshSnapshot)
             await hydrateTranslationsFromCache()
@@ -1210,8 +1219,10 @@ class ConversationViewModel: ObservableObject {
         case .stale:
             // Surface GRDB data immediately, then revalidate in background.
             // Pré-hydrate les traductions AVANT loadInitial (cf. .fresh).
-            await hydratePersistedTranslations()
+            // Lectures GRDB indépendantes parallélisées (cf. branche .fresh).
+            async let translationsHydrated: Void = hydratePersistedTranslations()
             let staleSnapshot = await messageStore.loadInitialSnapshot()
+            await translationsHydrated
             messageStore.apply(records: staleSnapshot)
             hydrateMetadataFromGRDB(from: staleSnapshot)
             if messageStore.messages.isEmpty {
