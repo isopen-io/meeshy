@@ -368,4 +368,34 @@ extension CrashDiagnosticsManager: MXMetricManagerSubscriber {
             }
         }
     }
+
+    /// MetricKit MÉTRIQUES (distinct des diagnostics) : agrégats DEVICE-RÉELS
+    /// livrés ~1×/jour par l'OS. On logge les headline (scrollHitchTimeRatio,
+    /// CPU, mémoire pic) et on persiste le JSON complet dans
+    /// `Documents/metrickit/` pour export + analyse offline. Le ratio de hitch
+    /// scroll est LE signal de jank de rendu sur device réel — impossible à
+    /// mesurer sur simulateur (cf. pipeline perf : signposts + MetricKit + xctrace).
+    nonisolated func didReceive(_ payloads: [MXMetricPayload]) {
+        for payload in payloads {
+            let hitch = payload.animationMetrics?.scrollHitchTimeRatio
+            let cpu = payload.cpuMetrics?.cumulativeCPUTime
+            let peak = payload.memoryMetrics?.peakMemoryUsage
+            Logger.crash.info("""
+            MetricKit metrics: scrollHitchTimeRatio=\(hitch?.description ?? "n/a", privacy: .public) \
+            cpuTime=\(cpu?.description ?? "n/a", privacy: .public) \
+            peakMemory=\(peak?.description ?? "n/a", privacy: .public)
+            """)
+            Self.persistMetricPayload(payload.jsonRepresentation(), end: payload.timeStampEnd)
+        }
+    }
+
+    /// Écrit le JSON MetricKit dans `Documents/metrickit/` (exportable via
+    /// Xcode → Devices & Simulators → Container, ou partagé pour analyse).
+    nonisolated private static func persistMetricPayload(_ json: Data, end: Date) {
+        guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+        let dir = docs.appendingPathComponent("metrickit", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let name = "metric-\(Int(end.timeIntervalSince1970)).json"
+        try? json.write(to: dir.appendingPathComponent(name))
+    }
 }
