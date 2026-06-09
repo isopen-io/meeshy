@@ -538,6 +538,11 @@ final class MessageListViewController: UIViewController {
     private func applySnapshot(animated: Bool = true) {
         let _spState = PerfSignpost.signposter.beginInterval("applySnapshot")
         defer { PerfSignpost.signposter.endInterval("applySnapshot", _spState) }
+        // Sous-segments pour pinpointer le coût des 75ms mesurés sur device :
+        // `snapshot.build` (prépa O(n) : reversed+map+groupByDay+serverId+
+        // reconfigure-scan) vs `snapshot.apply` (dataSource.apply = diff +
+        // animation + réalisation des cellules). IDs uniques car imbriqués.
+        let _buildState = PerfSignpost.signposter.beginInterval("snapshot.build", id: PerfSignpost.signposter.makeSignpostID())
         var snapshot = NSDiffableDataSourceSnapshot<MessageListSection, MessageListItem>()
         snapshot.appendSections([.main])
 
@@ -639,7 +644,10 @@ final class MessageListViewController: UIViewController {
         // Scroll in the apply completion handler so the new item exists in the
         // layout before `scrollToItem` runs (apply is asynchronous for the
         // animated diff path).
+        PerfSignpost.signposter.endInterval("snapshot.build", _buildState)
+        let _applyState = PerfSignpost.signposter.beginInterval("snapshot.apply", id: PerfSignpost.signposter.makeSignpostID())
         dataSource.apply(snapshot, animatingDifferences: animated) { [weak self] in
+            PerfSignpost.signposter.endInterval("snapshot.apply", _applyState)
             guard let self else { return }
             // La pill flottante doit refléter le nouveau top du flux dès que
             // les cellules sont en place (insertion d'un nouveau message, etc.).
