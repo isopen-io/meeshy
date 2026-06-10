@@ -210,6 +210,22 @@ export async function updateUserProfile(fastify: FastifyInstance) {
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
 
+      // B3 (5.3) — un changement de langue doit rafraîchir le snapshot
+      // `resolvedLanguages` des sockets connectés du user, sinon SOCKET_LANG_FILTER
+      // continue de filtrer sur l'ancienne langue jusqu'à reconnexion. Best-effort.
+      const langChanged =
+        body.systemLanguage !== undefined ||
+        body.regionalLanguage !== undefined ||
+        body.customDestinationLanguage !== undefined;
+      if (langChanged) {
+        fastify.socketIOHandler?.getManager?.()?.refreshUserResolvedLanguages(userId!, {
+          systemLanguage: updatedUser.systemLanguage,
+          regionalLanguage: updatedUser.regionalLanguage,
+          customDestinationLanguage: updatedUser.customDestinationLanguage,
+          deviceLocale: updatedUser.deviceLocale,
+        });
+      }
+
       const isAdmin = updatedUser.role === 'ADMIN' || updatedUser.role === 'BIGBOSS';
       const permissions = {
         canAccessAdmin: isAdmin,
