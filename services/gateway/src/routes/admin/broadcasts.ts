@@ -17,11 +17,11 @@ const logger = enhancedLogger.child({ module: 'BroadcastRoutes' });
 const requireBroadcastPermission = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return reply.status(401).send({ success: false, message: 'Authentification requise' });
+    return sendUnauthorized(reply, 'Authentification requise');
   }
   const userRole = authContext.registeredUser.role;
   if (!['BIGBOSS', 'ADMIN'].includes(userRole)) {
-    return reply.status(403).send({ success: false, message: 'Permission insuffisante' });
+    return sendForbidden(reply, 'Permission insuffisante');
   }
 };
 
@@ -425,17 +425,11 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       });
 
       if (!broadcast) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Broadcast non trouve',
-        });
+        return sendNotFound(reply, 'Broadcast non trouve');
       }
 
       if (!['DRAFT', 'READY'].includes(broadcast.status)) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Seuls les broadcasts en statut DRAFT ou READY peuvent etre supprimes',
-        });
+        return sendBadRequest(reply, 'Seuls les broadcasts en statut DRAFT ou READY peuvent etre supprimes');
       }
 
       // Audit log before deletion
