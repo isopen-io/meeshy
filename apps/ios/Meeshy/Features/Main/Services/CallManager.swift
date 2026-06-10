@@ -5,6 +5,7 @@ import Combine
 import Network
 import UIKit
 import MeeshySDK
+import MeeshyUI
 @preconcurrency import WebRTC
 import os
 
@@ -76,6 +77,16 @@ final class CallManager: ObservableObject {
             // micro est coupé — RTCAudioSession possède .playAndRecord/.voiceChat).
             // Synchrone (setCallActive est nonisolated) → pas de reorder de Task.
             MediaSessionCoordinator.shared.setCallActive(active)
+
+            // Au DÉMARRAGE d'un appel (transition inactif→actif uniquement) : couper
+            // tout média en cours (voice notes, vidéo, story). L'appel VoIP prend la
+            // main sur l'audio. Placé APRÈS setCallActive → le stop est call-aware (la
+            // session reste à l'appel, aucun teardown). Évite le média orphelin qui
+            // resterait « muet définitivement » au raccrochage : plus rien à réactiver,
+            // le prochain tap utilisateur reconfigure proprement la session.
+            if active && !oldValue.isActive {
+                PlaybackCoordinator.shared.stopAll()
+            }
         }
     }
     @Published private(set) var transcriptionService = CallTranscriptionService()

@@ -923,15 +923,14 @@ public struct MeeshyAudioEditorView: View {
     // MARK: - Audio Session
 
     private func configureAudioSession() {
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .default)
-        try? session.setActive(true)
+        // Source UNIQUE call-aware : l'éditeur audio ne stomp pas un appel VoIP actif
+        // (sinon micro coupé). No-op pendant un appel.
+        MediaSessionCoordinator.shared.activatePlaybackSync(options: [])
     }
 
     private func deactivateAudioSession() {
-        try? AVAudioSession.sharedInstance().setActive(
-            false, options: [.notifyOthersOnDeactivation]
-        )
+        // No-op pendant un appel (la session appartient à l'appel) — call-aware.
+        MediaSessionCoordinator.shared.deactivatePlaybackSync()
     }
 
     // MARK: - Confirm / Cancel

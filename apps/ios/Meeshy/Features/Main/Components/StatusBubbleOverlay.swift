@@ -79,6 +79,12 @@ struct StatusBubbleOverlay: View {
         .onAppear {
             appearAnimation = true
         }
+        .onDisappear {
+            // Stop-à-la-sortie déterministe : si la bulle est retirée sans passer par
+            // dismiss()/replyTapped() (ex: currentEntry vidé ailleurs), l'audio d'humeur
+            // ne doit pas fuir sur l'écran suivant (sinon dépend de la dealloc ARC).
+            audioPlayer.stop()
+        }
     }
 
     // MARK: - Thought Circle
