@@ -103,7 +103,9 @@ file-by-file audit — every one of the 673 iOS files was read in full.
 - [ ] Transport spike: WebSocket vs long-polling on Android (ADR-015) →
       Socket.IO wrappers ×2 exposing sealed-class `SharedFlow`s
 - [ ] Foreground-socket / background-FCM delivery doctrine
-- [ ] `ConversationSyncEngine` — cache-first sync, atomic merge, `seq` gap-fill, bounded fan-out
+- [~] `ConversationSyncEngine` — socket→Room relay + reconnect fan-out (×3 cap)
+      + session-driven lifecycle (`SessionLifecycleOrchestrator`); `seq` gap-fill
+      + `updatedSince` checkpoint pending
 - [ ] Dual `kotlinx.serialization` config (lenient DTOs / strict crypto+auth)
 - [ ] FCM push (notify-then-fetch) + `NotificationCoordinator` authority model
 - [ ] **E2EE** — gated behind ADR-018..020: threat model, libsignal pairwise +
@@ -136,8 +138,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [x] `:feature:auth` — login screen + `AuthViewModel`
 - [x] `:feature:conversations` — cache-first conversation list, tap-through
 - [x] `:feature:chat` — cache-first message list + `MessageBubble` + composer
-- [ ] Pending: session layer (current user → outgoing bubbles + Prisme prefs),
-      outbox-backed send, then Feed / Stories / Calls / the rest
+- [x] Session layer (current user → outgoing bubbles + Prisme prefs)
+- [x] Outbox-backed optimistic send (pending bubble → outcome relay → dedup)
+- [x] `:feature:settings` — grouped settings hub (visual shell, logout wired)
+- [x] `:feature:contacts` — 4-tab shell (Contacts/Requests/Discover/Blocked)
+- [ ] Pending: Feed enrichment / Stories / Calls / the rest
 
 ## Phase 6 — Integration & final audit
 - [ ] Navigation graph + deep links (`meeshy://`, `https://meeshy.me`)
@@ -194,7 +199,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 
 ## C. Chat / Messaging
 - [ ] Real-time 1:1 / group chat: send, edit, delete (for-me / for-everyone, 2h window), reply, forward
-- [ ] Optimistic send with in-place server-ACK upgrade (no flicker) + `clientMessageId` reconciliation
+- [~] Optimistic send with in-place server-ACK upgrade (no flicker) + `clientMessageId`
+      reconciliation — pending bubble + outcome relay + SWR dedup done; failed-retry
+      affordance UI pending
 - [ ] Inverted message list, date section headers, joined banner, unread separator, E2EE disclaimer
 - [ ] Pagination of older messages (offset / before-cursor / around-anchor)
 - [ ] Reactions: quick-strip (usage-ordered) + full picker; add/remove; reaction detail breakdown
@@ -224,7 +231,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Send with attachments (TUS resumable; audio over socket, others over REST) + upload progress
 - [ ] In-conversation message search (debounced, translation-match aware) + jump-to-result
 - [ ] Scroll-to-bottom control with rich unread/typing/offline/search states
-- [ ] Typing indicators (header + inline)
+- [~] Typing indicators (header + inline) — inline indicator with 5s auto-clear done
 - [ ] Static location pin + live location sharing (timed sessions) + fullscreen map / directions
 - [ ] OpenGraph link-preview cards + in-app browser; tracker-param stripping
 - [ ] Report message (typed reasons + detail); per-conversation animated themed background
@@ -441,8 +448,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Optimistic updates with snapshot rollback + in-flight guards + self/others socket-echo split
 - [ ] `MessageStateMachine` + localId↔serverId reconciliation (no duplicate bubbles)
 - [ ] Cold-start full conversation sync (bounded parallel paging, retries, completeness guards)
-- [ ] Foreground / reconnect delta sync (`updatedSince` checkpoint, burst cooldown, gap-fill)
-- [ ] Real-time socket→Room relay (messages, reactions, read status, translations, lifecycle)
+- [~] Foreground / reconnect delta sync — reconnect refresh fan-out (×3 cap) done;
+      `updatedSince` checkpoint, burst cooldown, gap-fill pending
+- [~] Real-time socket→Room relay — messages, reactions, unread, conversation
+      lifecycle done; read status + translations relay pending
 - [ ] Two Socket.IO connections (message + social), long-polling transport, robust reconnect + room re-join
 - [ ] Crash-safe boot recovery for in-flight queue items + orphaned audio files
 - [ ] Resumable (TUS) uploads surviving app kill; daily message-retention cleanup; DB maintenance
