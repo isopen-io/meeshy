@@ -37,12 +37,22 @@ public struct MessageStateMachine: Sendable {
             state = .sending
 
         case (.sending, .serverAck(let id, _)),
-             (.queued, .serverAck(let id, _)):
+             (.queued, .serverAck(let id, _)),
+             (.failed, .serverAck(let id, _)):
             // `.queued` accepts the ack too: a send that failed once sits in `.queued`
             // (retry budget intact) and is replayed by the OutboxFlusher. When that
             // replay succeeds, reconciliation delivers `serverAck` while the record is
             // still `.queued` — without this case the ack is rejected and the bubble
             // stays stuck on the "sending" clock for a message the server received.
+            // `.failed` accepts it as well: the ack is authoritative — the server HAS
+            // the message. A row can sit in `.failed` from the orphan reconciler's
+            // grace-window guess (a legitimately slow in-flight send, e.g. a long
+            // attachment upload) or from an exhausted outbox whose final attempt's
+            // ack raced the exhaustion. Rejecting the ack would keep a delivered
+            // message displayed as failed until the next REST refresh heals it via
+            // the upsert's max(state) merge; accepting it heals immediately and
+            // removes the misleading manual-retry affordance (a retry would be
+            // deduped by clientMessageId anyway, but the UI shouldn't invite it).
             serverId = id
             state = .sent
 

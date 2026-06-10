@@ -913,6 +913,77 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertTrue(rows[0].isEncrypted)
     }
 
+    // MARK: - No-op upsert (anti re-render cascade)
+
+    /// The same payload routinely reaches the upsert several times (socket
+    /// handler + global SyncEngine persistor + REST refresh). A pass that
+    /// changes NOTHING must write nothing and post NO refresh — every no-op
+    /// pass used to bump `changeVersion`/`updatedAt`, which defeated
+    /// MessageStore's `newRecords != messages` skip and triggered a full
+    /// applySnapshot reconfiguring every visible cell (main-thread jank
+    /// felt while typing).
+    func test_upsertFromAPIMessages_identicalEcho_doesNotDirtyRowNorPostRefresh() async throws {
+        let conv = "conv_noop_echo"
+        let msg = makeAPIMessage(id: "m_noop_echo", conversationId: conv)
+        try await actor.upsertFromAPIMessages([msg])
+        let afterFirst = try actor.messages(for: conv, limit: 10)[0]
+
+        // Drain the first upsert's (legitimate) refresh, which is dispatched
+        // async onto the main queue, before arming the inverted observer.
+        await drainMainQueueNotifications()
+
+        let noRefresh = expectation(description: "no refresh for a no-op upsert")
+        noRefresh.isInverted = true
+        let observer = NotificationCenter.default.addObserver(
+            forName: .messageStoreShouldRefresh, object: nil, queue: .main
+        ) { notif in
+            guard let cid = notif.userInfo?["conversationId"] as? String,
+                  cid == conv else { return }
+            noRefresh.fulfill()
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        try await actor.upsertFromAPIMessages([msg])
+
+        await fulfillment(of: [noRefresh], timeout: 0.3)
+        let afterSecond = try actor.messages(for: conv, limit: 10)[0]
+        XCTAssertEqual(afterSecond.changeVersion, afterFirst.changeVersion,
+            "an identical echo must not dirty the row (changeVersion bump)")
+        XCTAssertEqual(afterSecond.updatedAt, afterFirst.updatedAt,
+            "an identical echo must not re-stamp updatedAt")
+    }
+
+    /// Counterpart: a payload that DOES change the row still writes and
+    /// posts the scoped refresh.
+    func test_upsertFromAPIMessages_changedContent_bumpsVersionAndPostsRefresh() async throws {
+        let conv = "conv_real_change"
+        try await actor.upsertFromAPIMessages(
+            [makeAPIMessage(id: "m_change", conversationId: conv, content: "v1")]
+        )
+        let afterFirst = try actor.messages(for: conv, limit: 10)[0]
+        await drainMainQueueNotifications()
+
+        let refreshed = expectation(description: "refresh fires for a real change")
+        refreshed.assertForOverFulfill = false
+        let observer = NotificationCenter.default.addObserver(
+            forName: .messageStoreShouldRefresh, object: nil, queue: .main
+        ) { notif in
+            guard let cid = notif.userInfo?["conversationId"] as? String,
+                  cid == conv else { return }
+            refreshed.fulfill()
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        try await actor.upsertFromAPIMessages(
+            [makeAPIMessage(id: "m_change", conversationId: conv, content: "v2")]
+        )
+
+        await fulfillment(of: [refreshed], timeout: 1.0)
+        let afterSecond = try actor.messages(for: conv, limit: 10)[0]
+        XCTAssertEqual(afterSecond.content, "v2")
+        XCTAssertGreaterThan(afterSecond.changeVersion, afterFirst.changeVersion)
+    }
+
     // MARK: - Story-reply citation (A.2)
 
     /// A.2 — un message qui répond à une story (payload serveur enrichi
@@ -1351,5 +1422,85 @@ final class MessagePersistenceActorTests: XCTestCase {
         let rows = try reactions(in: conv)
         XCTAssertEqual(Set(rows.map(\.emoji)), ["👍", "🎉"],
             "a 👍 cap of 1 must not suppress a distinct 🎉 reaction")
+    }
+
+    // MARK: - Orphaned sending reconciliation
+
+    /// An optimistic row stuck in `.sending` with no serverId, no live outbox
+    /// record, and older than the grace window has no code path left that can
+    /// ever transition it — the user saw the clock icon forever on every
+    /// conversation re-open. It must flip to `.failed` (manual retry affordance).
+    func test_reconcileOrphanedSendingRows_orphanOlderThanGrace_flipsToFailed() async throws {
+        let old = Date().addingTimeInterval(-300)
+        let record = MessageRecordFactory.make(
+            localId: "orphan_1", conversationId: "conv_orphan", state: .sending, createdAt: old
+        )
+        try await actor.insertOptimistic(record)
+
+        await actor.reconcileOrphanedSendingRows(conversationId: "conv_orphan", olderThan: 120)
+
+        let fetched = try actor.messages(for: "conv_orphan", limit: 10)
+        XCTAssertEqual(fetched[0].state, .failed)
+    }
+
+    func test_reconcileOrphanedSendingRows_recentRow_isLeftAlone() async throws {
+        let record = MessageRecordFactory.make(
+            localId: "inflight_1", conversationId: "conv_recent", state: .sending, createdAt: Date()
+        )
+        try await actor.insertOptimistic(record)
+
+        await actor.reconcileOrphanedSendingRows(conversationId: "conv_recent", olderThan: 120)
+
+        let fetched = try actor.messages(for: "conv_recent", limit: 10)
+        XCTAssertEqual(fetched[0].state, .sending,
+            "a row within the grace window may still be legitimately in flight")
+    }
+
+    func test_reconcileOrphanedSendingRows_rowWithLiveOutbox_isLeftAlone() async throws {
+        let old = Date().addingTimeInterval(-300)
+        let record = MessageRecordFactory.make(
+            localId: "queued_1", conversationId: "conv_outbox", state: .queued, createdAt: old
+        )
+        try await actor.insertOptimistic(record)
+        try await dbQueue.write { db in
+            try OutboxRecord(
+                kind: .sendMessage,
+                conversationId: "conv_outbox",
+                messageLocalId: "queued_1",
+                clientMessageId: "queued_1",
+                payload: Data(),
+                status: .pending
+            ).insert(db)
+        }
+
+        await actor.reconcileOrphanedSendingRows(conversationId: "conv_outbox", olderThan: 120)
+
+        let fetched = try actor.messages(for: "conv_outbox", limit: 10)
+        XCTAssertEqual(fetched[0].state, .queued,
+            "a live outbox record still owns the retry loop — don't fail its message")
+    }
+
+    func test_reconcileOrphanedSendingRows_rowWithExhaustedOutbox_flipsToFailed() async throws {
+        let old = Date().addingTimeInterval(-300)
+        let record = MessageRecordFactory.make(
+            localId: "exhausted_1", conversationId: "conv_exhausted", state: .sending, createdAt: old
+        )
+        try await actor.insertOptimistic(record)
+        try await dbQueue.write { db in
+            try OutboxRecord(
+                kind: .sendMessage,
+                conversationId: "conv_exhausted",
+                messageLocalId: "exhausted_1",
+                clientMessageId: "exhausted_1",
+                payload: Data(),
+                status: .exhausted
+            ).insert(db)
+        }
+
+        await actor.reconcileOrphanedSendingRows(conversationId: "conv_exhausted", olderThan: 120)
+
+        let fetched = try actor.messages(for: "conv_exhausted", limit: 10)
+        XCTAssertEqual(fetched[0].state, .failed,
+            "an exhausted outbox no longer retries — the row is orphaned")
     }
 }

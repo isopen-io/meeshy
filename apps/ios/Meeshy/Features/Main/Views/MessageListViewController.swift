@@ -71,10 +71,6 @@ final class MessageListViewController: UIViewController {
     /// server id (which is what `ReplyReference.messageId` carries —
     /// gateway sends `replyTo.id`, not the local UUID).
     private var serverIdToLocalId: [String: String] = [:]
-    private var lastMessageTranslations: [String: [MessageTranslation]] = [:]
-    private var lastMessageTranscriptions: [String: MessageTranscription] = [:]
-    private var lastMessageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:]
-    private var lastActiveTranslationOverrides: [String: MessageTranslation?] = [:]
     private var pendingReconfigureMessageIds = Set<String>()
     private var reconfigureDebounceTimer: Timer?
 
@@ -427,6 +423,25 @@ final class MessageListViewController: UIViewController {
             let mentionDisplayNames = vm?.mentionDisplayNames ?? [:]
             let isLastReceived = (vm?.lastReceivedMessageId == message.id)
             let isLastSent = (vm?.lastSentMessageId == message.id)
+            let messageId = message.id
+            // Flag-strip language selection — VM-owned (lifted out of the
+            // bubble's @State so it flows through the Equatable gate). A tap
+            // writes back to the VM, whose publisher triggers a targeted
+            // reconfigure of this cell with the fresh snapped values.
+            let languageSelection = vm?.bubbleLanguageSelections[messageId]
+            let setActiveDisplayLanguage: ((String?) -> Void) = { [weak self] code in
+                self?.conversationViewModel?.setBubbleActiveDisplayLanguage(code, for: messageId)
+            }
+            let setSecondaryLanguage: ((String?) -> Void) = { [weak self] code in
+                self?.conversationViewModel?.setBubbleSecondaryLanguage(code, for: messageId)
+            }
+            // Avatar/name tap → profile deep link. Routed through the
+            // controller-held Router so the bubble no longer needs the
+            // `@EnvironmentObject Router` that re-rendered every visible
+            // bubble on every Router publish.
+            let openProfileHandler: ((ProfileSheetUser) -> Void) = { [weak self] user in
+                self?.router.deepLinkProfileUser = user
+            }
             let user = AuthManager.shared.currentUser
             let userLanguages: (regional: String?, custom: String?) = (
                 user?.regionalLanguage,
@@ -459,7 +474,6 @@ final class MessageListViewController: UIViewController {
             let mediaTapHandler = self.onMediaTap
             let consumeViewOnceHandler = self.onConsumeViewOnce
             let requestTranslationHandler = self.onRequestTranslation
-            let messageId = message.id
             let isMine = message.isMe
 
             // No UIContextMenuInteraction here — the user wants a custom
@@ -481,7 +495,14 @@ final class MessageListViewController: UIViewController {
                     onSwipeForward: { swipeForwardHandler?(messageId) },
                     onLongPress: { longPressHandler?(messageId) }
                 ) {
-                    ThemedMessageBubble(
+                    // Equatable re-render gate. The flag-tap @State that made a
+                    // direct `.equatable()` unsafe (observed 2026-05-25, revert
+                    // b9a39c2c) is now lifted into the VM and flows through `==`
+                    // as plain inputs; the bubble's remaining @State (sheets,
+                    // fullscreen) lives on a CHILD of the gate's stateless
+                    // content, so its invalidations bypass `==` entirely. Same
+                    // topology as the Feed's `FeedPostCard().equatable()`.
+                    EquatableMessageBubble(bubble: ThemedMessageBubble(
                         message: message,
                         contactColor: accent,
                         isDirect: direct,
@@ -514,17 +535,14 @@ final class MessageListViewController: UIViewController {
                         isLastSentMessage: isLastSent,
                         mentionDisplayNames: mentionDisplayNames,
                         currentUserId: myId,
-                        userLanguages: userLanguages
-                    )
-                    // NOTE: do NOT add `.equatable()` here. ThemedMessageBubble
-                    // owns @State (activeDisplayLangCode / secondaryLangCode for
-                    // the flag-tap translation panel, plus sheet/fullscreen
-                    // state). On iOS 18+ an EquatableView re-consults `==` even
-                    // on @State invalidation; since `==` can't see the @State,
-                    // the flag tap would write state but never re-render the
-                    // secondary-translation panel (observed 2026-05-25). The
-                    // comprehensive `==` exists for a future fix that first lifts
-                    // that @State into the ViewModel (indexed by message id).
+                        userLanguages: userLanguages,
+                        activeDisplayLangCode: languageSelection?.activeDisplayLangCode,
+                        secondaryLangCode: languageSelection?.secondaryLangCode,
+                        onSetActiveDisplayLanguage: setActiveDisplayLanguage,
+                        onSetSecondaryLanguage: setSecondaryLanguage,
+                        onOpenProfile: openProfileHandler
+                    ))
+                    .equatable()
                 }
                 .environmentObject(host)
                 .environmentObject(stories)
@@ -697,95 +715,15 @@ final class MessageListViewController: UIViewController {
         // collapsed re-snapshots is the worst case).
         guard let vm = conversationViewModel else { return }
 
-        // Initialize cache values to avoid stale diffing on subscription
-        lastMessageTranslations = vm.messageTranslations
-        lastMessageTranscriptions = vm.messageTranscriptions
-        lastMessageTranslatedAudios = vm.messageTranslatedAudios
-        lastActiveTranslationOverrides = vm.activeTranslationOverrides
-
-        vm.$messageTranslations
-            .receive(on: DispatchQueue.main)
-            .dropFirst()
-            .sink { [weak self] newTranslations in
-                guard let self = self else { return }
-                var changed: Set<String> = []
-                for (msgId, val) in newTranslations {
-                    if self.lastMessageTranslations[msgId] != val {
-                        changed.insert(msgId)
-                    }
-                }
-                for msgId in self.lastMessageTranslations.keys {
-                    if newTranslations[msgId] == nil {
-                        changed.insert(msgId)
-                    }
-                }
-                self.lastMessageTranslations = newTranslations
-                self.queueReconfigure(for: changed)
-            }
-            .store(in: &cancellables)
-
-        vm.$messageTranscriptions
-            .receive(on: DispatchQueue.main)
-            .dropFirst()
-            .sink { [weak self] newTranscriptions in
-                guard let self = self else { return }
-                var changed: Set<String> = []
-                for (msgId, val) in newTranscriptions {
-                    if self.lastMessageTranscriptions[msgId] != val {
-                        changed.insert(msgId)
-                    }
-                }
-                for msgId in self.lastMessageTranscriptions.keys {
-                    if newTranscriptions[msgId] == nil {
-                        changed.insert(msgId)
-                    }
-                }
-                self.lastMessageTranscriptions = newTranscriptions
-                self.queueReconfigure(for: changed)
-            }
-            .store(in: &cancellables)
-
-        vm.$messageTranslatedAudios
-            .receive(on: DispatchQueue.main)
-            .dropFirst()
-            .sink { [weak self] newAudios in
-                guard let self = self else { return }
-                var changed: Set<String> = []
-                for (msgId, val) in newAudios {
-                    if self.lastMessageTranslatedAudios[msgId] != val {
-                        changed.insert(msgId)
-                    }
-                }
-                for msgId in self.lastMessageTranslatedAudios.keys {
-                    if newAudios[msgId] == nil {
-                        changed.insert(msgId)
-                    }
-                }
-                self.lastMessageTranslatedAudios = newAudios
-                self.queueReconfigure(for: changed)
-            }
-            .store(in: &cancellables)
-
-        vm.$activeTranslationOverrides
-            .receive(on: DispatchQueue.main)
-            .dropFirst()
-            .sink { [weak self] newOverrides in
-                guard let self = self else { return }
-                var changed: Set<String> = []
-                for (msgId, val) in newOverrides {
-                    if self.lastActiveTranslationOverrides[msgId] != val {
-                        changed.insert(msgId)
-                    }
-                }
-                for msgId in self.lastActiveTranslationOverrides.keys {
-                    if newOverrides[msgId] == nil {
-                        changed.insert(msgId)
-                    }
-                }
-                self.lastActiveTranslationOverrides = newOverrides
-                self.queueReconfigure(for: changed)
-            }
-            .store(in: &cancellables)
+        observePerMessageDictionary(vm.$messageTranslations, initial: vm.messageTranslations)
+        observePerMessageDictionary(vm.$messageTranscriptions, initial: vm.messageTranscriptions)
+        observePerMessageDictionary(vm.$messageTranslatedAudios, initial: vm.messageTranslatedAudios)
+        observePerMessageDictionary(vm.$activeTranslationOverrides, initial: vm.activeTranslationOverrides)
+        // Flag-strip selection lifted out of the bubble's @State — a tap
+        // writes to the VM; reconfigure the touched cell so the bubble
+        // re-renders with the fresh snapped inputs (the Equatable gate sees
+        // them change and lets the body re-run).
+        observePerMessageDictionary(vm.$bubbleLanguageSelections, initial: vm.bubbleLanguageSelections)
 
         vm.$preferredLanguageRevision
             .receive(on: DispatchQueue.main)
@@ -808,6 +746,36 @@ final class MessageListViewController: UIViewController {
             .store(in: &cancellables)
     }
 
+    /// Diffe un dictionnaire `[messageId: Value]` publié par le ViewModel et
+    /// queue un reconfigure ciblé pour chaque clé dont la valeur a changé ou
+    /// disparu. Mutualise les cinq flux de métadonnées par message
+    /// (traductions, transcriptions, audios traduits, overrides, sélection
+    /// drapeaux) — avant, chaque flux dupliquait ce diff sur 18 lignes avec
+    /// sa propre propriété `lastX`. Le snapshot précédent vit dans la closure
+    /// (capture `var`), le sink s'exécute sur le main via `receive(on:)`.
+    private func observePerMessageDictionary<Value: Equatable>(
+        _ publisher: Published<[String: Value]>.Publisher,
+        initial: [String: Value]
+    ) {
+        var last = initial
+        publisher
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] new in
+                guard let self else { return }
+                var changed: Set<String> = []
+                for (msgId, val) in new where last[msgId] != val {
+                    changed.insert(msgId)
+                }
+                for msgId in last.keys where new[msgId] == nil {
+                    changed.insert(msgId)
+                }
+                last = new
+                self.queueReconfigure(for: changed)
+            }
+            .store(in: &cancellables)
+    }
+
     private func queueReconfigure(for messageIds: Set<String>) {
         guard !messageIds.isEmpty else { return }
         pendingReconfigureMessageIds.formUnion(messageIds)
@@ -826,7 +794,11 @@ final class MessageListViewController: UIViewController {
     private func reconfigureMessages(serverIds: Set<String>) {
         guard let dataSource = dataSource, !serverIds.isEmpty else { return }
 
-        let localIds = serverIds.compactMap { self.serverIdToLocalId[$0] }
+        // Translation/transcription events key by server id; the flag-strip
+        // selection keys by `message.id`, which IS the local id for a not-yet
+        // acked optimistic row. Fall back to the raw key — non-existent items
+        // are filtered against the snapshot below anyway.
+        let localIds = serverIds.map { self.serverIdToLocalId[$0] ?? $0 }
         guard !localIds.isEmpty else { return }
 
         var snapshot = dataSource.snapshot()

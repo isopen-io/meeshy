@@ -108,6 +108,16 @@ struct RootView: View {
                             conversation: conv,
                             replyContext: router.pendingReplyContext
                         )
+                        // Identité par conversation — même fix que iPadRootView.
+                        // `Router.navigateToConversation` REMPLACE la pile en une
+                        // mutation (`path = [.conversation(B)]`) : déjà dans la
+                        // conversation A, un tap sur la notification de B réutilise
+                        // cette vue à la même profondeur — la prop `conversation`
+                        // change (header OK) mais le @StateObject viewModel créé
+                        // pour A survit et `.task` ne se relance pas : le contenu
+                        // restait sur A. `.id` force le teardown (flush du
+                        // brouillon de A via onDisappear) + une vue neuve pour B.
+                        .id(conv.id)
                         .navigationBarHidden(true)
                         .onAppear { router.pendingReplyContext = nil }
                     case .settings:

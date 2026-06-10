@@ -1584,7 +1584,14 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             clientMessageId: cid
         )
         return await withCheckedContinuation { continuation in
-            socket.emitWithAck("message:send-with-attachments", payload).timingOut(after: 30) { items in
+            // 10s (was 30s): the gateway acks as soon as the message row is
+            // created — attachments were already uploaded separately, so a
+            // healthy ack lands in well under 2s. Holding the optimistic
+            // bubble in `.sending` for 30s only prolonged the clock icon; on
+            // timeout the caller falls through to the outbox retry loop,
+            // which remains the durable safety net. Matches `sendAsync`'s
+            // 10s default on the text path.
+            socket.emitWithAck("message:send-with-attachments", payload).timingOut(after: 10) { items in
                 if let response = items.first as? [String: Any],
                    let success = response["success"] as? Bool, success,
                    let data = response["data"] as? [String: Any],
