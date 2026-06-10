@@ -50,6 +50,13 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     ///      user was looking at it.
     /// Pass `nil` (on view disappear) to restore pass-through behaviour.
     func setCurrentlyOpenConversation(_ conversationId: String?)
+
+    /// The conversation currently forced to unread=0 and excluded from the
+    /// cross-conversation aggregate, or `nil`. Read in
+    /// `ConversationViewModel.deinit` so the gate is relinquished ONLY when it
+    /// still points at this conversation — order-safe across a fast A→B switch
+    /// where `deinit(A)` may run after `start(B)` set the gate to B.
+    var currentlyOpenConversationId: String? { get }
 }
 
 public extension ConversationSyncEngineProviding {
@@ -103,7 +110,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// conversation's `unreadCount` to 0 on every server broadcast and
     /// excludes it from the cross-conversation aggregator.
     private var _currentlyOpenConversationId: String?
-    private var currentlyOpenConversationId: String? {
+    /// Public for the `ConversationSyncEngineProviding` read requirement (used by
+    /// `ConversationViewModel.deinit` for the order-safe, identity-conditional
+    /// gate release). `setCurrentlyOpenConversation(_:)` remains the canonical
+    /// mutation entry point.
+    public var currentlyOpenConversationId: String? {
         get { stateQueue.sync { _currentlyOpenConversationId } }
         set { stateQueue.sync { _currentlyOpenConversationId = newValue } }
     }

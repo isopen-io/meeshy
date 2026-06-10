@@ -65,12 +65,18 @@ struct ConversationListView: View {
 
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    // Lecture directe sans @ObservedObject — évite que chaque changement de thème ou de verrou
-    // force un re-render complet de la liste (centaines de rows). Les valeurs sont lues
-    // lors des refreshs naturels (scroll, interaction).
-    // internal for cross-file extension access
+    // Theme stays a direct read (a theme flip should repaint the whole list
+    // anyway, and it's infrequent). internal for cross-file extension access.
     var theme: ThemeManager { ThemeManager.shared }
-    var lockManager: ConversationLockManager { ConversationLockManager.shared }
+    // Lock + block ARE observed: they drive the swipe-action icons (Unlock /
+    // Unblock toggles built by `leadingSwipeActions` / `trailingSwipeActions`)
+    // which the row's Equatable gate compares. A direct read would freeze a
+    // stale action behind the gate after a lock/unlock or block/unblock (Opus
+    // review finding 2026-06-10) — they aren't in `renderFingerprint`. Both
+    // change only on explicit user action (rare), and the gate keeps unaffected
+    // rows static, so observing them is free on the hot scroll path.
+    @ObservedObject var lockManager = ConversationLockManager.shared
+    @ObservedObject var blockService = BlockService.shared
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet de la liste. La présence est rafraîchie lors des refreshs naturels.
     private var presenceManager: PresenceManager { PresenceManager.shared }

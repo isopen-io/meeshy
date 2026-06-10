@@ -87,9 +87,11 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
 
     var setCurrentlyOpenConversationCallCount = 0
     var lastSetCurrentlyOpenConversationId: String?
+    var currentlyOpenConversationId: String?
     func setCurrentlyOpenConversation(_ conversationId: String?) {
         setCurrentlyOpenConversationCallCount += 1
         lastSetCurrentlyOpenConversationId = conversationId
+        currentlyOpenConversationId = conversationId
     }
 
     // MARK: - Simulation Helpers
@@ -124,6 +126,7 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
         updateConversationAfterSendCallCount = 0
         setCurrentlyOpenConversationCallCount = 0
         lastSetCurrentlyOpenConversationId = nil
+        currentlyOpenConversationId = nil
         onSyncSinceLastCheckpoint = nil
     }
 }
