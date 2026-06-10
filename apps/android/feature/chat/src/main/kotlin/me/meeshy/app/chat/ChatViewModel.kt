@@ -21,16 +21,18 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SendMessageRequest
+import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
+import me.meeshy.sdk.outbox.OutboxOutcome
 import me.meeshy.sdk.outbox.OutboxRepository
-import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.BubbleContentBuilder
+import me.meeshy.ui.component.bubble.DeliveryStatus
 import javax.inject.Inject
 
 data class ChatUiState(
@@ -108,6 +110,31 @@ class ChatViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            outboxRepository.outcomes.collect { outcome ->
+                when (outcome) {
+                    is OutboxOutcome.Succeeded -> _state.update { s ->
+                        s.copy(messages = s.messages.filter { it.clientMessageId != outcome.cmid })
+                    }
+                    is OutboxOutcome.Exhausted -> _state.update { s ->
+                        s.copy(
+                            messages = s.messages.map { bubble ->
+                                if (bubble.clientMessageId == outcome.cmid && bubble.isPending) {
+                                    bubble.copy(deliveryStatus = DeliveryStatus.Failed)
+                                } else {
+                                    bubble
+                                }
+                            }
+                        )
+                    }
+                    is OutboxOutcome.Superseded -> _state.update { s ->
+                        s.copy(messages = s.messages.filter { it.clientMessageId != outcome.cmid })
+                    }
+                    is OutboxOutcome.Cancelled -> Unit
+                }
+            }
+        }
+
+        viewModelScope.launch {
             launch {
                 messageSocketManager.typingStarted.collect { event ->
                     if (event.conversationId == conversationId) {
@@ -165,6 +192,22 @@ class ChatViewModel @Inject constructor(
                         cmid = cmid,
                     )
                 )
+                val optimisticBubble = BubbleContent(
+                    messageId = cmid,
+                    text = text,
+                    isOutgoing = true,
+                    isTranslated = false,
+                    originalText = null,
+                    senderName = null,
+                    showSenderName = false,
+                    isEdited = false,
+                    isDeleted = false,
+                    createdAtIso = null,
+                    deliveryStatus = DeliveryStatus.Pending,
+                    isPending = true,
+                    clientMessageId = cmid,
+                )
+                _state.update { it.copy(messages = it.messages + optimisticBubble) }
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
             } catch (e: CancellationException) {
                 throw e
@@ -198,28 +241,51 @@ class ChatViewModel @Inject constructor(
 private fun ChatUiState.applyResult(
     result: CacheResult<List<ApiMessage>>,
     currentUser: MeeshyUser?,
-): ChatUiState = when (result) {
-    is CacheResult.Fresh -> copy(
-        messages = result.value.toBubbles(currentUser),
-        isSyncing = false,
-        showSkeleton = false,
-        errorMessage = null,
-    )
-    is CacheResult.Stale -> copy(
-        messages = result.value.toBubbles(currentUser),
-        isSyncing = true,
-        showSkeleton = false,
-    )
-    is CacheResult.Syncing -> copy(
-        messages = result.value?.toBubbles(currentUser) ?: messages,
-        isSyncing = true,
-        showSkeleton = result.value == null && messages.isEmpty() && errorMessage == null,
-    )
-    CacheResult.Empty -> copy(
-        messages = emptyList(),
-        isSyncing = false,
-        showSkeleton = errorMessage == null,
-    )
+): ChatUiState {
+    val pendingBubbles = messages.filter { it.isPending }
+    return when (result) {
+        is CacheResult.Fresh -> {
+            val serverCmids = result.value.mapNotNull { it.clientMessageId }.toSet()
+            val stillPending = pendingBubbles.filter { it.clientMessageId !in serverCmids }
+            copy(
+                messages = result.value.toBubbles(currentUser) + stillPending,
+                isSyncing = false,
+                showSkeleton = false,
+                errorMessage = null,
+            )
+        }
+        is CacheResult.Stale -> {
+            val serverCmids = result.value.mapNotNull { it.clientMessageId }.toSet()
+            val stillPending = pendingBubbles.filter { it.clientMessageId !in serverCmids }
+            copy(
+                messages = result.value.toBubbles(currentUser) + stillPending,
+                isSyncing = true,
+                showSkeleton = false,
+            )
+        }
+        is CacheResult.Syncing -> {
+            val serverMessages = result.value
+            if (serverMessages == null) {
+                copy(
+                    isSyncing = true,
+                    showSkeleton = messages.isEmpty() && errorMessage == null,
+                )
+            } else {
+                val serverCmids = serverMessages.mapNotNull { it.clientMessageId }.toSet()
+                val stillPending = pendingBubbles.filter { it.clientMessageId !in serverCmids }
+                copy(
+                    messages = serverMessages.toBubbles(currentUser) + stillPending,
+                    isSyncing = true,
+                    showSkeleton = false,
+                )
+            }
+        }
+        CacheResult.Empty -> copy(
+            messages = pendingBubbles,
+            isSyncing = false,
+            showSkeleton = pendingBubbles.isEmpty() && errorMessage == null,
+        )
+    }
 }
 
 private fun List<ApiMessage>.toBubbles(currentUser: MeeshyUser?): List<BubbleContent> = map { message ->

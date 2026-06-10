@@ -20,4 +20,7 @@ public interface ConversationDao {
 
     @Query("DELETE FROM conversations")
     public suspend fun clear()
+
+    @Query("SELECT id FROM conversations")
+    public suspend fun allIds(): List<String>
 }

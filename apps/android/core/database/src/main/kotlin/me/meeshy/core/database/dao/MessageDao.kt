@@ -28,4 +28,7 @@ public interface MessageDao {
 
     @Query("DELETE FROM messages")
     public suspend fun clear()
+
+    @Query("SELECT * FROM messages WHERE id = :id LIMIT 1")
+    public suspend fun findById(id: String): MessageEntity?
 }
