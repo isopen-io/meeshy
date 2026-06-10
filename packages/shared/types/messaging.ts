@@ -132,6 +132,7 @@ export interface MessageRequest {
   readonly priority?: MessagePriority;
   readonly encrypted?: boolean;             // Default: false
   readonly attachments?: readonly MessageAttachment[];
+  readonly attachmentIds?: readonly string[];
 
   // Effets de message — flou (BLURRED), éphémère (EPHEMERAL), vue unique
   // (VIEW_ONCE). Portés à l'identique par REST (POST /messages) et WebSocket

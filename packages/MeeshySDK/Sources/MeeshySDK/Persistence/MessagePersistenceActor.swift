@@ -45,34 +45,24 @@ fileprivate func postMessageStoreRefresh(conversationIds: Set<String>) {
 /// changeVersion bump — it would report every mutation as "unchanged" and
 /// silently drop real content/reaction/state updates.
 fileprivate func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord) -> Bool {
-    a.content == b.content &&
-    a.serverId == b.serverId &&
-    a.state == b.state &&
-    a.isEdited == b.isEdited &&
-    a.editedAt == b.editedAt &&
-    a.deletedAt == b.deletedAt &&
-    a.attachmentsJson == b.attachmentsJson &&
-    a.reactionsJson == b.reactionsJson &&
-    a.reactionCount == b.reactionCount &&
-    a.isEncrypted == b.isEncrypted &&
-    a.encryptionMode == b.encryptionMode &&
-    a.deliveredCount == b.deliveredCount &&
-    a.readCount == b.readCount &&
-    a.deliveredToAllAt == b.deliveredToAllAt &&
-    a.readByAllAt == b.readByAllAt &&
-    a.senderId == b.senderId &&
-    a.senderName == b.senderName &&
-    a.senderUsername == b.senderUsername &&
-    a.senderAvatarURL == b.senderAvatarURL &&
-    a.replyToId == b.replyToId &&
-    a.storyReplyToId == b.storyReplyToId &&
-    a.replyToJson == b.replyToJson &&
-    a.forwardedFromId == b.forwardedFromId &&
-    a.forwardedFromConversationId == b.forwardedFromConversationId &&
-    a.forwardedFromJson == b.forwardedFromJson &&
-    a.mentionedUsersJson == b.mentionedUsersJson &&
-    a.callSummaryJson == b.callSummaryJson &&
-    a.effectFlags == b.effectFlags
+    let contentAndState = a.content == b.content && a.serverId == b.serverId
+        && a.state == b.state && a.isEdited == b.isEdited
+        && a.editedAt == b.editedAt && a.deletedAt == b.deletedAt
+    let attachmentsAndReactions = a.attachmentsJson == b.attachmentsJson
+        && a.reactionsJson == b.reactionsJson && a.reactionCount == b.reactionCount
+    let encryptionAndDelivery = a.isEncrypted == b.isEncrypted && a.encryptionMode == b.encryptionMode
+        && a.deliveredCount == b.deliveredCount && a.readCount == b.readCount
+        && a.deliveredToAllAt == b.deliveredToAllAt && a.readByAllAt == b.readByAllAt
+    let sender = a.senderId == b.senderId && a.senderName == b.senderName
+        && a.senderUsername == b.senderUsername && a.senderAvatarURL == b.senderAvatarURL
+    let replyAndForward = a.replyToId == b.replyToId && a.storyReplyToId == b.storyReplyToId
+        && a.replyToJson == b.replyToJson && a.forwardedFromId == b.forwardedFromId
+        && a.forwardedFromConversationId == b.forwardedFromConversationId
+        && a.forwardedFromJson == b.forwardedFromJson
+    let extras = a.mentionedUsersJson == b.mentionedUsersJson
+        && a.callSummaryJson == b.callSummaryJson && a.effectFlags == b.effectFlags
+    return contentAndState && attachmentsAndReactions && encryptionAndDelivery
+        && sender && replyAndForward && extras
 }
 
 public actor MessagePersistenceActor {
