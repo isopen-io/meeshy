@@ -130,10 +130,10 @@ struct FloatingCallPillView: View {
         return ZStack {
             Circle()
                 .fill(MeeshyColors.brandGradient)
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
 
             Text(initial)
-                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .font(.system(.callout, design: .rounded).weight(.bold))
                 .foregroundColor(.white)
         }
         .accessibilityHidden(true)
@@ -177,9 +177,9 @@ struct FloatingCallPillView: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: callManager.isMuted ? "mic.slash.fill" : "mic.fill")
-                .font(.system(size: 14, weight: .medium))
+                .font(.subheadline.weight(.medium))
                 .foregroundColor(callManager.isMuted ? MeeshyColors.error : .white)
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
                 .background(
                     Circle()
                         .fill(callManager.isMuted ? MeeshyColors.error.opacity(0.2) : Color.white.opacity(0.1))
@@ -197,9 +197,9 @@ struct FloatingCallPillView: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill")
-                .font(.system(size: 14, weight: .medium))
+                .font(.subheadline.weight(.medium))
                 .foregroundColor(callManager.isSpeaker ? MeeshyColors.indigo400 : .white)
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
                 .background(
                     Circle()
                         .fill(callManager.isSpeaker ? MeeshyColors.indigo400.opacity(0.2) : Color.white.opacity(0.1))
@@ -216,9 +216,9 @@ struct FloatingCallPillView: View {
             expandToFullScreen()
         } label: {
             Image(systemName: "arrow.up.left.and.arrow.down.right")
-                .font(.system(size: 13, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundColor(.white)
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
                 .background(
                     Circle()
                         .fill(Color.white.opacity(0.1))
@@ -234,9 +234,9 @@ struct FloatingCallPillView: View {
             HapticFeedback.error()
         } label: {
             Image(systemName: "phone.down.fill")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(.white)
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
                 .background(
                     Circle()
                         .fill(

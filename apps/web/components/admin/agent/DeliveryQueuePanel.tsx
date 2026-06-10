@@ -124,7 +124,7 @@ export default memo(function DeliveryQueuePanel({ conversationId }: DeliveryQueu
       {items.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-6">
           <Package className="h-8 w-8 text-gray-300 dark:text-gray-600" />
-          <p className="text-xs text-gray-400">Aucun message en attente</p>
+          <p className="text-xs text-gray-400">{t('agent.deliveryQueue.empty')}</p>
         </div>
       ) : (
         <div className="space-y-2">

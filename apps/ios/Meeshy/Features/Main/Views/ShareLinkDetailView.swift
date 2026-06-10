@@ -33,11 +33,11 @@ struct ShareLinkDetailView: View {
         }
         .navigationTitle(link.displayName)
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("Supprimer ce lien ?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button("Supprimer", role: .destructive) { deleteLink() }
-            Button("Annuler", role: .cancel) {}
+        .confirmationDialog(String(localized: "shareLink.deleteTitle", defaultValue: "Delete this link?", bundle: .main), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button(String(localized: "shareLink.delete", defaultValue: "Delete", bundle: .main), role: .destructive) { deleteLink() }
+            Button(String(localized: "common.cancel", defaultValue: "Cancel", bundle: .main), role: .cancel) {}
         } message: {
-            Text("Cette action est irréversible. Le lien ne sera plus accessible.")
+            Text(String(localized: "shareLink.deleteConfirmation", defaultValue: "This action is irreversible. The link will no longer be accessible.", bundle: .main))
         }
     }
 
@@ -84,7 +84,7 @@ struct ShareLinkDetailView: View {
 
     private var actionsBar: some View {
         HStack(spacing: 12) {
-            actionButton("Copier", icon: copiedFeedback ? "checkmark" : "doc.on.doc",
+            actionButton(String(localized: "common.copy", defaultValue: "Copy", bundle: .main), icon: copiedFeedback ? "checkmark" : "doc.on.doc",
                          color: copiedFeedback ? "2ECC71" : "08D9D6") {
                 UIPasteboard.general.string = link.joinUrl
                 HapticFeedback.success()
@@ -93,17 +93,17 @@ struct ShareLinkDetailView: View {
                     withAnimation { copiedFeedback = false }
                 }
             }
-            actionButton("Partager", icon: "square.and.arrow.up", color: "08D9D6") {
+            actionButton(String(localized: "common.share", defaultValue: "Share", bundle: .main), icon: "square.and.arrow.up", color: "08D9D6") {
                 guard let url = URL(string: link.joinUrl) else { return }
                 let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
                 presentSheet(av)
             }
-            actionButton(isActive ? "Désactiver" : "Activer",
+            actionButton(isActive ? String(localized: "shareLink.disable", defaultValue: "Disable", bundle: .main) : String(localized: "shareLink.activate", defaultValue: "Activate", bundle: .main),
                          icon: isActive ? "pause.circle" : "play.circle",
                          color: isActive ? "FF6B6B" : "2ECC71") {
                 toggleActive()
             }
-            actionButton("Supprimer", icon: "trash", color: "FF2E63") {
+            actionButton(String(localized: "shareLink.delete", defaultValue: "Delete", bundle: .main), icon: "trash", color: "FF2E63") {
                 showDeleteConfirm = true
             }
         }

@@ -13,9 +13,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import me.meeshy.ui.theme.MeeshyPalette
 
 /**
@@ -30,6 +30,7 @@ public fun MeeshyAvatar(
     containerColor: Color = MeeshyPalette.Indigo500,
     contentColor: Color = MeeshyPalette.White,
 ) {
+    val textSize = with(LocalDensity.current) { (size * 0.4f).toSp() }
     Box(
         modifier = modifier
             .size(size)
@@ -42,7 +43,7 @@ public fun MeeshyAvatar(
             text = avatarInitials(name),
             color = contentColor,
             fontWeight = FontWeight.Bold,
-            fontSize = (size.value * 0.4f).sp,
+            fontSize = textSize,
         )
     }
 }

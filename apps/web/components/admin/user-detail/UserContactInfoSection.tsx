@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Mail, Phone, Clock, MapPin, Edit2, Save, X } from 'lucide-react';
 import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 import {
   COUNTRY_CODES,
   getDialCode,
@@ -57,6 +58,7 @@ export function UserContactInfoSection({
   userId,
   onUpdate
 }: UserContactInfoProps) {
+  const { t } = useI18n('admin');
   const resolvedCountry = resolveCountry(user.phoneNumber, (user as unknown).phoneCountryCode);
 
   const [editing, setEditing] = useState(false);
@@ -96,12 +98,12 @@ export function UserContactInfoSection({
       });
 
       if (response.data?.success) {
-        toast.success('Informations de contact mises à jour');
+        toast.success(t('userDetail.contactUpdated'));
         setEditing(false);
         onUpdate();
       }
     } catch (error: unknown) {
-      toast.error(error.message || 'Erreur lors de la mise à jour');
+      toast.error(error.message || t('userDetail.contactUpdateError'));
     } finally {
       setSaving(false);
     }

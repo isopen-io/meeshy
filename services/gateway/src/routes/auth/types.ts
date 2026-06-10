@@ -92,6 +92,7 @@ export interface SessionResponseData {
 /**
  * Utility to format user data consistently across all routes
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function formatUserResponse(user: any, permissions?: any): UserResponseData {
   return {
     id: user.id,
@@ -132,6 +133,7 @@ export function formatUserResponse(user: any, permissions?: any): UserResponseDa
 /**
  * Utility to format session data consistently
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function formatSessionResponse(session: any, rememberDevice: boolean = false): SessionResponseData {
   return {
     id: session.id,

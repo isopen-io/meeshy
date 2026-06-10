@@ -46,7 +46,7 @@ export function registerStoryAudioRoutes(
       return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
     }
 
-    const data = await (request as any).file();
+    const data = await request.file();
     if (!data) {
       return sendBadRequest(reply, 'No file provided', { code: 'NO_FILE' });
     }

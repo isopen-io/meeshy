@@ -46,14 +46,14 @@ struct CommunityLinkDetailView: View {
 
     private var actionsBar: some View {
         HStack(spacing: 12) {
-            communityActionButton("Copier", icon: copiedFeedback ? "checkmark" : "doc.on.doc",
+            communityActionButton(String(localized: "common.copy", defaultValue: "Copy", bundle: .main), icon: copiedFeedback ? "checkmark" : "doc.on.doc",
                                   color: copiedFeedback ? "2ECC71" : "F8B500") {
                 UIPasteboard.general.string = link.joinUrl
                 HapticFeedback.success()
                 withAnimation { copiedFeedback = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation { copiedFeedback = false } }
             }
-            communityActionButton("Partager", icon: "square.and.arrow.up", color: "F8B500") {
+            communityActionButton(String(localized: "common.share", defaultValue: "Share", bundle: .main), icon: "square.and.arrow.up", color: "F8B500") {
                 guard let url = URL(string: link.joinUrl) else { return }
                 let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
                 guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -61,7 +61,7 @@ struct CommunityLinkDetailView: View {
                       let root = window.rootViewController else { return }
                 root.present(av, animated: true)
             }
-            communityActionButton("Identifier", icon: "doc.plaintext", color: "6366F1") {
+            communityActionButton(String(localized: "communityLink.identify", defaultValue: "Identify", bundle: .main), icon: "doc.plaintext", color: "6366F1") {
                 UIPasteboard.general.string = link.identifier
                 HapticFeedback.light()
             }
@@ -106,7 +106,7 @@ struct CommunityLinkDetailView: View {
 
     private var infoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("INFORMATIONS").font(.system(size: 12, weight: .semibold))
+            Text("INFORMATIONS").font(.caption.weight(.semibold))
                 .foregroundColor(theme.textSecondary).kerning(0.8)
             VStack(spacing: 0) {
                 infoRow("Identifiant", value: link.identifier)

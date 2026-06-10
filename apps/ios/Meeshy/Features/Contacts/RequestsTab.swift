@@ -146,7 +146,7 @@ struct RequestsTab: View {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
                         .foregroundColor(theme.textMuted)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 44, height: 44)
                         .background(Circle().fill(theme.textMuted.opacity(0.12)))
                 }
                 .accessibilityLabel(String(format: String(localized: "contacts.requests.reject-a11y", defaultValue: "Refuser la demande de %@", bundle: .main), name))
@@ -157,7 +157,7 @@ struct RequestsTab: View {
                     Image(systemName: "checkmark")
                         .font(.caption.weight(.bold))
                         .foregroundColor(.white)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 44, height: 44)
                         .background(
                             Circle().fill(
                                 LinearGradient(

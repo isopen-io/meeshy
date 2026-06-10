@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_title">Feed</string>
+    <string name="feed_empty">No posts yet</string>
+    <string name="feed_like">Like</string>
+</resources>
