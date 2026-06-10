@@ -478,3 +478,46 @@ final class BubbleContentMatrixTests: XCTestCase {
         )
     }
 }
+
+// MARK: - BubbleBodyFooterLayout.bodyHeight (sizeThatFits double-measure removal)
+
+final class BubbleBodyFooterLayoutHeightTests: XCTestCase {
+
+    func test_bodyHeight_whenFooterDoesNotWiden_reusesProbeHeightWithoutRemeasure() {
+        // Common case: a multi-word message already wider than its meta row, so
+        // the resolved width equals the probed width. The probe height must be
+        // reused verbatim and the (expensive) full-subtree re-measure must NOT run.
+        let bodyProbe = CGSize(width: 220, height: 64)
+        var remeasureCalls = 0
+
+        let height = BubbleBodyFooterLayout.bodyHeight(
+            bodyProbe: bodyProbe,
+            resolvedWidth: 220
+        ) { _ in
+            remeasureCalls += 1
+            return 999  // sentinel that must never be reported
+        }
+
+        XCTAssertEqual(height, 64)
+        XCTAssertEqual(remeasureCalls, 0, "no re-measure when the footer floor did not widen the bubble")
+    }
+
+    func test_bodyHeight_whenFooterWidensBubble_remeasuresAtResolvedWidth() {
+        // Short message whose footer (timestamp + delivery) is wider than the
+        // text. The body must be re-measured at the wider resolved width — its
+        // height can shrink as the text stops wrapping.
+        let bodyProbe = CGSize(width: 40, height: 80)
+        var remeasuredWidth: CGFloat?
+
+        let height = BubbleBodyFooterLayout.bodyHeight(
+            bodyProbe: bodyProbe,
+            resolvedWidth: 96
+        ) { width in
+            remeasuredWidth = width
+            return 40
+        }
+
+        XCTAssertEqual(height, 40, "the re-measured height is reported, not the stale probe height")
+        XCTAssertEqual(remeasuredWidth, 96, "re-measure happens at the resolved (widened) width")
+    }
+}

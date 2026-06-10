@@ -1283,9 +1283,33 @@ struct BubbleBodyFooterLayout: Layout {
         let footer = subviews[1]
         let footerFloor = footer.sizeThatFits(.unspecified).width
         let width = max(bodyProbe.width, footerFloor)
-        let bodyHeight = body.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        // Re-measure the body subtree only when the footer floor widened the
+        // bubble past the body's natural width. When `width == bodyProbe.width`
+        // (the common case: a multi-word message already wider than its meta
+        // row), `bodyProbe.height` is already the height at this width — the
+        // second measure was a redundant full-subtree pass, and that pass is the
+        // #1 CPU self-time during scroll. The placement pass (`placeSubviews`)
+        // still re-measures unconditionally, so alignment is unaffected.
+        let bodyHeight = Self.bodyHeight(bodyProbe: bodyProbe, resolvedWidth: width) {
+            body.sizeThatFits(ProposedViewSize(width: $0, height: nil)).height
+        }
         let footerHeight = footer.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
         return CGSize(width: width, height: bodyHeight + spacing + footerHeight)
+    }
+
+    /// Body height to report for a resolved width, reusing the probe height when
+    /// the resolved width equals the probed width (i.e. the footer floor did not
+    /// widen the bubble). Pure + testable: the layout supplies the re-measure
+    /// closure, which is invoked *only* when a re-measure is genuinely required.
+    /// The `==` comparison is exact-safe: `resolvedWidth` is `max(bodyProbe.width,
+    /// footerFloor)`, so when the footer does not widen it is literally the same
+    /// `bodyProbe.width` value (no float drift).
+    static func bodyHeight(
+        bodyProbe: CGSize,
+        resolvedWidth: CGFloat,
+        remeasure: (CGFloat) -> CGFloat
+    ) -> CGFloat {
+        resolvedWidth == bodyProbe.width ? bodyProbe.height : remeasure(resolvedWidth)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
