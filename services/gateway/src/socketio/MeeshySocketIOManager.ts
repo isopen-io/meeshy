@@ -1599,6 +1599,13 @@ export class MeeshySocketIOManager {
               unreadCount
             });
 
+            // 5.3 SCOPE — le filtre SOCKET_LANG_FILTER s'applique au message:new
+            // ONLINE uniquement. L'enqueue offline ci-dessous stocke le payload
+            // complet (multi-traduit), NON filtré par langue. Acceptable car
+            // (a) le chemin principal `message:send` (MessageHandler) n'enqueue pas
+            // offline, et (b) le drain `_drainPendingMessages` est actuellement du
+            // code mort (jamais appelé) — sujet pré-existant à traiter séparément,
+            // hors périmètre 5.3.
             if (this.deliveryQueue && !connectedUserIds.has(roomTarget)) {
               this.deliveryQueue.enqueue(roomTarget, {
                 messageId: message.id,
