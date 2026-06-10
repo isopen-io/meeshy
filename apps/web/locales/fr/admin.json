@@ -617,7 +617,8 @@
     "clickColOs": "OS",
     "clickColReferrer": "Referrer",
     "clickColSource": "Source",
-    "clickColStatus": "Status"
+    "clickColStatus": "Status",
+    "fieldNamePlaceholder": "Promo été"
   },
   "users": {
     "newUser": {
@@ -675,7 +676,8 @@
       "errorPasswordMismatch": "Les mots de passe ne correspondent pas",
       "toastFormErrors": "Veuillez corriger les erreurs du formulaire",
       "toastSuccess": "Utilisateur créé avec succès!",
-      "toastError": "Erreur lors de la création de l'utilisateur"
+      "toastError": "Erreur lors de la création de l'utilisateur",
+      "placeholderBio": "À propos de cet utilisateur..."
     },
     "loadError": "Erreur lors du chargement des données",
     "backButton": "Retour",
@@ -937,7 +939,8 @@
     "actionTypeLabel": "Type d'action",
     "allStatuses": "Tous les statuts",
     "allSeverities": "Toutes les sévérités",
-    "ipLabel": "IP: {ip}"
+    "ipLabel": "IP: {ip}",
+    "periodLabel": "Période"
   },
   "broadcasts": {
     "loadError": "Erreur lors du chargement des broadcasts",
