@@ -3,6 +3,14 @@ package me.meeshy.sdk.model
 import kotlinx.serialization.Serializable
 import me.meeshy.sdk.lang.LanguageResolver
 
+@Serializable
+data class ApiMessageReplyPreview(
+    val id: String,
+    val content: String = "",
+    val senderDisplayName: String? = null,
+    val deletedAt: String? = null,
+)
+
 /** A pre-loaded text translation — port of APITextTranslation (MessageModels.swift). */
 @Serializable
 data class ApiTextTranslation(
@@ -41,6 +49,12 @@ data class ApiMessage(
     val createdAt: String? = null,
     val sender: ApiMessageSender? = null,
     val translations: List<ApiTextTranslation> = emptyList(),
+    val reactionSummary: Map<String, Int>? = null,
+    val deliveredCount: Int = 0,
+    val readCount: Int = 0,
+    val readByAllAt: String? = null,
+    val replyTo: ApiMessageReplyPreview? = null,
+    val clientMessageId: String? = null,
 ) {
     /**
      * Content to display under the Prisme Linguistique: the preferred translation,

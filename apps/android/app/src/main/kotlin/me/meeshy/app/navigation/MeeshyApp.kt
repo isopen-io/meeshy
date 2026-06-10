@@ -5,11 +5,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.PeopleOutline
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -21,8 +23,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavDestination.Companion.hasRoute
-import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -36,18 +36,21 @@ import me.meeshy.app.auth.LoginScreen
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.app.chat.ChatScreen
 import me.meeshy.app.chat.ChatViewModel
+import me.meeshy.app.contacts.ContactsScreen
 import me.meeshy.app.conversations.ConversationListScreen
 import me.meeshy.app.feed.FeedScreen
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.profile.ProfileScreen
+import me.meeshy.app.settings.SettingsScreen
 
 object Routes {
     const val LOGIN = "login"
     const val CONVERSATIONS = "conversations"
     const val CHAT = "chat/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val FEED = "feed"
+    const val CONTACTS = "contacts"
     const val NOTIFICATIONS = "notifications"
-    const val PROFILE = "profile"
+    const val SETTINGS = "settings"
     const val PROFILE_USER = "profile/{userId}"
 
     fun chat(conversationId: String): String = "chat/$conversationId"
@@ -176,14 +179,25 @@ fun MeeshyApp() {
             }
             composable(Routes.FEED) {
                 FeedScreen(
-                    onPostClick = { /* future: navigate to post detail */ },
+                    onPostClick = { },
                 )
+            }
+            composable(Routes.CONTACTS) {
+                ContactsScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.NOTIFICATIONS) {
                 NotificationsScreen()
             }
-            composable(Routes.PROFILE) {
-                ProfileScreen(onBack = { navController.popBackStack() })
+            composable(Routes.SETTINGS) {
+                SettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onLogout = {
+                        authViewModel.logout()
+                        navController.navigate(Routes.LOGIN) {
+                            popUpTo(Routes.CONVERSATIONS) { inclusive = true }
+                        }
+                    },
+                )
             }
             composable(
                 route = Routes.PROFILE_USER,

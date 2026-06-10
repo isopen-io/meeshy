@@ -123,6 +123,15 @@ data class ConversationDeletedSocketEvent(
     val deletedAt: String? = null,
 )
 
+@Serializable
+data class ReadStatusUpdatedEvent(
+    val conversationId: String,
+    val participantId: String,
+    val userId: String? = null,
+    val type: String = "read",
+    val updatedAt: String? = null,
+)
+
 /** Social socket events — mirrors iOS SocialSocketManager payloads. */
 
 @Serializable

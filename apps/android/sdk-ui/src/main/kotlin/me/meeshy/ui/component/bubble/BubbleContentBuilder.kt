@@ -3,13 +3,6 @@ package me.meeshy.ui.component.bubble
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 
-/**
- * Pure builder of [BubbleContent] (ARCHITECTURE.md §11).
- *
- * Applies the Prisme Linguistique (CLAUDE.md): the displayed text is the
- * preferred translation, or the original content when no translation targets a
- * preferred language — never an arbitrary translation.
- */
 public object BubbleContentBuilder {
 
     public fun build(
@@ -17,10 +10,25 @@ public object BubbleContentBuilder {
         currentUserId: String?,
         preferences: LanguageResolver.ContentLanguagePreferences,
         showSenderName: Boolean = false,
+        isPending: Boolean = false,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
         val isTranslated = !isDeleted && message.isTranslated(preferences)
+        val deliveryStatus = when {
+            !isOutgoing -> DeliveryStatus.Sent
+            isPending -> DeliveryStatus.Pending
+            message.readByAllAt != null -> DeliveryStatus.Read
+            message.readCount > 0 -> DeliveryStatus.Read
+            message.deliveredCount > 0 -> DeliveryStatus.Delivered
+            else -> DeliveryStatus.Sent
+        }
+        val reactions = message.reactionSummary
+            ?.map { (emoji, count) -> ReactionEntry(emoji = emoji, count = count) }
+            ?: emptyList()
+        val replyToText = message.replyTo?.let { reply ->
+            if (reply.deletedAt != null) "Message deleted" else reply.content
+        }
         return BubbleContent(
             messageId = message.id,
             text = if (isDeleted) "" else message.displayContent(preferences),
@@ -33,6 +41,12 @@ public object BubbleContentBuilder {
             isEdited = message.isEdited,
             isDeleted = isDeleted,
             createdAtIso = message.createdAt,
+            deliveryStatus = deliveryStatus,
+            reactions = reactions,
+            replyToText = replyToText,
+            replyToSenderName = message.replyTo?.senderDisplayName,
+            isPending = isPending,
+            clientMessageId = message.clientMessageId,
         )
     }
 }
