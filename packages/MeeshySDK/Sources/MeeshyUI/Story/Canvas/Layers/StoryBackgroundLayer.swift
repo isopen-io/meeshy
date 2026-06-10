@@ -727,12 +727,10 @@ extension StoryBackgroundLayer {
         // entre un retour foreground et l'activation `MediaSessionCoordinator`
         // — sans cette ligne, la vidéo joue sous `.ambient` et reste silencieuse
         // en mode silent (simulator OU device avec switch).
-        let session = AVAudioSession.sharedInstance()
-        // Call-safety : pendant un appel la catégorie est `.playAndRecord` (≠
-        // .playback) ; NE PAS la basculer sinon le micro de l'appel est coupé.
-        if session.category != .playback, !MediaSessionCoordinator.shared.isCallActive {
-            try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers, .duckOthers])
-            try? session.setActive(true)
+        // Pose la session de lecture via la source UNIQUE (call-aware) si pas déjà
+        // `.playback` — idempotent, no-op pendant un appel (micro préservé).
+        if AVAudioSession.sharedInstance().category != .playback {
+            MediaSessionCoordinator.shared.activatePlaybackSync(options: [.mixWithOthers, .duckOthers])
         }
         let pl = AVPlayerLayer(player: avPlayer)
         pl.frame = bounds

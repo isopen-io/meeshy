@@ -458,14 +458,10 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         // entre les deux — auquel cas il joue sous catégorie `.ambient`, donc
         // silencieux en simulator silent mode et sur device avec le switch
         // physique. Forcer la catégorie ici est idempotent et coûte ~0 ms.
-        if mode == .play {
-            let session = AVAudioSession.sharedInstance()
-            // Call-safety : pendant un appel la catégorie est `.playAndRecord` (≠
-            // .playback) ; NE PAS la basculer sinon le micro de l'appel est coupé.
-            if session.category != .playback, !MediaSessionCoordinator.shared.isCallActive {
-                try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers, .duckOthers])
-                try? session.setActive(true)
-            }
+        if mode == .play, AVAudioSession.sharedInstance().category != .playback {
+            // Pose la session de lecture via la source UNIQUE (call-aware) : idempotent,
+            // no-op pendant un appel (micro de l'appel préservé).
+            MediaSessionCoordinator.shared.activatePlaybackSync(options: [.mixWithOthers, .duckOthers])
         }
 
         switch mode {

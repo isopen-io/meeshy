@@ -36,16 +36,10 @@ public final class StoryMediaCoordinator: StoppablePlayer {
         }
         PlaybackCoordinator.shared.willStartPlaying(external: self)
 
-        // Ensure audio plays through speakers (not just ringer) regardless of silent switch.
-        // Call-safety : ne PAS reconfigurer la session pendant un appel VoIP (sinon
-        // micro coupé) — la story céderait sa session à l'appel. État d'appel = source
-        // unique MediaSessionCoordinator.isCallActive (alimentée par CallManager).
-        if !MediaSessionCoordinator.shared.isCallActive {
-            do {
-                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers, .duckOthers])
-                try AVAudioSession.sharedInstance().setActive(true)
-            } catch {}
-        }
+        // Session de lecture story via la source UNIQUE (call-aware) : `.mixWithOthers`
+        // pour laisser une éventuelle musique de fond, `.duckOthers` pour atténuer.
+        // Ne reconfigure pas pendant un appel VoIP (micro préservé).
+        MediaSessionCoordinator.shared.activatePlaybackSync(options: [.mixWithOthers, .duckOthers])
     }
 
     /// Release exclusive audio (story dismissed). Triggers stop handler for cleanup.
