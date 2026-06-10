@@ -73,8 +73,7 @@ export function registerDeleteForMeRoutes(
             data: { role: 'creator' },
           })
 
-          const socketIOManager = socketIOHandler?.getManager?.()
-          const io = (socketIOManager as any)?.io || (socketIOHandler as any)?.io
+          const io = socketIOHandler?.getManager()?.getIO()
           if (io) {
             io.to(ROOMS.conversation(conversationId)).emit(
               SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED,
@@ -103,8 +102,7 @@ export function registerDeleteForMeRoutes(
       })
 
       // Remove user from socket room silently
-      const socketIOManager = socketIOHandler?.getManager?.()
-      const io = (socketIOManager as any)?.io || (socketIOHandler as any)?.io
+      const io = socketIOHandler?.getManager()?.getIO()
       if (io) {
         const userSockets = await io.in(ROOMS.user(userId)).fetchSockets()
         for (const s of userSockets) {

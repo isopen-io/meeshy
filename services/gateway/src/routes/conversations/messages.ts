@@ -276,7 +276,7 @@ export function registerMessagesRoutes(
         summary
       };
 
-      const io = (socketIOManager as any).io;
+      const io = socketIOManager.getIO();
       const convRoom = ROOMS.conversation(conversationId);
       let emitter: any = io.to(convRoom);
       const seenRooms = new Set<string>([convRoom]);
@@ -1806,7 +1806,7 @@ export function registerMessagesRoutes(
 
       // Broadcast pin event via Socket.IO
       if (socketIOHandler) {
-        (socketIOHandler as any).io?.to(`conversation:${conversationId}`).emit('message:pinned', {
+        fastify.socketIOHandler.getManager()?.getIO().to(`conversation:${conversationId}`).emit('message:pinned', {
           messageId,
           conversationId,
           pinnedAt: now.toISOString(),
@@ -1875,7 +1875,7 @@ export function registerMessagesRoutes(
 
       // Broadcast unpin event via Socket.IO
       if (socketIOHandler) {
-        (socketIOHandler as any).io?.to(`conversation:${conversationId}`).emit('message:unpinned', {
+        fastify.socketIOHandler.getManager()?.getIO().to(`conversation:${conversationId}`).emit('message:unpinned', {
           messageId,
           conversationId
         });
@@ -2157,7 +2157,7 @@ export function registerMessagesRoutes(
 
       // Broadcast consume event via Socket.IO
       if (socketIOHandler) {
-        (socketIOHandler as any).io?.to(`conversation:${conversationId}`).emit('message:consumed', {
+        fastify.socketIOHandler.getManager()?.getIO().to(`conversation:${conversationId}`).emit('message:consumed', {
           messageId,
           conversationId,
           userId,

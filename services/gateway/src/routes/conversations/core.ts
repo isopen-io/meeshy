@@ -928,8 +928,7 @@ export function registerCoreRoutes(
       // pour compat avec les anciens clients pendant ~3 mois.
       try {
         const socketIOHandler = fastify.socketIOHandler;
-        const socketIOManager = socketIOHandler?.getManager?.();
-        const io = (socketIOManager as any)?.io || (socketIOHandler as any)?.io;
+        const io = socketIOHandler?.getManager()?.getIO();
         if (io) {
           const allParticipantIds = [userId, ...uniqueParticipantIds];
           const conversationNewPayload = {
@@ -1107,8 +1106,7 @@ export function registerCoreRoutes(
       if (autoTranslateEnabled !== undefined) changedFields.autoTranslateEnabled = autoTranslateEnabled
 
       const socketIOHandler = fastify.socketIOHandler
-      const socketIOManager = socketIOHandler?.getManager?.()
-      const io = (socketIOManager as any)?.io || (socketIOHandler as any)?.io
+      const io = socketIOHandler?.getManager()?.getIO()
       if (io) {
         const room = ROOMS.conversation(id)
         io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
@@ -1199,8 +1197,7 @@ export function registerCoreRoutes(
       });
 
       // Broadcast closure to all members
-      const socketIOManager = fastify.socketIOHandler?.getManager?.()
-      const io = (socketIOManager as any)?.io || (fastify.socketIOHandler as any)?.io
+      const io = fastify.socketIOHandler?.getManager()?.getIO()
       if (io) {
         io.to(ROOMS.conversation(conversationId)).emit(
           SERVER_EVENTS.CONVERSATION_CLOSED,

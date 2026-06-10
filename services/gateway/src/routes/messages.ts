@@ -310,7 +310,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
           const room = ROOMS.conversation(message.conversationId);
-          (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, {
+          socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, {
             ...transformedMessage,
             conversationId: message.conversationId
           });
@@ -443,7 +443,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
           const room = ROOMS.conversation(message.conversationId);
-          (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, {
+          socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, {
             messageId,
             conversationId: message.conversationId
           });
@@ -546,7 +546,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               updatedAt: new Date(),
               summary
             };
-            const io = (socketIOManager as any).io;
+            const io = socketIOManager.getIO();
             const convRoom = ROOMS.conversation(message.conversationId);
             let emitter: any = io.to(convRoom);
             const seenRooms = new Set<string>([convRoom]);
@@ -906,7 +906,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
           const room = ROOMS.conversation(attachment.message.conversationId);
-          (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, {
+          socketIOManager.getIO().to(room).emit(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, {
             attachmentId,
             messageId: attachment.messageId,
             conversationId: attachment.message.conversationId,

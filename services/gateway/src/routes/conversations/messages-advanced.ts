@@ -473,7 +473,7 @@ export function registerMessagesAdvancedRoutes(
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
           const room = ROOMS.conversation(conversationId);
-          (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, messageResponse);
+          socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, messageResponse);
           logger.info(`Edit - Broadcasted message:edited to room ${room}`);
         }
       } catch (socketError) {
@@ -637,7 +637,7 @@ export function registerMessagesAdvancedRoutes(
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
           const room = ROOMS.conversation(conversationId);
-          (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, {
+          socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, {
             messageId,
             conversationId
           });
@@ -1034,7 +1034,7 @@ export function registerMessagesAdvancedRoutes(
 
         if (socketIOHandler) {
           const socketIOManager = socketIOHandler.getManager?.();
-          const io = (socketIOManager as any)?.io || (socketIOHandler as any).io;
+          const io = socketIOHandler.getManager()?.getIO();
           if (io) {
             io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
           }
@@ -1180,7 +1180,7 @@ export function registerMessagesAdvancedRoutes(
 
         if (socketIOHandler) {
           const socketIOManager = socketIOHandler.getManager?.();
-          const io = (socketIOManager as any)?.io || (socketIOHandler as any).io;
+          const io = socketIOHandler.getManager()?.getIO();
           if (io) {
             io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, updateEvent);
           }

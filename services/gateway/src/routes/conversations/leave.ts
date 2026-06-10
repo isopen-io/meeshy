@@ -65,8 +65,7 @@ export function registerLeaveRoutes(
         data: { isActive: false, leftAt: now },
       })
 
-      const socketIOManager = socketIOHandler?.getManager?.()
-      const io = (socketIOManager as any)?.io || (socketIOHandler as any)?.io
+      const io = socketIOHandler?.getManager()?.getIO()
       const room = ROOMS.conversation(id)
 
       if (io) {
