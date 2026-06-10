@@ -1,6 +1,12 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
+import {
+  sendSuccess,
+  sendForbidden,
+  sendNotFound,
+  sendInternalError
+} from '../../utils/response.js';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import {
   createUnifiedAuthMiddleware,
@@ -123,10 +129,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         }
 
         if (!member) {
-          return reply.status(403).send({
-            success: false,
-            message: "Vous n'êtes pas membre de cette conversation"
-          });
+          return sendForbidden(reply, "Vous n'êtes pas membre de cette conversation");
         }
 
         // Récupérer les informations de la conversation pour vérifier le type
@@ -136,29 +139,20 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         });
 
         if (!conversation) {
-          return reply.status(404).send({
-            success: false,
-            message: 'Conversation non trouvée'
-          });
+          return sendNotFound(reply, 'Conversation non trouvée');
         }
 
         const conversationType = conversation.type;
 
         // Interdire la création de liens pour les conversations directes
         if (conversationType === 'direct') {
-          return reply.status(403).send({
-            success: false,
-            message: 'Cannot create share links for direct conversations'
-          });
+          return sendForbidden(reply, 'Cannot create share links for direct conversations');
         }
 
         // Pour les conversations globales, seuls les ADMIN et BIGBOSS peuvent créer des liens
         if (conversationType === 'global') {
           if (userRole !== UserRoleEnum.BIGBOSS && userRole !== UserRoleEnum.ADMIN) {
-            return reply.status(403).send({
-              success: false,
-              message: 'You do not have the necessary rights to perform this operation'
-            });
+            return sendForbidden(reply, 'You do not have the necessary rights to perform this operation');
           }
         }
       } else if (body.newConversation) {
@@ -329,21 +323,18 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         fastify.log.error('Error sending share link notification:');
       }
 
-      return reply.status(201).send({
-        success: true,
-        data: {
+      return sendSuccess(reply, {
+        linkId: finalLinkId,
+        conversationId,
+        shareLink: {
+          id: shareLink.id,
           linkId: finalLinkId,
-          conversationId,
-          shareLink: {
-            id: shareLink.id,
-            linkId: finalLinkId,
-            name: shareLink.name,
-            description: shareLink.description,
-            expiresAt: shareLink.expiresAt,
-            isActive: shareLink.isActive
-          }
+          name: shareLink.name,
+          description: shareLink.description,
+          expiresAt: shareLink.expiresAt,
+          isActive: shareLink.isActive
         }
-      });
+      }, { statusCode: 201 });
 
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -354,10 +345,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         });
       }
       logError(fastify.log, 'Create link error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 }

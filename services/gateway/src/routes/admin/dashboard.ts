@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
-import { sendSuccess } from '../../utils/response.js';
+import { sendSuccess, sendForbidden, sendInternalError } from '../../utils/response.js';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 
@@ -158,14 +158,14 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const authContext = (request as UnifiedAuthRequest).authContext;
     if (!['BIGBOSS', 'ADMIN'].includes(authContext.registeredUser.role)) {
-      return reply.status(403).send({ success: false, message: 'BIGBOSS ou ADMIN requis' });
+      return sendForbidden(reply, 'BIGBOSS ou ADMIN requis');
     }
     try {
       await getCacheStore().del(DASHBOARD_CACHE_KEY);
-      return reply.send({ success: true, message: 'Cache dashboard invalidé' });
+      return sendSuccess(reply, undefined, { message: 'Cache dashboard invalidé' });
     } catch (error) {
       logError(fastify.log, 'Error invalidating dashboard cache:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur invalidation cache' });
+      return sendInternalError(reply, 'Erreur invalidation cache');
     }
   });
 }
