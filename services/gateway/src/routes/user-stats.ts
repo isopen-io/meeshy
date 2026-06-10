@@ -37,7 +37,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as { userId: string };
+        const userId = request.user!.userId;
 
         const [
           totalMessages,
@@ -135,7 +135,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as { userId: string };
+        const userId = request.user!.userId;
         const { days = 30 } = request.query as { days?: number };
 
         const startDate = new Date();
@@ -204,7 +204,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as { userId: string };
+        const userId = request.user!.userId;
 
         const [
           totalMessages,

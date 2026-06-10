@@ -81,7 +81,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = createFriendRequestSchema.parse(request.body);
-      const { userId } = request.user as any;
+      const userId = request.user!.userId;
 
       // Verifier que l'utilisateur cible existe
       const targetUser = await fastify.prisma.user.findUnique({
@@ -239,7 +239,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { userId } = request.user as any;
+      const userId = request.user!.userId;
       const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
 
       const { offsetNum, limitNum } = validatePagination(offset, limit);
@@ -338,7 +338,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { userId } = request.user as any;
+      const userId = request.user!.userId;
       const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
 
       const { offsetNum, limitNum } = validatePagination(offset, limit);
@@ -441,7 +441,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
     try {
       const { id } = request.params as { id: string };
       const body = updateFriendRequestSchema.parse(request.body);
-      const { userId } = request.user as any;
+      const userId = request.user!.userId;
 
       // Verifier que la demande existe et appartient a l'utilisateur
       const friendRequest = await fastify.prisma.friendRequest.findFirst({
@@ -671,7 +671,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
-      const { userId } = request.user as any;
+      const userId = request.user!.userId;
 
       // Verifier que la demande existe et appartient a l'utilisateur (envoyee ou recue)
       const friendRequest = await fastify.prisma.friendRequest.findFirst({

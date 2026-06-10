@@ -85,7 +85,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as any;
+        const userId = request.user!.userId;
         const { offset = 0, limit = 20, unreadOnly = false } = request.query as any;
 
         const pagination = validatePagination(offset, limit, 100);
@@ -152,7 +152,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as any;
+        const userId = request.user!.userId;
         const count = await notificationService.getUnreadCount(userId);
 
         return {
@@ -205,7 +205,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const { id } = request.params as any;
-        const { userId } = request.user as any;
+        const userId = request.user!.userId;
 
         // Vérifier que la notification appartient à l'utilisateur
         const notification = await fastify.prisma.notification.findUnique({
@@ -272,7 +272,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as any;
+        const userId = request.user!.userId;
         const count = await notificationService.markAllAsRead(userId);
 
         return {
@@ -329,7 +329,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as any;
+        const userId = request.user!.userId;
         const { conversationId } = request.params as any;
 
         const count = await notificationService.markConversationNotificationsAsRead(
@@ -394,7 +394,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as any;
+        const userId = request.user!.userId;
         const { types } = request.body as { types: string[] };
 
         const count = await notificationService.markNotificationsByTypesAsRead(userId, types);
@@ -448,7 +448,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const { id } = request.params as any;
-        const { userId } = request.user as any;
+        const userId = request.user!.userId;
 
         // Vérifier que la notification appartient à l'utilisateur
         const notification = await fastify.prisma.notification.findUnique({
@@ -531,7 +531,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as any;
+        const userId = request.user!.userId;
         const body = request.body as any;
 
         const notification = await notificationService.createMessageNotification({
@@ -583,7 +583,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const user = request.user as any;
+        const user = request.user!;
 
         // Vérification admin
         if (user.role !== 'ADMIN' && user.role !== 'BIGBOSS') {

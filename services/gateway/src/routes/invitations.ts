@@ -24,7 +24,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { email } = sendEmailInvitationSchema.parse(request.body);
-      const { userId } = request.user as { userId: string };
+      const userId = request.user!.userId;
 
       const user = await fastify.prisma.user.findUnique({
         where: { id: userId },
