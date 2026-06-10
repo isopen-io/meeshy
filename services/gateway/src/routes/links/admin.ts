@@ -5,6 +5,7 @@ import {
   sendPaginatedSuccess,
   sendUnauthorized,
   sendForbidden,
+  sendNotFound,
   sendInternalError
 } from '../../utils/response.js';
 import {
@@ -266,10 +267,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       });
 
       if (!link) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Lien non trouvé'
-        });
+        return sendNotFound(reply, 'Lien non trouvé');
       }
 
       const isCreator = link.createdBy === userId;
@@ -278,10 +276,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       );
 
       if (!isCreator && !isConversationAdmin) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Permissions insuffisantes pour modifier ce lien'
-        });
+        return sendForbidden(reply, 'Permissions insuffisantes pour modifier ce lien');
       }
 
       const updatedLink = await fastify.prisma.conversationShareLink.update({
@@ -312,18 +307,11 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
         }
       });
 
-      return reply.send({
-        success: true,
-        data: updatedLink,
-        message: isActive ? 'Lien activé avec succès' : 'Lien désactivé avec succès'
-      });
+      return sendSuccess(reply, updatedLink, { message: isActive ? 'Lien activé avec succès' : 'Lien désactivé avec succès' });
 
     } catch (error) {
       logError(fastify.log, 'Toggle link status error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la modification du statut du lien'
-      });
+      return sendInternalError(reply, 'Erreur lors de la modification du statut du lien');
     }
   });
 
@@ -412,10 +400,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       });
 
       if (!link) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Lien non trouvé'
-        });
+        return sendNotFound(reply, 'Lien non trouvé');
       }
 
       const isCreator = link.createdBy === userId;
@@ -424,10 +409,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       );
 
       if (!isCreator && !isConversationAdmin) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Permissions insuffisantes pour modifier ce lien'
-        });
+        return sendForbidden(reply, 'Permissions insuffisantes pour modifier ce lien');
       }
 
       const updatedLink = await fastify.prisma.conversationShareLink.update({
@@ -458,18 +440,11 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
         }
       });
 
-      return reply.send({
-        success: true,
-        data: updatedLink,
-        message: 'Lien prolongé avec succès'
-      });
+      return sendSuccess(reply, updatedLink, { message: 'Lien prolongé avec succès' });
 
     } catch (error) {
       logError(fastify.log, 'Extend link duration error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la prolongation du lien'
-      });
+      return sendInternalError(reply, 'Erreur lors de la prolongation du lien');
     }
   });
 
@@ -549,10 +524,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       });
 
       if (!link) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Lien non trouvé'
-        });
+        return sendNotFound(reply, 'Lien non trouvé');
       }
 
       const isCreator = link.createdBy === userId;
@@ -561,10 +533,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       );
 
       if (!isCreator && !isConversationAdmin) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Permissions insuffisantes pour supprimer ce lien'
-        });
+        return sendForbidden(reply, 'Permissions insuffisantes pour supprimer ce lien');
       }
 
       await fastify.prisma.conversationShareLink.delete({
@@ -575,10 +544,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       logError(fastify.log, 'Delete link error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la suppression du lien'
-      });
+      return sendInternalError(reply, 'Erreur lors de la suppression du lien');
     }
   });
 }

@@ -1,7 +1,12 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
-import { sendSuccess } from '../../utils/response.js';
+import {
+  sendSuccess,
+  sendForbidden,
+  sendNotFound,
+  sendInternalError
+} from '../../utils/response.js';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import {
   createUnifiedAuthMiddleware,
@@ -103,10 +108,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       });
 
       if (!shareLink) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Lien de partage non trouvé'
-        });
+        return sendNotFound(reply, 'Lien de partage non trouvé');
       }
 
       const isCreator = shareLink.createdBy === userId;
@@ -117,10 +119,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       );
 
       if (!isCreator && !isConversationAdmin) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Seuls les créateurs du lien ou les administrateurs de la conversation peuvent le modifier'
-        });
+        return sendForbidden(reply, 'Seuls les créateurs du lien ou les administrateurs de la conversation peuvent le modifier');
       }
 
       const updatedLink = await fastify.prisma.conversationShareLink.update({
@@ -158,10 +157,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
         });
       }
       logError(fastify.log, 'Update link error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -243,10 +239,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       });
 
       if (!shareLink) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Lien de partage non trouvé'
-        });
+        return sendNotFound(reply, 'Lien de partage non trouvé');
       }
 
       const isCreator = shareLink.createdBy === userId;
@@ -255,10 +248,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       );
 
       if (!isCreator && !isConversationAdmin) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Permissions insuffisantes pour modifier ce lien'
-        });
+        return sendForbidden(reply, 'Permissions insuffisantes pour modifier ce lien');
       }
 
       const updateData: any = {};
@@ -310,11 +300,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
         }
       });
 
-      return reply.send({
-        success: true,
-        data: updatedLink,
-        message: 'Lien mis à jour avec succès'
-      });
+      return sendSuccess(reply, updatedLink, { message: 'Lien mis à jour avec succès' });
 
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -325,10 +311,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
         });
       }
       logError(fastify.log, 'Update link error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 }
