@@ -444,7 +444,7 @@ async function broadcastReadStatusUpdate(
     summary
   };
 
-  const io = (socketIOManager as any).io;
+  const io = socketIOManager.getIO();
   const convRoom = ROOMS.conversation(args.conversationId);
 
   // Chain rooms so Socket.IO delivers the event at most once per socket,
