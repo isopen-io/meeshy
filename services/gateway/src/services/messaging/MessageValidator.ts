@@ -28,7 +28,7 @@ export class MessageValidator {
 
     // Validation du contenu - permettre les messages sans contenu si il y a des attachements ou un payload chiffré
     const hasAttachments = (request.attachments && request.attachments.length > 0) ||
-                          ((request as any).attachmentIds && (request as any).attachmentIds.length > 0);
+                          (request.attachmentIds && request.attachmentIds.length > 0);
 
     if ((!request.content || request.content.trim().length === 0) && !hasAttachments && !request.encryptedPayload) {
       errors.push({
@@ -65,7 +65,7 @@ export class MessageValidator {
     }
 
     // Validation des pièces jointes
-    const attachmentCount = (request.attachments?.length || 0) + ((request as any).attachmentIds?.length || 0);
+    const attachmentCount = (request.attachments?.length || 0) + (request.attachmentIds?.length || 0);
     if (attachmentCount > 10) {
       errors.push({
         field: 'attachments',

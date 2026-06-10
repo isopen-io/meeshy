@@ -273,9 +273,6 @@ export function getUserId(request: FastifyRequest): string | null {
   const user = request.user;
   if (user?.userId) return user.userId;
 
-  const session = (request as any).session;
-  if (session?.userId) return session.userId;
-
   const headerUserId = request.headers['x-user-id'];
   if (typeof headerUserId === 'string') return headerUserId;
 
