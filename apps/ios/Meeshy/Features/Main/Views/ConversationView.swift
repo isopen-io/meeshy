@@ -785,12 +785,14 @@ struct ConversationView: View {
                           LanguageOption.defaults.contains(where: { $0.code == userLang }) {
                     composerState.selectedLanguage = userLang
                 }
-                // Brancher la persistance différée du brouillon (400 ms après
-                // la dernière frappe). Vit sur le modèle isolé : la racine ne
-                // se ré-évalue plus à la frappe, donc un `onChange` ici ne
-                // fonctionnerait plus. La closure capture une copie de la vue
-                // mais lit les @State/@StateObject via leur stockage LIVE.
-                composerText.onDebouncedChange = { text in
+                // Brancher la persistance du brouillon (immédiate à chaque
+                // fin de mot / champ vidé, débouncée 400 ms en milieu de mot
+                // — cf. ConversationComposerTextModel). Vit sur le modèle
+                // isolé : la racine ne se ré-évalue plus à la frappe, donc un
+                // `onChange` ici ne fonctionnerait plus. La closure capture
+                // une copie de la vue mais lit les @State/@StateObject via
+                // leur stockage LIVE.
+                composerText.onPersistNeeded = { text in
                     persistDraft(text: text)
                 }
                 if composerText.text.isEmpty, let draft = DraftStore.shared.load(for: viewModel.conversationId) {

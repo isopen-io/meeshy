@@ -280,20 +280,22 @@ final class DraftStoreTests: XCTestCase {
     }
 }
 
-// MARK: - ConversationComposerTextModel (debounced draft persistence)
+// MARK: - ConversationComposerTextModel (politique de persistance du brouillon)
 //
 // Le modèle isole le texte du composer de l'arbre racine de ConversationView
-// et porte la persistance différée du brouillon (l'ancien `.onChange` racine
-// ne peut plus exister : la racine ne se ré-évalue plus à la frappe).
+// et porte la politique de persistance : immédiate à chaque fin de mot
+// (espace/retour) ou champ vidé, débouncée 400 ms en milieu de mot, flush
+// immédiat aux sorties de vue (l'ancien `.onChange` racine ne peut plus
+// exister : la racine ne se ré-évalue plus à la frappe).
 @MainActor
 final class ConversationComposerTextModelTests: XCTestCase {
 
-    func test_textBurst_firesDebouncedChangeOnce_withLastValue() async {
+    func test_midWordBurst_firesOnce_withLastValue() async {
         let model = ConversationComposerTextModel()
-        let fired = expectation(description: "debounced change fired")
+        let fired = expectation(description: "debounced persist fired")
         fired.assertForOverFulfill = true
         var received: [String] = []
-        model.onDebouncedChange = { text in
+        model.onPersistNeeded = { text in
             received.append(text)
             fired.fulfill()
         }
@@ -305,7 +307,43 @@ final class ConversationComposerTextModelTests: XCTestCase {
 
         await fulfillment(of: [fired], timeout: 2.0)
         XCTAssertEqual(received, ["Bonjour"],
-            "une rafale de frappes ne doit produire qu'UNE persistance, avec le dernier texte")
+            "une rafale en milieu de mot ne doit produire qu'UNE persistance, avec le dernier texte")
+    }
+
+    func test_wordBoundary_space_persistsImmediately() async {
+        let model = ConversationComposerTextModel()
+        let fired = expectation(description: "space persisted immediately")
+        fired.assertForOverFulfill = true
+        var received: [String] = []
+        model.onPersistNeeded = { text in
+            received.append(text)
+            fired.fulfill()
+        }
+
+        model.text = "Bonjour "
+
+        // Timeout 0.2s << fenêtre de débounce 400ms : prouve l'immédiateté.
+        await fulfillment(of: [fired], timeout: 0.2)
+        XCTAssertEqual(received, ["Bonjour "])
+    }
+
+    func test_clearedText_persistsImmediately() async {
+        let model = ConversationComposerTextModel()
+        model.text = "Bonjour " // persistée immédiatement (espace)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        let cleared = expectation(description: "empty text persisted immediately")
+        cleared.assertForOverFulfill = true
+        model.onPersistNeeded = { text in
+            guard text.isEmpty else { return }
+            cleared.fulfill()
+        }
+
+        model.text = ""
+
+        // L'envoi vide le champ : le brouillon doit être purgé tout de suite,
+        // pas 400ms plus tard.
+        await fulfillment(of: [cleared], timeout: 0.2)
     }
 
     func test_flushPendingChange_emitsImmediately_andCancelsPendingWindow() async {
@@ -313,16 +351,16 @@ final class ConversationComposerTextModelTests: XCTestCase {
         let fired = expectation(description: "flush emitted current text")
         fired.assertForOverFulfill = true
         var received: [String] = []
-        model.onDebouncedChange = { text in
+        model.onPersistNeeded = { text in
             received.append(text)
             fired.fulfill()
         }
 
-        model.text = "Brouillon en cours"
+        model.text = "Brouillon"
         model.flushPendingChange()
 
         await fulfillment(of: [fired], timeout: 0.2)
-        XCTAssertEqual(received, ["Brouillon en cours"])
+        XCTAssertEqual(received, ["Brouillon"])
 
         // La fenêtre de débounce annulée ne doit PAS re-émettre derrière.
         try? await Task.sleep(nanoseconds: 600_000_000)
@@ -330,11 +368,11 @@ final class ConversationComposerTextModelTests: XCTestCase {
             "le flush annule la fenêtre en vol — pas de double persistance")
     }
 
-    func test_initialValue_doesNotFireDebouncedChange() async {
+    func test_initialValue_doesNotFirePersist() async {
         let model = ConversationComposerTextModel()
-        let notFired = expectation(description: "no change for untouched text")
+        let notFired = expectation(description: "no persist for untouched text")
         notFired.isInverted = true
-        model.onDebouncedChange = { _ in notFired.fulfill() }
+        model.onPersistNeeded = { _ in notFired.fulfill() }
 
         await fulfillment(of: [notFired], timeout: 0.6)
     }

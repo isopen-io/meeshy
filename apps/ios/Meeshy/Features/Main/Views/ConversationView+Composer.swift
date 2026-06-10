@@ -21,13 +21,22 @@ import MeeshyUI
 // ne se ré-évalue plus à la frappe, donc `onChange` n'y fire plus).
 
 /// Stockage du texte du composer, hors de l'arbre de dépendances de la racine.
+///
+/// Politique de persistance du brouillon (décision produit 2026-06-09) :
+/// - **Fin de mot** (espace, retour ligne) ou **champ vidé** → persistance
+///   IMMÉDIATE. Le brouillon est donc durable mot par mot.
+/// - **Milieu de mot** → fenêtre de 400 ms (filet de sécurité pour une pause
+///   de frappe) — jamais une écriture + re-tri de la liste par caractère.
+/// - **Sortie de vue** (navigation, changement de conversation via `.id`,
+///   perte de focus du clavier — appel entrant, sheet —, passage en
+///   arrière-plan) → `flushPendingChange()` immédiat.
 @MainActor
 final class ConversationComposerTextModel: ObservableObject {
     @Published var text: String = ""
 
-    /// Installé par la vue (onAppear) : reçoit le texte 400 ms après la
-    /// dernière frappe — branché sur `persistDraft` côté ConversationView.
-    var onDebouncedChange: ((String) -> Void)?
+    /// Installé par la vue (onAppear) : reçoit le texte à persister —
+    /// branché sur `persistDraft` côté ConversationView.
+    var onPersistNeeded: ((String) -> Void)?
     private var debounceTask: Task<Void, Never>?
     private var textObservation: AnyCancellable?
 
@@ -35,26 +44,35 @@ final class ConversationComposerTextModel: ObservableObject {
         textObservation = $text
             .dropFirst()
             .sink { [weak self] newValue in
-                self?.scheduleDebouncedChange(newValue)
+                guard let self else { return }
+                if newValue.isEmpty || newValue.last?.isWhitespace == true {
+                    self.persistNow(newValue)
+                } else {
+                    self.scheduleDebouncedPersist(newValue)
+                }
             }
     }
 
-    private func scheduleDebouncedChange(_ value: String) {
+    private func persistNow(_ value: String) {
+        debounceTask?.cancel()
+        debounceTask = nil
+        onPersistNeeded?(value)
+    }
+
+    private func scheduleDebouncedPersist(_ value: String) {
         debounceTask?.cancel()
         debounceTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled else { return }
-            self?.onDebouncedChange?(value)
+            self?.onPersistNeeded?(value)
         }
     }
 
     /// Annule la fenêtre de débounce en vol et émet immédiatement la valeur
-    /// courante. Appelé au disappear et au passage en arrière-plan pour ne
-    /// jamais perdre la fin de saisie.
+    /// courante. Appelé au disappear, à la perte de focus du clavier et au
+    /// passage en arrière-plan pour ne jamais perdre la fin de saisie.
     func flushPendingChange() {
-        debounceTask?.cancel()
-        debounceTask = nil
-        onDebouncedChange?(text)
+        persistNow(text)
     }
 }
 
@@ -87,6 +105,10 @@ extension ConversationView {
                 isTyping = focused
                 if focused {
                     withAnimation { composerState.showOptions = false }
+                } else {
+                    // Perte de focus du clavier (appel entrant, sheet,
+                    // fermeture clavier) → sauvegarde immédiate du brouillon.
+                    composerText.flushPendingChange()
                 }
             },
             onLocationRequest: { composerState.showLocationPicker = true },
