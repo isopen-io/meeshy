@@ -312,6 +312,7 @@ struct ConversationListView: View {
         ) {
             conversationContextMenu(for: conversation)
         }
+        .equatable()
     }
 
     // MARK: - Share Link Permission
