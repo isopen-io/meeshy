@@ -68,6 +68,7 @@ dependencies {
     implementation(libs.hilt.work)
     ksp(libs.hilt.work.compiler)
     implementation(libs.work.runtime)
+    implementation(libs.firebase.messaging)
     implementation(libs.timber)
     debugImplementation(libs.compose.ui.tooling)
 

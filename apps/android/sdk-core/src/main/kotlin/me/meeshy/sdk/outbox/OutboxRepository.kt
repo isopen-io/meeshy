@@ -92,6 +92,16 @@ class OutboxRepository @Inject constructor(
         emit(OutboxOutcome.Exhausted(cmid, reason))
     }
 
+    /**
+     * Revives an `EXHAUSTED` row for a user-initiated retry: back to `PENDING`
+     * with a fresh attempt budget. Returns `false` when the row no longer exists.
+     */
+    suspend fun retry(cmid: String): Boolean {
+        if (outboxDao.find(cmid) == null) return false
+        outboxDao.updateState(cmid, OutboxState.PENDING.name, 0, now())
+        return true
+    }
+
     /** Crash-safe boot recovery (ARCHITECTURE.md §5) — any orphaned `INFLIGHT` row becomes `PENDING`. */
     suspend fun recoverInflight(): Int = outboxDao.resetInflight(now())
 

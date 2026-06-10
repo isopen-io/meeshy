@@ -12,6 +12,8 @@ import androidx.room.PrimaryKey
  *   intended sort key; `null` until the gateway exposes it, so the list
  *   currently falls back to [createdAt] ordering.
  * @property payload the serialized `ApiMessage`.
+ * @property sendState `null` for server-acked rows; `SENDING` / `FAILED` for
+ *   optimistic local rows whose `id` is still the outbox `cmid`.
  */
 @Entity(
     tableName = "messages",
@@ -24,4 +26,5 @@ public data class MessageEntity(
     val payload: String,
     val createdAt: Long,
     val cachedAt: Long,
+    val sendState: String? = null,
 )

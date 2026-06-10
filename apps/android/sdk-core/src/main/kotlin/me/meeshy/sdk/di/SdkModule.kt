@@ -5,6 +5,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import kotlinx.serialization.json.Json
+import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.net.MeeshyApi
 import javax.inject.Singleton
 
@@ -18,6 +20,10 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object SdkModule {
+
+    @Provides
+    @Singleton
+    fun providesCacheClock(): CacheClock = SystemCacheClock
 
     @Provides
     @Singleton

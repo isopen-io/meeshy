@@ -91,16 +91,16 @@ private fun rememberTabs(): List<TabItem> {
                 unselectedIcon = { Icon(Icons.Outlined.Notifications, contentDescription = activity) },
             ),
             TabItem(
-                route = Routes.PROFILE,
+                route = Routes.SETTINGS,
                 label = profile,
-                selectedIcon = { Icon(Icons.Filled.Person, contentDescription = profile) },
-                unselectedIcon = { Icon(Icons.Outlined.PersonOutline, contentDescription = profile) },
+                selectedIcon = { Icon(Icons.Filled.Settings, contentDescription = profile) },
+                unselectedIcon = { Icon(Icons.Outlined.Settings, contentDescription = profile) },
             ),
         )
     }
 }
 
-private val tabRoutes = setOf(Routes.CONVERSATIONS, Routes.FEED, Routes.NOTIFICATIONS, Routes.PROFILE)
+private val tabRoutes = setOf(Routes.CONVERSATIONS, Routes.FEED, Routes.NOTIFICATIONS, Routes.SETTINGS)
 
 @Composable
 fun MeeshyApp() {

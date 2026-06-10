@@ -25,7 +25,7 @@ import me.meeshy.core.database.entity.SyncMetaEntity
         OutboxEntity::class,
         MessageEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 public abstract class MeeshyDatabase : RoomDatabase() {

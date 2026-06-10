@@ -8,6 +8,7 @@ import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -17,6 +18,7 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.socket.MessageSocketManager
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -42,12 +44,22 @@ class ConversationListViewModelTest {
         every { it.conversationsStream(any(), any()) } returns stream
     }
 
+    private fun socketManager(): MessageSocketManager =
+        mockk<MessageSocketManager> {
+            every { unreadUpdated } returns MutableSharedFlow()
+            every { messageReceived } returns MutableSharedFlow()
+            every { conversationUpdated } returns MutableSharedFlow()
+        }
+
+    private fun viewModel(repo: ConversationRepository) =
+        ConversationListViewModel(repo, socketManager())
+
     @Test
     fun fresh_result_populates_conversations_without_skeleton() = runTest(dispatcher) {
         val repo = repositoryReturning(
-            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")))),
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
         )
-        val vm = ConversationListViewModel(repo)
+        val vm = viewModel(repo)
         advanceUntilIdle()
 
         assertThat(vm.state.value.conversations).hasSize(1)
@@ -57,7 +69,7 @@ class ConversationListViewModelTest {
 
     @Test
     fun empty_result_shows_the_skeleton() = runTest(dispatcher) {
-        val vm = ConversationListViewModel(repositoryReturning(flowOf(CacheResult.Empty)))
+        val vm = viewModel(repositoryReturning(flowOf(CacheResult.Empty)))
         advanceUntilIdle()
 
         assertThat(vm.state.value.showSkeleton).isTrue()
@@ -66,8 +78,8 @@ class ConversationListViewModelTest {
 
     @Test
     fun stale_result_keeps_data_and_marks_syncing() = runTest(dispatcher) {
-        val vm = ConversationListViewModel(
-            repositoryReturning(flowOf(CacheResult.Stale(listOf(ApiConversation(id = "c1"))))),
+        val vm = viewModel(
+            repositoryReturning(flowOf(CacheResult.Stale(listOf(ApiConversation(id = "c1")), ageMillis = 0))),
         )
         advanceUntilIdle()
 
@@ -81,7 +93,7 @@ class ConversationListViewModelTest {
         val repo = mockk<ConversationRepository>(relaxed = true)
         val onError = slot<(Throwable) -> Unit>()
         every { repo.conversationsStream(any(), capture(onError)) } returns flowOf(CacheResult.Empty)
-        val vm = ConversationListViewModel(repo)
+        val vm = viewModel(repo)
         advanceUntilIdle()
 
         onError.captured.invoke(RuntimeException("Server down"))
@@ -94,7 +106,7 @@ class ConversationListViewModelTest {
     fun refresh_failure_surfaces_the_error_message() = runTest(dispatcher) {
         val repo = repositoryReturning(flowOf(CacheResult.Empty))
         coEvery { repo.refresh() } throws RuntimeException("Network unavailable")
-        val vm = ConversationListViewModel(repo)
+        val vm = viewModel(repo)
         advanceUntilIdle()
 
         vm.refresh()

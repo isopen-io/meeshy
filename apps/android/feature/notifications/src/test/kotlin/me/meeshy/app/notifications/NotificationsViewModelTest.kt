@@ -1,18 +1,37 @@
 package me.meeshy.app.notifications
 
-import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.mockk
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.NotificationState
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.notification.NotificationRepository
+import org.junit.After
+import org.junit.Before
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class NotificationsViewModelTest {
+
+    private val dispatcher = UnconfinedTestDispatcher()
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(dispatcher)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
 
     private val repository: NotificationRepository = mockk(relaxed = true)
 
@@ -27,13 +46,9 @@ class NotificationsViewModelTest {
         coEvery { repository.list(any(), any(), any()) } returns NetworkResult.Success(items)
 
         val vm = NotificationsViewModel(repository)
-        vm.state.test {
-            skipItems(1) // loading state
-            val s = awaitItem()
-            assertThat(s.notifications).hasSize(2)
-            assertThat(s.isLoading).isFalse()
-            cancelAndIgnoreRemainingEvents()
-        }
+
+        assertThat(vm.state.value.notifications).hasSize(2)
+        assertThat(vm.state.value.isLoading).isFalse()
     }
 
     @Test
@@ -42,13 +57,10 @@ class NotificationsViewModelTest {
         coEvery { repository.list(any(), any(), any()) } returns NetworkResult.Success(items)
 
         val vm = NotificationsViewModel(repository)
-        vm.state.test {
-            skipItems(2) // loading + loaded
-            vm.markAsRead("n1")
-            val s = awaitItem()
-            assertThat(s.notifications.first().state.isRead).isTrue()
-            cancelAndIgnoreRemainingEvents()
-        }
+
+        vm.markAsRead("n1")
+
+        assertThat(vm.state.value.notifications.first().state.isRead).isTrue()
     }
 
     @Test
@@ -56,11 +68,7 @@ class NotificationsViewModelTest {
         coEvery { repository.list(any(), any(), any()) } returns NetworkResult.Failure(ApiError("Server error", httpStatus = 500))
 
         val vm = NotificationsViewModel(repository)
-        vm.state.test {
-            skipItems(1)
-            val s = awaitItem()
-            assertThat(s.errorMessage).isEqualTo("Server error")
-            cancelAndIgnoreRemainingEvents()
-        }
+
+        assertThat(vm.state.value.errorMessage).isEqualTo("Server error")
     }
 }

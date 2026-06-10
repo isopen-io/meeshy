@@ -12,6 +12,7 @@ import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.serialization.json.Json
+import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddReactionRequest
@@ -34,6 +35,7 @@ class OutboxFlushWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val outboxRepository: OutboxRepository,
+    private val messageRepository: MessageRepository,
     private val messageApi: MessageApi,
     private val reactionApi: ReactionApi,
     private val json: Json,
@@ -43,7 +45,11 @@ class OutboxFlushWorker @AssistedInject constructor(
         outboxRepository.recoverInflight()
 
         val senders = buildSenders()
-        val drainer = OutboxDrainer(outboxRepository, senders)
+        val drainer = OutboxDrainer(outboxRepository, senders) { row ->
+            if (row.kindEnum == OutboxKind.SEND_MESSAGE) {
+                messageRepository.markSendFailed(row.cmid)
+            }
+        }
 
         val lanes = listOf(
             OutboxLanes.REACTION,
@@ -81,8 +87,11 @@ class OutboxFlushWorker @AssistedInject constructor(
         OutboxKind.SEND_MESSAGE to MutationSender { row ->
             val req = runCatching { json.decodeFromString<SendMessageRequest>(row.payload) }
                 .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
-            when (apiCall { messageApi.send(row.targetId, req) }) {
-                is NetworkResult.Success -> SendResult.Success
+            when (val result = apiCall { messageApi.send(row.targetId, req) }) {
+                is NetworkResult.Success -> {
+                    messageRepository.reconcileSent(row.cmid, result.data)
+                    SendResult.Success
+                }
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }
         },

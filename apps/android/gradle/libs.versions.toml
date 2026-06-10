@@ -62,6 +62,7 @@ hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt"
 hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hilt" }
 hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
 work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
+firebase-messaging = { module = "com.google.firebase:firebase-messaging", version = "24.1.0" }
 hilt-work = { module = "androidx.hilt:hilt-work", version = "1.2.0" }
 hilt-work-compiler = { module = "androidx.hilt:hilt-compiler", version = "1.2.0" }
 paging-runtime = { module = "androidx.paging:paging-runtime-ktx", version.ref = "paging" }

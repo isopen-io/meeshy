@@ -91,4 +91,39 @@ class OutboxDrainerTest {
         assertThat(report.exhausted).isEqualTo(1)
         assertThat(outbox.observeAll().first().single().stateEnum).isEqualTo(OutboxState.EXHAUSTED)
     }
+
+    @Test
+    fun `drainLane reports every exhausted row through onExhausted`() = runTest {
+        enqueueSend("m1")
+        enqueueSend("m2")
+        val exhaustedCmids = mutableListOf<String>()
+
+        OutboxDrainer(
+            outbox,
+            mapOf(
+                OutboxKind.SEND_MESSAGE to MutationSender { row ->
+                    if (row.cmid == "m1") SendResult.PermanentFailure("rejected") else SendResult.Success
+                },
+            ),
+            onExhausted = { exhaustedCmids += it.cmid },
+        ).drainLane(lane)
+
+        assertThat(exhaustedCmids).containsExactly("m1")
+    }
+
+    @Test
+    fun `drainLane fires onExhausted when transient retries run out`() = runTest {
+        enqueueSend("m1")
+        repeat(OutboxRepository.MAX_ATTEMPTS - 1) { outbox.markFailed("m1") }
+        val exhaustedCmids = mutableListOf<String>()
+
+        OutboxDrainer(
+            outbox,
+            mapOf(OutboxKind.SEND_MESSAGE to MutationSender { SendResult.TransientFailure }),
+            onExhausted = { exhaustedCmids += it.cmid },
+        ).drainLane(lane)
+
+        assertThat(exhaustedCmids).containsExactly("m1")
+        assertThat(outbox.observeAll().first().single().stateEnum).isEqualTo(OutboxState.EXHAUSTED)
+    }
 }
