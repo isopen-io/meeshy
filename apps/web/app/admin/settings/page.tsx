@@ -3,6 +3,7 @@
 import React, { useState, Suspense } from 'react';
 
 import dynamic from 'next/dynamic';
+import { useI18n } from '@/hooks/use-i18n';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -114,6 +115,7 @@ function SectionLoader() {
  */
 export default function AdminSettingsPage() {
   const [activeTab, setActiveTab] = useState('general');
+  const { t } = useI18n('admin');
 
   const {
     settings,
@@ -140,7 +142,7 @@ export default function AdminSettingsPage() {
   };
 
   const handleReset = () => {
-    if (confirm('Réinitialiser tous les paramètres à leurs valeurs par défaut?')) {
+    if (confirm(t('adminSettings.resetConfirm'))) {
       resetAll();
     }
   };

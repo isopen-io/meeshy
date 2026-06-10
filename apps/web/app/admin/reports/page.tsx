@@ -424,7 +424,7 @@ export default function AdminReportsPage() {
 
               <Select value={statusFilter || 'all'} onValueChange={(value) => handleFilterChange('status', value)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Statut" />
+                  <SelectValue placeholder={t('reports.allStatuses')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('reports.statusAll')}</SelectItem>
@@ -437,7 +437,7 @@ export default function AdminReportsPage() {
 
               <Select value={priorityFilter || 'all'} onValueChange={(value) => handleFilterChange('priority', value)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Priorité" />
+                  <SelectValue placeholder={t('reports.allPriorities')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('reports.priorityAll')}</SelectItem>
