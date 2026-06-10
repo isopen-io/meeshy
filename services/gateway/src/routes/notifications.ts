@@ -6,7 +6,6 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { NotificationFormatter } from '../services/notifications/NotificationFormatter';
-import { validatePagination } from '../utils/pagination';
 import {
   notificationSchema,
   errorResponseSchema,
@@ -83,8 +82,6 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         const userId = request.user!.userId;
         const { offset = 0, limit = 20, unreadOnly = false } = request.query as { offset?: number; limit?: number; unreadOnly?: boolean };
 
-        const pagination = validatePagination(offset, limit, 100);
-
         // Récupérer les notifications BRUTES de Prisma (pas encore formatées)
         const where: any = { userId };
         if (unreadOnly) {
@@ -95,8 +92,8 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           fastify.prisma.notification.findMany({
             where,
             orderBy: { createdAt: 'desc' },
-            take: pagination.limit,
-            skip: pagination.offset,
+            take: limit,
+            skip: offset,
           }),
           fastify.prisma.notification.count({ where }),
           notificationService.getUnreadCount(userId),
@@ -106,8 +103,8 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         return NotificationFormatter.formatPaginatedResponse({
           notifications: rawNotifications,
           total,
-          offset: pagination.offset,
-          limit: pagination.limit,
+          offset,
+          limit,
           unreadCount,
         });
       } catch (error) {
