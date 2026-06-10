@@ -1458,7 +1458,8 @@
     "confirmPasswordLabel": "Confirmar contraseña",
     "reasonResetLabel": "Motivo del restablecimiento",
     "reasonResetPlaceholder": "Motivo del restablecimiento de contraseña...",
-    "resetButton": "Restablecer contraseña"
+    "resetButton": "Restablecer contraseña",
+    "deleteSuccess": "Usuario eliminado con éxito"
   },
   "shareLinks": {
     "loading": "Cargando enlaces de compartición...",
