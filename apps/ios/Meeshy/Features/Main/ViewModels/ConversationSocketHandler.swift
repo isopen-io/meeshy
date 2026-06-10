@@ -352,8 +352,13 @@ final class ConversationSocketHandler {
                            let socketAttachments = apiMsg.attachments, !socketAttachments.isEmpty,
                            let idx = delegate.messageIndex(for: apiMsg.id) {
                             let existing = delegate.messages[idx]
+                            // `.slow` is a still-pending optimistic row (failed
+                            // once, retrying via the outbox) — like `.sending`,
+                            // its attachment data is local and must be refreshed
+                            // from the authoritative socket echo.
                             let hasNewData = existing.attachments.count != socketAttachments.count
                                 || existing.deliveryStatus == .sending
+                                || existing.deliveryStatus == .slow
                             if hasNewData, let persistence = self.persistence {
                                 // Write refreshed attachment data through persistence;
                                 // store observation surfaces the update to the view.

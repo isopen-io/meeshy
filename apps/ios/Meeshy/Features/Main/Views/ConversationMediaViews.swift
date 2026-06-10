@@ -35,11 +35,14 @@ struct DownloadBadgeView: View {
     private var accent: Color { Color(hex: accentColor) }
 
     /// Local optimistic media (a `file://` URL) and messages still in their
-    /// optimistic phase (`.sending` / `.invisible`) are already on disk — a
-    /// download badge must never appear for them. See Sprint 3 RC3.2.
+    /// optimistic phase (`.sending` / `.slow` / `.invisible`) are already on
+    /// disk — a download badge must never appear for them. `.slow` is a row
+    /// that failed once and is retrying via the outbox: still optimistic, still
+    /// local. See Sprint 3 RC3.2.
     var hidesForLocalOrOptimisticMedia: Bool {
         attachment.fileUrl.hasPrefix("file://")
             || messageDeliveryStatus == .sending
+            || messageDeliveryStatus == .slow
             || messageDeliveryStatus == .invisible
     }
 
