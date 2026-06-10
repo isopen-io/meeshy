@@ -210,6 +210,12 @@ struct ThemedMessageBubble: View {
             content: content,
             message: message,
             contactColor: contactColor,
+            otherBubbleColor: DynamicColorGenerator.blendTwo(
+                message.senderColor ?? contactColor,
+                weight1: 0.30,
+                MeeshyColors.brandPrimaryHex,
+                weight2: 0.70
+            ),
             isDirect: isDirect,
             isDark: isDark,
             transcription: transcription,
