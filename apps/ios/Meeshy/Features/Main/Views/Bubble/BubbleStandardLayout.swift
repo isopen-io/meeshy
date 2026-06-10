@@ -448,6 +448,14 @@ struct BubbleStandardLayout: View {
         .onReceive(SharedAVPlayerManager.shared.$activeURL) { newURL in
             // Local mirror — toggles `hasPlayingInlineVideo` to drive the
             // footer overlay visibility. Doesn't re-render on time ticks.
+            //
+            // Every visible bubble (text bubbles included) is subscribed, but
+            // only a bubble that actually owns a video has any reason to mirror
+            // this. Gating the @State write on video presence (and deduping the
+            // value) means a text bubble's body is never invalidated when the
+            // active inline video changes elsewhere in the list.
+            guard visualAttachments.contains(where: { $0.type == .video }),
+                  newURL != inlineVideoActiveURL else { return }
             inlineVideoActiveURL = newURL
         }
         .sheet(isPresented: $showShareSheet) {
