@@ -132,3 +132,34 @@ describe('groupSocketsByLanguage', () => {
     expect(totalEmitsAvoided).toBe(1);
   });
 });
+
+describe('multi-device divergent languages (5.3 integration)', () => {
+  it('each device receives only its languages + original', () => {
+    const payload = basePayload(); // content fr, translations {en, es, de}
+    const groups = groupSocketsByLanguage({
+      socketIds: ['sA', 'sB'],
+      originalLanguage: 'fr',
+      socketToUser: (s) => (s === 'sA' ? 'uA' : 'uB'),
+      resolveLanguages: (u) => (u === 'uA' ? ['en'] : ['es']),
+      userLanguage: () => undefined,
+    });
+
+    // Deux groupes distincts (langues divergentes), chacun avec l'original 'fr'
+    expect(groups).toHaveLength(2);
+    const gA = groups.find((g) => g.socketIds.includes('sA'))!;
+    const gB = groups.find((g) => g.socketIds.includes('sB'))!;
+    expect([...gA.languages].sort()).toEqual(['en', 'fr']);
+    expect([...gB.languages].sort()).toEqual(['es', 'fr']);
+
+    // Device EN : seule la traduction 'en' reste (es/de prunés) ; original préservé
+    const fA = filterMessagePayloadForLanguages(payload, gA.languages);
+    expect(fA.translations.map((t: { targetLanguage: string }) => t.targetLanguage).sort()).toEqual(['en']);
+    expect(fA.content).toBe('Bonjour');
+    expect(fA.originalLanguage).toBe('fr');
+
+    // Device ES : seule la traduction 'es' reste ; original préservé
+    const fB = filterMessagePayloadForLanguages(payload, gB.languages);
+    expect(fB.translations.map((t: { targetLanguage: string }) => t.targetLanguage).sort()).toEqual(['es']);
+    expect(fB.content).toBe('Bonjour');
+  });
+});

@@ -221,6 +221,10 @@ services:
       ZMQ_TRANSLATOR_PUSH_PORT: "5555"
       ZMQ_TRANSLATOR_SUB_PORT: "5558"
       AGENT_HOST: agent
+      # 5.3 — filtre langue WS : réduit le payload message:new aux langues du
+      # device + l'original. OFF par défaut. Activer en staging (cf. runbook
+      # docs/runbooks/2026-06-10-socket-lang-filter-activation.md).
+      # SOCKET_LANG_FILTER: false
       NODE_ENV: development
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3100}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3100}

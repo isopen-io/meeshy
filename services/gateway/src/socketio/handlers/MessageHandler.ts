@@ -688,6 +688,19 @@ export class MessageHandler {
     for (const group of groups) {
       if (group.socketIds.length === 0) continue;
       const filtered = filterMessagePayloadForLanguages(payload, group.languages);
+      // 5.3 — mesure du gain bande passante (debug, gaté). Permet de prouver la
+      // réduction en staging avant un flip prod. Coût nul quand le flag est OFF.
+      if (process.env.SOCKET_LANG_FILTER === 'true') {
+        const fullBytes = JSON.stringify(payload).length;
+        const filteredBytes = JSON.stringify(filtered).length;
+        handlerLogger.debug('[lang-filter] payload reduced', {
+          fullBytes,
+          filteredBytes,
+          savedPct: fullBytes > 0 ? Math.round((1 - filteredBytes / fullBytes) * 100) : 0,
+          languages: group.languages,
+          originalLanguage,
+        });
+      }
       // Chain `.to(socketId)` so a single emit fans out to exactly this group's
       // sockets (mirrors the manager's per-language emit).
       let emitter: any = this.io;

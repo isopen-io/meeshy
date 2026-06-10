@@ -9,6 +9,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray } from '../utils/translation-transformer';
 import { filterMessagePayloadForLanguages } from './utils/message-payload-filter';
+import { applyResolvedLanguagesRefresh } from './utils/resolved-languages-refresh';
 import { MaintenanceService } from '../services/MaintenanceService';
 import { StatusService } from '../services/StatusService';
 import { MessagingService } from '../services/MessagingService';
@@ -1598,6 +1599,13 @@ export class MeeshySocketIOManager {
               unreadCount
             });
 
+            // 5.3 SCOPE — le filtre SOCKET_LANG_FILTER s'applique au message:new
+            // ONLINE uniquement. L'enqueue offline ci-dessous stocke le payload
+            // complet (multi-traduit), NON filtré par langue. Acceptable car
+            // (a) le chemin principal `message:send` (MessageHandler) n'enqueue pas
+            // offline, et (b) le drain `_drainPendingMessages` est actuellement du
+            // code mort (jamais appelé) — sujet pré-existant à traiter séparément,
+            // hors périmètre 5.3.
             if (this.deliveryQueue && !connectedUserIds.has(roomTarget)) {
               this.deliveryQueue.enqueue(roomTarget, {
                 messageId: message.id,
@@ -1620,6 +1628,23 @@ export class MeeshySocketIOManager {
     } catch (error) {
       logger.error('[PHASE 3.1] Erreur broadcast message', error);
     }
+  }
+
+  /**
+   * B3 (5.3) — appelée par `PATCH /users/profile` quand un user change de langue,
+   * pour que `SOCKET_LANG_FILTER` filtre sur la nouvelle langue sans reconnexion.
+   * No-op si le user n'est pas connecté.
+   */
+  public refreshUserResolvedLanguages(
+    userId: string,
+    prefs: {
+      systemLanguage: string;
+      regionalLanguage?: string | null;
+      customDestinationLanguage?: string | null;
+      deviceLocale?: string | null;
+    }
+  ): void {
+    applyResolvedLanguagesRefresh(this.connectedUsers, userId, prefs);
   }
 
   /**
