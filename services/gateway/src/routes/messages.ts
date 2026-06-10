@@ -46,7 +46,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
   // Instancier les services
   const attachmentService = new AttachmentService(prisma);
-  const translationService: MessageTranslationService = (fastify as any).translationService;
+  const translationService = fastify.translationService;
   const socketIOHandler = fastify.socketIOHandler;
 
   // Middleware d'authentification requis pour les messages

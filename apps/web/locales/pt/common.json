@@ -211,7 +211,19 @@
     "exitFullscreen": "Sair da tela cheia",
     "zoomIn": "Ampliar",
     "zoomOut": "Reduzir",
-    "rotate": "Girar"
+    "rotate": "Girar",
+    "clearSearch": "Limpar pesquisa",
+    "backToList": "Voltar à lista",
+    "backToConversations": "Voltar às conversas",
+    "breadcrumb": "Trilha de navegação",
+    "home": "Início",
+    "anonymous": "Anônimo",
+    "user": "Usuário",
+    "reactWith": "Reagir com {emoji}",
+    "limitReached": "Limite atingido: {limit} {category}s máximo",
+    "filesAdded": "Apenas {count} arquivo(s) adicionado(s)",
+    "send": "Enviar",
+    "noTrending": "Sem tendências no momento"
   },
   "copied": "Copiado",
   "never": "Nunca"

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_title">Fil d\'actualité</string>
+    <string name="feed_empty">Aucune publication pour l\'instant</string>
+    <string name="feed_like">J\'aime</string>
+</resources>

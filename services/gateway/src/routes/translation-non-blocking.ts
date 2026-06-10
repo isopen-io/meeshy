@@ -248,10 +248,10 @@ const conversationParamsSchema = {
 } as const;
 
 // ===== ROUTE NON-BLOQUANTE =====
-export async function translationRoutes(fastify: FastifyInstance, options: any) {
+export async function translationRoutes(fastify: FastifyInstance, _options: Record<string, unknown>) {
   // Recuperer les services depuis l'instance fastify (comme dans translation.ts)
-  const translationService = (fastify as any).translationService;
-  const messagingService = (fastify as any).messagingService;
+  const translationService = fastify.translationService;
+  const messagingService = fastify.messagingService;
 
   if (!translationService) {
     throw new Error('MessageTranslationService not provided to translation routes');
@@ -364,10 +364,7 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
         // DECLENCHEMENT NON-BLOQUANT - pas d'await !
         messagingService.handleMessage(
           messageRequest,
-          'system', // TODO: Recuperer l'ID utilisateur depuis l'auth
-          true,
-          undefined, // JWT token
-          undefined  // Session token
+          'system' // TODO: Recuperer l'ID utilisateur depuis l'auth
         ).catch((error: any) => {
           logger.error(`[Translation] Async message processing error: ${error.message}`);
         });
@@ -417,7 +414,7 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
         }
       }
     }
-  }, async (request: any, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Params: { messageId: string; language: string } }>, reply: FastifyReply) => {
     try {
       const { messageId, language } = request.params;
 

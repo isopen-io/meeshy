@@ -73,6 +73,11 @@ struct MessageContextOverlay: View {
     let onDismiss: () -> Void
     let onDragChanged: (CGFloat) -> Void
     let onDragEnded: (CGFloat, CGFloat) -> Void
+    /// Tap sur l'avatar/nom de la bulle élevée → profil de l'expéditeur.
+    /// La bulle n'a plus de `@EnvironmentObject Router` (perf re-render) ;
+    /// sans ce câblage le tap serait silencieusement no-op alors que la
+    /// bulle élevée EST interactive pendant la phase `.open`.
+    var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
 
     private var isVisible: Bool {
         phase == .opening || phase == .open
@@ -147,7 +152,8 @@ struct MessageContextOverlay: View {
             isLastSentMessage: true,
             mentionDisplayNames: mentionDisplayNames,
             currentUserId: currentUserId,
-            userLanguages: userLanguages
+            userLanguages: userLanguages,
+            onOpenProfile: onOpenProfile
         )
         .frame(width: frame.width, height: frame.height)
         .scaleEffect(bubbleScale)

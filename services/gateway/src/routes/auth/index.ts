@@ -17,7 +17,7 @@ import { registerRevokeAllSessionsRoute } from './revoke-all-sessions';
 export async function authRoutes(fastify: FastifyInstance) {
   // Initialize core authentication service
   const authService = new AuthService(
-    (fastify as any).prisma,
+    fastify.prisma,
     process.env.JWT_SECRET || 'meeshy-secret-key-dev'
   );
 
@@ -27,7 +27,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 
   // Initialize phone transfer service for registration flow
   const phoneTransferService = new PhoneTransferService(
-    (fastify as any).prisma,
+    fastify.prisma,
     cacheStore,
     smsService
   );
@@ -39,8 +39,8 @@ export async function authRoutes(fastify: FastifyInstance) {
     phoneTransferService,
     smsService,
     cacheStore,
-    redis: (fastify as any).redis, // Keep for backward compatibility
-    prisma: (fastify as any).prisma
+    redis: fastify.redis, // Keep for backward compatibility
+    prisma: fastify.prisma
   };
 
   // Register route modules

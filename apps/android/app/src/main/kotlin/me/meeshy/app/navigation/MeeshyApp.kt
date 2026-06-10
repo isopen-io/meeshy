@@ -19,6 +19,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -28,8 +29,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.compose.ui.res.stringResource
+import me.meeshy.app.R
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.LoginScreen
+import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.app.chat.ChatScreen
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.contacts.ContactsScreen
@@ -60,40 +64,43 @@ private data class TabItem(
     val unselectedIcon: @Composable () -> Unit,
 )
 
-private val tabs = listOf(
-    TabItem(
-        route = Routes.CONVERSATIONS,
-        label = "Messages",
-        selectedIcon = { Icon(Icons.Filled.ChatBubble, null) },
-        unselectedIcon = { Icon(Icons.Outlined.ChatBubbleOutline, null) },
-    ),
-    TabItem(
-        route = Routes.FEED,
-        label = "Feed",
-        selectedIcon = { Icon(Icons.Filled.Home, null) },
-        unselectedIcon = { Icon(Icons.Outlined.Home, null) },
-    ),
-    TabItem(
-        route = Routes.CONTACTS,
-        label = "Contacts",
-        selectedIcon = { Icon(Icons.Filled.People, null) },
-        unselectedIcon = { Icon(Icons.Outlined.PeopleOutline, null) },
-    ),
-    TabItem(
-        route = Routes.NOTIFICATIONS,
-        label = "Activity",
-        selectedIcon = { Icon(Icons.Filled.Notifications, null) },
-        unselectedIcon = { Icon(Icons.Outlined.Notifications, null) },
-    ),
-    TabItem(
-        route = Routes.SETTINGS,
-        label = "Settings",
-        selectedIcon = { Icon(Icons.Filled.Settings, null) },
-        unselectedIcon = { Icon(Icons.Outlined.Settings, null) },
-    ),
-)
+@Composable
+private fun rememberTabs(): List<TabItem> {
+    val messages = stringResource(R.string.tab_messages)
+    val feed = stringResource(R.string.tab_feed)
+    val activity = stringResource(R.string.tab_activity)
+    val profile = stringResource(R.string.tab_profile)
+    return remember(messages, feed, activity, profile) {
+        listOf(
+            TabItem(
+                route = Routes.CONVERSATIONS,
+                label = messages,
+                selectedIcon = { Icon(Icons.Filled.ChatBubble, contentDescription = messages) },
+                unselectedIcon = { Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = messages) },
+            ),
+            TabItem(
+                route = Routes.FEED,
+                label = feed,
+                selectedIcon = { Icon(Icons.Filled.Home, contentDescription = feed) },
+                unselectedIcon = { Icon(Icons.Outlined.Home, contentDescription = feed) },
+            ),
+            TabItem(
+                route = Routes.NOTIFICATIONS,
+                label = activity,
+                selectedIcon = { Icon(Icons.Filled.Notifications, contentDescription = activity) },
+                unselectedIcon = { Icon(Icons.Outlined.Notifications, contentDescription = activity) },
+            ),
+            TabItem(
+                route = Routes.PROFILE,
+                label = profile,
+                selectedIcon = { Icon(Icons.Filled.Person, contentDescription = profile) },
+                unselectedIcon = { Icon(Icons.Outlined.PersonOutline, contentDescription = profile) },
+            ),
+        )
+    }
+}
 
-private val tabRoutes = tabs.map { it.route }.toSet()
+private val tabRoutes = setOf(Routes.CONVERSATIONS, Routes.FEED, Routes.NOTIFICATIONS, Routes.PROFILE)
 
 @Composable
 fun MeeshyApp() {
@@ -105,9 +112,11 @@ fun MeeshyApp() {
     val currentRoute = navBackStack?.destination?.route
     val showBottomBar = currentRoute in tabRoutes
 
-    val startDestination = if (authState.isAuthenticated) Routes.CONVERSATIONS else Routes.LOGIN
+    val startDestination = remember(authState.isAuthenticated) { if (authState.isAuthenticated) Routes.CONVERSATIONS else Routes.LOGIN }
+    val tabs = rememberTabs()
 
     Scaffold(
+        containerColor = MeeshyTheme.tokens.backgroundPrimary,
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
@@ -118,7 +127,7 @@ fun MeeshyApp() {
                             onClick = {
                                 if (!selected) {
                                     navController.navigate(tab.route) {
-                                        popUpTo(Routes.CONVERSATIONS) { saveState = true }
+                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
                                         launchSingleTop = true
                                         restoreState = true
                                     }

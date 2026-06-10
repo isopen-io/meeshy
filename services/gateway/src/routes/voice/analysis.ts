@@ -101,18 +101,14 @@ export function registerAnalysisRoutes(
   }, async (request: FastifyRequest<{ Body: AnalyzeBody }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+      return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
     }
 
     try {
       const { audioBase64, analysisTypes } = request.body;
 
       if (!audioBase64) {
-        return reply.status(400).send({
-          success: false,
-          error: 'INVALID_REQUEST',
-          message: 'audioBase64 is required'
-        });
+        return sendBadRequest(reply, 'INVALID_REQUEST', { message: 'audioBase64 is required' });
       }
 
       const result = await audioTranslateService.analyzeVoice(userId, {
@@ -178,18 +174,14 @@ export function registerAnalysisRoutes(
   }, async (request: FastifyRequest<{ Body: CompareBody }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+      return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
     }
 
     try {
       const { audioBase64_1, audioBase64_2 } = request.body;
 
       if (!audioBase64_1 || !audioBase64_2) {
-        return reply.status(400).send({
-          success: false,
-          error: 'INVALID_REQUEST',
-          message: 'Both audioBase64_1 and audioBase64_2 are required'
-        });
+        return sendBadRequest(reply, 'INVALID_REQUEST', { message: 'Both audioBase64_1 and audioBase64_2 are required' });
       }
 
       const result = await audioTranslateService.compareVoices(userId, {
@@ -281,26 +273,18 @@ export function registerAnalysisRoutes(
   }, async (request: FastifyRequest<{ Body: FeedbackBody }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+      return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
     }
 
     try {
       const { translationId, rating, feedbackType, comment, metadata } = request.body;
 
       if (!translationId || rating === undefined) {
-        return reply.status(400).send({
-          success: false,
-          error: 'INVALID_REQUEST',
-          message: 'translationId and rating are required'
-        });
+        return sendBadRequest(reply, 'INVALID_REQUEST', { message: 'translationId and rating are required' });
       }
 
       if (rating < 1 || rating > 5) {
-        return reply.status(400).send({
-          success: false,
-          error: 'INVALID_REQUEST',
-          message: 'rating must be between 1 and 5'
-        });
+        return sendBadRequest(reply, 'INVALID_REQUEST', { message: 'rating must be between 1 and 5' });
       }
 
       const result = await audioTranslateService.submitFeedback(userId, {
@@ -391,7 +375,7 @@ export function registerAnalysisRoutes(
   }, async (request: FastifyRequest<{ Querystring: HistoryQuery }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+      return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
     }
 
     try {
@@ -452,7 +436,7 @@ export function registerAnalysisRoutes(
   }, async (request: FastifyRequest<{ Querystring: StatsQuery }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+      return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
     }
 
     try {
@@ -500,11 +484,11 @@ export function registerAnalysisRoutes(
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+      return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
     }
 
     if (!isAdmin(request)) {
-      return reply.status(403).send({ success: false, error: 'FORBIDDEN', message: 'Admin access required' });
+      return sendForbidden(reply, 'FORBIDDEN', { message: 'Admin access required' });
     }
 
     try {

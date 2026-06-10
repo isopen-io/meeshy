@@ -407,12 +407,15 @@ extension FeedView {
 
     // MARK: - Helpers
     func feedGenerateVideoThumbnail(url: URL) async -> UIImage? {
-        let asset = AVAsset(url: url)
+        // Async AVFoundation API (iOS 16+): decodes off AVFoundation's queue
+        // instead of blocking the caller, replacing the deprecated synchronous
+        // `copyCGImage` / `AVAsset(url:)`.
+        let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = CGSize(width: 200, height: 200)
         do {
-            let cgImage = try generator.copyCGImage(at: .zero, actualTime: nil)
+            let cgImage = try await generator.image(at: .zero).image
             return UIImage(cgImage: cgImage)
         } catch {
             return nil
@@ -1189,11 +1192,11 @@ struct FeedComposerSheet: View {
 
     // MARK: - Helpers
     private func generateVideoThumbnail(url: URL) async -> UIImage? {
-        let asset = AVAsset(url: url)
+        let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = CGSize(width: 200, height: 200)
-        return try? UIImage(cgImage: generator.copyCGImage(at: .zero, actualTime: nil))
+        return try? await UIImage(cgImage: generator.image(at: .zero).image)
     }
 
     private func mimeTypeForURL(_ url: URL) -> String {

@@ -38,6 +38,43 @@ fileprivate func postMessageStoreRefresh(conversationIds: Set<String>) {
     }
 }
 
+/// Field-level equality over exactly the columns the `upsertFromAPIMessages`
+/// update branch mutates. CANNOT use `MessageRecord ==` here: that
+/// conformance is intentionally O(1) (`localId` + `changeVersion` only, for
+/// MessageStore's refresh skip) and the comparison runs BEFORE the
+/// changeVersion bump — it would report every mutation as "unchanged" and
+/// silently drop real content/reaction/state updates.
+fileprivate func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord) -> Bool {
+    a.content == b.content &&
+    a.serverId == b.serverId &&
+    a.state == b.state &&
+    a.isEdited == b.isEdited &&
+    a.editedAt == b.editedAt &&
+    a.deletedAt == b.deletedAt &&
+    a.attachmentsJson == b.attachmentsJson &&
+    a.reactionsJson == b.reactionsJson &&
+    a.reactionCount == b.reactionCount &&
+    a.isEncrypted == b.isEncrypted &&
+    a.encryptionMode == b.encryptionMode &&
+    a.deliveredCount == b.deliveredCount &&
+    a.readCount == b.readCount &&
+    a.deliveredToAllAt == b.deliveredToAllAt &&
+    a.readByAllAt == b.readByAllAt &&
+    a.senderId == b.senderId &&
+    a.senderName == b.senderName &&
+    a.senderUsername == b.senderUsername &&
+    a.senderAvatarURL == b.senderAvatarURL &&
+    a.replyToId == b.replyToId &&
+    a.storyReplyToId == b.storyReplyToId &&
+    a.replyToJson == b.replyToJson &&
+    a.forwardedFromId == b.forwardedFromId &&
+    a.forwardedFromConversationId == b.forwardedFromConversationId &&
+    a.forwardedFromJson == b.forwardedFromJson &&
+    a.mentionedUsersJson == b.mentionedUsersJson &&
+    a.callSummaryJson == b.callSummaryJson &&
+    a.effectFlags == b.effectFlags
+}
+
 public actor MessagePersistenceActor {
     private let dbWriter: any DatabaseWriter
 
@@ -182,25 +219,28 @@ public actor MessagePersistenceActor {
                 switch op {
                 case .reconcileBatch(let messages):
                     guard !messages.isEmpty else { continue }
-                    try? await self.reconcileBatchSync(messages)
                     // Post the refresh AFTER the write completes — buffer
                     // callers used to post the notification immediately on
                     // enqueue, but the worker that does the actual GRDB write
                     // runs async on this stream, so MessageStore observers
                     // fired against an empty database and silently dropped
-                    // the new row. New messages received via socket while
-                    // the user was on the conversation never appeared until
-                    // a manual reload.
-                    let convIds = Set(messages.map(\.conversationId))
-                    postMessageStoreRefresh(conversationIds: convIds)
+                    // the new row. Scoped to the conversations whose rows
+                    // actually changed: a re-delivered identical payload must
+                    // not trigger the MessageStore → applySnapshot cascade.
+                    if let changed = try? await self.reconcileBatchSync(messages),
+                       !changed.isEmpty {
+                        postMessageStoreRefresh(conversationIds: changed)
+                    }
                 case .upsertAPIMessages(let messages):
                     guard !messages.isEmpty else { continue }
-                    // `upsertFromAPIMessages` posts its own scoped refresh via
-                    // a `defer` — do NOT re-post here or observers refresh twice.
+                    // `upsertFromAPIMessages` posts its own refresh, scoped to
+                    // the conversations with real row changes — do NOT re-post
+                    // here or observers refresh twice.
                     try? await self.upsertFromAPIMessages(messages)
                 case .batchDeliveryUpdate(let convId, let event):
-                    try? await self.batchDeliverySync(conversationId: convId, event: event)
-                    postMessageStoreRefresh(conversationIds: [convId])
+                    if (try? await self.batchDeliverySync(conversationId: convId, event: event)) == true {
+                        postMessageStoreRefresh(conversationIds: [convId])
+                    }
                 }
             }
         }
@@ -342,6 +382,58 @@ public actor MessagePersistenceActor {
         }
     }
 
+    /// Réconcilie les lignes optimistes ORPHELINES — `.sending`/`.queued` sans
+    /// `serverId` ET sans record outbox vivant (pending/inflight/failed) qui
+    /// les rejouerait. Ces lignes naissent quand le process est tué (ou la
+    /// Task d'envoi annulée) entre l'insert optimiste et la transition
+    /// `serverAck`/`sendFailed` : aucun chemin ne les fera jamais évoluer, et
+    /// l'utilisateur revoyait l'horloge `.sending` à CHAQUE réouverture de la
+    /// conversation, indéfiniment. Passées `.failed`, elles exposent enfin
+    /// l'affordance de retry manuel. La fenêtre de grâce évite de faucher un
+    /// envoi légitimement en vol pendant que l'écran se rouvre.
+    ///
+    /// Complète `reconcileFailedFromOutbox` (qui ne couvre que les outbox
+    /// `.exhausted`) ; appelé au même point du chargement de conversation.
+    public func reconcileOrphanedSendingRows(
+        conversationId: String,
+        olderThan age: TimeInterval = 120
+    ) {
+        let cutoff = Date().addingTimeInterval(-age)
+        let didChange = (try? dbWriter.write { db -> Bool in
+            let stuckStates = [MessageState.sending.rawValue, MessageState.queued.rawValue]
+            let stuckIds = try MessageRecord
+                .filter(Column("conversationId") == conversationId)
+                .filter(stuckStates.contains(Column("state")))
+                .filter(Column("serverId") == nil)
+                .filter(Column("createdAt") < cutoff)
+                .fetchAll(db)
+                .map(\.localId)
+            guard !stuckIds.isEmpty else { return false }
+
+            let liveStatuses = [
+                OutboxStatus.pending.rawValue,
+                OutboxStatus.inflight.rawValue,
+                OutboxStatus.failed.rawValue
+            ]
+            let liveOutboxLocalIds = Set(try OutboxRecord
+                .filter(Column("conversationId") == conversationId)
+                .filter(Column("kind") == OutboxKind.sendMessage.rawValue)
+                .filter(liveStatuses.contains(Column("status")))
+                .fetchAll(db)
+                .compactMap(\.messageLocalId))
+
+            let orphanIds = stuckIds.filter { !liveOutboxLocalIds.contains($0) }
+            guard !orphanIds.isEmpty else { return false }
+            let updated = try MessageRecord
+                .filter(orphanIds.contains(Column("localId")))
+                .updateAll(db, Column("state").set(to: MessageState.failed.rawValue))
+            return updated > 0
+        }) ?? false
+        if didChange {
+            postMessageStoreRefresh(conversationIds: [conversationId])
+        }
+    }
+
     // MARK: - Buffered Writes
 
     public func bufferIncoming(_ messages: [IncomingMessageData]) {
@@ -368,8 +460,13 @@ public actor MessagePersistenceActor {
         writeContinuation.yield(.batchDeliveryUpdate(conversationId: conversationId, event: event))
     }
 
-    private func reconcileBatchSync(_ messages: [IncomingMessageData]) throws {
-        try dbWriter.write { db in
+    /// Returns the conversations where a row was actually written, so the
+    /// worker only posts refreshes for real changes — a re-delivered payload
+    /// that matches the stored row must not dirty it (`changeVersion` bump)
+    /// nor trigger the MessageStore → applySnapshot reconfigure cascade.
+    private func reconcileBatchSync(_ messages: [IncomingMessageData]) throws -> Set<String> {
+        try dbWriter.write { db -> Set<String> in
+            var changedConvIds: Set<String> = []
             for msg in messages {
                 let existingLocalId = try PendingIdRecord
                     .filter(Column("serverId") == msg.id)
@@ -377,11 +474,16 @@ public actor MessagePersistenceActor {
 
                 if let localId = existingLocalId,
                    var existing = try MessageRecord.fetchOne(db, key: localId) {
-                    existing.state = max(existing.state, msg.computedState)
+                    let newState = max(existing.state, msg.computedState)
+                    guard newState != existing.state || existing.content != msg.content else {
+                        continue
+                    }
+                    existing.state = newState
                     existing.content = msg.content
                     existing.updatedAt = Date()
                     existing.changeVersion += 1
                     try existing.update(db)
+                    changedConvIds.insert(msg.conversationId)
                 } else {
                     let record = MessageRecord(
                         localId: msg.id, serverId: msg.id,
@@ -416,19 +518,25 @@ public actor MessagePersistenceActor {
                         changeVersion: 0
                     )
                     try record.insert(db)
+                    changedConvIds.insert(msg.conversationId)
                 }
             }
+            return changedConvIds
         }
     }
 
-    private func batchDeliverySync(conversationId: String, event: MessageEvent) throws {
-        try dbWriter.write { db in
+    /// Returns whether any row actually transitioned, so the worker only
+    /// posts a refresh for real changes — delivery/read events routinely
+    /// target conversations whose rows are already past the transition.
+    private func batchDeliverySync(conversationId: String, event: MessageEvent) throws -> Bool {
+        try dbWriter.write { db -> Bool in
             let records = try MessageRecord
                 .filter(Column("conversationId") == conversationId)
                 .filter([MessageState.sending.rawValue, MessageState.sent.rawValue]
                     .contains(Column("state")))
                 .fetchAll(db)
 
+            var didChange = false
             for var record in records {
                 var machine = MessageStateMachine(
                     state: record.state, retryCount: record.retryCount,
@@ -441,8 +549,10 @@ public actor MessagePersistenceActor {
                     record.updatedAt = Date()
                     record.changeVersion += 1
                     try record.update(db)
+                    didChange = true
                 }
             }
+            return didChange
         }
     }
 
@@ -1037,18 +1147,26 @@ public actor MessagePersistenceActor {
     public func upsertFromAPIMessages(_ apiMessages: [APIMessage]) async throws {
         // Empty payloads are a routine outcome of pagination paths (e.g.
         // `loadOlderMessages` reaching the start of the conversation) — no
-        // rows to write means no refresh to post. Returning early here keeps
-        // the empty-Set guard on `postMessageStoreRefresh` from tripping the
-        // assertion meant to catch genuine "forgot to scope the convId" bugs.
+        // rows to write means no refresh to post.
         guard !apiMessages.isEmpty else { return }
         let encoder = JSONEncoder()
-        let convIds = Set(apiMessages.map(\.conversationId))
         // Capture the actor-isolated current user id into a Sendable local so
         // the GRDB write closure can tag the current user's own reactions
         // without reaching back across the actor isolation boundary.
         let currentUserId = self.currentUserId
-        defer { postMessageStoreRefresh(conversationIds: convIds) }
-        try await dbWriter.write { db in
+        // Refresh ONLY the conversations where a row actually changed. The
+        // same payload routinely reaches this upsert several times (open
+        // conversation: per-conversation socket handler + the SyncEngine's
+        // global persistor + observeSync's cache backfill; REST: the VM's
+        // refresh + the SyncEngine's ensureMessages). The previous version
+        // bumped `changeVersion`/`updatedAt` and posted a refresh on EVERY
+        // pass — each no-op pass dirtied every row, defeated MessageStore's
+        // `newRecords != messages` skip, and triggered a full applySnapshot
+        // that reconfigured every visible cell. Repeated for every incoming
+        // socket event, that cascade is main-thread work felt as jank while
+        // typing. A no-op upsert must be exactly that: no write, no refresh.
+        let changedConvIds: Set<String> = try await dbWriter.write { db -> Set<String> in
+            var changedConvIds: Set<String> = []
             // T13 — message ids whose reaction toggle is still pending in the
             // outbox. Their local `reactionsJson` holds an optimistic add/remove
             // not yet on the server, so a stale REST snapshot must NOT clobber
@@ -1344,6 +1462,11 @@ public actor MessagePersistenceActor {
                         .fetchOne(db)
                 }
                 if var existing = existingRecord {
+                    // Snapshot BEFORE any mutation — compared after all field
+                    // assignments to detect whether this upsert actually
+                    // changes the row (most don't: echoes and refreshes
+                    // re-deliver identical payloads).
+                    let before = existing
                     // E2EE: when the local row already holds readable content
                     // (`isEncrypted == false`, non-empty) and the server now
                     // reports the message encrypted, the local copy is an own
@@ -1439,19 +1562,34 @@ public actor MessagePersistenceActor {
                     existing.mentionedUsersJson = mentionedUsersJson
                     existing.callSummaryJson = callSummaryJson ?? existing.callSummaryJson
                     existing.effectFlags = effectFlags
-                    existing.updatedAt = api.updatedAt ?? Date()
-                    existing.changeVersion += 1
-                    try existing.update(db)
-                    // When this upsert reconciled an optimistic row (its PK is
-                    // the `cid`, not the server id), keep PendingIdRecord
-                    // coherent so `resolveServerId` / future reconciliations
-                    // resolve the server id even when the row landed purely via
-                    // the socket path (no `applyEvent(.serverAck)` ran).
-                    if existing.localId != api.id {
-                        try PendingIdRecord(
-                            localId: existing.localId, serverId: api.id,
-                            conversationId: api.conversationId, reconciledAt: Date()
-                        ).save(db)
+                    // Write ONLY when something actually changed: either a
+                    // mirrored field differs from the pre-mutation snapshot,
+                    // or the server reports a newer `updatedAt` (it may bump
+                    // it for fields we don't mirror here, and the bubble's
+                    // Equatable gate keys on `updatedAt` for content/edit
+                    // invalidation). A byte-identical echo writes nothing and
+                    // posts no refresh — killing the redundant full-list
+                    // reconfigure that every duplicate delivery used to cost.
+                    let rowChanged = !upsertMutatedFieldsEqual(existing, before)
+                        || (api.updatedAt != nil && api.updatedAt != before.updatedAt)
+                    if rowChanged {
+                        existing.updatedAt = api.updatedAt ?? Date()
+                        existing.changeVersion += 1
+                        try existing.update(db)
+                        changedConvIds.insert(api.conversationId)
+                        // When this upsert reconciled an optimistic row (its PK is
+                        // the `cid`, not the server id), keep PendingIdRecord
+                        // coherent so `resolveServerId` / future reconciliations
+                        // resolve the server id even when the row landed purely via
+                        // the socket path (no `applyEvent(.serverAck)` ran). The
+                        // first reconciliation IS a row change (serverId backfill),
+                        // so gating this on `rowChanged` never skips a needed save.
+                        if existing.localId != api.id {
+                            try PendingIdRecord(
+                                localId: existing.localId, serverId: api.id,
+                                conversationId: api.conversationId, reconciledAt: Date()
+                            ).save(db)
+                        }
                     }
                 } else {
                     let record = MessageRecord(
@@ -1510,6 +1648,7 @@ public actor MessagePersistenceActor {
                         callSummaryJson: callSummaryJson
                     )
                     try record.insert(db)
+                    changedConvIds.insert(api.conversationId)
                     // `save` (upsert): a dangling PendingIdRecord from a
                     // previously purged message row must not roll back this
                     // fresh insert on a PK clash.
@@ -1540,6 +1679,10 @@ public actor MessagePersistenceActor {
                     }
                 }
             }
+            return changedConvIds
+        }
+        if !changedConvIds.isEmpty {
+            postMessageStoreRefresh(conversationIds: changedConvIds)
         }
     }
 

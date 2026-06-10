@@ -206,7 +206,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
         return sendBadRequest(reply, 'Username, email ou numéro de téléphone requis');
       }
 
-      const prisma = (fastify as any).prisma;
+      const prisma = fastify.prisma;
       const { normalizePhoneNumber } = await import('../../utils/normalize');
       const result: {
         usernameAvailable?: boolean;
@@ -306,7 +306,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
   fastify.post('/force-init', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { InitService } = await import('../../services/InitService');
-      const initService = new InitService((fastify as any).prisma);
+      const initService = new InitService(fastify.prisma);
       await initService.initializeDatabase();
 
       return sendSuccess(reply, { message: 'Database initialized successfully' });

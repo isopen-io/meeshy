@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 import { StatsGrid, TimeSeriesChart, DonutChart, type StatItem } from '@/components/admin/Charts';
 import { StatCardSkeleton, TableSkeleton } from '@/components/admin/TableSkeleton';
 
@@ -64,6 +65,7 @@ interface ModerationStats {
 
 export default function AdminModerationPage() {
   const router = useRouter();
+  const { t } = useI18n('admin');
   const [actions, setActions] = useState<ModerationAction[]>([]);
   const [stats, setStats] = useState<ModerationStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -165,7 +167,7 @@ export default function AdminModerationPage() {
       setActions(mockActions);
     } catch (error) {
       console.error('Erreur lors du chargement des données de modération:', error);
-      toast.error('Erreur lors du chargement des données');
+      toast.error(t('moderation.loadError'));
     } finally {
       setLoading(false);
     }
@@ -192,35 +194,35 @@ export default function AdminModerationPage() {
   // Stats pour StatsGrid
   const statsItems: StatItem[] = [
     {
-      title: 'Signalements en attente',
+      title: t('moderation.statPending'),
       value: stats?.pendingReports || 0,
-      description: `${stats?.totalReports || 0} total`,
+      description: t('moderation.statPendingDesc', { total: stats?.totalReports || 0 }),
       icon: Flag,
       iconColor: 'text-red-600 dark:text-red-400',
       iconBgColor: 'bg-red-100 dark:bg-red-900/30',
-      badge: { text: 'Urgent', variant: 'destructive' }
+      badge: { text: t('moderation.badgeUrgent'), variant: 'destructive' }
     },
     {
-      title: 'Actions aujourd\'hui',
+      title: t('moderation.statToday'),
       value: stats?.resolvedToday || 0,
-      description: 'Modérations effectuées',
+      description: t('moderation.statTodayDesc'),
       icon: CheckCircle,
       iconColor: 'text-green-600 dark:text-green-400',
       iconBgColor: 'bg-green-100 dark:bg-green-900/30',
       trend: { value: 15, isPositive: true }
     },
     {
-      title: 'Utilisateurs suspendus',
+      title: t('moderation.statSuspended'),
       value: stats?.suspendedUsers || 0,
-      description: `${stats?.activeWarnings || 0} avertissements actifs`,
+      description: t('moderation.statSuspendedDesc', { count: stats?.activeWarnings || 0 }),
       icon: UserX,
       iconColor: 'text-orange-600 dark:text-orange-400',
       iconBgColor: 'bg-orange-100 dark:bg-orange-900/30'
     },
     {
-      title: 'Taux de conformité',
+      title: t('moderation.statCompliance'),
       value: `${stats?.complianceRate || 0}%`,
-      description: 'Excellent',
+      description: t('moderation.statComplianceDesc'),
       icon: Shield,
       iconColor: 'text-blue-600 dark:text-blue-400',
       iconBgColor: 'bg-blue-100 dark:bg-blue-900/30',
@@ -241,9 +243,9 @@ export default function AdminModerationPage() {
 
   // Données pour DonutChart
   const donutData = [
-    { name: 'Résolus', value: 25, color: '#10b981' },
-    { name: 'En attente', value: stats?.pendingReports || 12, color: '#f59e0b' },
-    { name: 'Rejetés', value: 8, color: '#6b7280' }
+    { name: t('moderation.donutResolved'), value: 25, color: '#10b981' },
+    { name: t('moderation.donutPending'), value: stats?.pendingReports || 12, color: '#f59e0b' },
+    { name: t('moderation.donutDismissed'), value: 8, color: '#6b7280' }
   ];
 
   const getActionIcon = (type: string) => {
@@ -259,12 +261,12 @@ export default function AdminModerationPage() {
 
   const getActionLabel = (type: string) => {
     const labels: Record<string, string> = {
-      warning: 'Avertissement',
-      mute: 'Silence',
-      suspend: 'Suspension',
-      ban: 'Bannissement',
-      report_resolved: 'Signalement résolu',
-      report_dismissed: 'Signalement rejeté'
+      warning: t('moderation.actionWarning'),
+      mute: t('moderation.actionMute'),
+      suspend: t('moderation.actionSuspend'),
+      ban: t('moderation.actionBan'),
+      report_resolved: t('moderation.actionReportResolved'),
+      report_dismissed: t('moderation.actionReportDismissed')
     };
     return labels[type] || type;
   };
@@ -324,11 +326,11 @@ export default function AdminModerationPage() {
                 className="text-white hover:bg-white/20"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Retour
+                {t('moderation.back')}
               </Button>
               <div>
-                <h1 className="text-2xl font-bold">Modération du contenu</h1>
-                <p className="text-slate-100 mt-1">Surveillance et gestion des actions de modération</p>
+                <h1 className="text-2xl font-bold">{t('moderation.pageTitle')}</h1>
+                <p className="text-slate-100 mt-1">{t('moderation.pageSubtitle')}</p>
               </div>
             </div>
             <Button
@@ -337,7 +339,7 @@ export default function AdminModerationPage() {
               className="bg-white/20 hover:bg-white/30 text-white border-white/30"
             >
               <Flag className="h-4 w-4 mr-2" />
-              Voir les signalements
+              {t('moderation.viewReports')}
             </Button>
           </div>
         </div>
@@ -349,16 +351,16 @@ export default function AdminModerationPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <TimeSeriesChart
             data={timeSeriesData}
-            title="Actions de modération"
-            description="Actions effectuées cette semaine"
+            title={t('moderation.chartTitle')}
+            description={t('moderation.chartDesc')}
             color="#64748b"
             dataKey="value"
           />
 
           <DonutChart
             data={donutData}
-            title="État des signalements"
-            description="Répartition des signalements par statut"
+            title={t('moderation.donutTitle')}
+            description={t('moderation.donutDesc')}
           />
         </div>
 
@@ -368,7 +370,7 @@ export default function AdminModerationPage() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
               <CardTitle className="flex items-center space-x-2">
                 <Shield className="h-5 w-5" />
-                <span>Historique des actions de modération</span>
+                <span>{t('moderation.historyTitle')}</span>
                 <Badge variant="secondary">{filteredActions.length} actions</Badge>
               </CardTitle>
 
@@ -377,7 +379,7 @@ export default function AdminModerationPage() {
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
                     type="text"
-                    placeholder="Rechercher..."
+                    placeholder={t('moderation.searchPlaceholder')}
                     value={searchQuery}
                     onChange={(e) => {
                       setSearchQuery(e.target.value);
@@ -391,12 +393,12 @@ export default function AdminModerationPage() {
                     <SelectValue placeholder="Type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Tous les types</SelectItem>
-                    <SelectItem value="warning">Avertissements</SelectItem>
-                    <SelectItem value="suspend">Suspensions</SelectItem>
-                    <SelectItem value="ban">Bannissements</SelectItem>
-                    <SelectItem value="report_resolved">Résolus</SelectItem>
-                    <SelectItem value="report_dismissed">Rejetés</SelectItem>
+                    <SelectItem value="all">{t('moderation.typeAll')}</SelectItem>
+                    <SelectItem value="warning">{t('moderation.typeWarning')}</SelectItem>
+                    <SelectItem value="suspend">{t('moderation.typeSuspend')}</SelectItem>
+                    <SelectItem value="ban">{t('moderation.typeBan')}</SelectItem>
+                    <SelectItem value="report_resolved">{t('moderation.typeResolved')}</SelectItem>
+                    <SelectItem value="report_dismissed">{t('moderation.typeDismissed')}</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={severityFilter} onValueChange={setSeverityFilter}>
@@ -404,11 +406,11 @@ export default function AdminModerationPage() {
                     <SelectValue placeholder="Sévérité" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Toutes</SelectItem>
-                    <SelectItem value="low">Faible</SelectItem>
-                    <SelectItem value="medium">Moyenne</SelectItem>
-                    <SelectItem value="high">Élevée</SelectItem>
-                    <SelectItem value="critical">Critique</SelectItem>
+                    <SelectItem value="all">{t('moderation.severityAll')}</SelectItem>
+                    <SelectItem value="low">{t('moderation.severityLow')}</SelectItem>
+                    <SelectItem value="medium">{t('moderation.severityMedium')}</SelectItem>
+                    <SelectItem value="high">{t('moderation.severityHigh')}</SelectItem>
+                    <SelectItem value="critical">{t('moderation.severityCritical')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -421,10 +423,10 @@ export default function AdminModerationPage() {
                 <div className="text-center py-12">
                   <Shield className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                    Aucune action trouvée
+                    {t('moderation.emptyTitle')}
                   </h3>
                   <p className="text-gray-600 dark:text-gray-400">
-                    {searchQuery ? 'Essayez avec un autre terme de recherche' : 'Les actions de modération apparaîtront ici'}
+                    {searchQuery ? t('moderation.emptyWithSearch') : t('moderation.emptyDefault')}
                   </p>
                 </div>
               ) : (
@@ -471,7 +473,7 @@ export default function AdminModerationPage() {
                         </div>
 
                         <div className="text-sm">
-                          <span className="font-medium text-gray-700 dark:text-gray-300">Raison: </span>
+                          <span className="font-medium text-gray-700 dark:text-gray-300">{t('moderation.labelReason')}</span>
                           <span className="text-gray-900 dark:text-gray-100">{action.reason}</span>
                         </div>
 
@@ -485,13 +487,13 @@ export default function AdminModerationPage() {
                           <div className="text-xs text-orange-600 dark:text-orange-400 pl-6 flex items-center space-x-1">
                             <Clock className="h-3 w-3" />
                             <span>
-                              Expire le {new Date(action.expiresAt).toLocaleDateString('fr-FR')}
+                              {t('moderation.labelExpires', { date: new Date(action.expiresAt).toLocaleDateString() })}
                             </span>
                           </div>
                         )}
 
                         <div className="text-xs text-gray-500 dark:text-gray-400 pl-6">
-                          Modérateur: {action.moderator.displayName || action.moderator.username}
+                          {t('moderation.labelModerator')}{action.moderator.displayName || action.moderator.username}
                         </div>
                       </div>
                     </div>
@@ -517,7 +519,7 @@ export default function AdminModerationPage() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-6 pt-4 border-t dark:border-gray-700">
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Page {currentPage} sur {totalPages} • {filteredActions.length} action(s)
+                  {t('moderation.paginationInfo', { page: currentPage, total: totalPages, count: filteredActions.length })}
                 </div>
                 <div className="flex items-center space-x-2">
                   <Button
@@ -547,7 +549,7 @@ export default function AdminModerationPage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Shield className="h-5 w-5" />
-              <span>Guide de modération</span>
+              <span>{t('moderation.guideTitle')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -555,48 +557,48 @@ export default function AdminModerationPage() {
               <div>
                 <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center space-x-2">
                   <AlertTriangle className="h-4 w-4 text-slate-600" />
-                  <span>Niveaux de sévérité</span>
+                  <span>{t('moderation.guideSeverityTitle')}</span>
                 </h4>
                 <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
                   <li className="flex items-start space-x-2">
                     <span className="text-blue-600 dark:text-blue-400">•</span>
-                    <span><strong>Faible:</strong> Premier avertissement, contenu limite</span>
+                    <span>{t('moderation.guideLow')}</span>
                   </li>
                   <li className="flex items-start space-x-2">
                     <span className="text-yellow-600 dark:text-yellow-400">•</span>
-                    <span><strong>Moyenne:</strong> Spam, contenu répétitif</span>
+                    <span>{t('moderation.guideMedium')}</span>
                   </li>
                   <li className="flex items-start space-x-2">
                     <span className="text-orange-600 dark:text-orange-400">•</span>
-                    <span><strong>Élevée:</strong> Contenu inapproprié, harcèlement léger</span>
+                    <span>{t('moderation.guideHigh')}</span>
                   </li>
                   <li className="flex items-start space-x-2">
                     <span className="text-red-600 dark:text-red-400">•</span>
-                    <span><strong>Critique:</strong> Menaces, harcèlement grave, illégal</span>
+                    <span>{t('moderation.guideCritical')}</span>
                   </li>
                 </ul>
               </div>
               <div>
                 <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center space-x-2">
                   <Flag className="h-4 w-4 text-slate-600" />
-                  <span>Actions disponibles</span>
+                  <span>{t('moderation.guideActionsTitle')}</span>
                 </h4>
                 <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
                   <li className="flex items-start space-x-2">
                     <span className="text-slate-600 dark:text-slate-400">•</span>
-                    <span><strong>Avertissement:</strong> Notifier sans sanction</span>
+                    <span>{t('moderation.guideWarning')}</span>
                   </li>
                   <li className="flex items-start space-x-2">
                     <span className="text-slate-600 dark:text-slate-400">•</span>
-                    <span><strong>Suspension:</strong> Blocage temporaire (1-30 jours)</span>
+                    <span>{t('moderation.guideSuspend')}</span>
                   </li>
                   <li className="flex items-start space-x-2">
                     <span className="text-slate-600 dark:text-slate-400">•</span>
-                    <span><strong>Bannissement:</strong> Blocage permanent</span>
+                    <span>{t('moderation.guideBan')}</span>
                   </li>
                   <li className="flex items-start space-x-2">
                     <span className="text-slate-600 dark:text-slate-400">•</span>
-                    <span><strong>Résolution:</strong> Traiter et clôturer un signalement</span>
+                    <span>{t('moderation.guideResolve')}</span>
                   </li>
                 </ul>
               </div>

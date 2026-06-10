@@ -32,7 +32,7 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
   fastify.delete(
     '/delete-account',
     {
-      preValidation: [(fastify as any).authenticate],
+      preValidation: [fastify.authenticate],
       preHandler: [validateBody(DeleteAccountBodySchema)],
       schema: {
         description: 'Initiate account deletion with email confirmation',

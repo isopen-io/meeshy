@@ -32,10 +32,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.bubble.MessageBubble
 import me.meeshy.ui.theme.MeeshySpacing
@@ -60,10 +62,10 @@ fun ChatScreen(
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
         topBar = {
             TopAppBar(
-                title = { Text("Messages", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.chat_title), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chat_back))
                     }
                 },
             )
@@ -85,7 +87,7 @@ fun ChatScreen(
                     ChatNotice(state.errorMessage!!, onRetry = viewModel::refresh)
 
                 state.messages.isEmpty() ->
-                    ChatNotice("No messages yet", onRetry = null)
+                    ChatNotice(stringResource(R.string.chat_no_messages), onRetry = null)
 
                 else -> Column(modifier = Modifier.fillMaxSize()) {
                     LazyColumn(
@@ -141,11 +143,11 @@ private fun ChatComposer(
                 value = draft,
                 onValueChange = onDraftChange,
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Message") },
+                placeholder = { Text(stringResource(R.string.chat_message_placeholder)) },
                 maxLines = 4,
             )
             IconButton(onClick = onSend, enabled = canSend) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.chat_send))
             }
         }
     }
@@ -179,7 +181,7 @@ private fun ChatNotice(message: String, onRetry: (() -> Unit)?) {
         )
         if (onRetry != null) {
             Button(onClick = onRetry, modifier = Modifier.padding(top = MeeshySpacing.lg)) {
-                Text("Retry")
+                Text(stringResource(R.string.chat_retry))
             }
         }
     }

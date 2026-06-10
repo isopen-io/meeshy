@@ -422,9 +422,7 @@ export function registerCoreRoutes(
       // Override runtime de isOnline : la DB peut être obsolète (heartbeat manqué,
       // crash gateway, déconnexion non détectée). La source de vérité est `connectedUsers`
       // Map du SocketIOManager, exposée via le décorateur `presenceChecker`.
-      const presenceChecker = (fastify as any).presenceChecker as
-        | { isOnline: (id: string) => boolean; bulk: (ids: readonly string[]) => Map<string, boolean> }
-        | undefined;
+      const presenceChecker = fastify.presenceChecker;
 
       // Calculate hasMore. Two strategies:
       //   1. When we have a real `totalCount` (includeCount=true OR
@@ -929,9 +927,9 @@ export function registerCoreRoutes(
       // payload typé. La notification:new legacy reste émise en parallèle
       // pour compat avec les anciens clients pendant ~3 mois.
       try {
-        const socketIOHandler = (fastify as any).socketIOHandler;
+        const socketIOHandler = fastify.socketIOHandler;
         const socketIOManager = socketIOHandler?.getManager?.();
-        const io = socketIOManager?.io || (socketIOHandler as any)?.io;
+        const io = (socketIOManager as any)?.io || (socketIOHandler as any)?.io;
         if (io) {
           const allParticipantIds = [userId, ...uniqueParticipantIds];
           const conversationNewPayload = {
@@ -958,7 +956,7 @@ export function registerCoreRoutes(
       }
 
       // Envoyer des notifications aux participants invités
-      const notificationService = (fastify as any).notificationService;
+      const notificationService = fastify.notificationService;
       if (notificationService && uniqueParticipantIds.length > 0) {
         try {
           // Récupérer les informations du créateur
@@ -1108,9 +1106,9 @@ export function registerCoreRoutes(
       if (slowModeSeconds !== undefined) changedFields.slowModeSeconds = slowModeSeconds
       if (autoTranslateEnabled !== undefined) changedFields.autoTranslateEnabled = autoTranslateEnabled
 
-      const socketIOHandler = (fastify as any).socketIOHandler
+      const socketIOHandler = fastify.socketIOHandler
       const socketIOManager = socketIOHandler?.getManager?.()
-      const io = socketIOManager?.io || (socketIOHandler as any)?.io
+      const io = (socketIOManager as any)?.io || (socketIOHandler as any)?.io
       if (io) {
         const room = ROOMS.conversation(id)
         io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
@@ -1201,8 +1199,8 @@ export function registerCoreRoutes(
       });
 
       // Broadcast closure to all members
-      const socketIOManager = (fastify as any).socketIOHandler?.getManager?.()
-      const io = socketIOManager?.io || ((fastify as any).socketIOHandler as any)?.io
+      const socketIOManager = fastify.socketIOHandler?.getManager?.()
+      const io = (socketIOManager as any)?.io || (fastify.socketIOHandler as any)?.io
       if (io) {
         io.to(ROOMS.conversation(conversationId)).emit(
           SERVER_EVENTS.CONVERSATION_CLOSED,

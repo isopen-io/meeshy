@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Button, Card, LanguageOrb, MessageBubble, useToast, PageHeader, Switch, Dialog, DialogHeader, DialogBody, DialogFooter, Input, Label, Skeleton } from '@/components/v2';
 import { useSettingsV2 } from '@/hooks/v2';
+import { useI18n } from '@/hooks/use-i18n';
 
 // ============================================================================
 // Sample conversations for preview
@@ -176,6 +177,7 @@ export default function V2SettingsPage() {
   } = useSettingsV2();
 
   const { addToast } = useToast();
+  const { t } = useI18n('settings');
 
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [languageType, setLanguageType] = useState<'translation' | 'system'>('translation');
@@ -193,14 +195,14 @@ export default function V2SettingsPage() {
     try {
       if (languageType === 'translation') {
         await updateTranslationLanguage(code);
-        addToast('Langue de traduction mise a jour', 'success');
+        addToast(t('v2settings.translationLangUpdated'), 'success');
       } else {
         await updateSystemLanguage(code);
-        addToast('Langue de l\'interface mise a jour', 'success');
+        addToast(t('v2settings.uiLangUpdated'), 'success');
       }
       setShowLanguageModal(false);
     } catch {
-      addToast('Erreur lors du changement de langue', 'error');
+      addToast(t('v2settings.uiLangUpdated'), 'error');
     }
   };
 
@@ -221,9 +223,9 @@ export default function V2SettingsPage() {
       await updatePassword(passwordForm.current, passwordForm.new);
       setShowPasswordModal(false);
       setPasswordForm({ current: '', new: '', confirm: '' });
-      addToast('Mot de passe modifie avec succes', 'success');
+      addToast(t('v2settings.passwordChanged'), 'success');
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors du changement de mot de passe';
+      const errorMessage = err instanceof Error ? err.message : t('v2settings.passwordChangeError');
       setPasswordError(errorMessage);
     }
   };
@@ -232,10 +234,10 @@ export default function V2SettingsPage() {
     setIsDeletingAccount(true);
     try {
       await deleteAccount();
-      addToast('Compte supprime', 'success');
+      addToast(t('v2settings.accountDeleted'), 'success');
       window.location.href = '/v2/login';
     } catch {
-      addToast('Erreur lors de la suppression du compte', 'error');
+      addToast(t('v2settings.accountDeleteError'), 'error');
       setIsDeletingAccount(false);
       setShowDeleteConfirm(false);
     }
@@ -523,7 +525,7 @@ export default function V2SettingsPage() {
             className="w-full text-[var(--gp-asian-ruby)]"
             onClick={() => setShowDeleteConfirm(true)}
           >
-            Supprimer mon compte
+            {t('v2settings.deleteAccount')}
           </Button>
         </section>
       </main>
@@ -622,7 +624,7 @@ export default function V2SettingsPage() {
             </svg>
           </div>
           <h2 className="text-lg font-semibold mb-2 text-[var(--gp-text-primary)]">
-            Supprimer votre compte ?
+            {t('v2settings.deleteAccountTitle')}
           </h2>
           <p className="text-sm mb-6 text-[var(--gp-text-secondary)]">
             Cette action est irreversible. Toutes vos donnees seront supprimees definitivement.
@@ -644,7 +646,7 @@ export default function V2SettingsPage() {
             onClick={handleDeleteAccount}
             isLoading={isDeletingAccount}
           >
-            Supprimer
+            {t('v2settings.delete')}
           </Button>
         </DialogFooter>
       </Dialog>

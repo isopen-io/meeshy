@@ -28,6 +28,7 @@ import {
 
 import { adminService } from '@/services/admin.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 import { StatsGrid, TimeSeriesChart, DonutChart, StatItem, TimeSeriesDataPoint, DonutDataPoint } from '@/components/admin/Charts';
 import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleton';
 
@@ -44,6 +45,7 @@ type Community = BaseCommunity & {
 
 export default function AdminCommunitiesPage() {
   const router = useRouter();
+  const { t } = useI18n('admin');
   const [communities, setCommunities] = useState<Community[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -98,7 +100,7 @@ export default function AdminCommunitiesPage() {
       }
     } catch (error) {
       console.error('Erreur lors du chargement des communautés:', error);
-      toast.error('Erreur lors du chargement des communautés');
+      toast.error(t('communities.loadError'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -143,36 +145,36 @@ export default function AdminCommunitiesPage() {
   // Données pour StatsGrid
   const stats: StatItem[] = [
     {
-      title: 'Total Communautés',
+      title: t('communities.statTotal'),
       value: totalCount,
-      description: 'Communautés créées',
+      description: t('communities.statTotalDesc'),
       icon: Users,
       iconColor: 'text-green-600 dark:text-green-400',
       iconBgColor: 'bg-green-100 dark:bg-green-900/30',
       trend: { value: 12, isPositive: true }
     },
     {
-      title: 'Publiques',
+      title: t('communities.statPublic'),
       value: publicCommunities,
-      description: 'Visibles par tous',
+      description: t('communities.statPublicDesc'),
       icon: Globe,
       iconColor: 'text-emerald-600 dark:text-emerald-400',
       iconBgColor: 'bg-emerald-100 dark:bg-emerald-900/30',
       trend: { value: 8, isPositive: true }
     },
     {
-      title: 'Privées',
+      title: t('communities.statPrivate'),
       value: privateCommunities,
-      description: 'Accès restreint',
+      description: t('communities.statPrivateDesc'),
       icon: Lock,
       iconColor: 'text-blue-600 dark:text-blue-400',
       iconBgColor: 'bg-blue-100 dark:bg-blue-900/30',
       trend: { value: 5, isPositive: true }
     },
     {
-      title: 'Membres moyens',
+      title: t('communities.statAvgMembers'),
       value: avgMembersPerCommunity,
-      description: 'Par communauté',
+      description: t('communities.statAvgMembersDesc'),
       icon: User,
       iconColor: 'text-purple-600 dark:text-purple-400',
       iconBgColor: 'bg-purple-100 dark:bg-purple-900/30',
@@ -193,8 +195,8 @@ export default function AdminCommunitiesPage() {
 
   // Données pour le DonutChart
   const donutData: DonutDataPoint[] = [
-    { name: 'Publiques', value: publicCommunities, color: '#10b981' },
-    { name: 'Privées', value: privateCommunities, color: '#3b82f6' }
+    { name: t('communities.statPublic'), value: publicCommunities, color: '#10b981' },
+    { name: t('communities.statPrivate'), value: privateCommunities, color: '#3b82f6' }
   ];
 
   if (loading && currentPage === 1) {
@@ -228,11 +230,11 @@ export default function AdminCommunitiesPage() {
                 size="sm"
               >
                 <ArrowLeft className="h-4 w-4" />
-                <span>Retour</span>
+                <span>{t('communities.backButton')}</span>
               </Button>
               <div>
-                <h1 className="text-2xl font-bold">Gestion des Communautés</h1>
-                <p className="text-green-100 mt-1">Administration des communautés et groupes</p>
+                <h1 className="text-2xl font-bold">{t('communities.pageTitle')}</h1>
+                <p className="text-green-100 mt-1">{t('communities.pageSubtitle')}</p>
               </div>
             </div>
             <Button
@@ -240,7 +242,7 @@ export default function AdminCommunitiesPage() {
               size="sm"
             >
               <Users className="h-4 w-4" />
-              <span>Nouvelle communauté</span>
+              <span>{t('communities.newButton')}</span>
             </Button>
           </div>
         </div>
@@ -252,15 +254,15 @@ export default function AdminCommunitiesPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <TimeSeriesChart
             data={timeSeriesData}
-            title="Évolution des communautés"
-            description="Nouvelles communautés créées cette semaine"
+            title={t('communities.chartEvolutionTitle')}
+            description={t('communities.chartEvolutionDesc')}
             color="#10b981"
             showArea={true}
           />
           <DonutChart
             data={donutData}
-            title="Répartition Public/Privé"
-            description="Distribution par type de visibilité"
+            title={t('communities.chartDonutTitle')}
+            description={t('communities.chartDonutDesc')}
             showLegend={false}
           />
         </div>
@@ -270,7 +272,7 @@ export default function AdminCommunitiesPage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2 text-lg">
               <Filter className="h-5 w-5" />
-              <span>Filtres et recherche</span>
+              <span>{t('communities.filtersTitle')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -278,7 +280,7 @@ export default function AdminCommunitiesPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400 dark:text-gray-500" />
                 <Input
-                  placeholder="Nom, identifiant, description..."
+                  placeholder={t('communities.searchPlaceholder')}
                   value={searchTerm}
                   onChange={(e) => handleSearch(e.target.value)}
                   className="pl-10"
@@ -287,12 +289,12 @@ export default function AdminCommunitiesPage() {
 
               <Select value={privacyFilter || 'all'} onValueChange={handleFilterChange}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Toutes les communautés" />
+                  <SelectValue placeholder={t('communities.filterAll')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes les communautés</SelectItem>
-                  <SelectItem value="public">Publiques</SelectItem>
-                  <SelectItem value="private">Privées</SelectItem>
+                  <SelectItem value="all">{t('communities.filterAll')}</SelectItem>
+                  <SelectItem value="public">{t('communities.statPublic')}</SelectItem>
+                  <SelectItem value="private">{t('communities.statPrivate')}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -301,9 +303,9 @@ export default function AdminCommunitiesPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="20">20 par page</SelectItem>
-                  <SelectItem value="50">50 par page</SelectItem>
-                  <SelectItem value="100">100 par page</SelectItem>
+                  <SelectItem value="20">{t('communities.perPage', { count: 20 })}</SelectItem>
+                  <SelectItem value="50">{t('communities.perPage', { count: 50 })}</SelectItem>
+                  <SelectItem value="100">{t('communities.perPage', { count: 100 })}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -314,7 +316,7 @@ export default function AdminCommunitiesPage() {
                 className="w-full"
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                Actualiser
+                {t('communities.refresh')}
               </Button>
             </div>
           </CardContent>
@@ -325,7 +327,7 @@ export default function AdminCommunitiesPage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2 text-lg">
               <Users className="h-5 w-5" />
-              <span>Communautés ({totalCount})</span>
+              <span>{t('communities.listTitle', { count: totalCount })}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -333,10 +335,10 @@ export default function AdminCommunitiesPage() {
               <div className="text-center py-12">
                 <Users className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                  Aucune communauté trouvée
+{t('communities.emptyTitle')}
                 </h3>
                 <p className="text-gray-500 dark:text-gray-400">
-                  Aucune communauté ne correspond aux critères de recherche actuels.
+{t('communities.emptySubtitle')}
                 </p>
               </div>
             ) : (
@@ -372,12 +374,12 @@ export default function AdminCommunitiesPage() {
                             {community.isPrivate ? (
                               <Badge variant="secondary" className="flex items-center space-x-1 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
                                 <Lock className="h-3 w-3" />
-                                <span>Privée</span>
+                                <span>{t('communities.badgePrivate')}</span>
                               </Badge>
                             ) : (
                               <Badge variant="outline" className="flex items-center space-x-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
                                 <Globe className="h-3 w-3" />
-                                <span>Publique</span>
+                                <span>{t('communities.badgePublic')}</span>
                               </Badge>
                             )}
                           </div>
@@ -400,19 +402,19 @@ export default function AdminCommunitiesPage() {
                               <span className="font-medium text-green-600 dark:text-green-400">
                                 {community._count?.members ?? 0}
                               </span>
-                              <span>membre{(community._count?.members ?? 0) > 1 ? 's' : ''}</span>
+                              <span>{(community._count?.members ?? 0) === 1 ? t('communities.memberSingular') : t('communities.memberPlural')}</span>
                             </div>
                             <div className="flex items-center space-x-1">
                               <MessageSquare className="h-4 w-4 text-blue-600" />
                               <span className="font-medium text-blue-600 dark:text-blue-400">
                                 {community._count?.Conversation ?? community._count?.conversations ?? 0}
                               </span>
-                              <span>conversation{(community._count?.Conversation ?? community._count?.conversations ?? 0) > 1 ? 's' : ''}</span>
+                              <span>{(community._count?.Conversation ?? community._count?.conversations ?? 0) === 1 ? t('communities.conversationSingular') : t('communities.conversationPlural')}</span>
                             </div>
                             <div className="flex items-center space-x-1">
                               <User className="h-4 w-4" />
                               <span>
-                                Créé par {community.creator?.displayName || community.creator?.username}
+  {t('communities.createdBy', { name: community.creator?.displayName || community.creator?.username })}
                               </span>
                             </div>
                             <div className="flex items-center space-x-1">
@@ -427,15 +429,15 @@ export default function AdminCommunitiesPage() {
                       <div className="flex gap-2 flex-shrink-0">
                         <Button variant="outline" size="sm">
                           <Eye className="h-4 w-4 mr-1" />
-                          <span className="hidden sm:inline">Voir</span>
+                          <span className="hidden sm:inline">{t('communities.actionView')}</span>
                         </Button>
                         <Button variant="outline" size="sm">
                           <Edit className="h-4 w-4 mr-1" />
-                          <span className="hidden sm:inline">Modifier</span>
+                          <span className="hidden sm:inline">{t('communities.actionEdit')}</span>
                         </Button>
                         <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 dark:text-red-400">
                           <Trash2 className="h-4 w-4 mr-1" />
-                          <span className="hidden sm:inline">Supprimer</span>
+                          <span className="hidden sm:inline">{t('communities.actionDelete')}</span>
                         </Button>
                       </div>
                     </div>
@@ -448,7 +450,7 @@ export default function AdminCommunitiesPage() {
             {communities && communities.length > 0 && (
               <div className="flex flex-col sm:flex-row items-center justify-between mt-6 gap-4 border-t dark:border-gray-700 pt-4">
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Page {currentPage} sur {totalPages} • {communities.length} communautés affichées • {totalCount} au total
+                  {t('communities.paginationInfo', { page: currentPage, total: totalPages, shown: communities.length, count: totalCount })}
                 </div>
                 <div className="flex space-x-2">
                   <Button
@@ -458,7 +460,7 @@ export default function AdminCommunitiesPage() {
                     onClick={() => setCurrentPage(currentPage - 1)}
                   >
                     <ChevronLeft className="h-4 w-4" />
-                    <span className="hidden sm:inline ml-1">Précédent</span>
+                    <span className="hidden sm:inline ml-1">{t('communities.prevPage')}</span>
                   </Button>
                   <div className="flex items-center px-3 py-2 border dark:border-gray-700 rounded-md text-sm font-medium">
                     {currentPage} / {totalPages}
@@ -469,7 +471,7 @@ export default function AdminCommunitiesPage() {
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage(currentPage + 1)}
                   >
-                    <span className="hidden sm:inline mr-1">Suivant</span>
+                    <span className="hidden sm:inline mr-1">{t('communities.nextPage')}</span>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>

@@ -18,7 +18,7 @@ export function registerBanRoutes(
   _optionalAuth: any,
   requiredAuth: any
 ) {
-  const socketIOHandler = (fastify as any).socketIOHandler
+  const socketIOHandler = fastify.socketIOHandler
 
   fastify.patch<{ Params: { id: string; userId: string } }>(
     '/conversations/:id/participants/:userId/ban',
@@ -81,7 +81,7 @@ export function registerBanRoutes(
       })
 
       const socketIOManager = socketIOHandler?.getManager?.()
-      const io = socketIOManager?.io || (socketIOHandler as any)?.io
+      const io = (socketIOManager as any)?.io || (socketIOHandler as any)?.io
       const room = ROOMS.conversation(id)
 
       if (io) {
@@ -156,7 +156,7 @@ export function registerBanRoutes(
       })
 
       const socketIOManager = socketIOHandler?.getManager?.()
-      const io = socketIOManager?.io || (socketIOHandler as any)?.io
+      const io = (socketIOManager as any)?.io || (socketIOHandler as any)?.io
       const room = ROOMS.conversation(id)
 
       if (io) {

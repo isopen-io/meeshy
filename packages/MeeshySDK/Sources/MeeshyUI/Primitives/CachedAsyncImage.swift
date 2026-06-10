@@ -341,6 +341,12 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
     /// keeps the default `false`: the policy gate honours the user's
     /// per-network auto-download preference.
     public let autoLoad: Bool
+    /// Taille d'affichage en points. Quand non-nil, l'image full est
+    /// sous-échantillonnée à `max(w,h) × scale` px lors d'un cold read disque
+    /// (cap mémoire). Filet SECONDAIRE : un bitmap déjà résident l'ignore (clé
+    /// cache = URL seule, cf. spec 5.2 §4.4). Le vrai gain octets+pixels vient
+    /// de la sélection de variante en amont (URL plus petite passée en `fullUrl`).
+    public let targetSize: CGSize?
     public let placeholder: () -> Placeholder
 
     @State private var thumbHashImage: UIImage?
@@ -356,12 +362,14 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         thumbnailUrl: String?,
         fullUrl: String?,
         autoLoad: Bool = false,
+        targetSize: CGSize? = nil,
         @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
         self.thumbHash = thumbHash
         self.thumbnailUrl = thumbnailUrl
         self.fullUrl = fullUrl
         self.autoLoad = autoLoad
+        self.targetSize = targetSize
         self.placeholder = placeholder
 
         // Tier 2: warm le full image depuis le disque vers la NSCache puis
@@ -449,6 +457,10 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         urlString.hasPrefix("file://")
     }
 
+    @MainActor private static func pixelSize(for points: CGSize) -> CGFloat {
+        max(points.width, points.height) * UIScreen.main.scale
+    }
+
     private func loadThumbnail() async {
         guard let thumbnailUrl, !thumbnailUrl.isEmpty, thumbnailImage == nil else { return }
         let resolved = MeeshyConfig.resolveMediaURL(thumbnailUrl)?.absoluteString ?? thumbnailUrl
@@ -490,7 +502,14 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
            !MediaDownloadPolicy.shouldAutoLoadImage() {
             return
         }
-        if let loaded = await CacheCoordinator.shared.images.image(for: resolved) {
+        let loaded: UIImage?
+        if let targetSize {
+            let maxPixel = await Self.pixelSize(for: targetSize)
+            loaded = await CacheCoordinator.shared.images.image(for: resolved, maxPixelSize: maxPixel)
+        } else {
+            loaded = await CacheCoordinator.shared.images.image(for: resolved)
+        }
+        if let loaded {
             if !Task.isCancelled {
                 withAnimation(.easeIn(duration: 0.25)) { fullImage = loaded }
             }

@@ -1,16 +1,100 @@
 // MARK: - Extracted from ConversationView.swift
 import SwiftUI
+import Combine
 import PhotosUI
 import AVFoundation
 import MeeshySDK
 import MeeshyUI
+
+// MARK: - Composer text isolation
+//
+// Le texte du composer vivait en `@State` à la RACINE de ConversationView :
+// chaque caractère tapé ré-évaluait l'arbre racine entier (~1500 lignes de
+// body : header, bridge de liste, overlays, sheets) + re-exécutait
+// `updateUIViewController` du bridge. En le déplaçant dans un ObservableObject
+// tenu par la racine via `@State` (la racine ne LIT jamais `text` dans son
+// body et ne s'abonne pas à `objectWillChange`), seul `ComposerTextHost`
+// — l'unique `@ObservedObject` — se re-rend à la frappe.
+//
+// Le modèle porte aussi la persistance différée du brouillon : l'ancien
+// `.adaptiveOnChange(of: messageText)` racine ne peut plus exister (la racine
+// ne se ré-évalue plus à la frappe, donc `onChange` n'y fire plus).
+
+/// Stockage du texte du composer, hors de l'arbre de dépendances de la racine.
+///
+/// Politique de persistance du brouillon (décision produit 2026-06-09) :
+/// - **Fin de mot** (espace, retour ligne) ou **champ vidé** → persistance
+///   IMMÉDIATE. Le brouillon est donc durable mot par mot.
+/// - **Milieu de mot** → fenêtre de 400 ms (filet de sécurité pour une pause
+///   de frappe) — jamais une écriture + re-tri de la liste par caractère.
+/// - **Sortie de vue** (navigation, changement de conversation via `.id`,
+///   perte de focus du clavier — appel entrant, sheet —, passage en
+///   arrière-plan) → `flushPendingChange()` immédiat.
+@MainActor
+final class ConversationComposerTextModel: ObservableObject {
+    @Published var text: String = ""
+
+    /// Installé par la vue (onAppear) : reçoit le texte à persister —
+    /// branché sur `persistDraft` côté ConversationView.
+    var onPersistNeeded: ((String) -> Void)?
+    private var debounceTask: Task<Void, Never>?
+    private var textObservation: AnyCancellable?
+
+    init() {
+        textObservation = $text
+            .dropFirst()
+            .sink { [weak self] newValue in
+                guard let self else { return }
+                if newValue.isEmpty || newValue.last?.isWhitespace == true {
+                    self.persistNow(newValue)
+                } else {
+                    self.scheduleDebouncedPersist(newValue)
+                }
+            }
+    }
+
+    private func persistNow(_ value: String) {
+        debounceTask?.cancel()
+        debounceTask = nil
+        onPersistNeeded?(value)
+    }
+
+    private func scheduleDebouncedPersist(_ value: String) {
+        debounceTask?.cancel()
+        debounceTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            self?.onPersistNeeded?(value)
+        }
+    }
+
+    /// Annule la fenêtre de débounce en vol et émet immédiatement la valeur
+    /// courante. Appelé au disappear, à la perte de focus du clavier et au
+    /// passage en arrière-plan pour ne jamais perdre la fin de saisie.
+    func flushPendingChange() {
+        persistNow(text)
+    }
+}
+
+/// Unique abonné au texte du composer : la frappe re-rend CE sous-arbre
+/// seulement. Le contenu reçoit un `Binding<String>` frais à chaque
+/// ré-évaluation (équivalent de l'ancien `$messageText`).
+struct ComposerTextHost<Content: View>: View {
+    @ObservedObject var model: ConversationComposerTextModel
+    @ViewBuilder let content: (Binding<String>) -> Content
+
+    var body: some View {
+        content($model.text)
+    }
+}
 
 // MARK: - Composer, Attachments & Recording
 extension ConversationView {
 
     // MARK: - Themed Composer (powered by UniversalComposerBar)
     var themedComposer: some View {
-        UniversalComposerBar(
+        ComposerTextHost(model: composerText) { textBinding in
+            UniversalComposerBar(
             style: .light,
             mode: .message,
             accentColor: viewModel.ephemeralDuration != nil ? "FF6B6B" : viewModel.isBlurEnabled ? "A855F7" : viewModel.pendingEffects.hasAnyEffect ? "6366F1" : accentColor,
@@ -21,10 +105,14 @@ extension ConversationView {
                 isTyping = focused
                 if focused {
                     withAnimation { composerState.showOptions = false }
+                } else {
+                    // Perte de focus du clavier (appel entrant, sheet,
+                    // fermeture clavier) → sauvegarde immédiate du brouillon.
+                    composerText.flushPendingChange()
                 }
             },
             onLocationRequest: { composerState.showLocationPicker = true },
-            textBinding: $messageText,
+            textBinding: textBinding,
             editBanner: composerState.editingMessageId != nil
                 ? AnyView(composerEditBanner)
                 : nil,
@@ -73,7 +161,8 @@ extension ConversationView {
             pendingEffects: $viewModel.pendingEffects,
             onRequestEffectsPicker: { viewModel.showEffectsPicker = true },
             hideEffects: composerState.editingMessageId != nil
-        )
+            )
+        }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.ephemeralDuration != nil)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isBlurEnabled)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.pendingEffects.hasAnyEffect)
@@ -193,7 +282,7 @@ extension ConversationView {
         for email in contact.emails { parts.append(email) }
         let contactText = parts.joined(separator: "\n")
 
-        messageText = contactText
+        composerText.text = contactText
         HapticFeedback.success()
     }
 
@@ -355,7 +444,7 @@ extension ConversationView {
 
     func submitEdit() {
         guard let messageId = composerState.editingMessageId else { return }
-        let newContent = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newContent = composerText.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !newContent.isEmpty else { return }
 
         // Don't send if content unchanged
@@ -375,7 +464,7 @@ extension ConversationView {
         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
             composerState.editingMessageId = nil
             composerState.editingOriginalContent = nil
-            messageText = ""
+            composerText.text = ""
         }
     }
 

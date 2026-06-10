@@ -7,11 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { 
-  Users, 
-  UserCheck, 
-  Shield, 
-  Activity, 
+import {
+  Users,
+  UserCheck,
+  Shield,
+  Activity,
   TrendingUp,
   AlertCircle,
   Clock,
@@ -23,6 +23,8 @@ import { toast } from 'sonner';
 import { adminService, AdminDashboardData } from '@/services/admin.service';
 import { getDefaultPermissions } from '@/utils/user-adapter';
 import { authManager } from '@/services/auth-manager.service';
+import { useI18n } from '@/hooks/use-i18n';
+import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 
 interface _UserCapabilities {
   role: string;
@@ -33,6 +35,8 @@ interface _UserCapabilities {
 
 const AdminDashboard: React.FC = () => {
   const router = useRouter();
+  const { t } = useI18n('admin');
+  const interfaceLanguage = useCurrentInterfaceLanguage();
   const [user, setUser] = useState<User | null>(null);
   const [dashboardData, setDashboardData] = useState<AdminDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,15 +49,15 @@ const AdminDashboard: React.FC = () => {
       if (response.data && (response.data as unknown).success && (response.data as unknown).data) {
         const dashData = (response.data as unknown).data;
         setDashboardData(dashData);
-        toast.success('Données actualisées avec succès');
+        toast.success(t('dashboard.statsRefreshed'));
       } else if (response.data) {
         // Cas où les données sont directement dans response.data (pas de wrapping)
         setDashboardData(response.data);
-        toast.success('Données actualisées avec succès');
+        toast.success(t('dashboard.statsRefreshed'));
       }
     } catch (error) {
       console.error('Erreur lors du chargement des statistiques admin:', error);
-      toast.error('Erreur lors du chargement des statistiques d\'administration');
+      toast.error(t('dashboard.loadError'));
     }
   };
 
@@ -113,7 +117,7 @@ const AdminDashboard: React.FC = () => {
 
         if (!hasAdminAccess) {
           router.push('/dashboard');
-          toast.error('Accès non autorisé à l\'administration');
+          toast.error(t('dashboard.unauthorizedAccess'));
           return;
         }
 
@@ -129,12 +133,12 @@ const AdminDashboard: React.FC = () => {
           }
         } else {
           // Si le chargement des stats a échoué, afficher un message mais permettre l'accès
-          toast.error('Erreur lors du chargement des statistiques d\'administration');
+          toast.error(t('dashboard.loadError'));
         }
 
       } catch (error) {
         console.error('Erreur lors du chargement des données admin:', error);
-        toast.error('Erreur lors du chargement des données d\'administration');
+        toast.error(t('dashboard.loadError'));
         router.push('/dashboard');
       } finally {
         setLoading(false);
@@ -149,7 +153,7 @@ const AdminDashboard: React.FC = () => {
       <AdminLayout currentPage="/admin">
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2">Chargement des données d&apos;administration...</span>
+          <span className="ml-2">{t('dashboard.loadingData')}</span>
         </div>
       </AdminLayout>
     );
@@ -168,17 +172,17 @@ const AdminDashboard: React.FC = () => {
         <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold">Bienvenue, {user.displayName || (user.firstName ? `${user.firstName} ${user.lastName}` : user.username)}</h1>
+              <h1 className="text-2xl font-bold">{t('dashboard.welcome', { name: user.displayName || (user.firstName ? `${user.firstName} ${user.lastName}` : user.username) })}</h1>
               <p className="text-purple-100 mt-1">
-                Niveau d&apos;accès: {user.role} - Administration Meeshy
+                {t('dashboard.accessLevel', { role: user.role })}
               </p>
             </div>
             <div className="text-right">
-              <div className="text-sm text-purple-100">Dernière connexion</div>
+              <div className="text-sm text-purple-100">{t('dashboard.lastLogin')}</div>
               <div className="text-lg font-semibold">
-                {new Date().toLocaleTimeString('fr-FR', { 
-                  hour: '2-digit', 
-                  minute: '2-digit' 
+                {new Date().toLocaleTimeString(interfaceLanguage || 'en', {
+                  hour: '2-digit',
+                  minute: '2-digit'
                 })}
               </div>
             </div>
@@ -190,13 +194,13 @@ const AdminDashboard: React.FC = () => {
           {/* 1. Utilisateurs */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Utilisateurs</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('dashboard.statUsers')}</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats?.totalUsers || 0}</div>
               <p className="text-xs text-muted-foreground">
-                {stats?.activeUsers || 0} actifs
+                {t('dashboard.statUsersActive', { count: stats?.activeUsers || 0 })}
               </p>
             </CardContent>
           </Card>
@@ -204,13 +208,13 @@ const AdminDashboard: React.FC = () => {
           {/* 2. Utilisateurs anonymes */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Anonymes</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('dashboard.statAnonymous')}</CardTitle>
               <UserCheck className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-indigo-600">{stats?.totalAnonymousUsers || 0}</div>
               <p className="text-xs text-muted-foreground">
-                {stats?.activeAnonymousUsers || 0} actifs
+                {t('dashboard.statUsersActive', { count: stats?.activeAnonymousUsers || 0 })}
               </p>
             </CardContent>
           </Card>
@@ -218,13 +222,13 @@ const AdminDashboard: React.FC = () => {
           {/* 3. Messages */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Messages</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('dashboard.statMessages')}</CardTitle>
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-600">{stats?.totalMessages || 0}</div>
               <p className="text-xs text-muted-foreground">
-                Messages envoyés
+                {t('dashboard.statMessagesSent')}
               </p>
             </CardContent>
           </Card>
@@ -232,13 +236,13 @@ const AdminDashboard: React.FC = () => {
           {/* 4. Communautés */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Communautés</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('dashboard.statCommunities')}</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-orange-600">{stats?.totalCommunities || 0}</div>
               <p className="text-xs text-muted-foreground">
-                Communautés créées
+                {t('dashboard.statCommunitiesCreated')}
               </p>
             </CardContent>
           </Card>
@@ -246,13 +250,13 @@ const AdminDashboard: React.FC = () => {
           {/* 5. Traductions */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Traductions</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('dashboard.statTranslations')}</CardTitle>
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">{stats?.totalTranslations || 0}</div>
               <p className="text-xs text-muted-foreground">
-                Traductions effectuées
+                {t('dashboard.statTranslationsDone')}
               </p>
             </CardContent>
           </Card>
@@ -263,13 +267,13 @@ const AdminDashboard: React.FC = () => {
           {/* 6. Liens de conversation */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Liens créés</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('dashboard.statLinks')}</CardTitle>
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-purple-600">{stats?.totalShareLinks || 0}</div>
               <p className="text-xs text-muted-foreground">
-                {stats?.activeShareLinks || 0} actifs
+                {t('dashboard.statLinksActive', { count: stats?.activeShareLinks || 0 })}
               </p>
             </CardContent>
           </Card>
@@ -277,13 +281,13 @@ const AdminDashboard: React.FC = () => {
           {/* 7. Signalements */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Signalements</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('dashboard.statReports')}</CardTitle>
               <AlertCircle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-600">{stats?.totalReports || 0}</div>
               <p className="text-xs text-muted-foreground">
-                Messages signalés
+                {t('dashboard.statReportsFlagged')}
               </p>
             </CardContent>
           </Card>
@@ -291,13 +295,13 @@ const AdminDashboard: React.FC = () => {
           {/* 8. Invitations */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Invitations</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('dashboard.statInvitations')}</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-yellow-600">{stats?.totalInvitations || 0}</div>
               <p className="text-xs text-muted-foreground">
-                Demandes en attente
+                {t('dashboard.statInvitationsPending')}
               </p>
             </CardContent>
           </Card>
@@ -305,13 +309,13 @@ const AdminDashboard: React.FC = () => {
           {/* 9. Administrateurs */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Administrateurs</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('dashboard.statAdmins')}</CardTitle>
               <Shield className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-purple-600">{stats?.adminUsers || 0}</div>
               <p className="text-xs text-muted-foreground">
-                Admins et modérateurs
+                {t('dashboard.statAdminsMods')}
               </p>
             </CardContent>
           </Card>
@@ -319,7 +323,7 @@ const AdminDashboard: React.FC = () => {
           {/* 10. Langues les plus utilisées */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Langues</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('dashboard.statLanguages')}</CardTitle>
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -327,7 +331,7 @@ const AdminDashboard: React.FC = () => {
                 {stats?.topLanguages?.length || 0}
               </div>
               <p className="text-xs text-muted-foreground">
-                Langues détectées
+                {t('dashboard.statLanguagesDetected')}
               </p>
             </CardContent>
           </Card>
@@ -336,7 +340,7 @@ const AdminDashboard: React.FC = () => {
         {/* Langues les plus utilisées */}
         {stats?.topLanguages && stats.topLanguages.length > 0 && (
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900">Langues les plus utilisées</h3>
+            <h3 className="text-lg font-semibold text-gray-900">{t('dashboard.topLanguagesTitle')}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {stats.topLanguages.slice(0, 6).map((lang: { language: string; count: number }, index: number) => (
                 <Card key={lang.language}>
@@ -345,7 +349,7 @@ const AdminDashboard: React.FC = () => {
                       <div>
                         <div className="text-lg font-semibold">{lang.language.toUpperCase()}</div>
                         <div className="text-sm text-muted-foreground">
-                          {lang.count} messages
+                          {lang.count} {t('dashboard.topLanguagesMessages')}
                         </div>
                       </div>
                       <div className="text-2xl font-bold text-blue-600">
@@ -371,25 +375,25 @@ const AdminDashboard: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <TrendingUp className="w-5 h-5" />
-                <span>Activité récente (7 derniers jours)</span>
+                <span>{t('dashboard.recentActivityTitle')}</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Nouveaux utilisateurs</span>
+                  <span className="text-sm font-medium">{t('dashboard.recentNewUsers')}</span>
                   <Badge variant="secondary">{dashboardData?.recentActivity?.newUsers || 0}</Badge>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Nouvelles conversations</span>
+                  <span className="text-sm font-medium">{t('dashboard.recentNewConversations')}</span>
                   <Badge variant="secondary">{dashboardData?.recentActivity?.newConversations || 0}</Badge>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Nouveaux messages</span>
+                  <span className="text-sm font-medium">{t('dashboard.recentNewMessages')}</span>
                   <Badge variant="secondary">{dashboardData?.recentActivity?.newMessages || 0}</Badge>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Nouveaux utilisateurs anonymes</span>
+                  <span className="text-sm font-medium">{t('dashboard.recentNewAnonymous')}</span>
                   <Badge variant="secondary">{dashboardData?.recentActivity?.newAnonymousUsers || 0}</Badge>
                 </div>
               </div>
@@ -400,24 +404,24 @@ const AdminDashboard: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <Clock className="w-5 h-5" />
-                <span>Dernière mise à jour</span>
+                <span>{t('dashboard.lastUpdateTitle')}</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">
-                  {dashboardData?.timestamp ? 
-                    new Date(dashboardData.timestamp).toLocaleString('fr-FR') : 
-                    'Non disponible'
+                  {dashboardData?.timestamp ?
+                    new Date(dashboardData.timestamp).toLocaleString(interfaceLanguage || 'en') :
+                    t('dashboard.lastUpdateUnavailable')
                   }
                 </p>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={loadAdminStats}
                   className="w-full"
                 >
-                  Actualiser les données
+                  {t('dashboard.refreshButton')}
                 </Button>
               </div>
             </CardContent>
@@ -429,13 +433,13 @@ const AdminDashboard: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Activity className="w-5 h-5" />
-              <span>Navigation - Toutes les pages admin</span>
+              <span>{t('dashboard.navTitle')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             {/* Ligne 1 - Gestion des utilisateurs et contenus */}
             <div className="mb-3">
-              <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">Gestion des utilisateurs et contenus</h4>
+              <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">{t('dashboard.navGroupUsers')}</h4>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 <Button
                   variant="outline"
@@ -443,7 +447,7 @@ const AdminDashboard: React.FC = () => {
                   onClick={() => router.push('/admin/users')}
                 >
                   <Users className="w-6 h-6" />
-                  <span className="text-sm">Utilisateurs</span>
+                  <span className="text-sm">{t('dashboard.navUsers')}</span>
                 </Button>
 
                 <Button
@@ -452,7 +456,7 @@ const AdminDashboard: React.FC = () => {
                   onClick={() => router.push('/admin/anonymous-users')}
                 >
                   <UserCheck className="w-6 h-6" />
-                  <span className="text-sm">Anonymes</span>
+                  <span className="text-sm">{t('dashboard.navAnonymous')}</span>
                 </Button>
 
                 <Button
@@ -461,7 +465,7 @@ const AdminDashboard: React.FC = () => {
                   onClick={() => router.push('/admin/messages')}
                 >
                   <Activity className="w-6 h-6" />
-                  <span className="text-sm">Messages</span>
+                  <span className="text-sm">{t('dashboard.navMessages')}</span>
                 </Button>
 
                 <Button
@@ -470,7 +474,7 @@ const AdminDashboard: React.FC = () => {
                   onClick={() => router.push('/admin/communities')}
                 >
                   <Users className="w-6 h-6" />
-                  <span className="text-sm">Communautés</span>
+                  <span className="text-sm">{t('dashboard.navCommunities')}</span>
                 </Button>
 
                 <Button
@@ -479,14 +483,14 @@ const AdminDashboard: React.FC = () => {
                   onClick={() => router.push('/admin/share-links')}
                 >
                   <Activity className="w-6 h-6" />
-                  <span className="text-sm">Liens créés</span>
+                  <span className="text-sm">{t('dashboard.navLinks')}</span>
                 </Button>
               </div>
             </div>
 
             {/* Ligne 2 - Modération et traductions */}
             <div className="mb-3">
-              <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">Modération et langues</h4>
+              <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">{t('dashboard.navGroupModeration')}</h4>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 <Button
                   variant="outline"
@@ -494,7 +498,7 @@ const AdminDashboard: React.FC = () => {
                   onClick={() => router.push('/admin/reports')}
                 >
                   <AlertCircle className="w-6 h-6" />
-                  <span className="text-sm">Signalements</span>
+                  <span className="text-sm">{t('dashboard.navReports')}</span>
                 </Button>
 
                 <Button
@@ -503,7 +507,7 @@ const AdminDashboard: React.FC = () => {
                   onClick={() => router.push('/admin/moderation')}
                 >
                   <Shield className="w-6 h-6" />
-                  <span className="text-sm">Modération</span>
+                  <span className="text-sm">{t('dashboard.navModeration')}</span>
                 </Button>
 
                 <Button
@@ -512,7 +516,7 @@ const AdminDashboard: React.FC = () => {
                   onClick={() => router.push('/admin/translations')}
                 >
                   <TrendingUp className="w-6 h-6" />
-                  <span className="text-sm">Traductions</span>
+                  <span className="text-sm">{t('dashboard.navTranslations')}</span>
                 </Button>
 
                 <Button
@@ -521,7 +525,7 @@ const AdminDashboard: React.FC = () => {
                   onClick={() => router.push('/admin/languages')}
                 >
                   <TrendingUp className="w-6 h-6" />
-                  <span className="text-sm">Langues</span>
+                  <span className="text-sm">{t('dashboard.navLanguages')}</span>
                 </Button>
 
                 <Button
@@ -530,14 +534,14 @@ const AdminDashboard: React.FC = () => {
                   onClick={() => router.push('/admin/invitations')}
                 >
                   <Users className="w-6 h-6" />
-                  <span className="text-sm">Invitations</span>
+                  <span className="text-sm">{t('dashboard.navInvitations')}</span>
                 </Button>
               </div>
             </div>
 
             {/* Ligne 3 - Analytics, Audit et Configuration */}
             <div>
-              <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">Analytics et configuration</h4>
+              <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">{t('dashboard.navGroupAnalytics')}</h4>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 <Button
                   variant="outline"
@@ -545,7 +549,7 @@ const AdminDashboard: React.FC = () => {
                   onClick={() => router.push('/admin/analytics')}
                 >
                   <TrendingUp className="w-6 h-6" />
-                  <span className="text-sm">Analytics</span>
+                  <span className="text-sm">{t('dashboard.navAnalytics')}</span>
                 </Button>
 
                 <Button
@@ -554,7 +558,7 @@ const AdminDashboard: React.FC = () => {
                   onClick={() => router.push('/admin/audit-logs')}
                 >
                   <Shield className="w-6 h-6" />
-                  <span className="text-sm">Audit Logs</span>
+                  <span className="text-sm">{t('dashboard.navAuditLogs')}</span>
                 </Button>
 
                 <Button
@@ -563,7 +567,7 @@ const AdminDashboard: React.FC = () => {
                   onClick={() => router.push('/admin/settings')}
                 >
                   <Server className="w-6 h-6" />
-                  <span className="text-sm">Settings</span>
+                  <span className="text-sm">{t('dashboard.navSettings')}</span>
                 </Button>
               </div>
             </div>
@@ -575,27 +579,27 @@ const AdminDashboard: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Server className="w-5 h-5" />
-              <span>État du système</span>
+              <span>{t('dashboard.systemStatusTitle')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm">Serveur</span>
+                <span className="text-sm">{t('dashboard.systemServer')}</span>
                 <Badge variant="outline" className="text-green-600 border-green-200">
-                  En ligne
+                  {t('dashboard.systemOnline')}
                 </Badge>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm">Base de données</span>
+                <span className="text-sm">{t('dashboard.systemDatabase')}</span>
                 <Badge variant="outline" className="text-green-600 border-green-200">
-                  Connectée
+                  {t('dashboard.systemConnected')}
                 </Badge>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm">WebSocket</span>
+                <span className="text-sm">{t('dashboard.systemWebSocket')}</span>
                 <Badge variant="outline" className="text-green-600 border-green-200">
-                  Actif
+                  {t('dashboard.systemActive')}
                 </Badge>
               </div>
             </div>

@@ -9,22 +9,24 @@ import { Badge } from '@/components/ui/badge';
 import { Mail, Plus, ChevronLeft, ChevronRight, Eye, Trash2, RefreshCw } from 'lucide-react';
 import { adminService } from '@/services/admin.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleton';
 
-const getStatusBadge = (status: string) => {
+const getStatusBadge = (status: string, t: (key: string) => string) => {
   switch (status) {
-    case 'DRAFT': return <Badge variant="secondary">Brouillon</Badge>;
-    case 'TRANSLATING': return <Badge className="bg-yellow-100 text-yellow-800">Traduction...</Badge>;
-    case 'READY': return <Badge className="bg-blue-100 text-blue-800">Pret</Badge>;
-    case 'SENDING': return <Badge className="bg-orange-100 text-orange-800">Envoi...</Badge>;
-    case 'SENT': return <Badge className="bg-green-100 text-green-800">Envoye</Badge>;
-    case 'FAILED': return <Badge className="bg-red-100 text-red-800">Echoue</Badge>;
+    case 'DRAFT': return <Badge variant="secondary">{t('broadcasts.statusDraft')}</Badge>;
+    case 'TRANSLATING': return <Badge className="bg-yellow-100 text-yellow-800">{t('broadcasts.statusTranslating')}</Badge>;
+    case 'READY': return <Badge className="bg-blue-100 text-blue-800">{t('broadcasts.statusReady')}</Badge>;
+    case 'SENDING': return <Badge className="bg-orange-100 text-orange-800">{t('broadcasts.statusSending')}</Badge>;
+    case 'SENT': return <Badge className="bg-green-100 text-green-800">{t('broadcasts.statusSent')}</Badge>;
+    case 'FAILED': return <Badge className="bg-red-100 text-red-800">{t('broadcasts.statusFailed')}</Badge>;
     default: return <Badge variant="outline">{status}</Badge>;
   }
 };
 
 export default function AdminBroadcastsPage() {
   const router = useRouter();
+  const { t } = useI18n('admin');
   const [broadcasts, setBroadcasts] = useState<unknown[]>([]);
   const [, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -75,7 +77,7 @@ export default function AdminBroadcastsPage() {
       }
     } catch (error) {
       console.error('Erreur lors du chargement des broadcasts:', error);
-      toast.error('Erreur lors du chargement des broadcasts');
+      toast.error(t('broadcasts.loadError'));
       setBroadcasts([]);
     } finally {
       setLoading(false);
@@ -95,14 +97,14 @@ export default function AdminBroadcastsPage() {
   }, [currentPage, statusFilter, isInitialLoad]);
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Supprimer ce broadcast ?')) return;
+    if (!window.confirm(t('broadcasts.deleteConfirm'))) return;
     try {
       await adminService.deleteBroadcast(id);
-      toast.success('Broadcast supprime');
+      toast.success(t('broadcasts.deleteSuccess'));
       loadBroadcasts(false);
     } catch (error) {
       console.error('Erreur suppression broadcast:', error);
-      toast.error('Erreur lors de la suppression');
+      toast.error(t('broadcasts.deleteError'));
     }
   };
 
@@ -142,8 +144,8 @@ export default function AdminBroadcastsPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">Broadcasts Email</h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400 hidden sm:block">Gestion des campagnes email</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{t('broadcasts.title')}</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400 hidden sm:block">{t('broadcasts.subtitle')}</p>
           </div>
           <div className="flex space-x-2">
             <Button
@@ -160,7 +162,7 @@ export default function AdminBroadcastsPage() {
               className="flex items-center space-x-2 dark:bg-blue-700 dark:hover:bg-blue-800"
             >
               <Plus className="h-4 w-4" />
-              <span className="hidden md:inline">Nouveau broadcast</span>
+              <span className="hidden md:inline">{t('broadcasts.newButton')}</span>
             </Button>
           </div>
         </div>
@@ -169,41 +171,41 @@ export default function AdminBroadcastsPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card className="dark:bg-gray-900 dark:border-gray-800">
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Total</CardTitle>
+              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">{t('broadcasts.statTotal')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-xl sm:text-2xl font-bold dark:text-gray-100">{stats.total}</div>
-              <Badge variant="outline" className="mt-1 text-xs dark:border-gray-700 dark:text-gray-300">Broadcasts</Badge>
+              <Badge variant="outline" className="mt-1 text-xs dark:border-gray-700 dark:text-gray-300">{t('broadcasts.statBroadcastsBadge')}</Badge>
             </CardContent>
           </Card>
 
           <Card className="dark:bg-gray-900 dark:border-gray-800">
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">En cours</CardTitle>
+              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">{t('broadcasts.statSending')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-xl sm:text-2xl font-bold text-orange-600 dark:text-orange-400">{stats.sending}</div>
-              <Badge variant="outline" className="mt-1 text-xs text-orange-600 dark:text-orange-400 dark:border-orange-700">Envoi</Badge>
+              <Badge variant="outline" className="mt-1 text-xs text-orange-600 dark:text-orange-400 dark:border-orange-700">{t('broadcasts.statSendingBadge')}</Badge>
             </CardContent>
           </Card>
 
           <Card className="dark:bg-gray-900 dark:border-gray-800">
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Envoyes</CardTitle>
+              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">{t('broadcasts.statSent')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400">{stats.sent}</div>
-              <Badge variant="outline" className="mt-1 text-xs text-green-600 dark:text-green-400 dark:border-green-700">Termine</Badge>
+              <Badge variant="outline" className="mt-1 text-xs text-green-600 dark:text-green-400 dark:border-green-700">{t('broadcasts.statSentBadge')}</Badge>
             </CardContent>
           </Card>
 
           <Card className="dark:bg-gray-900 dark:border-gray-800">
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Echoues</CardTitle>
+              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">{t('broadcasts.statFailed')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400">{stats.failed}</div>
-              <Badge variant="outline" className="mt-1 text-xs text-red-600 dark:text-red-400 dark:border-red-700">Erreurs</Badge>
+              <Badge variant="outline" className="mt-1 text-xs text-red-600 dark:text-red-400 dark:border-red-700">{t('broadcasts.statFailedBadge')}</Badge>
             </CardContent>
           </Card>
         </div>
@@ -213,7 +215,7 @@ export default function AdminBroadcastsPage() {
           <CardHeader className="space-y-4">
             <CardTitle className="flex items-center space-x-2 text-base sm:text-lg dark:text-gray-100">
               <Mail className="h-4 w-4 sm:h-5 sm:w-5" />
-              <span>Broadcasts ({broadcasts?.length || 0})</span>
+              <span>{t('broadcasts.tableTitle', { count: broadcasts?.length || 0 })}</span>
             </CardTitle>
 
             {/* Filter */}
@@ -223,12 +225,12 @@ export default function AdminBroadcastsPage() {
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
-                <option value="">Tous les statuts</option>
-                <option value="DRAFT">Brouillon</option>
-                <option value="READY">Pret</option>
-                <option value="SENDING">En cours d&apos;envoi</option>
-                <option value="SENT">Envoye</option>
-                <option value="FAILED">Echoue</option>
+                <option value="">{t('broadcasts.filterAll')}</option>
+                <option value="DRAFT">{t('broadcasts.statusDraft')}</option>
+                <option value="READY">{t('broadcasts.statusReady')}</option>
+                <option value="SENDING">{t('broadcasts.filterSending')}</option>
+                <option value="SENT">{t('broadcasts.statusSent')}</option>
+                <option value="FAILED">{t('broadcasts.statusFailed')}</option>
               </select>
             </div>
           </CardHeader>
@@ -237,12 +239,12 @@ export default function AdminBroadcastsPage() {
             <div className="hidden lg:block space-y-4">
               {/* Header */}
               <div className="grid grid-cols-12 gap-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg font-medium text-sm text-gray-700 dark:text-gray-300 sticky top-0 z-10">
-                <div className="col-span-3">Nom</div>
-                <div className="col-span-2">Status</div>
-                <div className="col-span-2">Destinataires</div>
-                <div className="col-span-2">Envoyes / Echoues</div>
-                <div className="col-span-2">Cree le</div>
-                <div className="col-span-1">Actions</div>
+                <div className="col-span-3">{t('broadcasts.colName')}</div>
+                <div className="col-span-2">{t('broadcasts.colStatus')}</div>
+                <div className="col-span-2">{t('broadcasts.colRecipients')}</div>
+                <div className="col-span-2">{t('broadcasts.colSentFailed')}</div>
+                <div className="col-span-2">{t('broadcasts.colCreatedAt')}</div>
+                <div className="col-span-1">{t('broadcasts.colActions')}</div>
               </div>
 
               {/* Rows */}
@@ -255,7 +257,7 @@ export default function AdminBroadcastsPage() {
                     </div>
                   </div>
                   <div className="col-span-2 flex items-center">
-                    {getStatusBadge(broadcast.status)}
+                    {getStatusBadge(broadcast.status, t)}
                   </div>
                   <div className="col-span-2 text-sm text-gray-600 dark:text-gray-400 flex items-center">
                     {broadcast.totalRecipients ?? '-'}
@@ -274,7 +276,7 @@ export default function AdminBroadcastsPage() {
                       size="sm"
                       onClick={() => router.push(`/admin/broadcasts/${broadcast.id}`)}
                       className="dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700 dark:text-gray-200"
-                      title="Voir"
+                      title={t('broadcasts.actionView')}
                     >
                       <Eye className="h-3 w-3" />
                     </Button>
@@ -284,7 +286,7 @@ export default function AdminBroadcastsPage() {
                         size="sm"
                         onClick={() => handleDelete(broadcast.id)}
                         className="text-red-600 hover:text-red-700 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700"
-                        title="Supprimer"
+                        title={t('broadcasts.actionDelete')}
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
@@ -304,10 +306,10 @@ export default function AdminBroadcastsPage() {
                         <h3 className="font-medium text-gray-900 dark:text-gray-100 truncate">{broadcast.name}</h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{broadcast.subject}</p>
                       </div>
-                      {getStatusBadge(broadcast.status)}
+                      {getStatusBadge(broadcast.status, t)}
                     </div>
                     <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mt-2">
-                      <span>Dest: {broadcast.totalRecipients ?? '-'}</span>
+                      <span>{t('broadcasts.mobileRecipients', { count: broadcast.totalRecipients ?? '-' })}</span>
                       <span>
                         <span className="text-green-600 dark:text-green-400">{broadcast.sentCount ?? 0}</span>
                         {' / '}
@@ -323,7 +325,7 @@ export default function AdminBroadcastsPage() {
                         onClick={() => router.push(`/admin/broadcasts/${broadcast.id}`)}
                       >
                         <Eye className="h-3 w-3 mr-1" />
-                        Voir
+                        {t('broadcasts.actionView')}
                       </Button>
                       {(broadcast.status === 'DRAFT' || broadcast.status === 'READY') && (
                         <Button
@@ -345,14 +347,14 @@ export default function AdminBroadcastsPage() {
             {(!broadcasts || broadcasts.length === 0) && (
               <div className="text-center py-12">
                 <Mail className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Aucun broadcast trouve</h3>
-                <p className="text-gray-500 dark:text-gray-400">Creez votre premier broadcast email</p>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">{t('broadcasts.emptyTitle')}</h3>
+                <p className="text-gray-500 dark:text-gray-400">{t('broadcasts.emptySubtitle')}</p>
                 <Button
                   className="mt-4"
                   onClick={() => router.push('/admin/broadcasts/new')}
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  Nouveau broadcast
+                  {t('broadcasts.newButton')}
                 </Button>
               </div>
             )}
@@ -361,7 +363,7 @@ export default function AdminBroadcastsPage() {
             {broadcasts && broadcasts.length > 0 && (
               <div className="flex flex-col sm:flex-row items-center justify-between mt-6 gap-4">
                 <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                  Page {currentPage} sur {totalPages} - {broadcasts.length} broadcasts affiches
+                  {t('broadcasts.paginationInfo', { page: currentPage, total: totalPages, count: broadcasts.length })}
                 </div>
                 <div className="flex space-x-2">
                   <Button
@@ -372,7 +374,7 @@ export default function AdminBroadcastsPage() {
                     className="text-xs sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200 dark:disabled:opacity-50"
                   >
                     <ChevronLeft className="h-4 w-4" />
-                    <span className="hidden sm:inline ml-1">Precedent</span>
+                    <span className="hidden sm:inline ml-1">{t('broadcasts.prevPage')}</span>
                   </Button>
                   <div className="flex items-center px-3 py-2 border dark:border-gray-700 rounded-md text-xs sm:text-sm font-medium dark:bg-gray-800 dark:text-gray-200">
                     {currentPage} / {totalPages}
@@ -384,7 +386,7 @@ export default function AdminBroadcastsPage() {
                     onClick={handleNextPage}
                     className="text-xs sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200 dark:disabled:opacity-50"
                   >
-                    <span className="hidden sm:inline mr-1">Suivant</span>
+                    <span className="hidden sm:inline mr-1">{t('broadcasts.nextPage')}</span>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>

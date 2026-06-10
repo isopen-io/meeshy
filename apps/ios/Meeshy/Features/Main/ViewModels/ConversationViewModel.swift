@@ -204,6 +204,34 @@ class ConversationViewModel: ObservableObject {
     /// nil value means user chose "show original audio"
     @Published var activeAudioLanguageOverrides: [String: String?] = [:]
 
+    /// Per-message language selection driven by the bubble's flag strip
+    /// (primary display language switch + inline secondary panel). Lifted out
+    /// of `ThemedMessageBubble`'s `@State` so the bubble can sit behind an
+    /// Equatable re-render gate: as plain inputs these flow through `==`, and
+    /// a flag tap publishes here → targeted cell reconfigure → the bubble
+    /// re-renders with the new selection. (The former in-bubble `@State` is
+    /// exactly what made `.equatable()` unsafe — see b9a39c2c.)
+    @Published private(set) var bubbleLanguageSelections: [String: BubbleLanguageSelection] = [:]
+
+    struct BubbleLanguageSelection: Equatable {
+        var activeDisplayLangCode: String?
+        var secondaryLangCode: String?
+    }
+
+    func setBubbleActiveDisplayLanguage(_ code: String?, for messageId: String) {
+        var selection = bubbleLanguageSelections[messageId] ?? BubbleLanguageSelection()
+        guard selection.activeDisplayLangCode != code else { return }
+        selection.activeDisplayLangCode = code
+        bubbleLanguageSelections[messageId] = selection
+    }
+
+    func setBubbleSecondaryLanguage(_ code: String?, for messageId: String) {
+        var selection = bubbleLanguageSelections[messageId] ?? BubbleLanguageSelection()
+        guard selection.secondaryLangCode != code else { return }
+        selection.secondaryLangCode = code
+        bubbleLanguageSelections[messageId] = selection
+    }
+
     /// B2 (Prisme Linguistique) — monotonically increasing counter bumped
     /// every time the viewer's preferred-content languages change (user
     /// edits `systemLanguage` / `regionalLanguage` / `customDestinationLanguage`
@@ -1195,6 +1223,11 @@ class ConversationViewModel: ObservableObject {
         // après épuisement des tentatives » : la bulle affiche alors la barre
         // « Échec · Réessayer · Supprimer » au lieu d'un spinner figé.
         await messagePersistence.reconcileFailedFromOutbox(conversationId: conversationId)
+        // Et les lignes optimistes ORPHELINES (process tué / Task annulée
+        // entre l'insert optimiste et serverAck/sendFailed, AUCUN outbox
+        // vivant pour les rejouer) : sans ça l'horloge `.sending` réapparaît
+        // à chaque réouverture, pour toujours.
+        await messagePersistence.reconcileOrphanedSendingRows(conversationId: conversationId)
 
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
         switch cached {
@@ -2214,7 +2247,7 @@ class ConversationViewModel: ObservableObject {
                 || resolvedBlur == true
                 || pendingEffects.hasAnyEffect
             if !hasSpecialProps {
-                Logger.messages.warning("SendFlow socket-fallback START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public) — REST failed, awaiting socket ack up to ~30s (isSending held)")
+                Logger.messages.warning("SendFlow socket-fallback START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public) — REST failed, awaiting socket ack up to ~10s (isSending held)")
                 let socketAck = await messageSocket.sendViaSocketFallback(
                     conversationId: conversationId,
                     content: finalContent,
@@ -2571,6 +2604,11 @@ class ConversationViewModel: ObservableObject {
                 await OutboxFlushTrigger.flushNow()
             }
         } else {
+            // Marque la reaction comme "nouvelle" AVANT l'ecriture async : quand
+            // le store observe l'ajout et re-rend la bulle, la nouvelle pill
+            // verra `shouldAnimate == true` et jouera la comete. Un scroll
+            // ulterieur (hors fenetre) ne la re-animera pas.
+            ReactionAnimationGate.markAdded(messageId: messageId, emoji: emoji)
             let reactionId = UUID().uuidString
             Task { [weak self] in
                 try? await self?.messagePersistence.appendReaction(

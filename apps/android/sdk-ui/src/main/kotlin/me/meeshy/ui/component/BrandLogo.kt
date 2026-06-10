@@ -13,9 +13,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import me.meeshy.ui.theme.MeeshyPalette
 
 /**
@@ -27,6 +27,7 @@ public fun BrandLogo(
     modifier: Modifier = Modifier,
     size: Dp = 72.dp,
 ) {
+    val textSize = with(LocalDensity.current) { (size * 0.5f).toSp() }
     Box(
         modifier = modifier
             .size(size)
@@ -39,7 +40,7 @@ public fun BrandLogo(
             text = "M",
             color = MeeshyPalette.White,
             fontWeight = FontWeight.Bold,
-            fontSize = (size.value * 0.5f).sp,
+            fontSize = textSize,
         )
     }
 }

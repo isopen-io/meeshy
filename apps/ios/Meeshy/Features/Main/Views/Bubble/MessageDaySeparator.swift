@@ -16,7 +16,7 @@ struct MessageDaySeparator: View, Equatable {
         HStack {
             Spacer(minLength: 0)
             Text(label)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundColor(textColor)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)

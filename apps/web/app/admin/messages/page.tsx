@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { MessageSquare, ArrowLeft, Search, Filter, Calendar, User, Globe, FileText, Image, Video, Music, MapPin } from 'lucide-react';
 import { adminService } from '@/services/admin.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface Message {
   id: string;
@@ -57,6 +58,7 @@ interface Message {
 
 export default function AdminMessagesPage() {
   const router = useRouter();
+  const { t } = useI18n('admin');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -78,13 +80,13 @@ export default function AdminMessagesPage() {
   };
 
   const messageTypeLabels = {
-    text: 'Texte',
-    image: 'Image',
-    file: 'Fichier',
-    audio: 'Audio',
-    video: 'Vidéo',
-    location: 'Localisation',
-    system: 'Système'
+    text: t('messages.typeText'),
+    image: t('messages.typeImage'),
+    file: t('messages.typeFile'),
+    audio: t('messages.typeAudio'),
+    video: t('messages.typeVideo'),
+    location: t('messages.typeLocation'),
+    system: t('messages.typeSystem')
   };
 
   useEffect(() => {
@@ -114,7 +116,7 @@ export default function AdminMessagesPage() {
       }
     } catch (error) {
       console.error('Erreur lors du chargement des messages:', error);
-      toast.error('Erreur lors du chargement des messages');
+      toast.error(t('messages.loadError'));
     } finally {
       setLoading(false);
     }
@@ -167,7 +169,7 @@ export default function AdminMessagesPage() {
       <AdminLayout currentPage="/admin/messages">
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2">Chargement des messages...</span>
+          <span className="ml-2">{t('messages.loading')}</span>
         </div>
       </AdminLayout>
     );
@@ -185,11 +187,11 @@ export default function AdminMessagesPage() {
               className="flex items-center space-x-2"
             >
               <ArrowLeft className="h-4 w-4" />
-              <span>Retour</span>
+              <span>{t('messages.backButton')}</span>
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Gestion des messages</h1>
-              <p className="text-gray-600">Administration et modération des messages</p>
+              <h1 className="text-2xl font-bold text-gray-900">{t('messages.pageTitle')}</h1>
+              <p className="text-gray-600">{t('messages.pageSubtitle')}</p>
             </div>
           </div>
         </div>
@@ -199,17 +201,17 @@ export default function AdminMessagesPage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Filter className="h-5 w-5" />
-              <span>Filtres et recherche</span>
+              <span>{t('messages.filtersTitle')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Recherche</label>
+                <label className="text-sm font-medium">{t('messages.searchLabel')}</label>
                 <div className="relative">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                   <Input
-                    placeholder="Rechercher dans le contenu..."
+                    placeholder={t('messages.searchPlaceholder')}
                     value={searchTerm}
                     onChange={(e) => handleSearch(e.target.value)}
                     className="pl-10"
@@ -218,61 +220,61 @@ export default function AdminMessagesPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Type de message</label>
+                <label className="text-sm font-medium">{t('messages.typeLabel')}</label>
                 <Select value={messageType || 'all'} onValueChange={(value) => handleFilterChange('type', value)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Tous les types" />
+                    <SelectValue placeholder={t('messages.typeAll')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Tous les types</SelectItem>
-                    <SelectItem value="text">Texte</SelectItem>
-                    <SelectItem value="image">Image</SelectItem>
-                    <SelectItem value="file">Fichier</SelectItem>
-                    <SelectItem value="audio">Audio</SelectItem>
-                    <SelectItem value="video">Vidéo</SelectItem>
-                    <SelectItem value="location">Localisation</SelectItem>
-                    <SelectItem value="system">Système</SelectItem>
+                    <SelectItem value="all">{t('messages.typeAll')}</SelectItem>
+                    <SelectItem value="text">{t('messages.typeText')}</SelectItem>
+                    <SelectItem value="image">{t('messages.typeImage')}</SelectItem>
+                    <SelectItem value="file">{t('messages.typeFile')}</SelectItem>
+                    <SelectItem value="audio">{t('messages.typeAudio')}</SelectItem>
+                    <SelectItem value="video">{t('messages.typeVideo')}</SelectItem>
+                    <SelectItem value="location">{t('messages.typeLocation')}</SelectItem>
+                    <SelectItem value="system">{t('messages.typeSystem')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Période</label>
+                <label className="text-sm font-medium">{t('messages.periodLabel')}</label>
                 <Select value={period || 'all'} onValueChange={(value) => handleFilterChange('period', value)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Toutes les périodes" />
+                    <SelectValue placeholder={t('messages.periodAll')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Toutes les périodes</SelectItem>
-                    <SelectItem value="today">Aujourd&apos;hui</SelectItem>
-                    <SelectItem value="week">Cette semaine</SelectItem>
-                    <SelectItem value="month">Ce mois</SelectItem>
+                    <SelectItem value="all">{t('messages.periodAll')}</SelectItem>
+                    <SelectItem value="today">{t('messages.periodToday')}</SelectItem>
+                    <SelectItem value="week">{t('messages.periodWeek')}</SelectItem>
+                    <SelectItem value="month">{t('messages.periodMonth')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Par page</label>
+                <label className="text-sm font-medium">{t('messages.perPageLabel')}</label>
                 <Select value={String(pageSize)} onValueChange={(val) => handlePageSizeChange(Number(val))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="20">20 par page</SelectItem>
-                    <SelectItem value="50">50 par page</SelectItem>
-                    <SelectItem value="100">100 par page</SelectItem>
+                    <SelectItem value="20">{t('messages.perPage', { count: 20 })}</SelectItem>
+                    <SelectItem value="50">{t('messages.perPage', { count: 50 })}</SelectItem>
+                    <SelectItem value="100">{t('messages.perPage', { count: 100 })}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Actions</label>
+                <label className="text-sm font-medium">{t('messages.actionsLabel')}</label>
                 <Button
                   variant="outline"
                   onClick={loadMessages}
                   className="w-full"
                 >
-                  Actualiser
+                  {t('messages.refresh')}
                 </Button>
               </div>
             </div>
@@ -283,43 +285,43 @@ export default function AdminMessagesPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Total messages</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">{t('messages.statTotal')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalCount}</div>
-              <Badge variant="outline" className="mt-1">Messages trouvés</Badge>
+              <Badge variant="outline" className="mt-1">{t('messages.statTotalBadge')}</Badge>
             </CardContent>
           </Card>
           
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Page actuelle</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">{t('messages.statCurrentPage')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-600">{currentPage}</div>
-              <Badge variant="outline" className="mt-1">sur {totalPages}</Badge>
+              <Badge variant="outline" className="mt-1">{t('messages.statOf', { total: totalPages })}</Badge>
             </CardContent>
           </Card>
           
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Messages par page</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">{t('messages.statPerPage')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">20</div>
-              <Badge variant="outline" className="mt-1">Par défaut</Badge>
+              <Badge variant="outline" className="mt-1">{t('messages.statDefault')}</Badge>
             </CardContent>
           </Card>
           
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Filtres actifs</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">{t('messages.statActiveFilters')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-purple-600">
                 {[searchTerm, messageType, period].filter(Boolean).length}
               </div>
-              <Badge variant="outline" className="mt-1">Filtres appliqués</Badge>
+              <Badge variant="outline" className="mt-1">{t('messages.statFiltersBadge')}</Badge>
             </CardContent>
           </Card>
         </div>
@@ -329,7 +331,7 @@ export default function AdminMessagesPage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <MessageSquare className="h-5 w-5" />
-              <span>Messages ({totalCount})</span>
+              <span>{t('messages.listTitle', { count: totalCount })}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -337,10 +339,10 @@ export default function AdminMessagesPage() {
               <div className="text-center py-12">
                 <MessageSquare className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  Aucun message trouvé
+{t('messages.emptyTitle')}
                 </h3>
                 <p className="text-gray-600">
-                  Aucun message ne correspond aux critères de recherche actuels.
+{t('messages.emptySubtitle')}
                 </p>
               </div>
             ) : (
@@ -360,7 +362,7 @@ export default function AdminMessagesPage() {
                             {message.originalLanguage.toUpperCase()}
                           </Badge>
                           {message.isEdited && (
-                            <Badge variant="secondary">Modifié</Badge>
+                            <Badge variant="secondary">{t('messages.badgeEdited')}</Badge>
                           )}
                         </div>
 
@@ -374,7 +376,7 @@ export default function AdminMessagesPage() {
                         {message.attachments && message.attachments.length > 0 && (
                           <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
                             <p className="text-sm font-medium text-gray-700 mb-2">
-                              📎 {message.attachments.length} fichier(s) joint(s)
+{t('messages.attachmentsLabel', { count: message.attachments.length })}
                             </p>
                             <div className="space-y-2">
                               {message.attachments.map((att) => (
@@ -394,10 +396,10 @@ export default function AdminMessagesPage() {
                                         <span>🎬 {att.fps}fps</span>
                                       )}
                                       {att.pageCount && (
-                                        <span>📄 {att.pageCount} page{att.pageCount > 1 ? 's' : ''}</span>
+                                        <span>📄 {att.pageCount} {att.pageCount > 1 ? t('messages.pagePlural') : t('messages.pageSingular')}</span>
                                       )}
                                       {att.lineCount && (
-                                        <span>📝 {att.lineCount} ligne{att.lineCount > 1 ? 's' : ''}</span>
+                                        <span>📝 {att.lineCount} {att.lineCount > 1 ? t('messages.linePlural') : t('messages.lineSingular')}</span>
                                       )}
                                       {att.bitrate && (
                                         <span>🎵 {Math.floor(att.bitrate / 1000)}kbps</span>
@@ -443,20 +445,20 @@ export default function AdminMessagesPage() {
 
                         <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
                           {message._count.translations > 0 && (
-                            <span>{message._count.translations} traduction(s)</span>
+                            <span>{t('messages.translationCount', { count: message._count.translations })}</span>
                           )}
                           {message._count.replies > 0 && (
-                            <span>{message._count.replies} réponse(s)</span>
+                            <span>{t('messages.replyCount', { count: message._count.replies })}</span>
                           )}
                         </div>
                       </div>
 
                       <div className="flex space-x-2 ml-4">
                         <Button variant="outline" size="sm">
-                          Voir
+                          {t('messages.actionView')}
                         </Button>
                         <Button variant="outline" size="sm">
-                          Modérer
+                          {t('messages.actionModerate')}
                         </Button>
                       </div>
                     </div>
@@ -469,7 +471,7 @@ export default function AdminMessagesPage() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-6">
                 <div className="text-sm text-gray-600">
-                  Page {currentPage} sur {totalPages} ({totalCount} messages)
+                  {t('messages.paginationInfo', { page: currentPage, total: totalPages, count: totalCount })}
                 </div>
                 <div className="flex space-x-2">
                   <Button
@@ -478,7 +480,7 @@ export default function AdminMessagesPage() {
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
                   >
-                    Précédent
+                    {t('messages.prevPage')}
                   </Button>
                   <Button
                     variant="outline"
@@ -486,7 +488,7 @@ export default function AdminMessagesPage() {
                     onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages}
                   >
-                    Suivant
+                    {t('messages.nextPage')}
                   </Button>
                 </div>
               </div>

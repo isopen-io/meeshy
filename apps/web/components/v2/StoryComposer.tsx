@@ -156,15 +156,13 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
     const available = limit - current;
 
     if (available <= 0) {
-      toast.error(`Limite atteinte : ${limit} ${getCategoryLabel(category)}s maximum`);
+      toast.error(t('limitReached', { limit: String(limit), category: getCategoryLabel(category) }));
       return;
     }
 
     const filesToAdd = Array.from(files).slice(0, available);
     if (filesToAdd.length < files.length) {
-      toast.warning(
-        `Seuls ${filesToAdd.length} fichier(s) ajouté(s) (limite : ${limit} ${getCategoryLabel(category)}s)`
-      );
+      toast.warning(t('filesAdded', { count: String(filesToAdd.length) }));
     }
 
     handleFilesSelected(filesToAdd);

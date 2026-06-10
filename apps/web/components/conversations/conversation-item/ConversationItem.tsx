@@ -15,6 +15,7 @@ import { formatConversationDate } from '@/utils/date-format';
 import { useUserStore } from '@/stores/user-store';
 import { ConversationItemActions } from './ConversationItemActions';
 import { usePrefetchOnHover } from '@/hooks/use-prefetch-on-hover';
+import { useI18n } from '@/hooks/use-i18n';
 import {
   getConversationAvatar,
   getConversationAvatarUrl,
@@ -54,6 +55,7 @@ export const ConversationItem = memo(function ConversationItem({
   isMobile = false
 }: ConversationItemProps) {
   // Store global des préférences de conversation (réactif)
+  const { t: tCommon } = useI18n('common');
   const prefsStore = useConversationPreferencesStore();
   const storePrefs = prefsStore.preferencesMap.get(conversation.id);
 
@@ -197,7 +199,7 @@ export const ConversationItem = memo(function ConversationItem({
                        : null);
 
     if (!senderName) {
-      senderName = isAnonymous ? 'Anonyme' : 'Utilisateur';
+      senderName = isAnonymous ? tCommon('anonymous') : tCommon('user');
     }
 
     return isAnonymous ? `${senderName} (anonyme)` : senderName;
@@ -205,7 +207,10 @@ export const ConversationItem = memo(function ConversationItem({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
       onMouseEnter={prefetchOnMouseEnter}
       onMouseLeave={prefetchOnMouseLeave}
       className={cn(

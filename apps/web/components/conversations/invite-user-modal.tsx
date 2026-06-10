@@ -204,7 +204,7 @@ export function InviteUserModal({
               {searchResults.length === 0 && searchQuery.length >= 2 && !isSearching ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Users className="h-8 w-8 mx-auto mb-2" />
-                  <p>Aucun utilisateur trouvé</p>
+                  <p>{t('inviteModal.noUsersFound')}</p>
                 </div>
               ) : (
                 <div className="space-y-2">

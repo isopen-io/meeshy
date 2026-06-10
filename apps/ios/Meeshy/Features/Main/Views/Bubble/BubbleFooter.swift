@@ -36,7 +36,7 @@ struct BubbleFooter: View, Equatable {
         HStack(spacing: 3) {
             if let timestamp = model.timestamp {
                 Text(timestamp)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundColor(compactMetaColor)
             }
             if model.delivery != nil {
@@ -174,7 +174,7 @@ struct BubbleFooter: View, Equatable {
     private var metaTrailing: some View {
         if let timestamp = model.timestamp {
             Text(timestamp)
-                .font(.system(size: 11, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundColor(metaColor)
         }
         if model.delivery != nil {

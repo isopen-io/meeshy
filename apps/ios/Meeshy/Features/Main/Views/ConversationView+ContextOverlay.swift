@@ -47,6 +47,10 @@ extension ConversationView {
                             overlayState.contextOverlayDragOffset = 0
                         }
                     }
+                },
+                onOpenProfile: { user in
+                    dismissContextOverlay()
+                    router.deepLinkProfileUser = user
                 }
             )
             .zIndex(998)
@@ -117,8 +121,9 @@ extension ConversationView {
 
     /// Filter the master action list by message state. `Delete` only shown
     /// for own messages or admins; `Translate` only when the resolved
-    /// translation differs from the user's preferred language; `Copy` only
-    /// when there's textual content to copy.
+    /// translation differs from the user's preferred language.
+    /// Note: Copy is handled natively via `.textSelection(.enabled)` on the
+    /// message text — no duplicate action needed here.
     func actionsForOverlay(message: Message) -> [ContextAction] {
         var actions: [ContextAction] = []
         actions.append(.reply())
@@ -127,9 +132,6 @@ extension ConversationView {
         if !(viewModel.messageTranslations[message.id]?.isEmpty ?? true)
             || !message.content.isEmpty {
             actions.append(.translate())
-        }
-        if !message.content.isEmpty {
-            actions.append(.copy())
         }
         if message.isMe || isCurrentUserAdminOrMod {
             actions.append(.delete())

@@ -156,19 +156,19 @@ const serviceUnavailableResponseSchema = {
 export async function translationJobsRoutes(fastify: FastifyInstance) {
   // Initialize translate service if ZMQ client is available
   let translateService: AttachmentTranslateService | null = null;
-  if ((fastify as any).zmqClient) {
-    // Utiliser le cache multi-niveau partagé depuis le décorateur Fastify
-    const jobMappingCache = (fastify as any).jobMappingCache;
+  const zmqClient = fastify.translationService.getZmqClient();
+  if (zmqClient) {
+    const jobMappingCache = fastify.jobMappingCache;
 
     translateService = new AttachmentTranslateService(
-      (fastify as any).prisma,
-      (fastify as any).zmqClient,
+      fastify.prisma,
+      zmqClient,
       jobMappingCache
     );
   }
 
   // Middleware d'authentification requise
-  const authRequired = createUnifiedAuthMiddleware((fastify as any).prisma, {
+  const authRequired = createUnifiedAuthMiddleware(fastify.prisma, {
     requireAuth: true,
     allowAnonymous: false
   });

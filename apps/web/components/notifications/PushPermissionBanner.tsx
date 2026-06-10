@@ -72,7 +72,7 @@ export const PushPermissionBanner = memo(function PushPermissionBanner() {
           variant="ghost"
           className="h-8 w-8 p-0"
           onClick={() => setDismissed(true)}
-          aria-label="Dismiss"
+          aria-label={t('dismiss')}
         >
           <X className="h-4 w-4" />
         </Button>

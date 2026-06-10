@@ -11,7 +11,7 @@ export function registerDeleteForMeRoutes(
   _optionalAuth: any,
   requiredAuth: any
 ) {
-  const socketIOHandler = (fastify as any).socketIOHandler
+  const socketIOHandler = fastify.socketIOHandler
 
   fastify.delete<{ Params: { id: string } }>(
     '/conversations/:id/delete-for-me',
@@ -74,7 +74,7 @@ export function registerDeleteForMeRoutes(
           })
 
           const socketIOManager = socketIOHandler?.getManager?.()
-          const io = socketIOManager?.io || (socketIOHandler as any)?.io
+          const io = (socketIOManager as any)?.io || (socketIOHandler as any)?.io
           if (io) {
             io.to(ROOMS.conversation(conversationId)).emit(
               SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED,
@@ -104,7 +104,7 @@ export function registerDeleteForMeRoutes(
 
       // Remove user from socket room silently
       const socketIOManager = socketIOHandler?.getManager?.()
-      const io = socketIOManager?.io || (socketIOHandler as any)?.io
+      const io = (socketIOManager as any)?.io || (socketIOHandler as any)?.io
       if (io) {
         const userSockets = await io.in(ROOMS.user(userId)).fetchSockets()
         for (const s of userSockets) {

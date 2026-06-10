@@ -109,6 +109,22 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     }
     private var socketSubscriptions = Set<AnyCancellable>()
 
+    /// Optional hook the host app installs to persist raw `APIMessage`
+    /// payloads into its on-device message store (GRDB). The engine itself
+    /// only maintains the CacheCoordinator surfaces (conversation list,
+    /// previews, unread counts) — but the per-conversation timeline the app
+    /// renders is read from GRDB, so without this hook a message that
+    /// arrives while its conversation is closed (socket broadcast, push
+    /// notification refresh) updates the list preview yet is missing from
+    /// the open conversation until the next REST revalidation completes.
+    /// Invoked from `handleNewMessage`, `ensureMessages` and
+    /// `fetchOlderMessages` with the exact decoded payloads.
+    private var _apiMessagePersistor: (@Sendable ([APIMessage]) async -> Void)?
+    public var apiMessagePersistor: (@Sendable ([APIMessage]) async -> Void)? {
+        get { stateQueue.sync { _apiMessagePersistor } }
+        set { stateQueue.sync { _apiMessagePersistor = newValue } }
+    }
+
     // Cooldown between successive delta syncs. The gateway delta endpoint
     // is cheap (~10-50 ms) but a chatty socket that flaps reconnect every
     // 200 ms used to spam `/conversations?updatedSince=...` once per flap
@@ -564,6 +580,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 let fromCacheOnly = existing.filter { !freshIds.contains($0.id) }
                 return (freshMessages + fromCacheOnly).sorted { $0.createdAt < $1.createdAt }
             }
+            // Mirror the fetched window into the app's on-device message store
+            // so the conversation timeline (GRDB-backed) is already current
+            // when the user opens it — the push-notification handler routes
+            // through here with `force: true` precisely for that purpose.
+            await apiMessagePersistor?(response.data)
             _messagesDidChange.send(conversationId)
         } catch {
             Self.logger.error("[SyncEngine] ensureMessages error: \(error.localizedDescription)")
@@ -586,6 +607,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 let newOnly = olderMessages.filter { !existingIds.contains($0.id) }
                 return newOnly + existing
             }
+            await apiMessagePersistor?(response.data)
             _messagesDidChange.send(conversationId)
         } catch {
             Self.logger.error("[SyncEngine] fetchOlderMessages error: \(error.localizedDescription)")
@@ -800,6 +822,15 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         await cache.messages.upsert(item: msg, for: msg.conversationId) { existing, new in
             existing.contains(where: { $0.id == new.id }) ? existing : existing + [new]
         }
+        // Persist into the app's GRDB message store too — this is the ONLY
+        // global `message:new` sink, so without it a broadcast for a CLOSED
+        // conversation updates the list preview but never reaches the
+        // timeline the conversation screen renders. The upsert reconciles by
+        // clientMessageId/serverId, so the open conversation's own handler
+        // buffering the same payload stays idempotent — and an own-echo
+        // arriving after the user navigated away still flips its optimistic
+        // `.sending` row to `.sent` instead of leaving the clock forever.
+        await apiMessagePersistor?([apiMessage])
         _messagesDidChange.send(msg.conversationId)
 
         // Preserve the existing author when the broadcast payload omits the

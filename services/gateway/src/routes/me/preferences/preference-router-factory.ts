@@ -44,9 +44,9 @@ export function createPreferenceRouter<T>(
 
     const emitPreferencesUpdated = (userId: string) => {
       try {
-        const manager = (fastify as any).socketIOHandler?.getManager?.();
-        if (manager?.io) {
-          manager.io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.USER_PREFERENCES_UPDATED, {
+        const manager = fastify.socketIOHandler?.getManager?.();
+        if ((manager as any)?.io) {
+          (manager as any).io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.USER_PREFERENCES_UPDATED, {
             userId,
             category,
           });
@@ -78,7 +78,7 @@ export function createPreferenceRouter<T>(
         }
       },
       async (request: FastifyRequest, reply: FastifyReply) => {
-        const userId = (request as any).auth?.userId;
+        const userId = request.auth?.userId;
 
         if (!userId) {
           return reply.status(401).send({
@@ -144,7 +144,7 @@ export function createPreferenceRouter<T>(
         }
       },
       async (request, reply) => {
-        const userId = (request as any).auth?.userId;
+        const userId = request.auth?.userId;
 
         if (!userId) {
           return reply.status(401).send({
@@ -264,7 +264,7 @@ export function createPreferenceRouter<T>(
         }
       },
       async (request, reply) => {
-        const userId = (request as any).auth?.userId;
+        const userId = request.auth?.userId;
 
         if (!userId) {
           return reply.status(401).send({
@@ -379,7 +379,7 @@ export function createPreferenceRouter<T>(
         }
       },
       async (request, reply) => {
-        const userId = (request as any).auth?.userId;
+        const userId = request.auth?.userId;
 
         if (!userId) {
           return reply.status(401).send({

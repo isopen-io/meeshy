@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { adminService } from '@/services/admin.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 import { StatsGrid, TimeSeriesChart, DonutChart, type StatItem } from '@/components/admin/Charts';
 import { StatCardSkeleton } from '@/components/admin/TableSkeleton';
 
@@ -93,6 +94,7 @@ const languageFlags: Record<string, string> = {
 
 export default function AdminLanguagesPage() {
   const router = useRouter();
+  const { t } = useI18n('admin');
   const [languageData, setLanguageData] = useState<LanguageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -119,14 +121,14 @@ export default function AdminLanguagesPage() {
       }
     } catch (error) {
       console.error('Erreur lors du chargement des statistiques de langues:', error);
-      toast.error('Erreur lors du chargement des statistiques de langues');
+      toast.error(t('languages.loadError'));
     } finally {
       setLoading(false);
     }
   };
 
   const getLanguageName = (code: string) => {
-    return languageNames[code] || code.toUpperCase();
+    return t('languages.langNames.' + code) || languageNames[code] || code.toUpperCase();
   };
 
   const getLanguageFlag = (code: string) => {
@@ -149,35 +151,35 @@ export default function AdminLanguagesPage() {
   // Statistiques pour StatsGrid
   const stats: StatItem[] = [
     {
-      title: 'Langues détectées',
+      title: t('languages.statDetected'),
       value: languageData?.topLanguages.length || 0,
-      description: 'Langues uniques',
+      description: t('languages.statDetectedDesc'),
       icon: Globe,
       iconColor: 'text-slate-600 dark:text-slate-400',
       iconBgColor: 'bg-slate-100 dark:bg-slate-900/30',
       trend: { value: 5, isPositive: true }
     },
     {
-      title: 'Messages analysés',
+      title: t('languages.statMessages'),
       value: languageData?.totalMessages || 0,
-      description: 'Total messages',
+      description: t('languages.statMessagesDesc'),
       icon: MessageSquare,
       iconColor: 'text-blue-600 dark:text-blue-400',
       iconBgColor: 'bg-blue-100 dark:bg-blue-900/30',
       trend: { value: 12, isPositive: true }
     },
     {
-      title: 'Utilisateurs multilingues',
+      title: t('languages.statUsers'),
       value: languageData?.totalUsers || 0,
-      description: 'Utilisateurs actifs',
+      description: t('languages.statUsersDesc'),
       icon: Users,
       iconColor: 'text-green-600 dark:text-green-400',
       iconBgColor: 'bg-green-100 dark:bg-green-900/30'
     },
     {
-      title: 'Traductions',
+      title: t('languages.statTranslations'),
       value: languageData?.totalTranslations || 0,
-      description: 'Traductions effectuées',
+      description: t('languages.statTranslationsDesc'),
       icon: LanguagesIcon,
       iconColor: 'text-purple-600 dark:text-purple-400',
       iconBgColor: 'bg-purple-100 dark:bg-purple-900/30',
@@ -238,11 +240,11 @@ export default function AdminLanguagesPage() {
                 className="text-white hover:bg-white/20"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Retour
+                {t('languages.backButton')}
               </Button>
               <div>
-                <h1 className="text-2xl font-bold">Statistiques des langues</h1>
-                <p className="text-slate-100 mt-1">Analyse de l&apos;utilisation des langues sur la plateforme</p>
+                <h1 className="text-2xl font-bold">{t('languages.pageTitle')}</h1>
+                <p className="text-slate-100 mt-1">{t('languages.pageSubtitle')}</p>
               </div>
             </div>
           </div>
@@ -255,16 +257,16 @@ export default function AdminLanguagesPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <TimeSeriesChart
             data={timeSeriesData}
-            title="Évolution des messages multilingues"
-            description="Nombre de messages traduits par jour"
+            title={t('languages.chartEvolutionTitle')}
+            description={t('languages.chartEvolutionDesc')}
             color="#64748b"
             dataKey="value"
           />
 
           <DonutChart
             data={donutData}
-            title="Top 5 des langues"
-            description="Répartition des langues les plus utilisées"
+            title={t('languages.chartTopTitle')}
+            description={t('languages.chartTopDesc')}
           />
         </div>
 
@@ -274,8 +276,8 @@ export default function AdminLanguagesPage() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
               <CardTitle className="flex items-center space-x-2">
                 <Globe className="h-5 w-5" />
-                <span>Classement des langues</span>
-                <Badge variant="secondary">{filteredLanguages.length} langues</Badge>
+                <span>{t('languages.rankingTitle')}</span>
+                <Badge variant="secondary">{t('languages.langCountBadge', { count: filteredLanguages.length })}</Badge>
               </CardTitle>
 
               <div className="flex items-center space-x-2 w-full sm:w-auto">
@@ -283,7 +285,7 @@ export default function AdminLanguagesPage() {
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
                     type="text"
-                    placeholder="Rechercher une langue..."
+                    placeholder={t('languages.searchPlaceholder')}
                     value={searchQuery}
                     onChange={(e) => {
                       setSearchQuery(e.target.value);
@@ -302,10 +304,10 @@ export default function AdminLanguagesPage() {
                 <div className="text-center py-12">
                   <Globe className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Aucune langue trouvée
+                    {t('languages.emptyTitle')}
                   </h3>
                   <p className="text-gray-600">
-                    {searchQuery ? 'Essayez avec un autre terme de recherche' : 'Les statistiques seront disponibles une fois que des messages auront été analysés'}
+                    {searchQuery ? t('languages.emptySearchHint') : t('languages.emptyDataHint')}
                   </p>
                 </div>
               ) : (
@@ -340,7 +342,7 @@ export default function AdminLanguagesPage() {
                             {getLanguageName(lang.language)}
                           </div>
                           <div className="text-sm text-gray-500 dark:text-gray-400">
-                            Code: {lang.language.toUpperCase()}
+                            {t('languages.codeLabel')} {lang.language.toUpperCase()}
                           </div>
                         </div>
                       </div>
@@ -349,7 +351,7 @@ export default function AdminLanguagesPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {lang.count.toLocaleString()} messages
+  {t('languages.langMessageCount', { count: lang.count.toLocaleString() })}
                           </span>
                           <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">
                             {percentage.toFixed(1)}%
@@ -385,7 +387,7 @@ export default function AdminLanguagesPage() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-6 pt-4 border-t dark:border-gray-700">
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Page {currentPage} sur {totalPages} • {filteredLanguages.length} langue(s)
+                  {t('languages.paginationInfo', { page: currentPage, total: totalPages, count: filteredLanguages.length })}
                 </div>
                 <div className="flex items-center space-x-2">
                   <Button
@@ -415,7 +417,7 @@ export default function AdminLanguagesPage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <LanguagesIcon className="h-5 w-5" />
-              <span>À propos de la détection de langues</span>
+              <span>{t('languages.infoTitle')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -423,44 +425,44 @@ export default function AdminLanguagesPage() {
               <div>
                 <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center space-x-2">
                   <TrendingUp className="h-4 w-4 text-slate-600" />
-                  <span>Comment ça marche ?</span>
+                  <span>{t('languages.howItWorksTitle')}</span>
                 </h4>
                 <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
                   <li className="flex items-start space-x-2">
                     <span className="text-slate-600 dark:text-slate-400">•</span>
-                    <span>Analyse automatique du contenu des messages</span>
+                    <span>{t('languages.bullet1')}</span>
                   </li>
                   <li className="flex items-start space-x-2">
                     <span className="text-slate-600 dark:text-slate-400">•</span>
-                    <span>Détection basée sur des modèles de langage avancés</span>
+                    <span>{t('languages.bullet2')}</span>
                   </li>
                   <li className="flex items-start space-x-2">
                     <span className="text-slate-600 dark:text-slate-400">•</span>
-                    <span>Support de plus de {Object.keys(languageNames).length} langues</span>
+                    <span>{t('languages.bullet3', { count: Object.keys(languageNames).length })}</span>
                   </li>
                   <li className="flex items-start space-x-2">
                     <span className="text-slate-600 dark:text-slate-400">•</span>
-                    <span>Mise à jour en temps réel des statistiques</span>
+                    <span>{t('languages.bullet4')}</span>
                   </li>
                 </ul>
               </div>
               <div>
                 <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center space-x-2">
                   <Globe className="h-4 w-4 text-slate-600" />
-                  <span>Langues supportées</span>
+                  <span>{t('languages.supportedTitle')}</span>
                 </h4>
                 <div className="text-sm text-gray-600 dark:text-gray-400">
                   <p className="mb-3">
-                    Notre système détecte automatiquement les langues suivantes :
+                    {t('languages.supportedIntro')}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {Object.entries(languageNames).slice(0, 12).map(([code, name]) => (
+                    {Object.entries(languageNames).slice(0, 12).map(([code]) => (
                       <Badge key={code} variant="outline" className="text-xs">
-                        {getLanguageFlag(code)} {name}
+                        {getLanguageFlag(code)} {getLanguageName(code)}
                       </Badge>
                     ))}
                     <Badge variant="secondary" className="text-xs">
-                      +{Object.keys(languageNames).length - 12} autres
+{t('languages.moreBadge', { count: Object.keys(languageNames).length - 12 })}
                     </Badge>
                   </div>
                 </div>

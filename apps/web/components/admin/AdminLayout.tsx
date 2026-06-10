@@ -32,6 +32,7 @@ import {
 import { PermissionsService } from '@/services/permissions.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
+import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import { preloadRouteModules } from '@/lib/lazy-components';
 import {
   DropdownMenu,
@@ -47,6 +48,7 @@ interface AdminLayoutProps {
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
   const { t } = useI18n('admin');
+  const interfaceLanguage = useCurrentInterfaceLanguage();
   const user = useUser();
   const { logout } = useAuth();
   const router = useRouter();
@@ -174,7 +176,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
   return (
     <AuthGuard>
       <a href="#main-content" className="skip-link">
-        Aller au contenu principal
+        {t('layout.skipToContent')}
       </a>
       <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Mobile Overlay */}
@@ -199,8 +201,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                 <Crown className="w-8 h-8 text-purple-600" />
                 {isSidebarOpen && (
                   <div>
-                    <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Administration</h1>
-                    <p className="text-sm text-gray-500">Panel de contrôle</p>
+                    <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t('layout.title')}</h1>
+                    <p className="text-sm text-gray-500">{t('layout.subtitle')}</p>
                   </div>
                 )}
               </div>
@@ -259,10 +261,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                 onClick={() => router.push('/dashboard')}
                 onMouseEnter={() => preloadRouteModules('/dashboard')}
                 onFocus={() => preloadRouteModules('/dashboard')}
-                aria-label={!isSidebarOpen ? 'Retour dashboard' : undefined}
+                aria-label={!isSidebarOpen ? t('layout.backDashboard') : undefined}
               >
                 <Home className="w-5 h-5" />
-                {isSidebarOpen && <span className="ml-3">Retour dashboard</span>}
+                {isSidebarOpen && <span className="ml-3">{t('layout.backDashboard')}</span>}
               </Button>
 
               {/* Navigation admin */}
@@ -294,10 +296,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
               variant="ghost"
               className={`w-full ${isSidebarOpen ? 'justify-start' : 'justify-center'} h-10 text-red-600 hover:text-red-700 hover:bg-red-50`}
               onClick={handleLogout}
-              aria-label={!isSidebarOpen ? 'Déconnexion' : undefined}
+              aria-label={!isSidebarOpen ? t('layout.logout') : undefined}
             >
               <LogOut className="w-5 h-5" />
-              {isSidebarOpen && <span className="ml-3">Déconnexion</span>}
+              {isSidebarOpen && <span className="ml-3">{t('layout.logout')}</span>}
             </Button>
           </div>
         </div>
@@ -320,17 +322,18 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                 </Button>
                 <div>
                   <h2 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
-                    {currentPage === '/admin' && 'Tableau de bord'}
-                    {currentPage === '/admin/users' && 'Gestion des utilisateurs'}
-                    {currentPage === '/admin/moderation' && 'Modération'}
-                    {currentPage === '/admin/audit' && 'Logs d\'audit'}
-                    {currentPage === '/admin/analytics' && 'Analyses'}
-                    {currentPage === '/admin/ranking' && 'Classements'}
-                    {currentPage === '/admin/broadcasts' && 'Broadcasts Email'}
-                    {currentPage === '/admin/tracking-links' && 'Tracking Links'}
-                    {currentPage === '/admin/settings' && 'Paramètres système'}
-                    {currentPage === '/admin/agent' && 'Agent IA'}
-                    {currentPage === '/admin/monitoring' && 'Monitoring'}
+                    {currentPage === '/admin' && t('layout.pageAdmin')}
+                    {currentPage === '/admin/users' && t('layout.pageUsers')}
+                    {currentPage === '/admin/moderation' && t('layout.pageModeration')}
+                    {currentPage === '/admin/audit' && t('layout.pageAuditLogs')}
+                    {currentPage === '/admin/audit-logs' && t('layout.pageAuditLogs')}
+                    {currentPage === '/admin/analytics' && t('layout.pageAnalytics')}
+                    {currentPage === '/admin/ranking' && t('layout.pageRanking')}
+                    {currentPage === '/admin/broadcasts' && t('layout.pageBroadcasts')}
+                    {currentPage === '/admin/tracking-links' && t('layout.pageTrackingLinks')}
+                    {currentPage === '/admin/settings' && t('layout.pageSettings')}
+                    {currentPage === '/admin/agent' && t('layout.pageAgent')}
+                    {currentPage === '/admin/monitoring' && t('layout.pageMonitoring')}
                   </h2>
                   <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 hidden sm:block">
                     Administration Meeshy - Niveau d&apos;accès: {PermissionsService.getRoleDisplayName(user.role)}
@@ -351,24 +354,24 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => setTheme('light')}>
                       <Sun className="mr-2 h-4 w-4" />
-                      Clair
+                      {t('layout.themeLight')}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setTheme('dark')}>
                       <Moon className="mr-2 h-4 w-4" />
-                      Sombre
+                      {t('layout.themeDark')}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setTheme('auto')}>
                       <Laptop className="mr-2 h-4 w-4" />
-                      Système
+                      {t('layout.themeAuto')}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
 
                 <Badge variant="outline" className="text-green-600 border-green-200 dark:text-green-400 dark:border-green-800 hidden sm:flex">
-                  En ligne
+                  {t('layout.statusOnline')}
                 </Badge>
                 <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 hidden md:block">
-                  {new Date().toLocaleDateString('fr-FR', {
+                  {new Date().toLocaleDateString(interfaceLanguage || 'en', {
                     weekday: 'long',
                     year: 'numeric',
                     month: 'long',
