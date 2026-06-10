@@ -386,15 +386,18 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         // Saves ~150-300ms on the user's first upload after app launch.
         urlRequest.assumesHTTP3Capable = true
 
-        // Compression (E1, bandwidth sprint): deliberately NO explicit
-        // `Accept-Encoding` header. URLSession advertises gzip/br on its own
-        // and transparently decompresses the response; setting the header by
-        // hand flips URLSession into manual-decompression mode (Foundation
-        // can't decode brotli natively), so the gateway's @fastify/compress
-        // output would arrive still-compressed and fail to decode. The gateway
-        // honours the automatic header, so JSON is already compressed on the
-        // wire. Never add `Accept-Encoding` here, in ClientInfoProvider, or in
-        // per-request `headers`.
+        // Compression (E1, bandwidth sprint) : AUCUN header `Accept-Encoding`
+        // explicite — URLSession (iOS ≥ 11, l'app cible iOS 16+) envoie déjà
+        // `gzip, deflate, br` automatiquement ET décompresse les trois de
+        // façon transparente. Poser le header à la main n'apporte donc RIEN
+        // (br est déjà annoncé) et fait basculer URLSession en mode
+        // « l'app gère le décodage », un comportement non garanti selon les
+        // versions d'OS. Le gateway négocie br > gzip > deflate
+        // (@fastify/compress, seuil 1 Ko — cf. services/gateway/src/server.ts)
+        // sur le header automatique. Vérifié 2026-06-09 : la config gateway
+        // négocie bien `br` face au header d'URLSession (test local, ratio
+        // ~44× sur du JSON). Ne JAMAIS ajouter `Accept-Encoding` ici, dans
+        // ClientInfoProvider, ni dans les `headers` par requête.
 
         // Client identification headers (version, device, locale, geo)
         let clientHeaders = await ClientInfoProvider.shared.buildHeaders()
@@ -421,10 +424,6 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
             urlRequest.httpBody = body
         }
-
-        // E1 — Declare Brotli + gzip support explicitly so the gateway's @fastify/compress
-        // returns compressed responses. URLSession does not always advertise Brotli unless told.
-        urlRequest.setValue("br, gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
 
         // Caller-provided headers are applied last so they win over defaults
         // (relevant for `X-Client-Mutation-Id` which has no built-in setter).
