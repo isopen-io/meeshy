@@ -261,3 +261,47 @@ Autres sources d'optimisation identifiées, NON traitées (collision routine / s
    (~1500 l.) — chaque frappe ré-évalue l'arbre + `updateUIViewController` (19 closures
    réassignées). C'est l'option 3 (non retenue aujourd'hui).
 5. `typeWave` squish par frappe (UniversalComposerBar) — assumé par l'utilisateur.
+
+---
+
+# 2026-06-10 — Latence envoi (horloge bloquée) + réception (message absent à l'ouverture)
+
+Suite au correctif PARTIEL non vérifié `aab9e0f55` (hier) : le device de l'utilisateur
+l'a déjà et le bug persiste → gaps RESTANTS. Diagnostic device confirmé : cellulaire +
+trace Instruments (aucun hang main thread → attente réseau, pas blocage UI).
+
+## Fait
+- [x] R1 — `consumeAll()` à l'ouverture (`loadMessages`) + `consumeAll` rendu DÉTERMINISTE
+      (`upsertFromAPIMessages` awaité au lieu de `bufferIncomingAPIMessages` fire-and-forget)
+      → message reçu en push (background) surface INSTANTANÉMENT depuis le local, sans REST.
+- [x] R3 — commentaire périmé `:1262-1268` corrigé (le sink global persiste bien pour
+      les conversations fermées ; le refresh différé reste le backstop).
+- [x] S1 — `withSendTimeout(12s)` sur le POST d'envoi (vs 60s URLSession) → bascule rapide
+      socket-fallback + outbox au lieu de tenir l'horloge jusqu'à 60s. Re-emit même
+      clientMessageId → dedup gateway, pas de doublon. + tests unitaires (2).
+- [x] S2 — DÉJÀ câblé (vérifié) : `OutboxRetryScheduler.startObservingNetworkReconnect()`
+      (MeeshyApp.swift:295) flush l'outbox au reconnect réseau.
+- [x] S4 — `.queued → .slow` (MessageRecord+ToMessage) : un message qui retente après échec
+      affiche « Envoi lent » (clock.badge.exclamationmark) distinct d'un `.sending` frais.
+      L'UI `.slow` existait déjà (BubbleDeliveryCheck), seul le trigger manquait.
+
+## Différé (justifié)
+- [ ] R2 (refresh awaité sur divergence lastMessageAt) — ABANDONNÉ : le refresh REST est
+      DÉJÀ déclenché à chaque ouverture ; un refresh awaité n'accélère pas le round-trip
+      cellulaire. Le vrai gain instantané = R1 (local). R2 ajoutait coût sans bénéfice.
+- [ ] S3 (réactiver envoi socket-first) — REQUIERT vérification device : le canal
+      `message:send` a été désactivé (non-fonctionnel 2026-05-17). Re-flip aveugle =
+      risque de régresser TOUS les envois. À valider via logs `transport=socket-fallback`.
+
+## Vérification
+- [x] `meeshy.sh build` vert (27s, 0 erreur) pour R1/R3/S1.
+- [~] Tests `ConversationViewModelTests` (dont withSendTimeout) — bloqués par build device
+      concurrent (lock build.db) ; relance différée après libération du verrou.
+- [ ] Validation device réelle (cellulaire) : envoi instantané/horloge, réception à l'ouverture.
+
+## 2026-06-10 (suite) — Bouton de renvoi orange (demande UI)
+- [x] BubbleFailedRetryBar redesign : bande 28pt (vs 5pt), icône arrow.clockwise,
+      pulsation luminosité+scale (gated Reduce Motion), zone tactile 44pt conservée.
+- [x] BubbleStandardLayout : overlay `.leading` → `.trailing` (bord écran pour msg sortant).
+- [x] Build vert (11s). Tests latence : 75/75 ConversationViewModelTests passent (dont
+      withSendTimeout x2). Reste : validation visuelle device + validation latence device.

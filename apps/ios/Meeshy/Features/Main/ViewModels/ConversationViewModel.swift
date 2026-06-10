@@ -6,6 +6,29 @@ import MeeshySDK
 import MeeshyUI
 import os
 
+// MARK: - Send Timeout Helper
+
+/// Caps an awaited async operation at `seconds`. On expiry the operation's
+/// task is cancelled, so a hung/slow REST send (typical on cellular) throws
+/// promptly instead of holding the optimistic `.sending` clock for the full
+/// URLSession `timeoutIntervalForRequest` (60s) before the socket/outbox
+/// fallback can take over. The send catch path re-emits with the SAME
+/// `clientMessageId`, so the gateway dedups — no duplicate row even if the
+/// cancelled POST actually landed server-side.
+@MainActor
+func withSendTimeout<T: Sendable>(
+    seconds: Double,
+    operation: @escaping () async throws -> T
+) async throws -> T {
+    let operationTask = Task { try await operation() }
+    let watchdog = Task {
+        try? await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
+        operationTask.cancel()
+    }
+    defer { watchdog.cancel() }
+    return try await operationTask.value
+}
+
 // MARK: - Real-time Translation Type (text translations, not in SDK)
 
 struct MessageTranslation: Identifiable, Equatable {
@@ -697,6 +720,19 @@ class ConversationViewModel: ObservableObject {
     private let offlineQueue: OfflineMessageQueueing
     private let decryptionActor = DecryptionActor(provider: LiveSessionProvider())
 
+    /// Captured at init so the heavy side-effects (DB observation, initial
+    /// load, Combine subscriptions, singleton mutations) can be deferred out
+    /// of `init` into `start()`. `init` MUST stay side-effect-free: SwiftUI
+    /// reconstructs `ConversationView` — and therefore eagerly allocates a
+    /// throwaway `ConversationViewModel` (discarded by `@StateObject`) — on
+    /// every parent re-evaluation. Running the GRDB window read / observation
+    /// registration / singleton thrash in `init` turned that into a constant
+    /// main-thread storm (device trace: ~57% of a P-core, battery heating).
+    /// See `start()`.
+    private let startupDependencies: ConversationDependencies
+    private let anonymousSession: AnonymousSessionContext?
+    private var hasStarted = false
+
     private var currentUserId: String { authManager.currentUser?.id ?? "" }
     /// Public read-only accessor for the view layer (UIKit bridge needs the user id).
     var currentUserIdForView: String { currentUserId }
@@ -839,6 +875,8 @@ class ConversationViewModel: ObservableObject {
         self.offlineQueue = offlineQueue
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
+        self.startupDependencies = dependencies
+        self.anonymousSession = anonymousSession
 
         // Split-handler scaffolding — see ConversationStateStore et al.
         // Built before MessageStore/socket so subsequent delegations always
@@ -887,13 +925,35 @@ class ConversationViewModel: ObservableObject {
         handler.delegate = self
         handler.persistence = dependencies.persistence
         self.socketHandler = handler
+    }
+
+    /// Activates the conversation: registers the GRDB window observation,
+    /// kicks off the initial DB load, wires every Combine subscription, and
+    /// declares the conversation as currently-open on the sync engine.
+    ///
+    /// CRITICAL — this MUST NOT run from `init`. `ConversationView` is
+    /// reconstructed by SwiftUI on every parent re-evaluation (RootView's
+    /// `navigationDestination` closure reads `router.pendingReplyContext`),
+    /// and each reconstruction eagerly allocates a throwaway VM that
+    /// `@StateObject` immediately discards. When this work lived in `init`,
+    /// every throwaway allocation paid for a full SQLite window read+decode on
+    /// the main actor and thrashed `syncEngine.setCurrentlyOpenConversation`
+    /// (`init` set it, the throwaway `deinit` cleared it), whose published
+    /// recompute re-rendered RootView → reconstructed ConversationView → a
+    /// self-sustaining main-thread storm (device trace: constant ~57% of a
+    /// P-core, thermal state Nominal→Fair). Driven once from the view's
+    /// `.task` (one run per `.id(conversationId)` identity); the `hasStarted`
+    /// guard makes re-entry (background→foreground re-task) a no-op.
+    func start() {
+        guard !hasStarted else { return }
+        hasStarted = true
         // Declare this conversation as currently visible so the sync engine
         // forces its `unreadCount` to 0 on every server broadcast (the user
         // IS reading it) and excludes it from the cross-conversation
         // aggregator. Cleared in `deinit`.
         syncEngine.setCurrentlyOpenConversation(conversationId)
-        store.startObserving(dbPool: dependencies.dbPool)
-        Task { await store.loadInitial() }
+        messageStore.startObserving(dbPool: startupDependencies.dbPool)
+        Task { await messageStore.loadInitial() }
         messagesPersistCancellable = $messages
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
@@ -1165,6 +1225,12 @@ class ConversationViewModel: ObservableObject {
     deinit {
         // socketHandler deinit handles room leave & typing cleanup
         socketHandler = nil
+        // Only undo the singleton mutations `start()` performed. A throwaway VM
+        // (eagerly allocated by `ConversationView.init`, never activated because
+        // `@StateObject` discarded it before its `.task` ran) MUST NOT clear the
+        // anonymous token or the currently-open gate — doing so cancelled what
+        // the live VM's `start()` had just set and fed the re-render storm.
+        guard hasStarted else { return }
         APIClient.shared.anonymousSessionToken = nil
         // Clear the currently-open conversation gate so cross-conversation
         // surfaces (back-button pill on other screens) resume counting it.
@@ -1213,6 +1279,12 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Load Messages (initial)
 
+    /// REST send timeout (seconds). Far below `APIClient.timeoutIntervalForRequest`
+    /// (60s): a slow/failing POST must fall through to the socket fallback +
+    /// durable outbox quickly instead of pinning the optimistic `.sending`
+    /// clock for a full minute on a single hung cellular attempt.
+    static let sendRESTTimeoutSeconds: Double = 12
+
     func loadMessages() async {
         guard !isLoadingInitial else { return }
         isLoadingInitial = true
@@ -1228,6 +1300,15 @@ class ConversationViewModel: ObservableObject {
         // vivant pour les rejouer) : sans ça l'horloge `.sending` réapparaît
         // à chaque réouverture, pour toujours.
         await messagePersistence.reconcileOrphanedSendingRows(conversationId: conversationId)
+
+        // Drain any push-prefetched messages the NSE wrote to the App Group
+        // BEFORE reading the GRDB snapshot. A message received while the app
+        // was backgrounded (the "j'ai reçu la notif" case) is otherwise only
+        // merged on `resumeFromBackground`, never on the conversation-open
+        // path — so it stayed absent from the thread until a network refresh.
+        // `consumeAll` now persists synchronously (awaited upsert), so the
+        // snapshot below picks the message up locally — no REST round-trip.
+        await NSEPendingMessageConsumer.shared.consumeAll()
 
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
         switch cached {
@@ -1259,13 +1340,17 @@ class ConversationViewModel: ObservableObject {
             await hydrateTranslationsFromCache(messageIds: freshSnapshot.map(\.localId))
             messageStore.apply(records: freshSnapshot)
             hydrateMetadataFromGRDB(from: freshSnapshot)
-            // Always revalidate from API in background — the GRDB local store may only
-            // contain messages WE sent (optimistic inserts) while messages received from
-            // other participants while the conversation was closed are absent because
-            // `handleNewMessage` only buffers into GRDB when the socket handler is armed
-            // (i.e. the conversation is open). Without this background refresh, messages
-            // received offline (e.g. Belva's messages while the app was in background)
-            // never appear until the user manually scrolls up to trigger pagination.
+            // Background revalidation — catches anything the local store missed
+            // while the conversation was closed (edits, reactions, translations,
+            // and any received message not already surfaced locally). The common
+            // gaps are now closed before this snapshot: the global SyncEngine
+            // sink (`handleNewMessage` → `apiMessagePersistor`) persists received
+            // messages into GRDB even for CLOSED conversations while connected,
+            // and `consumeAll()` above drains background-push messages from the
+            // App Group synchronously — so the just-notified message renders from
+            // local data on open, not after this round-trip. This refresh stays
+            // unconditional as the authoritative backstop for the foreground race
+            // (the sink's write still in flight) and offline-delivered deltas.
             isRevalidating = !messageStore.messages.isEmpty
             Task { [weak self] in
                 guard let self else { return }
@@ -2173,9 +2258,17 @@ class ConversationViewModel: ObservableObject {
             // Re-enable the WebSocket-first path once the Socket.IO channel
             // is repaired and the `message:send` ACK round-trip is verified.
             Logger.messages.info("SendFlow POST /messages START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public) — awaiting response (isSending held)")
-            let responseData = try await messageService.send(
-                conversationId: conversationId, request: body
-            )
+            // Cap the REST send at `sendRESTTimeoutSeconds` (12s) instead of the
+            // 60s URLSession request timeout: on a slow/intermittent cellular
+            // link a hung POST otherwise pins the optimistic `.sending` clock for
+            // a full minute before the socket fallback + durable outbox can take
+            // over. On timeout the throw routes into the catch below (socket
+            // re-emit with the SAME clientMessageId → gateway dedups).
+            let responseData = try await withSendTimeout(seconds: Self.sendRESTTimeoutSeconds) {
+                try await self.messageService.send(
+                    conversationId: self.conversationId, request: body
+                )
+            }
             let serverId = responseData.id
             let serverCreatedAt = responseData.createdAt
             Logger.messages.debug("SendFlow POST OK tempId=\(tempId, privacy: .public) serverId=\(responseData.id, privacy: .public)")

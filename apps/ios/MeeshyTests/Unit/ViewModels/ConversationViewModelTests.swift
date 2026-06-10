@@ -64,7 +64,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockAuthManager.simulateLoggedIn(user: currentUser)
 
         let deps = dependencies ?? makeTestDependencies()
-        return ConversationViewModel(
+        let sut = ConversationViewModel(
             conversationId: conversationId ?? testConversationId,
             unreadCount: unreadCount,
             isDirect: isDirect,
@@ -78,6 +78,11 @@ final class ConversationViewModelTests: XCTestCase {
             messageSocket: mockMessageSocket,
             dependencies: deps
         )
+        // Activate the VM as the view's `.task` does: `init` is now
+        // side-effect-free, so the GRDB observation / initial load / Combine
+        // subscriptions only come alive after `start()`.
+        sut.start()
+        return sut
     }
 
     private func makeTestDependencies() -> ConversationDependencies {
@@ -1717,6 +1722,31 @@ final class ConversationViewModelTests: XCTestCase {
         let matching = viewModel.messages.filter { $0.id == "m1" || $0.content == "hello" }
         XCTAssertFalse(matching.isEmpty, "messages should reflect the inserted MessageRecord via store observation")
         XCTAssertEqual(matching.first?.content, "hello")
+    }
+
+    // MARK: - withSendTimeout (S1 — send-clock latency cap)
+
+    func test_withSendTimeout_fastOperation_returnsValue() async throws {
+        let result = try await withSendTimeout(seconds: 5) { () async throws -> Int in
+            return 42
+        }
+        XCTAssertEqual(result, 42)
+    }
+
+    func test_withSendTimeout_slowOperation_cancelsAndThrows() async {
+        do {
+            _ = try await withSendTimeout(seconds: 0.05) { () async throws -> Int in
+                // Far longer than the 50ms cap — the watchdog must cancel it.
+                try await Task.sleep(nanoseconds: 5_000_000_000)
+                return 1
+            }
+            XCTFail("Expected the timed-out operation to be cancelled and rethrow")
+        } catch is CancellationError {
+            // Expected: the watchdog cancelled the operation task, whose
+            // `Task.sleep` surfaces a CancellationError that `.value` rethrows.
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
+        }
     }
 
     // MARK: - Helpers

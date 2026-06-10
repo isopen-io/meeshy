@@ -67,6 +67,10 @@ final class ConversationViewModelAudioTests: XCTestCase {
             messageSocket: mockMessageSocket,
             dependencies: deps
         )
+        // Audio-queue subscriptions are wired in `start()` now (deferred out of
+        // `init`); `_testSetAudioCoordinator` re-subscribes finished-events to
+        // the injected coordinator, mirroring the previous init ordering.
+        vm.start()
 
         let engine = MockAudioPlaybackEngine()
         let coordinator = ConversationAudioCoordinator(engine: engine)
@@ -111,6 +115,7 @@ final class ConversationViewModelAudioTests: XCTestCase {
             messageSocket: mockMessageSocket,
             dependencies: deps
         )
+        vm.start()
         vm._testSetAudioCoordinator(sharedCoordinator)
         return vm
     }

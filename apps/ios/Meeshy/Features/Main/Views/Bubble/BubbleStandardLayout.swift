@@ -864,11 +864,13 @@ struct BubbleStandardLayout: View {
             }
         }
         .background(bubbleBackground)
-        // BUG3 — failed outgoing message: an orange left-edge band attached to
-        // the bubble; tapping it re-triggers the send (placed before clipShape so
-        // it follows the rounded corners). Gated so non-failed bubbles are
-        // untouched.
-        .overlay(alignment: .leading) {
+        // BUG3 — failed outgoing message: an orange edge button on the
+        // SCREEN-EDGE (trailing) side of the bubble; tapping it re-triggers the
+        // send (placed before clipShape so it follows the rounded corners). The
+        // trailing edge is the side touching the screen edge for a right-aligned
+        // own bubble, so it covers trailing padding rather than the start of the
+        // text. Gated so non-failed bubbles are untouched.
+        .overlay(alignment: .trailing) {
             if isFailedOutgoing {
                 BubbleFailedRetryBar(onRetry: { performManualRetry() })
             }

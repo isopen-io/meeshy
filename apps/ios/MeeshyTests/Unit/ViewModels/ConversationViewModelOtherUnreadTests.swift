@@ -61,7 +61,7 @@ final class ConversationViewModelOtherUnreadTests: XCTestCase {
             dbPool: pool,
             persistence: MessagePersistenceActor(dbWriter: pool)
         )
-        return ConversationViewModel(
+        let sut = ConversationViewModel(
             conversationId: testConversationId,
             unreadCount: currentConversationUnread,
             authManager: mockAuthManager,
@@ -73,6 +73,10 @@ final class ConversationViewModelOtherUnreadTests: XCTestCase {
             messageSocket: mockMessageSocket,
             dependencies: deps
         )
+        // The cross-conversation unread subscription now lives in `start()`
+        // (deferred out of `init` to stop the eager-reconstruction storm).
+        sut.start()
+        return sut
     }
 
     func test_otherConversationsUnread_initiallyZero() {

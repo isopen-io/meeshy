@@ -53,9 +53,16 @@ final class NSEPendingMessageConsumer {
         // (preview, ordering). The conversation timeline reads GRDB — persist
         // there too, or a push-prefetched message stays invisible inside the
         // conversation until the next REST revalidation.
+        //
+        // Use the AWAITED `upsertFromAPIMessages` (commits before returning),
+        // not the fire-and-forget `bufferIncomingAPIMessages` (yields onto an
+        // async write worker). The conversation-open path calls `consumeAll`
+        // right before reading its GRDB snapshot: only an awaited commit
+        // guarantees the just-consumed push message is in that snapshot, so it
+        // renders INSTANTLY from local data with no network round-trip.
         if !decodedAPIMessages.isEmpty {
-            await DependencyContainer.shared.messagePersistence
-                .bufferIncomingAPIMessages(decodedAPIMessages)
+            try? await DependencyContainer.shared.messagePersistence
+                .upsertFromAPIMessages(decodedAPIMessages)
         }
 
         if !pending.isEmpty {

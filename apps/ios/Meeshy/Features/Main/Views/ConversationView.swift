@@ -744,6 +744,12 @@ struct ConversationView: View {
         bodyContent
             .background(InteractivePopEnabler())
             .task {
+                // Activate the live (StateObject-retained) VM exactly once.
+                // Heavy side-effects (GRDB observation, initial load, Combine
+                // subscriptions, sync-engine gate) are deferred here out of
+                // `init` so the throwaway VMs SwiftUI allocates on every
+                // reconstruction stay free — see ConversationViewModel.start().
+                viewModel.start()
                 viewModel.observeSync()
                 await viewModel.loadMessages()
                 MessageSocketManager.shared.connect()
