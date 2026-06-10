@@ -36,6 +36,12 @@ struct BubbleStandardLayout: View {
     let content: BubbleContent
     let message: Message
     let contactColor: String
+    /// Blended bubble accent for received bubbles (sender colour 30% over brand
+    /// 70%), pre-computed ONCE by the orchestrator. Was a computed `var` that
+    /// re-ran `blendTwo` (hex→RGB→HSB→hex) on each of its ~6 read sites per body
+    /// evaluation; the inputs (`message.senderColor`, `contactColor`) are stable
+    /// for the bubble's lifetime, so the blend belongs upstream of the body.
+    let otherBubbleColor: String
     let isDirect: Bool
     let isDark: Bool
     let transcription: MessageTranscription?
@@ -199,11 +205,6 @@ struct BubbleStandardLayout: View {
 
     private var secondaryContent: String? {
         content.translation?.secondaryContent
-    }
-
-    private var otherBubbleColor: String {
-        let senderHex = message.senderColor ?? contactColor
-        return DynamicColorGenerator.blendTwo(senderHex, weight1: 0.30, MeeshyColors.brandPrimaryHex, weight2: 0.70)
     }
 
     private var hasTextOrNonMediaContent: Bool {
