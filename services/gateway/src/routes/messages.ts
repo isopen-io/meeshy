@@ -4,7 +4,7 @@ import { AttachmentService } from '../services/attachments/index.js';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../services/attachments/attachmentIncludes';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, ROOMS, type SocketIOMessage } from '@meeshy/shared/types/socketio-events';
 import { validateParams, validateBody, validateQuery } from '../validation/helpers.js';
 import {
   MessageParamsSchema,
@@ -313,7 +313,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, {
             ...transformedMessage,
             conversationId: message.conversationId
-          });
+          } as unknown as SocketIOMessage);
         }
       } catch (socketError) {
         logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);

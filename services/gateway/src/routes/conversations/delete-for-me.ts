@@ -81,7 +81,7 @@ export function registerDeleteForMeRoutes(
                 conversationId,
                 userId: successor.userId,
                 newRole: 'creator',
-                promotedBy: userId,
+                updatedBy: userId,
               }
             )
           }

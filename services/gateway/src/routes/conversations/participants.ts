@@ -680,7 +680,7 @@ export function registerParticipantsRoutes(
           recipientUserId: userId,
           changedByUserId: currentUserId,
           conversationId,
-          newRole,
+          newRole: newRole.toUpperCase() as 'ADMIN' | 'MODERATOR' | 'MEMBER',
           previousRole: targetParticipant.role,
         }).catch((err: unknown) => logger.error('Notification error role_changed', err as Error));
       }
