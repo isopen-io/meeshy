@@ -42,6 +42,9 @@ file-by-file audit — every one of the 673 iOS files was read in full.
 
 ## Verification gates (no emulator in this environment)
 
+- SDK bootstrap (fresh container): download `commandlinetools-linux`, then
+  `sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"`
+  into `$HOME/android-sdk` and write `sdk.dir` to `local.properties`.
 - Compile gate: `./meeshy.sh build`
 - JVM unit tests: `./meeshy.sh test` — ViewModels, repositories, SWR, state
   machines, pure logic (TDD: red → green → refactor).
@@ -92,12 +95,14 @@ file-by-file audit — every one of the 673 iOS files was read in full.
 - [x] **Outbox runtime**: `OutboxRepository` (enqueue+coalesce, boot recovery,
       outcome `SharedFlow`, ×5 limit) + `OutboxDrainer` (FIFO lane drain,
       `MutationSender`, transient/permanent classification)
-- [ ] `WorkManager` per-lane `CoroutineWorker` + Hilt-WorkManager + scheduling
-      (glue — lands with the first feature `MutationSender`s)
+- [x] `WorkManager` flush worker (Hilt-injected, network-constrained, exponential
+      backoff, per-lane drain) scheduled on enqueue + FCM push
 - [ ] TUS resumable uploads in a **dedicated `WorkManager` chain** (foreground
       progress); message-send items `dependsOn` the upload
 - [x] `MessageStateMachine` (pure, monotonic 8-state delivery FSM) — 9 tests
-- [ ] `PendingId` localId↔serverId reconciliation (3-tier lookup)
+- [x] `cmid`↔serverId reconciliation: optimistic Room row (`sendState`
+      SENDING/FAILED) swapped atomically on REST ACK, plus `clientMessageId`
+      echo-matching during list sync; FAILED bubbles retry via outbox revive
 - [ ] **Message ordering**: per-conversation `seq` sort key + continuity gap
       detection + server-time offset (ADR-021)
 - [ ] Transport spike: WebSocket vs long-polling on Android (ADR-015) →
@@ -136,8 +141,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [x] `:feature:auth` — login screen + `AuthViewModel`
 - [x] `:feature:conversations` — cache-first conversation list, tap-through
 - [x] `:feature:chat` — cache-first message list + `MessageBubble` + composer
-- [ ] Pending: session layer (current user → outgoing bubbles + Prisme prefs),
-      outbox-backed send, then Feed / Stories / Calls / the rest
+- [x] Outbox-backed optimistic send: instant SENDING bubble, server-ACK swap,
+      FAILED + tap-to-retry (EN/FR), WorkManager flush
+- [ ] Pending: Feed / Stories / Calls slices, message pagination, reactions UI
 
 ## Phase 6 — Integration & final audit
 - [ ] Navigation graph + deep links (`meeshy://`, `https://meeshy.me`)
@@ -194,7 +200,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 
 ## C. Chat / Messaging
 - [ ] Real-time 1:1 / group chat: send, edit, delete (for-me / for-everyone, 2h window), reply, forward
-- [ ] Optimistic send with in-place server-ACK upgrade (no flicker) + `clientMessageId` reconciliation
+- [x] Optimistic send with in-place server-ACK upgrade (no flicker) + `clientMessageId` reconciliation
 - [ ] Inverted message list, date section headers, joined banner, unread separator, E2EE disclaimer
 - [ ] Pagination of older messages (offset / before-cursor / around-anchor)
 - [ ] Reactions: quick-strip (usage-ordered) + full picker; add/remove; reaction detail breakdown

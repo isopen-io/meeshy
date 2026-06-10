@@ -123,6 +123,43 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `a pending outgoing message shows the Pending status`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me"),
+            currentUserId = "me",
+            preferences = french,
+            isPending = true,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Pending)
+    }
+
+    @Test
+    fun `a failed outgoing message shows the Failed status even while pending`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me"),
+            currentUserId = "me",
+            preferences = french,
+            isPending = true,
+            isFailed = true,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Failed)
+    }
+
+    @Test
+    fun `incoming messages never show a failure status`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "other"),
+            currentUserId = "me",
+            preferences = french,
+            isFailed = true,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Sent)
+    }
+
+    @Test
     fun `the edited flag passes through`() {
         val content = BubbleContentBuilder.build(
             message(isEdited = true),

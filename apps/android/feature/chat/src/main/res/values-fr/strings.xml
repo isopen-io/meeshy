@@ -6,4 +6,5 @@
     <string name="chat_send">Envoyer</string>
     <string name="chat_no_messages">Aucun message pour l\'instant</string>
     <string name="chat_retry">Réessayer</string>
+    <string name="chat_send_failed_retry">Non envoyé — appuyez pour réessayer</string>
 </resources>

@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,11 +35,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.component.bubble.DeliveryStatus
 import me.meeshy.ui.component.bubble.MessageBubble
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -97,6 +100,18 @@ fun ChatScreen(
                     ) {
                         items(state.messages, key = { it.messageId }) { bubble ->
                             MessageBubble(bubble)
+                            if (bubble.deliveryStatus == DeliveryStatus.Failed) {
+                                Text(
+                                    text = stringResource(R.string.chat_send_failed_retry),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    textAlign = TextAlign.End,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { viewModel.retryMessage(bubble.messageId) }
+                                        .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+                                )
+                            }
                         }
                     }
                     TypingIndicator(typingUsers = state.typingUsers)

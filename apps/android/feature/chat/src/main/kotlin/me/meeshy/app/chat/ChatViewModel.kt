@@ -14,18 +14,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.conversation.LocalMessage
+import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
-import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MeeshyUser
-import me.meeshy.sdk.model.SendMessageRequest
-import me.meeshy.sdk.outbox.OutboxIds
-import me.meeshy.sdk.outbox.OutboxKind
-import me.meeshy.sdk.outbox.OutboxLanes
-import me.meeshy.sdk.outbox.OutboxMutation
-import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -50,8 +44,6 @@ class ChatViewModel @Inject constructor(
     private val messageRepository: MessageRepository,
     private val sessionRepository: SessionRepository,
     private val messageSocketManager: MessageSocketManager,
-    private val outboxRepository: OutboxRepository,
-    private val json: Json,
     private val workManager: WorkManager,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -145,26 +137,29 @@ class ChatViewModel @Inject constructor(
     fun send() {
         val text = _state.value.draft.trim()
         if (text.isEmpty()) return
+        val user = sessionRepository.currentUser.value ?: return
         _state.update { it.copy(draft = "") }
-        val language = sessionRepository.currentUser.value?.systemLanguage
-            ?: LanguageResolver.FALLBACK_LANGUAGE
         viewModelScope.launch {
             try {
-                val cmid = OutboxIds.cmid()
-                val req = SendMessageRequest(
+                messageRepository.sendOptimistic(
+                    conversationId = conversationId,
                     content = text,
-                    originalLanguage = language,
-                    clientMessageId = cmid,
+                    originalLanguage = user.systemLanguage ?: LanguageResolver.FALLBACK_LANGUAGE,
+                    sender = user,
                 )
-                outboxRepository.enqueue(
-                    OutboxMutation(
-                        kind = OutboxKind.SEND_MESSAGE,
-                        lane = OutboxLanes.forMessage(conversationId),
-                        targetId = conversationId,
-                        payload = json.encodeToString(req),
-                        cmid = cmid,
-                    )
-                )
+                workManager.enqueue(OutboxFlushWorker.buildRequest())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    fun retryMessage(messageId: String) {
+        viewModelScope.launch {
+            try {
+                messageRepository.retrySend(messageId)
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
             } catch (e: CancellationException) {
                 throw e
@@ -196,7 +191,7 @@ class ChatViewModel @Inject constructor(
 }
 
 private fun ChatUiState.applyResult(
-    result: CacheResult<List<ApiMessage>>,
+    result: CacheResult<List<LocalMessage>>,
     currentUser: MeeshyUser?,
 ): ChatUiState = when (result) {
     is CacheResult.Fresh -> copy(
@@ -222,12 +217,14 @@ private fun ChatUiState.applyResult(
     )
 }
 
-private fun List<ApiMessage>.toBubbles(currentUser: MeeshyUser?): List<BubbleContent> = map { message ->
+private fun List<LocalMessage>.toBubbles(currentUser: MeeshyUser?): List<BubbleContent> = map { local ->
     BubbleContentBuilder.build(
-        message = message,
+        message = local.message,
         currentUserId = currentUser?.id,
         preferences = currentUser ?: EmptyContentPreferences,
         showSenderName = true,
+        isPending = local.sendState == LocalSendState.SENDING,
+        isFailed = local.sendState == LocalSendState.FAILED,
     )
 }
 

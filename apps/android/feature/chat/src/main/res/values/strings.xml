@@ -6,4 +6,5 @@
     <string name="chat_send">Send</string>
     <string name="chat_no_messages">No messages yet</string>
     <string name="chat_retry">Retry</string>
+    <string name="chat_send_failed_retry">Not sent — tap to retry</string>
 </resources>

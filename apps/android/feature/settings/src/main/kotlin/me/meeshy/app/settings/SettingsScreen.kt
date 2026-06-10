@@ -76,7 +76,7 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     MeeshyAvatar(
-                        displayName = state.username ?: "?",
+                        name = state.username ?: "?",
                         modifier = Modifier.size(48.dp),
                     )
                     Spacer(Modifier.width(12.dp))

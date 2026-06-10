@@ -83,34 +83,34 @@ class MessageSocketManager @Inject constructor(
     val readStatusUpdated: SharedFlow<ReadStatusUpdatedEvent> = _readStatusUpdated.asSharedFlow()
 
     fun attach() {
-        listen("message:new") { _messageReceived.tryEmit(it) }
-        listen("message:updated") { _messageUpdated.tryEmit(it) }
-        listen("message:deleted") { _messageDeleted.tryEmit(it) }
-        listen("typing:start") { _typingStarted.tryEmit(it) }
-        listen("typing:stop") { _typingStopped.tryEmit(it) }
-        listen("reaction:added") { _reactionAdded.tryEmit(it) }
-        listen("reaction:removed") { _reactionRemoved.tryEmit(it) }
-        listen("conversation:unread-updated") { _unreadUpdated.tryEmit(it) }
-        listen("message:translated") { _translationCompleted.tryEmit(it) }
-        listen("message:translation") { _translationInProgress.tryEmit(it) }
-        listen("transcription:ready") { _transcriptionReady.tryEmit(it) }
-        listen("audio:translation-ready") { _audioTranslationReady.tryEmit(it) }
-        listen("message:attachment-updated") { _attachmentUpdated.tryEmit(it) }
-        listen("conversation:updated") { _conversationUpdated.tryEmit(it) }
-        listen("conversation:deleted") { _conversationDeleted.tryEmit(it) }
-        listen("user:status") { _userStatus.tryEmit(it) }
-        listen("presence:snapshot") { _presenceSnapshot.tryEmit(it) }
-        listen("conversation:participant-left") { _participantLeft.tryEmit(it) }
-        listen("conversation:participant-banned") { _participantBanned.tryEmit(it) }
-        listen("participant:role-updated") { _participantRoleUpdated.tryEmit(it) }
-        listen("read-status:updated") { _readStatusUpdated.tryEmit(it) }
+        listen("message:new", _messageReceived)
+        listen("message:updated", _messageUpdated)
+        listen("message:deleted", _messageDeleted)
+        listen("typing:start", _typingStarted)
+        listen("typing:stop", _typingStopped)
+        listen("reaction:added", _reactionAdded)
+        listen("reaction:removed", _reactionRemoved)
+        listen("conversation:unread-updated", _unreadUpdated)
+        listen("message:translated", _translationCompleted)
+        listen("message:translation", _translationInProgress)
+        listen("transcription:ready", _transcriptionReady)
+        listen("audio:translation-ready", _audioTranslationReady)
+        listen("message:attachment-updated", _attachmentUpdated)
+        listen("conversation:updated", _conversationUpdated)
+        listen("conversation:deleted", _conversationDeleted)
+        listen("user:status", _userStatus)
+        listen("presence:snapshot", _presenceSnapshot)
+        listen("conversation:participant-left", _participantLeft)
+        listen("conversation:participant-banned", _participantBanned)
+        listen("participant:role-updated", _participantRoleUpdated)
+        listen("read-status:updated", _readStatusUpdated)
     }
 
-    private inline fun <reified T> listen(event: String, crossinline emit: (T) -> Unit) {
+    private inline fun <reified T> listen(event: String, flow: MutableSharedFlow<T>) {
         socketManager.on(event) { args ->
             runCatching {
                 val raw = (args.firstOrNull() as? JSONObject)?.toString() ?: return@on
-                emit(json.decodeFromString<T>(raw))
+                flow.tryEmit(json.decodeFromString<T>(raw))
             }.onFailure { Timber.e(it, "Socket decode error [$event]: ${T::class.simpleName}") }
         }
     }

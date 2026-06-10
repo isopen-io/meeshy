@@ -11,12 +11,14 @@ public object BubbleContentBuilder {
         preferences: LanguageResolver.ContentLanguagePreferences,
         showSenderName: Boolean = false,
         isPending: Boolean = false,
+        isFailed: Boolean = false,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
         val isTranslated = !isDeleted && message.isTranslated(preferences)
         val deliveryStatus = when {
             !isOutgoing -> DeliveryStatus.Sent
+            isFailed -> DeliveryStatus.Failed
             isPending -> DeliveryStatus.Pending
             message.readByAllAt != null -> DeliveryStatus.Read
             message.readCount > 0 -> DeliveryStatus.Read
