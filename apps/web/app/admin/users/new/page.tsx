@@ -307,7 +307,7 @@ export default function NewUserPage() {
                   <label className="text-sm font-medium">{t('users.newUser.labelBio')}</label>
                   <textarea
                     className="w-full p-2 border rounded-md text-sm min-h-[80px]"
-                    placeholder="À propos de cet utilisateur..."
+                    placeholder={t('users.newUser.placeholderBio')}
                     value={formData.bio}
                     onChange={(e) => handleChange('bio', e.target.value)}
                     maxLength={500}

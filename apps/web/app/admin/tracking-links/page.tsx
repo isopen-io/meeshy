@@ -326,7 +326,7 @@ export default function AdminTrackingLinksPage() {
                 </Label>
                 <Input
                   id="formName"
-                  placeholder="Promo ete"
+                  placeholder={t('trackingLinks.fieldNamePlaceholder')}
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   maxLength={32}

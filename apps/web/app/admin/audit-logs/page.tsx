@@ -323,7 +323,7 @@ export default function AuditLogsPage() {
             <div className="flex items-center space-x-3">
               <Select value={dateRange} onValueChange={setDateRange}>
                 <SelectTrigger className="w-[150px] bg-white/10 border-white/20 text-white">
-                  <SelectValue placeholder="Période" />
+                  <SelectValue placeholder={t('auditLogs.periodLabel')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="24h">{t('auditLogs.period24h')}</SelectItem>

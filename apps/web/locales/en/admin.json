@@ -617,7 +617,8 @@
     "clickColOs": "OS",
     "clickColReferrer": "Referrer",
     "clickColSource": "Source",
-    "clickColStatus": "Status"
+    "clickColStatus": "Status",
+    "fieldNamePlaceholder": "Summer promo"
   },
   "users": {
     "newUser": {
@@ -675,7 +676,8 @@
       "errorPasswordMismatch": "Passwords do not match",
       "toastFormErrors": "Please correct the form errors",
       "toastSuccess": "User created successfully!",
-      "toastError": "Error creating user"
+      "toastError": "Error creating user",
+      "placeholderBio": "About this user..."
     },
     "loadError": "Error loading user data",
     "backButton": "Back",
@@ -937,7 +939,8 @@
     "actionTypeLabel": "Action type",
     "allStatuses": "All statuses",
     "allSeverities": "All severities",
-    "ipLabel": "IP: {ip}"
+    "ipLabel": "IP: {ip}",
+    "periodLabel": "Period"
   },
   "broadcasts": {
     "loadError": "Error loading broadcasts",
