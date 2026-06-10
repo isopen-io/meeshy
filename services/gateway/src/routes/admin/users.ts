@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import {
   UserRoleEnum,
+  UserAuditAction,
   PaginatedUsersResponse,
   UserFilters,
   CreateUserDTO,
@@ -126,7 +127,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       await userAuditService.createAuditLog({
         userId: authContext.registeredUser.id,
         adminId: authContext.registeredUser.id,
-        action: 'VIEW_USER_LIST' as any,
+        action: UserAuditAction.VIEW_USER_LIST,
         entityId: 'users',
         ipAddress: request.ip,
         userAgent: request.headers['user-agent']
@@ -607,7 +608,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       await userAuditService.createAuditLog({
         userId: request.params.userId,
         adminId: authContext.registeredUser.id,
-        action: 'UNLOCK_ACCOUNT' as any,
+        action: UserAuditAction.UNLOCK_ACCOUNT,
         entityId: request.params.userId,
         ipAddress: request.ip,
         userAgent: request.headers['user-agent']
@@ -651,7 +652,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       await userAuditService.createAuditLog({
         userId: request.params.userId,
         adminId: authContext.registeredUser.id,
-        action: 'ENABLE_2FA' as any,
+        action: UserAuditAction.ENABLE_2FA,
         entityId: request.params.userId,
         ipAddress: request.ip,
         userAgent: request.headers['user-agent']
@@ -694,7 +695,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       await userAuditService.createAuditLog({
         userId: request.params.userId,
         adminId: authContext.registeredUser.id,
-        action: 'DISABLE_2FA' as any,
+        action: UserAuditAction.DISABLE_2FA,
         entityId: request.params.userId,
         ipAddress: request.ip,
         userAgent: request.headers['user-agent']
@@ -749,7 +750,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       await userAuditService.createAuditLog({
         userId: request.params.userId,
         adminId: authContext.registeredUser.id,
-        action: 'VERIFY_EMAIL' as any,
+        action: UserAuditAction.VERIFY_EMAIL,
         entityId: request.params.userId,
         metadata: { verified: validatedData.verified, reason: validatedData.reason },
         ipAddress: request.ip,
@@ -822,7 +823,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       await userAuditService.createAuditLog({
         userId: request.params.userId,
         adminId: authContext.registeredUser.id,
-        action: 'VERIFY_PHONE' as any,
+        action: UserAuditAction.VERIFY_PHONE,
         entityId: request.params.userId,
         metadata: { verified: validatedData.verified, reason: validatedData.reason },
         ipAddress: request.ip,
@@ -896,7 +897,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       await userAuditService.createAuditLog({
         userId: request.params.userId,
         adminId: authContext.registeredUser.id,
-        action: 'UPDATE_PROFILE' as any,
+        action: UserAuditAction.UPDATE_PROFILE,
         entityId: request.params.userId,
         metadata: {
           consentType: validatedData.consentType,
@@ -973,7 +974,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       await userAuditService.createAuditLog({
         userId: request.params.userId,
         adminId: authContext.registeredUser.id,
-        action: 'UPDATE_PROFILE' as any,
+        action: UserAuditAction.UPDATE_PROFILE,
         entityId: request.params.userId,
         metadata: { ageVerified: validatedData.verified, reason: validatedData.reason },
         ipAddress: request.ip,
