@@ -159,7 +159,7 @@ export default function UserDetailPage() {
       const response = await adminService.deleteUser(userId);
 
       if (response.success) {
-        toast.success('Utilisateur supprimé avec succès');
+        toast.success(t('usersDetail.deleteSuccess'));
         router.push('/admin/users');
       }
     } catch (error: unknown) {
@@ -198,13 +198,13 @@ export default function UserDetailPage() {
 
   const getRoleLabel = (role: string) => {
     const labels: Record<string, string> = {
-      'BIGBOSS': 'Super Admin',
-      'ADMIN': 'Administrateur',
-      'MODERATOR': 'Modérateur',
-      'MODO': 'Modérateur',
-      'AUDIT': 'Auditeur',
-      'ANALYST': 'Analyste',
-      'USER': 'Utilisateur'
+      'BIGBOSS': t('users.newUser.roleBigboss'),
+      'ADMIN': t('users.newUser.roleAdmin'),
+      'MODERATOR': t('users.newUser.roleModo'),
+      'MODO': t('users.newUser.roleModo'),
+      'AUDIT': t('users.newUser.roleAudit'),
+      'ANALYST': t('users.newUser.roleAnalyst'),
+      'USER': t('users.newUser.roleUser'),
     };
     return labels[role] || role;
   };
@@ -344,12 +344,12 @@ export default function UserDetailPage() {
                         value={roleEdit.role}
                         onChange={(e) => setRoleEdit({ ...roleEdit, role: e.target.value })}
                       >
-                        <option value="USER">Utilisateur</option>
-                        <option value="ADMIN">Administrateur</option>
-                        <option value="MODERATOR">Modérateur</option>
-                        <option value="AUDIT">Auditeur</option>
-                        <option value="ANALYST">Analyste</option>
-                        <option value="BIGBOSS">Super Admin</option>
+                        <option value="USER">{t('users.newUser.roleUser')}</option>
+                        <option value="ADMIN">{t('users.newUser.roleAdmin')}</option>
+                        <option value="MODERATOR">{t('users.newUser.roleModo')}</option>
+                        <option value="AUDIT">{t('users.newUser.roleAudit')}</option>
+                        <option value="ANALYST">{t('users.newUser.roleAnalyst')}</option>
+                        <option value="BIGBOSS">{t('users.newUser.roleBigboss')}</option>
                       </select>
                     </div>
                     <div className="space-y-2">
