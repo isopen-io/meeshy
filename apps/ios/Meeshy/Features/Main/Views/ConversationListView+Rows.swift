@@ -130,8 +130,19 @@ extension ConversationRowItem: @MainActor Equatable {
         lhs.isSelected == rhs.isSelected &&
         lhs.draftSummary == rhs.draftSummary &&
         lhs.preferredContentLanguages == rhs.preferredContentLanguages &&
+        // Compare swipe action ICONS, not just `.count`: the lock/block toggles
+        // (`leadingSwipeActions`/`trailingSwipeActions`) read live state from
+        // `ConversationLockManager` / `BlockService` — singletons NOT folded into
+        // `renderFingerprint`. Counting alone would freeze a stale "Unblock" /
+        // "Unlock" action behind the equatable gate (the icon encodes the state:
+        // hand.raised.fill ⇄ hand.raised.slash.fill, lock.fill ⇄ lock.open.fill).
+        // The list now observes both singletons (see ConversationListView) so a
+        // change re-evaluates the rows and this comparison detects it. Zip avoids
+        // allocating arrays in `==`.
         lhs.leadingActions.count == rhs.leadingActions.count &&
         lhs.trailingActions.count == rhs.trailingActions.count &&
+        zip(lhs.leadingActions, rhs.leadingActions).allSatisfy { $0.icon == $1.icon } &&
+        zip(lhs.trailingActions, rhs.trailingActions).allSatisfy { $0.icon == $1.icon } &&
         (lhs.onCreateShareLink == nil) == (rhs.onCreateShareLink == nil) &&
         lhs.cachedPreviewMessages.count == rhs.cachedPreviewMessages.count
     }

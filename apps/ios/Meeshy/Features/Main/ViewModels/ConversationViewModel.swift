@@ -1232,9 +1232,17 @@ class ConversationViewModel: ObservableObject {
         // the live VM's `start()` had just set and fed the re-render storm.
         guard hasStarted else { return }
         APIClient.shared.anonymousSessionToken = nil
-        // Clear the currently-open conversation gate so cross-conversation
-        // surfaces (back-button pill on other screens) resume counting it.
-        syncEngine.setCurrentlyOpenConversation(nil)
+        // Relinquish the currently-open conversation gate so cross-conversation
+        // surfaces (back-button pill on other screens) resume counting it — but
+        // ONLY if the gate still points at THIS conversation. On a fast A→B
+        // switch the next VM's `start()` may set the gate to B before A's
+        // `deinit` runs (ARC teardown order is not guaranteed vs the async
+        // `.task`); an unconditional clear would then blank the gate while B is
+        // on screen — phantom unread on B + B re-counted in the back-button pill.
+        // Clearing by identity makes deinit order-safe.
+        if syncEngine.currentlyOpenConversationId == conversationId {
+            syncEngine.setCurrentlyOpenConversation(nil)
+        }
     }
 
     // MARK: - Typing Emission (delegated to socketHandler)
