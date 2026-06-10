@@ -159,7 +159,7 @@ export class AttachmentService {
   // ==================== GESTION ATTACHMENTS ====================
 
   async associateAttachmentsToMessage(
-    attachmentIds: string[],
+    attachmentIds: readonly string[],
     messageId: string
   ): Promise<void> {
     await this.prisma.messageAttachment.updateMany({
