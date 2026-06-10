@@ -14,7 +14,7 @@ struct ConvBgPulseRing: View {
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
-    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
+    private var reduceMotion: Bool { !ConversationBackgroundConfig.animationsEnabled || systemReduceMotion || userForcedReduceMotion }
 
     private var delay: Double { Double(index) * 0.7 }
 
@@ -55,7 +55,7 @@ struct ConvBgFixedAvatar: View {
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
-    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
+    private var reduceMotion: Bool { !ConversationBackgroundConfig.animationsEnabled || systemReduceMotion || userForcedReduceMotion }
 
     private var fixedAngle: CGFloat {
         CGFloat(index) * .pi * 2 / CGFloat(max(1, totalCount))
@@ -139,7 +139,7 @@ struct ConvBgGlobePulseRing: View {
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
-    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
+    private var reduceMotion: Bool { !ConversationBackgroundConfig.animationsEnabled || systemReduceMotion || userForcedReduceMotion }
 
     private var delay: Double { Double(index) * 0.6 }
 
@@ -180,7 +180,7 @@ struct ConvBgSatellite: View {
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
-    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
+    private var reduceMotion: Bool { !ConversationBackgroundConfig.animationsEnabled || systemReduceMotion || userForcedReduceMotion }
 
     private var baseAngle: CGFloat {
         CGFloat(index) * .pi * 2 / 3
@@ -279,7 +279,7 @@ struct ConvBgSignalWave: View {
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
-    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
+    private var reduceMotion: Bool { !ConversationBackgroundConfig.animationsEnabled || systemReduceMotion || userForcedReduceMotion }
 
     private var delay: Double {
         Double(waveIndex) * 0.5 + Double(satelliteIndex) * 0.15

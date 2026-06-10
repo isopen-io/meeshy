@@ -103,6 +103,18 @@ struct ConversationBackgroundConfig {
         case community
         case global
     }
+
+    /// Master switch for the conversation background's continuous animations.
+    /// Disabled by product decision (battery): the parent's four `repeatForever`
+    /// animations PLUS each decorative sub-component's own pulse/orbit
+    /// re-evaluated SwiftUI bodies at up to 120 Hz (ProMotion) the entire time a
+    /// conversation was open — pegging the main thread and heating the device
+    /// (device trace 2026-06-10, `ConversationAnimatedBackground.body` was the
+    /// hottest app symbol). When `false`, every animation kickoff early-returns
+    /// and the background renders its STATIC resting composition (gradient +
+    /// overlays at phase 0). Flip to `true` — or drive it from a scroll/typing
+    /// signal — to re-arm motion.
+    static let animationsEnabled = false
 }
 
 // MARK: - Main View
@@ -179,9 +191,10 @@ struct ConversationAnimatedBackground: View {
     // MARK: - Animation Control
 
     private func startAnimations() {
-        // Reduce Motion (OS or in-app): never kick off the four continuous
-        // repeatForever animations — leave the static gradient/overlays as-is.
-        guard !reduceMotion else { return }
+        // Background animation disabled by product decision (battery) OR Reduce
+        // Motion (OS / in-app): never kick off the four continuous repeatForever
+        // animations — leave the static gradient/overlays at their resting state.
+        guard ConversationBackgroundConfig.animationsEnabled, !reduceMotion else { return }
         animate = false
         wavePhase = 0
         orbitPhase = 0

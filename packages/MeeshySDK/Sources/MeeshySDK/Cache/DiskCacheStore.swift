@@ -506,11 +506,30 @@ public actor DiskCacheStore: ReadableCacheStore {
 
     // MARK: - File Key
 
+    /// Memoises `urlString → fileKey`. `fileKey` runs a SHA-256 hash plus a URL
+    /// parse on every call; during a scroll it is hit thousands of times for the
+    /// same handful of avatar/media URLs (each visible cell re-resolves its
+    /// warmed image on the main thread — device trace 2026-06-10 showed it as a
+    /// notable main-thread cost). The map turns the repeat hashes into a lookup.
+    /// `NSCache` is internally thread-safe, so the `nonisolated(unsafe)` static
+    /// is sound from the `nonisolated` callers.
+    nonisolated(unsafe) private static let fileKeyCache: NSCache<NSString, NSString> = {
+        let cache = NSCache<NSString, NSString>()
+        cache.countLimit = 4000
+        return cache
+    }()
+
     nonisolated static func fileKey(for urlString: String) -> String {
+        let cacheKey = urlString as NSString
+        if let cached = fileKeyCache.object(forKey: cacheKey) {
+            return cached as String
+        }
         let digest = SHA256.hash(data: Data(urlString.utf8))
         let hex = digest.prefix(8).map { String(format: "%02x", $0) }.joined()
         let ext = URL(string: urlString)?.pathExtension ?? ""
-        return ext.isEmpty ? hex : "\(hex).\(ext)"
+        let key = ext.isEmpty ? hex : "\(hex).\(ext)"
+        fileKeyCache.setObject(key as NSString, forKey: cacheKey)
+        return key
     }
 
     private func diskFilePath(for fileKey: String) -> URL {

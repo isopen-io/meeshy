@@ -1275,23 +1275,49 @@ struct BubbleStandardLayout: View {
 struct BubbleBodyFooterLayout: Layout {
     var spacing: CGFloat = 4
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    /// Memoises the resolved width and the body/footer heights computed during
+    /// `sizeThatFits` so the immediately-following `placeSubviews` (same pass,
+    /// same `cache`) reuses them instead of re-measuring the body/footer SwiftUI
+    /// subtrees. Measuring a bubble subtree (text layout, quoted reply, footer
+    /// meta) is the dominant per-cell scroll cost on device — every avoided
+    /// `subview.sizeThatFits` is a full subtree remeasure saved.
+    struct Cache {
+        var width: CGFloat = -1
+        var bodyHeight: CGFloat = 0
+        var footerHeight: CGFloat = 0
+        var hasFooter = false
+    }
+
+    func makeCache(subviews: Subviews) -> Cache { Cache() }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
         guard let body = subviews.first else { return .zero }
         let bodyProbe = body.sizeThatFits(proposal)
-        guard subviews.count > 1 else { return bodyProbe }
+        guard subviews.count > 1 else {
+            cache = Cache(width: bodyProbe.width, bodyHeight: bodyProbe.height, footerHeight: 0, hasFooter: false)
+            return bodyProbe
+        }
 
         let footer = subviews[1]
         let footerFloor = footer.sizeThatFits(.unspecified).width
         let width = max(bodyProbe.width, footerFloor)
-        let bodyHeight = body.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        // Common case (footer no wider than the body): the resolved width equals
+        // the probe width, so the probe's height already holds — skip a redundant
+        // body remeasure.
+        let bodyHeight = (width == bodyProbe.width)
+            ? bodyProbe.height
+            : body.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
         let footerHeight = footer.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        cache = Cache(width: width, bodyHeight: bodyHeight, footerHeight: footerHeight, hasFooter: true)
         return CGSize(width: width, height: bodyHeight + spacing + footerHeight)
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
         guard let body = subviews.first else { return }
         let width = bounds.width
-        let bodyHeight = body.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        let bodyHeight = cache.width == width
+            ? cache.bodyHeight
+            : body.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
         body.place(
             at: CGPoint(x: bounds.minX, y: bounds.minY),
             anchor: .topLeading,
@@ -1300,7 +1326,9 @@ struct BubbleBodyFooterLayout: Layout {
 
         guard subviews.count > 1 else { return }
         let footer = subviews[1]
-        let footerHeight = footer.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        let footerHeight = (cache.width == width && cache.hasFooter)
+            ? cache.footerHeight
+            : footer.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
         footer.place(
             at: CGPoint(x: bounds.minX, y: bounds.minY + bodyHeight + spacing),
             anchor: .topLeading,
