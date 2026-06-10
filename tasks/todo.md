@@ -220,6 +220,31 @@ commentaires pré-existantes).
 - [ ] Device : frappe fluide (Instruments : la racine ne doit plus apparaître
       dans les body evaluations par frappe), signposts applySnapshot ↓
 
+---
+
+# Revue finale (2026-06-09, branche fix/ios-conversation-fluidity-review)
+
+Seconde passe sur les commits non couverts par la revue multi-agents
+(cascade, composer isolé, .id notification, politique brouillon).
+
+## Bug trouvé et corrigé
+- **Cycle de rétention du composer** : `onPersistNeeded` capture une copie de
+  la struct ConversationView ; son wrapper `State<ConversationComposerTextModel>`
+  retient (via la box de stockage SwiftUI) le modèle vivant → modèle → closure
+  → copie → State box → modèle. Fuite du modèle ET du ConversationViewModel
+  (retenu par le wrapper @StateObject de la copie) à chaque teardown.
+  Fix : `composerText.onPersistNeeded = nil` dans onDisappear (après le flush) ;
+  onAppear réinstalle au retour d'un cover/sheet.
+
+## Vérifié sans correction nécessaire
+- 29 champs de `upsertMutatedFieldsEqual` validés contre MessageRecord.
+- `onFocusChange` flush : closure retenue par l'arbre de vues, pas de cycle.
+- `.id(conv.id)` : type non-optionnel, `.task`/onAppear relancés, replyContext OK.
+- Restore du brouillon à l'onAppear : callback installé avant, ré-écriture
+  idempotente, pas de clobber (`guard text.isEmpty`).
+- Tests immédiateté espace : `persistNow` synchrone dans le sink — timeout
+  0.2 s valide.
+
 Autres sources d'optimisation identifiées, NON traitées (collision routine / scope) :
 1. `APIClient.swift:427` pose `Accept-Encoding: br, gzip, deflate` manuellement alors
    que le commentaire l.389-397 l'interdit explicitement (« Never add Accept-Encoding

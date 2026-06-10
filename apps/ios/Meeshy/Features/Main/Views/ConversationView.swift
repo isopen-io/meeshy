@@ -876,6 +876,16 @@ struct ConversationView: View {
             }
             .onDisappear {
                 composerText.flushPendingChange()
+                // Rompt le cycle de rétention : `onPersistNeeded` capture une
+                // copie de cette struct, dont le wrapper State retient (via sa
+                // box de stockage) le modèle vivant — soit modèle → closure →
+                // copie de la vue → State box → modèle. Sans ce nil, le modèle
+                // ET le ConversationViewModel (retenu transitivement par le
+                // wrapper @StateObject de la copie) fuiteraient à chaque
+                // teardown. onAppear réinstalle le callback si la vue revient
+                // (retour d'un fullScreenCover/sheet) — aucune frappe n'est
+                // possible pendant qu'elle est couverte.
+                composerText.onPersistNeeded = nil
             }
     }
 
