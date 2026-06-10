@@ -164,7 +164,7 @@ export class AttachmentService {
   ): Promise<void> {
     await this.prisma.messageAttachment.updateMany({
       where: {
-        id: { in: attachmentIds },
+        id: { in: [...attachmentIds] },
       },
       data: {
         messageId: messageId,

@@ -708,7 +708,7 @@ export class MessageProcessor {
 
     try {
       const attachments = await this.prisma.messageAttachment.findMany({
-        where: { id: { in: attachmentIds } },
+        where: { id: { in: [...attachmentIds] } },
         select: { id: true, mimeType: true, fileUrl: true, filePath: true, duration: true, metadata: true, transcription: true }
       });
 
