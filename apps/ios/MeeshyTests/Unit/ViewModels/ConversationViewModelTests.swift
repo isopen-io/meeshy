@@ -395,7 +395,7 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(mockMessageService.sendCallCount, 1)
     }
 
-    func test_sendMessage_failure_keepsOptimisticAsSendingForRetry() async {
+    func test_sendMessage_failure_keepsOptimisticAsSlowForRetry() async {
         mockMessageService.sendResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Send failed"]))
         let sut = makeSUT()
 
@@ -403,8 +403,11 @@ final class ConversationViewModelTests: XCTestCase {
 
         XCTAssertFalse(result)
         XCTAssertEqual(sut.messages.count, 1)
-        // On failure, message stays in .sending status as it's enqueued for retry
-        XCTAssertEqual(sut.messages.first?.deliveryStatus, .sending)
+        // On failure the message is enqueued for retry (state `.queued`), which
+        // surfaces as `.slow` ("Envoi lent") — distinct from a fresh `.sending`
+        // clock — so the user can tell a struggling/retrying send from one that
+        // just left. It is NOT removed and NOT `.failed` (retries remain).
+        XCTAssertEqual(sut.messages.first?.deliveryStatus, .slow)
     }
 
     func test_sendMessage_surfacesOptimisticMessage() async {
