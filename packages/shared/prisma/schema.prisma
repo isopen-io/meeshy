@@ -392,6 +392,7 @@ model Conversation {
   @@index([isActive]) // Optimisation: filtrer conversations actives
   @@index([lastMessageAt]) // Optimisation: trier par activité récente
   @@index([isActive, lastMessageAt]) // iter-4: tri post-filtre participants (isActive+lastMessageAt DESC)
+  @@index([isActive, updatedAt]) // delta-sync: GET /conversations?updatedSince → where isActive AND updatedAt > since
 }
 
 /// Share/forward a conversation to a community or another context
