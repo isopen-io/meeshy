@@ -280,9 +280,7 @@ private struct ConversationHeaderAvatarView: View {
     private var isDirect: Bool { conversation?.type == .direct }
 
     private func memberStoryState(for userId: String) -> StoryRingState {
-        if storyViewModel.hasUnviewedStories(forUserId: userId) { return .unread }
-        if storyViewModel.hasStories(forUserId: userId) { return .read }
-        return .none
+        storyViewModel.storyRingState(forUserId: userId)
     }
 
     private func avatarContextMenu(for userId: String, name: String) -> [AvatarContextMenuItem] {

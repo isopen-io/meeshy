@@ -250,9 +250,7 @@ struct ConversationListView: View {
 
     private func storyRingState(for conversation: Conversation) -> StoryRingState {
         guard conversation.type == .direct, let userId = conversation.participantUserId else { return .none }
-        if storyViewModel.hasUnviewedStories(forUserId: userId) { return .unread }
-        if storyViewModel.hasStories(forUserId: userId) { return .read }
-        return .none
+        return storyViewModel.storyRingState(forUserId: userId)
     }
 
     private func conversationMoodStatus(for conversation: Conversation) -> StatusEntry? {

@@ -443,6 +443,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         storyGroups.first { $0.id == userId }?.hasUnviewed ?? false
     }
 
+    /// Source unique de l'état d'anneau story d'un avatar, toutes surfaces.
+    /// `.none` si l'utilisateur n'a aucune story active (groupe absent ou
+    /// entièrement expiré), `.unread` s'il reste au moins une story non vue.
+    func storyRingState(forUserId userId: String) -> StoryRingState {
+        guard let group = storyGroups.first(where: { $0.id == userId }),
+              !group.isFullyExpired() else { return .none }
+        return group.hasUnviewed ? .unread : .read
+    }
+
     // MARK: - Publish Story
 
     func publishStory(effects: StoryEffects, content: String?, image: UIImage?, originalLanguage: String? = nil, visibility: String = "PUBLIC") async {
