@@ -12,8 +12,6 @@
 import './env';
 
 import fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import compress from '@fastify/compress';
-import { constants as zlibConstants } from 'zlib';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
@@ -414,31 +412,24 @@ class MeeshyServer {
     await this.server.register(sensible);
 
     // Bandwidth sprint Phase D6 — app-wide conditional GET (ETag/304).
-    // Registered BEFORE compression so the ETag is computed over the logical
-    // (uncompressed) body and an unchanged GET short-circuits to a body-less
-    // 304 before we spend CPU compressing it. Generalizes the per-route
-    // `sendWithETag` to every eligible read without touching handlers; routes
-    // that already set an ETag or `max-age` are left untouched.
+    // The ETag is computed over the logical (uncompressed) body — Traefik
+    // compresses downstream — and an unchanged GET short-circuits to a
+    // body-less 304. Generalizes the per-route `sendWithETag` to every
+    // eligible read without touching handlers; routes that already set an
+    // ETag or `max-age` are left untouched.
     this.server.addHook('onSend', conditionalGetOnSend);
 
-    // HTTP response compression (Brotli > gzip > deflate).
-    // Bandwidth sprint Phase A: all JSON/text API responses are compressed
-    // transparently. Already-compressed media (jpeg/png/webp/mp3/mp4/...) is
-    // skipped automatically because mime-db marks those content-types as
-    // non-compressible, so range requests on attachment downloads are untouched.
-    await this.server.register(compress, {
-      global: true,
-      threshold: 1024, // skip tiny payloads where header overhead dominates
-      encodings: ['br', 'gzip', 'deflate'],
-      brotliOptions: {
-        params: {
-          // Quality 5 is the sweet spot for dynamic JSON: ~gzip-9 ratio at a
-          // fraction of brotli-11 CPU cost.
-          [zlibConstants.BROTLI_PARAM_QUALITY]: 5,
-        },
-      },
-      zlibOptions: { level: 6 },
-    });
+    // HTTP response compression is handled by Traefik (`compress@file`
+    // middleware, infrastructure/docker/compose/config/dynamic.yaml), NOT by
+    // @fastify/compress. Incident 2026-06-11: the global @fastify/compress
+    // onSend hook replaces the payload with a stream; every `async (req,
+    // reply) => { sendSuccess(reply, …) }` handler then resolves `undefined`
+    // while that stream is still in flight, Fastify issues a second
+    // `reply.send(undefined)` and the client receives `content-encoding` with
+    // an EMPTY body (plus ERR_HTTP_HEADERS_SENT unhandled rejections). Do not
+    // re-register a payload-stream-replacing onSend hook unless every handler
+    // returns `reply`. Route-level `compress: false` markers were kept as
+    // documentation on media/Range routes.
 
     // Register multipart plugin for file uploads
     await this.server.register(multipart, {

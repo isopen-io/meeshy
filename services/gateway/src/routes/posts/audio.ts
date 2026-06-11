@@ -124,7 +124,7 @@ export function registerStoryAudioRoutes(
   // GET /static/:filename — Serve uploaded story audio files (JWT-protected)
   fastify.get<{ Params: { filename: string } }>('/static/:filename', {
     preValidation: [requiredAuth],
-    compress: false, // already-compressed audio binary; skip re-compression
+    // already-compressed audio binary — never recompressed (Traefik excludedContentTypes)
   }, async (request: FastifyRequest<{ Params: { filename: string } }>, reply: FastifyReply) => {
     const { filename } = request.params;
 
