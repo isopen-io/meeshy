@@ -354,7 +354,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       ])];
 
       if (allConvIds.length === 0) {
-        return reply.send({ success: true, data: [], pagination: { total: 0, page: pageNum, limit: limitNum, hasMore: false } });
+        return sendPaginatedSuccess(reply, [], { total: 0, page: pageNum, limit: limitNum, hasMore: false } as any);
       }
 
       // Fetch conversations (with optional search filter)
@@ -472,11 +472,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         };
       });
 
-      return reply.send({
-        success: true,
-        data: enrichedConfigs,
-        pagination: { total, page: pageNum, limit: limitNum, hasMore: skip + limitNum < total },
-      });
+      return sendPaginatedSuccess(reply, enrichedConfigs, { total, page: pageNum, limit: limitNum, hasMore: skip + limitNum < total } as any);
     } catch (error) {
       logError(fastify.log, 'Error fetching agent configs:', error);
       return sendInternalError(reply, 'Erreur lors de la récupération des configs');
@@ -1479,11 +1475,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         fastify.prisma.message.count({ where }),
       ]);
 
-      return reply.send({
-        success: true,
-        data: messages,
-        pagination: { total, page: Math.max(1, Number(page)), limit: limitNum, hasMore: skip + limitNum < total },
-      });
+      return sendPaginatedSuccess(reply, messages, { total, page: Math.max(1, Number(page)), limit: limitNum, hasMore: skip + limitNum < total } as any);
     } catch (error) {
       logError(fastify.log, 'Error fetching agent messages:', error);
       return sendInternalError(reply, 'Erreur serveur');
@@ -1545,10 +1537,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         fastify.prisma.agentScanLog.count({ where }),
       ]);
 
-      return reply.send({
-        success: true, data: logs,
-        pagination: { total, page, limit, hasMore: page * limit < total },
-      });
+      return sendPaginatedSuccess(reply, logs, { total, page, limit, hasMore: page * limit < total } as any);
     } catch (error) {
       logError(fastify.log, 'Error fetching scan logs:', error);
       return sendInternalError(reply, 'Erreur serveur');
