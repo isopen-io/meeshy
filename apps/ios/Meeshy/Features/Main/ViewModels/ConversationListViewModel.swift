@@ -631,8 +631,12 @@ class ConversationListViewModel: ObservableObject {
         let cached = await CacheCoordinator.shared.conversations.load(for: "list")
         switch cached {
         case .fresh(let data, _), .stale(let data, _):
+            Logger.messages.debug("[ConversationListVM] reloadFromCache hit count=\(data.count)")
             setConversations(data)
         case .expired, .empty:
+            // Trou silencieux historique : un signal `conversationsDidChange`
+            // avec un cache expiré laissait la liste figée sans trace.
+            Logger.messages.info("[ConversationListVM] reloadFromCache MISS (expired/empty) — liste non rafraîchie")
             break
         }
     }

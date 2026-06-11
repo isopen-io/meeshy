@@ -823,6 +823,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     // MARK: - Socket Event Handlers
 
     private func handleNewMessage(_ apiMessage: APIMessage) async {
+        Self.logger.info("[SyncEngine] handleNewMessage id=\(apiMessage.id, privacy: .public) conv=\(apiMessage.conversationId, privacy: .public)")
         if let mentionedUsers = apiMessage.mentionedUsers {
             UserDisplayNameCache.shared.trackFromMentionedUsers(mentionedUsers)
         }
