@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
-import { sendPaginatedSuccess } from '../../utils/response.js';
+import { sendPaginatedSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
 import { permissionsService } from './services/PermissionsService';
 import {
   validatePagination,
@@ -18,18 +18,12 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return reply.status(401).send({
-      success: false,
-      message: 'Authentification requise'
-    });
+    return sendUnauthorized(reply, 'Authentification requise');
   }
 
   const permissions = permissionsService.getUserPermissions(authContext.registeredUser.role as UserRole);
   if (!permissions.canAccessAdmin) {
-    return reply.status(403).send({
-      success: false,
-      message: 'Acces administrateur requis'
-    });
+    return sendForbidden(reply, 'Acces administrateur requis');
   }
 };
 
@@ -82,10 +76,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
       const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
       if (!permissions.canModerateContent) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Permission insuffisante pour gerer les messages'
-        });
+        return sendForbidden(reply, 'Permission insuffisante pour gerer les messages');
       }
 
       const { offset = '0', limit = '20', search, type, period } = request.query as MessageListQuery;
@@ -183,10 +174,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       logError(fastify.log, 'Get admin messages error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -237,10 +225,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
       const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
       if (!permissions.canManageCommunities) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Permission insuffisante pour gerer les communautes'
-        });
+        return sendForbidden(reply, 'Permission insuffisante pour gerer les communautes');
       }
 
       const { offset = '0', limit = '20', search, isPrivate } = request.query as CommunityListQuery;
@@ -303,10 +288,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       logError(fastify.log, 'Get admin communities error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -358,10 +340,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
       const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
       if (!permissions.canManageTranslations) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Permission insuffisante pour gerer les traductions'
-        });
+        return sendForbidden(reply, 'Permission insuffisante pour gerer les traductions');
       }
 
       const { offset = '0', limit = '20', sourceLanguage, targetLanguage, period } = request.query as TranslationListQuery;
@@ -508,10 +487,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       logError(fastify.log, 'Get admin translations error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -562,10 +538,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
       const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
       if (!permissions.canManageConversations) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Permission insuffisante pour gerer les liens de partage'
-        });
+        return sendForbidden(reply, 'Permission insuffisante pour gerer les liens de partage');
       }
 
       const { offset = '0', limit = '20', search, isActive } = request.query as ShareLinkListQuery;
@@ -638,10 +611,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       logError(fastify.log, 'Get admin share links error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 }

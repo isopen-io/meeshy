@@ -18,20 +18,14 @@ const CACHE_TTL = {
 const requireAnalyticsPermission = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return reply.status(401).send({
-      success: false,
-      message: 'Authentification requise'
-    });
+    return sendUnauthorized(reply, 'Authentification requise');
   }
 
   const userRole = authContext.registeredUser.role;
   const canViewAnalytics = ['BIGBOSS', 'ADMIN', 'AUDIT', 'ANALYST'].includes(userRole);
 
   if (!canViewAnalytics) {
-    return reply.status(403).send({
-      success: false,
-      message: 'Permission insuffisante pour voir les analyses'
-    });
+    return sendForbidden(reply, 'Permission insuffisante pour voir les analyses');
   }
 };
 
@@ -82,10 +76,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get realtime analytics error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération des métriques temps réel'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des métriques temps réel');
     }
   });
 
@@ -125,10 +116,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get hourly activity error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération de l\'activité horaire'
-      });
+      return sendInternalError(reply, "Erreur lors de la récupération de l'activité horaire");
     }
   });
 
@@ -177,10 +165,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get message types error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération des types de messages'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des types de messages');
     }
   });
 
@@ -234,10 +219,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get user distribution error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération de la distribution utilisateurs'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération de la distribution utilisateurs');
     }
   });
 
@@ -279,10 +261,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get language distribution error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération de la distribution des langues'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération de la distribution des langues');
     }
   });
 
@@ -339,10 +318,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get KPIs error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération des KPIs'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des KPIs');
     }
   });
 
@@ -383,10 +359,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get volume timeline error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération de la timeline'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération de la timeline');
     }
   });
 }
