@@ -73,6 +73,12 @@ struct BubbleStandardLayout: View {
     /// Tap sur les coches de livraison -> ouvre le sheet detail a l'onglet
     /// "Vues" (read receipts). Passe `nil` pour rendre les coches inertes.
     let onShowReadStatus: ((String) -> Void)?
+    /// Manual resend of a FAILED outgoing message (id). Routed to
+    /// `ConversationViewModel.retryMessage`, which deletes the failed row and
+    /// re-sends with the SAME clientMessageId (gateway dedup) AND kicks the
+    /// outbox flusher — unlike the old local `OfflineQueue.retryByClientMessageId`
+    /// that reset the row but never triggered a flush, so the resend never fired.
+    let onRetry: ((String) -> Void)?
     let onReplyTap: ((String) -> Void)?
     let onStoryReplyTap: ((String) -> Void)?
     let onMediaTap: ((MessageAttachment) -> Void)?
@@ -297,6 +303,10 @@ struct BubbleStandardLayout: View {
     private var isFailedOutgoing: Bool {
         content.isMe && content.meta.deliveryStatus == .failed
     }
+
+    /// Width of the integrated trailing retry band (and the trailing inset the
+    /// bubble content reserves for it) on a failed outgoing message.
+    static let retryBandWidth: CGFloat = 34
 
     /// BUG3 — single retry affordance. When the failed-outgoing orange
     /// `BubbleFailedRetryBar` is shown, it owns the resend action, so the footer
@@ -884,16 +894,18 @@ struct BubbleStandardLayout: View {
                     .padding(.top, 6 + (content.reply != nil ? 52 : 0))
             }
         }
+        // FAILED outgoing send — reserve a trailing strip and glue the retry
+        // band INTO it as an integrated edge tab (clipped to the bubble's rounded
+        // corner, no gap). The content + footer are inset by the band width so
+        // the bubble's own timestamp + delivery state stay visible to its LEFT;
+        // and because the band lives INSIDE the bubble's frame, a failed bubble
+        // right-aligns exactly like every other bubble (no left-shift).
+        .padding(.trailing, isFailedOutgoing ? Self.retryBandWidth : 0)
         .background(bubbleBackground)
-        // BUG3 — failed outgoing message: an orange edge button on the
-        // SCREEN-EDGE (trailing) side of the bubble; tapping it re-triggers the
-        // send (placed before clipShape so it follows the rounded corners). The
-        // trailing edge is the side touching the screen edge for a right-aligned
-        // own bubble, so it covers trailing padding rather than the start of the
-        // text. Gated so non-failed bubbles are untouched.
         .overlay(alignment: .trailing) {
             if isFailedOutgoing {
                 BubbleFailedRetryBar(onRetry: { performManualRetry() })
+                    .frame(width: Self.retryBandWidth)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 18))
@@ -984,17 +996,16 @@ struct BubbleStandardLayout: View {
         NetworkMonitor.shared.isOnline
     }
 
-    /// Manual retry path triggered by `BubbleFooter`'s failed-delivery retry
-    /// button. Resolves the outbox row from the message's `clientMessageId`
-    /// and resets the retry budget so the flusher's next pass picks it up
-    /// immediately. Errors are
-    /// swallowed (no-op if the row no longer exists — the optimistic message
-    /// has already been reconciled or the user manually cleared the queue).
+    /// Manual resend triggered by the orange retry band (or the footer's retry).
+    /// Delegates to the ViewModel via `onRetry` → `retryMessage(messageId:)`,
+    /// which re-inserts a fresh optimistic `.sending` row (immediate feedback,
+    /// the band swaps to the normal sending indicator), re-enqueues, AND kicks
+    /// the outbox flusher. The previous local path
+    /// (`OfflineQueue.retryByClientMessageId`) only reset the outbox row to
+    /// `.pending` without ever flushing it, so on a foregrounded/online device
+    /// the resend silently never fired.
     private func performManualRetry() {
-        let cmid = message.clientMessageId ?? message.id
-        Task {
-            try? await OfflineQueue.shared.retryByClientMessageId(cmid)
-        }
+        onRetry?(message.id)
     }
 
     // MARK: - Edited indicator

@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
+import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
 import { permissionsService } from './services/PermissionsService';
 import {
   updateUserRoleSchema,
@@ -16,18 +17,12 @@ import { getCacheStore } from '../../services/CacheStore';
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return reply.status(401).send({
-      success: false,
-      message: 'Authentification requise'
-    });
+    return sendUnauthorized(reply, 'Authentification requise');
   }
 
   const permissions = permissionsService.getUserPermissions(authContext.registeredUser.role as UserRole);
   if (!permissions.canAccessAdmin) {
-    return reply.status(403).send({
-      success: false,
-      message: 'Acces administrateur requis'
-    });
+    return sendForbidden(reply, 'Acces administrateur requis');
   }
 };
 
@@ -116,10 +111,7 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
       const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
       if (!permissions.canManageUsers) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Permission insuffisante'
-        });
+        return sendForbidden(reply, 'Permission insuffisante');
       }
 
       // Recuperer l'utilisateur cible
@@ -128,25 +120,16 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
       });
 
       if (!targetUser) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Utilisateur non trouve'
-        });
+        return sendNotFound(reply, 'Utilisateur non trouve');
       }
 
       // Verifier si l'admin peut modifier ce role
       if (!permissionsService.canManageUser(user.role as UserRole, targetUser.role as UserRole)) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Vous ne pouvez pas modifier le role de cet utilisateur'
-        });
+        return sendForbidden(reply, 'Vous ne pouvez pas modifier le role de cet utilisateur');
       }
 
       if (!permissionsService.canManageUser(user.role as UserRole, body.role as UserRole)) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Vous ne pouvez pas attribuer ce role'
-        });
+        return sendForbidden(reply, 'Vous ne pouvez pas attribuer ce role');
       }
 
       // Mettre a jour le role
@@ -165,26 +148,15 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
 
       try { await getCacheStore().del(authUserCacheKey(id)); } catch { /* best-effort */ }
 
-      return reply.send({
-        success: true,
-        data: updatedUser,
-        message: `Role mis a jour vers ${body.role}`
-      });
+      return sendSuccess(reply, updatedUser, { message: `Role mis a jour vers ${body.role}` });
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Donnees invalides',
-          errors: error.errors
-        });
+        return sendBadRequest(reply, 'Donnees invalides');
       }
 
       logError(fastify.log, 'Update user role error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -269,10 +241,7 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
       const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
       if (!permissions.canManageUsers) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Permission insuffisante'
-        });
+        return sendForbidden(reply, 'Permission insuffisante');
       }
 
       // Recuperer l'utilisateur cible
@@ -281,18 +250,12 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
       });
 
       if (!targetUser) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Utilisateur non trouve'
-        });
+        return sendNotFound(reply, 'Utilisateur non trouve');
       }
 
       // Verifier les permissions
       if (!permissionsService.canManageUser(user.role as UserRole, targetUser.role as UserRole)) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Vous ne pouvez pas modifier le statut de cet utilisateur'
-        });
+        return sendForbidden(reply, 'Vous ne pouvez pas modifier le statut de cet utilisateur');
       }
 
       // Mettre a jour le statut
@@ -315,26 +278,15 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
 
       try { await getCacheStore().del(authUserCacheKey(id)); } catch { /* best-effort */ }
 
-      return reply.send({
-        success: true,
-        data: updatedUser,
-        message: body.isActive ? 'Utilisateur active' : 'Utilisateur desactive'
-      });
+      return sendSuccess(reply, updatedUser, { message: body.isActive ? 'Utilisateur active' : 'Utilisateur desactive' });
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Donnees invalides',
-          errors: error.errors
-        });
+        return sendBadRequest(reply, 'Donnees invalides');
       }
 
       logError(fastify.log, 'Update user status error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 }

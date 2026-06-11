@@ -128,6 +128,26 @@ final class GRDBCacheStoreTests: XCTestCase {
         }
     }
 
+    func test_update_onL1EvictedKey_hydratesFromL2AndMutates() async throws {
+        // After an L1 memory eviction the key still lives in L2. `update` must
+        // apply the mutation to the persisted set (not silently no-op) — this is
+        // what makes the conversation-list optimistic last-message update robust
+        // to eviction.
+        let db = try makeDB()
+        let store = try makeStore(maxL1Keys: 1, db: db)
+        try await store.save([CacheTestItem(id: "1", name: "Alice")], for: "evictme")
+        // Saving a second key evicts "evictme" from L1 (cap = 1); L2 keeps it.
+        try await store.save([CacheTestItem(id: "9", name: "Filler")], for: "filler")
+
+        await store.update(for: "evictme") { existing in
+            existing + [CacheTestItem(id: "2", name: "Bob")]
+        }
+
+        let result = await store.load(for: "evictme")
+        XCTAssertEqual(result.value?.map(\.id).sorted(), ["1", "2"],
+                       "update hydrated from L2 and applied the mutation instead of no-op")
+    }
+
     // MARK: - invalidate
 
     func test_invalidate_clearsL1AndL2() async throws {

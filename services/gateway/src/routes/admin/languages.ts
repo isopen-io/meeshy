@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { sendSuccess } from '../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
 import { validateQuery } from '../../validation/helpers.js';
 import { LanguageStatsQuerySchema, LanguageTimelineQuerySchema, TranslationAccuracyQuerySchema } from '../../validation/admin-schemas.js';
 
@@ -9,20 +9,14 @@ import { LanguageStatsQuerySchema, LanguageTimelineQuerySchema, TranslationAccur
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return reply.status(401).send({
-      success: false,
-      message: 'Authentification requise'
-    });
+    return sendUnauthorized(reply, 'Authentification requise');
   }
 
   const userRole = authContext.registeredUser.role;
   const canView = ['BIGBOSS', 'ADMIN', 'AUDIT', 'ANALYST'].includes(userRole);
 
   if (!canView) {
-    return reply.status(403).send({
-      success: false,
-      message: 'Permission insuffisante'
-    });
+    return sendForbidden(reply, 'Permission insuffisante');
   }
 };
 
@@ -247,10 +241,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
         });
     } catch (error) {
       logError(fastify.log, 'Get language stats error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération des statistiques des langues'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des statistiques des langues');
     }
   });
 
@@ -331,10 +322,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, timeline);
     } catch (error) {
       logError(fastify.log, 'Get language timeline error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération de la timeline des langues'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération de la timeline des langues');
     }
   });
 
@@ -413,10 +401,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, accuracy);
     } catch (error) {
       logError(fastify.log, 'Get translation accuracy error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération de la précision des traductions'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération de la précision des traductions');
     }
   });
 }

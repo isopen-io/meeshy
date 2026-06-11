@@ -952,6 +952,11 @@ class ConversationViewModel: ObservableObject {
         // IS reading it) and excludes it from the cross-conversation
         // aggregator. Cleared in `deinit`.
         syncEngine.setCurrentlyOpenConversation(conversationId)
+        // Open side-effects (socket room join + active-conversation publish to
+        // the notification singletons). Lives here — NOT in the handler's init
+        // — so the throwaway VMs SwiftUI allocates on every parent
+        // re-evaluation never fire them (only the installed VM runs start()).
+        socketHandler?.activate()
         messageStore.startObserving(dbPool: startupDependencies.dbPool)
         Task { await messageStore.loadInitial() }
         messagesPersistCancellable = $messages
@@ -1991,6 +1996,23 @@ class ConversationViewModel: ObservableObject {
         mentionController.clearDraft()
     }
 
+    /// French preview shown in the conversation list for an OPTIMISTIC message:
+    /// the caption when present, else a short media label (mirrors the server's
+    /// last-message preview wording). Used to surface a just-sent message in the
+    /// list before any server ACK. `nonisolated static` so the media path can
+    /// compute it for a `Task.detached`.
+    nonisolated static func optimisticListPreview(text: String, messageType: Message.MessageType) -> String {
+        if !text.isEmpty { return text }
+        switch messageType {
+        case .image: return "📷 Photo"
+        case .video: return "🎥 Vidéo"
+        case .audio: return "🎙️ Message vocal"
+        case .file: return "📎 Fichier"
+        case .location: return "📍 Position"
+        default: return ""
+        }
+    }
+
     @discardableResult
     func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2270,6 +2292,19 @@ class ConversationViewModel: ObservableObject {
             do {
                 try await persistence.insertOptimistic(optimisticRecord)
                 Logger.messages.debug("SendFlow insertOptimistic OK tempId=\(tempId, privacy: .public) state=.sending convId=\(self.conversationId, privacy: .public)")
+                // Local-first: surface the just-sent message in the conversation
+                // list IMMEDIATELY (preview + bump to top), before any server ACK
+                // — via the same path realtime events use (cache update →
+                // conversationsDidChange → reloadFromCache). Previously only the
+                // offline branch did this, so an online PENDING message did not
+                // appear/reorder in the list until its ACK. finalizeSuccessfulSend
+                // refreshes it with the server timestamp at ACK time.
+                await ConversationSyncEngine.shared.updateConversationAfterSend(
+                    conversationId: conversationId,
+                    messagePreview: Self.optimisticListPreview(text: text, messageType: optimisticMessageType),
+                    messageAt: optimisticRecord.createdAt,
+                    senderName: authManager.currentUser?.displayName ?? authManager.currentUser?.username
+                )
             } catch {
                 Logger.messages.error("SendFlow insertOptimistic FAILED tempId=\(tempId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
             }
@@ -2479,24 +2514,23 @@ class ConversationViewModel: ObservableObject {
         let failedMsg = messages[idx]
         guard failedMsg.deliveryStatus == .failed else { return }
 
-        // Delete the failed row from GRDB; store observation removes it from
-        // `messages` automatically. Then re-send, which inserts a fresh
-        // optimistic row.
-        //
-        // Phase 4 §6.2 — reuse the failed message's `clientMessageId` so
-        // the gateway dedup contract `(conversationId, clientMessageId)`
-        // catches a previous attempt that DID reach the server (e.g. ACK
-        // was lost mid-flight). A fresh `cid_*` here would bypass the
-        // dedup index and produce a duplicate server-side record.
-        // The local id of a Phase 4 optimistic message IS its
-        // `clientMessageId` (legacy `temp_/offline_/retry_*` prefixes are
-        // gone), so passing `messageId` straight through is correct.
+        // Resend IN PLACE — no delete + reinsert, so the bubble never flashes
+        // "message supprimé". `.retry` transitions the EXISTING row .failed →
+        // .queued (resets the retry budget) while preserving its content and
+        // position: the orange retry band disappears and the bubble shows the
+        // sending indicator immediately. `sendMessage` then re-drives the fast
+        // (socket-first) send reusing the SAME clientMessageId — Phase 4 §6.2,
+        // so the gateway dedup contract `(conversationId, clientMessageId)`
+        // catches a prior attempt that DID reach the server (lost ACK). Its
+        // optimistic insert harmlessly no-ops on the existing row (PK conflict,
+        // swallowed by the insert's own catch), and the serverAck reconciles it
+        // .queued → .sent. The local id of a Phase 4 optimistic message IS its
+        // clientMessageId (no legacy temp_/offline_/retry_ prefix), so passing
+        // `messageId` straight through as `existingTempId` is correct.
         let content = failedMsg.content
         let replyToId = failedMsg.replyToId
-        let priorClientMessageId = messageId
-        try? await messagePersistence.markDeleted(localId: messageId, deletedAt: Date())
-
-        await sendMessage(content: content, replyToId: replyToId, existingTempId: priorClientMessageId)
+        _ = try? await messagePersistence.applyEvent(localId: messageId, event: .retry)
+        await sendMessage(content: content, replyToId: replyToId, existingTempId: messageId)
     }
 
     func removeFailedMessage(messageId: String) {
@@ -2634,10 +2668,23 @@ class ConversationViewModel: ObservableObject {
         let persistence = messagePersistence
         let recordConversationId = record.conversationId
         let attachmentCount = attachments.count
+        // Captured for the conversation-list optimistic update below (computed on
+        // the MainActor before the detached insert).
+        let listPreview = Self.optimisticListPreview(text: content, messageType: messageType)
+        let listSenderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
         Task.detached(priority: .userInitiated) {
             do {
                 try await persistence.insertOptimistic(record)
                 Logger.messages.debug("SendFlow insertOptimisticMedia OK tempId=\(tempId, privacy: .public) convId=\(recordConversationId, privacy: .public) attachments=\(attachmentCount, privacy: .public)")
+                // Local-first: surface the media message in the conversation list
+                // immediately (preview + bump to top), before any server ACK —
+                // the media path previously never updated the list optimistically.
+                await ConversationSyncEngine.shared.updateConversationAfterSend(
+                    conversationId: recordConversationId,
+                    messagePreview: listPreview,
+                    messageAt: now,
+                    senderName: listSenderName
+                )
             } catch {
                 Logger.messages.error("SendFlow insertOptimisticMedia FAILED tempId=\(tempId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
             }

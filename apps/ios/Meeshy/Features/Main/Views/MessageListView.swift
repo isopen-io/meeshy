@@ -265,6 +265,8 @@ struct MessageListView: UIViewControllerRepresentable {
     /// opens the detail sheet directly on the "vues" tab so the author can
     /// inspect read receipts without going through the long-press menu.
     var onShowReadStatus: ((String) -> Void)?
+    /// Manual resend of a FAILED outgoing message (id) → `retryMessage`.
+    var onRetry: ((String) -> Void)?
     /// Open the message detail sheet on the "reactions" tab.
     var onShowReactions: ((String) -> Void)?
     /// Open the message detail sheet on the "language / translation" tab.
@@ -316,6 +318,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onOpenReactPicker = onOpenReactPicker
         vc.onShowMessageInfo = onShowMessageInfo
         vc.onShowReadStatus = onShowReadStatus
+        vc.onRetry = onRetry
         vc.onShowReactions = onShowReactions
         vc.onShowTranslationDetail = onShowTranslationDetail
         vc.onMediaTap = onMediaTap
@@ -366,6 +369,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onOpenReactPicker = onOpenReactPicker
         vc.onShowMessageInfo = onShowMessageInfo
         vc.onShowReadStatus = onShowReadStatus
+        vc.onRetry = onRetry
         vc.onShowReactions = onShowReactions
         vc.onShowTranslationDetail = onShowTranslationDetail
         vc.onMediaTap = onMediaTap

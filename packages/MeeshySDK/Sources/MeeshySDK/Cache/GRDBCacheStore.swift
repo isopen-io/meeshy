@@ -116,9 +116,21 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
     }
 
     public func update(for key: Key, mutate: @Sendable ([Value]) -> [Value]) async {
-        guard var l1 = memoryCache[key] else { return }
-        l1.items = mutate(l1.items)
-        memoryCache[key] = l1
+        if var l1 = memoryCache[key] {
+            l1.items = mutate(l1.items)
+            memoryCache[key] = l1
+            touchKey(key)
+            markDirty(key)
+            return
+        }
+        // L1 miss: hydrate from L2 so the mutation is applied to the persisted
+        // set instead of being silently dropped after a memory eviction (mirrors
+        // `upsert` / `upsertPatch`). NO `maxItemCount` trim here — `update`
+        // preserves the full set; callers like the conversation list keep it
+        // newest-first, where a `suffix` trim would drop the newest entries.
+        guard let l2items = readFromL2(for: namespacedKey(key.description))?.items else { return }
+        let entry = L1Entry(items: mutate(l2items), loadedAt: Date())
+        memoryCache[key] = entry
         touchKey(key)
         markDirty(key)
     }

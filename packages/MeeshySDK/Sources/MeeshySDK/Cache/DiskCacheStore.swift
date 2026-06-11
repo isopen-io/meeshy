@@ -13,8 +13,15 @@ public actor DiskCacheStore: ReadableCacheStore {
     private let baseDirectory: URL
     private let fileManager = FileManager.default
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "disk-cache")
-    private var inFlightTasks: [String: Task<Data, Error>] = [:]
+    private var inFlightTasks: [String: InFlightDownload] = [:]
     private var fileTimestamps: [String: Date] = [:]
+
+    /// Wraps an in-flight network task with an identity token so a stale
+    /// completion never clears a NEWER entry registered under the same key.
+    private struct InFlightDownload {
+        let id = UUID()
+        let task: Task<Data, Error>
+    }
 
     public init(policy: CachePolicy, baseDirectory: URL? = nil) {
         self.policy = policy
@@ -228,17 +235,25 @@ public actor DiskCacheStore: ReadableCacheStore {
         let result = await load(for: urlString)
         if let data = result.snapshot()?.first { return data }
 
-        // 2. Deduplicate in-flight downloads for same URL
-        let fileKey = Self.fileKey(for: urlString)
-        if let existing = inFlightTasks[fileKey] {
-            return try await existing.value
-        }
-
-        // 3. Download from network and cache
+        // 2. Download from network (coalesced with any in-flight fetch) and cache
         guard let url = URL(string: urlString),
               let scheme = url.scheme?.lowercased(),
               scheme == "https" || scheme == "http" else {
             throw DiskCacheError.notCached(urlString)
+        }
+        return try await networkData(for: urlString, url: url)
+    }
+
+    /// Single network funnel: every remote fetch for this store goes through
+    /// here so concurrent callers (`data(for:)`, `image(for:)`, prefetchers)
+    /// share ONE URLSession task per media key instead of opening duplicate
+    /// connections. Observed on device: the same voice note fetched 2-3×
+    /// concurrently by independent paths saturated a slow cellular link
+    /// (NSURLError -1001 ×50 → HTTP/2 connection torn down).
+    private func networkData(for urlString: String, url: URL) async throws -> Data {
+        let fileKey = Self.fileKey(for: urlString)
+        if let existing = inFlightTasks[fileKey] {
+            return try await existing.task.value
         }
 
         let task = Task<Data, Error> {
@@ -251,9 +266,39 @@ public actor DiskCacheStore: ReadableCacheStore {
             return data
         }
 
-        inFlightTasks[fileKey] = task
-        defer { inFlightTasks[fileKey] = nil }
+        let entry = InFlightDownload(task: task)
+        inFlightTasks[fileKey] = entry
+        defer {
+            if inFlightTasks[fileKey]?.id == entry.id { inFlightTasks[fileKey] = nil }
+        }
         return try await task.value
+    }
+
+    /// In-flight network download for `key`, if any. Lets an external
+    /// progress-streaming downloader (e.g. the conversation bubble's manual /
+    /// auto download) piggyback on a fetch already started by another path
+    /// (prefetch, another surface) instead of issuing a duplicate request.
+    public func inFlightDownload(for key: String) -> Task<Data, Error>? {
+        inFlightTasks[Self.fileKey(for: key)]?.task
+    }
+
+    /// Registers an externally-driven download so `data(for:)` / `image(for:)`
+    /// callers await it rather than re-fetching the same media. The registered
+    /// task MUST persist its payload into this store (via `store(_:for:)`)
+    /// before returning. The entry self-clears when the task finishes.
+    /// Returns `false` (no-op) when a download for `key` is already tracked —
+    /// the caller should then await `inFlightDownload(for:)` instead.
+    @discardableResult
+    public func registerInFlightDownload(_ task: Task<Data, Error>, for key: String) -> Bool {
+        let fileKey = Self.fileKey(for: key)
+        guard inFlightTasks[fileKey] == nil else { return false }
+        let entry = InFlightDownload(task: task)
+        inFlightTasks[fileKey] = entry
+        Task {
+            _ = try? await task.value
+            if inFlightTasks[fileKey]?.id == entry.id { inFlightTasks[fileKey] = nil }
+        }
+        return true
     }
 
     public func localFileURLOrThrow(for urlString: String) async throws -> URL {
@@ -453,11 +498,11 @@ public actor DiskCacheStore: ReadableCacheStore {
 
         guard url.scheme == "https" || url.scheme == "http" else { return nil }
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard let httpResponse = response as? HTTPURLResponse,
-                  (200...299).contains(httpResponse.statusCode),
-                  let image = Self.downsampledImage(data: data, maxPixelSize: maxPixelSize) else { return nil }
-            await save(data, for: urlString)
+            // Shared network funnel — coalesces with any in-flight fetch for
+            // the same key (prefetcher, CachedAsyncImage, another cell) and
+            // persists to disk inside the task.
+            let data = try await networkData(for: urlString, url: url)
+            guard let image = Self.downsampledImage(data: data, maxPixelSize: maxPixelSize) else { return nil }
             Self.cacheIfWithinBudget(image, key: fileKey)
             return image
         } catch {
