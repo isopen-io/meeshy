@@ -2,11 +2,14 @@
 # Traefik Dynamic Configuration for Production
 # =============================================================================
 
+# Floor TLS 1.2 conservé. sniStrict volontairement DÉSACTIVÉ : avec le
+# provider file actif, il s'applique comme option TLS *par défaut* à tous les
+# routeurs et ferme toute connexion dont le SNI ne matche aucun certificat
+# (sondes/monitors sans SNI). À réactiver par-routeur explicitement si besoin.
 tls:
   options:
     default:
       minVersion: VersionTLS12
-      sniStrict: true
 
 http:
   middlewares:
