@@ -82,11 +82,7 @@ export async function registerMetadataRoutes(
 
         const attachment = await attachmentService.getAttachmentWithMetadata(attachmentId);
         if (!attachment) {
-          return reply.status(404).send({
-            success: false,
-            error: 'ATTACHMENT_NOT_FOUND',
-            message: 'Attachment not found',
-          });
+          return sendNotFound(reply, 'ATTACHMENT_NOT_FOUND', { message: 'Attachment not found' });
         }
 
         const etag = `"${attachment.id}-${(attachment as { updatedAt?: Date }).updatedAt?.getTime() ?? 0}"`;
@@ -100,11 +96,7 @@ export async function registerMetadataRoutes(
         return sendSuccess(reply, { attachment });
       } catch (error: unknown) {
         logger.error('error fetching attachment metadata', { error });
-        return reply.status(500).send({
-          success: false,
-          error: 'METADATA_FETCH_FAILED',
-          message: error instanceof Error ? error.message : 'Failed to fetch attachment metadata',
-        });
+        return sendInternalError(reply, 'METADATA_FETCH_FAILED', { message: error instanceof Error ? error.message : 'Failed to fetch attachment metadata' });
       }
     }
   );
