@@ -13,6 +13,11 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.network=meeshy-network"
+      # Provider file: indispensable pour que `compress@file` (et les autres
+      # middlewares de dynamic.yaml) existent. Sans lui, dynamic.yaml n'est
+      # que monté, jamais chargé → `compress@file` = référence morte.
+      - "--providers.file.filename=/dynamic.yaml"
+      - "--providers.file.watch=true"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
       - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
