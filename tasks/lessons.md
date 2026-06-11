@@ -81,3 +81,9 @@
 25. **`displayLinkTick` gated sur `contentReadyFired` = plus aucune ré-évaluation après un armement raté.** Un seul signal manqué fige l'état pour toujours (pas de rebuild → pas de re-`scheduleContentReadyEvaluation`). Tout gate « j'attends X pour avancer » doit avoir un déclencheur évènementiel à l'arrivée de X (hook `onPlayerAttached`) OU un failsafe — jamais un sondage borné (l'ancien 30×50 ms abandonnait silencieusement si le download dépassait 1,5 s).
 
 26. **Méthode de debug qui a gagné : sondes os_log AVANT de théoriser plus.** 3 hypothèses statiques plausibles se sont révélées partielles ; 2 builds instrumentés (catégorie `story-media`) ont montré en 2 itérations le `hasPlayer=true hasItem=false` décisif. Les chemins media/readiness des stories étaient totalement aveugles (3 régressions invisibles en 3 semaines) — les sondes restent en place (.info chemins rares, .debug par-tick).
+
+## 2026-06-11 — Story rejoue au foreground + force-push dev
+
+27. **Reprise foreground d'un média : TOUJOURS gater sur `window != nil` ET sur le drapeau d'autorisation canonique (`isPlaybackActive`), pas seulement sur le mode.** `handleDidBecomeActive` ne vérifiait `window` que pour l'audio mixer → un canvas `.play` retenu hors écran rejouait sa vidéo/audio à la réouverture de l'app. Et `handleAppLifecycle(active: true)` court-circuitait le gate. Preuve/validation : grep CoreMedia `SetRateAndAnchorTime` (rate=1 au foreground avant fix, plus aucun après).
+
+28. **Avant tout `push --force-with-lease` sur `dev` : `git fetch` PUIS vérifier `git log main..origin/dev`** — un agent parallèle peut avoir mergé une PR sur dev uniquement (PR #570 écrasée puis réintégrée par merge `cb3cd8a9e`). Le lease ne protège que contre ce qu'on a déjà VU ; il faut regarder ce qu'on s'apprête à effacer.
