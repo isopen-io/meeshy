@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
@@ -44,6 +45,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,6 +74,10 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,10 +87,13 @@ fun ChatScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+    val timeline = remember(state.messages) {
+        buildTimeline(state.messages, ZoneId.systemDefault())
+    }
 
     LaunchedEffect(state.messages.lastOrNull()?.messageId) {
-        if (state.messages.isNotEmpty()) {
-            listState.animateScrollToItem(state.messages.lastIndex)
+        if (timeline.isNotEmpty()) {
+            listState.animateScrollToItem(timeline.lastIndex)
         }
     }
 
@@ -178,26 +187,32 @@ fun ChatScreen(
                                 }
                             }
                         }
-                        items(state.messages, key = { it.messageId }) { bubble ->
-                            MessageBubble(
-                                content = bubble,
-                                outgoingColor = accentColor,
-                                onLongPress = { viewModel.onMessageLongPress(bubble.messageId) },
-                                onReactionClick = { emoji ->
-                                    viewModel.toggleReaction(bubble.messageId, emoji)
-                                },
-                            )
-                            if (bubble.deliveryStatus == DeliveryStatus.Failed) {
-                                Text(
-                                    text = stringResource(R.string.chat_send_failed_retry),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                    textAlign = TextAlign.End,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { viewModel.retryMessage(bubble.messageId) }
-                                        .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
-                                )
+                        items(timeline, key = { it.key }) { item ->
+                            when (item) {
+                                is ChatTimelineItem.DayHeader -> DayHeaderChip(item.date)
+                                is ChatTimelineItem.Message -> {
+                                    val bubble = item.bubble
+                                    MessageBubble(
+                                        content = bubble,
+                                        outgoingColor = accentColor,
+                                        onLongPress = { viewModel.onMessageLongPress(bubble.messageId) },
+                                        onReactionClick = { emoji ->
+                                            viewModel.toggleReaction(bubble.messageId, emoji)
+                                        },
+                                    )
+                                    if (bubble.deliveryStatus == DeliveryStatus.Failed) {
+                                        Text(
+                                            text = stringResource(R.string.chat_send_failed_retry),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.error,
+                                            textAlign = TextAlign.End,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { viewModel.retryMessage(bubble.messageId) }
+                                                .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -349,6 +364,39 @@ private fun SheetAction(
     ) {
         Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
         Text(text = label, style = MaterialTheme.typography.bodyLarge, color = tint)
+    }
+}
+
+@Composable
+private fun DayHeaderChip(date: LocalDate) {
+    val today = LocalDate.now()
+    val label = when (date) {
+        today -> stringResource(R.string.chat_today)
+        today.minusDays(1) -> stringResource(R.string.chat_yesterday)
+        else -> remember(date) {
+            date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
+        }
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = MeeshySpacing.sm),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = MeeshyTheme.tokens.backgroundTertiary,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MeeshyTheme.tokens.textSecondary,
+                modifier = Modifier.padding(
+                    horizontal = MeeshySpacing.md,
+                    vertical = MeeshySpacing.xs,
+                ),
+            )
+        }
     }
 }
 

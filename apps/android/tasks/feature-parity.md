@@ -204,7 +204,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 ## C. Chat / Messaging
 - [ ] Real-time 1:1 / group chat: send, edit, delete (for-me / for-everyone, 2h window), reply, forward
 - [x] Optimistic send with in-place server-ACK upgrade (no flicker) + `clientMessageId` reconciliation
-- [ ] Inverted message list, date section headers, joined banner, unread separator, E2EE disclaimer
+- [~] Date section headers (Aujourd'hui/Hier/date, zone locale, buildTimeline pur) ;
+      inverted list / joined banner / unread separator / E2EE disclaimer pending
 - [~] Pagination of older messages — before-cursor done (`MessageRepository.loadOlder`,
       windowed prune keeps paginated history, scroll-top trigger + spinner); around-anchor pending
 - [ ] Reactions: quick-strip (usage-ordered) + full picker; add/remove; reaction detail breakdown

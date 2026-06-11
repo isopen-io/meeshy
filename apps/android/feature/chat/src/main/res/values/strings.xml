@@ -8,6 +8,8 @@
     <string name="chat_retry">Retry</string>
     <string name="chat_send_failed_retry">Not sent — tap to retry</string>
     <string name="chat_action_copy">Copy</string>
+    <string name="chat_today">Today</string>
+    <string name="chat_yesterday">Yesterday</string>
     <string name="chat_action_reply">Reply</string>
     <string name="chat_replying_to">Replying to %1$s</string>
     <string name="chat_cancel_reply">Cancel reply</string>
