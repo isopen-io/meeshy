@@ -25,13 +25,11 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
     }
 
     public func startRecording() {
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
-            try session.setActive(true)
-        } catch {
-            return
-        }
+        // Source unique de session (call-aware) : pendant un appel VoIP la
+        // reconfiguration est refusée — on n'enregistre pas par-dessus
+        // RTCAudioSession (l'ancien chemin direct AVAudioSession cassait
+        // l'uplink micro de l'appel).
+        guard MediaSessionCoordinator.shared.activateRecordingSync() else { return }
 
         let fileName = "voice_\(Int(Date().timeIntervalSince1970)).\(settings.codec.fileExtension)"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
