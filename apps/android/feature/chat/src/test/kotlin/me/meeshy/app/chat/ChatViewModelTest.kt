@@ -19,9 +19,11 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MeeshyUser
@@ -32,6 +34,7 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.theme.accentHex
 import me.meeshy.ui.component.bubble.DeliveryStatus
 import org.junit.After
 import org.junit.Before
@@ -56,10 +59,11 @@ class ChatViewModelTest {
 
     private val reactionAdded = MutableSharedFlow<ReactionUpdateEvent>()
     private val reactionRemoved = MutableSharedFlow<ReactionUpdateEvent>()
+    private val messageReceived = MutableSharedFlow<ApiMessage>()
 
     private fun socketManager(): MessageSocketManager =
         mockk<MessageSocketManager> {
-            every { messageReceived } returns MutableSharedFlow()
+            every { this@mockk.messageReceived } returns this@ChatViewModelTest.messageReceived
             every { messageUpdated } returns MutableSharedFlow()
             every { messageDeleted } returns MutableSharedFlow()
             every { typingStarted } returns MutableSharedFlow()
@@ -73,6 +77,7 @@ class ChatViewModelTest {
         val repo: MessageRepository,
         val workManager: WorkManager,
         val reactions: ReactionRepository,
+        val conversations: ConversationRepository,
     )
 
     private fun viewModel(
@@ -86,9 +91,12 @@ class ChatViewModelTest {
     private fun harness(
         stream: Flow<CacheResult<List<LocalMessage>>>,
         currentUser: MeeshyUser? = null,
+        conversation: ApiConversation? = null,
     ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
+        val conversations = mockk<ConversationRepository>(relaxed = true)
+        every { conversations.conversationStream("c1") } returns MutableStateFlow(conversation)
         val session = mockk<SessionRepository>(relaxed = true)
         every { session.currentUser } returns MutableStateFlow(currentUser)
         val reactions = mockk<ReactionRepository>(relaxed = true)
@@ -97,11 +105,46 @@ class ChatViewModelTest {
         val workManager = mockk<WorkManager>(relaxed = true)
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
         return Harness(
-            ChatViewModel(repo, session, reactions, socketManager(), workManager, handle),
+            ChatViewModel(repo, conversations, session, reactions, socketManager(), workManager, handle),
             repo,
             workManager,
             reactions,
+            conversations,
         )
+    }
+
+    @Test
+    fun opening_a_conversation_marks_it_read_and_schedules_the_flush() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.conversations.markReadOptimistic("c1") } returns true
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.conversations.markReadOptimistic("c1") }
+        coVerify(atLeast = 1) { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun an_incoming_message_in_the_open_conversation_is_marked_read() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.conversations.markReadOptimistic("c1") } returns true
+        advanceUntilIdle()
+
+        messageReceived.emit(ApiMessage(id = "m9", conversationId = "c1", content = "yo"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { h.conversations.markReadOptimistic("c1") }
+    }
+
+    @Test
+    fun an_incoming_message_elsewhere_does_not_mark_this_conversation_read() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.conversations.markReadOptimistic(any()) } returns true
+        advanceUntilIdle()
+
+        messageReceived.emit(ApiMessage(id = "m9", conversationId = "other", content = "yo"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.conversations.markReadOptimistic(any()) }
     }
 
     @Test
@@ -391,6 +434,155 @@ class ChatViewModelTest {
 
         assertThat(h.vm.state.value.editingMessageId).isNull()
         assertThat(h.vm.state.value.draft).isEmpty()
+    }
+
+    @Test
+    fun header_carries_the_conversation_title_and_accent_color() = runTest(dispatcher) {
+        val conversation = ApiConversation(id = "c1", title = "Équipe", type = "group")
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            conversation = conversation,
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.conversationTitle).isEqualTo("Équipe")
+        assertThat(h.vm.state.value.accentColorHex).isEqualTo(conversation.accentHex())
+    }
+
+    @Test
+    fun startReply_flags_the_composer_and_closes_the_sheet() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onMessageLongPress("m1")
+        h.vm.startReply("m1")
+
+        assertThat(h.vm.state.value.replyingToMessageId).isEqualTo("m1")
+        assertThat(h.vm.state.value.actionMessageId).isNull()
+    }
+
+    @Test
+    fun send_attaches_the_replyToId_and_clears_the_reply_state() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        advanceUntilIdle()
+
+        h.vm.startReply("m1")
+        h.vm.onDraftChange("re: salut")
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify {
+            h.repo.sendOptimistic(
+                conversationId = "c1",
+                content = "re: salut",
+                originalLanguage = "fr",
+                sender = me,
+                replyToId = "m1",
+            )
+        }
+        assertThat(h.vm.state.value.replyingToMessageId).isNull()
+    }
+
+    @Test
+    fun cancelReply_clears_the_banner_without_sending() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.startReply("m1")
+        h.vm.cancelReply()
+
+        assertThat(h.vm.state.value.replyingToMessageId).isNull()
+        coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun startEdit_and_startReply_are_mutually_exclusive() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.startReply("m1")
+        h.vm.startEdit("m1")
+        assertThat(h.vm.state.value.replyingToMessageId).isNull()
+
+        h.vm.startReply("m1")
+        assertThat(h.vm.state.value.editingMessageId).isNull()
+        assertThat(h.vm.state.value.replyingToMessageId).isEqualTo("m1")
+    }
+
+    @Test
+    fun toggleShowOriginal_swaps_the_bubble_to_the_original_and_back() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        fun bubble() = h.vm.state.value.messages.first { it.messageId == "m1" }
+        advanceUntilIdle()
+        assertThat(bubble().text).isEqualTo("salut fr")
+
+        h.vm.onMessageLongPress("m1")
+        h.vm.toggleShowOriginal("m1")
+        advanceUntilIdle()
+
+        assertThat(bubble().text).isEqualTo("salut")
+        assertThat(bubble().isShowingOriginal).isTrue()
+        assertThat(h.vm.state.value.actionMessageId).isNull()
+
+        h.vm.toggleShowOriginal("m1")
+        advanceUntilIdle()
+        assertThat(bubble().text).isEqualTo("salut fr")
+    }
+
+    @Test
+    fun loadOlder_records_when_history_is_exhausted() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.loadOlder("c1") } returns false
+        advanceUntilIdle()
+
+        h.vm.loadOlder()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.repo.loadOlder("c1") }
+        assertThat(h.vm.state.value.hasMoreOlder).isFalse()
+        assertThat(h.vm.state.value.isLoadingOlder).isFalse()
+    }
+
+    @Test
+    fun loadOlder_is_single_flight_and_stops_once_exhausted() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.loadOlder("c1") } returns false
+        advanceUntilIdle()
+
+        h.vm.loadOlder()
+        h.vm.loadOlder()
+        advanceUntilIdle()
+        h.vm.loadOlder()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.repo.loadOlder("c1") }
+    }
+
+    @Test
+    fun loadOlder_skips_an_empty_conversation() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.loadOlder()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.repo.loadOlder(any(), any()) }
+    }
+
+    @Test
+    fun loadOlder_failure_surfaces_the_error_and_keeps_pagination_enabled() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.loadOlder("c1") } throws RuntimeException("down")
+        advanceUntilIdle()
+
+        h.vm.loadOlder()
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.errorMessage).isEqualTo("down")
+        assertThat(h.vm.state.value.isLoadingOlder).isFalse()
+        assertThat(h.vm.state.value.hasMoreOlder).isTrue()
     }
 
     @Test

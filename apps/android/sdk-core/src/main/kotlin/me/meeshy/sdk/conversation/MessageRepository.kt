@@ -17,8 +17,10 @@ import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
+import me.meeshy.sdk.net.rawApiCall
 import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
@@ -54,6 +56,31 @@ class MessageRepository @Inject constructor(
     /** Explicit refresh of a conversation's messages (pull / retry). Throws on failure. */
     suspend fun refresh(conversationId: String) {
         cacheSource(conversationId).revalidate()
+    }
+
+    /**
+     * Backwards pagination: fetches the page of messages older than the oldest
+     * cached server row (`before` cursor) and appends it to the Room cache.
+     * The freshness watermark is untouched — history pages do not make the
+     * newest page fresher. Returns whether more history remains.
+     */
+    suspend fun loadOlder(conversationId: String, pageSize: Int = OLDER_PAGE_SIZE): Boolean {
+        val cursor = messageDao.oldestSynced(conversationId) ?: return true
+        val response = when (
+            val result = rawApiCall { messageApi.list(conversationId, limit = pageSize, before = cursor.id) }
+        ) {
+            is NetworkResult.Success -> result.data
+            is NetworkResult.Failure -> throw MessageSyncException(result.error.message)
+        }
+        val page = response.data
+        if (!response.success || page == null) {
+            throw MessageSyncException(response.error ?: response.message ?: "Unknown error")
+        }
+        val now = clock.nowMillis()
+        database.withTransaction {
+            messageDao.upsertAll(page.map { it.toCachedEntity(now) })
+        }
+        return response.pagination?.hasMore ?: (page.size >= pageSize)
     }
 
     /**
@@ -256,6 +283,9 @@ class MessageRepository @Inject constructor(
     }
 
     private fun ApiMessage.toLocalEntity(now: Long, state: LocalSendState): MessageEntity =
+        toCachedEntity(now).copy(sendState = state.name)
+
+    private fun ApiMessage.toCachedEntity(now: Long): MessageEntity =
         MessageEntity(
             id = id,
             conversationId = conversationId,
@@ -263,8 +293,11 @@ class MessageRepository @Inject constructor(
             payload = MeeshyApi.json.encodeToString(this),
             createdAt = isoToEpochMillis(createdAt),
             cachedAt = now,
-            sendState = state.name,
         )
+
+    private companion object {
+        const val OLDER_PAGE_SIZE = 30
+    }
 
     private fun cacheSource(conversationId: String) = MessageCacheSource(
         conversationId = conversationId,

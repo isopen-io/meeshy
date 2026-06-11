@@ -1,7 +1,6 @@
-package me.meeshy.app.conversations
+package me.meeshy.sdk.theme
 
 import me.meeshy.sdk.model.ApiConversation
-import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.sdk.theme.DynamicColorGenerator.ConversationContext
 import me.meeshy.sdk.theme.DynamicColorGenerator.ConversationType
 

@@ -70,6 +70,39 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `showOriginal swaps a translated bubble back to its original text`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                content = "Hello",
+                translations = listOf(
+                    ApiTextTranslation(targetLanguage = "fr", translatedContent = "Bonjour"),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            showOriginal = true,
+        )
+
+        assertThat(content.text).isEqualTo("Hello")
+        assertThat(content.isShowingOriginal).isTrue()
+        assertThat(content.isTranslated).isTrue()
+        assertThat(content.originalText).isNull()
+    }
+
+    @Test
+    fun `showOriginal is inert on an untranslated bubble`() {
+        val content = BubbleContentBuilder.build(
+            message(content = "Hello"),
+            currentUserId = "me",
+            preferences = french,
+            showOriginal = true,
+        )
+
+        assertThat(content.text).isEqualTo("Hello")
+        assertThat(content.isShowingOriginal).isFalse()
+    }
+
+    @Test
     fun `with no matching translation the original content is shown (Prisme rule 1)`() {
         val content = BubbleContentBuilder.build(
             message(

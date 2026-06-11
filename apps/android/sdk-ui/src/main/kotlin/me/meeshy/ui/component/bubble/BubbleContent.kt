@@ -24,6 +24,7 @@ public data class BubbleContent(
     val text: String,
     val isOutgoing: Boolean,
     val isTranslated: Boolean,
+    val isShowingOriginal: Boolean = false,
     val originalText: String?,
     val senderName: String?,
     val showSenderName: Boolean,

@@ -11,6 +11,10 @@ import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.net.api.ConversationApi
+import me.meeshy.sdk.outbox.OutboxKind
+import me.meeshy.sdk.outbox.OutboxLanes
+import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.kindEnum
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -46,7 +50,53 @@ class ConversationRepositoryTest {
     }
 
     private fun repository(api: ConversationApi) =
-        ConversationRepository(api, db, db.conversationDao(), db.syncMetaDao())
+        ConversationRepository(
+            api,
+            db,
+            db.conversationDao(),
+            db.syncMetaDao(),
+            OutboxRepository(db, db.outboxDao()),
+        )
+
+    @Test
+    fun `markReadOptimistic zeroes the cached unread count and queues a READ_RECEIPT`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", title = "Team", unreadCount = 4)),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.markReadOptimistic("c1")
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.unreadCount).isEqualTo(0)
+        val row = OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT).single()
+        assertThat(row.targetId).isEqualTo("c1")
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.READ_RECEIPT)
+    }
+
+    @Test
+    fun `markReadOptimistic is a no-op when the conversation is already read`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", title = "Team", unreadCount = 0)),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.markReadOptimistic("c1")
+
+        assertThat(applied).isFalse()
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT)).isEmpty()
+    }
+
 
     @Test
     fun `stream first emission is Empty on a cold cache`() = runTest {
@@ -89,6 +139,31 @@ class ConversationRepositoryTest {
         repo.refresh()
 
         assertThat(db.conversationDao().observeAll().first().map { it.id }).containsExactly("c2")
+    }
+
+    @Test
+    fun `conversationStream emits the cached conversation by id`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(
+                        ApiConversation(id = "c1", title = "Team"),
+                        ApiConversation(id = "c2", title = "Family"),
+                    ),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        assertThat(repo.conversationStream("c2").first()?.title).isEqualTo("Family")
+    }
+
+    @Test
+    fun `conversationStream emits null for an unknown conversation`() = runTest {
+        val repo = repository(FakeConversationApi(ApiResponse(success = false, error = "n/a")))
+
+        assertThat(repo.conversationStream("missing").first()).isNull()
     }
 
     @Test
