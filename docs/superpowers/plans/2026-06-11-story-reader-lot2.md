@@ -69,11 +69,17 @@ t.onCompletion = { goToNext() }
 - [ ] **Step 2.4 :** Readiness du canvas visible : dans la closure `onContentReady` existante (Canvas:778, qui pose `isContentReady = true`), appeler aussi `slideTimer.markContentReady(slideId:)` (idempotent) — le signal du canvas préfetché reste câblé, premier arrivé gagne.
 - [ ] **Step 2.5 :** Build + suite tests + smoke reader (image statique 6 s auto-advance, vidéo, long-press pause, sheet pause, swipe groupe) + commit.
 
-### Task 3 : Préemption — `stopHandler` réel
+### Task 3 : Préemption — `stopHandler` réel — **ABANDONNÉE (exécution 2026-06-11)**
 
-**Files:** `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` (onAppear :371-389)
-
-- [ ] La closure vide passée à `StoryMediaCoordinator.shared.activate(onStop:)` devient une pause complète latched : `isLongPressPaused = true` (gèle timer + canvas via le chemin `.storyPlayerPause` existant). Tap utilisateur pour reprendre. Build + commit.
+Le `stopHandler` vide est INTENTIONNEL et documenté dans le code
+(StoryViewerView onAppear) : le canvas se préempte LUI-MÊME à chaque
+`startAudioPlayback` (`willStartPlaying(external: audioMixer)` sweep →
+stop de `StoryMediaCoordinator` → handler). Un handler actif mettrait le
+viewer en pause/muted à CHAQUE démarrage de slide (bug historique
+« viewer s'ouvre toujours muted »). Les vraies interruptions externes
+passent par `observeAudioSessionEvents` (couvert par Task 4). La revue
+initiale avait flaggé ce point sans cross-checker le commentaire du code
+— leçon `feedback-audit-must-cross-check-git-log` reconfirmée.
 
 ### Task 4 : SDK — resume post-interruption respecte la pause
 
