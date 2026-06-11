@@ -9,10 +9,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
@@ -44,15 +46,67 @@ class ConversationListViewModelTest {
         every { it.conversationsStream(any(), any()) } returns stream
     }
 
+    private val connectionState = MutableStateFlow(true)
+
     private fun socketManager(): MessageSocketManager =
         mockk<MessageSocketManager> {
             every { unreadUpdated } returns MutableSharedFlow()
             every { messageReceived } returns MutableSharedFlow()
             every { conversationUpdated } returns MutableSharedFlow()
+            every { this@mockk.connectionState } returns this@ConversationListViewModelTest.connectionState
         }
 
     private fun viewModel(repo: ConversationRepository) =
         ConversationListViewModel(repo, socketManager())
+
+    @Test
+    fun disconnection_shows_the_banner_and_reconnection_refreshes() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+        assertThat(vm.state.value.isConnected).isTrue()
+
+        connectionState.value = false
+        advanceUntilIdle()
+        assertThat(vm.state.value.isConnected).isFalse()
+
+        coEvery { repo.refresh() } returns Unit
+        connectionState.value = true
+        advanceUntilIdle()
+        assertThat(vm.state.value.isConnected).isTrue()
+        io.mockk.coVerify(atLeast = 1) { repo.refresh() }
+    }
+
+    @Test
+    fun pull_refresh_tracks_the_inflight_state() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        coEvery { repo.refresh() } coAnswers { gate.await() }
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.refresh()
+        runCurrent()
+        assertThat(vm.state.value.isRefreshing).isTrue()
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertThat(vm.state.value.isRefreshing).isFalse()
+    }
+
+    @Test
+    fun pull_refresh_clears_the_inflight_state_on_failure() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        coEvery { repo.refresh() } throws RuntimeException("down")
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.refresh()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.isRefreshing).isFalse()
+        assertThat(vm.state.value.errorMessage).isEqualTo("down")
+    }
 
     @Test
     fun fresh_result_populates_conversations_without_skeleton() = runTest(dispatcher) {

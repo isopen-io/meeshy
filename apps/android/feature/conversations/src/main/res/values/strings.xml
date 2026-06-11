@@ -5,4 +5,5 @@
     <string name="conversations_empty">No conversations yet</string>
     <string name="conversations_retry">Retry</string>
     <string name="conversations_no_messages">No messages yet</string>
+    <string name="conversations_offline_banner">Offline — reconnecting…</string>
 </resources>

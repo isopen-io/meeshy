@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -23,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -69,30 +72,64 @@ fun ConversationListScreen(
             )
         },
     ) { padding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            when {
-                state.showSkeleton -> SkeletonList()
+            if (!state.isConnected) {
+                OfflineBanner()
+            }
+            PullToRefreshBox(
+                isRefreshing = state.isRefreshing,
+                onRefresh = viewModel::refresh,
+                modifier = Modifier.weight(1f),
+            ) {
+                when {
+                    state.showSkeleton -> SkeletonList()
 
-                state.conversations.isEmpty() && state.errorMessage != null ->
-                    CenteredMessage(state.errorMessage!!, stringResource(R.string.conversations_retry), viewModel::refresh)
+                    state.conversations.isEmpty() && state.errorMessage != null ->
+                        CenteredMessage(state.errorMessage!!, stringResource(R.string.conversations_retry), viewModel::refresh)
 
-                state.conversations.isEmpty() ->
-                    CenteredMessage(stringResource(R.string.conversations_empty), null, null)
+                    state.conversations.isEmpty() ->
+                        CenteredMessage(stringResource(R.string.conversations_empty), null, null)
 
-                else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(state.conversations, key = { it.id }) { conversation ->
-                        ConversationRow(
-                            conversation = conversation,
-                            onClick = { onConversationClick(conversation.id) },
-                        )
+                    else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        items(state.conversations, key = { it.id }) { conversation ->
+                            ConversationRow(
+                                conversation = conversation,
+                                onClick = { onConversationClick(conversation.id) },
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun OfflineBanner() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MeeshyTheme.tokens.backgroundTertiary)
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.CloudOff,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.size(14.dp),
+        )
+        Text(
+            text = stringResource(R.string.conversations_offline_banner),
+            style = MaterialTheme.typography.labelSmall,
+            color = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.padding(start = MeeshySpacing.xs),
+        )
     }
 }
 

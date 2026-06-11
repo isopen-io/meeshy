@@ -18,6 +18,8 @@ import javax.inject.Inject
 data class ConversationListUiState(
     val conversations: List<ApiConversation> = emptyList(),
     val isSyncing: Boolean = false,
+    val isRefreshing: Boolean = false,
+    val isConnected: Boolean = true,
     val showSkeleton: Boolean = false,
     val errorMessage: String? = null,
 )
@@ -45,6 +47,17 @@ class ConversationListViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            var everConnected = false
+            var previous: Boolean? = null
+            messageSocketManager.connectionState.collect { connected ->
+                if (connected) everConnected = true
+                _state.update { it.copy(isConnected = connected || !everConnected) }
+                if (connected && previous == false) refreshSilently()
+                previous = connected
+            }
+        }
+
+        viewModelScope.launch {
             launch {
                 messageSocketManager.unreadUpdated.collect {
                     repository.refresh()
@@ -64,17 +77,32 @@ class ConversationListViewModel @Inject constructor(
     }
 
     fun refresh() {
-        _state.update { it.copy(errorMessage = null, isSyncing = true) }
+        _state.update { it.copy(errorMessage = null, isSyncing = true, isRefreshing = true) }
         viewModelScope.launch {
             try {
                 repository.refresh()
+                _state.update { it.copy(isRefreshing = false) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 _state.update {
-                    it.copy(errorMessage = e.message, isSyncing = false, showSkeleton = false)
+                    it.copy(
+                        errorMessage = e.message,
+                        isSyncing = false,
+                        isRefreshing = false,
+                        showSkeleton = false,
+                    )
                 }
             }
+        }
+    }
+
+    private suspend fun refreshSilently() {
+        try {
+            repository.refresh()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
         }
     }
 }

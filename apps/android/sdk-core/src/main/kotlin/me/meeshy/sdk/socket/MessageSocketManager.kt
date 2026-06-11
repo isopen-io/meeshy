@@ -2,6 +2,7 @@ package me.meeshy.sdk.socket
 
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.ApiMessage
@@ -81,6 +82,10 @@ class MessageSocketManager @Inject constructor(
     val participantBanned: SharedFlow<ParticipantBannedEvent> = _participantBanned.asSharedFlow()
     val participantRoleUpdated: SharedFlow<ParticipantRoleUpdatedEvent> = _participantRoleUpdated.asSharedFlow()
     val readStatusUpdated: SharedFlow<ReadStatusUpdatedEvent> = _readStatusUpdated.asSharedFlow()
+
+    /** Live socket connection state, for connection-health UI. */
+    val connectionState: StateFlow<Boolean>
+        get() = socketManager.connectionState
 
     fun attach() {
         listen("message:new", _messageReceived)

@@ -3,8 +3,11 @@ package me.meeshy.sdk.socket
 import io.socket.client.IO
 import io.socket.client.Socket
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.TokenStore
 import org.json.JSONObject
@@ -26,9 +29,13 @@ class SocketManager @Inject constructor(
 
     private val _connected = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
     private val _disconnected = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
+    private val _connectionState = MutableStateFlow(false)
 
     val connected: SharedFlow<Unit> = _connected.asSharedFlow()
     val disconnected: SharedFlow<Unit> = _disconnected.asSharedFlow()
+
+    /** Live connection state — true between EVENT_CONNECT and EVENT_DISCONNECT. */
+    val connectionState: StateFlow<Boolean> = _connectionState.asStateFlow()
 
     val isConnected: Boolean get() = _socket?.connected() == true
 
@@ -47,11 +54,13 @@ class SocketManager @Inject constructor(
 
         socket.on(Socket.EVENT_CONNECT) {
             Timber.d("Socket connected")
+            _connectionState.value = true
             _connected.tryEmit(Unit)
         }
         socket.on(Socket.EVENT_DISCONNECT) { args ->
             val reason = args.firstOrNull()?.toString() ?: "unknown"
             Timber.d("Socket disconnected: $reason")
+            _connectionState.value = false
             _disconnected.tryEmit(Unit)
         }
         socket.on(Socket.EVENT_CONNECT_ERROR) { args ->
@@ -63,6 +72,7 @@ class SocketManager @Inject constructor(
     fun disconnect() {
         _socket?.disconnect()
         _socket = null
+        _connectionState.value = false
     }
 
     fun reconnectWithToken() {

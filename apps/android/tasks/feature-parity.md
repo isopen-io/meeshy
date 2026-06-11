@@ -183,7 +183,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Splash screen with brand animation + minimum display duration
 
 ## B. Conversations list
-- [ ] Cache-first instant load, cursor-based infinite scroll, pull-to-refresh (branded)
+- [~] Cache-first instant load [x] + pull-to-refresh M3 (isRefreshing dédié) ;
+      infinite scroll + branded PTR pending
 - [ ] Sectioned list with collapsible user categories + pinned section + drag-to-category
 - [ ] Filtering (all/unread/personal/private/open/global/channels/favorites/archived) + search overlay
 - [ ] Communities carousel + category filter chips
@@ -195,7 +196,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       preview (ephemeral/expired/hidden/view-once/draft/typing), unread badge, presence/story-ring/mood
 - [ ] Draft-aware ordering (drafts float to top); bump-to-top on send/receive
 - [ ] Cold-start skeletons + error-with-retry empty state
-- [ ] Connection-health banner (offline / disconnected / syncing / connected)
+- [~] Connection-health banner : hors-ligne (CloudOff + reconnexion…) piloté par
+      SocketManager.connectionState, refresh auto au retour ; états fins pending
 - [ ] Conversation category create + expand/collapse; client-side tag aggregation for autocomplete
 - [ ] Create direct/group conversation via user search; add participants
 - [ ] Story tray + per-conversation story rings
