@@ -209,7 +209,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       windowed prune keeps paginated history, scroll-top trigger + spinner); around-anchor pending
 - [ ] Reactions: quick-strip (usage-ordered) + full picker; add/remove; reaction detail breakdown
 - [ ] Pin/unpin message; starred/bookmarked messages list with navigate-to-conversation
-- [ ] Reply (swipe + banner); forward (swipe + picker); jump-to-quoted-message (local/server)
+- [~] Reply: long-press → Répondre, bannière composer (accent, annulable),
+      replyToId optimiste + aperçu cité dans la bulle ; swipe / forward / jump pending
 - [ ] Reply-count pills + reply thread overlay
 - [ ] Message bubbles: text, emoji-only (oversized), image/video grid (1–4+ collage), inline
       carousel, audio, files, location, shared-contact card

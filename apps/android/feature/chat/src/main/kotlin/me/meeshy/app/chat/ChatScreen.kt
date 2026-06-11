@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -129,13 +130,19 @@ fun ChatScreen(
             )
         },
         bottomBar = {
+            val replyTarget = state.replyingToMessageId?.let { id ->
+                state.messages.firstOrNull { it.messageId == id }
+            }
             ChatComposer(
                 draft = state.draft,
                 canSend = state.canSend,
                 isEditing = state.isEditing,
+                replyingToLabel = replyTarget?.let { it.senderName ?: it.text.take(40) },
+                accentColor = accentColor,
                 onDraftChange = viewModel::onDraftChange,
                 onSend = viewModel::send,
                 onCancelEdit = viewModel::cancelEdit,
+                onCancelReply = viewModel::cancelReply,
             )
         },
     ) { padding ->
@@ -210,6 +217,7 @@ fun ChatScreen(
             onReact = { emoji -> viewModel.toggleReaction(actionTarget.messageId, emoji) },
             onEdit = { viewModel.startEdit(actionTarget.messageId) },
             onDelete = { viewModel.deleteMessage(actionTarget.messageId) },
+            onReply = { viewModel.startReply(actionTarget.messageId) },
             onToggleOriginal = { viewModel.toggleShowOriginal(actionTarget.messageId) },
             onDismiss = viewModel::dismissMessageActions,
         )
@@ -228,6 +236,7 @@ private fun MessageActionsSheet(
     onReact: (String) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onReply: () -> Unit,
     onToggleOriginal: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -258,6 +267,13 @@ private fun MessageActionsSheet(
                 HorizontalDivider(color = MeeshyTheme.tokens.backgroundTertiary)
             }
 
+            if (isActionable) {
+                SheetAction(
+                    icon = Icons.AutoMirrored.Filled.Reply,
+                    label = stringResource(R.string.chat_action_reply),
+                    onClick = onReply,
+                )
+            }
             if (bubble.isTranslated) {
                 SheetAction(
                     icon = Icons.Filled.Translate,
@@ -358,9 +374,12 @@ private fun ChatComposer(
     draft: String,
     canSend: Boolean,
     isEditing: Boolean,
+    replyingToLabel: String?,
+    accentColor: Color,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onCancelEdit: () -> Unit,
+    onCancelReply: () -> Unit,
 ) {
     Surface(color = MeeshyTheme.tokens.backgroundPrimary) {
         Column(
@@ -369,6 +388,39 @@ private fun ChatComposer(
                 .navigationBarsPadding()
                 .imePadding(),
         ) {
+            if (replyingToLabel != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = MeeshySpacing.lg, end = MeeshySpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Reply,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.chat_replying_to, replyingToLabel),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = accentColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = MeeshySpacing.xs),
+                    )
+                    IconButton(onClick = onCancelReply) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = stringResource(R.string.chat_cancel_reply),
+                            tint = MeeshyTheme.tokens.textSecondary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+            }
             if (isEditing) {
                 Row(
                     modifier = Modifier

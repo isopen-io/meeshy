@@ -43,6 +43,7 @@ data class ChatUiState(
     val accentColorHex: String? = null,
     val actionMessageId: String? = null,
     val editingMessageId: String? = null,
+    val replyingToMessageId: String? = null,
     val ownReactions: Map<String, Set<String>> = emptyMap(),
     val isLoadingOlder: Boolean = false,
     val hasMoreOlder: Boolean = true,
@@ -213,7 +214,8 @@ class ChatViewModel @Inject constructor(
             return
         }
         val user = sessionRepository.currentUser.value ?: return
-        _state.update { it.copy(draft = "") }
+        val replyToId = _state.value.replyingToMessageId
+        _state.update { it.copy(draft = "", replyingToMessageId = null) }
         viewModelScope.launch {
             try {
                 messageRepository.sendOptimistic(
@@ -221,6 +223,7 @@ class ChatViewModel @Inject constructor(
                     content = text,
                     originalLanguage = user.systemLanguage ?: LanguageResolver.FALLBACK_LANGUAGE,
                     sender = user,
+                    replyToId = replyToId,
                 )
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
             } catch (e: CancellationException) {
@@ -275,8 +278,32 @@ class ChatViewModel @Inject constructor(
         }?.message ?: return
         if (message.deletedAt != null) return
         _state.update {
-            it.copy(editingMessageId = messageId, draft = message.content, actionMessageId = null)
+            it.copy(
+                editingMessageId = messageId,
+                draft = message.content,
+                actionMessageId = null,
+                replyingToMessageId = null,
+            )
         }
+    }
+
+    fun startReply(messageId: String) {
+        val message = latestMessages.firstOrNull {
+            it.message.id == messageId && it.sendState == LocalSendState.SYNCED
+        }?.message ?: return
+        if (message.deletedAt != null) return
+        _state.update {
+            it.copy(
+                replyingToMessageId = messageId,
+                actionMessageId = null,
+                editingMessageId = null,
+                draft = if (it.isEditing) "" else it.draft,
+            )
+        }
+    }
+
+    fun cancelReply() {
+        _state.update { it.copy(replyingToMessageId = null) }
     }
 
     fun cancelEdit() {

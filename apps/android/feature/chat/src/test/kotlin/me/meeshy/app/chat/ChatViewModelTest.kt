@@ -451,6 +451,67 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun startReply_flags_the_composer_and_closes_the_sheet() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onMessageLongPress("m1")
+        h.vm.startReply("m1")
+
+        assertThat(h.vm.state.value.replyingToMessageId).isEqualTo("m1")
+        assertThat(h.vm.state.value.actionMessageId).isNull()
+    }
+
+    @Test
+    fun send_attaches_the_replyToId_and_clears_the_reply_state() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        advanceUntilIdle()
+
+        h.vm.startReply("m1")
+        h.vm.onDraftChange("re: salut")
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify {
+            h.repo.sendOptimistic(
+                conversationId = "c1",
+                content = "re: salut",
+                originalLanguage = "fr",
+                sender = me,
+                replyToId = "m1",
+            )
+        }
+        assertThat(h.vm.state.value.replyingToMessageId).isNull()
+    }
+
+    @Test
+    fun cancelReply_clears_the_banner_without_sending() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.startReply("m1")
+        h.vm.cancelReply()
+
+        assertThat(h.vm.state.value.replyingToMessageId).isNull()
+        coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun startEdit_and_startReply_are_mutually_exclusive() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.startReply("m1")
+        h.vm.startEdit("m1")
+        assertThat(h.vm.state.value.replyingToMessageId).isNull()
+
+        h.vm.startReply("m1")
+        assertThat(h.vm.state.value.editingMessageId).isNull()
+        assertThat(h.vm.state.value.replyingToMessageId).isEqualTo("m1")
+    }
+
+    @Test
     fun toggleShowOriginal_swaps_the_bubble_to_the_original_and_back() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
         fun bubble() = h.vm.state.value.messages.first { it.messageId == "m1" }
