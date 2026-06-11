@@ -111,6 +111,26 @@ public actor MediaSessionCoordinator {
         try? session.setActive(true)
     }
 
+    /// Configure SYNCHRONEMENT la session pour un enregistrement micro
+    /// (voice note, voice story). Source unique call-aware : pendant un
+    /// appel VoIP la session appartient à RTCAudioSession — reconfigurer
+    /// en `.playAndRecord` ici casserait l'uplink micro de l'appel.
+    /// Retourne `false` si la session n'a pas pu être prise (appel actif).
+    @discardableResult
+    public nonisolated func activateRecordingSync(
+        options: AVAudioSession.CategoryOptions = [.defaultToSpeaker, .allowBluetoothA2DP]
+    ) -> Bool {
+        guard Self.shouldManageSession(callActive: callActive) else { return false }
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playAndRecord, mode: .default, options: options)
+            try session.setActive(true)
+            return true
+        } catch {
+            return false
+        }
+    }
+
     /// Désactive SYNCHRONEMENT la session (call-aware : ne coupe rien pendant un appel,
     /// la session appartient alors à l'appel).
     public nonisolated func deactivatePlaybackSync() {

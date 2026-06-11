@@ -247,6 +247,97 @@ final class StoryReaderTimerGatingTests: XCTestCase {
         XCTAssertEqual(completionCount, 1)
     }
 
+    // MARK: - setPaused(_:) contracts
+
+    /// Pause contract : while paused, wall-time deltas must not move
+    /// `progress` — the reader pauses the countdown for sheets,
+    /// composer focus, transitions, and player preemption.
+    func test_setPaused_freezesProgress() {
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.setCurrentSlide(id: "slide-current", duration: 5)
+        timer.markContentReady(slideId: "slide-current")
+        timer._advanceClockForTesting(by: 2.0)
+        XCTAssertEqual(timer.progress, 0.4, accuracy: 1e-6)
+
+        timer.setPaused(true)
+        timer._advanceClockForTesting(by: 3.0)
+        XCTAssertEqual(timer.progress, 0.4, accuracy: 1e-6,
+                       "Progress must freeze while paused")
+        XCTAssertTrue(timer.isPaused)
+    }
+
+    /// Resume contract : un-pausing resumes from the frozen elapsed
+    /// value without any jump — the next delta is the only advance.
+    func test_setPaused_resume_doesNotJump() {
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.setCurrentSlide(id: "slide-current", duration: 5)
+        timer.markContentReady(slideId: "slide-current")
+        timer._advanceClockForTesting(by: 2.0)
+
+        timer.setPaused(true)
+        timer._advanceClockForTesting(by: 3.0)
+        timer.setPaused(false)
+        timer._advanceClockForTesting(by: 1.0)
+
+        XCTAssertEqual(timer.progress, 0.6, accuracy: 1e-6,
+                       "Resume must continue from 2 s + 1 s = 3 s / 5 s, not absorb the paused span")
+    }
+
+    /// Pausing while pending must not implicitly start the timer, and
+    /// readiness during pause must not advance anything.
+    func test_setPaused_whilePending_staysPending() {
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.setCurrentSlide(id: "slide-current", duration: 5)
+
+        timer.setPaused(true)
+        timer._advanceClockForTesting(by: 1.0)
+        XCTAssertFalse(timer.isActive)
+        XCTAssertEqual(timer.progress, 0)
+
+        timer.markContentReady(slideId: "slide-current")
+        timer._advanceClockForTesting(by: 1.0)
+        XCTAssertEqual(timer.progress, 0,
+                       "Paused timer must not advance even after readiness")
+
+        timer.setPaused(false)
+        timer._advanceClockForTesting(by: 1.0)
+        XCTAssertEqual(timer.progress, 0.2, accuracy: 1e-6)
+    }
+
+    /// Completion must never fire from a tick that lands while paused.
+    func test_setPaused_true_blocksCompletion() {
+        var completionCount = 0
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.onCompletion = { completionCount += 1 }
+        timer.setCurrentSlide(id: "slide-current", duration: 2)
+        timer.markContentReady(slideId: "slide-current")
+        timer._advanceClockForTesting(by: 1.9)
+
+        timer.setPaused(true)
+        timer._advanceClockForTesting(by: 5.0)
+        XCTAssertEqual(completionCount, 0,
+                       "Completion must not fire while paused")
+
+        timer.setPaused(false)
+        timer._advanceClockForTesting(by: 0.2)
+        XCTAssertEqual(completionCount, 1)
+    }
+
+    /// `setCurrentSlide` and `reset` both clear a latched pause — a new
+    /// slide always starts un-paused.
+    func test_setCurrentSlide_clearsPause() {
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+        timer.setCurrentSlide(id: "slide-A", duration: 5)
+        timer.setPaused(true)
+
+        timer.setCurrentSlide(id: "slide-B", duration: 5)
+        XCTAssertFalse(timer.isPaused, "New slide must start un-paused")
+
+        timer.setPaused(true)
+        timer.reset()
+        XCTAssertFalse(timer.isPaused, "reset() must clear the pause latch")
+    }
+
     // MARK: - test_canvasOnContentReady_solidColor_firesOnce
 
     /// Bridges the canvas-side signal to the timer-side gate :

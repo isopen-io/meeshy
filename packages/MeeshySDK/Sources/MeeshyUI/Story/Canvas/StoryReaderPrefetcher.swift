@@ -105,10 +105,17 @@ public final class StoryReaderPrefetcher {
     ///     bootstrapped view via `setReaderContext(_:)`.
     ///   - preferredLanguages: Prisme Linguistique chain used to project
     ///     `StoryItem` → `StorySlide` (title + text resolution).
+    ///   - extraWarmItems: Slides supplémentaires à garder chauds HORS de la
+    ///     fenêtre intra-groupe — typiquement le slide d'entrée des groupes
+    ///     voisins, pour que la première frame d'un swipe auteur→auteur soit
+    ///     instantanée. Bootstrappés en `.edit` comme la fenêtre, protégés de
+    ///     l'éviction tant qu'ils restent passés ; `[]` (défaut) préserve le
+    ///     comportement historique.
     public func updateWindow(items: [StoryItem],
                              currentIndex: Int,
                              context: StoryReaderContext,
-                             preferredLanguages: [String]) {
+                             preferredLanguages: [String],
+                             extraWarmItems: [StoryItem] = []) {
         guard !items.isEmpty,
               items.indices.contains(currentIndex) else {
             // Empty group or out-of-range index: drop everything.
@@ -117,7 +124,8 @@ public final class StoryReaderPrefetcher {
         }
 
         let windowIndices = windowIndices(around: currentIndex, count: items.count)
-        let desiredIds = Set(windowIndices.map { items[$0].id })
+        var desiredIds = Set(windowIndices.map { items[$0].id })
+        desiredIds.formUnion(extraWarmItems.map(\.id))
 
         // Evict everything outside the window first to free memory before we
         // allocate new canvases. Important on low-RAM devices where 3 fullscreen
@@ -127,6 +135,11 @@ public final class StoryReaderPrefetcher {
         for idx in windowIndices {
             let item = items[idx]
             if bootstrapped[item.id] != nil { continue }
+            bootstrap(item: item,
+                      context: context,
+                      preferredLanguages: preferredLanguages)
+        }
+        for item in extraWarmItems where bootstrapped[item.id] == nil {
             bootstrap(item: item,
                       context: context,
                       preferredLanguages: preferredLanguages)

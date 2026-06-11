@@ -41,6 +41,17 @@ public protocol StoryReaderTimerControlling: AnyObject {
     /// Used by the reader on tap-to-pause / app backgrounding.
     func reset()
 
+    /// `true` while the countdown is frozen by `setPaused(true)`.
+    var isPaused: Bool { get }
+
+    /// Freezes / resumes the countdown WITHOUT losing the elapsed
+    /// accumulator — the reader's UI pauses (sheets, composer focus,
+    /// long-press, transitions, preemption) all funnel here. Resuming
+    /// continues from the frozen elapsed value with no jump. Cleared
+    /// by `setCurrentSlide` and `reset()` — a new slide always starts
+    /// un-paused.
+    func setPaused(_ paused: Bool)
+
     /// Test-only seam : advances the internal clock by `seconds` and
     /// triggers the progress callback chain as if `seconds` of wall
     /// time had elapsed. Lets unit tests assert the gating contract
@@ -106,6 +117,7 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
     public private(set) var currentSlideId: String?
     public private(set) var progress: Double = 0
     public private(set) var isActive: Bool = false
+    public private(set) var isPaused: Bool = false
 
     private var duration: TimeInterval = 0
     private var elapsed: TimeInterval = 0
@@ -155,6 +167,7 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
         elapsed = 0
         progress = 0
         isActive = false
+        isPaused = false
         completionFired = false
         lastTick = nil
         // Pending state — display link is allowed to tick (it will
@@ -180,9 +193,18 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
         elapsed = 0
         progress = 0
         isActive = false
+        isPaused = false
         completionFired = false
         lastTick = nil
         onProgressChange?(0)
+    }
+
+    public func setPaused(_ paused: Bool) {
+        guard paused != isPaused else { return }
+        isPaused = paused
+        // Resume without a jump : the next display-link tick re-seeds
+        // `lastTick` instead of integrating the whole paused span.
+        if !paused { lastTick = nil }
     }
 
     public func _advanceClockForTesting(by seconds: TimeInterval) {
@@ -200,7 +222,7 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
     }
 
     @objc private func tick(_ link: CADisplayLink) {
-        guard isActive else {
+        guard isActive, !isPaused else {
             // Pending : record but do not advance the accumulator. The
             // next `markContentReady` call will reset `lastTick` so
             // the first active tick advances by zero (no jump).
@@ -217,7 +239,7 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
     /// regardless of whether the display link is wired. Used by the gating
     /// test suite which constructs `StoryReaderTimerController(useDisplayLink: false)`.
     private func advanceClock(by delta: TimeInterval) {
-        guard isActive, duration > 0 else { return }
+        guard isActive, !isPaused, duration > 0 else { return }
         elapsed = min(duration, elapsed + max(0, delta))
         progress = elapsed / duration
         onProgressChange?(progress)

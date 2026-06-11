@@ -1082,9 +1082,14 @@ public final class StoryCanvasUIView: UIView {
                 case .interruptionBegan, .routeChangedOldDeviceUnavailable:
                     self.audioMixer.pause()
                 case .interruptionEndedShouldResume:
+                    // `!isPlaybackPaused` : si l'utilisateur était en pause
+                    // (long-press latch / pause UI) au moment de
+                    // l'interruption, la fin d'interruption ne doit PAS
+                    // relancer l'audio sous une slide visuellement gelée.
                     guard self.mode == .play,
                           self.window != nil,
-                          !self.completionFired else { return }
+                          !self.completionFired,
+                          !self.isPlaybackPaused else { return }
                     self.startAudioPlayback()
                 case .interruptionEndedShouldNotResume, .routeChangedOther:
                     break
