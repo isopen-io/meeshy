@@ -125,6 +125,8 @@ export const SERVER_EVENTS = {
   REACTION_ADDED: 'reaction:added',
   REACTION_REMOVED: 'reaction:removed',
   REACTION_SYNC: 'reaction:sync',
+  ATTACHMENT_REACTION_ADDED: 'attachment:reaction-added',
+  ATTACHMENT_REACTION_REMOVED: 'attachment:reaction-removed',
   MENTION_CREATED: 'mention:created',
   CALL_INITIATED: 'call:initiated',
   CALL_PARTICIPANT_JOINED: 'call:participant-joined',
@@ -293,6 +295,8 @@ export const CLIENT_EVENTS = {
   REACTION_ADD: 'reaction:add',
   REACTION_REMOVE: 'reaction:remove',
   REACTION_REQUEST_SYNC: 'reaction:request-sync',
+  ATTACHMENT_REACTION_ADD: 'attachment:reaction-add',
+  ATTACHMENT_REACTION_REMOVE: 'attachment:reaction-remove',
   CALL_INITIATE: 'call:initiate',
   CALL_JOIN: 'call:join',
   CALL_LEAVE: 'call:leave',
@@ -564,6 +568,24 @@ export interface ReactionSyncEventData {
   }[];
   readonly totalCount: number;
   readonly userReactions: readonly string[];
+}
+
+/**
+ * BUG2 A' — delta de réaction par-image. `reactionSummary` porte les comptes
+ * agrégés (emoji→count) de l'attachment APRÈS l'action. Le client met à jour les
+ * comptes ; l'état « ma réaction » reste maintenu côté client via
+ * `currentUserReactions` (optimiste + re-baké au cold-load REST), miroir des
+ * réactions message-level.
+ */
+export interface AttachmentReactionUpdateEventData {
+  readonly attachmentId: string;
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly participantId: string;
+  readonly emoji: string;
+  readonly action: 'add' | 'remove';
+  readonly reactionSummary: Readonly<Record<string, number>>;
+  readonly timestamp: string;
 }
 
 /**
@@ -952,6 +974,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.REACTION_ADDED]: (data: ReactionUpdateEventData) => void;
   [SERVER_EVENTS.REACTION_REMOVED]: (data: ReactionUpdateEventData) => void;
   [SERVER_EVENTS.REACTION_SYNC]: (data: ReactionSyncEventData) => void;
+  [SERVER_EVENTS.ATTACHMENT_REACTION_ADDED]: (data: AttachmentReactionUpdateEventData) => void;
+  [SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED]: (data: AttachmentReactionUpdateEventData) => void;
   [SERVER_EVENTS.CALL_INITIATED]: (data: CallInitiatedEvent) => void;
   [SERVER_EVENTS.CALL_PARTICIPANT_JOINED]: (data: CallParticipantJoinedEvent) => void;
   [SERVER_EVENTS.CALL_PARTICIPANT_LEFT]: (data: CallParticipantLeftEvent) => void;
