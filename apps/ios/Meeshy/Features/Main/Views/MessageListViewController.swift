@@ -108,6 +108,8 @@ final class MessageListViewController: UIViewController {
     var onAddReaction: ((String, CGRect?) -> Void)?
     /// Toggle an existing reaction emoji on a message.
     var onToggleReaction: ((String, String) -> Void)?
+    /// BUG2 A' — réaction par-image (attachmentId, messageId, emoji).
+    var onReactToAttachment: ((String, String, String) -> Void)?
     /// Open the full reaction picker / list for a message.
     var onOpenReactPicker: ((String) -> Void)?
     /// Open the detail sheet on the message-info tab.
@@ -488,6 +490,7 @@ final class MessageListViewController: UIViewController {
                 self.onAddReaction?(tappedId, self.cellFrameInWindow(messageId: tappedId))
             }
             let toggleReactionHandler = self.onToggleReaction
+            let attachmentReactionHandler = self.onReactToAttachment
             let openReactPickerHandler = self.onOpenReactPicker
             let showInfoHandler = self.onShowMessageInfo
             let showReadStatusHandler = self.onShowReadStatus
@@ -560,6 +563,7 @@ final class MessageListViewController: UIViewController {
                         onStoryReplyTap: storyReplyHandler,
                         onMediaTap: mediaTapHandler,
                         onConsumeViewOnce: consumeViewOnceHandler,
+                        onReactToAttachment: { attId, emoji in attachmentReactionHandler?(attId, messageId, emoji) },
                         onRequestTranslation: requestTranslationHandler,
                         onShowTranslationDetail: showTranslationHandler,
                         onPlayAudio: { [weak self] attachmentId in

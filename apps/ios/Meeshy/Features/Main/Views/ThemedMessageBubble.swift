@@ -64,6 +64,8 @@ struct ThemedMessageBubble: View {
     var onStoryReplyTap: ((String) -> Void)? = nil
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
+    /// BUG2 A' — réaction par-image (attachmentId, emoji).
+    var onReactToAttachment: ((String, String) -> Void)? = nil
     var onRequestTranslation: ((String, String) -> Void)? = nil
     var onShowTranslationDetail: ((String) -> Void)? = nil
     /// Phase 5 wiring (audio playback persistence): forwarded to
@@ -248,6 +250,7 @@ struct ThemedMessageBubble: View {
             onStoryReplyTap: onStoryReplyTap,
             onMediaTap: onMediaTap,
             onConsumeViewOnce: onConsumeViewOnce,
+            onReactToAttachment: onReactToAttachment,
             onRequestTranslation: onRequestTranslation,
             onShowTranslationDetail: onShowTranslationDetail,
             onPlayAudio: onPlayAudio,

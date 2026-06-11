@@ -257,6 +257,8 @@ struct MessageListView: UIViewControllerRepresentable {
     var onAddReaction: ((String, CGRect?) -> Void)?
     /// Toggle a reaction emoji on a message (tap an existing reaction chip).
     var onToggleReaction: ((String, String) -> Void)?
+    /// BUG2 A' — réaction par-image (attachmentId, messageId, emoji).
+    var onReactToAttachment: ((String, String, String) -> Void)?
     /// Open the full reactions list / picker sheet for a message.
     var onOpenReactPicker: ((String) -> Void)?
     /// Open the message detail sheet on the "info / views" tab.
@@ -315,6 +317,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onLongPress = onLongPress
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
+        vc.onReactToAttachment = onReactToAttachment
         vc.onOpenReactPicker = onOpenReactPicker
         vc.onShowMessageInfo = onShowMessageInfo
         vc.onShowReadStatus = onShowReadStatus
@@ -366,6 +369,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onLongPress = onLongPress
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
+        vc.onReactToAttachment = onReactToAttachment
         vc.onOpenReactPicker = onOpenReactPicker
         vc.onShowMessageInfo = onShowMessageInfo
         vc.onShowReadStatus = onShowReadStatus

@@ -126,7 +126,8 @@ extension BubbleStandardLayout {
             fullscreenAttachment: $fullscreenAttachment,
             shareURL: $shareURL,
             showShareSheet: $showShareSheet,
-            onConsumeViewOnce: onConsumeViewOnce
+            onConsumeViewOnce: onConsumeViewOnce,
+            onReactToAttachment: onReactToAttachment
         )
     }
 
@@ -243,6 +244,23 @@ extension BubbleStandardLayout {
 /// the runtime can resolve in O(1) recursion depth. This also lets SwiftUI
 /// preserve the cell's structural identity across `ThemedMessageBubble.body`
 /// re-evaluations and skip rebuild when the bindings haven't actually changed.
+/// BUG2 A' — attache un long-press HAUTE PRIORITÉ (gagne sur le long-press parent
+/// = context menu) uniquement quand `enabled`. Pour image solo/protégée, aucun
+/// geste n'est attaché → le parent gère son propre long-press normalement.
+private struct AttachmentReactionLongPress: ViewModifier {
+    let enabled: Bool
+    let action: () -> Void
+    func body(content: Content) -> some View {
+        if enabled {
+            content.highPriorityGesture(
+                LongPressGesture(minimumDuration: 0.4).onEnded { _ in action() }
+            )
+        } else {
+            content
+        }
+    }
+}
+
 fileprivate struct BubbleGridCell: View {
     let attachment: MessageAttachment
     let overflowCount: Int
@@ -267,8 +285,21 @@ fileprivate struct BubbleGridCell: View {
     /// on the gateway and then calls back with the success flag.
     let onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
 
+    /// BUG2 A' — émis quand l'utilisateur pose un emoji sur CETTE image
+    /// (`attachmentId`, `emoji`). nil = pas de réaction par-image (ex : image solo).
+    let onReactToAttachment: ((String, String) -> Void)?
+
+    @State private var showReactionPicker = false
+
     private var attachmentIsProtected: Bool {
         attachment.isViewOnce || attachment.isBlurred
+    }
+
+    /// Réaction par-image active seulement en grille multi-images (`!solo`), sur
+    /// image non protégée, avec callback câblé. L'image solo garde la réaction
+    /// message-level ; les protégées gardent le long-press de révélation.
+    private var canReactPerImage: Bool {
+        !solo && !attachmentIsProtected && onReactToAttachment != nil
     }
 
     private var isRevealed: Bool {
@@ -298,6 +329,56 @@ fileprivate struct BubbleGridCell: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: handleTap)
         .overlay { downloadBadgeOverlay }
+        .overlay(alignment: .bottomLeading) { reactionsBadge }
+        .modifier(AttachmentReactionLongPress(enabled: canReactPerImage) {
+            HapticFeedback.medium()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { showReactionPicker = true }
+        })
+        .overlay { reactionPickerOverlay }
+    }
+
+    /// BUG2 A' — pastille des réactions par-image (emojis + total) en coin bas-gauche
+    /// (le download badge occupe le bas-droite, le viewCount le haut-droite).
+    @ViewBuilder private var reactionsBadge: some View {
+        if let summary = attachment.reactionSummary, !summary.isEmpty {
+            let total = summary.values.reduce(0, +)
+            HStack(spacing: 1) {
+                ForEach(summary.keys.sorted().prefix(3), id: \.self) { emoji in
+                    Text(emoji).font(.system(size: 11))
+                }
+                if total > 1 {
+                    Text("\(total)").font(.system(size: 9, weight: .semibold)).foregroundColor(.white)
+                }
+            }
+            .padding(.horizontal, 5).padding(.vertical, 2)
+            .background(Capsule().fill(Color.black.opacity(0.55)))
+            .padding(5)
+        }
+    }
+
+    /// BUG2 A' — picker emoji présenté centré DANS les bounds de la cellule (évite
+    /// le clip de `.clipped()`), fond assombri tap-to-dismiss.
+    @ViewBuilder private var reactionPickerOverlay: some View {
+        if showReactionPicker {
+            ZStack {
+                Color.black.opacity(0.4)
+                    .contentShape(Rectangle())
+                    .onTapGesture { withAnimation { showReactionPicker = false } }
+                EmojiReactionPicker(
+                    scale: 0.78,
+                    scrollable: true,
+                    onReact: { emoji in
+                        onReactToAttachment?(attachment.id, emoji)
+                        withAnimation { showReactionPicker = false }
+                    },
+                    onDismiss: { withAnimation { showReactionPicker = false } }
+                )
+                .padding(8)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .padding(.horizontal, 6)
+            }
+            .transition(.opacity)
+        }
     }
 
     /// Inline video player path. `VideoAvailabilityResolver` resolves download

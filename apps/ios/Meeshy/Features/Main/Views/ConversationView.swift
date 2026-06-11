@@ -1054,6 +1054,9 @@ struct ConversationView: View {
                 onToggleReaction: { messageId, emoji in
                     viewModel.toggleReaction(messageId: messageId, emoji: emoji)
                 },
+                onReactToAttachment: { attachmentId, messageId, emoji in
+                    viewModel.toggleAttachmentReaction(attachmentId: attachmentId, messageId: messageId, emoji: emoji)
+                },
                 onOpenReactPicker: { messageId in
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     overlayState.detailSheetMessage = msg

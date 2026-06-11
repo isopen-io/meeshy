@@ -83,6 +83,8 @@ struct BubbleStandardLayout: View {
     let onStoryReplyTap: ((String) -> Void)?
     let onMediaTap: ((MessageAttachment) -> Void)?
     let onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
+    /// BUG2 A' — réaction par-image (attachmentId, emoji). Threadé jusqu'à BubbleGridCell.
+    let onReactToAttachment: ((String, String) -> Void)?
     let onRequestTranslation: ((String, String) -> Void)?
     let onShowTranslationDetail: ((String) -> Void)?
     /// Phase 5 wiring (audio playback persistence): a tap on the play button
