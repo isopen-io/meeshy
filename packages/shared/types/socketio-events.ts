@@ -1225,6 +1225,8 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.REQUEST_TRANSLATION]: (data: RequestTranslationData) => void;
   [CLIENT_EVENTS.REACTION_ADD]: (data: ReactionAddData, callback?: (response: SocketIOResponse<ReactionUpdateEventData>) => void) => void;
   [CLIENT_EVENTS.REACTION_REMOVE]: (data: ReactionRemoveData, callback?: (response: SocketIOResponse<ReactionUpdateEventData>) => void) => void;
+  [CLIENT_EVENTS.ATTACHMENT_REACTION_ADD]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<unknown>) => void) => void;
+  [CLIENT_EVENTS.ATTACHMENT_REACTION_REMOVE]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<unknown>) => void) => void;
   [CLIENT_EVENTS.REACTION_REQUEST_SYNC]: (messageId: string, callback?: (response: SocketIOResponse<ReactionSyncEventData>) => void) => void;
   [CLIENT_EVENTS.CALL_INITIATE]: (data: CallInitiateEvent, ack: (response: CallInitiateAck) => void) => void;
   [CLIENT_EVENTS.CALL_JOIN]: (data: CallJoinEvent, ack: (response: CallJoinAck) => void) => void;

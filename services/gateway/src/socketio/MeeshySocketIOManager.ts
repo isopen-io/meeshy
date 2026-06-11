@@ -20,6 +20,8 @@ import { AuthHandler } from './handlers/AuthHandler';
 import { MessageHandler } from './handlers/MessageHandler';
 import { StatusHandler } from './handlers/StatusHandler';
 import { ReactionHandler } from './handlers/ReactionHandler';
+import { AttachmentReactionHandler } from './handlers/AttachmentReactionHandler';
+import { AttachmentReactionService } from '../services/AttachmentReactionService';
 import { CommentReactionHandler } from './handlers/CommentReactionHandler';
 import { PostReactionHandler } from './handlers/PostReactionHandler';
 import { ConversationHandler } from './handlers/ConversationHandler';
@@ -114,6 +116,7 @@ export class MeeshySocketIOManager {
   private messageHandler!: MessageHandler;
   private statusHandler!: StatusHandler;
   private reactionHandler!: ReactionHandler;
+  private attachmentReactionHandler!: AttachmentReactionHandler;
   private commentReactionHandler!: CommentReactionHandler;
   private postReactionHandler!: PostReactionHandler;
   private conversationHandler!: ConversationHandler;
@@ -294,6 +297,14 @@ export class MeeshySocketIOManager {
       prisma: this.prisma,
       notificationService: this.notificationService,
       reactionService,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+    });
+
+    this.attachmentReactionHandler = new AttachmentReactionHandler({
+      io: this.io,
+      prisma: this.prisma,
+      service: new AttachmentReactionService(this.prisma),
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
     });
@@ -678,6 +689,14 @@ export class MeeshySocketIOManager {
 
       socket.on(CLIENT_EVENTS.REACTION_REQUEST_SYNC, async (messageId, callback) => {
         try { await this.reactionHandler.handleReactionSync(socket, messageId, callback); } catch (error) { logger.error('[REACTION_SYNC] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
+      });
+
+      socket.on(CLIENT_EVENTS.ATTACHMENT_REACTION_ADD, async (data, callback) => {
+        try { await this.attachmentReactionHandler.handleAdd(socket, data, callback); } catch (error) { logger.error('[ATTACHMENT_REACTION_ADD] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
+      });
+
+      socket.on(CLIENT_EVENTS.ATTACHMENT_REACTION_REMOVE, async (data, callback) => {
+        try { await this.attachmentReactionHandler.handleRemove(socket, data, callback); } catch (error) { logger.error('[ATTACHMENT_REACTION_REMOVE] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.COMMENT_REACTION_ADD, async (data, callback) => {
