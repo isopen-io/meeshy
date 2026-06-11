@@ -472,6 +472,32 @@ struct StoryComposerBarView: View {
 
 // MARK: - Story Card
 
+/// Cache à 1 entrée du `StorySlide` renderable de la slide courante.
+/// `toRenderableSlide` résout les traductions (Prisme) et hydrate les durées
+/// média — l'appeler 3× par évaluation de body (representable + check fond
+/// média + backdrop), à chaque tick de barre pendant la lecture, recompose
+/// l'intégralité du slide pour rien. Classe boxée en `@State` : survit aux
+/// re-créations de la struct ; invalidée par fingerprint (id + chaîne de
+/// langues + counts de traductions par textObject — couvre les merges de
+/// traductions temps réel `story:translation-updated`).
+@MainActor
+final class RenderableSlideCache {
+    private var key: String = ""
+    private var cached: StorySlide?
+
+    func slide(for story: StoryItem, chain: [String]) -> StorySlide {
+        let translationCounts = (story.storyEffects?.textObjects ?? [])
+            .map { String($0.translations?.count ?? 0) }
+            .joined(separator: ".")
+        let newKey = "\(story.id)|\(chain.joined(separator: ","))|\(translationCounts)"
+        if newKey == key, let cached { return cached }
+        let slide = story.toRenderableSlide(preferredLanguages: chain)
+        key = newKey
+        cached = slide
+        return slide
+    }
+}
+
 /// The full story canvas: background, pixel-perfect reader, voice caption,
 /// audio badge, translation badge, scrims, gesture overlay, progress bars,
 /// header, action sidebar, big-reaction overlay, comments overlay, composer
@@ -481,6 +507,10 @@ struct StoryComposerBarView: View {
 /// `AnyView`) so its ~10-layer `ZStack` is its own type-metadata unit.
 struct StoryCardView: View {
     let geometry: GeometryProxy
+
+    /// Cf. doc de `RenderableSlideCache` — partagé par les 3 lecteurs du
+    /// slide renderable dans ce body (representable, fond média, backdrop).
+    @State private var renderableSlideCache = RenderableSlideCache()
 
     // Story content
     let currentStory: StoryItem?
@@ -831,7 +861,7 @@ struct StoryCardView: View {
                 // média est révélé.
                 if slideContentProgress < 0.95 {
                     StoryReaderLoadingOverlay(
-                        slide: story.toRenderableSlide(preferredLanguages: resolvedViewerLanguageChain),
+                        slide: renderableSlideCache.slide(for: story, chain: resolvedViewerLanguageChain),
                         progress: slideContentProgress,
                         threshold: 0.95,
                         showSpinner: showProgressOverlay
@@ -1321,7 +1351,7 @@ struct StoryCardView: View {
     /// est déjà une image/vidéo »).
     private var currentSlideHasMediaBackground: Bool {
         guard let story = currentStory else { return false }
-        return story.toRenderableSlide(preferredLanguages: resolvedViewerLanguageChain)
+        return renderableSlideCache.slide(for: story, chain: resolvedViewerLanguageChain)
             .effects.hasVisualBackgroundMedia
     }
 
@@ -1384,7 +1414,7 @@ struct StoryCardView: View {
     /// Retourne `nil` si aucune source exploitable n'existe (Color.clear path).
     private func resolvedBackdropImage(for story: StoryItem?) -> UIImage? {
         guard let story else { return nil }
-        let slide = story.toRenderableSlide(preferredLanguages: resolvedViewerLanguageChain)
+        let slide = renderableSlideCache.slide(for: story, chain: resolvedViewerLanguageChain)
         // (1) thumbHash slide-level
         if let hash = slide.effects.thumbHash,
            !hash.isEmpty,
