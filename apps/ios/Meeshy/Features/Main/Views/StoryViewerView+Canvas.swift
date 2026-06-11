@@ -583,11 +583,6 @@ struct StoryCardView: View {
     /// uniquement sur ses transitions — pas sur celles de `isPaused`.
     @Binding var isLongPressPaused: Bool
 
-    /// Position de lecture (secondes) émise par le canvas — pilote la progress
-    /// bar et l'auto-advance du timer parent. Bound pour que le viewer parent
-    /// puisse la lire dans `startTimer()`.
-    @Binding var lastPlaybackTime: Double
-
     /// Reflète `shouldPauseTimer` du parent (aggrégation des pauses UI : sheets,
     /// composer, drag, long-press, transition). Propagée au canvas via
     /// `StoryReaderRepresentable.isPaused` pour que la timeline canvas (vidéo,
@@ -791,8 +786,7 @@ struct StoryCardView: View {
                                               return
                                           }
                                           slideContentProgress = p
-                                      },
-                                      onPlaybackTime: { t in lastPlaybackTime = t })
+                                      })
                     .id(story.id)
                     // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
                     // Sans contrainte, `geometry.size.height` étirait le canvas

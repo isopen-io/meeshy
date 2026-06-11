@@ -139,17 +139,8 @@ struct StoryViewerView: View {
     /// arrondit à `ceil(base / loopPeriod) × loopPeriod` pour que chaque loop bg
     /// termine son cycle avant l'avance.
     @State var computedStoryDuration: Double = 6.0 // internal for cross-file extension access
-    @State var timerCancellable: AnyCancellable? // internal for cross-file extension access
     @State var hasFiredFadeOut = false // internal for cross-file extension access
     @State var hasFiredNextPrefetch = false // déclencheur du prefetch de la slide N+1, armé à 5s de la fin de la slide en cours pour que la transition soit fluide.
-
-    /// Position de lecture (secondes) émise par le displayLink interne du canvas
-    /// via `StoryReaderRepresentable.onPlaybackTime`. Source de vérité unique
-    /// pour piloter la progress bar du viewer en sync EXACTE avec la timeline
-    /// canvas (vidéo BG + audio + keyframes). Aligné sur `computedStoryDuration`
-    /// qui inclut le roundup des cycles bg → la transition n'interrompt jamais
-    /// un loop mid-cycle. Reset à 0 à chaque slide change (cf. `startTimer`).
-    @State var lastPlaybackTime: Double = 0 // internal for cross-file extension access
 
     /// Visibilité du chrome (header, sidebar droite, composer) — animé par
     /// glissements directionnels. En mode normal `chromeVisible = true` au
@@ -176,15 +167,14 @@ struct StoryViewerView: View {
     // visible `StoryReaderRepresentable` shares the same image cache (its
     // canvas hits the cache directly on `setReaderContext` → `rebuildLayers`).
     //
-    // The timer's `onCompletion` drives auto-advance, replacing the legacy
-    // wall-clock CADisplayLink loop in `startTimer()`. The legacy
-    // `timerCancellable` is intentionally KEPT and exercised by
-    // `restartTimer()` calls from `crossFadeStory` / `groupTransition`
-    // (extension code) — wiring `onChange` of the slide index re-cancels
-    // it and re-arms the gated timer so both code paths converge on the
-    // same auto-advance source of truth.
+    // Lot 2 (2026-06-11) : le timer gated est l'UNIQUE pilote — barre de
+    // progression (`onProgressChange`), seuil de prefetch N+1 et auto-advance
+    // (`onCompletion` → `goToNext()`). Le display-link legacy
+    // (`StoryProgressDisplayLinkProxy` + `timerCancellable`) est supprimé ;
+    // `startTimer()` (extension +Content) ne garde que les resets d'état de
+    // slide puis ré-arme via `refreshPrefetchWindowAndTimer()`.
     @State private var prefetcher = StoryReaderPrefetcher()
-    @State private var slideTimer = StoryReaderTimerController()
+    @State var slideTimer = StoryReaderTimerController() // internal for cross-file extension access
     /// Latched once `attach(to:)` has been wired via the host
     /// representable — guards against re-firing every onAppear cycle
     /// (scene phase changes / parent re-renders).
@@ -388,7 +378,6 @@ struct StoryViewerView: View {
                 // besoin de basculer la UI mute pour ça.
             }
             installPrefetchPipelineIfNeeded()
-            refreshPrefetchWindowAndTimer()
             startTimer()
             markCurrentViewed()
             prefetchCurrentGroup()
@@ -405,7 +394,6 @@ struct StoryViewerView: View {
             await refreshVideoAudioTrackPresence()
         }
         .onDisappear {
-            timerCancellable?.cancel()
             slideTimer.reset()
             prefetcher.detach()
             hasInstalledPrefetchPipeline = false
@@ -420,7 +408,6 @@ struct StoryViewerView: View {
         }
         .adaptiveOnChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
-                timerCancellable?.cancel()
                 slideTimer.reset()
                 PlaybackCoordinator.shared.stopAll()
                 // Release the shared playback session so other apps' audio
@@ -442,6 +429,21 @@ struct StoryViewerView: View {
                 name: paused ? .storyPlayerPause : .storyPlayerResume,
                 object: nil
             )
+        }
+        // Toutes les pauses UI (sheets, composer engaged, pickers, overlay
+        // commentaires, transitions, dismiss, long-press) convergent vers le
+        // timer gated — ex-gate par-tick `guard !shouldPauseTimer` du proxy.
+        .adaptiveOnChange(of: shouldPauseTimer) { _, paused in
+            slideTimer.setPaused(paused)
+        }
+        // Readiness du canvas VISIBLE (StoryReaderRepresentable) — signal
+        // jumeau de celui du canvas préfetché câblé dans
+        // `refreshPrefetchWindowAndTimer` (markContentReady est idempotent,
+        // premier arrivé gagne). Garde le gate fonctionnel même quand le
+        // prefetcher n'a pas (encore) de canvas pour la slide courante.
+        .adaptiveOnChange(of: isContentReady) { _, ready in
+            guard ready, let id = currentStory?.id else { return }
+            slideTimer.markContentReady(slideId: id)
         }
         .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
             skipExpiredStoriesIfNeeded()
@@ -622,22 +624,31 @@ struct StoryViewerView: View {
         // Reset the gated timer so a re-entrant `.onAppear` doesn't keep
         // the previous slide's countdown alive across the host re-install.
         t.reset()
-        t.onProgressChange = { _ in
-            // Visual progress bar is driven by the legacy
-            // `startTimer()` display-link loop — the gated timer only
-            // owns the auto-advance trigger. Wiring `onProgressChange`
-            // here (no-op for now) keeps the seam available so a
-            // post-launch refactor can switch the bar to gated progress
-            // without touching the structure of the integration.
+        // Lot 2 (2026-06-11) : le timer gated est désormais l'UNIQUE pilote
+        // de progression — le display-link legacy `StoryProgressDisplayLinkProxy`
+        // est supprimé. La barre, le seuil de prefetch N+1 et l'auto-advance
+        // vivent ici ; la pause est asservie à `shouldPauseTimer` via
+        // `adaptiveOnChange` (+ `setPaused` initial dans `startTimer()`).
+        t.onProgressChange = { [self] p in
+            let raw = CGFloat(min(1.0, p))
+            // Granularité 1/300 : évite de committer le @State `progress`
+            // à chaque tick 60 Hz pour des deltas invisibles (la barre fait
+            // ~300 pt de large au maximum).
+            if abs(raw - progress) >= 1.0 / 300.0 || raw >= 1.0 || raw == 0 {
+                progress = raw
+            }
+            // Seuil d'amorçage du prefetch de la slide suivante : 5 s avant
+            // la fin, borné à 50 % minimum (cf. rationale historique dans
+            // l'ancien `startTimer()` — conservée à l'identique).
+            let duration = computedStoryDuration
+            let threshold = max(0.5, 1.0 - (5.0 / max(duration, 0.1)))
+            if p >= threshold && !hasFiredNextPrefetch {
+                hasFiredNextPrefetch = true
+                _ = prefetchStory(at: currentStoryIndex + 1)
+            }
         }
-        t.onCompletion = {
-            // No-op : the legacy `startTimer()` display-link loop already
-            // owns `goToNext()` (it fires when `progress >= 1.0`), so
-            // wiring a second auto-advance here would double-skip. The
-            // seam stays exposed so a follow-up patch can pivot to gated
-            // advance once the legacy loop is fully retired, and so the
-            // integration test can assert the callback is wired without
-            // having to spin the legacy display link.
+        t.onCompletion = { [self] in
+            goToNext()
         }
     }
 
@@ -987,7 +998,6 @@ struct StoryViewerView: View {
             chromeVisible: $chromeVisible,
             isFullscreenStorySession: $isFullscreenStorySession,
             isLongPressPaused: $isLongPressPaused,
-            lastPlaybackTime: $lastPlaybackTime,
             isCanvasPlaybackPaused: shouldPauseTimer,
             keyboard: keyboard,
             triggerStoryReaction: { triggerStoryReaction($0) },
