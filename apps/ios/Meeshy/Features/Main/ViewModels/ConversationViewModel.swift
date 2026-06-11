@@ -2484,24 +2484,23 @@ class ConversationViewModel: ObservableObject {
         let failedMsg = messages[idx]
         guard failedMsg.deliveryStatus == .failed else { return }
 
-        // Delete the failed row from GRDB; store observation removes it from
-        // `messages` automatically. Then re-send, which inserts a fresh
-        // optimistic row.
-        //
-        // Phase 4 §6.2 — reuse the failed message's `clientMessageId` so
-        // the gateway dedup contract `(conversationId, clientMessageId)`
-        // catches a previous attempt that DID reach the server (e.g. ACK
-        // was lost mid-flight). A fresh `cid_*` here would bypass the
-        // dedup index and produce a duplicate server-side record.
-        // The local id of a Phase 4 optimistic message IS its
-        // `clientMessageId` (legacy `temp_/offline_/retry_*` prefixes are
-        // gone), so passing `messageId` straight through is correct.
+        // Resend IN PLACE — no delete + reinsert, so the bubble never flashes
+        // "message supprimé". `.retry` transitions the EXISTING row .failed →
+        // .queued (resets the retry budget) while preserving its content and
+        // position: the orange retry band disappears and the bubble shows the
+        // sending indicator immediately. `sendMessage` then re-drives the fast
+        // (socket-first) send reusing the SAME clientMessageId — Phase 4 §6.2,
+        // so the gateway dedup contract `(conversationId, clientMessageId)`
+        // catches a prior attempt that DID reach the server (lost ACK). Its
+        // optimistic insert harmlessly no-ops on the existing row (PK conflict,
+        // swallowed by the insert's own catch), and the serverAck reconciles it
+        // .queued → .sent. The local id of a Phase 4 optimistic message IS its
+        // clientMessageId (no legacy temp_/offline_/retry_ prefix), so passing
+        // `messageId` straight through as `existingTempId` is correct.
         let content = failedMsg.content
         let replyToId = failedMsg.replyToId
-        let priorClientMessageId = messageId
-        try? await messagePersistence.markDeleted(localId: messageId, deletedAt: Date())
-
-        await sendMessage(content: content, replyToId: replyToId, existingTempId: priorClientMessageId)
+        _ = try? await messagePersistence.applyEvent(localId: messageId, event: .retry)
+        await sendMessage(content: content, replyToId: replyToId, existingTempId: messageId)
     }
 
     func removeFailedMessage(messageId: String) {

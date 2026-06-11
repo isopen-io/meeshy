@@ -131,4 +131,69 @@ final class PushDeliveryReceiptServiceTests: XCTestCase {
         await sut.flushPending()
         XCTAssertEqual(sut._pendingCount(), 1, "Still-failing items remain queued")
     }
+
+    // MARK: - Poison-pill guards (empty id / permanent server errors)
+
+    func test_ack_withEmptyConversationId_neverCallsBackendNorQueues() async {
+        let recorder = CallRecorder()
+        let sut = makeSUT(recorder: recorder)
+
+        await sut.ack(conversationId: "", messageId: "msg-1")
+
+        let calls = await recorder.calls
+        XCTAssertTrue(calls.isEmpty, "Un id vide produirait /conversations//mark-as-received → 404 permanent")
+        XCTAssertEqual(sut._pendingCount(), 0)
+    }
+
+    func test_flushPending_purgesPersistedEmptyConversationIds() async {
+        let recorder = CallRecorder()
+        // Simule la ligne corrompue persistée par un ancien build : enqueue
+        // via le chemin non-authentifié d'un SUT SANS le guard (on écrit
+        // directement le JSON legacy dans le même defaults/clé).
+        let legacy = """
+        [{"conversationId":"","messageId":null,"enqueuedAt":"2026-06-10T08:00:00Z"},\
+        {"conversationId":"conv-ok","messageId":null,"enqueuedAt":"2026-06-10T08:00:01Z"}]
+        """
+        defaults.set(Data(legacy.utf8), forKey: "com.meeshy.push.pendingReceipts")
+        let sut = makeSUT(recorder: recorder)
+        XCTAssertEqual(sut._pendingCount(), 2)
+
+        await sut.flushPending()
+
+        let calls = await recorder.calls
+        XCTAssertEqual(calls, ["conv-ok"], "La ligne vide est purgée sans appel réseau")
+        XCTAssertEqual(sut._pendingCount(), 0)
+    }
+
+    func test_flushPending_dropsPermanent4xxInsteadOfRequeueing() async {
+        let recorder = CallRecorder()
+        let deps = PushDeliveryReceiptService.Dependencies(
+            markAsReceived: { id in
+                try await recorder.record(id)
+                throw MeeshyError.server(statusCode: 404, message: "Route not found")
+            },
+            isAuthenticated: { true }
+        )
+        let sut = PushDeliveryReceiptService(dependencies: deps, defaults: defaults)
+        defaults.set(
+            Data("""
+            [{"conversationId":"conv-gone","messageId":null,"enqueuedAt":"2026-06-10T08:00:00Z"}]
+            """.utf8),
+            forKey: "com.meeshy.push.pendingReceipts"
+        )
+
+        await sut.flushPending()
+
+        XCTAssertEqual(sut._pendingCount(), 0, "Un 404 est permanent — re-enfiler garantit l'échec à vie")
+    }
+
+    func test_isRetryable_classifiesServerErrors() {
+        XCTAssertFalse(PushDeliveryReceiptService.isRetryable(MeeshyError.server(statusCode: 400, message: "Validation failed")))
+        XCTAssertFalse(PushDeliveryReceiptService.isRetryable(MeeshyError.server(statusCode: 404, message: "Route not found")))
+        XCTAssertFalse(PushDeliveryReceiptService.isRetryable(MeeshyError.forbidden(reason: nil, body: nil)))
+        XCTAssertTrue(PushDeliveryReceiptService.isRetryable(MeeshyError.server(statusCode: 401, message: "expired")))
+        XCTAssertTrue(PushDeliveryReceiptService.isRetryable(MeeshyError.server(statusCode: 429, message: "rate limited")))
+        XCTAssertTrue(PushDeliveryReceiptService.isRetryable(MeeshyError.server(statusCode: 503, message: "unavailable")))
+        XCTAssertTrue(PushDeliveryReceiptService.isRetryable(TestError.network))
+    }
 }

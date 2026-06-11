@@ -2267,6 +2267,10 @@ struct MessageDetailSheet: View {
         guard !isLoadingReactions || reactionGroups.isEmpty else { return }
         isLoadingReactions = true
         defer { isLoadingReactions = false }
+        guard messageHasServerId else {
+            reactionGroups = []
+            return
+        }
         do {
             let response: APIResponse<ReactionSyncResponse> = try await APIClient.shared.request(
                 endpoint: "/reactions/\(message.id)"
@@ -2299,8 +2303,17 @@ struct MessageDetailSheet: View {
 
     @State private var readStatusError: String? = nil
 
+    /// `true` quand `message.id` est un ObjectId MongoDB (24 hex). Un message
+    /// encore optimiste garde son id local `cid_…` (l'upgrade in-place ne
+    /// change jamais l'identité SwiftUI) : il n'existe pas côté serveur, et
+    /// les endpoints `/messages/:id/...` répondraient 400 "Validation failed".
+    private var messageHasServerId: Bool {
+        message.id.count == 24 && message.id.allSatisfy(\.isHexDigit)
+    }
+
     private func loadReadStatus() async {
         guard readStatusData == nil, !isLoadingReadStatus else { return }
+        guard messageHasServerId else { return }
         isLoadingReadStatus = true
         readStatusError = nil
         defer { isLoadingReadStatus = false }
