@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { sendSuccess } from '../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
 import { validateQuery } from '../../validation/helpers.js';
 import { AdminMessagesStatsQuerySchema, AdminMessagesEngagementQuerySchema } from '../../validation/admin-schemas.js';
 
@@ -9,20 +9,14 @@ import { AdminMessagesStatsQuerySchema, AdminMessagesEngagementQuerySchema } fro
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return reply.status(401).send({
-      success: false,
-      message: 'Authentification requise'
-    });
+    return sendUnauthorized(reply, 'Authentification requise');
   }
 
   const userRole = authContext.registeredUser.role;
   const canView = ['BIGBOSS', 'ADMIN', 'MODERATOR', 'AUDIT'].includes(userRole);
 
   if (!canView) {
-    return reply.status(403).send({
-      success: false,
-      message: 'Permission insuffisante'
-    });
+    return sendForbidden(reply, 'Permission insuffisante');
   }
 };
 
@@ -225,10 +219,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         });
     } catch (error) {
       logError(fastify.log, 'Get message stats error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération des statistiques des messages'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des statistiques des messages');
     }
   });
 
@@ -307,10 +298,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         });
     } catch (error) {
       logError(fastify.log, 'Get message trends error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération des tendances'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des tendances');
     }
   });
 
@@ -411,10 +399,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         });
     } catch (error) {
       logError(fastify.log, 'Get message engagement error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération de l\'engagement'
-      });
+      return sendInternalError(reply, "Erreur lors de la récupération de l'engagement");
     }
   });
 }
