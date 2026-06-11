@@ -4,26 +4,20 @@ import { validatePagination, buildPaginationMeta } from '../../utils/pagination'
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
 import { InvitationsListQuerySchema, InvitationIdParamSchema, UpdateInvitationBodySchema } from '../../validation/admin-schemas.js';
-import { sendSuccess } from '../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
 
 // Middleware pour vérifier les permissions admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return reply.status(401).send({
-      success: false,
-      message: 'Authentification requise'
-    });
+    return sendUnauthorized(reply, 'Authentification requise');
   }
 
   const userRole = authContext.registeredUser.role;
   const canManage = ['BIGBOSS', 'ADMIN'].includes(userRole);
 
   if (!canManage) {
-    return reply.status(403).send({
-      success: false,
-      message: 'Permission admin requise'
-    });
+    return sendForbidden(reply, 'Permission admin requise');
   }
 };
 
@@ -109,19 +103,10 @@ export async function invitationRoutes(fastify: FastifyInstance) {
         friendRequests.length
       );
 
-      return reply.send({
-        success: true,
-        data: {
-          invitations,
-          pagination: paginationMeta
-        }
-      });
+      return sendSuccess(reply, { invitations, pagination: paginationMeta });
     } catch (error) {
       logError(fastify.log, 'Get invitations error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération des invitations'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des invitations');
     }
   });
 
@@ -179,10 +164,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
         });
     } catch (error) {
       logError(fastify.log, 'Get invitation stats error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération des statistiques'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des statistiques');
     }
   });
 
@@ -226,10 +208,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
       });
 
       if (!invitation) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Invitation non trouvée'
-        });
+        return sendNotFound(reply, 'Invitation non trouvée');
       }
 
       return sendSuccess(reply, {
@@ -266,10 +245,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
       const { status } = request.body as { status: string };
 
       if (!['pending', 'accepted', 'rejected'].includes(status)) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Statut invalide'
-        });
+        return sendBadRequest(reply, 'Statut invalide');
       }
 
       const invitation = await fastify.prisma.friendRequest.update({
@@ -362,10 +338,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, timeline);
     } catch (error) {
       logError(fastify.log, 'Get invitations timeline error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération de la timeline'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération de la timeline');
     }
   });
 }
