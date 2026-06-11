@@ -241,6 +241,9 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Tap on a story reply preview inside a bubble. Argument is the story id
     /// (not the message id) — the parent resolves it to a story group + slide.
     var onStoryReplyTap: ((String) -> Void)?
+    /// Tap on the sender avatar's story ring in a bubble footer. Argument is
+    /// the sender's user id — the parent presents the story viewer.
+    var onViewSenderStory: ((String) -> Void)?
     /// Swipe-to-reply on a bubble. Argument is the swiped message id.
     var onSwipeReply: ((String) -> Void)?
     /// Swipe-to-forward on a bubble. Argument is the swiped message id.
@@ -304,6 +307,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
         vc.onStoryReplyTap = onStoryReplyTap
+        vc.onViewSenderStory = onViewSenderStory
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
@@ -353,6 +357,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
         vc.onStoryReplyTap = onStoryReplyTap
+        vc.onViewSenderStory = onViewSenderStory
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
