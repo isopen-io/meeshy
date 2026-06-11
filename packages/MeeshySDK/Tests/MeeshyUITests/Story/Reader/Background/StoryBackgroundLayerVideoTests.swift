@@ -74,4 +74,37 @@ final class StoryBackgroundLayerVideoTests: XCTestCase {
             naturalSize: landscape, canvasSize: canvas, override: "fill")
         XCTAssertEqual(gravity, .resizeAspectFill)
     }
+
+    /// Un attach de player (chaud comme tardif après download) DOIT notifier
+    /// `onPlayerAttached` : c'est le signal qui permet au canvas de ré-armer
+    /// l'observation de readiness quand le fichier vidéo arrive APRÈS
+    /// l'évaluation initiale (bug 2026-06-11 : thumbnail figé, progression
+    /// sans frames ni audio). L'attach est synchrone et ne dépend pas de la
+    /// validité du contenu — un fichier temporaire suffit.
+    func test_attachBackgroundPlayer_firesOnPlayerAttached() throws {
+        let layer = StoryBackgroundLayer()
+        let url = try makeTemporaryFileURL()
+        var attachedCount = 0
+        layer.onPlayerAttached = { attachedCount += 1 }
+        layer.attachBackgroundPlayer(url: url, looping: true, mute: true)
+        XCTAssertEqual(attachedCount, 1)
+        XCTAssertNotNil(layer.avPlayer)
+    }
+
+    func test_attachBackgroundPlayer_nonLooping_firesOnPlayerAttached() throws {
+        let layer = StoryBackgroundLayer()
+        let url = try makeTemporaryFileURL()
+        var attachedCount = 0
+        layer.onPlayerAttached = { attachedCount += 1 }
+        layer.attachBackgroundPlayer(url: url, looping: false, mute: false)
+        XCTAssertEqual(attachedCount, 1)
+    }
+
+    private func makeTemporaryFileURL() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("bg-attach-\(UUID().uuidString).mp4")
+        try Data([0x00, 0x00, 0x00, 0x18]).write(to: url)
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        return url
+    }
 }

@@ -1,6 +1,13 @@
 import UIKit
 import AVFoundation
 import MeeshySDK
+import os
+
+/// Diagnostics du pipeline vidéo de fond des stories — chemin historiquement
+/// aveugle (régressions 2026-05-22, 2026-06-09, 2026-06-11 toutes invisibles
+/// dans les logs). Couvre : choix de sous-chemin dans `configure(.video)`,
+/// résolution cache vs streaming distant, attach du player.
+let storyMediaLog = os.Logger(subsystem: "me.meeshy.app", category: "story-media")
 
 /// Affine transform applied to the background layer (zoom + pan + rotation).
 /// Mirrors `StoryBackgroundTransform` from the SDK schema, in render-space.
@@ -135,6 +142,15 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
     /// ThumbHash, and the opaque overlay then covered the loaded photo with that
     /// placeholder (« le preview affiche le thumbHash, pas l'image » 2026-06-03).
     @MainActor public var onFinalImageStamped: (() -> Void)?
+
+    /// Fired chaque fois qu'un `AVPlayer` de fond vient d'être attaché —
+    /// chemin chaud (fichier local immédiat) comme chemin froid (attach
+    /// différé après download). Le canvas s'en sert pour (ré)armer son
+    /// observation de readiness vidéo : sans ce signal, un download plus
+    /// long que la fenêtre de sondage initiale (~1,5 s) laissait la slide
+    /// gelée sur son thumbnail, progression sans frames ni audio
+    /// (bug user 2026-06-11).
+    @MainActor public var onPlayerAttached: (() -> Void)?
 
     /// Marks the final bitmap as stamped and notifies `onFinalImageStamped`.
     @MainActor
@@ -599,6 +615,7 @@ extension StoryBackgroundLayer {
                 if let direct = Self.directURLIfAny(from: postMediaId) { return direct }
                 return resolver?(postMediaId)
             }()
+            storyMediaLog.info("bg video configure id=\(postMediaId.suffix(24), privacy: .public) resolved=\(resolvedURL?.absoluteString.suffix(40) ?? "nil", privacy: .public)")
             guard let remoteURL = resolvedURL else {
                 // Pas d'URL : on laisse le layer transparent, le parent
                 // (composer / viewer) porte le fond. Évite un flash noir
@@ -613,17 +630,20 @@ extension StoryBackgroundLayer {
             // direct, sans placeholder noir ni ThumbHash (la première frame
             // de la vidéo est rendue très vite).
             if remoteURL.isFileURL {
+                storyMediaLog.info("bg video path=local-file")
                 backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
                 attachBackgroundPlayer(url: remoteURL, looping: looping, mute: mute,
                                        fitOverride: self.transform3D.videoFitMode)
                 break
             }
             if let local = CacheCoordinator.videoLocalFileURL(for: remoteURL.absoluteString) {
+                storyMediaLog.info("bg video path=disk-hit")
                 backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
                 attachBackgroundPlayer(url: local, looping: looping, mute: mute,
                                        fitOverride: self.transform3D.videoFitMode)
                 break
             }
+            storyMediaLog.info("bg video path=cache-miss → fetch async")
 
             // Cache miss : placeholder ThumbHash dans un sublayer si dispo,
             // sinon on garde le layer transparent (le parent porte le fond
@@ -645,7 +665,10 @@ extension StoryBackgroundLayer {
             // le placeholder, qui disparaît visuellement quand la vidéo joue.
             let fitOverride = self.transform3D.videoFitMode
             Task { @MainActor [weak self] in
+                let started = CFAbsoluteTimeGetCurrent()
                 let url = await CacheCoordinator.videoLocalFileURLAwait(for: remoteURL) ?? remoteURL
+                let elapsed = Int((CFAbsoluteTimeGetCurrent() - started) * 1000)
+                storyMediaLog.info("bg video fetch done in \(elapsed, privacy: .public)ms → \(url.isFileURL ? "local" : "REMOTE-FALLBACK", privacy: .public)")
                 self?.attachBackgroundPlayer(url: url, looping: looping, mute: mute,
                                               fitOverride: fitOverride)
             }
@@ -806,6 +829,8 @@ extension StoryBackgroundLayer {
                 self?.avPlayer?.play()
             }
         }
+
+        onPlayerAttached?()
     }
 
     @MainActor
