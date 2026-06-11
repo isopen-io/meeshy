@@ -687,9 +687,31 @@ struct StoryViewerView: View {
         // skips every clip silently (logged via `Logger.storyAudio`).
         // Images bypass the resolver via `CachedAsyncImage`, but audio has no
         // equivalent prefetch path, so we MUST provide a resolver here.
+        // Prefetch inter-groupes (Lot 3) : garde chaud le slide d'ENTRÉE des
+        // groupes voisins pour que la première frame d'un swipe auteur→auteur
+        // soit instantanée (zéro rebuildLayers perceptible). Entrée = première
+        // non-vue non-expirée du groupe suivant (là où `startAtFirstUnviewed`
+        // atterrira), sinon la première ; pour le groupe précédent, la première
+        // (comportement back-swipe actuel).
+        let now = Date()
+        var extraWarmItems: [StoryItem] = []
+        if groups.indices.contains(currentGroupIndex + 1) {
+            let next = groups[currentGroupIndex + 1].stories
+            if let entry = next.first(where: { !$0.isViewed && !$0.isExpired(at: now) })
+                ?? next.first(where: { !$0.isExpired(at: now) }) {
+                extraWarmItems.append(entry)
+            }
+        }
+        if currentGroupIndex > 0, groups.indices.contains(currentGroupIndex - 1) {
+            let previous = groups[currentGroupIndex - 1].stories
+            if let entry = previous.first(where: { !$0.isExpired(at: now) }) {
+                extraWarmItems.append(entry)
+            }
+        }
+
         let windowItems = stories
         let mediaIndex: [String: URL] = Dictionary(
-            windowItems
+            (windowItems + extraWarmItems)
                 .flatMap { $0.media }
                 .compactMap { m -> (String, URL)? in
                     guard let raw = m.url, let url = URL(string: raw) else { return nil }
@@ -710,7 +732,8 @@ struct StoryViewerView: View {
         p.updateWindow(items: stories,
                        currentIndex: currentStoryIndex,
                        context: context,
-                       preferredLanguages: chain)
+                       preferredLanguages: chain,
+                       extraWarmItems: extraWarmItems)
 
         let current = stories[currentStoryIndex]
         // PREFETCHER CANVASES RESTENT EN `.edit` (jamais promus en `.play`).
