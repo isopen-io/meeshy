@@ -83,6 +83,11 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
     func applyAttachmentUpdate(_ event: AttachmentUpdatedEvent) {
         applyAttachmentUpdateEvents.append(event)
     }
+
+    var applyAttachmentReactionDeltas: [(attachmentId: String, reactionSummary: [String: Int])] = []
+    func applyAttachmentReactionDelta(attachmentId: String, reactionSummary: [String: Int]) {
+        applyAttachmentReactionDeltas.append((attachmentId, reactionSummary))
+    }
 }
 
 // MARK: - Tests
