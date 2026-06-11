@@ -760,11 +760,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Sanitize la réponse
       const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
 
-      reply.send({
-        success: true,
-        data: sanitizedUser,
-        message: validatedData.verified ? 'Email verified' : 'Email unverified'
-      });
+      sendSuccess(reply, sanitizedUser, { message: validatedData.verified ? 'Email verified' : 'Email unverified' });
     } catch (error) {
       if (error instanceof z.ZodError) {
         reply.status(400).send({
@@ -833,11 +829,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Sanitize la réponse
       const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
 
-      reply.send({
-        success: true,
-        data: sanitizedUser,
-        message: validatedData.verified ? 'Phone verified' : 'Phone unverified'
-      });
+      sendSuccess(reply, sanitizedUser, { message: validatedData.verified ? 'Phone verified' : 'Phone unverified' });
     } catch (error) {
       if (error instanceof z.ZodError) {
         reply.status(400).send({
@@ -911,11 +903,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Sanitize la réponse
       const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
 
-      reply.send({
-        success: true,
-        data: sanitizedUser,
-        message: `${validatedData.consentType} ${validatedData.enabled ? 'enabled' : 'disabled'}`
-      });
+      sendSuccess(reply, sanitizedUser, { message: `${validatedData.consentType} ${validatedData.enabled ? 'enabled' : 'disabled'}` });
     } catch (error) {
       if (error instanceof z.ZodError) {
         reply.status(400).send({
@@ -984,11 +972,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Sanitize la réponse
       const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
 
-      reply.send({
-        success: true,
-        data: sanitizedUser,
-        message: validatedData.verified ? 'Age verified' : 'Age unverified'
-      });
+      sendSuccess(reply, sanitizedUser, { message: validatedData.verified ? 'Age verified' : 'Age unverified' });
     } catch (error) {
       if (error instanceof z.ZodError) {
         reply.status(400).send({
