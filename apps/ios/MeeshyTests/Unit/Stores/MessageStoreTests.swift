@@ -281,6 +281,60 @@ final class MessageStoreTests: XCTestCase {
         )
     }
 
+    // MARK: - Duplicate server-id collapse (publish-boundary guard)
+
+    func test_collapsingDuplicateServerIds_noCollision_returnsInputUnchanged() {
+        var a = MessageStoreObservationHelper.makeRecord(localId: "a", conversationId: "c"); a.serverId = "S1"
+        var b = MessageStoreObservationHelper.makeRecord(localId: "b", conversationId: "c"); b.serverId = "S2"
+
+        let result = MessageStore.collapsingDuplicateServerIds([a, b])
+
+        XCTAssertEqual(result.map(\.localId), ["a", "b"])
+    }
+
+    func test_collapsingDuplicateServerIds_optimisticAndServerMirror_keepsOptimistic() {
+        // The duplicate-row race: an optimistic row (localId = client cid, with
+        // its serverId backfilled by serverAck) plus a second server-mirror row
+        // inserted by a reconcile miss (localId == serverId). Keep the optimistic
+        // /tracked row so the diffable identity + send-flow cid survive — matching
+        // the successful-reconcile outcome.
+        var optimistic = MessageStoreObservationHelper.makeRecord(localId: "cid_1", conversationId: "c"); optimistic.serverId = "SRV1"
+        var mirror = MessageStoreObservationHelper.makeRecord(localId: "SRV1", conversationId: "c"); mirror.serverId = "SRV1"
+
+        let result = MessageStore.collapsingDuplicateServerIds([optimistic, mirror])
+
+        XCTAssertEqual(result.map(\.localId), ["cid_1"])
+    }
+
+    func test_collapsingDuplicateServerIds_mirrorBeforeOptimistic_stillKeepsOptimistic() {
+        var mirror = MessageStoreObservationHelper.makeRecord(localId: "SRV1", conversationId: "c"); mirror.serverId = "SRV1"
+        var optimistic = MessageStoreObservationHelper.makeRecord(localId: "cid_1", conversationId: "c"); optimistic.serverId = "SRV1"
+
+        let result = MessageStore.collapsingDuplicateServerIds([mirror, optimistic])
+
+        XCTAssertEqual(result.map(\.localId), ["cid_1"])
+    }
+
+    func test_collapsingDuplicateServerIds_multipleNilServerIds_keepsAll() {
+        // Un-acked optimistic rows (serverId nil) are distinct messages — never merged.
+        let a = MessageStoreObservationHelper.makeRecord(localId: "cid_a", conversationId: "c")
+        let b = MessageStoreObservationHelper.makeRecord(localId: "cid_b", conversationId: "c")
+
+        let result = MessageStore.collapsingDuplicateServerIds([a, b])
+
+        XCTAssertEqual(result.map(\.localId), ["cid_a", "cid_b"])
+    }
+
+    func test_collapsingDuplicateServerIds_preservesOrderOfSurvivors() {
+        var a = MessageStoreObservationHelper.makeRecord(localId: "cid_1", conversationId: "c"); a.serverId = "SRV1"
+        var mirror = MessageStoreObservationHelper.makeRecord(localId: "SRV1", conversationId: "c"); mirror.serverId = "SRV1"
+        var c = MessageStoreObservationHelper.makeRecord(localId: "cid_2", conversationId: "c"); c.serverId = "SRV2"
+
+        let result = MessageStore.collapsingDuplicateServerIds([a, mirror, c])
+
+        XCTAssertEqual(result.map(\.localId), ["cid_1", "cid_2"])
+    }
+
     // MARK: - Helpers
 
     private func makeInMemoryDatabase() throws -> DatabaseQueue {
