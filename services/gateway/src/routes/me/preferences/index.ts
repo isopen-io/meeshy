@@ -5,7 +5,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { createUnifiedAuthMiddleware } from '../../../middleware/auth';
-import { sendSuccess } from '../../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
 import { createPreferenceRouter } from './preference-router-factory';
 import { categoriesRoutes } from './categories';
 import {
@@ -85,11 +85,7 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
       const userId = request.auth?.userId;
 
       if (!userId) {
-        return reply.status(401).send({
-          success: false,
-          error: 'UNAUTHORIZED',
-          message: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
       }
 
       try {
@@ -108,11 +104,7 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
         });
       } catch (error: any) {
         fastify.log.error({ error }, 'Error fetching all preferences');
-        return reply.status(500).send({
-          success: false,
-          error: 'FETCH_ERROR',
-          message: error.message || 'Failed to fetch preferences'
-        });
+        return sendInternalError(reply, 'FETCH_ERROR', { message: error.message || 'Failed to fetch preferences' });
       }
     }
   );
@@ -146,11 +138,7 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
       const userId = request.auth?.userId;
 
       if (!userId) {
-        return reply.status(401).send({
-          success: false,
-          error: 'UNAUTHORIZED',
-          message: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
       }
 
       try {
@@ -167,17 +155,10 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
           }
         });
 
-        return reply.send({
-          success: true,
-          message: 'All preferences reset to defaults'
-        });
+        return sendSuccess(reply, undefined, { message: 'All preferences reset to defaults' });
       } catch (error: any) {
         fastify.log.error({ error }, 'Error resetting all preferences');
-        return reply.status(500).send({
-          success: false,
-          error: 'RESET_ERROR',
-          message: error.message || 'Failed to reset preferences'
-        });
+        return sendInternalError(reply, 'RESET_ERROR', { message: error.message || 'Failed to reset preferences' });
       }
     }
   );

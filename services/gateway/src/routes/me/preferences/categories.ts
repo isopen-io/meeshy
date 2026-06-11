@@ -15,7 +15,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../../utils/logger-enhanced.js';
-import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest } from '../../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendInternalError, sendPaginatedSuccess } from '../../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'PreferenceCategoriesRoutes' });
 import { createUnifiedAuthMiddleware } from '../../../middleware/auth';
@@ -222,22 +222,10 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
           })
         ]);
 
-        return reply.send({
-          success: true,
-          data: categories,
-          pagination: {
-            total,
-            limit,
-            offset
-          }
-        });
+        return sendPaginatedSuccess(reply, categories, { total, limit, offset } as any);
       } catch (error: any) {
         logError('Error fetching categories', error, { source: 'categories-routes' });
-        return reply.status(500).send({
-          success: false,
-          error: 'FETCH_ERROR',
-          message: error.message || 'Failed to fetch categories'
-        });
+        return sendInternalError(reply, 'FETCH_ERROR', { message: error.message || 'Failed to fetch categories' });
       }
     }
   );
@@ -298,11 +286,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         return sendSuccess(reply, category);
       } catch (error: any) {
         logError('Error fetching category', error, { source: 'categories-routes' });
-        return reply.status(500).send({
-          success: false,
-          error: 'FETCH_ERROR',
-          message: error.message || 'Failed to fetch category'
-        });
+        return sendInternalError(reply, 'FETCH_ERROR', { message: error.message || 'Failed to fetch category' });
       }
     }
   );
@@ -378,11 +362,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         return sendSuccess(reply, category);
       } catch (error: any) {
         logError('Error creating category', error, { source: 'categories-routes' });
-        return reply.status(500).send({
-          success: false,
-          error: 'CREATE_ERROR',
-          message: error.message || 'Failed to create category'
-        });
+        return sendInternalError(reply, 'CREATE_ERROR', { message: error.message || 'Failed to create category' });
       }
     }
   );
@@ -463,11 +443,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         return sendSuccess(reply, updated);
       } catch (error: any) {
         logError('Error updating category', error, { source: 'categories-routes' });
-        return reply.status(500).send({
-          success: false,
-          error: 'UPDATE_ERROR',
-          message: error.message || 'Failed to update category'
-        });
+        return sendInternalError(reply, 'UPDATE_ERROR', { message: error.message || 'Failed to update category' });
       }
     }
   );
@@ -544,17 +520,10 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         };
         broadcastToUser(fastify, userId, SERVER_EVENTS.CATEGORY_DELETED, deletedPayload);
 
-        return reply.send({
-          success: true,
-          message: 'Category deleted successfully'
-        });
+        return sendSuccess(reply, undefined, { message: 'Category deleted successfully' });
       } catch (error: any) {
         logError('Error deleting category', error, { source: 'categories-routes' });
-        return reply.status(500).send({
-          success: false,
-          error: 'DELETE_ERROR',
-          message: error.message || 'Failed to delete category'
-        });
+        return sendInternalError(reply, 'DELETE_ERROR', { message: error.message || 'Failed to delete category' });
       }
     }
   );
@@ -609,17 +578,10 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         };
         broadcastToUser(fastify, userId, SERVER_EVENTS.CATEGORIES_REORDERED, reorderedPayload);
 
-        return reply.send({
-          success: true,
-          message: 'Categories reordered successfully'
-        });
+        return sendSuccess(reply, undefined, { message: 'Categories reordered successfully' });
       } catch (error: any) {
         logError('Error reordering categories', error, { source: 'categories-routes' });
-        return reply.status(500).send({
-          success: false,
-          error: 'REORDER_ERROR',
-          message: error.message || 'Failed to reorder categories'
-        });
+        return sendInternalError(reply, 'REORDER_ERROR', { message: error.message || 'Failed to reorder categories' });
       }
     }
   );

@@ -397,10 +397,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         logger.error(`Broadcast job failed for id=${id}: ${err.message}`);
       });
 
-      return reply.send({
-        success: true,
-        message: 'Envoi en cours',
-      });
+      return sendSuccess(reply, undefined, { message: 'Envoi en cours' });
     } catch (error: any) {
       logger.error('Error sending broadcast');
       return sendInternalError(reply, 'Erreur lors du lancement de l\'envoi du broadcast');
@@ -450,16 +447,10 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         where: { id },
       });
 
-      return reply.send({
-        success: true,
-        message: 'Broadcast supprime',
-      });
+      return sendSuccess(reply, undefined, { message: 'Broadcast supprime' });
     } catch (error: any) {
       logger.error('Error deleting broadcast');
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la suppression du broadcast',
-      });
+      return sendInternalError(reply, 'Erreur lors de la suppression du broadcast');
     }
   });
 }
