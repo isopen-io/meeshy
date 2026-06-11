@@ -394,6 +394,60 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun loadOlder_records_when_history_is_exhausted() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.loadOlder("c1") } returns false
+        advanceUntilIdle()
+
+        h.vm.loadOlder()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.repo.loadOlder("c1") }
+        assertThat(h.vm.state.value.hasMoreOlder).isFalse()
+        assertThat(h.vm.state.value.isLoadingOlder).isFalse()
+    }
+
+    @Test
+    fun loadOlder_is_single_flight_and_stops_once_exhausted() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.loadOlder("c1") } returns false
+        advanceUntilIdle()
+
+        h.vm.loadOlder()
+        h.vm.loadOlder()
+        advanceUntilIdle()
+        h.vm.loadOlder()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.repo.loadOlder("c1") }
+    }
+
+    @Test
+    fun loadOlder_skips_an_empty_conversation() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.loadOlder()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.repo.loadOlder(any(), any()) }
+    }
+
+    @Test
+    fun loadOlder_failure_surfaces_the_error_and_keeps_pagination_enabled() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.loadOlder("c1") } throws RuntimeException("down")
+        advanceUntilIdle()
+
+        h.vm.loadOlder()
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.errorMessage).isEqualTo("down")
+        assertThat(h.vm.state.value.isLoadingOlder).isFalse()
+        assertThat(h.vm.state.value.hasMoreOlder).isTrue()
+    }
+
+    @Test
     fun deleteMessage_delegates_and_closes_the_sheet() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
         coEvery { h.repo.deleteOptimistic(any()) } returns true

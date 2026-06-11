@@ -33,6 +33,24 @@ public interface MessageDao {
     )
     public suspend fun deleteMissing(conversationId: String, ids: List<String>)
 
+    /**
+     * Windowed prune for the newest-page sync: only server rows inside the
+     * fetched window (`createdAt >= :minCreatedAt`) can be declared deleted by
+     * their absence — older paginated history is outside the page and survives.
+     */
+    @Query(
+        "DELETE FROM messages WHERE conversationId = :conversationId " +
+            "AND sendState IS NULL AND createdAt >= :minCreatedAt AND id NOT IN (:ids)",
+    )
+    public suspend fun deleteMissingSince(conversationId: String, minCreatedAt: Long, ids: List<String>)
+
+    /** Oldest server-acked row — the `before` cursor for backwards pagination. */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "AND sendState IS NULL ORDER BY createdAt ASC LIMIT 1",
+    )
+    public suspend fun oldestSynced(conversationId: String): MessageEntity?
+
     @Query("UPDATE messages SET sendState = :sendState WHERE id = :id")
     public suspend fun updateSendState(id: String, sendState: String?)
 

@@ -85,7 +85,15 @@ internal class MessageCacheSource(
         database.withTransaction {
             messageDao.upsertAll(rows)
             if (ackedLocalIds.isNotEmpty()) messageDao.deleteByIds(ackedLocalIds)
-            messageDao.deleteMissing(conversationId, rows.map { it.id })
+            if (rows.isEmpty()) {
+                messageDao.deleteMissing(conversationId, emptyList())
+            } else {
+                messageDao.deleteMissingSince(
+                    conversationId,
+                    rows.minOf { it.createdAt },
+                    rows.map { it.id },
+                )
+            }
             syncMetaDao.upsert(SyncMetaEntity(resourceKey, now))
         }
     }

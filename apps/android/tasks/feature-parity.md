@@ -143,7 +143,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [x] `:feature:chat` — cache-first message list + `MessageBubble` + composer
 - [x] Outbox-backed optimistic send: instant SENDING bubble, server-ACK swap,
       FAILED + tap-to-retry (EN/FR), WorkManager flush
-- [ ] Pending: Feed / Stories / Calls slices, message pagination, reactions UI
+- [x] Message pagination (before-cursor, scroll-top trigger, history-safe cache prune)
+- [ ] Pending: Feed / Stories / Calls slices, reactions UI polish
 
 ## Phase 6 — Integration & final audit
 - [ ] Navigation graph + deep links (`meeshy://`, `https://meeshy.me`)
@@ -202,7 +203,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Real-time 1:1 / group chat: send, edit, delete (for-me / for-everyone, 2h window), reply, forward
 - [x] Optimistic send with in-place server-ACK upgrade (no flicker) + `clientMessageId` reconciliation
 - [ ] Inverted message list, date section headers, joined banner, unread separator, E2EE disclaimer
-- [ ] Pagination of older messages (offset / before-cursor / around-anchor)
+- [~] Pagination of older messages — before-cursor done (`MessageRepository.loadOlder`,
+      windowed prune keeps paginated history, scroll-top trigger + spinner); around-anchor pending
 - [ ] Reactions: quick-strip (usage-ordered) + full picker; add/remove; reaction detail breakdown
 - [ ] Pin/unpin message; starred/bookmarked messages list with navigate-to-conversation
 - [ ] Reply (swipe + banner); forward (swipe + picker); jump-to-quoted-message (local/server)

@@ -12,6 +12,7 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.EditMessageRequest
@@ -30,8 +31,23 @@ import org.robolectric.RobolectricTestRunner
 
 private class FakeMessageApi(
     var response: ApiResponse<List<ApiMessage>>,
+    var olderResponse: ApiResponse<List<ApiMessage>> = ApiResponse(success = false, error = "no older page"),
 ) : MessageApi {
-    override suspend fun list(conversationId: String, offset: Int?, limit: Int?) = response
+    var lastBefore: String? = null
+    var lastLimit: Int? = null
+    var listCalls: Int = 0
+
+    override suspend fun list(
+        conversationId: String,
+        offset: Int?,
+        limit: Int?,
+        before: String?,
+    ): ApiResponse<List<ApiMessage>> {
+        listCalls += 1
+        lastBefore = before
+        lastLimit = limit
+        return if (before != null) olderResponse else response
+    }
     override suspend fun send(conversationId: String, body: SendMessageRequest) =
         ApiResponse<ApiMessage>(success = false)
     override suspend fun edit(messageId: String, body: EditMessageRequest) =
@@ -41,8 +57,27 @@ private class FakeMessageApi(
         ApiResponse<List<ApiMessage>>(success = false)
 }
 
-private fun apiMessage(id: String, conversationId: String = "c1", clientMessageId: String? = null) =
-    ApiMessage(id = id, conversationId = conversationId, content = "hi", clientMessageId = clientMessageId)
+private fun apiMessage(
+    id: String,
+    conversationId: String = "c1",
+    clientMessageId: String? = null,
+    createdAt: String? = null,
+) = ApiMessage(
+    id = id,
+    conversationId = conversationId,
+    content = "hi",
+    clientMessageId = clientMessageId,
+    createdAt = createdAt,
+)
+
+private class MutableClock(var now: Long) : me.meeshy.sdk.cache.CacheClock {
+    override fun nowMillis(): Long = now
+}
+
+private const val T1 = "2026-06-01T10:00:00Z"
+private const val T2 = "2026-06-01T11:00:00Z"
+private const val T3 = "2026-06-01T12:00:00Z"
+private const val T4 = "2026-06-01T13:00:00Z"
 
 private val sender = MeeshyUser(id = "me", username = "atabeth", displayName = "Atabeth")
 
@@ -66,8 +101,8 @@ class MessageRepositoryTest {
         db.close()
     }
 
-    private fun repository(api: MessageApi) =
-        MessageRepository(api, db, db.messageDao(), db.syncMetaDao(), outbox, SystemCacheClock)
+    private fun repository(api: MessageApi, clock: me.meeshy.sdk.cache.CacheClock = SystemCacheClock) =
+        MessageRepository(api, db, db.messageDao(), db.syncMetaDao(), outbox, clock)
 
     private suspend fun streamedMessages(repo: MessageRepository, conversationId: String = "c1") =
         db.messageDao().observeForConversation(conversationId).first()
@@ -307,6 +342,147 @@ class MessageRepositoryTest {
         assertThat(cachedMessage(cmid).content).isEqualTo("salut")
         assertThat(outbox.deliverable("message:c1").single().kindEnum)
             .isEqualTo(OutboxKind.SEND_MESSAGE)
+    }
+
+    @Test
+    fun `loadOlder pages backwards from the oldest synced message`() = runTest {
+        val api = FakeMessageApi(
+            response = ApiResponse(
+                success = true,
+                data = listOf(apiMessage("m3", createdAt = T3), apiMessage("m2", createdAt = T2)),
+            ),
+            olderResponse = ApiResponse(
+                success = true,
+                data = listOf(apiMessage("m1", createdAt = T1)),
+                pagination = Pagination(hasMore = false),
+            ),
+        )
+        val repo = repository(api)
+        repo.refresh("c1")
+
+        val hasMore = repo.loadOlder("c1")
+
+        assertThat(api.lastBefore).isEqualTo("m2")
+        assertThat(hasMore).isFalse()
+        assertThat(streamedMessages(repo).map { it.id })
+            .containsExactly("m1", "m2", "m3")
+            .inOrder()
+    }
+
+    @Test
+    fun `loadOlder reports more history when the server says so`() = runTest {
+        val api = FakeMessageApi(
+            response = ApiResponse(success = true, data = listOf(apiMessage("m2", createdAt = T2))),
+            olderResponse = ApiResponse(
+                success = true,
+                data = listOf(apiMessage("m1", createdAt = T1)),
+                pagination = Pagination(hasMore = true),
+            ),
+        )
+        val repo = repository(api)
+        repo.refresh("c1")
+
+        assertThat(repo.loadOlder("c1")).isTrue()
+    }
+
+    @Test
+    fun `loadOlder leaves the freshness watermark untouched`() = runTest {
+        val clock = MutableClock(1_000)
+        val api = FakeMessageApi(
+            response = ApiResponse(success = true, data = listOf(apiMessage("m2", createdAt = T2))),
+            olderResponse = ApiResponse(
+                success = true,
+                data = listOf(apiMessage("m1", createdAt = T1)),
+                pagination = Pagination(hasMore = false),
+            ),
+        )
+        val repo = repository(api, clock)
+        repo.refresh("c1")
+        clock.now = 5_000
+
+        repo.loadOlder("c1")
+
+        assertThat(db.syncMetaDao().observe("messages:c1").first()).isEqualTo(1_000)
+    }
+
+    @Test
+    fun `loadOlder does nothing on a cache with no synced message`() = runTest {
+        val api = FakeMessageApi(ApiResponse(success = false, error = "n/a"))
+        val repo = repository(api)
+        repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        val hasMore = repo.loadOlder("c1")
+
+        assertThat(hasMore).isTrue()
+        assertThat(api.listCalls).isEqualTo(0)
+    }
+
+    @Test
+    fun `loadOlder throws when the network fails`() = runTest {
+        val api = FakeMessageApi(
+            response = ApiResponse(success = true, data = listOf(apiMessage("m2", createdAt = T2))),
+            olderResponse = ApiResponse(success = false, error = "down"),
+        )
+        val repo = repository(api)
+        repo.refresh("c1")
+
+        val thrown = runCatching { repo.loadOlder("c1") }.exceptionOrNull()
+
+        assertThat(thrown).isInstanceOf(MessageSyncException::class.java)
+    }
+
+    @Test
+    fun `refresh keeps paginated history outside the window it fetched`() = runTest {
+        val api = FakeMessageApi(
+            response = ApiResponse(
+                success = true,
+                data = listOf(apiMessage("m3", createdAt = T3), apiMessage("m2", createdAt = T2)),
+            ),
+            olderResponse = ApiResponse(
+                success = true,
+                data = listOf(apiMessage("m1", createdAt = T1)),
+                pagination = Pagination(hasMore = false),
+            ),
+        )
+        val repo = repository(api)
+        repo.refresh("c1")
+        repo.loadOlder("c1")
+
+        api.response = ApiResponse(
+            success = true,
+            data = listOf(apiMessage("m4", createdAt = T4), apiMessage("m3", createdAt = T3)),
+        )
+        repo.refresh("c1")
+
+        assertThat(streamedMessages(repo).map { it.id })
+            .containsExactly("m1", "m2", "m3", "m4")
+            .inOrder()
+    }
+
+    @Test
+    fun `refresh still prunes deletions inside the fetched window`() = runTest {
+        val api = FakeMessageApi(
+            response = ApiResponse(
+                success = true,
+                data = listOf(
+                    apiMessage("m3", createdAt = T3),
+                    apiMessage("m2", createdAt = T2),
+                    apiMessage("m1", createdAt = T1),
+                ),
+            ),
+        )
+        val repo = repository(api)
+        repo.refresh("c1")
+
+        api.response = ApiResponse(
+            success = true,
+            data = listOf(apiMessage("m3", createdAt = T3), apiMessage("m1", createdAt = T1)),
+        )
+        repo.refresh("c1")
+
+        assertThat(streamedMessages(repo).map { it.id })
+            .containsExactly("m1", "m3")
+            .inOrder()
     }
 
     @Test

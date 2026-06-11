@@ -40,6 +40,8 @@ data class ChatUiState(
     val actionMessageId: String? = null,
     val editingMessageId: String? = null,
     val ownReactions: Map<String, Set<String>> = emptyMap(),
+    val isLoadingOlder: Boolean = false,
+    val hasMoreOlder: Boolean = true,
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
     val isEditing: Boolean get() = editingMessageId != null
@@ -278,6 +280,22 @@ class ChatViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    fun loadOlder() {
+        val current = _state.value
+        if (current.isLoadingOlder || !current.hasMoreOlder || current.messages.isEmpty()) return
+        _state.update { it.copy(isLoadingOlder = true) }
+        viewModelScope.launch {
+            try {
+                val hasMore = messageRepository.loadOlder(conversationId)
+                _state.update { it.copy(isLoadingOlder = false, hasMoreOlder = hasMore) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(isLoadingOlder = false, errorMessage = e.message) }
             }
         }
     }

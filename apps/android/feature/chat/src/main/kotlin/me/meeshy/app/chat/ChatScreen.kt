@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -41,6 +42,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.distinctUntilChanged
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.bubble.BubbleContent
@@ -75,10 +78,18 @@ fun ChatScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
-    LaunchedEffect(state.messages.size) {
+    LaunchedEffect(state.messages.lastOrNull()?.messageId) {
         if (state.messages.isNotEmpty()) {
             listState.animateScrollToItem(state.messages.lastIndex)
         }
+    }
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex }
+            .distinctUntilChanged()
+            .collect { index ->
+                if (index <= LOAD_OLDER_THRESHOLD) viewModel.loadOlder()
+            }
     }
 
     Scaffold(
@@ -120,6 +131,22 @@ fun ChatScreen(
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(vertical = MeeshySpacing.sm),
                     ) {
+                        if (state.isLoadingOlder) {
+                            item(key = "loading-older") {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = MeeshySpacing.sm),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MeeshyPalette.Indigo400,
+                                    )
+                                }
+                            }
+                        }
                         items(state.messages, key = { it.messageId }) { bubble ->
                             MessageBubble(
                                 content = bubble,
@@ -162,6 +189,8 @@ fun ChatScreen(
         )
     }
 }
+
+private const val LOAD_OLDER_THRESHOLD = 2
 
 private val QuickReactions = listOf("❤️", "😂", "🔥", "👏", "😮", "😢", "🥰", "👍")
 
