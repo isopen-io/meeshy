@@ -213,6 +213,18 @@ struct BubbleStandardLayout: View {
 
     private var isEmojiOnly: Bool { content.isEmojiOnly }
 
+    /// Cache key for `BubbleBodyFooterLayout`. nil (no caching) for expandable
+    /// bubbles: their measured height depends on the per-cell `isExpanded`
+    /// @State of `BubbleExpandableText`, which the content-keyed cache cannot
+    /// observe — so a long message always measures live and never risks a stale
+    /// collapsed/expanded height. Every other bubble keys on (id, content).
+    private var heightCacheContext: BubbleHeightCacheContext? {
+        if let raw = content.text?.raw, raw.count > BubbleExpandableText.truncateLimit {
+            return nil
+        }
+        return BubbleHeightCacheContext(messageId: content.messageId, content: content)
+    }
+
     /// True when audio attachments are the message's only content — no text,
     /// no non-media attachment, no reply, not emoji. In that case the bubble
     /// has no text container to host the identity bar, so it is injected into
@@ -851,7 +863,7 @@ struct BubbleStandardLayout: View {
         // `placeSubviews` both derive every value from the same resolved
         // width, so the reported height is self-consistent (no
         // UICollectionView cell-height drift).
-        BubbleBodyFooterLayout(spacing: 4) {
+        BubbleBodyFooterLayout(spacing: 4, cacheContext: heightCacheContext) {
             // Wrapped in a VStack so the Layout sees the body as ONE opaque
             // subview — a bare @ViewBuilder property would be flattened into
             // its individual conditional branches.
@@ -1281,10 +1293,45 @@ struct BubbleStandardLayout: View {
 // the same resolved width, so the reported size is self-consistent and the
 // hosting UICollectionView cell never drifts. Accepts one subview (body only,
 // when the footer is suppressed for an audio-in-quote bubble) or two.
+/// Identifies a bubble for the height cache: the message id plus the exact
+/// `BubbleContent` value it renders. nil at the call site = no caching (e.g.
+/// expandable bubbles whose height depends on per-cell `isExpanded` state).
+struct BubbleHeightCacheContext {
+    let messageId: String
+    let content: BubbleContent
+}
+
 struct BubbleBodyFooterLayout: Layout {
     var spacing: CGFloat = 4
+    var cacheContext: BubbleHeightCacheContext? = nil
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        // Cache lookup only for a concrete finite proposal width — the
+        // ideal/unspecified passes must not poison the width-keyed cache, and a
+        // hit returns the previously measured size without descending into the
+        // body subtree (the #1 CPU self-time at scroll). On a miss we measure
+        // and store; `placeSubviews` always re-measures the live content, so the
+        // cache only affects the *reported* size, never placement.
+        guard let ctx = cacheContext,
+              let proposedWidth = proposal.width,
+              proposedWidth.isFinite else {
+            return measuredSize(proposal: proposal, subviews: subviews)
+        }
+        // `Layout.sizeThatFits` is a nonisolated protocol requirement, but
+        // SwiftUI always runs layout on the main thread — so `assumeIsolated`
+        // safely bridges to the @MainActor cache (and `BubbleContent ==`).
+        return MainActor.assumeIsolated {
+            let cache = BubbleHeightCache.shared
+            if let cached = cache.size(messageId: ctx.messageId, content: ctx.content, width: proposedWidth) {
+                return cached
+            }
+            let size = measuredSize(proposal: proposal, subviews: subviews)
+            cache.store(messageId: ctx.messageId, content: ctx.content, width: proposedWidth, size: size)
+            return size
+        }
+    }
+
+    private func measuredSize(proposal: ProposedViewSize, subviews: Subviews) -> CGSize {
         guard let body = subviews.first else { return .zero }
         let bodyProbe = body.sizeThatFits(proposal)
         guard subviews.count > 1 else { return bodyProbe }
@@ -1340,5 +1387,83 @@ struct BubbleBodyFooterLayout: Layout {
             proposal: ProposedViewSize(width: width, height: footerHeight)
         )
     }
+}
+
+// MARK: - Bubble height cache
+
+/// Content-keyed height cache that short-circuits the (expensive) full
+/// body-subtree measurement in `BubbleBodyFooterLayout.sizeThatFits` — the #1
+/// CPU self-time during scroll. A hit requires the SAME message rendering the
+/// SAME `BubbleContent` at the SAME (rounded) width.
+///
+/// Correctness boundary = `BubbleContent ==`: any height-affecting content
+/// change (edit, arriving translation, secondary panel toggle, reactions,
+/// attachment enrichment) produces a different value → a miss → a fresh
+/// measure. This is the exact invariant the bubble's own equatable gate already
+/// relies on, so the cache cannot be more stale than the rendered tree itself.
+/// A recycled cell reused for a different message keys on a different id, never
+/// reading another message's entry (the failure mode of the reverted
+/// width-only `Layout.Cache`, d6ba7f958).
+///
+/// `placeSubviews` is NEVER cached — it always re-measures the live content — so
+/// the cache only affects the *reported* size, not placement. The cache is
+/// flushed on Dynamic Type change and on memory warning; width buckets quantize
+/// to the nearest point so sub-pixel proposal jitter still hits, and a rotation
+/// (different proposed width) naturally misses. Expandable bubbles (text beyond
+/// the truncation limit, whose height depends on per-cell `isExpanded` @State)
+/// opt out at the call site rather than caching a state this key cannot see.
+///
+/// `@MainActor`: the SwiftUI layout pass (and thus every `sizeThatFits` call)
+/// runs on the main thread, and `BubbleContent`'s equality is main-actor
+/// isolated — so the cache shares that isolation and needs no lock. The system
+/// observers fire on the main queue; the flush closure re-enters via
+/// `assumeIsolated`.
+@MainActor
+final class BubbleHeightCache {
+    static let shared = BubbleHeightCache(observeSystemEvents: true)
+
+    private struct Entry {
+        let content: BubbleContent
+        let widthBucket: CGFloat
+        let size: CGSize
+    }
+
+    private var entries: [String: Entry] = [:]
+    private let capacity: Int
+
+    init(capacity: Int = 3000, observeSystemEvents: Bool = false) {
+        self.capacity = capacity
+        guard observeSystemEvents else { return }
+        let center = NotificationCenter.default
+        let flush: @Sendable (Notification) -> Void = { _ in
+            MainActor.assumeIsolated { BubbleHeightCache.shared.removeAll() }
+        }
+        center.addObserver(forName: UIContentSizeCategory.didChangeNotification, object: nil, queue: .main, using: flush)
+        center.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main, using: flush)
+    }
+
+    private static func bucket(_ width: CGFloat) -> CGFloat { width.rounded() }
+
+    func size(messageId: String, content: BubbleContent, width: CGFloat) -> CGSize? {
+        guard let entry = entries[messageId],
+              entry.widthBucket == Self.bucket(width),
+              entry.content == content else { return nil }
+        return entry.size
+    }
+
+    func store(messageId: String, content: BubbleContent, width: CGFloat, size: CGSize) {
+        // Bound growth: one entry per message id, reset wholesale on overflow
+        // (a cold re-measure is cheap next to a scroll's worth of hits).
+        if entries[messageId] == nil, entries.count >= capacity {
+            entries.removeAll(keepingCapacity: true)
+        }
+        entries[messageId] = Entry(content: content, widthBucket: Self.bucket(width), size: size)
+    }
+
+    func removeAll() {
+        entries.removeAll(keepingCapacity: true)
+    }
+
+    var count: Int { entries.count }
 }
 
