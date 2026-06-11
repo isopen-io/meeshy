@@ -1511,6 +1511,12 @@ struct StoryViewerContentView: View {
     let slideProgress: CGFloat
     let dragProgress: CGFloat
 
+    // Cube inter-groupes (Lot 3) : aperçu statique léger du groupe voisin
+    // rendu comme seconde face pendant le drag horizontal / le commit.
+    let neighborGroup: StoryGroup?
+    let neighborEntryStory: StoryItem?
+    let neighborDirection: Int
+
     @Binding var isPresented: Bool
 
     /// Builds the story card for the supplied geometry. The closure is owned by
@@ -1537,6 +1543,12 @@ struct StoryViewerContentView: View {
                     // body, and we double-down here so neither the
                     // `scaleEffect` nor any unexpected intrinsic content
                     // size can leak beyond the viewport's actual bounds.
+                    // Vrai cube inter-groupes (Lot 3) : angle proportionnel à
+                    // la position écran, anchor sur l'arête intérieure — les
+                    // deux faces (carte sortante + aperçu voisin) tournent
+                    // autour de l'arête commune. À 90° la face est de profil :
+                    // le swap de contenu au commit y est invisible.
+                    let cubeWidth = max(geometry.size.width, 1)
                     makeStoryCard(geometry)
                         .frame(width: geometry.size.width, height: geometry.size.height)
                         .scaleEffect(cardScale * (1.0 - slideProgress * 0.08))
@@ -1544,14 +1556,31 @@ struct StoryViewerContentView: View {
                         .opacity(cardOpacity)
                         .offset(x: totalSlideX, y: cardOffsetY)
                         .rotation3DEffect(
-                            .degrees(Double(-totalSlideX) / 25.0),
+                            .degrees(Double(totalSlideX / cubeWidth) * 90.0),
                             axis: (x: 0, y: 1, z: 0),
-                            perspective: 0.6
+                            anchor: totalSlideX > 0 ? .leading : .trailing,
+                            perspective: 0.5
                         )
                         .shadow(
                             color: .black.opacity(dragProgress > 0.05 || slideProgress > 0.02 ? 0.5 : 0),
                             radius: 40, y: 15
                         )
+
+                    if let neighbor = neighborGroup, neighborDirection != 0 {
+                        let incomingX = totalSlideX + (neighborDirection == 1 ? cubeWidth : -cubeWidth)
+                        NeighborGroupCubeFace(group: neighbor, entryStory: neighborEntryStory)
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                            .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius + slideProgress * 16, style: .continuous))
+                            .offset(x: incomingX, y: cardOffsetY)
+                            .rotation3DEffect(
+                                .degrees(Double(incomingX / cubeWidth) * 90.0),
+                                axis: (x: 0, y: 1, z: 0),
+                                anchor: incomingX > 0 ? .leading : .trailing,
+                                perspective: 0.5
+                            )
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
 
                     // Bouton ✕ uniquement en preview mode
                     if isPreviewMode {
@@ -1578,5 +1607,66 @@ struct StoryViewerContentView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Neighbor Group Cube Face (Lot 3)
+
+/// Face entrante du cube inter-groupes : aperçu statique LÉGER du groupe
+/// voisin (thumbHash flouté du slide d'entrée + avatar + nom) — jamais une
+/// seconde `StoryCardView` interactive (les états du viewer sont mono-slide,
+/// et rendre deux piles complètes pendant un geste 60-120 Hz coûterait un
+/// frame budget entier). Parité reels : la face entrante est un rendu du
+/// média, le swap vers la vraie carte se fait au commit, masqué par l'arête
+/// à 90°. Le vrai canvas du voisin est déjà chaud (prefetch inter-groupes),
+/// donc la première frame réelle suit instantanément.
+struct NeighborGroupCubeFace: View {
+    let group: StoryGroup
+    let entryStory: StoryItem?
+
+    private var backdrop: UIImage? {
+        guard let story = entryStory else { return nil }
+        if let hash = story.storyEffects?.thumbHash, !hash.isEmpty,
+           let img = UIImage.fromThumbHash(hash) {
+            return img
+        }
+        if let hash = story.media.first(where: { $0.thumbHash?.isEmpty == false })?.thumbHash,
+           let img = UIImage.fromThumbHash(hash) {
+            return img
+        }
+        return nil
+    }
+
+    var body: some View {
+        ZStack {
+            if let img = backdrop {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .blur(radius: 24)
+                    .scaleEffect(1.1)
+            } else {
+                LinearGradient(
+                    colors: [MeeshyColors.indigo950, MeeshyColors.indigo900],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+            Color.black.opacity(0.35)
+            VStack(spacing: 12) {
+                MeeshyAvatar(
+                    name: group.username,
+                    context: .storyTray,
+                    accentColor: group.avatarColor,
+                    avatarURL: group.avatarURL,
+                    storyState: group.hasUnviewed ? .unread : .read
+                )
+                Text(group.username)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+        }
+        .clipped()
+        .accessibilityHidden(true)
     }
 }

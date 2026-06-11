@@ -211,7 +211,12 @@ extension StoryViewerView {
                 }
 
                 switch gestureAxis {
-                case 1: horizontalDrag = dx
+                case 1:
+                    horizontalDrag = dx
+                    // Face du cube côté direction courante — recalculée à
+                    // chaque tick : le geste est réversible mi-course.
+                    let total = groupSlide + dx
+                    neighborPreviewDirection = total < 0 ? 1 : (total > 0 ? -1 : 0)
                 case 2: if dy > 0 { dragOffset = dy }
                 default: break
                 }
@@ -230,8 +235,9 @@ extension StoryViewerView {
                     let dx = value.translation.width
                     let predicted = value.predictedEndTranslation.width
 
-                    // Transfer interactive drag -> groupSlide (no visual snap)
-                    groupSlide += horizontalDrag * 0.5
+                    // Transfer interactive drag -> groupSlide (no visual snap).
+                    // 1:1 (Lot 3) — cohérent avec `totalSlideX` sans amorti.
+                    groupSlide += horizontalDrag
                     horizontalDrag = 0
 
                     if (dx < -60 || predicted < -150) && currentGroupIndex < groups.count - 1 {
@@ -249,9 +255,14 @@ extension StoryViewerView {
                             progress = 0
                         }
                     } else {
-                        // Snap back — animate groupSlide to 0
+                        // Snap back — animate groupSlide to 0. La face du cube
+                        // reste montée pendant le retour (elle sort de l'écran
+                        // avec l'animation), nettoyée une fois posée.
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             groupSlide = 0
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+                            if !isTransitioning { neighborPreviewDirection = 0 }
                         }
                         resumeTimer()
                     }
@@ -277,6 +288,9 @@ extension StoryViewerView {
             horizontalDrag = 0
             dragOffset = 0
             groupSlide = 0
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+            if !isTransitioning { neighborPreviewDirection = 0 }
         }
         resumeTimer()
     }
@@ -410,32 +424,37 @@ extension StoryViewerView {
         }
     }
 
-    /// Slide transition for navigating between different users' story groups
+    /// Transition cube entre groupes d'auteurs (Lot 3). Pendant le drag, les
+    /// deux faces (carte + aperçu voisin) suivent déjà le doigt ; le commit
+    /// termine la rotation jusqu'à ±90° puis swappe le contenu à l'arête —
+    /// la carte réelle remplace la face entrante à transform identité, swap
+    /// invisible. Le canvas voisin est chaud (prefetch inter-groupes), la
+    /// première frame réelle est instantanée.
     private func groupTransition(forward: Bool, update: @escaping () -> Void) {
         guard !isTransitioning else { return }
         isTransitioning = true
+        // Tap-en-bord / auto-advance arrivent ici sans drag : poser la
+        // direction pour que la face entrante participe au commit.
+        neighborPreviewDirection = forward ? 1 : -1
 
         let exitX: CGFloat = forward ? -screenW : screenW
-        let enterX: CGFloat = forward ? screenW : -screenW
-
-        // 1. Slide current card off-screen
-        withAnimation(.easeIn(duration: 0.2)) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
             groupSlide = exitX
         }
 
-        // 2. Swap content while off-screen, slide new card in immediately
-        //    ThumbHash provides instant visual — no need to await prefetch
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+        // Swap quand l'arête est quasi à 90° (~96 % de la course du spring) :
+        // la face entrante est alors à ~quelques points de l'identité.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) {
             update()
             markCurrentViewed()
             prefetchCurrentGroup()
 
-            groupSlide = enterX
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                groupSlide = 0
-            }
+            // Sans animation : la carte réelle prend la place exacte de la
+            // face entrante (transform identité), la face est démontée.
+            groupSlide = 0
+            neighborPreviewDirection = 0
             restartTimer()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 isTransitioning = false
             }
         }

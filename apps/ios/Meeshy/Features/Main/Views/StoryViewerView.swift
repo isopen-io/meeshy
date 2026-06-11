@@ -241,6 +241,11 @@ struct StoryViewerView: View {
 
     // Horizontal swipe (group ↔ group)
     @State var horizontalDrag: CGFloat = 0 // internal for cross-file extension access
+    /// Direction de la face entrante du cube inter-groupes : +1 = groupe
+    /// suivant (face à droite), -1 = précédent (face à gauche), 0 = aucune.
+    /// Posée par le drag horizontal (réversible mi-geste) et par
+    /// `groupTransition` (tap/auto-advance), nettoyée au snap-back/commit.
+    @State var neighborPreviewDirection: Int = 0 // internal for cross-file extension access
     @State var gestureAxis: Int = 0 // internal for cross-file extension access  // 0=undecided, 1=horizontal, 2=vertical
     @State var showViewersSheet = false
     @State var showExportShareSheet = false
@@ -310,8 +315,26 @@ struct StoryViewerView: View {
     }
 
     // Combined horizontal offset (programmatic slide + interactive drag)
+    /// 1:1 avec le doigt (Lot 3 — l'ancien amorti ×0.5 rendait le cube
+    /// inter-groupes « lourd » : un commit exigeait 2× la largeur de course).
     private var totalSlideX: CGFloat {
-        groupSlide + horizontalDrag * 0.5
+        groupSlide + horizontalDrag
+    }
+
+    /// Slide d'entrée d'un groupe pour la face du cube — même règle que le
+    /// prefetch inter-groupes : première non-vue non-expirée, sinon première
+    /// non-expirée.
+    func entryStory(of group: StoryGroup) -> StoryItem? {
+        let now = Date()
+        return group.stories.first(where: { !$0.isViewed && !$0.isExpired(at: now) })
+            ?? group.stories.first(where: { !$0.isExpired(at: now) })
+    }
+
+    private var neighborCubeGroup: StoryGroup? {
+        guard neighborPreviewDirection != 0, !isPreviewMode else { return nil }
+        let idx = currentGroupIndex + neighborPreviewDirection
+        guard groups.indices.contains(idx) else { return nil }
+        return groups[idx]
     }
 
     // Depth effect from horizontal movement (slight scale + rotation)
@@ -337,6 +360,9 @@ struct StoryViewerView: View {
             totalSlideX: totalSlideX,
             slideProgress: slideProgress,
             dragProgress: dragProgress,
+            neighborGroup: neighborCubeGroup,
+            neighborEntryStory: neighborCubeGroup.flatMap { entryStory(of: $0) },
+            neighborDirection: neighborPreviewDirection,
             isPresented: $isPresented,
             makeStoryCard: { geometry in storyCard(geometry: geometry) }
         )
