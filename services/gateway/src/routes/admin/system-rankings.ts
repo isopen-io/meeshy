@@ -4,25 +4,19 @@ import { type RankingQuery } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery } from '../../validation/helpers.js';
 import { RankingsQuerySchema } from '../../validation/admin-schemas.js';
-import { sendSuccess } from '../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendForbidden, sendBadRequest, sendInternalError } from '../../utils/response.js';
 
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return reply.status(401).send({
-      success: false,
-      message: 'Authentification requise'
-    });
+    return sendUnauthorized(reply, 'Authentification requise');
   }
 
   const userRole = authContext.registeredUser.role;
   const canView = ['BIGBOSS', 'ADMIN', 'AUDIT', 'ANALYST'].includes(userRole);
 
   if (!canView) {
-    return reply.status(403).send({
-      success: false,
-      message: 'Permission insuffisante'
-    });
+    return sendForbidden(reply, 'Permission insuffisante');
   }
 };
 
@@ -901,19 +895,13 @@ export async function systemRankingsRoutes(fastify: FastifyInstance) {
           rankings = await rankLinks(fastify, criterion || 'tracking_links_most_visited', startDate, limitNum);
           break;
         default:
-          return reply.status(400).send({
-            success: false,
-            message: `Type d'entite inconnu: ${entityType}`
-          });
+          return sendBadRequest(reply, `Type d'entite inconnu: ${entityType}`);
       }
 
       return sendSuccess(reply, { rankings, entityType, criterion, period, total: rankings.length });
     } catch (error) {
       logError(fastify.log, 'Get admin rankings error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la recuperation des classements'
-      });
+      return sendInternalError(reply, 'Erreur lors de la recuperation des classements');
     }
   });
 }
