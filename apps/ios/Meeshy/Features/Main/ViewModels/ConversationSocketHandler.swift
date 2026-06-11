@@ -57,6 +57,7 @@ protocol ConversationSocketDelegate: AnyObject {
     /// GRDB upsert so future opens of this conversation render the
     /// enriched attachment from cache without a refetch.
     func applyAttachmentUpdate(_ event: AttachmentUpdatedEvent)
+    func applyAttachmentReactionDelta(attachmentId: String, reactionSummary: [String: Int])
 }
 
 // MARK: - ConversationSocketHandler
@@ -544,6 +545,27 @@ final class ConversationSocketHandler {
                         participantId: event.participantId
                     )
                 }
+            }
+            .store(in: &cancellables)
+
+        // BUG2 A' — réactions par-image : le delta porte le reactionSummary
+        // autoritaire ; on remplace les comptes in-memory (currentUserReactions
+        // reste géré optimiste côté VM, comme message-level).
+        socketManager.attachmentReactionAdded
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, let delegate = self.delegate, let summary = event.reactionSummary else { return }
+                delegate.applyAttachmentReactionDelta(attachmentId: event.attachmentId, reactionSummary: summary)
+            }
+            .store(in: &cancellables)
+
+        socketManager.attachmentReactionRemoved
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, let delegate = self.delegate, let summary = event.reactionSummary else { return }
+                delegate.applyAttachmentReactionDelta(attachmentId: event.attachmentId, reactionSummary: summary)
             }
             .store(in: &cancellables)
 

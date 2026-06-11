@@ -593,6 +593,67 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(decoded.first?.fileUrl, "file:///tmp/photo.jpg")
     }
 
+    // MARK: - Attachment Reactions (BUG2 A')
+
+    private func makeImageMessage(id: String = "m1", attachmentId: String = "a1") -> Message {
+        var msg = makeMessage(id: id)
+        msg.attachments = [MeeshyMessageAttachment(
+            id: attachmentId, mimeType: "image/jpeg", fileUrl: "file:///x.jpg", uploadedBy: testUserId
+        )]
+        return msg
+    }
+
+    func test_toggleAttachmentReaction_addsOptimistically_andEmits() throws {
+        let pool = try makeInMemoryPool()
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        sut.messages = [makeImageMessage()]
+
+        sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
+
+        let att = sut.messages.first?.attachments.first
+        XCTAssertEqual(att?.reactionSummary?["❤️"], 1)
+        XCTAssertEqual(att?.currentUserReactions, ["❤️"])
+        XCTAssertEqual(mockMessageSocket.addAttachmentReactionCallCount, 1)
+    }
+
+    func test_toggleAttachmentReaction_secondTapSameEmoji_removes() throws {
+        let pool = try makeInMemoryPool()
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        sut.messages = [makeImageMessage()]
+
+        sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
+        sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
+
+        let att = sut.messages.first?.attachments.first
+        XCTAssertNil(att?.reactionSummary)
+        XCTAssertNil(att?.currentUserReactions)
+        XCTAssertEqual(mockMessageSocket.removeAttachmentReactionCallCount, 1)
+    }
+
+    func test_toggleAttachmentReaction_capsAtOneEmojiPerUser() throws {
+        let pool = try makeInMemoryPool()
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        sut.messages = [makeImageMessage()]
+
+        sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
+        sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "👍")
+
+        let att = sut.messages.first?.attachments.first
+        XCTAssertNil(att?.reactionSummary?["❤️"])
+        XCTAssertEqual(att?.reactionSummary?["👍"], 1)
+        XCTAssertEqual(att?.currentUserReactions, ["👍"])
+    }
+
+    func test_applyAttachmentReactionDelta_replacesSummary() throws {
+        let pool = try makeInMemoryPool()
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        sut.messages = [makeImageMessage()]
+
+        sut.applyAttachmentReactionDelta(attachmentId: "a1", reactionSummary: ["👍": 3])
+
+        XCTAssertEqual(sut.messages.first?.attachments.first?.reactionSummary?["👍"], 3)
+    }
+
     func test_insertOptimisticMediaMessage_surfacesBubbleInViewModel() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)

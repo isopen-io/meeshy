@@ -2832,6 +2832,50 @@ class ConversationViewModel: ObservableObject {
 
     }
 
+    // MARK: - Attachment Reactions (BUG2 A')
+
+    /// Réagit à UNE image d'un message multi-images. Optimiste in-memory + emit
+    /// direct socket (parité offline-queue différée, cf. spec) ; le cold-load REST
+    /// re-fournit les réactions persistées. Cap 1 emoji/user/PJ (miroir
+    /// message-level). La mutation de `messages` déclenche le reconfigure diffable
+    /// → re-render de la bulle avec le nouveau reactionSummary.
+    func toggleAttachmentReaction(attachmentId: String, messageId: String, emoji: String) {
+        guard let mIdx = messageIndex(for: messageId),
+              let aIdx = messages[mIdx].attachments.firstIndex(where: { $0.id == attachmentId }) else { return }
+        var summary = messages[mIdx].attachments[aIdx].reactionSummary ?? [:]
+        var mine = messages[mIdx].attachments[aIdx].currentUserReactions ?? []
+        let remoteId = serverId(for: messageId)
+
+        if mine.contains(emoji) {
+            summary[emoji] = max(0, (summary[emoji] ?? 1) - 1)
+            if summary[emoji] == 0 { summary.removeValue(forKey: emoji) }
+            mine.removeAll { $0 == emoji }
+            messageSocket.removeAttachmentReaction(attachmentId: attachmentId, messageId: remoteId, emoji: emoji)
+        } else {
+            // 1 emoji/user/PJ : retirer la réaction précédente de l'utilisateur.
+            for old in mine {
+                summary[old] = max(0, (summary[old] ?? 1) - 1)
+                if summary[old] == 0 { summary.removeValue(forKey: old) }
+            }
+            mine.removeAll()
+            summary[emoji] = (summary[emoji] ?? 0) + 1
+            mine.append(emoji)
+            messageSocket.addAttachmentReaction(attachmentId: attachmentId, messageId: remoteId, emoji: emoji)
+        }
+        messages[mIdx].attachments[aIdx].reactionSummary = summary.isEmpty ? nil : summary
+        messages[mIdx].attachments[aIdx].currentUserReactions = mine.isEmpty ? nil : mine
+    }
+
+    /// Applique un delta serveur : remplace le reactionSummary (comptes
+    /// autoritaires) de la pièce jointe. `currentUserReactions` reste géré côté
+    /// client (optimiste) — limite multi-device connue, comme message-level.
+    /// Lookup par `attachmentId` (server-unique), robuste au mapping local/server id.
+    func applyAttachmentReactionDelta(attachmentId: String, reactionSummary: [String: Int]) {
+        guard let mIdx = messages.firstIndex(where: { $0.attachments.contains { $0.id == attachmentId } }),
+              let aIdx = messages[mIdx].attachments.firstIndex(where: { $0.id == attachmentId }) else { return }
+        messages[mIdx].attachments[aIdx].reactionSummary = reactionSummary.isEmpty ? nil : reactionSummary
+    }
+
     // MARK: - Fetch Reaction Details
 
     func fetchReactionDetails(messageId: String) async {
