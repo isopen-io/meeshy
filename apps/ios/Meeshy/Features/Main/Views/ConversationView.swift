@@ -289,9 +289,10 @@ struct ConversationView: View {
 
     // MARK: - Computed Properties
 
-    var headerHasStoryRing: Bool {
-        guard let userId = conversation?.participantUserId else { return false }
-        return storyViewModel.hasStories(forUserId: userId)
+    var headerStoryRingState: StoryRingState {
+        guard conversation?.type == .direct,
+              let userId = conversation?.participantUserId else { return .none }
+        return storyViewModel.storyRingState(forUserId: userId)
     }
 
     var accentColor: String {
@@ -1268,7 +1269,7 @@ struct ConversationView: View {
                     Spacer()
                     ThemedAvatarButton(
                         name: conversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
-                        isExpanded: false, hasStoryRing: headerHasStoryRing,
+                        isExpanded: false, storyState: headerStoryRingState,
                         avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
                         presenceState: headerPresenceState,
                         moodEmoji: headerMoodEmoji
