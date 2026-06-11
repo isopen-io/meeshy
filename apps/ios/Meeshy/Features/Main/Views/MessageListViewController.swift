@@ -113,6 +113,8 @@ final class MessageListViewController: UIViewController {
     /// received / read the message. Only fires for `isMe` messages — received
     /// bubbles never render a delivery check.
     var onShowReadStatus: ((String) -> Void)?
+    /// Manual resend of a FAILED outgoing message (id) → `retryMessage`.
+    var onRetry: ((String) -> Void)?
     /// Open the detail sheet on the reactions tab.
     var onShowReactions: ((String) -> Void)?
     /// Open the detail sheet on the language / translation tab.
@@ -335,62 +337,79 @@ final class MessageListViewController: UIViewController {
     // MARK: - DataSource
 
     private func configureDataSource() {
-        // Single registration that hosts the SwiftUI ThemedMessageBubble inside
-        // the cell via UIHostingConfiguration (iOS 16+). Reuses the rich SwiftUI
-        // bubble shipped before — avatars, sender chrome, accent gradients,
-        // translations, reactions, etc. — without manually mirroring its layout
-        // in UIKit. The hosting configuration diff-updates on reuse, so scroll
-        // performance is preserved.
-        let registration = UICollectionView.CellRegistration<UICollectionViewCell, MessageListItem> { [weak self] cell, _, item in
+        // Cells host their SwiftUI content via UIHostingConfiguration
+        // (iOS 16+). The message registration reuses the rich SwiftUI bubble
+        // shipped before — avatars, sender chrome, accent gradients,
+        // translations, reactions, etc. — without manually mirroring its
+        // layout in UIKit. The hosting configuration diff-updates on reuse,
+        // so scroll performance is preserved.
+        // Une registration PAR type d'item (bulle / séparateur de jour /
+        // typing). Avec une registration unique, UIKit recyclait une cellule
+        // hébergeant un `BubbleSwipeContainer<…>` pour y poser une
+        // configuration `MessageDaySeparator` (et inversement) : le hosting
+        // content view existant ne supporte pas le nouveau type racine, UIKit
+        // détruit et reconstruit la content view à chaque recyclage croisé
+        // (warning runtime `UIContentConfigurationAlertForReplacedContentView`,
+        // coût visible au scroll). Des registrations distinctes donnent des
+        // pools de réutilisation distincts : chaque cellule ne reçoit que des
+        // configurations de son propre type racine et se diff-update en place.
+
+        // Typing indicator — vraie cellule (dernière du flux inversé,
+        // donc bas visuel). Pas un overlay : un message reçu en direct
+        // s'insère au-dessus et remonte la conversation. La bulle anime
+        // ses points en autonomie ; le contre-flip annule la transform.
+        let typingRegistration = UICollectionView.CellRegistration<UICollectionViewCell, MessageListItem> { [weak self] cell, _, _ in
+            guard let self else {
+                cell.contentConfiguration = nil
+                return
+            }
+            let typingNames = self.conversationViewModel?.typingUsernames ?? []
+            let typingAccent = self.accentColor
+            let typingDark = self.isDark
+            cell.contentConfiguration = UIHostingConfiguration {
+                TypingIndicatorBubble(names: typingNames, accentHex: typingAccent, isDark: typingDark)
+                    .scaleEffect(x: 1, y: -1)
+            }
+            .margins(.all, 0)
+            cell.backgroundColor = .clear
+        }
+
+        // Séparateur de jour — pill "Aujourd'hui / Hier / Lundi 9 mai"
+        // posée entre deux groupes de messages de jours distincts. Le
+        // label est recalculé à chaque rendu de cellule afin de suivre
+        // le passage de minuit sans avoir à reconstruire la datasource.
+        // Les libellés relatifs sont injectés depuis le catalogue de
+        // chaînes localisées pour suivre la langue d'interface de l'app.
+        let dayHeaderRegistration = UICollectionView.CellRegistration<UICollectionViewCell, MessageListItem> { [weak self] cell, _, item in
+            guard let self, case .dayHeader(let dayStart) = item else {
+                cell.contentConfiguration = nil
+                return
+            }
+            let label = MessageDayLabel.label(
+                for: dayStart,
+                now: Date(),
+                calendar: .current,
+                locale: .current,
+                today: String(localized: "date.today", defaultValue: "Aujourd'hui"),
+                yesterday: String(localized: "date.yesterday", defaultValue: "Hier"),
+                dayBeforeYesterday: String(localized: "date.dayBeforeYesterday", defaultValue: "Avant-hier")
+            )
+            let dark = self.isDark
+            cell.contentConfiguration = UIHostingConfiguration {
+                MessageDaySeparator(label: label, isDark: dark)
+                    .scaleEffect(x: 1, y: -1)
+            }
+            .margins(.all, 0)
+            cell.backgroundColor = .clear
+        }
+
+        let messageRegistration = UICollectionView.CellRegistration<UICollectionViewCell, MessageListItem> { [weak self] cell, _, item in
             guard let self else {
                 cell.contentConfiguration = nil
                 return
             }
             let _spState = PerfSignpost.signposter.beginInterval("cellConfig")
             defer { PerfSignpost.signposter.endInterval("cellConfig", _spState) }
-
-            // Typing indicator — vraie cellule (dernière du flux inversé,
-            // donc bas visuel). Pas un overlay : un message reçu en direct
-            // s'insère au-dessus et remonte la conversation. La bulle anime
-            // ses points en autonomie ; le contre-flip annule la transform.
-            if case .typingIndicator = item {
-                let typingNames = self.conversationViewModel?.typingUsernames ?? []
-                let typingAccent = self.accentColor
-                let typingDark = self.isDark
-                cell.contentConfiguration = UIHostingConfiguration {
-                    TypingIndicatorBubble(names: typingNames, accentHex: typingAccent, isDark: typingDark)
-                        .scaleEffect(x: 1, y: -1)
-                }
-                .margins(.all, 0)
-                cell.backgroundColor = .clear
-                return
-            }
-
-            // Séparateur de jour — pill "Aujourd'hui / Hier / Lundi 9 mai"
-            // posée entre deux groupes de messages de jours distincts. Le
-            // label est recalculé à chaque rendu de cellule afin de suivre
-            // le passage de minuit sans avoir à reconstruire la datasource.
-            // Les libellés relatifs sont injectés depuis le catalogue de
-            // chaînes localisées pour suivre la langue d'interface de l'app.
-            if case .dayHeader(let dayStart) = item {
-                let label = MessageDayLabel.label(
-                    for: dayStart,
-                    now: Date(),
-                    calendar: .current,
-                    locale: .current,
-                    today: String(localized: "date.today", defaultValue: "Aujourd'hui"),
-                    yesterday: String(localized: "date.yesterday", defaultValue: "Hier"),
-                    dayBeforeYesterday: String(localized: "date.dayBeforeYesterday", defaultValue: "Avant-hier")
-                )
-                let dark = self.isDark
-                cell.contentConfiguration = UIHostingConfiguration {
-                    MessageDaySeparator(label: label, isDark: dark)
-                        .scaleEffect(x: 1, y: -1)
-                }
-                .margins(.all, 0)
-                cell.backgroundColor = .clear
-                return
-            }
 
             guard case .message(let localId) = item,
                   let message = self.store.domainMessage(for: localId, currentUserId: self.currentUserId) else {
@@ -468,6 +487,7 @@ final class MessageListViewController: UIViewController {
             let openReactPickerHandler = self.onOpenReactPicker
             let showInfoHandler = self.onShowMessageInfo
             let showReadStatusHandler = self.onShowReadStatus
+            let retryHandler = self.onRetry
             let showReactionsHandler = self.onShowReactions
             let showTranslationHandler = self.onShowTranslationDetail
             let callBackHandler = self.onCallBack
@@ -518,6 +538,7 @@ final class MessageListViewController: UIViewController {
                         onShowInfo: { showInfoHandler?(messageId) },
                         onShowReactions: showReactionsHandler,
                         onShowReadStatus: showReadStatusHandler,
+                        onRetry: retryHandler,
                         onReplyTap: scrollHandler,
                         onStoryReplyTap: storyReplyHandler,
                         onMediaTap: mediaTapHandler,
@@ -556,7 +577,14 @@ final class MessageListViewController: UIViewController {
         }
 
         dataSource = UICollectionViewDiffableDataSource(collectionView: collectionView) { cv, indexPath, item in
-            cv.dequeueConfiguredReusableCell(using: registration, for: indexPath, item: item)
+            switch item {
+            case .message:
+                return cv.dequeueConfiguredReusableCell(using: messageRegistration, for: indexPath, item: item)
+            case .dayHeader:
+                return cv.dequeueConfiguredReusableCell(using: dayHeaderRegistration, for: indexPath, item: item)
+            case .typingIndicator:
+                return cv.dequeueConfiguredReusableCell(using: typingRegistration, for: indexPath, item: item)
+            }
         }
     }
 

@@ -952,6 +952,11 @@ class ConversationViewModel: ObservableObject {
         // IS reading it) and excludes it from the cross-conversation
         // aggregator. Cleared in `deinit`.
         syncEngine.setCurrentlyOpenConversation(conversationId)
+        // Open side-effects (socket room join + active-conversation publish to
+        // the notification singletons). Lives here — NOT in the handler's init
+        // — so the throwaway VMs SwiftUI allocates on every parent
+        // re-evaluation never fire them (only the installed VM runs start()).
+        socketHandler?.activate()
         messageStore.startObserving(dbPool: startupDependencies.dbPool)
         Task { await messageStore.loadInitial() }
         messagesPersistCancellable = $messages

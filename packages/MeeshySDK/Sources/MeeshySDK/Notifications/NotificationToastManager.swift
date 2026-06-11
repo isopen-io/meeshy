@@ -59,6 +59,20 @@ public final class NotificationToastManager: ObservableObject {
     private var lastUnreadRefreshAt: Date?
     private static let unreadRefreshMinInterval: TimeInterval = 1.5
 
+    // Coalescing du mark-read par conversation : même protection que pour le
+    // compteur non-lu. Un cycle open→close→open rapproché (re-render parent,
+    // navigation aller-retour) ne doit produire qu'UN seul
+    // `POST /notifications/conversation/:id/read` — sans ce gate, chaque
+    // passage du guard `activeConversationId` émet un POST, et la rafale
+    // sature le rate-limiter gateway (storm 429 observé sur device, chaque
+    // requête retentée 3× amplifiant la saturation). Les notifications qui
+    // arrivent pendant que la conversation est OUVERTE sont déjà marquées
+    // unitairement par `handleNewNotification`, donc sauter un POST redondant
+    // dans la fenêtre de cooldown n'introduit pas de dérive durable.
+    private var conversationReadTasks: [String: Task<Void, Never>] = [:]
+    private var lastConversationReadAt: [String: Date] = [:]
+    private static let conversationReadMinInterval: TimeInterval = 5
+
     private init() {
         subscribeToCoordinator()
         subscribeToSocketEvents()
@@ -120,10 +134,24 @@ public final class NotificationToastManager: ObservableObject {
         // (qui ré-émet `notification:counts` → la cloche/badge se recalent), et
         // enfin on rafraîchit le compteur pour récupérer la valeur autoritative.
         conversationNotificationsRead.send(conversationId)
+        markConversationNotificationsRead(conversationId)
+    }
 
-        Task {
+    /// Émet le `POST /notifications/conversation/:id/read` au plus une fois
+    /// par conversation et par fenêtre de `conversationReadMinInterval`, et
+    /// jamais deux fois en vol simultanément. Voir le commentaire des
+    /// propriétés `conversationReadTasks` / `lastConversationReadAt`.
+    private func markConversationNotificationsRead(_ conversationId: String) {
+        guard conversationReadTasks[conversationId] == nil else { return }
+        if let last = lastConversationReadAt[conversationId],
+           Date().timeIntervalSince(last) < Self.conversationReadMinInterval {
+            return
+        }
+        conversationReadTasks[conversationId] = Task { [weak self] in
             try? await NotificationService.shared.markConversationRead(conversationId: conversationId)
-            await refreshUnreadCount()
+            await self?.refreshUnreadCount()
+            self?.lastConversationReadAt[conversationId] = Date()
+            self?.conversationReadTasks[conversationId] = nil
         }
     }
 
@@ -150,6 +178,9 @@ public final class NotificationToastManager: ObservableObject {
     public func reset() {
         dismissToast()
         activeConversationId = nil
+        conversationReadTasks.values.forEach { $0.cancel() }
+        conversationReadTasks = [:]
+        lastConversationReadAt = [:]
         // Unread count cleared by NotificationCoordinator.reset() — do not
         // duplicate that write here or both paths will race.
     }

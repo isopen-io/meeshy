@@ -1057,6 +1057,14 @@ struct ConversationView: View {
                     overlayState.detailSheetMessage = msg
                     overlayState.detailSheetInitialTab = .views
                 },
+                onRetry: { messageId in
+                    // Tap on the orange retry band of a FAILED outgoing message.
+                    // `retryMessage` deletes the failed row and re-sends with the
+                    // SAME clientMessageId (gateway dedup) AND kicks the outbox
+                    // flusher — so the resend actually fires (the old local
+                    // OfflineQueue reset never flushed on a foregrounded device).
+                    Task { await viewModel.retryMessage(messageId: messageId) }
+                },
                 onShowReactions: { messageId in
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     overlayState.detailSheetMessage = msg
