@@ -24,6 +24,10 @@ struct StoryViewerRequest: Identifiable, Equatable {
     /// (entrées « toucher le profil / l'avatar / le tray »). Les deep links /
     /// notifications ciblant un contenu précis gardent `false`.
     var startAtFirstUnviewed: Bool = false
+    /// `true` pour les entrées « personne précise » (profil, bulle, avatar
+    /// de post, ma story) : le viewer ne montre que le groupe de cet
+    /// utilisateur. Les contextes « flux » (tray, liste) gardent `false`.
+    var singleGroup: Bool = false
 }
 
 /// Named magic numbers for the iPhone root-view audio overlay layout.
@@ -397,6 +401,7 @@ struct RootView: View {
                     storyViewerCoordinator.dismiss()
                     router.navigateToStoryReply(replyContext, conversationListViewModel: conversationViewModel)
                 },
+                singleGroup: request.singleGroup,
                 startAtFirstUnviewed: request.startAtFirstUnviewed,
                 presentationSource: "RootView.fromConv",
                 initialAction: request.initialAction
@@ -553,7 +558,10 @@ struct RootView: View {
             } else if routeName.hasPrefix("storyDetail:") {
                 let postId = String(routeName.dropFirst("storyDetail:".count))
                 if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                    storyViewerCoordinator.present(StoryViewerRequest(id: storyViewModel.storyGroups[groupIdx].id))
+                    storyViewerCoordinator.present(StoryViewerRequest(
+                        id: storyViewModel.storyGroups[groupIdx].id,
+                        startAtFirstUnviewed: true
+                    ))
                 } else {
                     router.push(.postDetail(postId))
                 }
@@ -710,7 +718,10 @@ struct RootView: View {
             // so cold-launch deep links and warm-launch push taps land on
             // the same screen for the same id.
             if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                storyViewerCoordinator.present(StoryViewerRequest(id: storyViewModel.storyGroups[groupIdx].id))
+                storyViewerCoordinator.present(StoryViewerRequest(
+                    id: storyViewModel.storyGroups[groupIdx].id,
+                    startAtFirstUnviewed: true
+                ))
             } else {
                 router.push(.postDetail(postId))
             }

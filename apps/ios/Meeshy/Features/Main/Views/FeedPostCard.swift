@@ -51,6 +51,12 @@ struct FeedPostCard: View {
     var onAuthorMoodTap: ((CGPoint) -> Void)? = nil
     var moodLookup: ((String) -> (emoji: String?, tapHandler: ((CGPoint) -> Void)?))? = nil
 
+    // Anneau story de l'auteur — fourni par le parent pour la même raison
+    // (leaf .equatable(), zéro @EnvironmentObject). Le tap ouvre le viewer
+    // singleGroup sur la première story non vue de l'auteur.
+    var authorStoryRing: StoryRingState = .none
+    var onViewAuthorStory: (() -> Void)? = nil
+
     // Lecture directe sans @ObservedObject — leaf view rendue dans un ForEach,
     // évite que chaque changement de thème force un re-render de toutes les cards.
     private var theme: ThemeManager { ThemeManager.shared }
@@ -313,10 +319,18 @@ struct FeedPostCard: View {
         }
         .sheet(item: $selectedProfileUser) { user in
             let mood = moodLookup?(user.userId ?? "")
+            let isPostAuthor = user.userId == post.authorId
             UserProfileSheet(
                 user: user,
                 moodEmoji: mood?.emoji,
-                onMoodTap: mood?.tapHandler
+                onMoodTap: mood?.tapHandler,
+                // L'état réel n'est connu que pour l'auteur du post (la card
+                // est une leaf sans accès au StoryViewModel) ; les autres
+                // profils gardent l'anneau décoratif legacy (nil).
+                storyRingState: isPostAuthor ? authorStoryRing : nil,
+                onViewStory: isPostAuthor ? onViewAuthorStory.map { handler in
+                    { selectedProfileUser = nil; handler() }
+                } : nil
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -351,8 +365,10 @@ struct FeedPostCard: View {
                 context: .postAuthor,
                 accentColor: accentColor,
                 avatarURL: post.authorAvatarURL,
+                storyState: authorStoryRing,
                 moodEmoji: authorMoodEmoji,
                 onViewProfile: { selectedProfileUser = .from(feedPost: post) },
+                onViewStory: onViewAuthorStory,
                 onMoodTap: onAuthorMoodTap,
                 contextMenuItems: [
                     AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
@@ -910,5 +926,6 @@ extension FeedPostCard: Equatable {
             && (lhs.post.translations?.count ?? 0) == (rhs.post.translations?.count ?? 0)
             && lhs.isCommentsExpanded == rhs.isCommentsExpanded
             && lhs.authorMoodEmoji == rhs.authorMoodEmoji
+            && lhs.authorStoryRing == rhs.authorStoryRing
     }
 }

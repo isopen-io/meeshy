@@ -13,6 +13,8 @@ struct GlobalSearchView: View {
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
     @EnvironmentObject var router: Router
     @EnvironmentObject private var statusViewModel: StatusViewModel
+    @EnvironmentObject private var storyViewModel: StoryViewModel
+    @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @Environment(\.dismiss) private var dismiss
     @FocusState private var isSearchFieldFocused: Bool
 
@@ -570,8 +572,16 @@ struct GlobalSearchView: View {
                 name: result.displayName ?? result.username,
                 context: .userListItem,
                 avatarURL: result.avatar,
+                storyState: storyViewModel.storyRingState(forUserId: result.id),
                 moodEmoji: statusViewModel.statusForUser(userId: result.id)?.moodEmoji,
                 presenceState: result.isOnline ? .online : .offline,
+                onViewStory: {
+                    storyViewerCoordinator.present(StoryViewerRequest(
+                        id: result.id,
+                        startAtFirstUnviewed: true,
+                        singleGroup: true
+                    ))
+                },
                 onMoodTap: statusViewModel.moodTapHandler(for: result.id)
             )
 

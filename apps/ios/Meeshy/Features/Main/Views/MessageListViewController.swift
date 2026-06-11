@@ -90,6 +90,10 @@ final class MessageListViewController: UIViewController {
     /// Receives the story id (NOT the message id). Wire to the parent's
     /// story viewer presentation logic.
     var onStoryReplyTap: ((String) -> Void)?
+    /// Invoked when the user taps the sender avatar's story ring in a bubble
+    /// footer. Receives the sender's user id. Wire to the parent's story
+    /// viewer presentation logic (singleGroup, first unviewed).
+    var onViewSenderStory: ((String) -> Void)?
     /// Invoked when the user swipes a bubble far enough to commit a reply
     /// gesture. Receives the message id of the swiped bubble.
     var onSwipeReply: ((String) -> Void)?
@@ -495,6 +499,15 @@ final class MessageListViewController: UIViewController {
             let consumeViewOnceHandler = self.onConsumeViewOnce
             let requestTranslationHandler = self.onRequestTranslation
             let isMine = message.isMe
+            // Anneau story de l'expéditeur — snappé en input primitif comme
+            // presence/mood : la cellule ne dépend pas du StoryViewModel, le
+            // sink storyGroups (observeStore) reconfigure les cellules
+            // visibles quand l'état vu/non-vu change.
+            let senderId = message.senderId
+            let senderRingState: StoryRingState = isMine
+                ? .none
+                : stories.storyRingState(forUserId: senderId)
+            let viewSenderStoryHandler = self.onViewSenderStory
 
             // No UIContextMenuInteraction here — the user wants a custom
             // overlay (light blur backdrop, re-rendered bubble centered,
@@ -532,6 +545,10 @@ final class MessageListViewController: UIViewController {
                         textTranslations: translations,
                         preferredTranslation: preferred,
                         showAvatar: !direct,
+                        senderStoryRingState: senderRingState,
+                        onViewStory: (senderRingState != .none)
+                            ? { viewSenderStoryHandler?(senderId) }
+                            : nil,
                         onAddReaction: addReactionHandler,
                         onToggleReaction: { emoji in toggleReactionHandler?(messageId, emoji) },
                         onOpenReactPicker: openReactPickerHandler,
@@ -772,6 +789,36 @@ final class MessageListViewController: UIViewController {
                 self?.applySnapshot(animated: true)
             }
             .store(in: &cancellables)
+
+        // Anneaux story des avatars expéditeurs — l'état vu/non-vu vit dans
+        // StoryViewModel (jamais dans GRDB), donc aucun chemin existant ne
+        // reconfigure les cellules quand il change. Fingerprint id:hasUnviewed
+        // pour ignorer les mutations sans effet sur l'anneau (compteurs de
+        // vues, réactions…) ; la reconfiguration ne touche que les cellules
+        // visibles — les autres re-snappent l'état à leur prochaine config.
+        storyViewModel.$storyGroups
+            .map { groups in
+                groups.map { "\($0.id):\($0.hasUnviewed)" }.joined(separator: ",")
+            }
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.reconfigureVisibleCells()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func reconfigureVisibleCells() {
+        guard let dataSource else { return }
+        let visibleItems = collectionView.indexPathsForVisibleItems
+            .compactMap { dataSource.itemIdentifier(for: $0) }
+        guard !visibleItems.isEmpty else { return }
+        var snapshot = dataSource.snapshot()
+        let existing = visibleItems.filter { snapshot.indexOfItem($0) != nil }
+        guard !existing.isEmpty else { return }
+        snapshot.reconfigureItems(existing)
+        dataSource.apply(snapshot, animatingDifferences: false)
     }
 
     /// Diffe un dictionnaire `[messageId: Value]` publié par le ViewModel et

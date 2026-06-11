@@ -172,6 +172,9 @@ struct ThemedFeedOverlay: View {
     @FocusState private var isComposerFocused: Bool
     @State private var showStoryViewer = false
     @State private var selectedStoryUserId: String?
+    /// `true` quand le viewer est ouvert depuis l'avatar d'un auteur de post
+    /// (contexte « personne précise ») ; `false` depuis le tray (flux).
+    @State private var storyViewerSingleGroup = false
     @State private var showStatusComposer = false
     @State private var showFullComposer = false
     @State private var pendingAttachmentType: String?
@@ -437,6 +440,7 @@ struct ThemedFeedOverlay: View {
                     // Story Tray
                     StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
                         selectedStoryUserId = userId
+                        storyViewerSingleGroup = false
                         showStoryViewer = true
                     }, onAddStatus: {
                         showStatusComposer = true
@@ -534,6 +538,12 @@ struct ThemedFeedOverlay: View {
                             moodLookup: { userId in
                                 (emoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
                                  tapHandler: statusViewModel.moodTapHandler(for: userId))
+                            },
+                            authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),
+                            onViewAuthorStory: {
+                                selectedStoryUserId = post.authorId
+                                storyViewerSingleGroup = true
+                                showStoryViewer = true
                             }
                         )
                         .equatable()
@@ -646,6 +656,7 @@ struct ThemedFeedOverlay: View {
                     showStoryViewer = false
                     router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
                 },
+                singleGroup: storyViewerSingleGroup,
                 startAtFirstUnviewed: true,
                 presentationSource: "FeedOverlay"
             )

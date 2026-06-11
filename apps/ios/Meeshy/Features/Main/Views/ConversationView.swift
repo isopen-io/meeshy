@@ -68,6 +68,10 @@ struct ConversationOverlayState {
     var storyViewerUserId: String? = nil
     var storyViewerGroupIndex: Int = 0
     var storyViewerSlideIndex: Int = 0
+    /// `true` quand le viewer est ouvert depuis l'avatar d'un expéditeur
+    /// (première non-vue) ; `false` quand une story-reply cible une slide
+    /// précise via `storyViewerSlideIndex`.
+    var storyViewerStartAtFirstUnviewed = false
     var showReplyThread = false
     var replyThreadParentId: String? = nil
 }
@@ -289,9 +293,10 @@ struct ConversationView: View {
 
     // MARK: - Computed Properties
 
-    var headerHasStoryRing: Bool {
-        guard let userId = conversation?.participantUserId else { return false }
-        return storyViewModel.hasStories(forUserId: userId)
+    var headerStoryRingState: StoryRingState {
+        guard conversation?.type == .direct,
+              let userId = conversation?.participantUserId else { return .none }
+        return storyViewModel.storyRingState(forUserId: userId)
     }
 
     var accentColor: String {
@@ -618,6 +623,7 @@ struct ConversationView: View {
                     },
                     singleGroup: true,
                     initialStoryIndex: overlayState.storyViewerSlideIndex,
+                    startAtFirstUnviewed: overlayState.storyViewerStartAtFirstUnviewed,
                     presentationSource: "ConversationView.overlay"
                 )
                 // Re-inject env objects required by StoryViewerView for its
@@ -998,8 +1004,17 @@ struct ConversationView: View {
                         overlayState.storyViewerUserId = group.id
                         overlayState.storyViewerGroupIndex = groupIdx
                         overlayState.storyViewerSlideIndex = slideIdx
+                        overlayState.storyViewerStartAtFirstUnviewed = false
                         overlayState.showStoryViewer = true
                     }
+                },
+                onViewSenderStory: { userId in
+                    // Anneau story d'un avatar de bulle (conversations de
+                    // groupe) → story de CET expéditeur, première non-vue.
+                    overlayState.storyViewerUserId = userId
+                    overlayState.storyViewerSlideIndex = 0
+                    overlayState.storyViewerStartAtFirstUnviewed = true
+                    overlayState.showStoryViewer = true
                 },
                 onSwipeReply: { messageId in
                     // Restore swipe-to-reply: BubbleSwipeContainer commits when
@@ -1276,7 +1291,7 @@ struct ConversationView: View {
                     Spacer()
                     ThemedAvatarButton(
                         name: conversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
-                        isExpanded: false, hasStoryRing: headerHasStoryRing,
+                        isExpanded: false, storyState: headerStoryRingState,
                         avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
                         presenceState: headerPresenceState,
                         moodEmoji: headerMoodEmoji

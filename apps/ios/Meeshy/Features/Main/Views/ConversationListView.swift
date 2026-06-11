@@ -250,9 +250,7 @@ struct ConversationListView: View {
 
     private func storyRingState(for conversation: Conversation) -> StoryRingState {
         guard conversation.type == .direct, let userId = conversation.participantUserId else { return .none }
-        if storyViewModel.hasUnviewedStories(forUserId: userId) { return .unread }
-        if storyViewModel.hasStories(forUserId: userId) { return .read }
-        return .none
+        return storyViewModel.storyRingState(forUserId: userId)
     }
 
     private func conversationMoodStatus(for conversation: Conversation) -> StatusEntry? {
@@ -801,18 +799,13 @@ struct ConversationListView: View {
 
     // MARK: - Handle Story View
     private func handleStoryView(_ conversation: Conversation) {
-        guard conversation.type == .direct else { return }
-
-        if let userId = conversation.participantUserId,
-           storyViewModel.groupIndex(forUserId: userId) != nil {
-            onStoryViewRequest?(userId, false)
-            return
-        }
-
-        if let group = storyViewModel.storyGroups.first(where: { $0.username == conversation.name }) {
-            onStoryViewRequest?(group.id, false)
-            return
-        }
+        // Lookup par userId uniquement — l'ancien fallback par display name
+        // (`$0.username == conversation.name`) ouvrait la story d'un homonyme
+        // ou cassait dès que l'utilisateur renommait son profil.
+        guard conversation.type == .direct,
+              let userId = conversation.participantUserId,
+              storyViewModel.hasStories(forUserId: userId) else { return }
+        onStoryViewRequest?(userId, false)
     }
 
     // MARK: - Handle Profile View
