@@ -451,6 +451,26 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun toggleShowOriginal_swaps_the_bubble_to_the_original_and_back() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        fun bubble() = h.vm.state.value.messages.first { it.messageId == "m1" }
+        advanceUntilIdle()
+        assertThat(bubble().text).isEqualTo("salut fr")
+
+        h.vm.onMessageLongPress("m1")
+        h.vm.toggleShowOriginal("m1")
+        advanceUntilIdle()
+
+        assertThat(bubble().text).isEqualTo("salut")
+        assertThat(bubble().isShowingOriginal).isTrue()
+        assertThat(h.vm.state.value.actionMessageId).isNull()
+
+        h.vm.toggleShowOriginal("m1")
+        advanceUntilIdle()
+        assertThat(bubble().text).isEqualTo("salut fr")
+    }
+
+    @Test
     fun loadOlder_records_when_history_is_exhausted() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
         coEvery { h.repo.loadOlder("c1") } returns false

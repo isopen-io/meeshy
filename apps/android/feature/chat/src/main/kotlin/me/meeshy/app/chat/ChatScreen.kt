@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -209,6 +210,7 @@ fun ChatScreen(
             onReact = { emoji -> viewModel.toggleReaction(actionTarget.messageId, emoji) },
             onEdit = { viewModel.startEdit(actionTarget.messageId) },
             onDelete = { viewModel.deleteMessage(actionTarget.messageId) },
+            onToggleOriginal = { viewModel.toggleShowOriginal(actionTarget.messageId) },
             onDismiss = viewModel::dismissMessageActions,
         )
     }
@@ -226,6 +228,7 @@ private fun MessageActionsSheet(
     onReact: (String) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onToggleOriginal: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val clipboard = LocalClipboardManager.current
@@ -255,6 +258,16 @@ private fun MessageActionsSheet(
                 HorizontalDivider(color = MeeshyTheme.tokens.backgroundTertiary)
             }
 
+            if (bubble.isTranslated) {
+                SheetAction(
+                    icon = Icons.Filled.Translate,
+                    label = stringResource(
+                        if (bubble.isShowingOriginal) R.string.chat_action_show_translation
+                        else R.string.chat_action_show_original,
+                    ),
+                    onClick = onToggleOriginal,
+                )
+            }
             if (!bubble.isDeleted) {
                 SheetAction(
                     icon = Icons.Filled.ContentCopy,

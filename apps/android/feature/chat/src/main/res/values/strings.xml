@@ -8,6 +8,8 @@
     <string name="chat_retry">Retry</string>
     <string name="chat_send_failed_retry">Not sent — tap to retry</string>
     <string name="chat_action_copy">Copy</string>
+    <string name="chat_action_show_original">See original</string>
+    <string name="chat_action_show_translation">See translation</string>
     <string name="chat_action_edit">Edit</string>
     <string name="chat_action_delete">Delete</string>
     <string name="chat_editing_label">Editing message</string>

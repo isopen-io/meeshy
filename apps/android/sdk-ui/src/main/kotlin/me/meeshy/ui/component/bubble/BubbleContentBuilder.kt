@@ -13,10 +13,12 @@ public object BubbleContentBuilder {
         isPending: Boolean = false,
         isFailed: Boolean = false,
         ownReactions: Set<String> = emptySet(),
+        showOriginal: Boolean = false,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
         val isTranslated = !isDeleted && message.isTranslated(preferences)
+        val isShowingOriginal = isTranslated && showOriginal
         val deliveryStatus = when {
             !isOutgoing -> DeliveryStatus.Sent
             isFailed -> DeliveryStatus.Failed
@@ -36,10 +38,15 @@ public object BubbleContentBuilder {
         }
         return BubbleContent(
             messageId = message.id,
-            text = if (isDeleted) "" else message.displayContent(preferences),
+            text = when {
+                isDeleted -> ""
+                isShowingOriginal -> message.content
+                else -> message.displayContent(preferences)
+            },
             isOutgoing = isOutgoing,
             isTranslated = isTranslated,
-            originalText = if (isTranslated) message.content else null,
+            isShowingOriginal = isShowingOriginal,
+            originalText = if (isTranslated && !isShowingOriginal) message.content else null,
             senderName = (message.sender?.displayName ?: message.sender?.username)
                 ?.takeIf { it.isNotBlank() },
             showSenderName = showSenderName && !isOutgoing,

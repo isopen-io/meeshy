@@ -252,7 +252,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 
 ## D. Translation — Prisme Linguistique
 - [ ] Automatic per-user translation display (resolution: system → regional → custom → original)
-- [ ] Original / secondary-language exploration (flag strip, inline secondary panel)
+- [~] Original exploration: long-press → « Voir l'original / la traduction »
+      (toggle par message, builder Prisme-aware) ; flag strip / panel secondaire pending
 - [ ] Message detail: per-language translation explorer + on-demand translate / retranslate
 - [ ] Per-post and per-story translation (flag strip, inline secondary, request missing languages)
 - [ ] Persisted translations / transcriptions / audio translations (offline Prisme)

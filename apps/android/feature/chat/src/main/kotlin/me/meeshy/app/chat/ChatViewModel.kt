@@ -70,6 +70,7 @@ class ChatViewModel @Inject constructor(
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     private val ownReactions = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
+    private val showingOriginal = MutableStateFlow<Set<String>>(emptySet())
     private val typingCleanupJobs = mutableMapOf<String, Job>()
     private var latestMessages: List<LocalMessage> = emptyList()
 
@@ -100,10 +101,11 @@ class ChatViewModel @Inject constructor(
                 ),
                 sessionRepository.currentUser,
                 ownReactions,
-            ) { result, user, own -> Triple(result, user, own) }
-                .collect { (result, user, own) ->
+                showingOriginal,
+            ) { result, user, own, originals -> BubbleInputs(result, user, own, originals) }
+                .collect { (result, user, own, originals) ->
                     latestMessages = result.valueOrNull() ?: latestMessages
-                    _state.update { it.applyResult(result, user, own) }
+                    _state.update { it.applyResult(result, user, own, originals) }
                 }
         }
 
@@ -241,6 +243,11 @@ class ChatViewModel @Inject constructor(
         _state.update { it.copy(actionMessageId = null) }
     }
 
+    fun toggleShowOriginal(messageId: String) {
+        showingOriginal.update { if (messageId in it) it - messageId else it + messageId }
+        _state.update { it.copy(actionMessageId = null) }
+    }
+
     fun toggleReaction(messageId: String, emoji: String) {
         val mine = ownReactions.value[messageId] ?: emptySet()
         val isAdding = emoji !in mine
@@ -356,6 +363,13 @@ class ChatViewModel @Inject constructor(
     }
 }
 
+private data class BubbleInputs(
+    val result: CacheResult<List<LocalMessage>>,
+    val user: MeeshyUser?,
+    val ownReactions: Map<String, Set<String>>,
+    val showingOriginal: Set<String>,
+)
+
 private fun <T> CacheResult<List<T>>.valueOrNull(): List<T>? = when (this) {
     is CacheResult.Fresh -> value
     is CacheResult.Stale -> value
@@ -367,22 +381,23 @@ private fun ChatUiState.applyResult(
     result: CacheResult<List<LocalMessage>>,
     currentUser: MeeshyUser?,
     ownReactions: Map<String, Set<String>>,
+    showingOriginal: Set<String>,
 ): ChatUiState = when (result) {
     is CacheResult.Fresh -> copy(
-        messages = result.value.toBubbles(currentUser, ownReactions),
+        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal),
         ownReactions = ownReactions,
         isSyncing = false,
         showSkeleton = false,
         errorMessage = null,
     )
     is CacheResult.Stale -> copy(
-        messages = result.value.toBubbles(currentUser, ownReactions),
+        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal),
         ownReactions = ownReactions,
         isSyncing = true,
         showSkeleton = false,
     )
     is CacheResult.Syncing -> copy(
-        messages = result.value?.toBubbles(currentUser, ownReactions) ?: messages,
+        messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal) ?: messages,
         ownReactions = ownReactions,
         isSyncing = true,
         showSkeleton = result.value == null && messages.isEmpty() && errorMessage == null,
@@ -398,6 +413,7 @@ private fun ChatUiState.applyResult(
 private fun List<LocalMessage>.toBubbles(
     currentUser: MeeshyUser?,
     ownReactions: Map<String, Set<String>>,
+    showingOriginal: Set<String>,
 ): List<BubbleContent> = map { local ->
     BubbleContentBuilder.build(
         message = local.message,
@@ -407,6 +423,7 @@ private fun List<LocalMessage>.toBubbles(
         isPending = local.sendState == LocalSendState.SENDING,
         isFailed = local.sendState == LocalSendState.FAILED,
         ownReactions = ownReactions[local.message.id] ?: emptySet(),
+        showOriginal = local.message.id in showingOriginal,
     )
 }
 
