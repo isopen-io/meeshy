@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import * as path from 'path';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
+import { aggregateAttachmentReactions } from '../../socketio/serializeAttachmentForSocket';
 import { MessagingService } from '../../services/messaging/MessagingService';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
@@ -108,7 +109,7 @@ const logger = enhancedLogger.child({ module: 'messages' });
  * Nettoie les attachments pour l'API en transformant les valeurs invalides
  * Fixe spécifiquement voiceSimilarityScore: false -> null pour compatibilité schéma
  */
-function cleanAttachmentsForApi(attachments: any[], languageFilter?: readonly string[]): any[] {
+function cleanAttachmentsForApi(attachments: any[], languageFilter?: readonly string[], currentParticipantId?: string): any[] {
   if (!attachments || !Array.isArray(attachments)) {
     return attachments;
   }
@@ -125,6 +126,13 @@ function cleanAttachmentsForApi(attachments: any[], languageFilter?: readonly st
 
   return attachments.map((att, attIndex) => {
     const cleaned = { ...att };
+
+    // BUG2 A' — agréger les réactions par-image en reactionSummary + currentUserReactions
+    // (miroir des réactions message-level) et retirer les rows brutes.
+    const __reactions = aggregateAttachmentReactions(cleaned.reactions, currentParticipantId);
+    cleaned.reactionSummary = __reactions.reactionSummary;
+    cleaned.currentUserReactions = __reactions.currentUserReactions;
+    delete cleaned.reactions;
 
     // Nettoyer la transcription
     if (cleaned.transcription && cleaned.transcription.segments) {
@@ -974,7 +982,7 @@ export function registerMessagesRoutes(
             isOnline: message.sender.user?.isOnline ?? message.sender.isOnline ?? null,
             lastActiveAt: message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null,
           } : null,
-          attachments: cleanAttachmentsForApi(message.attachments, languageFilter),
+          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId),
           _count: message._count
         };
 

@@ -94,6 +94,8 @@ export const attachmentMediaSelect = Prisma.validator<Prisma.MessageAttachmentSe
   createdAt: true,
   transcription: true,
   translations: true,
+  // BUG2 A' — réactions par-image (agrégées au mapping en reactionSummary + currentUserReactions)
+  reactions: { select: { emoji: true, participantId: true } },
 });
 
 /**

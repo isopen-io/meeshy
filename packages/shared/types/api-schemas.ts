@@ -266,6 +266,10 @@ export const messageAttachmentSchema = {
     filePath: { type: 'string', description: 'Relative file path' },
     fileUrl: { type: 'string', description: 'Full URL for access' },
 
+    // BUG2 A' — réactions par-image (sinon fast-json-stringify les strippe)
+    reactionSummary: { type: 'object', additionalProperties: { type: 'number' }, description: 'Per-image reaction counts (emoji→count)' },
+    currentUserReactions: { type: 'array', items: { type: 'string' }, description: 'Emojis the current user reacted with on this attachment' },
+
     // User-provided metadata
     title: { type: 'string', nullable: true, description: 'Human-readable title' },
     alt: { type: 'string', nullable: true, description: 'Accessibility alt text' },

@@ -47,11 +47,42 @@ export interface SocketAttachment {
   readonly createdAt: Date | string;
   readonly transcription: unknown;
   readonly translations: unknown;
+  /** BUG2 A' — réactions par-image agrégées (emoji→count). */
+  readonly reactionSummary: Readonly<Record<string, number>>;
+  /** BUG2 A' — emojis posés par le destinataire (vide si destinataire inconnu, ex broadcast). */
+  readonly currentUserReactions: readonly string[];
+}
+
+/**
+ * BUG2 A' — agrège les rows `attachmentReactions` ({emoji, participantId}) en
+ * `reactionSummary` (emoji→count) + `currentUserReactions` (emojis du participant
+ * courant). `currentParticipantId` absent (broadcast) → currentUserReactions vide.
+ */
+export function aggregateAttachmentReactions(
+  rows: ReadonlyArray<{ emoji: string; participantId: string }> | null | undefined,
+  currentParticipantId?: string
+): { reactionSummary: Record<string, number>; currentUserReactions: string[] } {
+  const reactionSummary: Record<string, number> = {};
+  const currentUserReactions: string[] = [];
+  if (rows) {
+    for (const r of rows) {
+      reactionSummary[r.emoji] = (reactionSummary[r.emoji] ?? 0) + 1;
+      if (currentParticipantId && r.participantId === currentParticipantId && !currentUserReactions.includes(r.emoji)) {
+        currentUserReactions.push(r.emoji);
+      }
+    }
+  }
+  return { reactionSummary, currentUserReactions };
 }
 
 export function serializeAttachmentForSocket(
-  raw: Record<string, unknown>
+  raw: Record<string, unknown>,
+  currentParticipantId?: string
 ): SocketAttachment {
+  const { reactionSummary, currentUserReactions } = aggregateAttachmentReactions(
+    raw.reactions as ReadonlyArray<{ emoji: string; participantId: string }> | undefined,
+    currentParticipantId
+  );
   return {
     id: raw.id as string,
     messageId: raw.messageId as string,
@@ -81,5 +112,7 @@ export function serializeAttachmentForSocket(
     // Prisme Linguistique — null = pas encore enrichi, présent = serialize tel quel
     transcription: raw.transcription ?? null,
     translations: raw.translations ?? null,
+    reactionSummary,
+    currentUserReactions,
   };
 }
