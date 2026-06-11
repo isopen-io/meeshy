@@ -19,9 +19,11 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MeeshyUser
@@ -32,6 +34,7 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.theme.accentHex
 import me.meeshy.ui.component.bubble.DeliveryStatus
 import org.junit.After
 import org.junit.Before
@@ -86,9 +89,12 @@ class ChatViewModelTest {
     private fun harness(
         stream: Flow<CacheResult<List<LocalMessage>>>,
         currentUser: MeeshyUser? = null,
+        conversation: ApiConversation? = null,
     ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
+        val conversations = mockk<ConversationRepository>(relaxed = true)
+        every { conversations.conversationStream("c1") } returns MutableStateFlow(conversation)
         val session = mockk<SessionRepository>(relaxed = true)
         every { session.currentUser } returns MutableStateFlow(currentUser)
         val reactions = mockk<ReactionRepository>(relaxed = true)
@@ -97,7 +103,7 @@ class ChatViewModelTest {
         val workManager = mockk<WorkManager>(relaxed = true)
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
         return Harness(
-            ChatViewModel(repo, session, reactions, socketManager(), workManager, handle),
+            ChatViewModel(repo, conversations, session, reactions, socketManager(), workManager, handle),
             repo,
             workManager,
             reactions,
@@ -391,6 +397,20 @@ class ChatViewModelTest {
 
         assertThat(h.vm.state.value.editingMessageId).isNull()
         assertThat(h.vm.state.value.draft).isEmpty()
+    }
+
+    @Test
+    fun header_carries_the_conversation_title_and_accent_color() = runTest(dispatcher) {
+        val conversation = ApiConversation(id = "c1", title = "Équipe", type = "group")
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            conversation = conversation,
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.conversationTitle).isEqualTo("Équipe")
+        assertThat(h.vm.state.value.accentColorHex).isEqualTo(conversation.accentHex())
     }
 
     @Test

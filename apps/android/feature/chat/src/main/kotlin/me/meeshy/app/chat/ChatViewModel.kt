@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
@@ -25,6 +26,8 @@ import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.theme.accentHex
+import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.BubbleContentBuilder
 import javax.inject.Inject
@@ -37,6 +40,7 @@ data class ChatUiState(
     val errorMessage: String? = null,
     val typingUsers: List<String> = emptyList(),
     val conversationTitle: String? = null,
+    val accentColorHex: String? = null,
     val actionMessageId: String? = null,
     val editingMessageId: String? = null,
     val ownReactions: Map<String, Set<String>> = emptyMap(),
@@ -50,6 +54,7 @@ data class ChatUiState(
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val messageRepository: MessageRepository,
+    conversationRepository: ConversationRepository,
     private val sessionRepository: SessionRepository,
     private val reactionRepository: ReactionRepository,
     private val messageSocketManager: MessageSocketManager,
@@ -69,6 +74,18 @@ class ChatViewModel @Inject constructor(
     private var latestMessages: List<LocalMessage> = emptyList()
 
     init {
+        viewModelScope.launch {
+            conversationRepository.conversationStream(conversationId).collect { conversation ->
+                if (conversation == null) return@collect
+                _state.update {
+                    it.copy(
+                        conversationTitle = conversation.displayTitle(),
+                        accentColorHex = conversation.accentHex(),
+                    )
+                }
+            }
+        }
+
         viewModelScope.launch {
             combine(
                 messageRepository.messagesStream(

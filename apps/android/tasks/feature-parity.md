@@ -123,7 +123,9 @@ file-by-file audit — every one of the 673 iOS files was read in full.
 - [x] `MeeshyPalette` Indigo scale + semantic colors
 - [x] `MeeshyThemeTokens` light/dark + `MeeshyTheme`
 - [ ] Typography + spacing + shape + motion tokens
-- [ ] Conversation `accentColor` Compose integration (palette propagation)
+- [~] Conversation `accentColor` Compose integration — `accentHex()`/`displayTitle()`
+      in `:sdk-core` theme, list avatars + chat header dot + outgoing bubbles +
+      pagination spinner tinted; full palette (secondary/accent) propagation pending
 - [~] Reusable primitives: `MeeshyAvatar`, `BrandLogo`, `MeeshyPrimaryButton`,
       `MeeshySkeletonBox` done (Login + Conversations screens de-duplicated);
       identity bar, fields, toasts, swipeable rows, tag input, pickers,

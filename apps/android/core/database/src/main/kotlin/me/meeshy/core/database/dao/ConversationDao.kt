@@ -12,6 +12,9 @@ public interface ConversationDao {
     @Query("SELECT * FROM conversations ORDER BY updatedAt DESC")
     public fun observeAll(): Flow<List<ConversationEntity>>
 
+    @Query("SELECT * FROM conversations WHERE id = :id")
+    public fun observeById(id: String): Flow<ConversationEntity?>
+
     @Upsert
     public suspend fun upsertAll(rows: List<ConversationEntity>)
 

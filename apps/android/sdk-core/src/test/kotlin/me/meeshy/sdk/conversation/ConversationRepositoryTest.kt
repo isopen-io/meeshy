@@ -92,6 +92,31 @@ class ConversationRepositoryTest {
     }
 
     @Test
+    fun `conversationStream emits the cached conversation by id`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(
+                        ApiConversation(id = "c1", title = "Team"),
+                        ApiConversation(id = "c2", title = "Family"),
+                    ),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        assertThat(repo.conversationStream("c2").first()?.title).isEqualTo("Family")
+    }
+
+    @Test
+    fun `conversationStream emits null for an unknown conversation`() = runTest {
+        val repo = repository(FakeConversationApi(ApiResponse(success = false, error = "n/a")))
+
+        assertThat(repo.conversationStream("missing").first()).isNull()
+    }
+
+    @Test
     fun `refresh throws when the network fails`() = runTest {
         val repo = repository(FakeConversationApi(ApiResponse(success = false, error = "Server down")))
 

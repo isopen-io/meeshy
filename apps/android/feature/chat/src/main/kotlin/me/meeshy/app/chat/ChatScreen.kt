@@ -55,6 +55,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -68,6 +69,7 @@ import me.meeshy.ui.component.bubble.MessageBubble
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.hexColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,11 +94,32 @@ fun ChatScreen(
             }
     }
 
+    val accentColor = state.accentColorHex
+        ?.let { hexColor(it) }
+        ?.takeIf { it != Color.Unspecified }
+        ?: MeeshyPalette.Indigo500
+
     Scaffold(
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.chat_title), fontWeight = FontWeight.Bold) },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(accentColor),
+                        )
+                        Text(
+                            text = state.conversationTitle ?: stringResource(R.string.chat_title),
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = MeeshySpacing.sm),
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chat_back))
@@ -142,7 +165,7 @@ fun ChatScreen(
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(20.dp),
                                         strokeWidth = 2.dp,
-                                        color = MeeshyPalette.Indigo400,
+                                        color = accentColor,
                                     )
                                 }
                             }
@@ -150,6 +173,7 @@ fun ChatScreen(
                         items(state.messages, key = { it.messageId }) { bubble ->
                             MessageBubble(
                                 content = bubble,
+                                outgoingColor = accentColor,
                                 onLongPress = { viewModel.onMessageLongPress(bubble.messageId) },
                                 onReactionClick = { emoji ->
                                     viewModel.toggleReaction(bubble.messageId, emoji)

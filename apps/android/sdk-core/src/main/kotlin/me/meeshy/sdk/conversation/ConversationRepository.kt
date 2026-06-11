@@ -1,6 +1,7 @@
 package me.meeshy.sdk.conversation
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.ConversationDao
 import me.meeshy.core.database.dao.SyncMetaDao
@@ -10,6 +11,7 @@ import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CreateConversationRequest
+import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.apiCall
@@ -20,7 +22,7 @@ import javax.inject.Singleton
 class ConversationRepository @Inject constructor(
     private val conversationApi: ConversationApi,
     database: MeeshyDatabase,
-    conversationDao: ConversationDao,
+    private val conversationDao: ConversationDao,
     syncMetaDao: SyncMetaDao,
 ) {
     private val cacheSource = ConversationCacheSource(
@@ -41,6 +43,15 @@ class ConversationRepository @Inject constructor(
         onSyncError: (Throwable) -> Unit = {},
     ): Flow<CacheResult<List<ApiConversation>>> =
         cacheFirstFlow(policy, cacheSource, onRevalidateError = onSyncError)
+
+    /**
+     * Cache-first single conversation: the Room row written by the list sync,
+     * decoded on the fly. Emits null until the conversation is cached.
+     */
+    fun conversationStream(id: String): Flow<ApiConversation?> =
+        conversationDao.observeById(id).map { row ->
+            row?.let { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }
+        }
 
     /** Explicit refresh (pull-to-refresh / retry). Throws on failure. */
     suspend fun refresh() {
