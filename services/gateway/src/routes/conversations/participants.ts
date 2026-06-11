@@ -343,7 +343,7 @@ export function registerParticipantsRoutes(
       // lists until manual reload). Mirrors the role-update emit below.
       // conversation:joined feeds ParticipantsView (invalidate+reload) and
       // ConversationSyncEngine (participants cache invalidate) on iOS.
-      const io = (request.server as any).io;
+      const io = fastify.socketIOHandler?.getManager()?.getIO();
       if (io) {
         io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.CONVERSATION_JOINED, {
           conversationId,
@@ -351,7 +351,7 @@ export function registerParticipantsRoutes(
         });
       }
 
-      const notificationService = (request.server as any).notificationService;
+      const notificationService = fastify.notificationService;
       if (notificationService) {
         notificationService.createAddedToConversationNotification({
           recipientUserId: userId,
@@ -485,7 +485,7 @@ export function registerParticipantsRoutes(
       // conversation:participant-left (room broadcast feeding ParticipantsView,
       // ConversationListViewModel count, ConversationSyncEngine invalidate) —
       // NOT conversation:left, which is a self-only ack.
-      const io = (request.server as any).io;
+      const io = fastify.socketIOHandler?.getManager()?.getIO();
       if (io) {
         io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, {
           conversationId,
@@ -495,7 +495,7 @@ export function registerParticipantsRoutes(
         });
       }
 
-      const notificationService = (request.server as any).notificationService;
+      const notificationService = fastify.notificationService;
       if (notificationService) {
         notificationService.createRemovedFromConversationNotification({
           recipientUserId: userId,
@@ -663,7 +663,7 @@ export function registerParticipantsRoutes(
         }
       });
 
-      const io = (request.server as any).io;
+      const io = fastify.socketIOHandler?.getManager()?.getIO();
       if (io) {
         io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, {
           conversationId,
@@ -674,13 +674,13 @@ export function registerParticipantsRoutes(
         });
       }
 
-      const notificationService = (request.server as any).notificationService;
+      const notificationService = fastify.notificationService;
       if (notificationService) {
         notificationService.createMemberRoleChangedNotification({
           recipientUserId: userId,
           changedByUserId: currentUserId,
           conversationId,
-          newRole,
+          newRole: newRole.toUpperCase() as 'ADMIN' | 'MODERATOR' | 'MEMBER',
           previousRole: targetParticipant.role,
         }).catch((err: unknown) => logger.error('Notification error role_changed', err as Error));
       }

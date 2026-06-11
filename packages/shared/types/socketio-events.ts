@@ -174,6 +174,7 @@ export const SERVER_EVENTS = {
   CONVERSATION_DELETED: 'conversation:deleted',
   CONVERSATION_PARTICIPANT_UNBANNED: 'conversation:participant-unbanned',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
+  LINK_MESSAGE_NEW: 'link:message:new',
   /**
    * Emitted whenever an attachment on an existing message has been
    * enriched server-side : Whisper transcription finalized, NLLB+TTS
@@ -788,7 +789,7 @@ export interface ParticipantRoleUpdatedEventData {
   readonly newRole: string;
   readonly updatedBy: string;
   /** Minimum guaranteed shape from gateway; actual payload may include additional fields */
-  readonly participant: {
+  readonly participant?: {
     readonly id: string;
     readonly role: string;
     readonly displayName: string;
@@ -950,6 +951,42 @@ export interface MentionCreatedEventData {
   readonly timestamp: string;
 }
 
+export interface ConversationParticipantBannedEventData {
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly bannedBy: { readonly id: string };
+  readonly bannedAt: string;
+}
+
+export interface ConversationParticipantUnbannedEventData {
+  readonly conversationId: string;
+  readonly userId: string;
+}
+
+export interface ConversationParticipantLeftEventData {
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly displayName: string;
+  readonly leftAt: string;
+}
+
+export interface ConversationUpdatedEventData {
+  readonly conversationId: string;
+  readonly updatedBy: { readonly id: string };
+  readonly updatedAt: string;
+  readonly [key: string]: unknown;
+}
+
+export interface ConversationClosedEventData {
+  readonly conversationId: string;
+  readonly closedBy: string;
+  readonly closedAt: string;
+}
+
+export interface LinkMessageNewEventData {
+  readonly message: Record<string, unknown>;
+}
+
 // Événements du serveur vers le client
 export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_NEW]: (message: SocketIOMessage) => void;
@@ -1073,6 +1110,20 @@ export interface ServerToClientEvents {
 
   // Delivery queue
   [SERVER_EVENTS.PENDING_MESSAGES_DELIVERED]: (data: { count: number }) => void;
+
+  // Conversation lifecycle
+  [SERVER_EVENTS.CONVERSATION_UPDATED]: (data: ConversationUpdatedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_CLOSED]: (data: ConversationClosedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_DELETED]: (data: ConversationDeletedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT]: (data: ConversationParticipantLeftEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED]: (data: ConversationParticipantBannedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED]: (data: ConversationParticipantUnbannedEventData) => void;
+
+  // Attachment status
+  [SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED]: (data: AttachmentStatusUpdatedEventData) => void;
+
+  // Share link messages
+  [SERVER_EVENTS.LINK_MESSAGE_NEW]: (data: LinkMessageNewEventData) => void;
 }
 
 /**

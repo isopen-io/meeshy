@@ -1254,7 +1254,7 @@
     "listTitle": "Lista de usuários anônimos",
     "emptyTitle": "Nenhum usuário anônimo encontrado",
     "messageCount": "{count} mensagens",
-    "joinedAt": "Entrou em {date}",
+    "joinedAt": "Aderiu em {date}",
     "actionDetails": "Detalhes",
     "conversationLabel": "Conversa:",
     "noTitle": "Sem título",
@@ -1458,7 +1458,8 @@
     "confirmPasswordLabel": "Confirmar senha",
     "reasonResetLabel": "Motivo da redefinição",
     "reasonResetPlaceholder": "Motivo da redefinição de senha...",
-    "resetButton": "Redefinir senha"
+    "resetButton": "Redefinir senha",
+    "deleteSuccess": "Utilizador eliminado com sucesso"
   },
   "shareLinks": {
     "loading": "Carregando links de compartilhamento...",

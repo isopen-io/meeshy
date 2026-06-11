@@ -4,7 +4,7 @@ import { AttachmentService } from '../services/attachments/index.js';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../services/attachments/attachmentIncludes';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, ROOMS, type SocketIOMessage } from '@meeshy/shared/types/socketio-events';
 import { validateParams, validateBody, validateQuery } from '../validation/helpers.js';
 import {
   MessageParamsSchema,
@@ -310,10 +310,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
           const room = ROOMS.conversation(message.conversationId);
-          (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, {
+          socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, {
             ...transformedMessage,
             conversationId: message.conversationId
-          });
+          } as unknown as SocketIOMessage);
         }
       } catch (socketError) {
         logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
@@ -443,7 +443,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
           const room = ROOMS.conversation(message.conversationId);
-          (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, {
+          socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, {
             messageId,
             conversationId: message.conversationId
           });
@@ -546,7 +546,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               updatedAt: new Date(),
               summary
             };
-            const io = (socketIOManager as any).io;
+            const io = socketIOManager.getIO();
             const convRoom = ROOMS.conversation(message.conversationId);
             let emitter: any = io.to(convRoom);
             const seenRooms = new Set<string>([convRoom]);
@@ -906,7 +906,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
           const room = ROOMS.conversation(attachment.message.conversationId);
-          (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, {
+          socketIOManager.getIO().to(room).emit(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, {
             attachmentId,
             messageId: attachment.messageId,
             conversationId: attachment.message.conversationId,

@@ -281,7 +281,7 @@ export default function AdminAnonymousUsersPage() {
                           </div>
                           <div className="flex items-center space-x-1">
                             <Calendar className="h-3 w-3" />
-                            <span>Rejoint le {formatDate(user.joinedAt)}</span>
+                            <span>{t('anonUsers.joinedAt', { date: formatDate(user.joinedAt) })}</span>
                           </div>
                         </div>
                         <Button

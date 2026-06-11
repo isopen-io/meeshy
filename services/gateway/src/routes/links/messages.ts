@@ -9,6 +9,7 @@ import {
   isRegisteredUser
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import {
   sendMessageSchema,
   sendMessageBodySchema,
@@ -251,7 +252,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // Émettre l'événement WebSocket
       const socketIOManager = fastify.socketIOHandler.getManager();
       if (socketIOManager) {
-        (socketIOManager as any).io?.to(`conversation:${participantShareLink.conversationId}`).emit('link:message:new', {
+        socketIOManager.getIO()?.to(`conversation:${participantShareLink.conversationId}`).emit(SERVER_EVENTS.LINK_MESSAGE_NEW, {
           message: {
             id: message.id,
             content: message.content,
@@ -522,7 +523,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // Émettre l'événement WebSocket
       const socketIOManager = fastify.socketIOHandler.getManager();
       if (socketIOManager) {
-        (socketIOManager as any).io?.to(`conversation:${shareLink.conversationId}`).emit('link:message:new', {
+        socketIOManager.getIO()?.to(`conversation:${shareLink.conversationId}`).emit(SERVER_EVENTS.LINK_MESSAGE_NEW, {
           message: {
             id: message.id,
             content: message.content,

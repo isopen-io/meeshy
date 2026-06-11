@@ -1254,7 +1254,7 @@
     "listTitle": "Anonymous users list",
     "emptyTitle": "No anonymous user found",
     "messageCount": "{count} messages",
-    "joinedAt": "Joined on {date}",
+    "joinedAt": "Joined {date}",
     "actionDetails": "Details",
     "conversationLabel": "Conversation:",
     "noTitle": "No title",
@@ -1458,7 +1458,8 @@
     "confirmPasswordLabel": "Confirm password",
     "reasonResetLabel": "Reason for reset",
     "reasonResetPlaceholder": "Reason for password reset...",
-    "resetButton": "Reset password"
+    "resetButton": "Reset password",
+    "deleteSuccess": "User deleted successfully"
   },
   "shareLinks": {
     "loading": "Loading share links...",

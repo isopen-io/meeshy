@@ -1458,7 +1458,8 @@
     "confirmPasswordLabel": "Confirmer le mot de passe",
     "reasonResetLabel": "Raison de la réinitialisation",
     "reasonResetPlaceholder": "Raison de la réinitialisation du mot de passe...",
-    "resetButton": "Réinitialiser le mot de passe"
+    "resetButton": "Réinitialiser le mot de passe",
+    "deleteSuccess": "Utilisateur supprimé avec succès"
   },
   "shareLinks": {
     "loading": "Chargement des liens de partage...",
