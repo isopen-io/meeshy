@@ -23,7 +23,13 @@ import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.ReactionSyncResponse
+import me.meeshy.sdk.model.ReactionUpdateEvent
+import me.meeshy.sdk.net.ApiError
+import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.ui.component.bubble.DeliveryStatus
@@ -48,6 +54,9 @@ class ChatViewModelTest {
 
     private fun synced(message: ApiMessage) = LocalMessage(message)
 
+    private val reactionAdded = MutableSharedFlow<ReactionUpdateEvent>()
+    private val reactionRemoved = MutableSharedFlow<ReactionUpdateEvent>()
+
     private fun socketManager(): MessageSocketManager =
         mockk<MessageSocketManager> {
             every { messageReceived } returns MutableSharedFlow()
@@ -55,22 +64,43 @@ class ChatViewModelTest {
             every { messageDeleted } returns MutableSharedFlow()
             every { typingStarted } returns MutableSharedFlow()
             every { typingStopped } returns MutableSharedFlow()
+            every { this@mockk.reactionAdded } returns this@ChatViewModelTest.reactionAdded
+            every { this@mockk.reactionRemoved } returns this@ChatViewModelTest.reactionRemoved
         }
+
+    private data class Harness(
+        val vm: ChatViewModel,
+        val repo: MessageRepository,
+        val workManager: WorkManager,
+        val reactions: ReactionRepository,
+    )
 
     private fun viewModel(
         stream: Flow<CacheResult<List<LocalMessage>>>,
         currentUser: MeeshyUser? = null,
     ): Triple<ChatViewModel, MessageRepository, WorkManager> {
+        val harness = harness(stream, currentUser)
+        return Triple(harness.vm, harness.repo, harness.workManager)
+    }
+
+    private fun harness(
+        stream: Flow<CacheResult<List<LocalMessage>>>,
+        currentUser: MeeshyUser? = null,
+    ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
         val session = mockk<SessionRepository>(relaxed = true)
         every { session.currentUser } returns MutableStateFlow(currentUser)
+        val reactions = mockk<ReactionRepository>(relaxed = true)
+        coEvery { reactions.fetchDetails(any()) } returns
+            NetworkResult.Failure(ApiError("offline"))
         val workManager = mockk<WorkManager>(relaxed = true)
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
-        return Triple(
-            ChatViewModel(repo, session, socketManager(), workManager, handle),
+        return Harness(
+            ChatViewModel(repo, session, reactions, socketManager(), workManager, handle),
             repo,
             workManager,
+            reactions,
         )
     }
 
@@ -187,5 +217,194 @@ class ChatViewModelTest {
 
         coVerify { repo.retrySend("cmid_x") }
         coVerify { workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    private val me = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+
+    private fun syncedConversation() = flowOf(
+        CacheResult.Fresh(
+            listOf(
+                synced(
+                    ApiMessage(
+                        id = "m1",
+                        conversationId = "c1",
+                        senderId = "me",
+                        content = "salut",
+                        translations = listOf(
+                            ApiTextTranslation(targetLanguage = "fr", translatedContent = "salut fr"),
+                        ),
+                    ),
+                ),
+                synced(ApiMessage(id = "m2", conversationId = "c1", senderId = "other", content = "yo")),
+            ),
+            ageMillis = 0,
+        ),
+    )
+
+    @Test
+    fun long_press_opens_the_action_sheet_and_hydrates_own_reactions() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.reactions.fetchDetails("m2") } returns NetworkResult.Success(
+            ReactionSyncResponse(messageId = "m2", userReactions = listOf("❤️")),
+        )
+        advanceUntilIdle()
+
+        h.vm.onMessageLongPress("m2")
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.actionMessageId).isEqualTo("m2")
+        assertThat(h.vm.state.value.ownReactions["m2"]).containsExactly("❤️")
+    }
+
+    @Test
+    fun dismissing_the_action_sheet_clears_the_target() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onMessageLongPress("m2")
+        h.vm.dismissMessageActions()
+
+        assertThat(h.vm.state.value.actionMessageId).isNull()
+    }
+
+    @Test
+    fun toggleReaction_adds_when_the_emoji_is_not_mine_yet() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.toggleReactionOptimistic(any(), any(), any()) } returns true
+        advanceUntilIdle()
+
+        h.vm.toggleReaction("m2", "🔥")
+        advanceUntilIdle()
+
+        coVerify { h.repo.toggleReactionOptimistic("m2", "🔥", isAdding = true) }
+        assertThat(h.vm.state.value.ownReactions["m2"]).containsExactly("🔥")
+        coVerify { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun toggleReaction_removes_when_the_emoji_is_already_mine() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.toggleReactionOptimistic(any(), any(), any()) } returns true
+        advanceUntilIdle()
+
+        h.vm.toggleReaction("m2", "🔥")
+        advanceUntilIdle()
+        h.vm.toggleReaction("m2", "🔥")
+        advanceUntilIdle()
+
+        coVerify { h.repo.toggleReactionOptimistic("m2", "🔥", isAdding = false) }
+        assertThat(h.vm.state.value.ownReactions["m2"] ?: emptySet<String>()).isEmpty()
+    }
+
+    @Test
+    fun own_reactions_flow_into_the_bubbles() = runTest(dispatcher) {
+        val stream = flowOf(
+            CacheResult.Fresh(
+                listOf(
+                    synced(
+                        ApiMessage(
+                            id = "m2",
+                            conversationId = "c1",
+                            senderId = "other",
+                            content = "yo",
+                            reactionSummary = mapOf("🔥" to 1),
+                        ),
+                    ),
+                ),
+                ageMillis = 0,
+            ),
+        )
+        val h = harness(stream, currentUser = me)
+        coEvery { h.repo.toggleReactionOptimistic(any(), any(), any()) } returns true
+        advanceUntilIdle()
+
+        h.vm.toggleReaction("m2", "🔥")
+        advanceUntilIdle()
+
+        val bubble = h.vm.state.value.messages.single { it.messageId == "m2" }
+        assertThat(bubble.reactions.single { it.emoji == "🔥" }.includesMe).isTrue()
+    }
+
+    @Test
+    fun a_reaction_event_from_someone_else_applies_a_cache_delta() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        reactionAdded.emit(
+            ReactionUpdateEvent(messageId = "m2", conversationId = "c1", userId = "other", emoji = "❤️"),
+        )
+        advanceUntilIdle()
+
+        coVerify { h.repo.applyReactionDelta("m2", "❤️", 1) }
+    }
+
+    @Test
+    fun my_own_echoed_reaction_event_is_not_double_counted() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        reactionAdded.emit(
+            ReactionUpdateEvent(messageId = "m2", conversationId = "c1", userId = "me", emoji = "❤️"),
+        )
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.repo.applyReactionDelta(any(), any(), any()) }
+    }
+
+    @Test
+    fun startEdit_fills_the_draft_with_the_original_content() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.startEdit("m1")
+
+        assertThat(h.vm.state.value.editingMessageId).isEqualTo("m1")
+        assertThat(h.vm.state.value.draft).isEqualTo("salut")
+        assertThat(h.vm.state.value.actionMessageId).isNull()
+    }
+
+    @Test
+    fun send_in_edit_mode_applies_the_edit_and_leaves_edit_mode() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.editOptimistic(any(), any()) } returns true
+        advanceUntilIdle()
+
+        h.vm.startEdit("m1")
+        h.vm.onDraftChange("salut tout le monde")
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify { h.repo.editOptimistic("m1", "salut tout le monde") }
+        coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+        assertThat(h.vm.state.value.editingMessageId).isNull()
+        assertThat(h.vm.state.value.draft).isEmpty()
+        coVerify { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun cancelEdit_restores_a_clean_composer() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.startEdit("m1")
+        h.vm.cancelEdit()
+
+        assertThat(h.vm.state.value.editingMessageId).isNull()
+        assertThat(h.vm.state.value.draft).isEmpty()
+    }
+
+    @Test
+    fun deleteMessage_delegates_and_closes_the_sheet() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.deleteOptimistic(any()) } returns true
+        advanceUntilIdle()
+
+        h.vm.onMessageLongPress("m1")
+        h.vm.deleteMessage("m1")
+        advanceUntilIdle()
+
+        coVerify { h.repo.deleteOptimistic("m1") }
+        assertThat(h.vm.state.value.actionMessageId).isNull()
+        coVerify { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
     }
 }

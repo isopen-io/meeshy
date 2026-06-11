@@ -12,6 +12,7 @@ public object BubbleContentBuilder {
         showSenderName: Boolean = false,
         isPending: Boolean = false,
         isFailed: Boolean = false,
+        ownReactions: Set<String> = emptySet(),
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
@@ -26,7 +27,9 @@ public object BubbleContentBuilder {
             else -> DeliveryStatus.Sent
         }
         val reactions = message.reactionSummary
-            ?.map { (emoji, count) -> ReactionEntry(emoji = emoji, count = count) }
+            ?.map { (emoji, count) ->
+                ReactionEntry(emoji = emoji, count = count, includesMe = emoji in ownReactions)
+            }
             ?: emptyList()
         val replyToText = message.replyTo?.let { reply ->
             if (reply.deletedAt != null) "Message deleted" else reply.content

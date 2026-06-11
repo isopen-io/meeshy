@@ -10,12 +10,17 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SendMessageRequest
+import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
+import me.meeshy.sdk.outbox.OutboxKind
+import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.OutboxState
+import me.meeshy.sdk.outbox.kindEnum
 import me.meeshy.sdk.outbox.stateEnum
 import org.junit.After
 import org.junit.Before
@@ -199,5 +204,127 @@ class MessageRepositoryTest {
         repo.retrySend(cmid)
 
         assertThat(outbox.deliverable("message:c1").map { it.cmid }).containsExactly(cmid)
+    }
+
+    private suspend fun cachedMessage(id: String): ApiMessage =
+        MeeshyApi.json.decodeFromString(db.messageDao().find(id)!!.payload)
+
+    @Test
+    fun `toggleReactionOptimistic add bumps the summary instantly and queues ADD_REACTION`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+        )
+        repo.refresh("c1")
+
+        val applied = repo.toggleReactionOptimistic("m1", "❤️", isAdding = true)
+
+        assertThat(applied).isTrue()
+        assertThat(cachedMessage("m1").reactionSummary).containsEntry("❤️", 1)
+        val row = outbox.deliverable(OutboxLanes.REACTION).single()
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.ADD_REACTION)
+        assertThat(row.targetId).isEqualTo("m1")
+        assertThat(row.payload).contains("❤️")
+    }
+
+    @Test
+    fun `toggleReactionOptimistic remove decrements and drops the emoji at zero`() = runTest {
+        val repo = repository(
+            FakeMessageApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(
+                        apiMessage("m1").copy(reactionSummary = mapOf("❤️" to 1, "🔥" to 3)),
+                    ),
+                ),
+            ),
+        )
+        repo.refresh("c1")
+
+        repo.toggleReactionOptimistic("m1", "❤️", isAdding = false)
+
+        val summary = cachedMessage("m1").reactionSummary
+        assertThat(summary).doesNotContainKey("❤️")
+        assertThat(summary).containsEntry("🔥", 3)
+        assertThat(outbox.deliverable(OutboxLanes.REACTION).single().kindEnum)
+            .isEqualTo(OutboxKind.REMOVE_REACTION)
+    }
+
+    @Test
+    fun `toggleReactionOptimistic refuses a bubble the server does not know yet`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "n/a")))
+        val cmid = repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        val applied = repo.toggleReactionOptimistic(cmid, "❤️", isAdding = true)
+
+        assertThat(applied).isFalse()
+        assertThat(outbox.deliverable(OutboxLanes.REACTION)).isEmpty()
+    }
+
+    @Test
+    fun `applyReactionDelta updates the cached summary without touching the outbox`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+        )
+        repo.refresh("c1")
+
+        repo.applyReactionDelta("m1", "🔥", delta = 1)
+
+        assertThat(cachedMessage("m1").reactionSummary).containsEntry("🔥", 1)
+        assertThat(outbox.deliverable(OutboxLanes.REACTION)).isEmpty()
+    }
+
+    @Test
+    fun `editOptimistic rewrites the cached message and queues EDIT_MESSAGE`() = runTest {
+        val translated = apiMessage("m1").copy(
+            translations = listOf(
+                ApiTextTranslation(targetLanguage = "en", translatedContent = "hi there"),
+            ),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(translated))))
+        repo.refresh("c1")
+
+        val applied = repo.editOptimistic("m1", "bonjour")
+
+        assertThat(applied).isTrue()
+        val message = cachedMessage("m1")
+        assertThat(message.content).isEqualTo("bonjour")
+        assertThat(message.isEdited).isTrue()
+        assertThat(message.translations).isEmpty()
+        val row = outbox.deliverable("message:c1").single()
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.EDIT_MESSAGE)
+        assertThat(row.targetId).isEqualTo("m1")
+        assertThat(row.payload).contains("bonjour")
+    }
+
+    @Test
+    fun `editOptimistic refuses a bubble the server does not know yet`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "n/a")))
+        val cmid = repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        val applied = repo.editOptimistic(cmid, "changed")
+
+        assertThat(applied).isFalse()
+        assertThat(cachedMessage(cmid).content).isEqualTo("salut")
+        assertThat(outbox.deliverable("message:c1").single().kindEnum)
+            .isEqualTo(OutboxKind.SEND_MESSAGE)
+    }
+
+    @Test
+    fun `deleteOptimistic tombstones the cached message and queues DELETE_MESSAGE`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+        )
+        repo.refresh("c1")
+
+        val applied = repo.deleteOptimistic("m1")
+
+        assertThat(applied).isTrue()
+        val message = cachedMessage("m1")
+        assertThat(message.deletedAt).isNotNull()
+        assertThat(message.content).isEmpty()
+        assertThat(message.translations).isEmpty()
+        val row = outbox.deliverable("message:c1").single()
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.DELETE_MESSAGE)
+        assertThat(row.targetId).isEqualTo("m1")
     }
 }

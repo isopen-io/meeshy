@@ -96,9 +96,9 @@ class OutboxFlushWorker @AssistedInject constructor(
             }
         },
         OutboxKind.EDIT_MESSAGE to MutationSender { row ->
-            val body = runCatching { json.decodeFromString<EditMessagePayload>(row.payload) }
+            val body = runCatching { json.decodeFromString<EditMessageRequest>(row.payload) }
                 .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
-            when (apiCall { messageApi.edit(row.targetId, EditMessageRequest(body.content)) }) {
+            when (apiCall { messageApi.edit(row.targetId, body) }) {
                 is NetworkResult.Success -> SendResult.Success
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }
@@ -126,12 +126,6 @@ class OutboxFlushWorker @AssistedInject constructor(
             }
         },
     )
-
-    @kotlinx.serialization.Serializable
-    private data class EditMessagePayload(val content: String)
-
-    @kotlinx.serialization.Serializable
-    private data class ReactionPayload(val emoji: String)
 
     companion object {
         const val TAG = "OutboxFlushWorker"

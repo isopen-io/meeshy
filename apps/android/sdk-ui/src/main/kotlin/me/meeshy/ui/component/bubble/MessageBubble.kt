@@ -1,6 +1,10 @@
 package me.meeshy.ui.component.bubble
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,11 +42,14 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 public fun MessageBubble(
     content: BubbleContent,
     modifier: Modifier = Modifier,
     outgoingColor: Color = MeeshyPalette.Indigo500,
+    onLongPress: (() -> Unit)? = null,
+    onReactionClick: ((String) -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -57,6 +64,10 @@ public fun MessageBubble(
                 .widthIn(max = 300.dp)
                 .clip(RoundedCornerShape(MeeshyRadius.xl))
                 .background(bubbleBackground)
+                .let { base ->
+                    if (onLongPress == null) base
+                    else base.combinedClickable(onClick = {}, onLongClick = onLongPress)
+                }
                 .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
         ) {
             if (content.showSenderName && content.senderName != null) {
@@ -95,6 +106,7 @@ public fun MessageBubble(
             if (content.reactions.isNotEmpty()) {
                 ReactionStrip(
                     reactions = content.reactions,
+                    onReactionClick = onReactionClick,
                     modifier = Modifier.padding(top = MeeshySpacing.xs),
                 )
             }
@@ -184,6 +196,7 @@ private fun ReplyPreview(
 @Composable
 private fun ReactionStrip(
     reactions: List<ReactionEntry>,
+    onReactionClick: ((String) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     FlowRow(
@@ -192,17 +205,28 @@ private fun ReactionStrip(
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
         reactions.forEach { entry ->
-            ReactionChip(entry = entry)
+            ReactionChip(entry = entry, onClick = onReactionClick?.let { { it(entry.emoji) } })
         }
     }
 }
 
 @Composable
-private fun ReactionChip(entry: ReactionEntry) {
+private fun ReactionChip(entry: ReactionEntry, onClick: (() -> Unit)?) {
+    val background =
+        if (entry.includesMe) MeeshyPalette.Indigo500.copy(alpha = 0.22f)
+        else MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.6f)
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(MeeshyRadius.pill))
-            .background(MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.6f))
+            .background(background)
+            .let { base ->
+                if (entry.includesMe) {
+                    base.border(1.dp, MeeshyPalette.Indigo400, RoundedCornerShape(MeeshyRadius.pill))
+                } else {
+                    base
+                }
+            }
+            .let { base -> if (onClick == null) base else base.clickable(onClick = onClick) }
             .padding(horizontal = MeeshySpacing.xs, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -214,7 +238,8 @@ private fun ReactionChip(entry: ReactionEntry) {
         Text(
             text = entry.count.toString(),
             fontSize = 12.sp,
-            color = MeeshyTheme.tokens.textPrimary,
+            color = if (entry.includesMe) MeeshyPalette.Indigo400 else MeeshyTheme.tokens.textPrimary,
+            fontWeight = if (entry.includesMe) FontWeight.SemiBold else null,
         )
     }
 }

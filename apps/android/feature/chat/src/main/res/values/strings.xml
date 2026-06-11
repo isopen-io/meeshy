@@ -7,4 +7,11 @@
     <string name="chat_no_messages">No messages yet</string>
     <string name="chat_retry">Retry</string>
     <string name="chat_send_failed_retry">Not sent — tap to retry</string>
+    <string name="chat_action_copy">Copy</string>
+    <string name="chat_action_edit">Edit</string>
+    <string name="chat_action_delete">Delete</string>
+    <string name="chat_editing_label">Editing message</string>
+    <string name="chat_cancel_edit">Cancel edit</string>
+    <string name="chat_react_with">React with %1$s</string>
+    <string name="chat_message_actions">Message actions</string>
 </resources>
