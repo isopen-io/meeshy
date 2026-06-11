@@ -1996,6 +1996,23 @@ class ConversationViewModel: ObservableObject {
         mentionController.clearDraft()
     }
 
+    /// French preview shown in the conversation list for an OPTIMISTIC message:
+    /// the caption when present, else a short media label (mirrors the server's
+    /// last-message preview wording). Used to surface a just-sent message in the
+    /// list before any server ACK. `nonisolated static` so the media path can
+    /// compute it for a `Task.detached`.
+    nonisolated static func optimisticListPreview(text: String, messageType: Message.MessageType) -> String {
+        if !text.isEmpty { return text }
+        switch messageType {
+        case .image: return "📷 Photo"
+        case .video: return "🎥 Vidéo"
+        case .audio: return "🎙️ Message vocal"
+        case .file: return "📎 Fichier"
+        case .location: return "📍 Position"
+        default: return ""
+        }
+    }
+
     @discardableResult
     func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2275,6 +2292,19 @@ class ConversationViewModel: ObservableObject {
             do {
                 try await persistence.insertOptimistic(optimisticRecord)
                 Logger.messages.debug("SendFlow insertOptimistic OK tempId=\(tempId, privacy: .public) state=.sending convId=\(self.conversationId, privacy: .public)")
+                // Local-first: surface the just-sent message in the conversation
+                // list IMMEDIATELY (preview + bump to top), before any server ACK
+                // — via the same path realtime events use (cache update →
+                // conversationsDidChange → reloadFromCache). Previously only the
+                // offline branch did this, so an online PENDING message did not
+                // appear/reorder in the list until its ACK. finalizeSuccessfulSend
+                // refreshes it with the server timestamp at ACK time.
+                await ConversationSyncEngine.shared.updateConversationAfterSend(
+                    conversationId: conversationId,
+                    messagePreview: Self.optimisticListPreview(text: text, messageType: optimisticMessageType),
+                    messageAt: optimisticRecord.createdAt,
+                    senderName: authManager.currentUser?.displayName ?? authManager.currentUser?.username
+                )
             } catch {
                 Logger.messages.error("SendFlow insertOptimistic FAILED tempId=\(tempId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
             }
@@ -2638,10 +2668,23 @@ class ConversationViewModel: ObservableObject {
         let persistence = messagePersistence
         let recordConversationId = record.conversationId
         let attachmentCount = attachments.count
+        // Captured for the conversation-list optimistic update below (computed on
+        // the MainActor before the detached insert).
+        let listPreview = Self.optimisticListPreview(text: content, messageType: messageType)
+        let listSenderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
         Task.detached(priority: .userInitiated) {
             do {
                 try await persistence.insertOptimistic(record)
                 Logger.messages.debug("SendFlow insertOptimisticMedia OK tempId=\(tempId, privacy: .public) convId=\(recordConversationId, privacy: .public) attachments=\(attachmentCount, privacy: .public)")
+                // Local-first: surface the media message in the conversation list
+                // immediately (preview + bump to top), before any server ACK —
+                // the media path previously never updated the list optimistically.
+                await ConversationSyncEngine.shared.updateConversationAfterSend(
+                    conversationId: recordConversationId,
+                    messagePreview: listPreview,
+                    messageAt: now,
+                    senderName: listSenderName
+                )
             } catch {
                 Logger.messages.error("SendFlow insertOptimisticMedia FAILED tempId=\(tempId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
             }

@@ -493,6 +493,25 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(mockMessageService.sendCallCount, 1, "REST is the fallback on a socket miss")
     }
 
+    // MARK: - Conversation-list optimistic preview
+
+    func test_optimisticListPreview_text_returnsTheText() {
+        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "Salut", messageType: .text), "Salut")
+    }
+
+    func test_optimisticListPreview_captionedMedia_prefersTheCaption() {
+        // A media message WITH a caption shows the caption, not the media label.
+        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "Regarde", messageType: .image), "Regarde")
+    }
+
+    func test_optimisticListPreview_captionlessMedia_returnsMediaLabel() {
+        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .image), "📷 Photo")
+        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .video), "🎥 Vidéo")
+        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .audio), "🎙️ Message vocal")
+        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .file), "📎 Fichier")
+        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .location), "📍 Position")
+    }
+
     func test_sendMessage_restAndSocketBothFail_returnsFalse() async {
         mockMessageService.sendResult = .failure(NSError(domain: "test", code: 500))
         mockMessageSocket.sendViaSocketFallbackResult = nil
