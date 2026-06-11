@@ -2,10 +2,9 @@ import SwiftUI
 import Combine
 import AVFoundation
 import QuartzCore
+import os
 import MeeshySDK
 import MeeshyUI
-
-// MARK: - Story progress display-link proxy
 
 // MARK: - Reveal Circle Shape
 
@@ -1350,7 +1349,11 @@ extension StoryViewerView {
             }
             storyCommentRepliesMap[commentId] = replies
         } catch {
-            storyCommentExpandedThreads.remove(commentId)
+            // Échec réseau transitoire : on garde le thread OUVERT (le
+            // refermer punissait l'utilisateur qui venait de l'ouvrir) —
+            // il affiche son état vide/spinner et le prochain toggle ou
+            // refetch opportuniste réessaiera.
+            Logger.messages.error("[StoryViewer] loadStoryCommentReplies failed for \(commentId, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -1562,7 +1565,12 @@ extension StoryViewerView {
                     await loadStoryCommentReplies(commentId: comment.id)
                 }
             }
-        } catch {}
+        } catch {
+            // Cache-first : l'overlay garde les commentaires cachés déjà
+            // affichés ; on logue l'échec du refresh réseau au lieu de
+            // l'avaler (diagnostic des overlays vides signalés).
+            Logger.messages.error("[StoryViewer] fetchStoryComments failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Seeds `storyCommentCount` for the slide that just became visible.
