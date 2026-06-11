@@ -864,7 +864,13 @@ struct StoryCardView: View {
                         slide: renderableSlideCache.slide(for: story, chain: resolvedViewerLanguageChain),
                         progress: slideContentProgress,
                         threshold: 0.95,
-                        showSpinner: showProgressOverlay
+                        showSpinner: showProgressOverlay,
+                        // Miniature serveur du fond (brute, sans overlays —
+                        // surtout PAS le cover composite local qui bake les
+                        // textes : ils seraient doublés par les layers live).
+                        // La tray vient de l'afficher → warm cache → rendue
+                        // nette par-dessus le ThumbHash dès le frame 0.
+                        coverThumbnailURL: story.media.first?.thumbnailUrl
                     )
                     .id("loader-\(story.id)")
                     // Hard-frame the overlay to the canvas dimensions and clip
