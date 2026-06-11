@@ -31,20 +31,14 @@ const updateReportSchema = z.object({
 const requireModeratorPermission = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return reply.status(401).send({
-      success: false,
-      message: 'Authentification requise'
-    });
+    return sendUnauthorized(reply, 'Authentification requise');
   }
 
   const userRole = authContext.registeredUser.role;
   const canModerate = ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(userRole);
 
   if (!canModerate) {
-    return reply.status(403).send({
-      success: false,
-      message: 'Permission de moderation requise'
-    });
+    return sendForbidden(reply, 'Permission de moderation requise');
   }
 };
 
@@ -74,11 +68,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
       const report = await reportService.createReport(reportData);
 
-      return reply.status(201).send({
-        success: true,
-        data: report,
-        message: 'Signalement cree avec succes'
-      });
+      return sendSuccess(reply, report, { statusCode: 201, message: 'Signalement cree avec succes' });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
@@ -131,13 +121,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
         result.reports.length
       );
 
-      return reply.send({
-        success: true,
-        data: {
-          reports: result.reports,
-          pagination: paginationMeta
-        }
-      });
+      return sendSuccess(reply, { reports: result.reports, pagination: paginationMeta });
     } catch (error) {
       logError(fastify.log, 'List reports error:', error);
       return sendInternalError(reply, 'Erreur lors de la recuperation des signalements');
@@ -219,11 +203,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
       const report = await reportService.updateReport(id, moderatorId, body as UpdateReportDTO);
 
-      return reply.send({
-        success: true,
-        data: report,
-        message: 'Signalement mis a jour'
-      });
+      return sendSuccess(reply, report, { message: 'Signalement mis a jour' });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
@@ -290,11 +270,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
       const report = await reportService.assignModerator(id, moderatorId);
 
-      return reply.send({
-        success: true,
-        data: report,
-        message: 'Moderateur assigne au signalement'
-      });
+      return sendSuccess(reply, report, { message: 'Moderateur assigne au signalement' });
     } catch (error) {
       logError(fastify.log, 'Assign moderator error:', error);
       return sendInternalError(reply, 'Erreur lors de l\'assignation du moderateur');
