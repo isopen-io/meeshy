@@ -109,6 +109,69 @@ class ConversationListViewModelTest {
     }
 
     @Test
+    fun search_filters_by_title_ignoring_case_and_accents() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(
+                CacheResult.Fresh(
+                    listOf(
+                        ApiConversation(id = "c1", title = "Équipe produit"),
+                        ApiConversation(id = "c2", title = "Famille"),
+                    ),
+                    ageMillis = 0,
+                ),
+            ),
+        )
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.onQueryChange("equipe")
+
+        assertThat(vm.state.value.filteredConversations.map { it.id }).containsExactly("c1")
+    }
+
+    @Test
+    fun search_matches_the_custom_name_too() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(
+                CacheResult.Fresh(
+                    listOf(
+                        ApiConversation(
+                            id = "c1",
+                            preferences = me.meeshy.sdk.model.ApiConversationPreferences(customName = "Les copains"),
+                        ),
+                        ApiConversation(id = "c2", title = "Travail"),
+                    ),
+                    ageMillis = 0,
+                ),
+            ),
+        )
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.onQueryChange("copains")
+
+        assertThat(vm.state.value.filteredConversations.map { it.id }).containsExactly("c1")
+    }
+
+    @Test
+    fun a_blank_query_returns_every_conversation() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(
+                CacheResult.Fresh(
+                    listOf(ApiConversation(id = "c1"), ApiConversation(id = "c2")),
+                    ageMillis = 0,
+                ),
+            ),
+        )
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.onQueryChange("   ")
+
+        assertThat(vm.state.value.filteredConversations).hasSize(2)
+    }
+
+    @Test
     fun fresh_result_populates_conversations_without_skeleton() = runTest(dispatcher) {
         val repo = repositoryReturning(
             flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),

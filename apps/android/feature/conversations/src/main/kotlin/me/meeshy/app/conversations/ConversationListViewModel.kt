@@ -17,12 +17,30 @@ import javax.inject.Inject
 
 data class ConversationListUiState(
     val conversations: List<ApiConversation> = emptyList(),
+    val query: String = "",
     val isSyncing: Boolean = false,
     val isRefreshing: Boolean = false,
     val isConnected: Boolean = true,
     val showSkeleton: Boolean = false,
     val errorMessage: String? = null,
-)
+) {
+    val filteredConversations: List<ApiConversation>
+        get() {
+            val needle = query.trim().normalized()
+            if (needle.isEmpty()) return conversations
+            return conversations.filter { conversation ->
+                listOfNotNull(
+                    conversation.title,
+                    conversation.preferences?.customName,
+                    conversation.identifier,
+                ).any { it.normalized().contains(needle) }
+            }
+        }
+}
+
+private fun String.normalized(): String =
+    java.text.Normalizer.normalize(lowercase(), java.text.Normalizer.Form.NFD)
+        .replace(Regex("\\p{Mn}+"), "")
 
 @HiltViewModel
 class ConversationListViewModel @Inject constructor(
@@ -74,6 +92,10 @@ class ConversationListViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun onQueryChange(value: String) {
+        _state.update { it.copy(query = value) }
     }
 
     fun refresh() {

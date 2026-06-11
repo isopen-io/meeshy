@@ -186,7 +186,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [~] Cache-first instant load [x] + pull-to-refresh M3 (isRefreshing dédié) ;
       infinite scroll + branded PTR pending
 - [ ] Sectioned list with collapsible user categories + pinned section + drag-to-category
-- [ ] Filtering (all/unread/personal/private/open/global/channels/favorites/archived) + search overlay
+- [~] Recherche client-side (titre/customName/identifier, casse+accents insensible,
+      toggle top bar, état vide dédié) ; filtres par catégorie pending
 - [ ] Communities carousel + category filter chips
 - [ ] Pinned / muted / locked / archived / favorited (emoji) states
 - [ ] Swipe actions (pin, mute, lock, archive, mark read/unread, block, hide)

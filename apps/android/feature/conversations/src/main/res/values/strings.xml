@@ -6,4 +6,8 @@
     <string name="conversations_retry">Retry</string>
     <string name="conversations_no_messages">No messages yet</string>
     <string name="conversations_offline_banner">Offline — reconnecting…</string>
+    <string name="conversations_search">Search</string>
+    <string name="conversations_search_close">Close search</string>
+    <string name="conversations_search_placeholder">Search conversations</string>
+    <string name="conversations_search_no_results">No conversations match your search</string>
 </resources>

@@ -6,4 +6,8 @@
     <string name="conversations_retry">Réessayer</string>
     <string name="conversations_no_messages">Aucun message pour l\'instant</string>
     <string name="conversations_offline_banner">Hors ligne — reconnexion…</string>
+    <string name="conversations_search">Rechercher</string>
+    <string name="conversations_search_close">Fermer la recherche</string>
+    <string name="conversations_search_placeholder">Rechercher une conversation</string>
+    <string name="conversations_search_no_results">Aucune conversation ne correspond</string>
 </resources>
