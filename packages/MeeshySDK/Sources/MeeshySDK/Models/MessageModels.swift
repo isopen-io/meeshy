@@ -84,6 +84,10 @@ public struct APIMessageAttachment: Decodable, Sendable {
     public let height: Int?
     /// D4 — responsive downscaled WebP variants for `srcset`-style selection.
     public let imageVariants: [MeeshyImageVariant]?
+    /// BUG2 A' — réactions par-image agrégées (emoji→count).
+    public let reactionSummary: [String: Int]?
+    /// BUG2 A' — emojis posés par l'utilisateur courant sur cette pièce jointe.
+    public let currentUserReactions: [String]?
 
     // ── Audio / video ──
     public let duration: Int?
@@ -154,7 +158,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, messageId
         case fileName, originalName, mimeType, fileSize, fileUrl
-        case thumbnailUrl, thumbHash, width, height, imageVariants
+        case thumbnailUrl, thumbHash, width, height, imageVariants, reactionSummary, currentUserReactions
         case duration, bitrate, sampleRate, codec, channels, fps, videoCodec
         case pageCount, lineCount
         case latitude, longitude
@@ -192,6 +196,8 @@ public struct APIMessageAttachment: Decodable, Sendable {
         self.width = try c.decodeIfPresent(Int.self, forKey: .width)
         self.height = try c.decodeIfPresent(Int.self, forKey: .height)
         self.imageVariants = try c.decodeIfPresent([MeeshyImageVariant].self, forKey: .imageVariants)
+        self.reactionSummary = try c.decodeIfPresent([String: Int].self, forKey: .reactionSummary)
+        self.currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
         self.duration = try c.decodeIfPresent(Int.self, forKey: .duration)
         self.bitrate = try c.decodeIfPresent(Int.self, forKey: .bitrate)
         self.sampleRate = try c.decodeIfPresent(Int.self, forKey: .sampleRate)

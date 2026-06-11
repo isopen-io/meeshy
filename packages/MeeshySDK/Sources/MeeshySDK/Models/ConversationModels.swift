@@ -259,7 +259,9 @@ extension APIConversation {
                 height: apiAtt.height,
                 thumbnailUrl: apiAtt.thumbnailUrl,
                 duration: apiAtt.duration,
-                imageVariants: apiAtt.imageVariants
+                imageVariants: apiAtt.imageVariants,
+                reactionSummary: apiAtt.reactionSummary,
+                currentUserReactions: apiAtt.currentUserReactions
             )
         }
         // Use the MAX of payload size and backend `_count` : a payload that
