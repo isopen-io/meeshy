@@ -100,6 +100,32 @@ final class StoryBackgroundLayerVideoTests: XCTestCase {
         XCTAssertEqual(attachedCount, 1)
     }
 
+    /// Invariant « stop à la sortie » : un retour foreground ne doit JAMAIS
+    /// relancer un player dont la lecture n'est pas autorisée
+    /// (`isPlaybackActive == false` — canvas détaché, prefetcher, viewer
+    /// fermé). Bug user 2026-06-11 : « quand j'ouvre l'application, la story
+    /// qui jouait en dernier continue à jouer ».
+    func test_handleAppLifecycle_active_doesNotPlayWhenPlaybackInactive() throws {
+        let layer = StoryBackgroundLayer()
+        let url = try makeTemporaryFileURL()
+        layer.attachBackgroundPlayer(url: url, looping: false, mute: true)
+        XCTAssertEqual(layer.isPlaybackActive, false)
+        layer.handleAppLifecycle(active: true)
+        XCTAssertEqual(layer.avPlayer?.rate, 0,
+                       "foreground ne doit pas relancer un player non autorisé")
+    }
+
+    func test_handleAppLifecycle_active_resumesWhenPlaybackActive() throws {
+        let layer = StoryBackgroundLayer()
+        let url = try makeTemporaryFileURL()
+        layer.attachBackgroundPlayer(url: url, looping: false, mute: true)
+        layer.isPlaybackActive = true
+        layer.avPlayer?.pause()
+        layer.handleAppLifecycle(active: true)
+        XCTAssertEqual(layer.avPlayer?.rate, 1,
+                       "foreground doit reprendre un player explicitement autorisé")
+    }
+
     private func makeTemporaryFileURL() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("bg-attach-\(UUID().uuidString).mp4")

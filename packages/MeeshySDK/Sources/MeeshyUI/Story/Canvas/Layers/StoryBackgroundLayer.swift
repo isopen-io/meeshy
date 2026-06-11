@@ -836,7 +836,19 @@ extension StoryBackgroundLayer {
     @MainActor
     public func handleAppLifecycle(active: Bool) {
         guard let player = avPlayer else { return }
-        if active { player.play() } else { player.pause() }
+        if active {
+            // Reprise gated sur l'autorisation canonique : un retour
+            // foreground ne doit JAMAIS relancer un player dont la lecture
+            // n'est pas active (canvas détaché/retenu, prefetcher, viewer
+            // fermé). Sans ce guard, la dernière story jouée reprenait son
+            // audio à la réouverture de l'app, sans aucun viewer à l'écran
+            // (bug user 2026-06-11) — violation de l'invariant « seuls les
+            // audios de conversation ou le PiP jouent hors de leur vue ».
+            guard isPlaybackActive else { return }
+            player.play()
+        } else {
+            player.pause()
+        }
     }
 
     /// Helper de routage du `postMediaId` en édition composer.

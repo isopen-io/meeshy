@@ -2085,12 +2085,18 @@ public final class StoryCanvasUIView: UIView {
     }
 
     @objc private func handleDidBecomeActive() {
-        guard mode == .play else { return }
+        // `window != nil` est OBLIGATOIRE pour TOUTES les reprises, pas
+        // seulement l'audio mixer : un canvas `.play` retenu hors écran
+        // (viewer fermé mais instance vivante, canvas sortant de cross-fade)
+        // reçoit aussi cette notification — sans le guard, ses AVPlayer
+        // foreground + le fond vidéo rejouaient à la réouverture de l'app
+        // alors qu'aucun viewer n'était visible (bug user 2026-06-11).
+        guard mode == .play, window != nil else { return }
         forEachAVPlayer { $0.play() }
         backgroundLayer.handleAppLifecycle(active: true)
         // Resume reader audio (re-acquires the session via startAudioPlayback)
-        // only while the slide is still on screen and has not finished.
-        if window != nil, !completionFired {
+        // only while the slide has not finished.
+        if !completionFired {
             startAudioPlayback()
         }
     }
