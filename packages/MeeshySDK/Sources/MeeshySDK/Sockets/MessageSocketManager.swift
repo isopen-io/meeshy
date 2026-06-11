@@ -34,6 +34,21 @@ public struct ReactionUpdateEvent: Decodable, Sendable {
     public var count: Int { aggregation?.count ?? 0 }
 }
 
+/// BUG2 A' — delta de réaction par-image reçu du serveur
+/// (`attachment:reaction-added` / `attachment:reaction-removed`). `reactionSummary`
+/// porte les comptes agrégés APRÈS l'action ; l'état « ma réaction » est maintenu
+/// côté client (optimiste + cold-load REST), miroir des réactions message-level.
+public struct AttachmentReactionUpdateEvent: Decodable, Sendable {
+    public let attachmentId: String
+    public let messageId: String
+    public let conversationId: String?
+    public let participantId: String?
+    public let emoji: String
+    public let action: String?
+    public let reactionSummary: [String: Int]?
+    public let timestamp: String?
+}
+
 public struct TypingEvent: Decodable, Sendable {
     public let userId: String
     /// Identifiant (handle) de l'utilisateur.
@@ -944,6 +959,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // Combine publishers — reactions
     public let reactionAdded = PassthroughSubject<ReactionUpdateEvent, Never>()
     public let reactionRemoved = PassthroughSubject<ReactionUpdateEvent, Never>()
+    // BUG2 A' — réactions par-image
+    public let attachmentReactionAdded = PassthroughSubject<AttachmentReactionUpdateEvent, Never>()
+    public let attachmentReactionRemoved = PassthroughSubject<AttachmentReactionUpdateEvent, Never>()
 
     // Combine publishers — typing
     public let typingStarted = PassthroughSubject<TypingEvent, Never>()
@@ -1382,6 +1400,18 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     public func emitTypingStop(conversationId: String) {
         socket?.emit("typing:stop", ["conversationId": conversationId])
+    }
+
+    // MARK: - Attachment Reactions (BUG2 A')
+
+    /// Pose une réaction sur une pièce jointe (emit direct ; parité offline-queue
+    /// différée, cf. spec). Le serveur diffuse `attachment:reaction-added`.
+    public func addAttachmentReaction(attachmentId: String, messageId: String, emoji: String) {
+        socket?.emit("attachment:reaction-add", ["attachmentId": attachmentId, "messageId": messageId, "emoji": emoji])
+    }
+
+    public func removeAttachmentReaction(attachmentId: String, messageId: String, emoji: String) {
+        socket?.emit("attachment:reaction-remove", ["attachmentId": attachmentId, "messageId": messageId, "emoji": emoji])
     }
 
     // MARK: - Translation Request
@@ -2080,6 +2110,21 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             Logger.socket.info("perf:ios.notif.socket.reaction-removed receivedAt=\(recvAt.timeIntervalSince1970, privacy: .public) messageId=\(firstMsgId ?? "nil", privacy: .public)")
             self.decode(ReactionUpdateEvent.self, from: data) { [weak self] event in
                 self?.reactionRemoved.send(event)
+            }
+        }
+
+        // BUG2 A' — réactions par-image
+        socket.on("attachment:reaction-added") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(AttachmentReactionUpdateEvent.self, from: data) { [weak self] event in
+                self?.attachmentReactionAdded.send(event)
+            }
+        }
+
+        socket.on("attachment:reaction-removed") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(AttachmentReactionUpdateEvent.self, from: data) { [weak self] event in
+                self?.attachmentReactionRemoved.send(event)
             }
         }
 
