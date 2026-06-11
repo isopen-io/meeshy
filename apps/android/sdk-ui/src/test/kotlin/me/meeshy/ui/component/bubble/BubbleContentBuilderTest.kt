@@ -169,4 +169,17 @@ class BubbleContentBuilderTest {
 
         assertThat(content.isEdited).isTrue()
     }
+
+    @Test
+    fun `own reactions mark their entry as includesMe`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(reactionSummary = mapOf("❤️" to 2, "🔥" to 1)),
+            currentUserId = "me",
+            preferences = french,
+            ownReactions = setOf("❤️"),
+        )
+
+        assertThat(content.reactions.single { it.emoji == "❤️" }.includesMe).isTrue()
+        assertThat(content.reactions.single { it.emoji == "🔥" }.includesMe).isFalse()
+    }
 }

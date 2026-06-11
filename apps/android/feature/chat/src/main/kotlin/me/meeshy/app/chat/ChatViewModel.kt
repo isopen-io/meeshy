@@ -20,7 +20,9 @@ import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.ui.component.bubble.BubbleContent
@@ -35,14 +37,19 @@ data class ChatUiState(
     val errorMessage: String? = null,
     val typingUsers: List<String> = emptyList(),
     val conversationTitle: String? = null,
+    val actionMessageId: String? = null,
+    val editingMessageId: String? = null,
+    val ownReactions: Map<String, Set<String>> = emptyMap(),
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
+    val isEditing: Boolean get() = editingMessageId != null
 }
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val messageRepository: MessageRepository,
     private val sessionRepository: SessionRepository,
+    private val reactionRepository: ReactionRepository,
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
     savedStateHandle: SavedStateHandle,
@@ -55,7 +62,9 @@ class ChatViewModel @Inject constructor(
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
+    private val ownReactions = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
     private val typingCleanupJobs = mutableMapOf<String, Job>()
+    private var latestMessages: List<LocalMessage> = emptyList()
 
     init {
         viewModelScope.launch {
@@ -69,9 +78,11 @@ class ChatViewModel @Inject constructor(
                     },
                 ),
                 sessionRepository.currentUser,
-            ) { result, user -> result to user }
-                .collect { (result, user) ->
-                    _state.update { it.applyResult(result, user) }
+                ownReactions,
+            ) { result, user, own -> Triple(result, user, own) }
+                .collect { (result, user, own) ->
+                    latestMessages = result.valueOrNull() ?: latestMessages
+                    _state.update { it.applyResult(result, user, own) }
                 }
         }
 
@@ -95,6 +106,16 @@ class ChatViewModel @Inject constructor(
                     if (event.conversationId == conversationId) {
                         messageRepository.refresh(conversationId)
                     }
+                }
+            }
+            launch {
+                messageSocketManager.reactionAdded.collect { event ->
+                    applyPeerReactionEvent(event, delta = 1)
+                }
+            }
+            launch {
+                messageSocketManager.reactionRemoved.collect { event ->
+                    applyPeerReactionEvent(event, delta = -1)
                 }
             }
         }
@@ -126,6 +147,16 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Own echoes are skipped — the optimistic toggle already moved the cached
+     * summary; replaying the echo would double-count it.
+     */
+    private suspend fun applyPeerReactionEvent(event: ReactionUpdateEvent, delta: Int) {
+        if (event.conversationId != conversationId) return
+        if (event.userId == sessionRepository.currentUser.value?.id) return
+        messageRepository.applyReactionDelta(event.messageId, event.emoji, delta)
+    }
+
     private fun removeTypingUser(userId: String, displayName: String) {
         _state.update { s -> s.copy(typingUsers = s.typingUsers - displayName) }
     }
@@ -137,6 +168,11 @@ class ChatViewModel @Inject constructor(
     fun send() {
         val text = _state.value.draft.trim()
         if (text.isEmpty()) return
+        val editingId = _state.value.editingMessageId
+        if (editingId != null) {
+            applyEdit(editingId, text)
+            return
+        }
         val user = sessionRepository.currentUser.value ?: return
         _state.update { it.copy(draft = "") }
         viewModelScope.launch {
@@ -148,6 +184,83 @@ class ChatViewModel @Inject constructor(
                     sender = user,
                 )
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    fun onMessageLongPress(messageId: String) {
+        _state.update { it.copy(actionMessageId = messageId) }
+        viewModelScope.launch {
+            val details = reactionRepository.fetchDetails(messageId).getOrNull() ?: return@launch
+            ownReactions.update { it + (messageId to details.userReactions.toSet()) }
+        }
+    }
+
+    fun dismissMessageActions() {
+        _state.update { it.copy(actionMessageId = null) }
+    }
+
+    fun toggleReaction(messageId: String, emoji: String) {
+        val mine = ownReactions.value[messageId] ?: emptySet()
+        val isAdding = emoji !in mine
+        ownReactions.update { it + (messageId to if (isAdding) mine + emoji else mine - emoji) }
+        _state.update { it.copy(actionMessageId = null) }
+        viewModelScope.launch {
+            try {
+                if (messageRepository.toggleReactionOptimistic(messageId, emoji, isAdding)) {
+                    workManager.enqueue(OutboxFlushWorker.buildRequest())
+                } else {
+                    ownReactions.update { it + (messageId to mine) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ownReactions.update { it + (messageId to mine) }
+                _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    fun startEdit(messageId: String) {
+        val message = latestMessages.firstOrNull {
+            it.message.id == messageId && it.sendState == LocalSendState.SYNCED
+        }?.message ?: return
+        if (message.deletedAt != null) return
+        _state.update {
+            it.copy(editingMessageId = messageId, draft = message.content, actionMessageId = null)
+        }
+    }
+
+    fun cancelEdit() {
+        _state.update { it.copy(editingMessageId = null, draft = "") }
+    }
+
+    fun deleteMessage(messageId: String) {
+        _state.update { it.copy(actionMessageId = null) }
+        viewModelScope.launch {
+            try {
+                if (messageRepository.deleteOptimistic(messageId)) {
+                    workManager.enqueue(OutboxFlushWorker.buildRequest())
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    private fun applyEdit(messageId: String, content: String) {
+        _state.update { it.copy(draft = "", editingMessageId = null) }
+        viewModelScope.launch {
+            try {
+                if (messageRepository.editOptimistic(messageId, content)) {
+                    workManager.enqueue(OutboxFlushWorker.buildRequest())
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -190,34 +303,49 @@ class ChatViewModel @Inject constructor(
     }
 }
 
+private fun <T> CacheResult<List<T>>.valueOrNull(): List<T>? = when (this) {
+    is CacheResult.Fresh -> value
+    is CacheResult.Stale -> value
+    is CacheResult.Syncing -> value
+    CacheResult.Empty -> emptyList()
+}
+
 private fun ChatUiState.applyResult(
     result: CacheResult<List<LocalMessage>>,
     currentUser: MeeshyUser?,
+    ownReactions: Map<String, Set<String>>,
 ): ChatUiState = when (result) {
     is CacheResult.Fresh -> copy(
-        messages = result.value.toBubbles(currentUser),
+        messages = result.value.toBubbles(currentUser, ownReactions),
+        ownReactions = ownReactions,
         isSyncing = false,
         showSkeleton = false,
         errorMessage = null,
     )
     is CacheResult.Stale -> copy(
-        messages = result.value.toBubbles(currentUser),
+        messages = result.value.toBubbles(currentUser, ownReactions),
+        ownReactions = ownReactions,
         isSyncing = true,
         showSkeleton = false,
     )
     is CacheResult.Syncing -> copy(
-        messages = result.value?.toBubbles(currentUser) ?: messages,
+        messages = result.value?.toBubbles(currentUser, ownReactions) ?: messages,
+        ownReactions = ownReactions,
         isSyncing = true,
         showSkeleton = result.value == null && messages.isEmpty() && errorMessage == null,
     )
     CacheResult.Empty -> copy(
         messages = emptyList(),
+        ownReactions = ownReactions,
         isSyncing = false,
         showSkeleton = errorMessage == null,
     )
 }
 
-private fun List<LocalMessage>.toBubbles(currentUser: MeeshyUser?): List<BubbleContent> = map { local ->
+private fun List<LocalMessage>.toBubbles(
+    currentUser: MeeshyUser?,
+    ownReactions: Map<String, Set<String>>,
+): List<BubbleContent> = map { local ->
     BubbleContentBuilder.build(
         message = local.message,
         currentUserId = currentUser?.id,
@@ -225,6 +353,7 @@ private fun List<LocalMessage>.toBubbles(currentUser: MeeshyUser?): List<BubbleC
         showSenderName = true,
         isPending = local.sendState == LocalSendState.SENDING,
         isFailed = local.sendState == LocalSendState.FAILED,
+        ownReactions = ownReactions[local.message.id] ?: emptySet(),
     )
 }
 
