@@ -73,3 +73,11 @@
 22. **Méthode de debug à distance qui a marché (à réutiliser).** (a) Reproduire l'appel exact du client en curl ; (b) comparer `Accept-Encoding: identity` vs gzip → isole la couche compression ; (c) frapper le conteneur en direct (`docker exec node -e`) → disculpe Traefik ; (d) bisection dans le conteneur avec les modules de `/app/node_modules` + variantes de pattern de route → 4 runs ont suffi à isoler `async+reply.send`. Un `cl=0` explicite (vs `transfer-encoding: chunked`) = le payload final était une chaîne vide, PAS un stream — indice décisif.
 
 23. **Hotfix conteneur = volatil.** Patch `sed` de `/app/dist/src/server.js` + `docker restart` survit aux restarts mais PAS à un `docker compose up` qui re-pull l'image. Tout hotfix in-container doit être suivi d'un rebuild d'image depuis le source corrigé AVANT le prochain déploiement, sinon l'incident revient.
+
+## 2026-06-11 — Story vidéo gelée sur thumbnail (readiness jamais armée)
+
+24. **`AVQueuePlayer.currentItem` est nil juste après l'attach d'un fond loopé** (l'`AVPlayerLooper` enqueue async). Tout code qui gate un armement d'observation sur `player.currentItem != nil` au moment de l'attach RATE la fenêtre. **Règle : armer sur la présence du PLAYER (le KVO `AVPlayerLayer.isReadyForDisplay` ne dépend que du layer) + failsafe temporel toujours armé ; le repli `.status` KVO seulement si l'item existe.**
+
+25. **`displayLinkTick` gated sur `contentReadyFired` = plus aucune ré-évaluation après un armement raté.** Un seul signal manqué fige l'état pour toujours (pas de rebuild → pas de re-`scheduleContentReadyEvaluation`). Tout gate « j'attends X pour avancer » doit avoir un déclencheur évènementiel à l'arrivée de X (hook `onPlayerAttached`) OU un failsafe — jamais un sondage borné (l'ancien 30×50 ms abandonnait silencieusement si le download dépassait 1,5 s).
+
+26. **Méthode de debug qui a gagné : sondes os_log AVANT de théoriser plus.** 3 hypothèses statiques plausibles se sont révélées partielles ; 2 builds instrumentés (catégorie `story-media`) ont montré en 2 itérations le `hasPlayer=true hasItem=false` décisif. Les chemins media/readiness des stories étaient totalement aveugles (3 régressions invisibles en 3 semaines) — les sondes restent en place (.info chemins rares, .debug par-tick).
