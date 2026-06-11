@@ -21,7 +21,7 @@ import { ZMQSingleton } from '../services/ZmqSingleton';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { VoiceAnalysisType } from '@meeshy/shared/types/voice-api';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
-import { sendSuccess } from '../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendInternalError } from '../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'VoiceAnalysis' });
 
@@ -164,11 +164,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
   ) => {
     const userId = request.auth?.userId;
     if (!userId) {
-      return reply.status(401).send({
-        success: false,
-        error: 'UNAUTHORIZED',
-        message: 'Authentication required'
-      });
+      return sendUnauthorized(reply, 'Authentication required');
     }
 
     const { attachmentId } = request.params;
@@ -182,11 +178,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
       });
 
       if (!attachment) {
-        return reply.status(404).send({
-          success: false,
-          error: 'NOT_FOUND',
-          message: 'Attachment not found'
-        });
+        return sendNotFound(reply, 'Attachment not found');
       }
 
       const result = await voiceAnalysisService.analyzeAttachment({
@@ -202,11 +194,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, result);
     } catch (error: any) {
       fastify.log.error({ error }, '[VoiceAnalysis] Attachment analysis error');
-      return reply.status(500).send({
-        success: false,
-        error: 'ANALYSIS_FAILED',
-        message: error.message || 'Voice analysis failed'
-      });
+      return sendInternalError(reply, error.message || 'Voice analysis failed');
     }
   });
 
@@ -283,29 +271,17 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
   ) => {
     const userId = request.auth?.userId;
     if (!userId) {
-      return reply.status(401).send({
-        success: false,
-        error: 'UNAUTHORIZED',
-        message: 'Authentication required'
-      });
+      return sendUnauthorized(reply, 'Authentication required');
     }
 
     const { attachments, persist = true } = request.body;
 
     if (!attachments || attachments.length === 0) {
-      return reply.status(400).send({
-        success: false,
-        error: 'INVALID_REQUEST',
-        message: 'attachments array is required and must not be empty'
-      });
+      return sendBadRequest(reply, 'attachments array is required and must not be empty');
     }
 
     if (attachments.length > 50) {
-      return reply.status(400).send({
-        success: false,
-        error: 'BATCH_TOO_LARGE',
-        message: 'Maximum 50 attachments per batch'
-      });
+      return sendBadRequest(reply, 'Maximum 50 attachments per batch');
     }
 
     try {
@@ -329,11 +305,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
       });
     } catch (error: any) {
       fastify.log.error({ error }, '[VoiceAnalysis] Batch analysis error');
-      return reply.status(500).send({
-        success: false,
-        error: 'BATCH_ANALYSIS_FAILED',
-        message: error.message || 'Batch voice analysis failed'
-      });
+      return sendInternalError(reply, error.message || 'Batch voice analysis failed');
     }
   });
 
@@ -379,11 +351,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
   ) => {
     const userId = request.auth?.userId;
     if (!userId) {
-      return reply.status(401).send({
-        success: false,
-        error: 'UNAUTHORIZED',
-        message: 'Authentication required'
-      });
+      return sendUnauthorized(reply, 'Authentication required');
     }
 
     const { attachmentId } = request.params;
@@ -394,11 +362,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, analysis ? { analysis } : null);
     } catch (error: any) {
       fastify.log.error({ error }, '[VoiceAnalysis] Get attachment analysis error');
-      return reply.status(500).send({
-        success: false,
-        error: 'RETRIEVAL_FAILED',
-        message: error.message || 'Failed to retrieve analysis'
-      });
+      return sendInternalError(reply, error.message || 'Failed to retrieve analysis');
     }
   });
 
@@ -458,11 +422,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
   ) => {
     const userId = request.auth?.userId;
     if (!userId) {
-      return reply.status(401).send({
-        success: false,
-        error: 'UNAUTHORIZED',
-        message: 'Authentication required'
-      });
+      return sendUnauthorized(reply, 'Authentication required');
     }
 
     const { audioBase64, audioPath, analysisTypes, persist = true } = request.body;
@@ -479,11 +439,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, result);
     } catch (error: any) {
       fastify.log.error({ error }, '[VoiceAnalysis] Profile analysis error');
-      return reply.status(500).send({
-        success: false,
-        error: 'ANALYSIS_FAILED',
-        message: error.message || 'Voice profile analysis failed'
-      });
+      return sendInternalError(reply, error.message || 'Voice profile analysis failed');
     }
   });
 
@@ -519,11 +475,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const userId = request.auth?.userId;
     if (!userId) {
-      return reply.status(401).send({
-        success: false,
-        error: 'UNAUTHORIZED',
-        message: 'Authentication required'
-      });
+      return sendUnauthorized(reply, 'Authentication required');
     }
 
     try {
@@ -532,11 +484,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, analysis ? { analysis } : null);
     } catch (error: any) {
       fastify.log.error({ error }, '[VoiceAnalysis] Get profile analysis error');
-      return reply.status(500).send({
-        success: false,
-        error: 'RETRIEVAL_FAILED',
-        message: error.message || 'Failed to retrieve profile analysis'
-      });
+      return sendInternalError(reply, error.message || 'Failed to retrieve profile analysis');
     }
   });
 }
