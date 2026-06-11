@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +42,8 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import java.time.ZoneId
+import java.util.Locale
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -137,11 +140,28 @@ public fun MessageBubble(
                     }
                 }
 
-                if (content.isOutgoing) {
-                    DeliveryStatusIcon(
-                        status = content.deliveryStatus,
-                        onColor = onColor,
-                    )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = MeeshySpacing.sm),
+                ) {
+                    val time = remember(content.createdAtIso) {
+                        formatBubbleTime(content.createdAtIso, ZoneId.systemDefault(), Locale.getDefault())
+                    }
+                    if (time != null) {
+                        Text(
+                            text = time,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = onColor.copy(alpha = 0.7f),
+                        )
+                    }
+                    if (content.isOutgoing) {
+                        Box(modifier = Modifier.padding(start = MeeshySpacing.xs)) {
+                            DeliveryStatusIcon(
+                                status = content.deliveryStatus,
+                                onColor = onColor,
+                            )
+                        }
+                    }
                 }
             }
         }
