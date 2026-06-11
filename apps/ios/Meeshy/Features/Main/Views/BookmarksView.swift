@@ -6,6 +6,11 @@ struct BookmarksView: View {
     @StateObject private var viewModel = BookmarksViewModel()
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var router: Router
+    @EnvironmentObject private var storyViewModel: StoryViewModel
+    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    @EnvironmentObject private var statusViewModel: StatusViewModel
+    /// Avatar d'auteur tappé → story de cet auteur (singleGroup, 1re non-vue).
+    @State private var storyAuthorUserId: String?
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -27,7 +32,9 @@ struct BookmarksView: View {
                                     try? await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
                                     FeedbackToastManager.shared.showSuccess(String(localized: "bookmarks.report.success", defaultValue: "Signalement envoye", bundle: .main))
                                 }
-                            }
+                            },
+                            authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),
+                            onViewAuthorStory: { storyAuthorUserId = post.authorId }
                         )
                         .equatable()
                     }
@@ -54,6 +61,27 @@ struct BookmarksView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await viewModel.refresh() }
         .task { await viewModel.loadBookmarks() }
+        .fullScreenCover(isPresented: Binding(
+            get: { storyAuthorUserId != nil },
+            set: { if !$0 { storyAuthorUserId = nil } }
+        )) {
+            StoryViewerContainer(
+                viewModel: storyViewModel,
+                userId: storyAuthorUserId,
+                isPresented: Binding(
+                    get: { storyAuthorUserId != nil },
+                    set: { if !$0 { storyAuthorUserId = nil } }
+                ),
+                singleGroup: true,
+                startAtFirstUnviewed: true,
+                presentationSource: "BookmarksView.authorAvatar"
+            )
+            // fullScreenCover n'hérite pas des EnvironmentObjects — trio
+            // requis par StoryViewerView (SharePickerView interne).
+            .environmentObject(router)
+            .environmentObject(statusViewModel)
+            .environmentObject(conversationListViewModel)
+        }
     }
 
     private var emptyState: some View {
