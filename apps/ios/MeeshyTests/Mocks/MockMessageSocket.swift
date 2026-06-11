@@ -18,6 +18,8 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
     let reactionAdded = PassthroughSubject<ReactionUpdateEvent, Never>()
     let reactionRemoved = PassthroughSubject<ReactionUpdateEvent, Never>()
+    let attachmentReactionAdded = PassthroughSubject<AttachmentReactionUpdateEvent, Never>()
+    let attachmentReactionRemoved = PassthroughSubject<AttachmentReactionUpdateEvent, Never>()
     let typingStarted = PassthroughSubject<TypingEvent, Never>()
     let typingStopped = PassthroughSubject<TypingEvent, Never>()
     let unreadUpdated = PassthroughSubject<UnreadUpdateEvent, Never>()
@@ -186,6 +188,19 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     private(set) var lastAppForeground: Bool?
     func emitAppForeground(_ foreground: Bool) {
         lastAppForeground = foreground
+    }
+
+    private(set) var addAttachmentReactionCallCount = 0
+    private(set) var lastAddedAttachmentReaction: (attachmentId: String, messageId: String, emoji: String)?
+    func addAttachmentReaction(attachmentId: String, messageId: String, emoji: String) {
+        addAttachmentReactionCallCount += 1
+        lastAddedAttachmentReaction = (attachmentId, messageId, emoji)
+    }
+    private(set) var removeAttachmentReactionCallCount = 0
+    private(set) var lastRemovedAttachmentReaction: (attachmentId: String, messageId: String, emoji: String)?
+    func removeAttachmentReaction(attachmentId: String, messageId: String, emoji: String) {
+        removeAttachmentReactionCallCount += 1
+        lastRemovedAttachmentReaction = (attachmentId, messageId, emoji)
     }
 
     func emitCallSignal(callId: String, type: String, payload: [String: Any]) {

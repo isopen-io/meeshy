@@ -7,6 +7,8 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
     let reactionAdded = PassthroughSubject<ReactionUpdateEvent, Never>()
     let reactionRemoved = PassthroughSubject<ReactionUpdateEvent, Never>()
+    let attachmentReactionAdded = PassthroughSubject<AttachmentReactionUpdateEvent, Never>()
+    let attachmentReactionRemoved = PassthroughSubject<AttachmentReactionUpdateEvent, Never>()
     let typingStarted = PassthroughSubject<TypingEvent, Never>()
     let typingStopped = PassthroughSubject<TypingEvent, Never>()
     let unreadUpdated = PassthroughSubject<UnreadUpdateEvent, Never>()
@@ -86,6 +88,8 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     func emitCallJoin(callId: String) {}
     func emitCallLeave(callId: String) {}
     func emitAppForeground(_ foreground: Bool) {}
+    func addAttachmentReaction(attachmentId: String, messageId: String, emoji: String) {}
+    func removeAttachmentReaction(attachmentId: String, messageId: String, emoji: String) {}
     func emitCallSignal(callId: String, type: String, payload: [String: Any]) {}
     func emitCallSignalWithAck(callId: String, type: String, payload: [String: Any]) async -> Bool { true }
     func emitCallToggleAudio(callId: String, enabled: Bool) {}

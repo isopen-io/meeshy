@@ -809,6 +809,8 @@ public protocol MessageSocketProviding: Sendable {
     var messageDeleted: PassthroughSubject<MessageDeletedEvent, Never> { get }
     var reactionAdded: PassthroughSubject<ReactionUpdateEvent, Never> { get }
     var reactionRemoved: PassthroughSubject<ReactionUpdateEvent, Never> { get }
+    var attachmentReactionAdded: PassthroughSubject<AttachmentReactionUpdateEvent, Never> { get }
+    var attachmentReactionRemoved: PassthroughSubject<AttachmentReactionUpdateEvent, Never> { get }
     var typingStarted: PassthroughSubject<TypingEvent, Never> { get }
     var typingStopped: PassthroughSubject<TypingEvent, Never> { get }
     var unreadUpdated: PassthroughSubject<UnreadUpdateEvent, Never> { get }
@@ -898,6 +900,8 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallJoin(callId: String)
     func emitCallLeave(callId: String)
     func emitAppForeground(_ foreground: Bool)
+    func addAttachmentReaction(attachmentId: String, messageId: String, emoji: String)
+    func removeAttachmentReaction(attachmentId: String, messageId: String, emoji: String)
     func emitCallSignal(callId: String, type: String, payload: [String: Any])
     func emitCallSignalWithAck(callId: String, type: String, payload: [String: Any]) async -> Bool
     func emitCallToggleAudio(callId: String, enabled: Bool)
