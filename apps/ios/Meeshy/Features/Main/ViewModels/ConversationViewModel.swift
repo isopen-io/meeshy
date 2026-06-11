@@ -1934,6 +1934,63 @@ class ConversationViewModel: ObservableObject {
         ].joined(separator: "\u{1F}")
     }
 
+    /// Shared post-ACK finalization for a successful send, used by BOTH the
+    /// socket-first fast path and the REST path so the two stay in lockstep:
+    /// records the tempId→serverId mapping, drives the `.serverAck` state
+    /// transition (⏱→✓), bumps the conversation to the top, persists the
+    /// server-id mapping for cold-start reconciliation, and clears the
+    /// ephemeral/blur/effect compose state + mention draft. `transport` only
+    /// tags the perf signpost (`perf:ios.send.ack ... transport=…`) so a device
+    /// trace can A/B socket-first vs rest.
+    private func finalizeSuccessfulSend(
+        tempId: String,
+        serverId: String,
+        serverCreatedAt: Date,
+        text: String,
+        sendStartedAt: Date,
+        transport: String
+    ) async {
+        // Register tempId → serverId so the `message:new` broadcast reconciles
+        // without creating a duplicate row. UI update (sent state) flows through
+        // persistence → store observation.
+        pendingServerIds[tempId] = serverId
+
+        // GRDB server ack — state machine transitions to .sent. `try?` swallows
+        // both errors AND a nil return (state machine rejected / record missing),
+        // logged so the ⏱→✓ transition is observable.
+        let ackResult = try? await messagePersistence.applyEvent(
+            localId: tempId,
+            event: .serverAck(serverId: serverId, at: serverCreatedAt)
+        )
+        Logger.messages.info("SendFlow PENDING->SENT tempId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) resultState=\(ackResult.map { String(describing: $0) } ?? "nil", privacy: .public) transport=\(transport, privacy: .public)")
+        let ackElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
+        Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) transport=\(transport, privacy: .public) durationMs=\(ackElapsedMs, privacy: .public)")
+
+        let convId = conversationId
+        let msgContent = text
+        let msgTime = serverCreatedAt
+
+        // Persist server-id mapping so a cold-start REST fetch reconciles without
+        // duplicate temp_…/server-id pairs.
+        Task { [weak self] in
+            await self?.persistMessagesUsingServerIds()
+        }
+        let sentSenderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
+        Task {
+            await ConversationSyncEngine.shared.updateConversationAfterSend(
+                conversationId: convId,
+                messagePreview: msgContent,
+                messageAt: msgTime,
+                senderName: sentSenderName
+            )
+        }
+
+        if ephemeralDuration != nil { ephemeralDuration = nil }
+        if isBlurEnabled { isBlurEnabled = false }
+        if pendingEffects.hasAnyEffect { pendingEffects = .none }
+        mentionController.clearDraft()
+    }
+
     @discardableResult
     func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2257,14 +2314,54 @@ class ConversationViewModel: ObservableObject {
                 encryptionMode: encryptionMode,
                 clientMessageId: tempId
             )
+
+            // WebSocket-first send (re-enabled 2026-06-11). On a persistent
+            // socket the `message:send` ACK returns in ~200 ms, vs the 10-30 s a
+            // slow-cellular REST POST + 429/503 retries can pin the optimistic
+            // clock. Gated to plain text only — no attachments, no E2EE, no
+            // ephemeral/view-once/blur/effects — because `message:send` does not
+            // transport those; and only when the socket reports connected. A miss
+            // (nil ACK / no socket) falls straight through to the REST POST below
+            // with the SAME clientMessageId, so the gateway dedups (no duplicate
+            // row). The disabling note below (2026-05-16/17, channel non-functional)
+            // is superseded: the gateway handler is wired and ACKs are verified.
+            let socketFirstEligible = messageSocket.isConnected
+                && !isEncrypted
+                && (attachmentIds?.isEmpty ?? true)
+                && resolvedExpiresAt == nil
+                && !resolvedIsViewOnce
+                && resolvedBlur != true
+                && !pendingEffects.hasAnyEffect
+            if socketFirstEligible {
+                Logger.messages.info("SendFlow socket-first START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public) — message:send before REST")
+                if let socketAck = await messageSocket.sendViaSocketFallback(
+                    conversationId: conversationId,
+                    content: finalContent,
+                    attachmentIds: [],
+                    replyToId: replyToId,
+                    storyReplyToId: storyReplyToId,
+                    originalLanguage: originalLanguage ?? defaultComposeLanguage(),
+                    isEncrypted: false,
+                    clientMessageId: tempId
+                ) {
+                    await finalizeSuccessfulSend(
+                        tempId: tempId,
+                        serverId: socketAck.messageId,
+                        serverCreatedAt: socketAck.createdAt ?? Date(),
+                        text: text,
+                        sendStartedAt: sendStartedAt,
+                        transport: "socket-first"
+                    )
+                    return true
+                }
+                Logger.messages.info("SendFlow socket-first MISS tempId=\(tempId, privacy: .public) — no ACK, falling through to REST")
+            }
+
             // Send via REST. The WebSocket-first send path (commit 35b399f9,
-            // 2026-05-16) is disabled: the `message:send` Socket.IO event
-            // never reached the gateway handler — the socket data channel was
-            // non-functional, so every send burned the full 10 s `emitWithAck`
-            // timeout before falling back to REST anyway (root-cause
-            // investigation 2026-05-17). REST is direct (~25 ms server-side).
-            // Re-enable the WebSocket-first path once the Socket.IO channel
-            // is repaired and the `message:send` ACK round-trip is verified.
+            // 2026-05-16) was disabled because the `message:send` Socket.IO event
+            // did not reach the gateway handler (investigation 2026-05-17). It is
+            // now re-enabled above as a fast path; REST remains the fallback and
+            // is direct (~25 ms server-side).
             Logger.messages.info("SendFlow POST /messages START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public) — awaiting response (isSending held)")
             // Cap the REST send at `sendRESTTimeoutSeconds` (12s) instead of the
             // 60s URLSession request timeout: on a slow/intermittent cellular
@@ -2281,57 +2378,14 @@ class ConversationViewModel: ObservableObject {
             let serverCreatedAt = responseData.createdAt
             Logger.messages.debug("SendFlow POST OK tempId=\(tempId, privacy: .public) serverId=\(responseData.id, privacy: .public)")
 
-            // Register tempId → serverId mapping so the socket handler can reconcile
-            // the `message:new` broadcast without creating a duplicate row.
-            // UI update (sent state) flows through persistence → store observation.
-            pendingServerIds[tempId] = serverId
-
-            // GRDB server ack — state machine transitions to .sent; store observation
-            // surfaces the change to the view without a direct messages[idx] write.
-            // Logging the result so we can see whether the ⏱→✓ transition actually
-            // took effect (the `try?` swallows both errors AND a nil return when
-            // the state machine rejects the event or the record is missing).
-            let ackResult = try? await messagePersistence.applyEvent(
-                localId: tempId,
-                event: .serverAck(serverId: serverId, at: serverCreatedAt)
+            await finalizeSuccessfulSend(
+                tempId: tempId,
+                serverId: serverId,
+                serverCreatedAt: serverCreatedAt,
+                text: text,
+                sendStartedAt: sendStartedAt,
+                transport: "rest"
             )
-            Logger.messages.info("SendFlow PENDING->SENT tempId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) resultState=\(ackResult.map { String(describing: $0) } ?? "nil", privacy: .public) transport=rest")
-            let ackElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
-            Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) transport=rest durationMs=\(ackElapsedMs, privacy: .public)")
-
-            // Move conversation to top of list immediately (optimistic)
-            let convId = conversationId
-            let msgContent = text
-            let msgTime = serverCreatedAt
-
-            // Persist the server-id mapping so that a future cold-start REST fetch
-            // reconciles without duplicate `temp_…` / server-id pairs.
-            Task { [weak self] in
-                await self?.persistMessagesUsingServerIds()
-            }
-            let sentSenderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
-            Task {
-                await ConversationSyncEngine.shared.updateConversationAfterSend(
-                    conversationId: convId,
-                    messagePreview: msgContent,
-                    messageAt: msgTime,
-                    senderName: sentSenderName
-                )
-            }
-
-            // Clear ephemeral duration after successful send
-            if ephemeralDuration != nil {
-                ephemeralDuration = nil
-            }
-            // Clear blur after successful send
-            if isBlurEnabled {
-                isBlurEnabled = false
-            }
-            // Clear pending effects after successful send
-            if pendingEffects.hasAnyEffect {
-                pendingEffects = .none
-            }
-            mentionController.clearDraft()
             return true
         } catch {
             let failElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)

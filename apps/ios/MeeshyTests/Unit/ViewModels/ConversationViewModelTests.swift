@@ -461,6 +461,38 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 0)
     }
 
+    // MARK: - sendMessage Socket-First Fast Path
+
+    func test_sendMessage_socketConnected_plainText_usesSocketFirst_skipsRest() async {
+        // Socket-first fast path: a connected socket ACKs `message:send` before
+        // the REST POST is ever attempted (avoids the 10-30s slow-cellular POST).
+        mockMessageSocket.isConnected = true
+        mockMessageSocket.sendViaSocketFallbackResult = MessageSocketManager.SendMessageAck(
+            messageId: "server-id-socket-first", clientMessageId: nil, createdAt: Date()
+        )
+        let sut = makeSUT()
+
+        let result = await sut.sendMessage(content: "Fast via socket")
+
+        XCTAssertTrue(result)
+        XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1, "socket-first sends via the socket")
+        XCTAssertEqual(mockMessageService.sendCallCount, 0, "REST is not called when the socket ACKs first")
+    }
+
+    func test_sendMessage_socketConnectedButNoAck_fallsThroughToRest() async {
+        // Socket connected but no ACK (nil) → fall straight through to the REST
+        // POST with the SAME clientMessageId. Both transports attempted once.
+        mockMessageSocket.isConnected = true
+        mockMessageSocket.sendViaSocketFallbackResult = nil
+        let sut = makeSUT()
+
+        let result = await sut.sendMessage(content: "Socket miss then REST")
+
+        XCTAssertTrue(result)
+        XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1, "socket-first was attempted")
+        XCTAssertEqual(mockMessageService.sendCallCount, 1, "REST is the fallback on a socket miss")
+    }
+
     func test_sendMessage_restAndSocketBothFail_returnsFalse() async {
         mockMessageService.sendResult = .failure(NSError(domain: "test", code: 500))
         mockMessageSocket.sendViaSocketFallbackResult = nil
