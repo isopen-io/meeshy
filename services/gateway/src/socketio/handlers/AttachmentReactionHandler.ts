@@ -55,8 +55,10 @@ export class AttachmentReactionHandler {
       }
       // Garde : un messageId optimiste non réconcilié (cid_*) ferait throw
       // prisma (P2023). Mirror de ReactionHandler._resolveParticipantId.
-      if (!OBJECT_ID.test(data.messageId)) {
-        logger.warn('attachment reaction — unreconciled optimistic messageId, skipping', { messageId: data.messageId });
+      if (!OBJECT_ID.test(data.messageId) || !OBJECT_ID.test(data.attachmentId)) {
+        logger.warn('attachment reaction — invalid/unreconciled id, skipping', {
+          messageId: data.messageId, attachmentId: data.attachmentId,
+        });
         callback?.({ success: false, error: 'Could not resolve participant' });
         return;
       }
@@ -78,6 +80,18 @@ export class AttachmentReactionHandler {
       const conversationId = await this.deps.service.resolveConversationId(data.messageId);
       if (!conversationId) {
         callback?.({ success: false, error: 'Message not found' });
+        return;
+      }
+
+      // Sécurité (IDOR) — lier l'attachment au message fourni. Sans ça, un client
+      // pourrait réagir à une PJ d'une autre conversation en passant un messageId
+      // dont il EST participant + un attachmentId étranger.
+      const att = await this.deps.prisma.messageAttachment.findUnique({
+        where: { id: data.attachmentId },
+        select: { messageId: true },
+      });
+      if (!att || att.messageId !== data.messageId) {
+        callback?.({ success: false, error: 'Attachment not found' });
         return;
       }
 
