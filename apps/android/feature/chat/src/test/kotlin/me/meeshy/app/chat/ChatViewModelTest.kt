@@ -59,10 +59,11 @@ class ChatViewModelTest {
 
     private val reactionAdded = MutableSharedFlow<ReactionUpdateEvent>()
     private val reactionRemoved = MutableSharedFlow<ReactionUpdateEvent>()
+    private val messageReceived = MutableSharedFlow<ApiMessage>()
 
     private fun socketManager(): MessageSocketManager =
         mockk<MessageSocketManager> {
-            every { messageReceived } returns MutableSharedFlow()
+            every { this@mockk.messageReceived } returns this@ChatViewModelTest.messageReceived
             every { messageUpdated } returns MutableSharedFlow()
             every { messageDeleted } returns MutableSharedFlow()
             every { typingStarted } returns MutableSharedFlow()
@@ -76,6 +77,7 @@ class ChatViewModelTest {
         val repo: MessageRepository,
         val workManager: WorkManager,
         val reactions: ReactionRepository,
+        val conversations: ConversationRepository,
     )
 
     private fun viewModel(
@@ -107,7 +109,42 @@ class ChatViewModelTest {
             repo,
             workManager,
             reactions,
+            conversations,
         )
+    }
+
+    @Test
+    fun opening_a_conversation_marks_it_read_and_schedules_the_flush() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.conversations.markReadOptimistic("c1") } returns true
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.conversations.markReadOptimistic("c1") }
+        coVerify(atLeast = 1) { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun an_incoming_message_in_the_open_conversation_is_marked_read() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.conversations.markReadOptimistic("c1") } returns true
+        advanceUntilIdle()
+
+        messageReceived.emit(ApiMessage(id = "m9", conversationId = "c1", content = "yo"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { h.conversations.markReadOptimistic("c1") }
+    }
+
+    @Test
+    fun an_incoming_message_elsewhere_does_not_mark_this_conversation_read() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.conversations.markReadOptimistic(any()) } returns true
+        advanceUntilIdle()
+
+        messageReceived.emit(ApiMessage(id = "m9", conversationId = "other", content = "yo"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.conversations.markReadOptimistic(any()) }
     }
 
     @Test

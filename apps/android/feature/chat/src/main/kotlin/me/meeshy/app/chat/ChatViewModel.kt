@@ -54,7 +54,7 @@ data class ChatUiState(
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val messageRepository: MessageRepository,
-    conversationRepository: ConversationRepository,
+    private val conversationRepository: ConversationRepository,
     private val sessionRepository: SessionRepository,
     private val reactionRepository: ReactionRepository,
     private val messageSocketManager: MessageSocketManager,
@@ -74,6 +74,8 @@ class ChatViewModel @Inject constructor(
     private var latestMessages: List<LocalMessage> = emptyList()
 
     init {
+        viewModelScope.launch { markConversationRead() }
+
         viewModelScope.launch {
             conversationRepository.conversationStream(conversationId).collect { conversation ->
                 if (conversation == null) return@collect
@@ -110,6 +112,7 @@ class ChatViewModel @Inject constructor(
                 messageSocketManager.messageReceived.collect { event ->
                     if (event.conversationId == conversationId) {
                         messageRepository.refresh(conversationId)
+                        markConversationRead()
                     }
                 }
             }
@@ -163,6 +166,21 @@ class ChatViewModel @Inject constructor(
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Mark-as-read never surfaces an error: the badge is non-critical and the
+     * queued receipt retries with the outbox on reconnect.
+     */
+    private suspend fun markConversationRead() {
+        try {
+            if (conversationRepository.markReadOptimistic(conversationId)) {
+                workManager.enqueue(OutboxFlushWorker.buildRequest())
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
         }
     }
 

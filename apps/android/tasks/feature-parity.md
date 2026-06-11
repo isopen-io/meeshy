@@ -401,7 +401,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Notification center with category filters (messages, reactions, mentions, social,
       contacts, groups, calls, translations, system)
 - [ ] Notification list — stale-while-revalidate cache + real-time socket updates, paginated, unread-only filter
-- [ ] Row swipe actions (mark-read, delete); mark single / all read; delete; unread badge count
+- [~] Mark read: ouverture du chat + message entrant → optimistic badge zero +
+      READ_RECEIPT outbox (coalescé) ; swipe actions / mark-all pending
 - [ ] In-app real-time notification toast
 - [ ] FCM push: permission request, tap-to-navigate, foreground/silent activity signal, badge sync
 - [ ] Rich push: decryption, message-media attachments, sender-avatar style, category quick

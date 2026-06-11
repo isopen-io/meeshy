@@ -15,6 +15,9 @@ public interface ConversationDao {
     @Query("SELECT * FROM conversations WHERE id = :id")
     public fun observeById(id: String): Flow<ConversationEntity?>
 
+    @Query("SELECT * FROM conversations WHERE id = :id")
+    public suspend fun find(id: String): ConversationEntity?
+
     @Upsert
     public suspend fun upsertAll(rows: List<ConversationEntity>)
 

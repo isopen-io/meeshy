@@ -1,7 +1,9 @@
 package me.meeshy.sdk.conversation
 
+import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.ConversationDao
 import me.meeshy.core.database.dao.SyncMetaDao
@@ -15,15 +17,20 @@ import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.outbox.OutboxKind
+import me.meeshy.sdk.outbox.OutboxLanes
+import me.meeshy.sdk.outbox.OutboxMutation
+import me.meeshy.sdk.outbox.OutboxRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class ConversationRepository @Inject constructor(
     private val conversationApi: ConversationApi,
-    database: MeeshyDatabase,
+    private val database: MeeshyDatabase,
     private val conversationDao: ConversationDao,
     syncMetaDao: SyncMetaDao,
+    private val outboxRepository: OutboxRepository,
 ) {
     private val cacheSource = ConversationCacheSource(
         database = database,
@@ -70,4 +77,36 @@ class ConversationRepository @Inject constructor(
 
     suspend fun markRead(id: String): NetworkResult<Unit> =
         apiCall { conversationApi.markRead(id) }
+
+    /**
+     * Optimistic mark-as-read (ARCHITECTURE.md §5): the cached badge drops to
+     * zero instantly and a `READ_RECEIPT` mutation joins its outbox lane (the
+     * coalescer merges repeats). No-op when the conversation is unknown or
+     * already read. Returns whether anything was queued.
+     */
+    suspend fun markReadOptimistic(id: String): Boolean {
+        val updated = database.withTransaction {
+            val row = conversationDao.find(id) ?: return@withTransaction false
+            val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+            if (conversation.unreadCount == 0) return@withTransaction false
+            conversationDao.upsertAll(
+                listOf(
+                    row.copy(
+                        payload = MeeshyApi.json.encodeToString(conversation.copy(unreadCount = 0)),
+                    ),
+                ),
+            )
+            true
+        }
+        if (!updated) return false
+        outboxRepository.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.READ_RECEIPT,
+                lane = OutboxLanes.READ_RECEIPT,
+                targetId = id,
+                payload = "{}",
+            ),
+        )
+        return true
+    }
 }

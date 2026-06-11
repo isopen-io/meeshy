@@ -16,6 +16,7 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddReactionRequest
+import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.ReactionApi
@@ -38,6 +39,7 @@ class OutboxFlushWorker @AssistedInject constructor(
     private val messageRepository: MessageRepository,
     private val messageApi: MessageApi,
     private val reactionApi: ReactionApi,
+    private val conversationApi: ConversationApi,
     private val json: Json,
 ) : CoroutineWorker(context, params) {
 
@@ -121,6 +123,12 @@ class OutboxFlushWorker @AssistedInject constructor(
             val body = runCatching { json.decodeFromString<ReactionPayload>(row.payload) }
                 .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
             when (apiCall { reactionApi.remove(row.targetId, body.emoji) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.READ_RECEIPT to MutationSender { row ->
+            when (apiCall { conversationApi.markRead(row.targetId) }) {
                 is NetworkResult.Success -> SendResult.Success
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }
