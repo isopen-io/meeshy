@@ -171,7 +171,11 @@ public enum AvatarContext: Sendable {
 
 // MARK: - Story Ring State
 
-public enum StoryRingState: Equatable {
+/// `nonisolated` : la conformance Equatable doit rester utilisable depuis
+/// les `==` nonisolated des leaf views Equatable (FeedPostCard…) — sous
+/// SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor, la conformance synthétisée
+/// serait sinon MainActor-isolée.
+nonisolated public enum StoryRingState: Equatable, Sendable {
     case none, unread, read
 }
 
