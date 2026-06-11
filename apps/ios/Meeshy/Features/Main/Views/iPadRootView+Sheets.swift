@@ -87,6 +87,7 @@ extension iPadRootView {
                         storyViewerCoordinator.dismiss()
                         handleStoryReply(replyContext)
                     },
+                    singleGroup: request.singleGroup,
                     startAtFirstUnviewed: request.startAtFirstUnviewed,
                     presentationSource: "iPadRootView.fromConv",
                     initialAction: request.initialAction
