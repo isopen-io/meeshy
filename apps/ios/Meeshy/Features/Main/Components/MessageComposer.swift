@@ -99,12 +99,12 @@ struct MessageComposer: View {
                     RoundedRectangle(cornerRadius: 22)
                         .stroke(
                             focusBounce ?
-                            LinearGradient(colors: [Color(hex: "08D9D6").opacity(0.5), Color(hex: "FF2E63").opacity(0.5)], startPoint: .leading, endPoint: .trailing) :
+                            LinearGradient(colors: [MeeshyColors.indigo400.opacity(0.5), MeeshyColors.indigo600.opacity(0.5)], startPoint: .leading, endPoint: .trailing) :
                                 LinearGradient(colors: [Color.white.opacity(0.15), Color.white.opacity(0.1)], startPoint: .leading, endPoint: .trailing),
                             lineWidth: focusBounce ? 1.5 : 1
                         )
                 )
-                .shadow(color: focusBounce ? Color(hex: "08D9D6").opacity(0.2) : Color.clear, radius: 8, x: 0, y: 0)
+                .shadow(color: focusBounce ? MeeshyColors.indigo400.opacity(0.2) : Color.clear, radius: 8, x: 0, y: 0)
         )
         .scaleEffect(focusBounce ? 1.02 : 1.0)
     }
@@ -128,13 +128,13 @@ struct MessageComposer: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: "FF2E63"), Color(hex: "FF6B6B")],
+                                colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                         .frame(width: 44, height: 44)
-                        .shadow(color: Color(hex: "FF2E63").opacity(0.4), radius: sendBounce ? 12 : 8, x: 0, y: 4)
+                        .shadow(color: MeeshyColors.indigo500.opacity(0.4), radius: sendBounce ? 12 : 8, x: 0, y: 4)
 
                     Image(systemName: "paperplane.fill")
                         .font(.system(size: 16, weight: .semibold))

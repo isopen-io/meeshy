@@ -39,8 +39,8 @@ struct ConversationBackgroundConfig {
         isE2EEncrypted: Bool = false,
         memberCount: Int = 2,
         topLanguages: [String] = [],
-        accentHex: String = "FF2E63",
-        secondaryHex: String = "08D9D6",
+        accentHex: String = MeeshyColors.brandPrimaryHex,
+        secondaryHex: String = MeeshyColors.indigo400Hex,
         isDarkMode: Bool = ThemeManager.shared.mode.isDark,
         groupEndHex: String? = nil,
         groupColorFadeDuration: Double = 10.0

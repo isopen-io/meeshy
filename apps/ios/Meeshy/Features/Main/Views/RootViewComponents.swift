@@ -418,7 +418,7 @@ struct ThemedFeedOverlay: View {
                 theme.backgroundGradient
 
                 Circle()
-                    .fill(Color(hex: "4ECDC4").opacity(isDark ? 0.1 : 0.06))
+                    .fill(MeeshyColors.brandPrimary.opacity(isDark ? 0.1 : 0.06))
                     .frame(width: 300, height: 300)
                     .blur(radius: 80)
                     .offset(x: -80, y: -100)
@@ -455,8 +455,8 @@ struct ThemedFeedOverlay: View {
                             MeeshyAvatar(
                                 name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
                                 context: .feedComposer,
-                                accentColor: "FF6B6B",
-                                secondaryColor: "4ECDC4"
+                                accentColor: MeeshyColors.brandPrimaryHex,
+                                secondaryColor: MeeshyColors.indigo300Hex
                             )
 
                             Text(String(localized: "composer.placeholder.share", defaultValue: "Share something…", bundle: .main))
@@ -557,7 +557,7 @@ struct ThemedFeedOverlay: View {
                     // Loading indicator
                     if viewModel.isLoadingMore {
                         ProgressView()
-                            .tint(Color(hex: "4ECDC4"))
+                            .tint(MeeshyColors.brandPrimary)
                             .padding()
                     }
                 }
@@ -710,7 +710,7 @@ struct ThemedFeedComposer: View {
     // Attachment options (without mic - mic is the toggle button when expanded)
     private let attachmentOptions: [(icon: String, color: String, type: String)] = [
         ("photo.on.rectangle.angled", "9B59B6", "photo"),
-        ("camera.fill", "FF6B6B", "camera"),
+        ("camera.fill", MeeshyColors.errorHex, "camera"),
         ("doc.fill", "3498DB", "file"),
         ("location.fill", "2ECC71", "location")
     ]
@@ -727,8 +727,8 @@ struct ThemedFeedComposer: View {
                 MeeshyAvatar(
                     name: getUserDisplayName(authManager.currentUser, fallback: "M"),
                     context: .feedComposer,
-                    accentColor: "FF6B6B",
-                    secondaryColor: "4ECDC4",
+                    accentColor: MeeshyColors.brandPrimaryHex,
+                    secondaryColor: MeeshyColors.indigo300Hex,
                     onViewProfile: {
                         if let user = authManager.currentUser {
                             selectedProfileUser = .from(user: user)
@@ -772,7 +772,7 @@ struct ThemedFeedComposer: View {
                             RoundedRectangle(cornerRadius: 16)
                                 .stroke(
                                     isFocused ?
-                                    Color(hex: "4ECDC4").opacity(0.5) :
+                                    MeeshyColors.brandPrimary.opacity(0.5) :
                                     theme.inputBorder,
                                     lineWidth: 1
                                 )
@@ -849,10 +849,10 @@ struct ThemedFeedComposer: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(theme.surfaceGradient(tint: "4ECDC4"))
+                    .fill(theme.surfaceGradient(tint: MeeshyColors.brandPrimaryHex))
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
-                            .stroke(theme.border(tint: "4ECDC4", intensity: 0.25), lineWidth: 1)
+                            .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.25), lineWidth: 1)
                     )
             )
 
@@ -973,10 +973,10 @@ struct ThemedFeedCard: View {
 
             // Actions
             HStack(spacing: 20) {
-                FeedActionButton(icon: isLiked ? "heart.fill" : "heart", color: "FF6B6B", count: item.likes + (isLiked ? 1 : 0), isActive: isLiked) {
+                FeedActionButton(icon: isLiked ? "heart.fill" : "heart", color: MeeshyColors.errorHex, count: item.likes + (isLiked ? 1 : 0), isActive: isLiked) {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { isLiked.toggle() }
                 }
-                FeedActionButton(icon: "bubble.right", color: "4ECDC4", count: 0)
+                FeedActionButton(icon: "bubble.right", color: MeeshyColors.brandPrimaryHex, count: 0)
                 FeedActionButton(icon: "arrow.2.squarepath", color: "9B59B6", count: 0)
 
                 Spacer()
@@ -1108,6 +1108,6 @@ struct LegacyFeedCard: View {
 struct FeedAction: View {
     let icon: String
     let count: Int
-    var body: some View { FeedActionButton(icon: icon, color: "4ECDC4", count: count) }
+    var body: some View { FeedActionButton(icon: icon, color: MeeshyColors.brandPrimaryHex, count: count) }
 }
 

@@ -140,7 +140,7 @@ export function AgentLlmTab() {
           <div className="space-y-2">
             <div className="flex items-center">
               <Label>{t('llm.labelProvider')}</Label>
-              <InfoIcon content="Source d'intelligence. OpenAI (GPT) est rapide et polyvalent. Anthropic (Claude) est excellent pour le raisonnement logique et le respect strict des consignes de sécurité." />
+              <InfoIcon content={t('agentConfig.llm.helpProvider')} />
             </div>
             <Select
               value={form.provider}
@@ -165,7 +165,7 @@ export function AgentLlmTab() {
           <div className="space-y-2">
             <div className="flex items-center">
               <Label>{t('llm.labelModel')}</Label>
-              <InfoIcon content="Version spécifique. Les modèles 'Mini' ou 'Haiku' sont optimisés pour le coût et la vitesse. Les versions complètes (4o, Sonnet) offrent une meilleure personnalité mais coûtent plus cher." />
+              <InfoIcon content={t('agentConfig.llm.helpModel')} />
             </div>
             <Select value={form.model} onValueChange={v => setForm(prev => ({ ...prev, model: v }))}>
               <SelectTrigger>
@@ -200,7 +200,7 @@ export function AgentLlmTab() {
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Label>{t('llm.labelTemperature')}</Label>
-                <InfoIcon content="Contrôle l'audace du modèle. À 0, le modèle est conservateur et répétitif (parfait pour la FAQ). À 0.8+, il devient inventif et fluide (idéal pour l'animation). Attention : au-delà de 1.5, les réponses peuvent perdre leur sens." />
+                <InfoIcon content={t('agentConfig.llm.helpTemperature')} />
               </div>
               <span className="text-sm text-gray-500 font-mono">{form.temperature?.toFixed(1)}</span>
             </div>
@@ -215,7 +215,7 @@ export function AgentLlmTab() {
           <div className="space-y-2">
             <div className="flex items-center">
               <Label>{t('llm.labelMaxTokens')}</Label>
-              <InfoIcon content="Taille maximale de la réponse (incluant la ponctuation). Une valeur de 1024 correspond à environ 750 mots. Limiter cette valeur permet de contrôler directement les coûts et d'éviter les réponses interminables." />
+              <InfoIcon content={t('agentConfig.llm.helpMaxTokens')} />
             </div>
             <Input
               type="number"
@@ -236,7 +236,7 @@ export function AgentLlmTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('llm.labelDailyBudget')}</Label>
-                <InfoIcon content="Arrêt d'urgence financier : si le coût cumulé des appels atteint ce montant, le provider est désactivé jusqu'à minuit. Prévoyez une marge de 20% par rapport à l'usage normal." />
+                <InfoIcon content={t('agentConfig.llm.helpDailyBudget')} />
               </div>
               <Input
                 type="number"
@@ -249,7 +249,7 @@ export function AgentLlmTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('llm.labelMaxCostPerCall')}</Label>
-                <InfoIcon content="Protection contre les contextes explosifs : refuse de générer une réponse si l'historique est si long que le coût unitaire dépasse ce seuil. Évite les factures surprises sur un seul message." />
+                <InfoIcon content={t('agentConfig.llm.helpMaxCostPerCall')} />
               </div>
               <Input
                 type="number"

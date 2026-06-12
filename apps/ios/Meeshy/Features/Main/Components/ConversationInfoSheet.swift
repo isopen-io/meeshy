@@ -882,7 +882,7 @@ struct ConversationInfoSheet: View {
             actionButton(
                 icon: "link.badge.plus",
                 label: String(localized: "common.share", defaultValue: "Partager", bundle: .main),
-                color: "4ECDC4",
+                color: MeeshyColors.brandPrimaryHex,
                 isLoading: isCreatingShareLink
             ) {
                 Task { await createShareLink() }
@@ -891,7 +891,7 @@ struct ConversationInfoSheet: View {
             actionButton(
                 icon: "rectangle.portrait.and.arrow.right",
                 label: String(localized: "conversation.info.leave.confirm", defaultValue: "Quitter", bundle: .main),
-                color: "FF6B6B"
+                color: MeeshyColors.errorHex
             ) {
                 showLeaveConfirmation = true
             }

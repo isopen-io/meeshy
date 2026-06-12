@@ -133,14 +133,14 @@ export function AgentGlobalConfigTab() {
         <div className="space-y-2 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
           <div className="flex items-center">
             <Label className="font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider text-xs">{t('globalConfig.systemPromptLabel')}</Label>
-            <InfoIcon content="C'est la 'Constitution' de votre IA. Ce texte est ajouté au début de chaque requête LLM. Il définit les règles éthiques de base, le ton de la marque et les interdictions globales qui s'appliquent à tous les agents, quel que soit leur salon." />
+            <InfoIcon content={t('agentConfig.global.helpSystemPrompt')} />
           </div>
           <Textarea
             rows={6}
             maxLength={10000}
             value={form.systemPrompt ?? ''}
             onChange={e => updateField('systemPrompt', e.target.value)}
-            placeholder="Prompt système global pour tous les agents..."
+            placeholder={t('agentConfig.global.systemPromptPlaceholder')}
             className="bg-white dark:bg-gray-800"
           />
           <p className="text-xs text-gray-500">{(form.systemPrompt ?? '').length}/10000</p>
@@ -153,7 +153,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('llm.labelProvider')}</Label>
-                <InfoIcon content="Source d'intelligence principale. OpenAI est souvent plus rapide, Anthropic est réputé pour sa précision et son respect des consignes complexes." />
+                <InfoIcon content={t('agentConfig.global.helpProvider')} />
               </div>
               <select
                 className="w-full p-2 border rounded-md bg-white dark:bg-gray-800 text-sm"
@@ -167,7 +167,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('llm.labelModel')}</Label>
-                <InfoIcon content="Version spécifique du moteur. 'Mini' ou 'Haiku' sont très économiques et rapides pour les réponses courtes. '4o' ou 'Sonnet' sont plus intelligents mais plus chers." />
+                <InfoIcon content={t('agentConfig.global.helpModel')} />
               </div>
               <Input
                 value={form.defaultModel ?? 'gpt-4o-mini'}
@@ -185,7 +185,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('globalConfig.labelFallbackProvider')}</Label>
-                <InfoIcon content="Fournisseur de secours en cas d'erreur du fournisseur principal." />
+                <InfoIcon content={t('agentConfig.global.helpFallbackProvider')} />
               </div>
               <Input
                 value={form.fallbackProvider ?? ''}
@@ -197,7 +197,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('globalConfig.labelFallbackModel')}</Label>
-                <InfoIcon content="Modèle de secours (souvent un modèle plus petit et moins cher)." />
+                <InfoIcon content={t('agentConfig.global.helpFallbackModel')} />
               </div>
               <Input
                 value={form.fallbackModel ?? ''}
@@ -216,7 +216,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('globalConfig.labelDailyBudget')}</Label>
-                <InfoIcon content="Vanne de sécurité financière globale. Si la somme des coûts de tous les agents dépasse ce montant, le service est suspendu pour éviter les débordements budgétaires." />
+                <InfoIcon content={t('agentConfig.global.helpDailyBudget')} />
               </div>
               <Input
                 type="number"
@@ -231,7 +231,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('globalConfig.labelMaxConcurrent')}</Label>
-                <InfoIcon content="Gestion du débit : bride le nombre de requêtes envoyées en même temps aux providers IA. Évite les erreurs de type 'Rate Limit' (429) lors des pics d'activité." />
+                <InfoIcon content={t('agentConfig.global.helpMaxConcurrent')} />
               </div>
               <Input
                 type="number"
@@ -251,7 +251,7 @@ export function AgentGlobalConfigTab() {
             <div className="flex items-center gap-2">
               <LayoutGrid className="h-4 w-4 text-indigo-500" />
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">{t('globalConfig.globalScheduler')}</h3>
-              <InfoIcon content="Mode séquentiel : l'agent traite les conversations une par une avec un délai aléatoire, au lieu de tout scanner en même temps. Réduit la charge et simule une activité humaine plus naturelle." />
+              <InfoIcon content={t('agentConfig.global.helpGlobalScheduler')} />
             </div>
             <Switch
               checked={form.globalScanEnabled ?? false}
@@ -263,7 +263,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('globalConfig.labelMinInterval')}</Label>
-                <InfoIcon content="Délai minimum entre deux scans de conversations en mode séquentiel." />
+                <InfoIcon content={t('agentConfig.global.helpMinInterval')} />
               </div>
               <Input
                 type="number"
@@ -275,7 +275,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('globalConfig.labelMaxInterval')}</Label>
-                <InfoIcon content="Délai maximum entre deux scans de conversations en mode séquentiel." />
+                <InfoIcon content={t('agentConfig.global.helpMaxInterval')} />
               </div>
               <Input
                 type="number"
@@ -294,7 +294,7 @@ export function AgentGlobalConfigTab() {
           <div className="space-y-2">
             <div className="flex items-center">
               <Label>{t('globalConfig.labelEligibleTypes')}</Label>
-              <InfoIcon content="Politique de déploiement : choisissez où les agents ont le droit de résider. Les 'Groupes' et 'Public' sont les cibles classiques de l'animation." />
+              <InfoIcon content={t('agentConfig.global.helpEligibleTypes')} />
             </div>
             <div className="flex flex-wrap gap-2">
               {CONVERSATION_TYPES.map(type => {
@@ -317,7 +317,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('globalConfig.labelFreshness')}</Label>
-                <InfoIcon content="Pertinence temporelle : définit si l'agent doit répondre à des messages 'anciens'. À 22h, il ignorera tout ce qui a été dit hier pour ne pas déterrer de vieux débats." />
+                <InfoIcon content={t('agentConfig.global.helpFreshness')} />
               </div>
               <Input
                 type="number"
@@ -332,7 +332,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('globalConfig.labelMaxConversations')}</Label>
-                <InfoIcon content="Impact sur la latence : limite le nombre de salons analysés à chaque passage. Si votre parc d'agents est énorme, cela permet de lisser la charge serveur." />
+                <InfoIcon content={t('agentConfig.global.helpMaxConversations')} />
               </div>
               <Input
                 type="number"
@@ -349,7 +349,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('globalConfig.labelWeekdayBudget')}</Label>
-                <InfoIcon content="Nombre maximum de conversations scannées par jour en semaine. Une fois ce budget épuisé, le scanner s'arrête jusqu'au lendemain. Chaque scan consomme 1 unité du budget." />
+                <InfoIcon content={t('agentConfig.global.helpWeekdayBudget')} />
               </div>
               <Input
                 type="number"
@@ -363,7 +363,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('globalConfig.labelWeekendBudget')}</Label>
-                <InfoIcon content="Nombre maximum de conversations scannées par jour le weekend. Généralement plus élevé car les utilisateurs sont plus actifs." />
+                <InfoIcon content={t('agentConfig.global.helpWeekendBudget')} />
               </div>
               <Input
                 type="number"
