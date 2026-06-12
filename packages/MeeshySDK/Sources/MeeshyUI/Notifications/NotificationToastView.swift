@@ -21,37 +21,18 @@ public struct NotificationToastView: View {
     }
 
     // MARK: - Author display
+    //
+    // Title / subtitle / body / avatar are resolved by the SDK's
+    // `SocketNotificationEvent` toast helpers so the precision (sender =
+    // title, group = subtitle for messages ; precise action phrase for
+    // reactions / comments / replies / reposts) stays a single source of
+    // truth shared with the notification list & push layer.
 
-    private var authorName: String {
-        event.senderDisplayName ?? event.senderUsername ?? event.title ?? "Meeshy"
-    }
-
-    private var authorAccentHex: String {
-        // Deterministic from senderId (stable across re-renders + matches
-        // the bubble's sender color) so the avatar fallback gradient
-        // looks the same as the bubble's sender chip.
-        DynamicColorGenerator.colorForName(event.senderId ?? authorName)
-    }
-
-    // MARK: - Body text
-
-    private var bodyText: String? {
-        if let label = event.attachmentLabel {
-            if let preview = event.messagePreview, !preview.isEmpty {
-                return "\(label) \u{2022} \(preview)"
-            }
-            return label
-        }
-        if let preview = event.messagePreview, !preview.isEmpty { return preview }
-        if !event.content.isEmpty { return event.content }
-        return nil
-    }
-
-    // MARK: - Conversation context (non-DM only)
-
-    private var conversationLabel: String? {
-        guard !event.isDirect, let title = event.conversationTitle, !title.isEmpty else { return nil }
-        return "dans \(title)"
+    private var avatarColorHex: String {
+        // Deterministic from the sender id (stable across re-renders + matches
+        // the bubble's sender color) so the avatar fallback gradient looks the
+        // same as the bubble's sender chip.
+        DynamicColorGenerator.colorForName(event.toastAvatarColorSeed)
     }
 
     // MARK: - Body
@@ -66,28 +47,26 @@ public struct NotificationToastView: View {
                 // previous implementation hard-coded the initials path
                 // and ignored `event.senderAvatar` entirely.
                 MeeshyAvatar(
-                    name: authorName,
+                    name: event.toastAvatarName,
                     context: .notification,
-                    accentColor: authorAccentHex,
-                    avatarURL: event.senderAvatar
+                    accentColor: avatarColorHex,
+                    avatarURL: event.toastAvatarURL
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(authorName)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
-                            .lineLimit(1)
+                    Text(event.toastTitle)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                        .lineLimit(1)
 
-                        if let convLabel = conversationLabel {
-                            Text(convLabel)
-                                .font(.system(size: 11))
-                                .foregroundColor(theme.textMuted)
-                                .lineLimit(1)
-                        }
+                    if let subtitle = event.toastSubtitle {
+                        Text(subtitle)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(theme.textMuted)
+                            .lineLimit(1)
                     }
 
-                    if let body = bodyText {
+                    if let body = event.toastBody {
                         Text(body)
                             .font(.system(size: 12))
                             .foregroundColor(theme.textSecondary)

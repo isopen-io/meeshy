@@ -57,6 +57,12 @@ struct UniversalComposerBar: View {
     var showLanguageSelector: Bool = false
     var showEmoji: Bool = true
 
+    /// Hard override that hides the attachment ladder (file / photo / camera /
+    /// location) regardless of `mode`. Used by the notification preview
+    /// composer, which must allow text / voice / effects / blur / ephemeral /
+    /// view-once but NOT file/photo attachments.
+    var forceHideAttachment: Bool = false
+
     // MARK: - Language
 
     var selectedLanguage: String = "fr"
@@ -135,6 +141,17 @@ struct UniversalComposerBar: View {
 
     /// When true, the blur toggle is hidden (e.g. in edit mode)
     var hideBlur: Bool = false
+
+    // MARK: - View-once mode
+
+    /// Binding to view-once state. When true, the next message is sent as a
+    /// view-once message (revealed once, then burned). Parent owns the state.
+    var isViewOnceEnabled: Binding<Bool> = .constant(false)
+
+    /// When true, the view-once toggle is shown. Off by default so the standard
+    /// conversation composer is unchanged; opted into by the notification
+    /// preview composer.
+    var showViewOnce: Bool = false
 
     // MARK: - Effects picker
 
@@ -226,7 +243,7 @@ struct UniversalComposerBar: View {
     var resolvedPlaceholder: String { mode?.placeholder ?? placeholder }
     var resolvedMaxLength: Int? { mode?.maxLength ?? maxLength }
     var resolvedShowVoice: Bool { mode?.showVoice ?? showVoice }
-    var resolvedShowAttachment: Bool { mode?.showAttachment ?? showAttachment }
+    var resolvedShowAttachment: Bool { forceHideAttachment ? false : (mode?.showAttachment ?? showAttachment) }
     private var resolvedShowLanguage: Bool { mode?.showLanguageSelector ?? showLanguageSelector }
     private var resolvedHideEphemeral: Bool {
         if let mode { return !mode.showEphemeral }
@@ -653,6 +670,11 @@ struct UniversalComposerBar: View {
             // Blur mode toggle
             if !hideBlur {
                 blurToggleButton
+            }
+
+            // View-once mode toggle (opt-in — notification preview composer)
+            if showViewOnce {
+                viewOnceToggleButton
             }
 
             // Effects picker toggle (full sheet — messages only)
@@ -1125,6 +1147,54 @@ struct UniversalComposerBar: View {
         .accessibilityLabel(isActive
                             ? String(localized: "composer.blur.active", defaultValue: "Mode flou actif", bundle: .main)
                             : String(localized: "composer.blur.activate", defaultValue: "Activer le mode flou", bundle: .main))
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
+    }
+
+    // ========================================================================
+    // MARK: - View-Once Toggle Button
+    // ========================================================================
+
+    @ViewBuilder
+    private var viewOnceToggleButton: some View {
+        let isActive = isViewOnceEnabled.wrappedValue
+
+        Button {
+            onAnyInteraction?()
+            HapticFeedback.light()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                isViewOnceEnabled.wrappedValue.toggle()
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: isActive ? "1.circle.fill" : "1.circle")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(isActive ? MeeshyColors.indigo600 : mutedColor)
+
+                if isActive {
+                    Text(String(localized: "composer.viewonce.label", defaultValue: "Vue unique", bundle: .main))
+                        .font(.caption2).fontWeight(.bold)
+                        .foregroundColor(MeeshyColors.indigo600)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(isActive
+                          ? MeeshyColors.indigo600.opacity(0.15)
+                          : Color.clear)
+                    .overlay(
+                        Capsule()
+                            .stroke(isActive
+                                    ? MeeshyColors.indigo600.opacity(0.3)
+                                    : Color.clear,
+                                    lineWidth: 0.5)
+                    )
+            )
+        }
+        .accessibilityLabel(isActive
+                            ? String(localized: "composer.viewonce.active", defaultValue: "Mode vue unique actif", bundle: .main)
+                            : String(localized: "composer.viewonce.activate", defaultValue: "Activer le mode vue unique", bundle: .main))
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
     }
 }
