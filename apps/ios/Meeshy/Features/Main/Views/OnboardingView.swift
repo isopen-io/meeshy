@@ -155,7 +155,7 @@ struct OnboardingView: View {
 
         return ForEach(Array(orbConfigs.enumerated()), id: \.offset) { _, orb in
             Circle()
-                .fill(orb.color.opacity(isDark ? 0.12 : 0.08))
+                .fill(Color(hex: orb.color).opacity(isDark ? 0.12 : 0.08))
                 .frame(width: orb.size, height: orb.size)
                 .blur(radius: orb.size * 0.3)
                 .offset(x: orb.offset.x, y: orb.offset.y)
