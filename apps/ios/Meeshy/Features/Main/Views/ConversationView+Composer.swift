@@ -99,6 +99,10 @@ extension ConversationView {
             mode: .message,
             accentColor: viewModel.ephemeralDuration != nil ? MeeshyColors.errorHex : viewModel.isBlurEnabled ? MeeshyColors.trackingAccentHex : viewModel.pendingEffects.hasAnyEffect ? MeeshyColors.brandPrimaryHex : accentColor,
             secondaryColor: secondaryColor,
+            // Hide file/photo attachments in the notification preview composer
+            // (declared before `selectedLanguage` → must appear here for the
+            // synthesized memberwise initializer's argument order).
+            forceHideAttachment: previewMode,
             selectedLanguage: composerState.selectedLanguage,
             onLanguageChange: { composerState.selectedLanguage = $0 },
             onFocusChange: { focused in
@@ -158,6 +162,13 @@ extension ConversationView {
             hideEphemeral: composerState.editingMessageId != nil,
             isBlurEnabled: $viewModel.isBlurEnabled,
             hideBlur: composerState.editingMessageId != nil,
+            // Notification preview composer: expose the view-once toggle (text /
+            // voice / effects / blur / ephemeral stay available). No-op for the
+            // full conversation. `forceHideAttachment` is passed earlier (its
+            // property is declared before `selectedLanguage`, so the synthesized
+            // memberwise initializer requires it in that position).
+            isViewOnceEnabled: $viewModel.isViewOnceEnabled,
+            showViewOnce: previewMode,
             pendingEffects: $viewModel.pendingEffects,
             onRequestEffectsPicker: { viewModel.showEffectsPicker = true },
             hideEffects: composerState.editingMessageId != nil

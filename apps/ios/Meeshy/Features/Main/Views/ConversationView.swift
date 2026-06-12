@@ -203,6 +203,11 @@ struct ConversationView: View {
     let conversation: Conversation?
     var replyContext: ReplyContext? = nil
     var anonymousSession: AnonymousSessionContext? = nil
+    /// Lightweight preview presentation (notification long-press overlay):
+    /// the composer hides file/photo attachments and exposes a view-once
+    /// toggle, while keeping text / voice / effects / blur / ephemeral. Default
+    /// `false` leaves the full conversation screen unchanged.
+    var previewMode: Bool = false
 
     // NOTE: Properties below are internal (not private) for cross-file extension access.
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
@@ -353,10 +358,11 @@ struct ConversationView: View {
 
     // MARK: - Init
 
-    init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil) {
+    init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil, previewMode: Bool = false) {
         self.conversation = conversation
         self.replyContext = replyContext
         self.anonymousSession = anonymousSession
+        self.previewMode = previewMode
         let vm = ConversationViewModel(
             conversationId: conversation?.id ?? "",
             unreadCount: conversation?.userState.unreadCount ?? 0,

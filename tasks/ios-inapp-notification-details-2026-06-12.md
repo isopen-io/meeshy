@@ -19,12 +19,25 @@ audio + flou / vue unique / éphémère, envoi réel).
 - [x] `new_message` + `user_mentioned` propagent `conversation.avatar`
 - [x] user=title / group=subtitle déjà géré par `buildPushHeader` (vérifié)
 
-## Phase 3 — App : overlay aperçu (long-press + glisser)
-- [ ] Geste long-press ET drag-down sur le toast (RootView)
-- [ ] `NotificationPreviewOverlay` : réutilise la liste de messages de la conv
-- [ ] `UniversalComposerBar` : showAttachment=false, showVoice=true, effets,
-      flou / vue unique / éphémère, envoi réel via `ConversationViewModel`
-- [ ] Résolution de la conversation depuis `conversationId` (cache-first)
+## Phase 3 — App : overlay aperçu (long-press + glisser) ✅
+- [x] Geste long-press ET drag-down ("tirer à la main") sur le toast (RootView)
+      + garde-fou `suppressToastTap` contre le double-déclenchement
+- [x] Aperçu = `ConversationView(previewMode:)` présenté en `.sheet` (détents
+      large/medium) au-dessus de la page courante → réutilise la liste de
+      messages + le composer + l'envoi réel
+- [x] `UniversalComposerBar` : `forceHideAttachment` (pas de fichier/photo),
+      voix + effets conservés, toggle `showViewOnce` ajouté ; flou + éphémère
+      déjà présents
+- [x] `ConversationViewModel.isViewOnceEnabled` câblé dans `sendMessage` + reset
+- [x] Résolution de la conversation depuis `conversationId` (cache-first :
+      in-memory → GRDB → réseau), repli sur navigation normale
+
+## Suites possibles
+- iPad : le geste/aperçu n'est branché que dans `RootView` (iPhone). À répliquer
+  dans `iPadRootView` si besoin.
+- `conversationAvatar` n'est propagé que pour `new_message` et `user_mentioned`
+  (les types « message de groupe »). Les autres types n'ont pas d'avatar de
+  groupe (non pertinent).
 
 ## Contrainte
 Environnement Linux sans Xcode : impossible de lancer `./apps/ios/meeshy.sh
