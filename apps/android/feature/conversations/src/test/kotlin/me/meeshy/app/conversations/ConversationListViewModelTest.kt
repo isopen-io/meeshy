@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -19,6 +20,8 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.socket.SocketConnectionState
+import me.meeshy.sdk.socket.SocketManager
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -51,8 +54,17 @@ class ConversationListViewModelTest {
             every { conversationUpdated } returns MutableSharedFlow()
         }
 
-    private fun viewModel(repo: ConversationRepository) =
-        ConversationListViewModel(repo, socketManager())
+    private fun connectionSocket(
+        state: MutableStateFlow<SocketConnectionState> =
+            MutableStateFlow(SocketConnectionState.DISCONNECTED),
+    ): SocketManager = mockk<SocketManager> {
+        every { connectionState } returns state
+    }
+
+    private fun viewModel(
+        repo: ConversationRepository,
+        connection: SocketManager = connectionSocket(),
+    ) = ConversationListViewModel(repo, socketManager(), connection)
 
     @Test
     fun fresh_result_populates_conversations_without_skeleton() = runTest(dispatcher) {
@@ -136,5 +148,27 @@ class ConversationListViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.isUserRefreshing).isFalse()
+    }
+
+    @Test
+    fun the_banner_follows_the_socket_connection_state() = runTest(dispatcher) {
+        val connection = MutableStateFlow(SocketConnectionState.CONNECTING)
+        val repo = repositoryReturning(
+            flowOf(
+                CacheResult.Fresh(
+                    listOf(ApiConversation(id = "c1", title = "Team")),
+                    ageMillis = 0,
+                ),
+            ),
+        )
+        val vm = viewModel(repo, connectionSocket(connection))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.RECONNECTING)
+
+        connection.value = SocketConnectionState.CONNECTED
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.HIDDEN)
     }
 }

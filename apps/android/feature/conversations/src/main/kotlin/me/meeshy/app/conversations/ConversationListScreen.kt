@@ -1,5 +1,7 @@
 package me.meeshy.app.conversations
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +36,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -44,6 +47,7 @@ import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
@@ -70,36 +74,76 @@ fun ConversationListScreen(
             )
         },
     ) { padding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            when {
-                state.showSkeleton -> SkeletonList()
+            ConnectionBannerStrip(state.banner)
+            Box(modifier = Modifier.weight(1f)) {
+                when {
+                    state.showSkeleton -> SkeletonList()
 
-                state.conversations.isEmpty() && state.errorMessage != null ->
-                    CenteredMessage(state.errorMessage!!, stringResource(R.string.conversations_retry), viewModel::refresh)
+                    state.conversations.isEmpty() && state.errorMessage != null ->
+                        CenteredMessage(
+                            state.errorMessage!!,
+                            stringResource(R.string.conversations_retry),
+                            viewModel::refresh,
+                        )
 
-                state.conversations.isEmpty() ->
-                    CenteredMessage(stringResource(R.string.conversations_empty), null, null)
+                    state.conversations.isEmpty() ->
+                        CenteredMessage(stringResource(R.string.conversations_empty), null, null)
 
-                else -> PullToRefreshBox(
-                    isRefreshing = state.isUserRefreshing,
-                    onRefresh = viewModel::refresh,
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(state.conversations, key = { it.id }) { conversation ->
-                            ConversationRow(
-                                conversation = conversation,
-                                onClick = { onConversationClick(conversation.id) },
-                            )
+                    else -> PullToRefreshBox(
+                        isRefreshing = state.isUserRefreshing,
+                        onRefresh = viewModel::refresh,
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            items(state.conversations, key = { it.id }) { conversation ->
+                                ConversationRow(
+                                    conversation = conversation,
+                                    onClick = { onConversationClick(conversation.id) },
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ConnectionBannerStrip(banner: ConnectionBanner, modifier: Modifier = Modifier) {
+    AnimatedVisibility(visible = banner != ConnectionBanner.HIDDEN, modifier = modifier) {
+        val (label, background, foreground) = when (banner) {
+            ConnectionBanner.SYNCING -> Triple(
+                stringResource(R.string.conversations_banner_syncing),
+                MeeshyTheme.tokens.backgroundTertiary,
+                MeeshyTheme.tokens.textSecondary,
+            )
+            ConnectionBanner.RECONNECTING -> Triple(
+                stringResource(R.string.conversations_banner_reconnecting),
+                MeeshyPalette.Warning.copy(alpha = 0.18f),
+                MeeshyPalette.Warning,
+            )
+            else -> Triple(
+                stringResource(R.string.conversations_banner_offline),
+                MeeshyTheme.tokens.backgroundTertiary,
+                MeeshyTheme.tokens.textSecondary,
+            )
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = foreground,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(background)
+                .padding(vertical = MeeshySpacing.xs),
+        )
     }
 }
 

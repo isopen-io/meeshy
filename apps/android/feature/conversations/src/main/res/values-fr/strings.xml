@@ -5,4 +5,7 @@
     <string name="conversations_empty">Aucune conversation pour l\'instant</string>
     <string name="conversations_retry">Réessayer</string>
     <string name="conversations_no_messages">Aucun message pour l\'instant</string>
+    <string name="conversations_banner_syncing">Synchronisation…</string>
+    <string name="conversations_banner_reconnecting">Reconnexion…</string>
+    <string name="conversations_banner_offline">Hors ligne</string>
 </resources>

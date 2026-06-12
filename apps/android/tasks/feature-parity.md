@@ -197,7 +197,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       preview (ephemeral/expired/hidden/view-once/draft/typing), unread badge, presence/story-ring/mood
 - [ ] Draft-aware ordering (drafts float to top); bump-to-top on send/receive
 - [ ] Cold-start skeletons + error-with-retry empty state
-- [ ] Connection-health banner (offline / disconnected / syncing / connected)
+- [x] Connection-health banner — `SocketManager.connectionState` (StateFlow
+      DISCONNECTED/CONNECTING/CONNECTED) → mapping pur `bannerFor` (la reconnexion
+      prime sur le sync) → strip animée sous l'app bar (Hors ligne / Reconnexion… /
+      Synchronisation…)
 - [ ] Conversation category create + expand/collapse; client-side tag aggregation for autocomplete
 - [ ] Create direct/group conversation via user search; add participants
 - [ ] Story tray + per-conversation story rings

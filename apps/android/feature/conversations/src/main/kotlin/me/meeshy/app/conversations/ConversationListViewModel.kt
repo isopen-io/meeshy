@@ -13,6 +13,8 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.socket.SocketConnectionState
+import me.meeshy.sdk.socket.SocketManager
 import javax.inject.Inject
 
 data class ConversationListUiState(
@@ -21,12 +23,16 @@ data class ConversationListUiState(
     val isUserRefreshing: Boolean = false,
     val showSkeleton: Boolean = false,
     val errorMessage: String? = null,
-)
+    val connection: SocketConnectionState = SocketConnectionState.DISCONNECTED,
+) {
+    val banner: ConnectionBanner get() = bannerFor(connection, isSyncing)
+}
 
 @HiltViewModel
 class ConversationListViewModel @Inject constructor(
     private val repository: ConversationRepository,
     private val messageSocketManager: MessageSocketManager,
+    socketManager: SocketManager,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -42,6 +48,12 @@ class ConversationListViewModel @Inject constructor(
                 },
             ).collect { result ->
                 _state.update { it.applyResult(result) }
+            }
+        }
+
+        viewModelScope.launch {
+            socketManager.connectionState.collect { connection ->
+                _state.update { it.copy(connection = connection) }
             }
         }
 
