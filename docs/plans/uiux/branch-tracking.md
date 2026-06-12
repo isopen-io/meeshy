@@ -16,19 +16,23 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | **47w** (web only : migration i18n admin agent COMPLÈTE — `AgentConfigDialog` ~122 strings FR dures → `agentConfig.*` (sections Comportement/Triggers/Seuils/Planificateur/Instructions/Recherche Web/Sujets neufs/Génération/Quality Gate/Scheduling/Timeline/Rôles + footer `tCommon('cancel')`/`save` + `createButton` + compteurs paramétrés `{percent}`/`{factor}`/`{count}`/topics) ; `AgentLlmTab` 6 tooltips → `llm.*Help` ; `AgentGlobalConfigTab` 15 tooltips + placeholder → `globalConfig.*Help` ; +145 clés × 4 locales fr/en/es/pt, parité vérifiée par script) |
-| Last merged PR | #605 (46w), #604 (routine fraîcheur), #597 (45) ; iter-47w sur `claude/blissful-ritchie-8d57jg` |
-| Last Merged Base (commit) | d10a80c5 (merge #605) — base de la branche iter-47w (+ merge #608 avant push) |
-| Next iteration | **48** — repartir de `main` HEAD post-merge iter-47w |
+| Last completed iteration | **48w** (web only : **réparation thème programmatique + charts dark mode** — découverte critique : `next-themes` consommé sans provider monté → `isDark` toujours `false` dans `MarkdownMessage` (blocs de code chat toujours clairs en dark !), `MarkdownViewer`, `TextViewer`, `ui/sonner` ; nouveau hook `hooks/use-resolved-theme.ts` (`useResolvedTheme(): 'light'|'dark'` depuis store Zustand + matchMedia pour `auto`, 6 tests TDD) substitué aux 4 imports ; `RankingStatsImpl` palette ambre théma-consciente (grid/axes/tooltips) + 6 strings FR → `ranking.stats*` ; `MermaidDiagramImpl` thème `dark`/`default` + ré-init au changement ; `AgentOverviewTab` pie théma-conscient + `kpi.inactive` ; +7 clés ×4 locales, parité 1698 clés vérifiée) |
+| Last merged PR | #610 (47w), #605 (46w), #604 (routine fraîcheur) ; iter-48w sur `claude/elegant-noether-1kozqp` |
+| Last Merged Base (commit) | 7659cb0e (merge #610) — base de la branche iter-48w |
+| Next iteration | **49** — repartir de `main` HEAD post-merge iter-48w |
 
-### Deferred carry-over — web (pour 48+)
-- ~~admin AgentConfigDialog/AgentLlmTab/AgentGlobalConfigTab i18n~~ → **SOLDÉ en 47w** (arbres `agentConfig.*`/`llm.*Help`/`globalConfig.*Help` étendus — ne plus auditer ces 3 fichiers)
-- chart hex sans variante dark : `RankingStatsImpl` (10+ hex recharts), `MermaidDiagramImpl` (thème mermaid fixe `default`, 6 hex), `AgentOverviewTab` (2 hex pie) ; consolidation `notifications/preferences` page vs composant
+### Deferred carry-over — web (pour 49+)
+- ~~chart hex sans variante dark (RankingStatsImpl/MermaidDiagramImpl/AgentOverviewTab)~~ → **SOLDÉ en 48w** (ne plus auditer ces 3 fichiers pour le dark mode)
+- retrait dépendance orpheline `next-themes` de `apps/web/package.json` (zéro import restant post-48w ; touche `pnpm-lock.yaml` — à faire isolément)
+- `RANKING_CRITERIA` labels dans `components/admin/ranking/constants.ts` — probablement FR durs (tooltip charts), à auditer
+- consolidation `notifications/preferences` page vs composant
 - réactions par pièce jointe (wiring gateway, feature commune web+Android)
 - audit qualité es/pt (relecture des traductions existantes)
 - console.error en français (participants-drawer ×5, links-section ×3) — logs dev, non bloquant
-- optimisations 45w toujours ouvertes : deep links `/v2/chats?id=` (parité iOS/Android), swipe-back mobile web, audit dark pages admin
+- optimisations 45w toujours ouvertes : deep links `/v2/chats?id=` (parité iOS/Android), swipe-back mobile web, audit dark pages admin (reste)
 - locale maps intentionnelles NON à migrer : share-affiliate-modal, AudioPostComposer (speech), use-voice-recording (SpeechRecognition lang) ; StoryViewer `select-none` text-objects = design (parité stories iOS)
+- `hooks/useI18n.ts` = simple re-export de `use-i18n.ts` (vérifié 48w — pas un doublon, ne pas re-flagger)
+- `/v2` garde son ThemeProvider propre (`gp-theme-mode`, `data-theme`) — système assumé, ne pas unifier avec `useResolvedTheme`
 
 ### Deferred carry-over — iOS (pour 46+, post-45i/45)
 SampleData.swift suppression fichier mort (pbxproj + build local) ; FriendRequestListView 11 polices ; PostDetailView (.textSelection + 21 hex — re-vérifié OK iter-45, retirer si confirmé) ; arbitrage `time.*` (FeedPostCard) vs `time.short.*` (ShortRelativeTime) — timeAgo FeedCommentsSheet réglé en 45, ChangePasswordView réglé en 45 ; ConversationInfoSheet (52 polices), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (27), NewConversationView (16), DataExportView (16), DataStorageView (11) ; reliquats ancienne palette : RootViewComponents (11), FeedView (8), FeedView+Attachments (10), WidgetPreviewView (7), AboutView (5), MessageComposer (4), AttachmentPreparationService (3), ConversationAnimatedBackground (2), divers ×1 (ConversationInfoSheet, MemberManagementSection, BlockedUsersView, UserStatsView, StoryViewerView+Content, MediaDownloadSettingsView) ; washes AudioPostComposer (décision design) ; ladder pièces jointes arc-en-ciel (à arbitrer charte) ; VoiceProfileWizardView/TrackingLinksView Color(hex:) ; IncomingCallView .white contraste ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) ; ThemedConversationRow theme-aware (leaf-view)
@@ -73,4 +77,5 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 45i | claude/wizardly-rubin-ux84an | #595 | ✅ |
 | 45 | claude/blissful-ritchie-dp7ibu | #597 | ✅ |
 | 46w | claude/elegant-noether-09t4x2 | #605 | ✅ |
-| 47w | claude/blissful-ritchie-8d57jg | ⏳ | ⏳ |
+| 47w | claude/blissful-ritchie-8d57jg | #610 | ✅ |
+| 48w | claude/elegant-noether-1kozqp | ⏳ | ⏳ |

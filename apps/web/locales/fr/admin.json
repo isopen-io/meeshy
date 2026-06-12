@@ -28,7 +28,12 @@
     "period90d": "Dernier trimestre (90j)",
     "period180d": "Dernier semestre (180j)",
     "period365d": "Dernière année (365j)",
-    "periodAll": "Tous les temps"
+    "periodAll": "Tous les temps",
+    "statsTopTitle": "Visualisation - Top {count}",
+    "statsDistributionTitle": "Évolution et distribution des performances",
+    "statsDistributionDesc": "Ce graphique montre la distribution des performances du top {count} classé par rang.",
+    "statsDistributionHint": "La courbe descendante indique comment les valeurs diminuent à travers les positions.",
+    "statsPositionLabel": "Position {label}"
   },
   "scanLog": {
     "title": "Scan Logs",
@@ -67,6 +72,7 @@
       "kpi": {
         "conversations": "Conversations",
         "active": "Actifs",
+        "inactive": "Inactifs",
         "users": "Utilisateurs",
         "roles": "Rôles",
         "messages": "Messages",

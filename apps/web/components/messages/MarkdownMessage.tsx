@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useMemo } from 'react';
-import { useTheme } from 'next-themes';
+import { useResolvedTheme } from '@/hooks/use-resolved-theme';
 import { cn } from '@/lib/utils';
 import {
   parseMessageLinks,
@@ -227,8 +227,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
   onLinkClick,
   _isOwnMessage = false
 }) => {
-  const { theme, resolvedTheme } = useTheme();
-  const isDark = theme === 'dark' || resolvedTheme === 'dark';
+  const isDark = useResolvedTheme() === 'dark';
 
   // Prétraiter le contenu pour transformer les liens m+TOKEN et normaliser le markdown
   const preprocessedContent = useMemo(() => {

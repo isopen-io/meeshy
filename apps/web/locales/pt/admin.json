@@ -28,7 +28,12 @@
     "period90d": "Último trimestre (90d)",
     "period180d": "Último semestre (180d)",
     "period365d": "Último ano (365d)",
-    "periodAll": "Todo o tempo"
+    "periodAll": "Todo o tempo",
+    "statsTopTitle": "Visualização - Top {count}",
+    "statsDistributionTitle": "Evolução e distribuição do desempenho",
+    "statsDistributionDesc": "Este gráfico mostra a distribuição do desempenho do top {count} classificado por posição.",
+    "statsDistributionHint": "A curva descendente indica como os valores diminuem ao longo das posições.",
+    "statsPositionLabel": "Posição {label}"
   },
   "scanLog": {
     "title": "Logs de varredura",
@@ -67,6 +72,7 @@
       "kpi": {
         "conversations": "Conversas",
         "active": "Ativos",
+        "inactive": "Inativos",
         "users": "Utilizadores",
         "roles": "Funções",
         "messages": "Mensagens",

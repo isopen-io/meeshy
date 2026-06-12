@@ -28,7 +28,12 @@
     "period90d": "Último trimestre (90d)",
     "period180d": "Último semestre (180d)",
     "period365d": "Último año (365d)",
-    "periodAll": "Todo el tiempo"
+    "periodAll": "Todo el tiempo",
+    "statsTopTitle": "Visualización - Top {count}",
+    "statsDistributionTitle": "Evolución y distribución del rendimiento",
+    "statsDistributionDesc": "Este gráfico muestra la distribución del rendimiento del top {count} clasificado por posición.",
+    "statsDistributionHint": "La curva descendente indica cómo disminuyen los valores a través de las posiciones.",
+    "statsPositionLabel": "Posición {label}"
   },
   "scanLog": {
     "title": "Registros de análisis",
@@ -67,6 +72,7 @@
       "kpi": {
         "conversations": "Conversaciones",
         "active": "Activos",
+        "inactive": "Inactivos",
         "users": "Usuarios",
         "roles": "Roles",
         "messages": "Mensajes",
