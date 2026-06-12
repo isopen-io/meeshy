@@ -103,6 +103,7 @@ fun ConversationListScreen(
                             items(state.conversations, key = { it.id }) { conversation ->
                                 ConversationRow(
                                     conversation = conversation,
+                                    currentUserId = state.currentUserId,
                                     onClick = { onConversationClick(conversation.id) },
                                 )
                             }
@@ -148,8 +149,21 @@ private fun ConnectionBannerStrip(banner: ConnectionBanner, modifier: Modifier =
 }
 
 @Composable
-private fun ConversationRow(conversation: ApiConversation, onClick: () -> Unit) {
+private fun ConversationRow(
+    conversation: ApiConversation,
+    currentUserId: String?,
+    onClick: () -> Unit,
+) {
     val title = conversation.displayTitle()
+    val previewLabels = LastMessagePreviewLabels(
+        photo = stringResource(R.string.conversations_preview_photo),
+        video = stringResource(R.string.conversations_preview_video),
+        voice = stringResource(R.string.conversations_preview_voice),
+        file = stringResource(R.string.conversations_preview_file),
+        location = stringResource(R.string.conversations_preview_location),
+        none = stringResource(R.string.conversations_no_messages),
+        you = stringResource(R.string.conversations_preview_you),
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -176,7 +190,12 @@ private fun ConversationRow(conversation: ApiConversation, onClick: () -> Unit) 
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = conversation.lastMessage?.content ?: stringResource(R.string.conversations_no_messages),
+                text = lastMessagePreview(
+                    message = conversation.lastMessage,
+                    currentUserId = currentUserId,
+                    showSender = conversation.type != "direct",
+                    labels = previewLabels,
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MeeshyTheme.tokens.textSecondary,
                 maxLines = 1,

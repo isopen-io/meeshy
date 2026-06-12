@@ -193,8 +193,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Swipe actions (pin, mute, lock, archive, mark read/unread, block, hide)
 - [ ] Context menu (pin, mute, mark read, details, invite, favorite, move, lock, archive, block, delete)
 - [ ] Hard-press conversation preview popover
-- [ ] Conversation row: activity-heat background, dynamic tag overflow, rich last-message
-      preview (ephemeral/expired/hidden/view-once/draft/typing), unread badge, presence/story-ring/mood
+- [~] Conversation row: rich last-message preview done (labels type média
+      📷/🎬/🎵/📎/📍 port iOS, caption prioritaire, préfixe expéditeur en groupe,
+      « Vous » pour soi) + unread badge done ; ephemeral/expired/hidden/view-once/
+      draft/typing, activity-heat, tags, presence/story-ring/mood pending
 - [ ] Draft-aware ordering (drafts float to top); bump-to-top on send/receive
 - [ ] Cold-start skeletons + error-with-retry empty state
 - [x] Connection-health banner — `SocketManager.connectionState` (StateFlow

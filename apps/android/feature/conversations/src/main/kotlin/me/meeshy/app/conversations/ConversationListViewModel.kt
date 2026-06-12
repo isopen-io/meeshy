@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
@@ -24,6 +25,7 @@ data class ConversationListUiState(
     val showSkeleton: Boolean = false,
     val errorMessage: String? = null,
     val connection: SocketConnectionState = SocketConnectionState.DISCONNECTED,
+    val currentUserId: String? = null,
 ) {
     val banner: ConnectionBanner get() = bannerFor(connection, isSyncing)
 }
@@ -33,6 +35,7 @@ class ConversationListViewModel @Inject constructor(
     private val repository: ConversationRepository,
     private val messageSocketManager: MessageSocketManager,
     socketManager: SocketManager,
+    sessionRepository: SessionRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -54,6 +57,12 @@ class ConversationListViewModel @Inject constructor(
         viewModelScope.launch {
             socketManager.connectionState.collect { connection ->
                 _state.update { it.copy(connection = connection) }
+            }
+        }
+
+        viewModelScope.launch {
+            sessionRepository.currentUser.collect { user ->
+                _state.update { it.copy(currentUserId = user?.id) }
             }
         }
 

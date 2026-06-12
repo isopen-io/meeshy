@@ -19,6 +19,7 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
@@ -61,10 +62,14 @@ class ConversationListViewModelTest {
         every { connectionState } returns state
     }
 
+    private fun session(): SessionRepository = mockk<SessionRepository> {
+        every { currentUser } returns MutableStateFlow(null)
+    }
+
     private fun viewModel(
         repo: ConversationRepository,
         connection: SocketManager = connectionSocket(),
-    ) = ConversationListViewModel(repo, socketManager(), connection)
+    ) = ConversationListViewModel(repo, socketManager(), connection, session())
 
     @Test
     fun fresh_result_populates_conversations_without_skeleton() = runTest(dispatcher) {
