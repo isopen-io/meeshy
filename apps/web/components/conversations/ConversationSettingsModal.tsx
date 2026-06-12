@@ -65,14 +65,14 @@ import { useI18n } from '@/hooks/useI18n';
 import { toast } from 'sonner';
 import { userPreferencesService } from '@/services/user-preferences.service';
 import { conversationsService } from '@/services/conversations.service';
-import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
+import { useConversationPreferencesActions } from '@/stores/conversation-preferences-store';
 import type { Conversation, Message } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
 import type { UserConversationPreferences } from '@meeshy/shared/types/user-preferences';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
-import { useUserStore } from '@/stores/user-store';
+import { useUserStore, useUserStatusTick } from '@/stores/user-store';
 import { AttachmentService } from '@/services/attachmentService';
 import {
   FoldableSection,
@@ -136,8 +136,9 @@ export function ConversationSettingsModal({
   const { t } = useI18n('conversations');
   const router = useRouter();
   const searchParams = useSearchParams();
-  const preferencesStore = useConversationPreferencesStore();
-  const userStore = useUserStore();
+  const preferencesActions = useConversationPreferencesActions();
+  const getUserById = useUserStore(state => state.getUserById);
+  const statusTick = useUserStatusTick();
 
   // Utilisateur factice si currentUser n'est pas fourni (pour compatibilité avec anciens appels)
   const safeCurrentUser = currentUser || {
@@ -186,10 +187,10 @@ export function ConversationSettingsModal({
   // Statut en temps réel de l'autre utilisateur
   const otherUserStatus = useMemo(() => {
     if (!isDirect || !otherUser) return 'offline';
-    const freshUser = userStore.getUserById(otherUser.id);
+    const freshUser = getUserById(otherUser.id);
     if (freshUser) return getUserStatus(freshUser);
     return getUserStatus(otherUser);
-  }, [isDirect, otherUser, userStore, userStore._lastStatusUpdate]);
+  }, [isDirect, otherUser, getUserById, statusTick]);
 
   // Hooks pour les stats et la gestion des participants
   const { _isAdmin, canModifyImage } = useParticipantManagement(conversation, safeCurrentUser);
@@ -311,20 +312,20 @@ export function ConversationSettingsModal({
   const savePreferences = async () => {
     setIsSavingPrefs(true);
     try {
-      const currentStorePrefs = preferencesStore.getPreferences(conversation.id);
+      const currentStorePrefs = preferencesActions.getPreferences(conversation.id);
 
       // Mettre à jour les toggles via le store pour sync UI
       if (currentStorePrefs?.isPinned !== isPinned) {
-        await preferencesStore.togglePin(conversation.id, isPinned);
+        await preferencesActions.togglePin(conversation.id, isPinned);
       }
       if (currentStorePrefs?.isMuted !== isMuted) {
-        await preferencesStore.toggleMute(conversation.id, isMuted);
+        await preferencesActions.toggleMute(conversation.id, isMuted);
       }
       if (currentStorePrefs?.isArchived !== isArchived) {
-        await preferencesStore.toggleArchive(conversation.id, isArchived);
+        await preferencesActions.toggleArchive(conversation.id, isArchived);
       }
       if (currentStorePrefs?.reaction !== (reaction.trim() || undefined)) {
-        await preferencesStore.setReaction(conversation.id, reaction.trim() || null);
+        await preferencesActions.setReaction(conversation.id, reaction.trim() || null);
       }
 
       // Pour les autres champs (customName, tags), utiliser le service directement
@@ -335,7 +336,7 @@ export function ConversationSettingsModal({
       });
 
       // Rafraîchir les préférences du store pour synchro complète
-      await preferencesStore.refreshPreferences();
+      await preferencesActions.refreshPreferences();
 
       toast.success(t('conversationDetails.preferencesSaved'));
     } catch (error) {

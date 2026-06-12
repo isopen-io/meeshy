@@ -55,18 +55,18 @@ export default function V2CommunitiesPage() {
   const handleJoinCommunity = async (community: Community) => {
     try {
       await joinMutation.mutateAsync(community.id);
-      addToast(t('v2.toasts.joined', { name: community.name }), 'success');
+      addToast(t('community.joinedToast', { name: community.name }), 'success');
     } catch {
-      addToast(t('v2.toasts.actionError'), 'error');
+      addToast(t('community.actionError'), 'error');
     }
   };
 
   const handleLeaveCommunity = async (community: Community) => {
     try {
       await leaveMutation.mutateAsync(community.id);
-      addToast(t('v2.toasts.left', { name: community.name }), 'info');
+      addToast(t('community.leftToast', { name: community.name }), 'info');
     } catch {
-      addToast(t('v2.toasts.actionError'), 'error');
+      addToast(t('community.actionError'), 'error');
     }
   };
 
@@ -128,8 +128,8 @@ export default function V2CommunitiesPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-semibold text-[var(--gp-text-primary)]">{community.name}</h3>
-                        <Badge variant="teal" size="sm">{t('v2.member')}</Badge>
-                        {community.isPrivate && <Badge variant="default" size="sm">{t('v2.private')}</Badge>}
+                        <Badge variant="teal" size="sm">{t('member')}</Badge>
+                        {community.isPrivate && <Badge variant="default" size="sm">{t('visibility.private')}</Badge>}
                       </div>
                       {community.description && (
                         <p className="text-sm mb-2 text-[var(--gp-text-secondary)]">{community.description}</p>
@@ -137,10 +137,10 @@ export default function V2CommunitiesPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                           <span className="text-sm text-[var(--gp-text-muted)]">
-                            {t('v2.membersCount', { count: (community._count?.members ?? 0).toLocaleString() })}
+                            {t('community.membersCount', { count: (community._count?.members ?? 0).toLocaleString() })}
                           </span>
                           <span className="text-sm text-[var(--gp-text-muted)]">
-                            {t('v2.conversationsCount', { count: community._count?.Conversation ?? community._count?.conversations ?? 0 })}
+                            {t('community.conversationsCount', { count: community._count?.Conversation ?? community._count?.conversations ?? 0 })}
                           </span>
                         </div>
                         <Button
@@ -152,7 +152,7 @@ export default function V2CommunitiesPage() {
                           }}
                           disabled={leaveMutation.isPending}
                         >
-                          {t('v2.leave')}
+                          {t('community.leave')}
                         </Button>
                       </div>
                     </div>
@@ -200,7 +200,7 @@ export default function V2CommunitiesPage() {
                       )}
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-[var(--gp-text-muted)]">
-                          {t('v2.membersCount', { count: (community._count?.members ?? 0).toLocaleString() })}
+                          {t('community.membersCount', { count: (community._count?.members ?? 0).toLocaleString() })}
                         </span>
                         <Button
                           variant="outline"
@@ -211,7 +211,7 @@ export default function V2CommunitiesPage() {
                           }}
                           disabled={joinMutation.isPending}
                         >
-                          {t('v2.join')}
+                          {t('community.join')}
                         </Button>
                       </div>
                     </div>

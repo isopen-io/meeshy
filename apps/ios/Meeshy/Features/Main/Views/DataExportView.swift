@@ -145,7 +145,7 @@ struct DataExportView: View {
 
     private var formatSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(title: String(localized: "settings.data.export.section.format", defaultValue: "FORMAT", bundle: .main), icon: "doc.fill", color: accentColor)
+            sectionHeader(title: String(localized: "settings.data.export.section.format", defaultValue: "FORMAT", bundle: .main), icon: "doc.fill", color: Color(hex: accentColor))
 
             HStack(spacing: 12) {
                 ForEach(ExportFormat.allCases) { format in
@@ -182,33 +182,33 @@ struct DataExportView: View {
 
     private var optionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(title: String(localized: "settings.data.export.section.content", defaultValue: "CONTENU", bundle: .main), icon: "checklist", color: MeeshyColors.warningHex)
+            sectionHeader(title: String(localized: "settings.data.export.section.content", defaultValue: "CONTENU", bundle: .main), icon: "checklist", color: MeeshyColors.communityAccent)
 
             VStack(spacing: 0) {
-                toggleRow(title: String(localized: "settings.data.export.content.messages", defaultValue: "Messages", bundle: .main), icon: "bubble.left.fill", color: MeeshyColors.errorHex, isOn: $includeMessages)
-                toggleRow(title: String(localized: "settings.data.export.content.media", defaultValue: "Media", bundle: .main), icon: "photo.fill", color: MeeshyColors.indigo600Hex, isOn: $includeMedia)
-                toggleRow(title: String(localized: "settings.data.export.content.contacts", defaultValue: "Contacts", bundle: .main), icon: "person.2.fill", color: MeeshyColors.indigo300Hex, isOn: $includeContacts)
+                toggleRow(title: String(localized: "settings.data.export.content.messages", defaultValue: "Messages", bundle: .main), icon: "bubble.left.fill", color: MeeshyColors.error, isOn: $includeMessages)
+                toggleRow(title: String(localized: "settings.data.export.content.media", defaultValue: "Media", bundle: .main), icon: "photo.fill", color: MeeshyColors.indigo600, isOn: $includeMedia)
+                toggleRow(title: String(localized: "settings.data.export.content.contacts", defaultValue: "Contacts", bundle: .main), icon: "person.2.fill", color: MeeshyColors.indigo500, isOn: $includeContacts)
             }
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(theme.surfaceGradient(tint: MeeshyColors.warningHex))
+                    .fill(theme.surfaceGradient(tint: MeeshyColors.communityAccent))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(theme.border(tint: MeeshyColors.warningHex), lineWidth: 1)
+                            .stroke(theme.border(tint: MeeshyColors.communityAccent), lineWidth: 1)
                     )
             )
         }
     }
 
-    private func toggleRow(title: String, icon: String, color: String, isOn: Binding<Bool>) -> some View {
+    private func toggleRow(title: String, icon: String, color: Color, isOn: Binding<Bool>) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Color(hex: color))
+                .foregroundColor(color)
                 .frame(width: 28, height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(hex: color).opacity(0.12))
+                        .fill(color.opacity(0.12))
                 )
                 .accessibilityHidden(true)
 
@@ -281,14 +281,14 @@ struct DataExportView: View {
             : String(localized: "settings.data.export.hint.start", defaultValue: "Lance l'export de vos donnees", bundle: .main))
     }
 
-    private func sectionHeader(title: String, icon: String, color: String) -> some View {
+    private func sectionHeader(title: String, icon: String, color: Color) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color(hex: color))
+                .foregroundColor(color)
             Text(title)
                 .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundColor(Color(hex: color))
+                .foregroundColor(color)
                 .tracking(1.2)
         }
         .padding(.leading, 4)

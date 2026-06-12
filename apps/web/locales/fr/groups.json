@@ -1,5 +1,34 @@
 {
   "groups": {
+    "preferences": {
+      "title": "Préférences",
+      "pin": "Épingler",
+      "mute": "Muet",
+      "archive": "Archiver",
+      "notifications": "Notifications",
+      "notifAll": "Toutes",
+      "notifMentions": "Mentions",
+      "notifNone": "Aucune",
+      "updateError": "Erreur de mise à jour"
+    },
+    "community": {
+      "notFound": "Communauté introuvable",
+      "backToCommunities": "Retour aux communautés",
+      "join": "Rejoindre la communauté",
+      "leave": "Quitter la communauté",
+      "joinedToast": "Vous avez rejoint \"{name}\"",
+      "leftToast": "Vous avez quitté \"{name}\"",
+      "actionError": "Une erreur est survenue. Veuillez réessayer.",
+      "membersTitle": "Membres",
+      "conversationsTitle": "Conversations",
+      "membersCount": "{count} membres",
+      "conversationsCount": "{count} conversations",
+      "noMembers": "Aucun membre",
+      "moreMembers": "+{count} autres membres",
+      "noConversations": "Aucune conversation dans cette communauté",
+      "untitled": "Sans titre",
+      "unknownMember": "Inconnu"
+    },
     "title": "Communautés",
     "description": "Découvrez et rejoignez des communautés",
     "createGroup": "Créer une communauté",
@@ -88,12 +117,6 @@
       "myCommunities": "MES COMMUNAUTÉS",
       "discover": "DÉCOUVRIR",
       "searchPlaceholder": "Rechercher des communautés...",
-      "member": "Membre",
-      "private": "Privé",
-      "membersCount": "{count} membres",
-      "conversationsCount": "{count} conversations",
-      "leave": "Quitter",
-      "join": "Rejoindre",
       "emptyMine": "Vous n'avez pas encore rejoint de communauté",
       "searchMinChars": "Entrez au moins 2 caractères pour rechercher",
       "noResults": "Aucune communauté trouvée",
@@ -104,37 +127,10 @@
       "descriptionPlaceholder": "Décrivez votre communauté...",
       "cancel": "Annuler",
       "creating": "Création...",
-      "back": "Retour",
-      "backToCommunities": "Retour aux communautés",
-      "notFound": "Communauté introuvable",
-      "createdOn": "Créée le {date}",
-      "leaveCommunity": "Quitter la communauté",
-      "joinCommunity": "Rejoindre la communauté",
-      "preferencesTitle": "PRÉFÉRENCES",
-      "membersTitle": "MEMBRES",
-      "conversationsTitle": "CONVERSATIONS",
-      "noMembers": "Aucun membre",
-      "moreMembers": "+{count} autres membres",
-      "noConversations": "Aucune conversation dans cette communauté",
-      "untitled": "Sans titre",
-      "unknownUser": "Inconnu",
       "toasts": {
         "nameRequired": "Le nom de la communauté est requis",
         "created": "Communauté \"{name}\" créée avec succès",
-        "createError": "Erreur lors de la création",
-        "joined": "Vous avez rejoint \"{name}\"",
-        "left": "Vous avez quitté \"{name}\"",
-        "actionError": "Une erreur est survenue"
-      },
-      "preferences": {
-        "pin": "Épingler",
-        "mute": "Muet",
-        "archive": "Archiver",
-        "notifications": "Notifications",
-        "notifAll": "Toutes",
-        "notifMentions": "Mentions",
-        "notifNone": "Aucune",
-        "updateError": "Erreur de mise à jour"
+        "createError": "Erreur lors de la création"
       }
     }
   }

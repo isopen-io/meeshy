@@ -16,12 +16,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | 42 (hex iOS Settings/Notifications/DataExport/Composer/Onboarding → charte, pages v2 web links/communities/settings i18n+a11y, ContactsTab + avatar fallback Android) |
-| Working branch (iteration 42) | `claude/blissful-ritchie-e672ur` (from main @ 167ef31c) |
-| Last Merged Base (commit) | 167ef31c (will be the merge commit of iter 42 once PR lands) |
+| Last completed iteration | 41 (deux passes parallèles mergées : #577 + #580) — 42 en cours sur cette branche |
+| Working branch (iteration 42) | `claude/blissful-ritchie-e672ur` (from main @ 167ef31c, resynced post-#580/#581) |
+| Last Merged Base (commit) | 1a238dd1 (merge #581) — sera le merge commit de l'iter 42 une fois la PR posée |
 | Next iteration | **43** |
 | Next branch to create from | `main` (after iter-42 merge) |
-| Deferred carry-over for 43 | balayage hex iOS hors des 6 surfaces de l'iter 42 + polices fixes vues liens ; parité stories Android + tokens MeeshySpacing SettingsScreen ; web dates 'fr-FR'/sans locale hors v2 (~40, admin/groups/contacts) + relecture qualité es/pt ; réactions par pièce jointe web/Android (wiring gateway) |
+| Deferred carry-over for 43 | balayage hex iOS hors des 6 surfaces de l'iter 42 + polices fixes vues liens ; parité stories Android + tokens MeeshySpacing SettingsScreen ; web dates 'fr-FR'/sans locale hors v2 (~40, admin/groups/contacts) + relecture qualité es/pt ; AudioEffectTile role=button web ; validation client ID conversation web ; réactions par pièce jointe web/Android (wiring gateway attachment:reaction-*) |
 
 ---
 
@@ -45,4 +45,5 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 33–39 | (inline admin-i18n passes, commit-message numbering) | #544, #545, … | ✅ |
 | 40 | claude/friendly-brown-xuzpju | #575 | ✅ |
 | 41 | claude/blissful-ritchie-9vesx9 | #577 | ✅ |
+| 41b | claude/blissful-ritchie-68j2oq | #580 | ✅ |
 | 42 | claude/blissful-ritchie-e672ur | (this iteration) | ⏳ |
