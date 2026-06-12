@@ -624,7 +624,7 @@ export function ConversationParticipantsDrawer({
                 >
                   <h3 className="text-xs font-semibold text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-1.5 uppercase tracking-wide">
                     <UserPlus className="h-3.5 w-3.5" />
-                    Ajouter un utilisateur
+                    {t('participants.addUserSection')}
                   </h3>
                   <ScrollArea className="max-h-[200px]">
                     <div className="space-y-1.5">
@@ -660,7 +660,7 @@ export function ConversationParticipantsDrawer({
                                 className="h-7 px-2.5 text-xs bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 flex-shrink-0"
                               >
                                 <UserPlus className="h-3 w-3 mr-1" />
-                                Ajouter
+                                {t('participants.addAction')}
                               </Button>
                             </motion.div>
                           ) : (
@@ -673,7 +673,7 @@ export function ConversationParticipantsDrawer({
                                   className="h-7 px-2.5 text-xs bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 flex-shrink-0"
                                 >
                                   <UserPlus className="h-3 w-3 mr-1" />
-                                  Ajouter
+                                  {t('participants.addAction')}
                                   <ChevronDown className="h-3 w-3 ml-1" />
                                 </Button>
                               </DropdownMenuTrigger>
@@ -703,7 +703,7 @@ export function ConversationParticipantsDrawer({
                   exit={{ opacity: 0 }}
                   className="mb-4 p-3 backdrop-blur-xl bg-gray-50/80 dark:bg-gray-900/40 rounded-xl border border-gray-200/50 dark:border-gray-700/30 text-center text-xs text-gray-500"
                 >
-                  Aucun utilisateur trouvé
+                  {t('participants.noUserFound')}
                 </motion.div>
               )}
               {isAdmin && searchQuery.length >= 2 && allPlatformResultsAlreadyMembers && !isPlatformSearching && (
@@ -713,7 +713,9 @@ export function ConversationParticipantsDrawer({
                   exit={{ opacity: 0 }}
                   className="mb-4 p-3 backdrop-blur-xl bg-blue-50/80 dark:bg-blue-900/20 rounded-xl border border-blue-200/50 dark:border-blue-800/30 text-center text-xs text-blue-600 dark:text-blue-400"
                 >
-                  {platformResults.length} utilisateur{platformResults.length > 1 ? 's' : ''} trouvé{platformResults.length > 1 ? 's' : ''} — tous déjà membres
+                  {platformResults.length === 1
+                    ? t('participants.allAlreadyMembersOne')
+                    : t('participants.allAlreadyMembersOther', { count: platformResults.length })}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -789,7 +791,7 @@ export function ConversationParticipantsDrawer({
                       onClick={() => setDisplayLimit(prev => prev + 50)}
                       className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40 hover:bg-blue-500/10 text-sm"
                     >
-                      Charger plus ({totalRemaining} restants)
+                      {t('participants.loadMoreRemaining', { count: totalRemaining })}
                     </Button>
                   </div>
                 )}

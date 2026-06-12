@@ -7,16 +7,25 @@
 import type { Conversation, Message } from '@meeshy/shared/types';
 import type { ConversationItemData, ConversationTag } from '@/components/v2';
 
+export type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
+
 export interface TransformConversationOptions {
   typingUserIds?: Set<string>;
   onlineUserIds?: Set<string>;
   currentUserId?: string;
+  t: TranslateFn;
+  locale: string;
 }
 
 /**
  * Format a timestamp to relative time string
+ * (i18n keys under `conversations.timeCompact`, aligned with iOS `time.short.*`)
  */
-function formatRelativeTime(date: Date | string | undefined): string {
+function formatRelativeTime(
+  date: Date | string | undefined,
+  t: TranslateFn,
+  locale: string
+): string {
   if (!date) return '';
 
   const now = new Date();
@@ -26,13 +35,13 @@ function formatRelativeTime(date: Date | string | undefined): string {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return 'maintenant';
-  if (diffMins < 60) return `${diffMins}min`;
-  if (diffHours < 24) return `${diffHours}h`;
-  if (diffDays < 7) return `${diffDays}j`;
+  if (diffMins < 1) return t('timeCompact.now');
+  if (diffMins < 60) return t('timeCompact.minutes', { count: diffMins });
+  if (diffHours < 24) return t('timeCompact.hours', { count: diffHours });
+  if (diffDays < 7) return t('timeCompact.days', { count: diffDays });
 
   // Format as date for older messages
-  return messageDate.toLocaleDateString('fr-FR', {
+  return messageDate.toLocaleDateString(locale, {
     day: 'numeric',
     month: 'short',
   });
@@ -73,9 +82,9 @@ function transformTags(tags?: readonly { id: string; name: string; color?: strin
  */
 export function transformToConversationItem(
   conversation: Conversation,
-  options: TransformConversationOptions = {}
+  options: TransformConversationOptions
 ): ConversationItemData {
-  const { typingUserIds = new Set(), onlineUserIds = new Set(), currentUserId } = options;
+  const { typingUserIds = new Set(), onlineUserIds = new Set(), currentUserId, t, locale } = options;
 
   const isGroup = conversation.type === 'group' || conversation.type === 'public' || conversation.type === 'global';
   const participants = conversation.participants ?? [];
@@ -115,13 +124,13 @@ export function transformToConversationItem(
         content: lastMessage.content || '',
         type: getMessageType(lastMessage),
         attachmentCount: lastMessage.attachments?.length,
-        timestamp: formatRelativeTime(lastMessage.createdAt),
+        timestamp: formatRelativeTime(lastMessage.createdAt, t, locale),
         senderName: isGroup ? (lastMessage.sender as any)?.displayName : undefined,
       }
     : {
         content: '',
         type: 'text' as const,
-        timestamp: formatRelativeTime(conversation.createdAt),
+        timestamp: formatRelativeTime(conversation.createdAt, t, locale),
       };
 
   // Check if someone is typing
@@ -165,7 +174,7 @@ export function transformToConversationItem(
  */
 export function transformConversations(
   conversations: Conversation[],
-  options: TransformConversationOptions = {}
+  options: TransformConversationOptions
 ): ConversationItemData[] {
   return conversations.map((conv) => transformToConversationItem(conv, options));
 }

@@ -497,7 +497,7 @@ struct CommentsSheetView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
-                    Text(timeAgo(from: post.timestamp))
+                    Text(ShortRelativeTime.label(for: post.timestamp))
                         .font(.system(size: 12))
                         .foregroundColor(theme.textMuted)
                 }
@@ -646,14 +646,6 @@ struct CommentsSheetView: View {
             focusTrigger: $composerFocusTrigger
         )
     }
-
-    private func timeAgo(from date: Date) -> String {
-        let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return "\u{00C0} l'instant" }
-        if seconds < 3600 { return "\(seconds / 60)m" }
-        if seconds < 86400 { return "\(seconds / 3600)h" }
-        return "\(seconds / 86400)j"
-    }
 }
 
 // MARK: - Comment Row View
@@ -780,7 +772,7 @@ struct CommentRowView: View, Equatable {
 
                     Text("\u{00B7}").font(.system(size: 12)).foregroundColor(theme.textMuted)
 
-                    Text(timeAgo(from: comment.timestamp))
+                    Text(ShortRelativeTime.label(for: comment.timestamp))
                         .font(.system(size: 12))
                         .foregroundColor(theme.textMuted)
                 }
@@ -869,14 +861,6 @@ struct CommentRowView: View, Equatable {
             .presentationDragIndicator(.visible)
         }
         .withStatusBubble()
-    }
-
-    private func timeAgo(from date: Date) -> String {
-        let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return "\u{00C0} l'instant" }
-        if seconds < 3600 { return "\(seconds / 60)m" }
-        if seconds < 86400 { return "\(seconds / 3600)h" }
-        return "\(seconds / 86400)j"
     }
 }
 

@@ -16,29 +16,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | 44 (web MessageTimestamp + notif-prefs + modales i18n/locale ; iOS CreateShareLink/TrackingLinkDetail Dynamic Type + ProfileView hex/a11y ; Android parité es/pt + sender format) |
-| Last merged PR | #588 (feat/uiux-iter33) ; iter-44 en cours |
-| Last Merged Base (commit) | 813b7fe3 |
-| Next iteration | **45** (carry-over: admin i18n batch web, GlobalSearchView/FeedCommentsSheet iOS, stories Android — voir plan iter-44) |
-| Next branch to create from | `main` (HEAD post-merge iter-44) |
-| Last completed iteration | 44 (audit post-#587 Android : i18n attachments/viewer/file-size + 12 clés es/pt ; web : i18n video-calls + dates locale-aware + dark mode bubbles ; iOS : 'Hier' localisé, Dynamic Type ProfileView/TwoFactorSetup/Call, tokens PrivacySettingsView) |
-| Last merged PR | #593 ; iter-44 (PR #592) en cours de merge |
-| Last Merged Base (commit) | 6d1375e (merge #593) |
-| Next iteration | **45** |
-| Next branch to create from | `main` (HEAD post-merge iter-44) |
-| Deferred carry-over for 45 | web admin : debug.tsx (~15 strings), AgentArchetypesTab, tooltips InfoIcon LlmTab/GlobalConfigTab, 'fr-FR' ranking/monitoring/anonymous-users ; iOS : famille composer Color(hex:) (ComposerModels/UniversalComposerBar/AudioPostComposer/VoiceProfileWizard — design pass identité couleurs), section colors PrivacySettingsView sans token équivalent, audit .white AudioFullscreenView, pluriels FeedPostCard ; Android : MeeshySpacing 2.dp residuals, emoji lineHeight token, parité stories (UI absente) ; réactions par pièce jointe web+Android (wiring gateway) |
-| Last completed iteration | 44 (web : date-format + MessageTimestamp locale-aware, i18n admin debug/archétypes/cache-hit, reconnaissance vocale Prisme ; iOS : Dynamic Type surface liens détail/create + i18n picker/expiration ; Android : expéditeur système i18n, deep links conversations) |
-| Last merged PR | #588 (feat/uiux-iter33) ; iter-44 (PR #589) en cours de merge |
-| Last Merged Base (commit) | 813b7fe (post #588) |
-| Next iteration | **45** |
-| Next branch to create from | `main` (HEAD post-merge iter-44) |
-| Deferred carry-over for 45 | web : user-settings.tsx 17 toasts fr, participants-drawer (5) + links-section (3), 14 fichiers 'fr-FR' restants à migrer vers date-format, FriendRequestCard formateur local dupliqué, vérif aria-label SwipeableRow ; iOS : ConversationInfoSheet (52 fonts), ConversationDashboardView (43), TwoFactorSetupView (42, texte seulement), CallView (34), InviteFriendsSheet (33), ProfileView (32), GlobalSearchView (32), SettingsView (31), VoiceProfileManageView (29), FeedView+Attachments (29), DataExportView (17), NewConversationView (15), ChangePasswordView (14) ; Android : parité stories (UI absente, large) ; réactions par pièce jointe web+Android (wiring gateway) ; audit qualité es/pt web |
-| Last completed iteration | 44 (iOS exclusif : ThemedConversationRow — i18n 21 clés ×5 locales, Dynamic Type 26 polices, tokens MeeshyColors.text*(isDark:), ShortRelativeTime partagé+testé) |
-| Last merged PR | #591 (sync iter-44, commit 90afe70) |
-| Last Merged Base (commit) | 90afe70 (merge #591) |
-| Current iteration | **44b** — iOS exclusivement : Dynamic Type vues liens détail/create (68 polices) + surface composer (56 polices, hex 08D9D6/FF2E63 → tokens, 10 labels a11y) — PR #590 |
-| Current branch | `claude/keen-dirac-a53ki2` (réintègre main 90afe70) |
-| Deferred carry-over for 45 (iOS only, directive routine) | ConversationListHelpers (19 polices, 28 hex) ; PostDetailView (.textSelection + 21 hex) ; FeedCommentsSheet/FeedPostCard timeAgo dupliqués + i18n ; ConversationInfoSheet (52 polices), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (31), NewConversationView (7), DataExportView/DataStorageView (8), ChangePasswordView (2) ; ancienne palette 08D9D6/FF2E63/4ECDC4 dans ~10 fichiers stories/profil/conversation ; ladder pièces jointes arc-en-ciel (à arbitrer charte) ; VoiceProfileWizardView/PrivacySettingsView/TrackingLinksView Color(hex:) ; IncomingCallView .white contraste ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) |
+| Last completed iteration | **45** (web : i18n participants-drawer 6 clés ×4 locales, `timeCompact.*` aligné iOS dans transform-conversation, `getLastSeenFormatted` localisé via `contacts.status.*`, suppression code mort notification-helpers, locale sur 2 dates ; iOS : régression FR timeAgo FeedCommentsSheet → `ShortRelativeTime`, ChangePasswordView tokens 6366F1/9B59B6 + 13 polices sémantiques ; Android : dédoublonnage `chat_date_*` es/pt) |
+| Last merged PR | #594 (iter-44 finale) ; iter-45 en cours sur `claude/blissful-ritchie-dp7ibu` |
+| Last Merged Base (commit) | 09e08439 (merge #594) |
+| Next iteration | **46** |
+| Next branch to create from | `main` (HEAD post-merge iter-45) |
+| Deferred carry-over for 46 | Voir « Différés » de `docs/analyses/uiux/2026-06-12-iteration-45.md` — web : batch admin i18n (debug.tsx, AgentArchetypesTab, AgentConfigDialog, UserPicker), 'fr-FR' admin (~10 fichiers), chart hex dark, BackSoundDetails, consolidation notifications/preferences, audit qualité es/pt ; iOS : grandes surfaces polices (ConversationInfoSheet 52, ConversationDashboardView 43, TwoFactorSetupView 42, CallView 34, InviteFriendsSheet 33, ProfileView/GlobalSearchView 32, SettingsView 27, VoiceProfileManageView 29, FeedView 29, NewConversationView 16, DataExportView 16, DataStorageView 11), ancienne palette 08D9D6/FF2E63/4ECDC4 (~10 fichiers), washes AudioPostComposer, ladder arc-en-ciel attachments, ThemedConversationRow theme-aware, arbitrage `time.*` vs `time.short.*` ; Android : parité stories (large) OU réactions par pièce jointe (wiring gateway) |
 
 ---
 
@@ -67,10 +50,10 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 42 | claude/blissful-ritchie-fst8wf | #582 | ✅ |
 | 42b | claude/blissful-ritchie-e672ur | #579 | ✅ |
 | 43 | claude/blissful-ritchie-6709o7 | #576 | ✅ |
-| 44 | claude/blissful-ritchie-kay6v7 | — | ⏳ |
-| 44 | claude/blissful-ritchie-jls4lb | (cette PR) | ⏳ |
+| 44 | claude/blissful-ritchie-kay6v7 | #594 | ✅ |
+| 44 | claude/blissful-ritchie-jls4lb | #592 | ✅ |
 | 43b | claude/awesome-albattani-xaqlhj | #587 | ✅ |
 | 44 | claude/keen-dirac-485vpk | #589, #591 | ✅ |
-| 44b | claude/keen-dirac-a53ki2 | #590 | ⏳ |
-| 44 | claude/blissful-ritchie-foe2wg | (en cours) | ⏳ |
-| 44 | claude/keen-dirac-485vpk | (en cours) | ⏳ |
+| 44b | claude/keen-dirac-a53ki2 | #590 | ✅ |
+| 44 | claude/blissful-ritchie-foe2wg | #589 | ✅ |
+| 45 | claude/blissful-ritchie-dp7ibu | (cette PR) | ⏳ |

@@ -254,10 +254,16 @@ export const usersService = {
 
   /**
    * Formate la dernière connexion
+   * (clés i18n `contacts.status.*`, namespace 'contacts')
    */
-  getLastSeenFormatted(user: User): string {
+  getLastSeenFormatted(
+    user: User,
+    options: { t: (key: string, params?: Record<string, unknown>) => string; locale?: string }
+  ): string {
+    const { t, locale } = options;
+
     if (user.isOnline) {
-      return 'En ligne';
+      return t('status.online');
     }
 
     const lastActive = new Date(user.lastActiveAt);
@@ -268,16 +274,18 @@ export const usersService = {
     const diffDays = Math.floor(diffHours / 24);
 
     if (diffMinutes < 1) {
-      return 'À l\'instant';
-    } else if (diffMinutes < 60) {
-      return `Il y a ${diffMinutes} min`;
-    } else if (diffHours < 24) {
-      return `Il y a ${diffHours}h`;
-    } else if (diffDays < 7) {
-      return `Il y a ${diffDays} jour${diffDays > 1 ? 's' : ''}`;
-    } else {
-      return lastActive.toLocaleDateString('fr-FR');
+      return t('status.justNow');
     }
+    if (diffMinutes < 60) {
+      return t('status.minutesAgo', { count: diffMinutes });
+    }
+    if (diffHours < 24) {
+      return t('status.hoursAgo', { count: diffHours });
+    }
+    if (diffDays < 7) {
+      return t('status.daysAgo', { count: diffDays });
+    }
+    return lastActive.toLocaleDateString(locale);
   },
 
   /**

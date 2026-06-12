@@ -432,6 +432,9 @@ describe('UsersService', () => {
   });
 
   describe('getLastSeenFormatted', () => {
+    const t = (key: string, params?: Record<string, unknown>) =>
+      params ? `${key}:${JSON.stringify(params)}` : key;
+
     beforeEach(() => {
       jest.useFakeTimers();
       jest.setSystemTime(new Date('2024-01-15T12:00:00Z'));
@@ -441,22 +444,22 @@ describe('UsersService', () => {
       jest.useRealTimers();
     });
 
-    it('should return "En ligne" for online user', () => {
+    it('should return the online status key for online user', () => {
       const user = createMockUser({
         isOnline: true,
         lastActiveAt: new Date(),
       });
 
-      expect(usersService.getLastSeenFormatted(user)).toBe('En ligne');
+      expect(usersService.getLastSeenFormatted(user, { t })).toBe('status.online');
     });
 
-    it('should return "A l\'instant" for very recent activity', () => {
+    it('should return the justNow key for very recent activity', () => {
       const user = createMockUser({
         isOnline: false,
         lastActiveAt: new Date('2024-01-15T11:59:30Z'), // 30 seconds ago
       });
 
-      expect(usersService.getLastSeenFormatted(user)).toBe("À l'instant");
+      expect(usersService.getLastSeenFormatted(user, { t })).toBe('status.justNow');
     });
 
     it('should return minutes for activity < 1 hour', () => {
@@ -465,7 +468,7 @@ describe('UsersService', () => {
         lastActiveAt: new Date('2024-01-15T11:30:00Z'), // 30 minutes ago
       });
 
-      expect(usersService.getLastSeenFormatted(user)).toBe('Il y a 30 min');
+      expect(usersService.getLastSeenFormatted(user, { t })).toBe('status.minutesAgo:{"count":30}');
     });
 
     it('should return hours for activity < 24 hours', () => {
@@ -474,7 +477,7 @@ describe('UsersService', () => {
         lastActiveAt: new Date('2024-01-15T08:00:00Z'), // 4 hours ago
       });
 
-      expect(usersService.getLastSeenFormatted(user)).toBe('Il y a 4h');
+      expect(usersService.getLastSeenFormatted(user, { t })).toBe('status.hoursAgo:{"count":4}');
     });
 
     it('should return days for activity < 7 days', () => {
@@ -483,28 +486,26 @@ describe('UsersService', () => {
         lastActiveAt: new Date('2024-01-12T12:00:00Z'), // 3 days ago
       });
 
-      expect(usersService.getLastSeenFormatted(user)).toBe('Il y a 3 jours');
+      expect(usersService.getLastSeenFormatted(user, { t })).toBe('status.daysAgo:{"count":3}');
     });
 
-    it('should return "jour" (singular) for 1 day', () => {
+    it('should return days with count 1 for 1 day', () => {
       const user = createMockUser({
         isOnline: false,
         lastActiveAt: new Date('2024-01-14T12:00:00Z'), // 1 day ago
       });
 
-      expect(usersService.getLastSeenFormatted(user)).toBe('Il y a 1 jour');
+      expect(usersService.getLastSeenFormatted(user, { t })).toBe('status.daysAgo:{"count":1}');
     });
 
-    it('should return formatted date for older activity', () => {
+    it('should return a locale-formatted date for older activity', () => {
       const user = createMockUser({
         isOnline: false,
         lastActiveAt: new Date('2024-01-01T12:00:00Z'), // 14 days ago
       });
 
-      const result = usersService.getLastSeenFormatted(user);
-      // Format may vary based on locale, just check it's a date string
-      expect(typeof result).toBe('string');
-      expect(result.length).toBeGreaterThan(0);
+      const result = usersService.getLastSeenFormatted(user, { t, locale: 'fr' });
+      expect(result).toBe(new Date('2024-01-01T12:00:00Z').toLocaleDateString('fr'));
     });
   });
 
