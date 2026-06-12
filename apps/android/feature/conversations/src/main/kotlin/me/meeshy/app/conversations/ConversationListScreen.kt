@@ -1,5 +1,7 @@
 package me.meeshy.app.conversations
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -33,6 +36,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -43,6 +47,7 @@ import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
@@ -69,26 +74,40 @@ fun ConversationListScreen(
             )
         },
     ) { padding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            when {
-                state.showSkeleton -> SkeletonList()
+            ConnectionBannerStrip(state.banner)
+            Box(modifier = Modifier.weight(1f)) {
+                when {
+                    state.showSkeleton -> SkeletonList()
 
-                state.conversations.isEmpty() && state.errorMessage != null ->
-                    CenteredMessage(state.errorMessage!!, stringResource(R.string.conversations_retry), viewModel::refresh)
-
-                state.conversations.isEmpty() ->
-                    CenteredMessage(stringResource(R.string.conversations_empty), null, null)
-
-                else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(state.conversations, key = { it.id }) { conversation ->
-                        ConversationRow(
-                            conversation = conversation,
-                            onClick = { onConversationClick(conversation.id) },
+                    state.conversations.isEmpty() && state.errorMessage != null ->
+                        CenteredMessage(
+                            state.errorMessage!!,
+                            stringResource(R.string.conversations_retry),
+                            viewModel::refresh,
                         )
+
+                    state.conversations.isEmpty() ->
+                        CenteredMessage(stringResource(R.string.conversations_empty), null, null)
+
+                    else -> PullToRefreshBox(
+                        isRefreshing = state.isUserRefreshing,
+                        onRefresh = viewModel::refresh,
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            items(state.conversations, key = { it.id }) { conversation ->
+                                ConversationRow(
+                                    conversation = conversation,
+                                    currentUserId = state.currentUserId,
+                                    onClick = { onConversationClick(conversation.id) },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -97,8 +116,54 @@ fun ConversationListScreen(
 }
 
 @Composable
-private fun ConversationRow(conversation: ApiConversation, onClick: () -> Unit) {
+private fun ConnectionBannerStrip(banner: ConnectionBanner, modifier: Modifier = Modifier) {
+    AnimatedVisibility(visible = banner != ConnectionBanner.HIDDEN, modifier = modifier) {
+        val (label, background, foreground) = when (banner) {
+            ConnectionBanner.SYNCING -> Triple(
+                stringResource(R.string.conversations_banner_syncing),
+                MeeshyTheme.tokens.backgroundTertiary,
+                MeeshyTheme.tokens.textSecondary,
+            )
+            ConnectionBanner.RECONNECTING -> Triple(
+                stringResource(R.string.conversations_banner_reconnecting),
+                MeeshyPalette.Warning.copy(alpha = 0.18f),
+                MeeshyPalette.Warning,
+            )
+            else -> Triple(
+                stringResource(R.string.conversations_banner_offline),
+                MeeshyTheme.tokens.backgroundTertiary,
+                MeeshyTheme.tokens.textSecondary,
+            )
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = foreground,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(background)
+                .padding(vertical = MeeshySpacing.xs),
+        )
+    }
+}
+
+@Composable
+private fun ConversationRow(
+    conversation: ApiConversation,
+    currentUserId: String?,
+    onClick: () -> Unit,
+) {
     val title = conversation.displayTitle()
+    val previewLabels = LastMessagePreviewLabels(
+        photo = stringResource(R.string.conversations_preview_photo),
+        video = stringResource(R.string.conversations_preview_video),
+        voice = stringResource(R.string.conversations_preview_voice),
+        file = stringResource(R.string.conversations_preview_file),
+        location = stringResource(R.string.conversations_preview_location),
+        none = stringResource(R.string.conversations_no_messages),
+        you = stringResource(R.string.conversations_preview_you),
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -125,7 +190,12 @@ private fun ConversationRow(conversation: ApiConversation, onClick: () -> Unit) 
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = conversation.lastMessage?.content ?: stringResource(R.string.conversations_no_messages),
+                text = lastMessagePreview(
+                    message = conversation.lastMessage,
+                    currentUserId = currentUserId,
+                    showSender = conversation.type != "direct",
+                    labels = previewLabels,
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MeeshyTheme.tokens.textSecondary,
                 maxLines = 1,

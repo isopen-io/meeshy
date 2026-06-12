@@ -12,20 +12,30 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.socket.SocketConnectionState
+import me.meeshy.sdk.socket.SocketManager
 import javax.inject.Inject
 
 data class ConversationListUiState(
     val conversations: List<ApiConversation> = emptyList(),
     val isSyncing: Boolean = false,
+    val isUserRefreshing: Boolean = false,
     val showSkeleton: Boolean = false,
     val errorMessage: String? = null,
-)
+    val connection: SocketConnectionState = SocketConnectionState.DISCONNECTED,
+    val currentUserId: String? = null,
+) {
+    val banner: ConnectionBanner get() = bannerFor(connection, isSyncing)
+}
 
 @HiltViewModel
 class ConversationListViewModel @Inject constructor(
     private val repository: ConversationRepository,
     private val messageSocketManager: MessageSocketManager,
+    socketManager: SocketManager,
+    sessionRepository: SessionRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -41,6 +51,18 @@ class ConversationListViewModel @Inject constructor(
                 },
             ).collect { result ->
                 _state.update { it.applyResult(result) }
+            }
+        }
+
+        viewModelScope.launch {
+            socketManager.connectionState.collect { connection ->
+                _state.update { it.copy(connection = connection) }
+            }
+        }
+
+        viewModelScope.launch {
+            sessionRepository.currentUser.collect { user ->
+                _state.update { it.copy(currentUserId = user?.id) }
             }
         }
 
@@ -63,8 +85,10 @@ class ConversationListViewModel @Inject constructor(
         }
     }
 
+    /** Pull-to-refresh: the visible spinner tracks the user gesture only —
+     * background SWR revalidations stay silent ([ConversationListUiState.isSyncing]). */
     fun refresh() {
-        _state.update { it.copy(errorMessage = null, isSyncing = true) }
+        _state.update { it.copy(errorMessage = null, isSyncing = true, isUserRefreshing = true) }
         viewModelScope.launch {
             try {
                 repository.refresh()
@@ -72,8 +96,10 @@ class ConversationListViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 _state.update {
-                    it.copy(errorMessage = e.message, isSyncing = false, showSkeleton = false)
+                    it.copy(errorMessage = e.message, showSkeleton = false)
                 }
+            } finally {
+                _state.update { it.copy(isUserRefreshing = false, isSyncing = false) }
             }
         }
     }

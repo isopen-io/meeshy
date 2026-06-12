@@ -54,7 +54,7 @@ class AuthViewModelTest {
     fun login_withBlankFields_showsValidationError() {
         val vm = viewModel(ApiResponse(success = false))
         vm.login()
-        assertThat(vm.state.value.errorMessage).isNotNull()
+        assertThat(vm.state.value.errorRes).isNotNull()
         assertThat(vm.state.value.isAuthenticated).isFalse()
     }
 
