@@ -3,6 +3,14 @@
   "minutesAgo": "há {minutes}min",
   "hoursAgo": "há {hours}h",
   "yesterday": "Ontem {time}",
+  "timestamp": {
+    "today": "Hoje",
+    "yesterday": "Ontem",
+    "todayAt": "Hoje às {time}",
+    "yesterdayAt": "Ontem às {time}",
+    "dayAt": "{day} às {time}",
+    "ariaLabel": "Carimbo de hora da mensagem: {timestamp}"
+  },
   "conversations": {
     "common": {
       "loading": "Carregando..."

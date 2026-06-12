@@ -47,8 +47,12 @@ import me.meeshy.app.settings.SettingsScreen
 object Routes {
     const val LOGIN = "login"
     const val CONVERSATIONS = "conversations"
+    const val CONVERSATIONS_DEEP_LINK = "meeshy://conversations"
     const val CHAT = "chat/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val CHAT_DEEP_LINK = "meeshy://$CHAT"
+    const val CONVERSATION_DEEP_LINK = "meeshy://conversations/{${ChatViewModel.CONVERSATION_ID_ARG}}"
+    const val CONVERSATION_SINGULAR_DEEP_LINK = "meeshy://conversation/{${ChatViewModel.CONVERSATION_ID_ARG}}"
+    const val CONVERSATION_SHORT_DEEP_LINK = "meeshy://c/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val FEED = "feed"
     const val CONTACTS = "contacts"
     const val NOTIFICATIONS = "notifications"
@@ -159,7 +163,12 @@ fun MeeshyApp() {
                     },
                 )
             }
-            composable(Routes.CONVERSATIONS) {
+            composable(
+                route = Routes.CONVERSATIONS,
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = Routes.CONVERSATIONS_DEEP_LINK },
+                ),
+            ) {
                 ConversationListScreen(
                     onConversationClick = { conversationId ->
                         navController.navigate(Routes.chat(conversationId))
@@ -179,6 +188,9 @@ fun MeeshyApp() {
                 ),
                 deepLinks = listOf(
                     navDeepLink { uriPattern = Routes.CHAT_DEEP_LINK },
+                    navDeepLink { uriPattern = Routes.CONVERSATION_DEEP_LINK },
+                    navDeepLink { uriPattern = Routes.CONVERSATION_SINGULAR_DEEP_LINK },
+                    navDeepLink { uriPattern = Routes.CONVERSATION_SHORT_DEEP_LINK },
                 ),
             ) {
                 ChatScreen(onBack = { navController.popBackStack() })

@@ -22,7 +22,7 @@ extension UniversalComposerBar {
         let borderDefault: [Color] = style == .dark
             ? [Color.white.opacity(0.15), Color.white.opacity(0.1)]
             : [accent.opacity(0.2), accent.opacity(0.15)]
-        let borderFocused: [Color] = [Color(hex: "08D9D6").opacity(0.5), Color(hex: "FF2E63").opacity(0.5)]
+        let borderFocused: [Color] = [MeeshyColors.indigo400.opacity(0.5), MeeshyColors.indigo600.opacity(0.5)]
 
         return HStack(spacing: 0) {
             // Mic button inside field (left) — hidden when focused
@@ -33,10 +33,11 @@ extension UniversalComposerBar {
                     startRecording()
                 } label: {
                     Image(systemName: "mic.fill")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.callout.weight(.medium))
                         .foregroundColor(mutedColor)
                         .frame(width: 36, height: 36)
                 }
+                .accessibilityLabel(String(localized: "composer.a11y.startRecording", defaultValue: "Enregistrer un message vocal", bundle: .main))
                 .padding(.leading, 4)
                 .transition(.scale.combined(with: .opacity))
             }
@@ -56,7 +57,7 @@ extension UniversalComposerBar {
                     .padding(.trailing, 16)
                     .padding(.vertical, 12)
                     .lineLimit(1...5)
-                    .font(.system(size: 16))
+                    .font(.callout)
                     .adaptiveOnChange(of: text) { _, newValue in
                         if let maxLen = resolvedMaxLength, newValue.count > maxLen {
                             text = String(newValue.prefix(maxLen))
@@ -78,7 +79,7 @@ extension UniversalComposerBar {
                             lineWidth: focusBounce ? 1.5 : 1
                         )
                 )
-                .shadow(color: focusBounce ? Color(hex: "08D9D6").opacity(0.2) : Color.clear, radius: 8, x: 0, y: 0)
+                .shadow(color: focusBounce ? MeeshyColors.indigo400.opacity(0.2) : Color.clear, radius: 8, x: 0, y: 0)
         )
         .scaleEffect(x: typeWave ? 1.015 : 1.0, y: typeWave ? 0.97 : 1.0)
         .scaleEffect(focusBounce ? 1.02 : 1.0)
@@ -118,11 +119,11 @@ extension UniversalComposerBar {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(Color(hex: "FF2E63").opacity(0.14))
+                        .fill(MeeshyColors.errorStrong.opacity(0.14))
                         .frame(width: 32, height: 32)
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(Color(hex: "FF2E63"))
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(MeeshyColors.errorStrong)
                 }
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
@@ -151,7 +152,7 @@ extension UniversalComposerBar {
                     )
 
                 Text(formatDuration(effectiveDuration))
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .font(.system(.footnote, design: .monospaced).weight(.semibold))
                     .foregroundColor(timerColor)
                     .contentTransition(.numericText())
                     .animation(.spring(response: 0.3), value: effectiveDuration)
@@ -178,7 +179,7 @@ extension UniversalComposerBar {
                             : Color(hex: accentColor).opacity(0.12))
                         .frame(width: 32, height: 32)
                     Image(systemName: "stop.fill")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.caption2.weight(.bold))
                         .foregroundColor(isDark ? .white : Color(hex: accentColor))
                 }
                 .opacity(canSend ? 1 : 0.4)
@@ -215,7 +216,7 @@ extension UniversalComposerBar {
                             radius: 6, y: 2
                         )
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.subheadline.weight(.bold))
                         .foregroundColor(.white)
                 }
                 .opacity(canSend ? 1 : 0.4)

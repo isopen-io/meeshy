@@ -3,6 +3,14 @@
   "minutesAgo": "{minutes}min ago",
   "hoursAgo": "{hours}h ago",
   "yesterday": "Yesterday {time}",
+  "timestamp": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "todayAt": "Today at {time}",
+    "yesterdayAt": "Yesterday at {time}",
+    "dayAt": "{day} at {time}",
+    "ariaLabel": "Message timestamp: {timestamp}"
+  },
   "conversations": {
     "common": {
       "loading": "Loading..."

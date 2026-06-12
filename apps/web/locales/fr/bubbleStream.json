@@ -61,6 +61,7 @@
     "quickReactions": "Réactions rapides",
     "moreReactions": "Plus de réactions",
     "messageCopied": "Message copié",
+    "messageCopyBy": "par",
     "copied": "Copié dans le presse-papiers",
     "copyFailed": "Échec de la copie",
     "copyMessage": "Copier le message",
@@ -154,4 +155,3 @@
     }
   }
 }
-

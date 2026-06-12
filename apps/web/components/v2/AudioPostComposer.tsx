@@ -2,6 +2,8 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useI18n } from '@/hooks/use-i18n';
+import { useUser } from '@/stores/auth-store';
+import { resolveUserPreferredLanguage } from '@/utils/user-language-preferences';
 import { cn } from '@/lib/utils';
 import { Button } from './Button';
 import type { MobileTranscription, MobileTranscriptionSegment } from '@/services/posts.service';
@@ -51,6 +53,13 @@ function getSupportedMimeType(): string {
   return 'audio/webm';
 }
 
+const SPEECH_RECOGNITION_LOCALES: Record<string, string> = {
+  fr: 'fr-FR',
+  en: 'en-US',
+  es: 'es-ES',
+  pt: 'pt-BR',
+};
+
 function getFileExtension(mime: string): string {
   if (mime.includes('mp4')) return 'm4a';
   if (mime.includes('ogg')) return 'ogg';
@@ -68,6 +77,7 @@ function AudioPostComposer({
   disabled = false,
 }: AudioPostComposerProps) {
   const { t } = useI18n('common');
+  const user = useUser();
   const [phase, setPhase] = useState<Phase>('idle');
   const [duration, setDuration] = useState(0);
   const [waveform, setWaveform] = useState<number[]>([]);
@@ -151,7 +161,10 @@ function AudioPostComposer({
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = navigator.language || 'fr-FR';
+    const preferredLanguage = user ? resolveUserPreferredLanguage(user) : null;
+    recognition.lang = preferredLanguage
+      ? SPEECH_RECOGNITION_LOCALES[preferredLanguage] ?? preferredLanguage
+      : navigator.language;
     recognition.maxAlternatives = 1;
 
     const segments: MobileTranscriptionSegment[] = [];
@@ -195,7 +208,7 @@ function AudioPostComposer({
     } catch { /* ignore */ }
 
     recognitionRef.current = recognition;
-  }, [phase]);
+  }, [phase, user]);
 
   // ── Start recording ───────────────────────────────────────────────────
 
