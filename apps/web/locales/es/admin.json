@@ -321,7 +321,8 @@
   },
   "translationMonitor": {
     "loadingMetrics": "Cargando métricas...",
-    "languageBreakdown": "Distribución por idioma"
+    "languageBreakdown": "Distribución por idioma",
+    "cacheHit": "Aciertos de caché"
   },
   "llm": {
     "generationSettings": "Configuración de generación",

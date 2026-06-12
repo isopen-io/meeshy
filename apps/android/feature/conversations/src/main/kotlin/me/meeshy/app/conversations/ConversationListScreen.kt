@@ -163,6 +163,7 @@ private fun ConversationRow(
         location = stringResource(R.string.conversations_preview_location),
         none = stringResource(R.string.conversations_no_messages),
         you = stringResource(R.string.conversations_preview_you),
+        senderFormat = stringResource(R.string.conversations_preview_sender_format),
     )
     Row(
         modifier = Modifier

@@ -299,7 +299,7 @@ export function CreateConversationModal({
                   >
                     <div className="flex items-center gap-2">
                       <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
-                      <span className="font-medium">Récapitulatif de la conversation</span>
+                      <span className="font-medium">{t('createConversationModal.preview.title')}</span>
                     </div>
                     {isPreviewOpen ? (
                       <ChevronUp className="h-4 w-4" aria-hidden="true" />

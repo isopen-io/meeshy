@@ -281,7 +281,32 @@
       },
       "permissionDeniedInstructions": "As notificações foram negadas. Você pode reativá-las nas configurações do seu navegador.",
       "unsupported": "As notificações não são suportadas pelo seu navegador.",
-      "resetButton": "Redefinir para os padrões"
+      "resetButton": "Redefinir para os padrões",
+      "pageTitle": "Preferências de notificações",
+      "pageSubtitle": "Personalize como e quando você recebe notificações",
+      "sections": {
+        "messages": {
+          "title": "Notificações de mensagens",
+          "description": "Gerencie as notificações de mensagens e conversas"
+        },
+        "interactions": {
+          "title": "Interações",
+          "description": "Gerencie as notificações de menções e reações"
+        },
+        "contacts": {
+          "title": "Contatos e membros",
+          "description": "Gerencie as notificações de contatos e grupos"
+        },
+        "callsSystem": {
+          "title": "Chamadas e sistema",
+          "description": "Gerencie as notificações de chamadas e do sistema"
+        }
+      },
+      "cancel": "Cancelar",
+      "saveButton": "Salvar preferências",
+      "notAuthenticated": "Não autenticado",
+      "saveError": "Erro ao salvar",
+      "networkError": "Erro de rede"
     },
     "connectionStatus": {
       "connected": "Conectado",

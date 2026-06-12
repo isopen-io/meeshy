@@ -16,11 +16,11 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | 33 (restore iter-32 lost locale keys, user-detail/agent-tab i18n, dark mode, iOS a11y) |
-| Last merged PR | #588 (feat/uiux-iter33) |
-| Last Merged Base (commit) | 7358047a |
-| Next iteration | **44** (full audit from main HEAD — see iter-43 deferred carry-over + fresh scan) |
-| Next branch to create from | `main` (HEAD = 7358047a) |
+| Last completed iteration | 44 (web MessageTimestamp + notif-prefs + modales i18n/locale ; iOS CreateShareLink/TrackingLinkDetail Dynamic Type + ProfileView hex/a11y ; Android parité es/pt + sender format) |
+| Last merged PR | #588 (feat/uiux-iter33) ; iter-44 en cours |
+| Last Merged Base (commit) | 813b7fe3 |
+| Next iteration | **45** (carry-over: admin i18n batch web, GlobalSearchView/FeedCommentsSheet iOS, stories Android — voir plan iter-44) |
+| Next branch to create from | `main` (HEAD post-merge iter-44) |
 
 ---
 
@@ -47,5 +47,6 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 41 | claude/blissful-ritchie-9vesx9 | #577 | ✅ |
 | 41b | claude/blissful-ritchie-68j2oq | #580 | ✅ |
 | 42 | claude/blissful-ritchie-fst8wf | #582 | ✅ |
-| 42b | claude/blissful-ritchie-e672ur | #579 | ⏳ |
-| 43 | claude/blissful-ritchie-6709o7 | #576 | ⏳ |
+| 42b | claude/blissful-ritchie-e672ur | #579 | ✅ |
+| 43 | claude/blissful-ritchie-6709o7 | #576 | ✅ |
+| 44 | claude/blissful-ritchie-kay6v7 | — | ⏳ |

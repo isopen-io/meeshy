@@ -14,6 +14,7 @@ class LastMessagePreviewTest {
         location = "📍 Localisation",
         none = "Aucun message",
         you = "Vous",
+        senderFormat = "%1\$s : %2\$s",
     )
 
     private fun message(
@@ -69,6 +70,18 @@ class LastMessagePreviewTest {
         )
 
         assertThat(preview).isEqualTo("Vous : Salut !")
+    }
+
+    @Test
+    fun `sender prefix follows the locale format`() {
+        val preview = lastMessagePreview(
+            message(content = "Hi!"),
+            currentUserId = "me",
+            showSender = true,
+            labels = labels.copy(senderFormat = "%1\$s: %2\$s"),
+        )
+
+        assertThat(preview).isEqualTo("Alice: Hi!")
     }
 
     @Test

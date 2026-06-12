@@ -62,7 +62,7 @@ export function TranslationMonitor({
   showDetails = true,
   refreshInterval = 5000
 }: TranslationMonitorProps) {
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   const [metrics, setMetrics] = useState<TranslationMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -230,7 +230,7 @@ export function TranslationMonitor({
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center justify-center gap-1 text-gray-600 text-sm mb-1">
                       <Database className="h-4 w-4" />
-                      Cache Hit
+                      {t('translationMonitor.cacheHit')}
                     </div>
                     <p className="font-bold text-lg">{metrics.cacheHitRate}%</p>
                   </div>
@@ -304,7 +304,7 @@ export function TranslationMonitor({
 
                 {/* Dernière mise à jour */}
                 <div className="text-center text-sm text-gray-500">
-                  {t('translationMonitor.lastUpdated')} {metrics.lastUpdated.toLocaleTimeString()}
+                  {t('translationMonitor.lastUpdated')} {metrics.lastUpdated.toLocaleTimeString(locale)}
                 </div>
               </>
             )}

@@ -12,6 +12,7 @@ import { AtSign } from 'lucide-react';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { toast } from 'sonner';
 import { API_CONFIG } from '@/lib/config';
+import { useI18n } from '@/hooks/use-i18n';
 
 /**
  * Interface des préférences de notifications
@@ -62,6 +63,7 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
 };
 
 function NotificationPreferencesContent() {
+  const { t } = useI18n('notifications');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [preferences, setPreferences] = useState<NotificationPreferences>(DEFAULT_PREFERENCES);
@@ -104,7 +106,7 @@ function NotificationPreferencesContent() {
     try {
       const token = localStorage.getItem('authToken');
       if (!token) {
-        toast.error('Non authentifié');
+        toast.error(t('notifPrefs.notAuthenticated'));
         return;
       }
 
@@ -119,14 +121,14 @@ function NotificationPreferencesContent() {
       });
 
       if (response.ok) {
-        toast.success('Préférences enregistrées');
+        toast.success(t('notifPrefs.saved'));
       } else {
         const errorData = await response.json();
-        toast.error(errorData.message || 'Erreur lors de l\'enregistrement');
+        toast.error(errorData.message || t('notifPrefs.saveError'));
       }
     } catch (error) {
       console.error('Error saving preferences:', error);
-      toast.error('Erreur réseau');
+      toast.error(t('notifPrefs.networkError'));
     } finally {
       setSaving(false);
     }
@@ -138,24 +140,24 @@ function NotificationPreferencesContent() {
 
   if (loading) {
     return (
-      <DashboardLayout title="Préférences de notifications">
+      <DashboardLayout title={t('notifPrefs.pageTitle')}>
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" role="status" aria-label={t('notifPrefs.loading')}></div>
         </div>
       </DashboardLayout>
     );
   }
 
   return (
-    <DashboardLayout title="Préférences de notifications">
+    <DashboardLayout title={t('notifPrefs.pageTitle')}>
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-3">
             <Settings className="h-8 w-8" />
-            Préférences de notifications
+            {t('notifPrefs.pageTitle')}
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">
-            Personnalisez vos notifications selon vos préférences
+            {t('notifPrefs.pageSubtitle')}
           </p>
         </div>
 
@@ -165,17 +167,17 @@ function NotificationPreferencesContent() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Bell className="h-5 w-5" />
-                Canaux de notification
+                {t('notifPrefs.channels.title')}
               </CardTitle>
               <CardDescription>
-                Choisissez comment vous souhaitez recevoir les notifications
+                {t('notifPrefs.channels.description')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="push" className="flex flex-col">
-                  <span className="font-medium">Notifications push</span>
-                  <span className="text-sm text-gray-500">Recevoir des notifications dans le navigateur</span>
+                  <span className="font-medium">{t('notifPrefs.channels.push.label')}</span>
+                  <span className="text-sm text-gray-500">{t('notifPrefs.channels.push.description')}</span>
                 </Label>
                 <Switch
                   id="push"
@@ -185,8 +187,8 @@ function NotificationPreferencesContent() {
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="email" className="flex flex-col">
-                  <span className="font-medium">Notifications par email</span>
-                  <span className="text-sm text-gray-500">Recevoir un récapitulatif par email</span>
+                  <span className="font-medium">{t('notifPrefs.channels.email.label')}</span>
+                  <span className="text-sm text-gray-500">{t('notifPrefs.channels.email.description')}</span>
                 </Label>
                 <Switch
                   id="email"
@@ -196,8 +198,8 @@ function NotificationPreferencesContent() {
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="sound" className="flex flex-col">
-                  <span className="font-medium">Son de notification</span>
-                  <span className="text-sm text-gray-500">Jouer un son pour les nouvelles notifications</span>
+                  <span className="font-medium">{t('notifPrefs.channels.sound.label')}</span>
+                  <span className="text-sm text-gray-500">{t('notifPrefs.channels.sound.description')}</span>
                 </Label>
                 <Switch
                   id="sound"
@@ -213,17 +215,17 @@ function NotificationPreferencesContent() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MessageSquare className="h-5 w-5" />
-                Notifications de messages
+                {t('notifPrefs.sections.messages.title')}
               </CardTitle>
               <CardDescription>
-                Gérez les notifications liées aux messages et conversations
+                {t('notifPrefs.sections.messages.description')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="newMessage" className="flex flex-col">
-                  <span className="font-medium">Nouveaux messages</span>
-                  <span className="text-sm text-gray-500">Notifications pour les nouveaux messages reçus</span>
+                  <span className="font-medium">{t('notifPrefs.types.newMessage.label')}</span>
+                  <span className="text-sm text-gray-500">{t('notifPrefs.types.newMessage.description')}</span>
                 </Label>
                 <Switch
                   id="newMessage"
@@ -233,8 +235,8 @@ function NotificationPreferencesContent() {
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="reply" className="flex flex-col">
-                  <span className="font-medium">Réponses</span>
-                  <span className="text-sm text-gray-500">Notifications quand quelqu&apos;un répond à vos messages</span>
+                  <span className="font-medium">{t('notifPrefs.types.reply.label')}</span>
+                  <span className="text-sm text-gray-500">{t('notifPrefs.types.reply.description')}</span>
                 </Label>
                 <Switch
                   id="reply"
@@ -244,8 +246,8 @@ function NotificationPreferencesContent() {
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="conversation" className="flex flex-col">
-                  <span className="font-medium">Activité de conversation</span>
-                  <span className="text-sm text-gray-500">Notifications pour les mises à jour de conversations</span>
+                  <span className="font-medium">{t('notifPrefs.types.conversation.label')}</span>
+                  <span className="text-sm text-gray-500">{t('notifPrefs.types.conversation.description')}</span>
                 </Label>
                 <Switch
                   id="conversation"
@@ -261,17 +263,17 @@ function NotificationPreferencesContent() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <AtSign className="h-5 w-5" />
-                Interactions
+                {t('notifPrefs.sections.interactions.title')}
               </CardTitle>
               <CardDescription>
-                Gérez les notifications pour les mentions et réactions
+                {t('notifPrefs.sections.interactions.description')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="mention" className="flex flex-col">
-                  <span className="font-medium">Mentions</span>
-                  <span className="text-sm text-gray-500">Notifications quand vous êtes mentionné (@)</span>
+                  <span className="font-medium">{t('notifPrefs.types.mention.label')}</span>
+                  <span className="text-sm text-gray-500">{t('notifPrefs.types.mention.description')}</span>
                 </Label>
                 <Switch
                   id="mention"
@@ -281,8 +283,8 @@ function NotificationPreferencesContent() {
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="reaction" className="flex flex-col">
-                  <span className="font-medium">Réactions</span>
-                  <span className="text-sm text-gray-500">Notifications pour les réactions à vos messages</span>
+                  <span className="font-medium">{t('notifPrefs.types.reaction.label')}</span>
+                  <span className="text-sm text-gray-500">{t('notifPrefs.types.reaction.description')}</span>
                 </Label>
                 <Switch
                   id="reaction"
@@ -298,17 +300,17 @@ function NotificationPreferencesContent() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
-                Contacts et membres
+                {t('notifPrefs.sections.contacts.title')}
               </CardTitle>
               <CardDescription>
-                Gérez les notifications liées aux contacts et groupes
+                {t('notifPrefs.sections.contacts.description')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="contactRequest" className="flex flex-col">
-                  <span className="font-medium">Demandes de contact</span>
-                  <span className="text-sm text-gray-500">Notifications pour les nouvelles demandes de contact</span>
+                  <span className="font-medium">{t('notifPrefs.types.contactRequest.label')}</span>
+                  <span className="text-sm text-gray-500">{t('notifPrefs.types.contactRequest.description')}</span>
                 </Label>
                 <Switch
                   id="contactRequest"
@@ -318,8 +320,8 @@ function NotificationPreferencesContent() {
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="memberJoined" className="flex flex-col">
-                  <span className="font-medium">Nouveaux membres</span>
-                  <span className="text-sm text-gray-500">Notifications quand un membre rejoint un groupe</span>
+                  <span className="font-medium">{t('notifPrefs.types.memberJoined.label')}</span>
+                  <span className="text-sm text-gray-500">{t('notifPrefs.types.memberJoined.description')}</span>
                 </Label>
                 <Switch
                   id="memberJoined"
@@ -335,17 +337,17 @@ function NotificationPreferencesContent() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <PhoneMissed className="h-5 w-5" />
-                Appels et système
+                {t('notifPrefs.sections.callsSystem.title')}
               </CardTitle>
               <CardDescription>
-                Gérez les notifications d&apos;appels et système
+                {t('notifPrefs.sections.callsSystem.description')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="missedCall" className="flex flex-col">
-                  <span className="font-medium">Appels manqués</span>
-                  <span className="text-sm text-gray-500">Notifications pour les appels manqués</span>
+                  <span className="font-medium">{t('notifPrefs.types.missedCall.label')}</span>
+                  <span className="text-sm text-gray-500">{t('notifPrefs.types.missedCall.description')}</span>
                 </Label>
                 <Switch
                   id="missedCall"
@@ -355,8 +357,8 @@ function NotificationPreferencesContent() {
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="system" className="flex flex-col">
-                  <span className="font-medium">Notifications système</span>
-                  <span className="text-sm text-gray-500">Mises à jour importantes et annonces</span>
+                  <span className="font-medium">{t('notifPrefs.types.system.label')}</span>
+                  <span className="text-sm text-gray-500">{t('notifPrefs.types.system.description')}</span>
                 </Label>
                 <Switch
                   id="system"
@@ -372,16 +374,16 @@ function NotificationPreferencesContent() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
-                Ne pas déranger
+                {t('notifPrefs.dnd.title')}
               </CardTitle>
               <CardDescription>
-                Définissez une plage horaire pendant laquelle vous ne souhaitez pas recevoir de notifications
+                {t('notifPrefs.dnd.description')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="dnd">
-                  <span className="font-medium">Activer &quot;Ne pas déranger&quot;</span>
+                  <span className="font-medium">{t('notifPrefs.dnd.enableLabel')}</span>
                 </Label>
                 <Switch
                   id="dnd"
@@ -392,7 +394,7 @@ function NotificationPreferencesContent() {
               {preferences.dndEnabled && (
                 <div className="grid grid-cols-2 gap-4 mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                   <div>
-                    <Label htmlFor="dndStart" className="text-sm font-medium">Heure de début</Label>
+                    <Label htmlFor="dndStart" className="text-sm font-medium">{t('notifPrefs.dnd.startTime')}</Label>
                     <Input
                       id="dndStart"
                       type="time"
@@ -402,7 +404,7 @@ function NotificationPreferencesContent() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="dndEnd" className="text-sm font-medium">Heure de fin</Label>
+                    <Label htmlFor="dndEnd" className="text-sm font-medium">{t('notifPrefs.dnd.endTime')}</Label>
                     <Input
                       id="dndEnd"
                       type="time"
@@ -412,7 +414,7 @@ function NotificationPreferencesContent() {
                     />
                   </div>
                   <p className="col-span-2 text-sm text-gray-500 mt-2">
-                    Pendant cette période, vous ne recevrez aucune notification push ou sonore.
+                    {t('notifPrefs.dnd.activePeriodNote')}
                   </p>
                 </div>
               )}
@@ -425,10 +427,10 @@ function NotificationPreferencesContent() {
               variant="outline"
               onClick={() => window.location.href = '/notifications'}
             >
-              Annuler
+              {t('notifPrefs.cancel')}
             </Button>
             <Button onClick={savePreferences} disabled={saving}>
-              {saving ? 'Enregistrement...' : 'Enregistrer les préférences'}
+              {saving ? t('notifPrefs.saving') : t('notifPrefs.saveButton')}
             </Button>
           </div>
         </div>

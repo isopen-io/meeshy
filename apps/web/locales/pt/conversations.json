@@ -635,6 +635,13 @@
       "selectedUser": "Usuário selecionado",
       "loginAs": "Você entrará como {username}",
       "login": "Entrar"
+    },
+    "messageTimestamp": {
+      "today": "Hoje",
+      "yesterday": "Ontem",
+      "todayAt": "Hoje às {time}",
+      "yesterdayAt": "Ontem às {time}",
+      "dayAt": "{day} às {time}"
     }
   }
 }

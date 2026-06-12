@@ -8,4 +8,5 @@
     <string name="bubble_status_delivered">Entregue</string>
     <string name="bubble_status_read">Lida</string>
     <string name="bubble_status_failed">Falha</string>
+    <string name="avatar_fallback">Avatar</string>
 </resources>

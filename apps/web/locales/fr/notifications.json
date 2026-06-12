@@ -314,7 +314,32 @@
       },
       "permissionDeniedInstructions": "Les notifications ont été refusées. Vous pouvez les réactiver dans les paramètres de votre navigateur.",
       "unsupported": "Les notifications ne sont pas supportées par votre navigateur.",
-      "resetButton": "Réinitialiser aux valeurs par défaut"
+      "resetButton": "Réinitialiser aux valeurs par défaut",
+      "pageTitle": "Préférences de notifications",
+      "pageSubtitle": "Personnalisez vos notifications selon vos préférences",
+      "sections": {
+        "messages": {
+          "title": "Notifications de messages",
+          "description": "Gérez les notifications liées aux messages et conversations"
+        },
+        "interactions": {
+          "title": "Interactions",
+          "description": "Gérez les notifications pour les mentions et réactions"
+        },
+        "contacts": {
+          "title": "Contacts et membres",
+          "description": "Gérez les notifications liées aux contacts et groupes"
+        },
+        "callsSystem": {
+          "title": "Appels et système",
+          "description": "Gérez les notifications d'appels et système"
+        }
+      },
+      "cancel": "Annuler",
+      "saveButton": "Enregistrer les préférences",
+      "notAuthenticated": "Non authentifié",
+      "saveError": "Erreur lors de l'enregistrement",
+      "networkError": "Erreur réseau"
     },
     "connectionStatus": {
       "connected": "Connecté",

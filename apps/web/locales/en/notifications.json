@@ -284,7 +284,32 @@
       },
       "permissionDeniedInstructions": "Notifications were denied. You can re-enable them in your browser settings.",
       "unsupported": "Notifications are not supported by your browser.",
-      "resetButton": "Reset to defaults"
+      "resetButton": "Reset to defaults",
+      "pageTitle": "Notification preferences",
+      "pageSubtitle": "Customize how and when you get notified",
+      "sections": {
+        "messages": {
+          "title": "Message notifications",
+          "description": "Manage notifications for messages and conversations"
+        },
+        "interactions": {
+          "title": "Interactions",
+          "description": "Manage notifications for mentions and reactions"
+        },
+        "contacts": {
+          "title": "Contacts and members",
+          "description": "Manage notifications for contacts and groups"
+        },
+        "callsSystem": {
+          "title": "Calls and system",
+          "description": "Manage call and system notifications"
+        }
+      },
+      "cancel": "Cancel",
+      "saveButton": "Save preferences",
+      "notAuthenticated": "Not authenticated",
+      "saveError": "Error while saving",
+      "networkError": "Network error"
     },
     "connectionStatus": {
       "connected": "Connected",

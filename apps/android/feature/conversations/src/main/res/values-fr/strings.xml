@@ -14,4 +14,5 @@
     <string name="conversations_preview_file">📎 Fichier</string>
     <string name="conversations_preview_location">📍 Localisation</string>
     <string name="conversations_preview_you">Vous</string>
+    <string name="conversations_preview_sender_format">%1$s : %2$s</string>
 </resources>

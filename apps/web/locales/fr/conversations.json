@@ -643,6 +643,13 @@
       "selectedUser": "Utilisateur sélectionné",
       "loginAs": "Vous allez vous connecter en tant que {username}",
       "login": "Se connecter"
+    },
+    "messageTimestamp": {
+      "today": "Aujourd'hui",
+      "yesterday": "Hier",
+      "todayAt": "Aujourd'hui à {time}",
+      "yesterdayAt": "Hier à {time}",
+      "dayAt": "{day} à {time}"
     }
   }
 }

@@ -10,7 +10,7 @@ struct PrivacySettingsView: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @ObservedObject private var prefs = UserPreferencesManager.shared
 
-    private let accentColor = "6366F1"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
         ZStack {

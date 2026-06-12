@@ -8,4 +8,5 @@
     <string name="bubble_status_delivered">Entregado</string>
     <string name="bubble_status_read">Leído</string>
     <string name="bubble_status_failed">Fallido</string>
+    <string name="avatar_fallback">Avatar</string>
 </resources>

@@ -4,4 +4,5 @@
     <string name="login_username_label">Nome de usuário</string>
     <string name="login_password_label">Senha</string>
     <string name="login_button">Entrar</string>
+    <string name="login_error_required">Nome de usuário e senha são obrigatórios</string>
 </resources>

@@ -54,7 +54,7 @@ function ContactSkeleton() {
 export default function V2ContactsPage() {
   const router = useRouter();
   const user = useUser();
-  const { t } = useI18n('contacts');
+  const { t, locale } = useI18n('contacts');
   const [activeTab, setActiveTab] = useState<ContactTab>('all');
   const [showSortMenu, setShowSortMenu] = useState(false);
 
@@ -391,6 +391,7 @@ export default function V2ContactsPage() {
                     currentUserId={user?.id}
                     onAction={handleFriendRequestAction}
                     t={t}
+                    locale={locale}
                   />
                 ))}
               </Card>
@@ -420,6 +421,7 @@ export default function V2ContactsPage() {
                     currentUserId={user?.id}
                     onAction={handleFriendRequestAction}
                     t={t}
+                    locale={locale}
                   />
                 ))}
               </Card>
@@ -449,6 +451,7 @@ export default function V2ContactsPage() {
                     currentUserId={user?.id}
                     onAction={handleFriendRequestAction}
                     t={t}
+                    locale={locale}
                   />
                 ))}
               </Card>
