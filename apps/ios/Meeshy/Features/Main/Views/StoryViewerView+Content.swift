@@ -174,10 +174,10 @@ extension StoryViewerView {
                     Color.gray.opacity(0.4)
                         .blendMode(.saturation)
                 case "warm":
-                    Color(hex: "FF6B6B").opacity(0.1)
+                    MeeshyColors.error.opacity(0.1)
                         .blendMode(.softLight)
                 case "cool":
-                    Color(hex: "08D9D6").opacity(0.1)
+                    MeeshyColors.indigo300.opacity(0.1)
                         .blendMode(.softLight)
                 default:
                     EmptyView()

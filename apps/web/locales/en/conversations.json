@@ -320,7 +320,8 @@
       "fallbackUser": "User",
       "reactionAdded": "Reaction {emoji} added",
       "reactionRemoved": "Reaction removed",
-      "inviteSearchPlaceholder": "Search users..."
+      "inviteSearchPlaceholder": "Search users...",
+      "editPhoto": "Edit"
     },
     "conversationImage": {
       "title": "Change conversation image",

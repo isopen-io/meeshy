@@ -28,7 +28,14 @@
     "period90d": "Último trimestre (90d)",
     "period180d": "Último semestre (180d)",
     "period365d": "Último ano (365d)",
-    "periodAll": "Todo o tempo"
+    "periodAll": "Todo o tempo",
+    "charts": {
+      "topTitle": "Visualização - Top {count}",
+      "evolutionTitle": "Evolução e distribuição do desempenho",
+      "position": "Posição {label}",
+      "distributionNote": "Este gráfico mostra a distribuição de desempenho do top {count} classificado por posição.",
+      "curveNote": "A curva descendente indica como os valores diminuem ao longo das posições."
+    }
   },
   "scanLog": {
     "title": "Logs de varredura",
@@ -72,7 +79,8 @@
         "messages": "Mensagens",
         "words": "Palavras",
         "avgConfidence": "Conf. média",
-        "archetypes": "Arquétipos"
+        "archetypes": "Arquétipos",
+        "inactive": "Inativos"
       },
       "distribution": "Distribuição",
       "recentActivity": "Atividade recente",

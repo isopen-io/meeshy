@@ -30,11 +30,11 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 - optimisations 45w toujours ouvertes : deep links `/v2/chats?id=` (parité iOS/Android), swipe-back mobile web, audit dark pages admin
 - locale maps intentionnelles NON à migrer : share-affiliate-modal, AudioPostComposer (speech), use-voice-recording (SpeechRecognition lang) ; StoryViewer `select-none` text-objects = design (parité stories iOS)
 
-### Deferred carry-over — iOS (pour 46+, post-45i/45)
-SampleData.swift suppression fichier mort (pbxproj + build local) ; FriendRequestListView 11 polices ; PostDetailView (.textSelection + 21 hex — re-vérifié OK iter-45, retirer si confirmé) ; arbitrage `time.*` (FeedPostCard) vs `time.short.*` (ShortRelativeTime) — timeAgo FeedCommentsSheet réglé en 45, ChangePasswordView réglé en 45 ; ConversationInfoSheet (52 polices), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (27), NewConversationView (16), DataExportView (16), DataStorageView (11) ; reliquats ancienne palette : RootViewComponents (11), FeedView (8), FeedView+Attachments (10), WidgetPreviewView (7), AboutView (5), MessageComposer (4), AttachmentPreparationService (3), ConversationAnimatedBackground (2), divers ×1 (ConversationInfoSheet, MemberManagementSection, BlockedUsersView, UserStatsView, StoryViewerView+Content, MediaDownloadSettingsView) ; washes AudioPostComposer (décision design) ; ladder pièces jointes arc-en-ciel (à arbitrer charte) ; VoiceProfileWizardView/TrackingLinksView Color(hex:) ; IncomingCallView .white contraste ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) ; ThemedConversationRow theme-aware (leaf-view)
+### Deferred carry-over — iOS (pour 47+, post-46/46i)
+PostDetailView (.textSelection + 21 hex — re-vérifié OK iter-45, retirer si confirmé) ; arbitrage `time.*` (FeedPostCard) vs `time.short.*` (ShortRelativeTime) ; ConversationInfoSheet (52 polices), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (27), NewConversationView (16), DataExportView (16), DataStorageView (11) ; ladder catégoriel arc-en-ciel (FF9F43/45B7D1/2ECC71/F8B500/9B59B6/E74C3C/FF6B6B/E91E63/3498DB/A855F7 — à arbitrer charte : UserStatsView, AboutView sections, MediaDownloadSettingsView, toolbars feed, WidgetPreviewView « Post ») ; `FeedItem`/`ConversationTag` possiblement orphelins post-46i (audit avant suppression) ; washes AudioPostComposer (décision design, OK) ; filtre photo « cool » 08D9D6 StoryViewerView+Content:180 (exception documentée 46i — NE PLUS FLAGGER) ; VoiceProfileWizardView/TrackingLinksView Color(hex:) ; IncomingCallView .white contraste ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) ; ThemedConversationRow theme-aware (leaf-view). **Réglés en 46/46i : ancienne palette (toutes surfaces vivantes), SampleData/MessageComposer supprimés, FriendRequestListView polices+a11y, RootViewComponents épuré, CameraView a11y, PostDetailView confirmé OK**
 
-### Deferred carry-over — Android (pour 46+)
-parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ; exceptions documentées : SettingsScreen 14.dp, emoji 22.sp (acceptées, ne pas re-flagger)
+### Deferred carry-over — Android (pour 47+)
+parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ; App Links `https://meeshy.me` (assetlinks.json, arbitrage cross-platform) ; exceptions documentées : SettingsScreen 14.dp, emoji 22.sp (acceptées, ne pas re-flagger). Soldés en 46 : 4 sites `Role.Button` (SettingsScreen profil, MeeshyPrimaryButton, ReactionChip, BubbleImageGrid ×2)
 
 ---
 
@@ -72,5 +72,7 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 45w | claude/elegant-noether-1pen57 | #596 | ✅ |
 | 45i | claude/wizardly-rubin-ux84an | #595 | ✅ |
 | 45 | claude/blissful-ritchie-dp7ibu | #597 | ✅ |
+| 46 | claude/blissful-ritchie-8rma6f | #606 | ⏳ |
+| 46i | claude/wizardly-rubin-a15oib | #607 | ⏳ |
 | 46w | claude/elegant-noether-09t4x2 | #605 | ✅ |
 | 47w | claude/blissful-ritchie-8d57jg | ⏳ | ⏳ |
