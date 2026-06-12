@@ -101,6 +101,53 @@ struct ConversationRowItem<Menu: View>: View {
     }
 }
 
+// MARK: - Equatable re-render gate (list rows)
+//
+// `ConversationRowItem` carries NO @State (every property is a `let` value or a
+// stable closure), so it is a clean `.equatable()` candidate — unlike the
+// bubble it has none of the iOS 18+ EquatableView-vs-@State footgun. Without
+// this gate the row re-evaluated on every `ConversationListView` body pass and
+// rebuilt its `SwipeableRow` wrapper + `.contextMenu` + `preview:` subtree
+// (device Allocations trace 2026-06-10: ~800k `TypedElement<…ButtonStyle…>`
+// allocations). The `==` MIRRORS `ThemedConversationRow.==` field-for-field
+// (so the visible content is never under-compared — `renderFingerprint` folds
+// every render-affecting conversation field) and adds the SwipeableRow geometry
+// (action counts) + the share-link affordance toggle. Closures are assumed
+// stable (they capture `conversation`, which is compared); the context-menu /
+// preview closures are long-press-only, so minor staleness there is acceptable.
+extension ConversationRowItem: @MainActor Equatable {
+    static func == (lhs: ConversationRowItem, rhs: ConversationRowItem) -> Bool {
+        lhs.conversation.id == rhs.conversation.id &&
+        lhs.conversation.renderFingerprint == rhs.conversation.renderFingerprint &&
+        lhs.community?.id == rhs.community?.id &&
+        lhs.rowWidth == rhs.rowWidth &&
+        lhs.isDragging == rhs.isDragging &&
+        lhs.presenceState == rhs.presenceState &&
+        lhs.isDark == rhs.isDark &&
+        lhs.storyRingState == rhs.storyRingState &&
+        lhs.moodStatus?.id == rhs.moodStatus?.id &&
+        lhs.typingUsername == rhs.typingUsername &&
+        lhs.isSelected == rhs.isSelected &&
+        lhs.draftSummary == rhs.draftSummary &&
+        lhs.preferredContentLanguages == rhs.preferredContentLanguages &&
+        // Compare swipe action ICONS, not just `.count`: the lock/block toggles
+        // (`leadingSwipeActions`/`trailingSwipeActions`) read live state from
+        // `ConversationLockManager` / `BlockService` — singletons NOT folded into
+        // `renderFingerprint`. Counting alone would freeze a stale "Unblock" /
+        // "Unlock" action behind the equatable gate (the icon encodes the state:
+        // hand.raised.fill ⇄ hand.raised.slash.fill, lock.fill ⇄ lock.open.fill).
+        // The list now observes both singletons (see ConversationListView) so a
+        // change re-evaluates the rows and this comparison detects it. Zip avoids
+        // allocating arrays in `==`.
+        lhs.leadingActions.count == rhs.leadingActions.count &&
+        lhs.trailingActions.count == rhs.trailingActions.count &&
+        zip(lhs.leadingActions, rhs.leadingActions).allSatisfy { $0.icon == $1.icon } &&
+        zip(lhs.trailingActions, rhs.trailingActions).allSatisfy { $0.icon == $1.icon } &&
+        (lhs.onCreateShareLink == nil) == (rhs.onCreateShareLink == nil) &&
+        lhs.cachedPreviewMessages.count == rhs.cachedPreviewMessages.count
+    }
+}
+
 // MARK: - Pagination Footer
 
 /// Cursor-based infinite-scroll footer driven by `paginationState`.

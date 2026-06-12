@@ -160,6 +160,7 @@
       "createAccount": "Créer un compte"
     },
     "redirecting": "Redirection...",
+    "redirectingDescription": "Vous allez être redirigé vers votre destination",
     "featureGate": {
       "title": "Fonctionnalité temporairement indisponible",
       "passwordResetDisabled": "La réinitialisation du mot de passe est temporairement indisponible. Veuillez contacter le support si vous avez besoin d'aide pour accéder à votre compte.",
@@ -211,7 +212,66 @@
     "exitFullscreen": "Quitter le plein écran",
     "zoomIn": "Zoomer",
     "zoomOut": "Dézoomer",
-    "rotate": "Pivoter"
+    "rotate": "Pivoter",
+    "clearSearch": "Effacer la recherche",
+    "backToList": "Retour à la liste",
+    "backToConversations": "Retour aux conversations",
+    "breadcrumb": "Fil d'Ariane",
+    "home": "Accueil",
+    "anonymous": "Anonyme",
+    "user": "Utilisateur",
+    "reactWith": "Réagir avec {emoji}",
+    "limitReached": "Limite atteinte : {limit} {category}s maximum",
+    "filesAdded": "Seuls {count} fichier(s) ajouté(s)",
+    "send": "Envoyer",
+    "noTrending": "Aucune tendance pour le moment",
+    "breadcrumbLabels": {
+      "admin": "Admin",
+      "users": "Utilisateurs",
+      "analytics": "Analytics",
+      "moderation": "Modération",
+      "settings": "Paramètres",
+      "messages": "Messages",
+      "conversations": "Conversations",
+      "communities": "Communautés",
+      "broadcasts": "Diffusions",
+      "reports": "Rapports",
+      "ranking": "Classement",
+      "agent": "Agent IA",
+      "monitoring": "Monitoring",
+      "notifications": "Notifications",
+      "auditLogs": "Journaux d'audit",
+      "trackingLinks": "Liens de tracking",
+      "shareLinks": "Liens de partage",
+      "languages": "Langues",
+      "dashboard": "Tableau de bord",
+      "contacts": "Contacts",
+      "feeds": "Feeds"
+    },
+    "newStory": "Nouvelle story",
+    "publish": "Publier",
+    "storyPlaceholder": "Tapez votre story...",
+    "replyPlaceholder": "Répondre...",
+    "mediaCategory": {
+      "photo": "photo",
+      "video": "vidéo",
+      "audio": "audio"
+    },
+    "storyVisibility": {
+      "public": "Public",
+      "friends": "Amis",
+      "private": "Privé"
+    },
+    "statusComposer": {
+      "title": "Quel est ton mood ?",
+      "placeholder": "Qu'est-ce que tu fais ?",
+      "preview": "Aperçu",
+      "yourName": "Ton nom",
+      "clear": "Effacer mon statut"
+    },
+    "postPlaceholder": "Qu'est-ce qui te passe par la tête ?",
+    "captionPlaceholder": "Ajoute une légende (optionnel)...",
+    "quotePlaceholder": "Ajoute ton commentaire..."
   },
   "copied": "Copié",
   "never": "Jamais"

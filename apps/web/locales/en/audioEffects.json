@@ -7,12 +7,14 @@
     "selectEffectPrompt": "Click on an effect to configure it",
     "toggleEffect": "Toggle Effect",
     "configure": "Configure",
+    "configureEffect": "Configure the {name} effect",
     "close": "Close",
     "apply": "Apply",
     "reset": "Reset",
     "resetAll": "Reset All",
     "disableAll": "Disable all effects",
     "controls": {
+      "loading": "Loading...",
       "speed": {
         "ariaLabel": "Adjust playback speed"
       },
@@ -308,11 +310,27 @@
       "custom": "Custom",
       "customDescription": "Your own settings"
     },
+    "transcription": {
+      "you": "You",
+      "noVoiceProfile": "(no voice profile)",
+      "highConfidence": "High confidence",
+      "mediumConfidence": "Medium confidence",
+      "veryLowConfidence": "Very low",
+      "uncertain": "Uncertain"
+    },
     "timeline": {
       "title": "Effects Timeline",
       "duration": "Duration",
       "effectsUsed": "Effects Used",
       "noTimeline": "No effects timeline available",
+      "noData": "No timeline data available",
+      "allParametersEvolution": "All parameters evolution",
+      "parametersEvolution": "Parameters evolution",
+      "activationPeriods": "Activation periods:",
+      "totalTime": "Total time:",
+      "noConfiguration": "No configuration available for this effect",
+      "dataPoint": "{label}: {value} at {time}",
+      "clickToSeek": "Click to jump to this moment",
       "activatedAt": "Activated at",
       "deactivatedAt": "Deactivated at",
       "updatedAt": "Updated at",

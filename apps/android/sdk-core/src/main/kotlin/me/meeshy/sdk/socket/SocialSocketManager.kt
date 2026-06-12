@@ -45,21 +45,21 @@ class SocialSocketManager @Inject constructor(
     val storyViewed: SharedFlow<SocketStoryViewedData> = _storyViewed.asSharedFlow()
 
     fun attach() {
-        listen("post:created") { _postCreated.tryEmit(it) }
-        listen("post:liked") { _postLiked.tryEmit(it) }
-        listen("post:unliked") { _postUnliked.tryEmit(it) }
-        listen("post:deleted") { _postDeleted.tryEmit(it) }
-        listen("comment:added") { _commentAdded.tryEmit(it) }
-        listen("comment:liked") { _commentLiked.tryEmit(it) }
-        listen("story:created") { _storyCreated.tryEmit(it) }
-        listen("story:viewed") { _storyViewed.tryEmit(it) }
+        listen("post:created", _postCreated)
+        listen("post:liked", _postLiked)
+        listen("post:unliked", _postUnliked)
+        listen("post:deleted", _postDeleted)
+        listen("comment:added", _commentAdded)
+        listen("comment:liked", _commentLiked)
+        listen("story:created", _storyCreated)
+        listen("story:viewed", _storyViewed)
     }
 
-    private inline fun <reified T> listen(event: String, crossinline emit: (T) -> Unit) {
+    private inline fun <reified T> listen(event: String, flow: MutableSharedFlow<T>) {
         socketManager.on(event) { args ->
             runCatching {
                 val raw = (args.firstOrNull() as? JSONObject)?.toString() ?: return@on
-                emit(json.decodeFromString<T>(raw))
+                flow.tryEmit(json.decodeFromString<T>(raw))
             }.onFailure { Timber.e(it, "Socket decode error [$event]: ${T::class.simpleName}") }
         }
     }

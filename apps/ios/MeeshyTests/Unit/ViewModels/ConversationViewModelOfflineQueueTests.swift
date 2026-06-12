@@ -99,6 +99,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
             networkMonitor: networkMonitor,
             offlineQueue: offlineQueue
         )
+        sut.start()
         return Fixture(
             sut: sut,
             messageService: messageService,

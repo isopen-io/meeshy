@@ -3,8 +3,8 @@
  * Tests for user status state management with Zustand
  */
 
-import { act } from '@testing-library/react';
-import { useUserStore, UserStatusUpdate } from '../../stores/user-store';
+import { act, renderHook } from '@testing-library/react';
+import { useUserStore, useUserById, useUserStatusTick, UserStatusUpdate } from '../../stores/user-store';
 import type { User } from '@/types';
 
 describe('UserStore', () => {
@@ -418,6 +418,55 @@ describe('UserStore', () => {
       });
 
       expect(useUserStore.getState().getUserById('user-1')?.isOnline).toBe(true);
+    });
+  });
+
+  describe('Selector hooks', () => {
+    it('useUserById returns the requested user reactively', () => {
+      act(() => {
+        useUserStore.getState().mergeParticipants([mockUser1]);
+      });
+
+      const { result } = renderHook(() => useUserById('user-1'));
+      expect(result.current?.username).toBe('john');
+
+      act(() => {
+        useUserStore.getState().updateUserStatus('user-1', { isOnline: false });
+      });
+
+      expect(result.current?.isOnline).toBe(false);
+    });
+
+    it('useUserById does not re-render when another user changes', () => {
+      act(() => {
+        useUserStore.getState().mergeParticipants([mockUser1, mockUser2]);
+      });
+
+      let renderCount = 0;
+      renderHook(() => {
+        renderCount += 1;
+        return useUserById('user-1');
+      });
+      const initialRenderCount = renderCount;
+
+      act(() => {
+        useUserStore.getState().updateUserStatus('user-2', { isOnline: true });
+      });
+
+      expect(renderCount).toBe(initialRenderCount);
+    });
+
+    it('useUserStatusTick re-renders on status ticks', () => {
+      const { result } = renderHook(() => useUserStatusTick());
+      const initialTick = result.current;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(initialTick + 1000);
+
+      act(() => {
+        useUserStore.getState().triggerStatusTick();
+      });
+
+      nowSpy.mockRestore();
+      expect(result.current).toBe(initialTick + 1000);
     });
   });
 });

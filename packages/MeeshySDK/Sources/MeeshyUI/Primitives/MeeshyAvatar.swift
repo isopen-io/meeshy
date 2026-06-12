@@ -171,7 +171,11 @@ public enum AvatarContext: Sendable {
 
 // MARK: - Story Ring State
 
-public enum StoryRingState: Equatable {
+/// `nonisolated` : la conformance Equatable doit rester utilisable depuis
+/// les `==` nonisolated des leaf views Equatable (FeedPostCard…) — sous
+/// SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor, la conformance synthétisée
+/// serait sinon MainActor-isolée.
+nonisolated public enum StoryRingState: Equatable, Sendable {
     case none, unread, read
 }
 
@@ -237,21 +241,25 @@ public struct MeeshyAvatar: View {
         self.enablePulse = enablePulse ?? context.defaultPulse; self.isDark = isDark
         self.onTap = onTap; self.onViewProfile = onViewProfile; self.onViewStory = onViewStory
         self.onMoodTap = onMoodTap; self.onOnlineTap = onOnlineTap; self.contextMenuItems = contextMenuItems
+        // Memoized once from the immutable inputs (name/accentColor/secondaryColor).
+        // Previously computed vars: `colorForName` (DJB2 hash) and the initials
+        // split re-ran on every body access — once per shadow/fill/ring/secondary
+        // read, and again on every story-ring rotation tick. Computing here keeps
+        // every subsequent render allocation- and hash-free.
+        let accent = accentColor.isEmpty ? DynamicColorGenerator.colorForName(name) : accentColor
+        self.resolvedAccent = accent
+        self.resolvedSecondary = secondaryColor ?? accent
+        self.initials = Self.makeInitials(from: name)
     }
 
     @State private var ringRotation: Double = 0
     @State private var tapScale: CGFloat = 1.0
     @State private var moodScale: CGFloat = 1.0
     private let isDark: Bool
+    private let resolvedAccent: String
+    private let resolvedSecondary: String
+    private let initials: String
     private var theme: ThemeManager { ThemeManager.shared }
-
-    private var resolvedAccent: String {
-        accentColor.isEmpty ? DynamicColorGenerator.colorForName(name) : accentColor
-    }
-
-    private var resolvedSecondary: String {
-        secondaryColor ?? resolvedAccent
-    }
 
     private var secondaryGradientColor: Color {
         secondaryColor != nil ? Color(hex: resolvedSecondary) : Color(hex: resolvedAccent).opacity(0.6)
@@ -505,7 +513,10 @@ public struct MeeshyAvatar: View {
 
     // MARK: - Helpers
 
-    private var initials: String {
+    /// Pure initials derivation (first letter of up to two words, uppercased,
+    /// falling back to the first character). `nonisolated` so it is reachable
+    /// from the `nonisolated`-friendly path and unit-testable off the MainActor.
+    nonisolated static func makeInitials(from name: String) -> String {
         let parts = name.components(separatedBy: " ")
             .prefix(2)
             .compactMap(\.first)

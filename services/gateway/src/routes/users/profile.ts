@@ -17,7 +17,7 @@ import {
   updateUserRequestSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import type { AuthenticatedRequest, PaginationParams, UserIdParams, UsernameParams } from './types';
+import type { AuthenticatedRequest, UserIdParams, UsernameParams } from './types';
 import { formatUserResponse } from '../auth/types';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import { authUserCacheKey } from '../../middleware/auth';
@@ -28,19 +28,6 @@ import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendFor
 
 const logger = enhancedLogger.child({ module: 'UserProfileRoutes' });
 
-/**
- * Validate and sanitize pagination parameters
- */
-function validatePagination(
-  offset: string = '0',
-  limit: string = '20',
-  defaultLimit: number = 20,
-  maxLimit: number = 100
-): PaginationParams {
-  const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
-  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || defaultLimit), maxLimit);
-  return { offsetNum, limitNum };
-}
 
 /**
  * Get authenticated user test endpoint
@@ -209,6 +196,22 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
+
+      // B3 (5.3) — un changement de langue doit rafraîchir le snapshot
+      // `resolvedLanguages` des sockets connectés du user, sinon SOCKET_LANG_FILTER
+      // continue de filtrer sur l'ancienne langue jusqu'à reconnexion. Best-effort.
+      const langChanged =
+        body.systemLanguage !== undefined ||
+        body.regionalLanguage !== undefined ||
+        body.customDestinationLanguage !== undefined;
+      if (langChanged) {
+        fastify.socketIOHandler?.getManager?.()?.refreshUserResolvedLanguages(userId!, {
+          systemLanguage: updatedUser.systemLanguage,
+          regionalLanguage: updatedUser.regionalLanguage,
+          customDestinationLanguage: updatedUser.customDestinationLanguage,
+          deviceLocale: updatedUser.deviceLocale,
+        });
+      }
 
       const isAdmin = updatedUser.role === 'ADMIN' || updatedUser.role === 'BIGBOSS';
       const permissions = {

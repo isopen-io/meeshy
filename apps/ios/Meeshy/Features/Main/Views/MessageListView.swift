@@ -241,6 +241,9 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Tap on a story reply preview inside a bubble. Argument is the story id
     /// (not the message id) — the parent resolves it to a story group + slide.
     var onStoryReplyTap: ((String) -> Void)?
+    /// Tap on the sender avatar's story ring in a bubble footer. Argument is
+    /// the sender's user id — the parent presents the story viewer.
+    var onViewSenderStory: ((String) -> Void)?
     /// Swipe-to-reply on a bubble. Argument is the swiped message id.
     var onSwipeReply: ((String) -> Void)?
     /// Swipe-to-forward on a bubble. Argument is the swiped message id.
@@ -254,6 +257,8 @@ struct MessageListView: UIViewControllerRepresentable {
     var onAddReaction: ((String, CGRect?) -> Void)?
     /// Toggle a reaction emoji on a message (tap an existing reaction chip).
     var onToggleReaction: ((String, String) -> Void)?
+    /// BUG2 A' — réaction par-image (attachmentId, messageId, emoji).
+    var onReactToAttachment: ((String, String, String) -> Void)?
     /// Open the full reactions list / picker sheet for a message.
     var onOpenReactPicker: ((String) -> Void)?
     /// Open the message detail sheet on the "info / views" tab.
@@ -262,6 +267,8 @@ struct MessageListView: UIViewControllerRepresentable {
     /// opens the detail sheet directly on the "vues" tab so the author can
     /// inspect read receipts without going through the long-press menu.
     var onShowReadStatus: ((String) -> Void)?
+    /// Manual resend of a FAILED outgoing message (id) → `retryMessage`.
+    var onRetry: ((String) -> Void)?
     /// Open the message detail sheet on the "reactions" tab.
     var onShowReactions: ((String) -> Void)?
     /// Open the message detail sheet on the "language / translation" tab.
@@ -304,14 +311,17 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
         vc.onStoryReplyTap = onStoryReplyTap
+        vc.onViewSenderStory = onViewSenderStory
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
+        vc.onReactToAttachment = onReactToAttachment
         vc.onOpenReactPicker = onOpenReactPicker
         vc.onShowMessageInfo = onShowMessageInfo
         vc.onShowReadStatus = onShowReadStatus
+        vc.onRetry = onRetry
         vc.onShowReactions = onShowReactions
         vc.onShowTranslationDetail = onShowTranslationDetail
         vc.onMediaTap = onMediaTap
@@ -353,14 +363,17 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
         vc.onStoryReplyTap = onStoryReplyTap
+        vc.onViewSenderStory = onViewSenderStory
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
+        vc.onReactToAttachment = onReactToAttachment
         vc.onOpenReactPicker = onOpenReactPicker
         vc.onShowMessageInfo = onShowMessageInfo
         vc.onShowReadStatus = onShowReadStatus
+        vc.onRetry = onRetry
         vc.onShowReactions = onShowReactions
         vc.onShowTranslationDetail = onShowTranslationDetail
         vc.onMediaTap = onMediaTap

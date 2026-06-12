@@ -34,8 +34,10 @@ final class NSEPendingMessageConsumer {
         let userId = AuthManager.shared.currentUser?.id ?? ""
         let username = AuthManager.shared.currentUser?.username
 
+        var decodedAPIMessages: [APIMessage] = []
         for (conversationId, data) in pending {
             guard let apiMsg = try? decoder.decode(APIMessage.self, from: data) else { continue }
+            decodedAPIMessages.append(apiMsg)
             let message = apiMsg.toMessage(currentUserId: userId, currentUsername: username)
 
             await CacheCoordinator.shared.messages.upsert(
@@ -45,6 +47,22 @@ final class NSEPendingMessageConsumer {
                 guard !existing.contains(where: { $0.id == newItem.id }) else { return existing }
                 return (existing + [newItem]).sorted { $0.createdAt < $1.createdAt }
             }
+        }
+
+        // The CacheCoordinator upsert above only feeds the conversation LIST
+        // (preview, ordering). The conversation timeline reads GRDB — persist
+        // there too, or a push-prefetched message stays invisible inside the
+        // conversation until the next REST revalidation.
+        //
+        // Use the AWAITED `upsertFromAPIMessages` (commits before returning),
+        // not the fire-and-forget `bufferIncomingAPIMessages` (yields onto an
+        // async write worker). The conversation-open path calls `consumeAll`
+        // right before reading its GRDB snapshot: only an awaited commit
+        // guarantees the just-consumed push message is in that snapshot, so it
+        // renders INSTANTLY from local data with no network round-trip.
+        if !decodedAPIMessages.isEmpty {
+            try? await DependencyContainer.shared.messagePersistence
+                .upsertFromAPIMessages(decodedAPIMessages)
         }
 
         if !pending.isEmpty {

@@ -190,7 +190,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         if (message) {
           // Broadcaster l'événement à tous les participants de la conversation
           // Note: La méthode broadcastToConversation sera ajoutée au handler Socket.IO
-          (socketIOHandler as any).io?.to(ROOMS.conversation(message.conversationId)).emit(
+          fastify.socketIOHandler.getManager()?.getIO().to(ROOMS.conversation(message.conversationId)).emit(
             SERVER_EVENTS.REACTION_ADDED,
             updateEvent
           );
@@ -334,7 +334,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       if (socketIOHandler) {
 
         if (message) {
-          (socketIOHandler as any).io?.to(ROOMS.conversation(message.conversationId)).emit(
+          fastify.socketIOHandler.getManager()?.getIO().to(ROOMS.conversation(message.conversationId)).emit(
             SERVER_EVENTS.REACTION_REMOVED,
             updateEvent
           );

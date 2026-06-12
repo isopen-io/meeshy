@@ -248,7 +248,7 @@ const conversationParamsSchema = {
 } as const;
 
 // ===== ROUTE NON-BLOQUANTE =====
-export async function translationRoutes(fastify: FastifyInstance, options: any) {
+export async function translationRoutes(fastify: FastifyInstance, _options: Record<string, unknown>) {
   // Recuperer les services depuis l'instance fastify (comme dans translation.ts)
   const translationService = fastify.translationService;
   const messagingService = fastify.messagingService;
@@ -414,7 +414,7 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
         }
       }
     }
-  }, async (request: any, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Params: { messageId: string; language: string } }>, reply: FastifyReply) => {
     try {
       const { messageId, language } = request.params;
 

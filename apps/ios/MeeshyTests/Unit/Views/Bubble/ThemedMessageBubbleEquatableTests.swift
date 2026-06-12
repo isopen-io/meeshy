@@ -128,6 +128,48 @@ final class ThemedMessageBubbleEquatableTests: XCTestCase {
         XCTAssertEqual(a, b)
     }
 
+    // MARK: - Flag-strip selection (VM-owned inputs, lifted out of @State)
+    //
+    // A flag tap round-trips VM → cell reconfigure → fresh inputs. The gate
+    // MUST see them change, or the secondary-translation panel never
+    // re-renders — the exact iOS 18+ footgun that forced revert b9a39c2c.
+
+    func test_activeDisplayLangCodeChange_invalidates() {
+        var a = makeBubble()
+        var b = makeBubble()
+        a.activeDisplayLangCode = "fr"
+        b.activeDisplayLangCode = "en"
+        XCTAssertNotEqual(a, b)
+    }
+
+    func test_secondaryLangCodeChange_invalidates() {
+        var a = makeBubble()
+        var b = makeBubble()
+        a.secondaryLangCode = nil
+        b.secondaryLangCode = "es"
+        XCTAssertNotEqual(a, b)
+    }
+
+    // MARK: - EquatableMessageBubble (stateless cell gate) delegates to ==
+
+    func test_equatableGate_identicalBubbles_areEqual() {
+        XCTAssertEqual(
+            EquatableMessageBubble(bubble: makeBubble()),
+            EquatableMessageBubble(bubble: makeBubble())
+        )
+    }
+
+    func test_equatableGate_languageSelectionChange_invalidates() {
+        var a = makeBubble()
+        var b = makeBubble()
+        a.secondaryLangCode = nil
+        b.secondaryLangCode = "es"
+        XCTAssertNotEqual(
+            EquatableMessageBubble(bubble: a),
+            EquatableMessageBubble(bubble: b)
+        )
+    }
+
     // MARK: - Helpers
 
     private func makeBubble(

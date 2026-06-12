@@ -93,6 +93,51 @@ public actor MediaSessionCoordinator {
     /// sans dépendance à la couche appel de l'app. `nonisolated` → lecture sync.
     public nonisolated var isCallActive: Bool { callActive }
 
+    /// Configure + active SYNCHRONEMENT la session `.playback` (call-aware) — source
+    /// UNIQUE de la config de session de lecture pour les composants dont `load`/`play`
+    /// sont synchrones (vidéo `SharedAVPlayerManager`, story canvas/coordinator), par
+    /// opposition aux moteurs voice-note qui passent par `request(role:)` async
+    /// refcompté. NE TOUCHE PAS la session pendant un appel VoIP (sinon micro coupé) :
+    /// le média joue alors sous la session de l'appel. `nonisolated` (I/O session +
+    /// `callActive` sont synchrones). Pas de refcount : `PlaybackCoordinator` garantit
+    /// déjà l'exclusion mutuelle entre lecteurs.
+    public nonisolated func activatePlaybackSync(
+        mode: AVAudioSession.Mode = .default,
+        options: AVAudioSession.CategoryOptions
+    ) {
+        guard Self.shouldManageSession(callActive: callActive) else { return }
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, mode: mode, options: options)
+        try? session.setActive(true)
+    }
+
+    /// Configure SYNCHRONEMENT la session pour un enregistrement micro
+    /// (voice note, voice story). Source unique call-aware : pendant un
+    /// appel VoIP la session appartient à RTCAudioSession — reconfigurer
+    /// en `.playAndRecord` ici casserait l'uplink micro de l'appel.
+    /// Retourne `false` si la session n'a pas pu être prise (appel actif).
+    @discardableResult
+    public nonisolated func activateRecordingSync(
+        options: AVAudioSession.CategoryOptions = [.defaultToSpeaker, .allowBluetoothA2DP]
+    ) -> Bool {
+        guard Self.shouldManageSession(callActive: callActive) else { return false }
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playAndRecord, mode: .default, options: options)
+            try session.setActive(true)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Désactive SYNCHRONEMENT la session (call-aware : ne coupe rien pendant un appel,
+    /// la session appartient alors à l'appel).
+    public nonisolated func deactivatePlaybackSync() {
+        guard Self.shouldManageSession(callActive: callActive) else { return }
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
     /// Pure, testable decision: may the coordinator (re)configure or tear down
     /// the shared `AVAudioSession` right now? `false` while a VoIP call owns it
     /// — switching the category to `.playback` mid-call mutes the microphone.

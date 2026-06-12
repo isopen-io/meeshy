@@ -171,16 +171,23 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
     /// At most one media transition (renegotiation) in flight at a time, to avoid
     /// SDP offer glare and Task pile-up on a flaky link.
     private var isTransitioning = false
-    /// Hard cap on a single suspend/resume. A renegotiation can hang on a dead
-    /// link; without this, `isTransitioning` would stay `true` forever and freeze
-    /// survival for the rest of a (potentially multi-hour) call.
+    /// Default hard cap (seconds) on a single suspend/resume renegotiation. A
+    /// renegotiation can hang on a dead link; without this, `isTransitioning`
+    /// would stay `true` forever and freeze survival for the rest of a
+    /// (potentially multi-hour) call. Named + centralised here rather than left
+    /// as a literal in `init`. `nonisolated` so the init default argument can
+    /// read it without hopping onto the main actor.
+    nonisolated static let defaultTransitionTimeout: TimeInterval = 20
+
+    /// Per-instance cap on a single suspend/resume renegotiation. Injectable for
+    /// tests; defaults to `defaultTransitionTimeout`.
     private let transitionTimeout: TimeInterval
 
     init(
         actuator: VideoSurvivalActuating? = nil,
         policy: VideoSurvivalPolicy = VideoSurvivalPolicy(),
         now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
-        transitionTimeout: TimeInterval = 20
+        transitionTimeout: TimeInterval = VideoSurvivalController.defaultTransitionTimeout
     ) {
         self.actuator = actuator
         self.policy = policy

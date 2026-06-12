@@ -24,6 +24,10 @@ struct StoryViewerRequest: Identifiable, Equatable {
     /// (entrées « toucher le profil / l'avatar / le tray »). Les deep links /
     /// notifications ciblant un contenu précis gardent `false`.
     var startAtFirstUnviewed: Bool = false
+    /// `true` pour les entrées « personne précise » (profil, bulle, avatar
+    /// de post, ma story) : le viewer ne montre que le groupe de cet
+    /// utilisateur. Les contextes « flux » (tray, liste) gardent `false`.
+    var singleGroup: Bool = false
 }
 
 /// Named magic numbers for the iPhone root-view audio overlay layout.
@@ -108,6 +112,16 @@ struct RootView: View {
                             conversation: conv,
                             replyContext: router.pendingReplyContext
                         )
+                        // Identité par conversation — même fix que iPadRootView.
+                        // `Router.navigateToConversation` REMPLACE la pile en une
+                        // mutation (`path = [.conversation(B)]`) : déjà dans la
+                        // conversation A, un tap sur la notification de B réutilise
+                        // cette vue à la même profondeur — la prop `conversation`
+                        // change (header OK) mais le @StateObject viewModel créé
+                        // pour A survit et `.task` ne se relance pas : le contenu
+                        // restait sur A. `.id` force le teardown (flush du
+                        // brouillon de A via onDisappear) + une vue neuve pour B.
+                        .id(conv.id)
                         .navigationBarHidden(true)
                         .onAppear { router.pendingReplyContext = nil }
                     case .settings:
@@ -387,6 +401,7 @@ struct RootView: View {
                     storyViewerCoordinator.dismiss()
                     router.navigateToStoryReply(replyContext, conversationListViewModel: conversationViewModel)
                 },
+                singleGroup: request.singleGroup,
                 startAtFirstUnviewed: request.startAtFirstUnviewed,
                 presentationSource: "RootView.fromConv",
                 initialAction: request.initialAction
@@ -543,7 +558,10 @@ struct RootView: View {
             } else if routeName.hasPrefix("storyDetail:") {
                 let postId = String(routeName.dropFirst("storyDetail:".count))
                 if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                    storyViewerCoordinator.present(StoryViewerRequest(id: storyViewModel.storyGroups[groupIdx].id))
+                    storyViewerCoordinator.present(StoryViewerRequest(
+                        id: storyViewModel.storyGroups[groupIdx].id,
+                        startAtFirstUnviewed: true
+                    ))
                 } else {
                     router.push(.postDetail(postId))
                 }
@@ -700,7 +718,10 @@ struct RootView: View {
             // so cold-launch deep links and warm-launch push taps land on
             // the same screen for the same id.
             if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                storyViewerCoordinator.present(StoryViewerRequest(id: storyViewModel.storyGroups[groupIdx].id))
+                storyViewerCoordinator.present(StoryViewerRequest(
+                    id: storyViewModel.storyGroups[groupIdx].id,
+                    startAtFirstUnviewed: true
+                ))
             } else {
                 router.push(.postDetail(postId))
             }

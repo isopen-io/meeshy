@@ -67,10 +67,10 @@ const TEXT_STYLES: { id: TextStyle; label: string }[] = [
   { id: 'handwriting', label: 'Hh' },
 ];
 
-const VISIBILITY_OPTIONS: { id: StoryVisibility; label: string; icon: string }[] = [
-  { id: 'PUBLIC', label: 'Public', icon: '\uD83C\uDF0D' },
-  { id: 'FRIENDS', label: 'Amis', icon: '\uD83D\uDC65' },
-  { id: 'PRIVATE', label: 'Priv\u00e9', icon: '\uD83D\uDD12' },
+const VISIBILITY_OPTIONS: { id: StoryVisibility; labelKey: string; icon: string }[] = [
+  { id: 'PUBLIC', labelKey: 'storyVisibility.public', icon: '\uD83C\uDF0D' },
+  { id: 'FRIENDS', labelKey: 'storyVisibility.friends', icon: '\uD83D\uDC65' },
+  { id: 'PRIVATE', labelKey: 'storyVisibility.private', icon: '\uD83D\uDD12' },
 ];
 
 // ============================================================================
@@ -103,11 +103,11 @@ function getMediaCategory(mimeType: string): MediaCategory | null {
   return null;
 }
 
-function getCategoryLabel(category: MediaCategory): string {
+function getCategoryLabelKey(category: MediaCategory): string {
   switch (category) {
-    case 'image': return 'photo';
-    case 'video': return 'video';
-    case 'audio': return 'audio';
+    case 'image': return 'mediaCategory.photo';
+    case 'video': return 'mediaCategory.video';
+    case 'audio': return 'mediaCategory.audio';
   }
 }
 
@@ -156,19 +156,17 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
     const available = limit - current;
 
     if (available <= 0) {
-      toast.error(`Limite atteinte : ${limit} ${getCategoryLabel(category)}s maximum`);
+      toast.error(t('limitReached', { limit: String(limit), category: t(getCategoryLabelKey(category)) }));
       return;
     }
 
     const filesToAdd = Array.from(files).slice(0, available);
     if (filesToAdd.length < files.length) {
-      toast.warning(
-        `Seuls ${filesToAdd.length} fichier(s) ajouté(s) (limite : ${limit} ${getCategoryLabel(category)}s)`
-      );
+      toast.warning(t('filesAdded', { count: String(filesToAdd.length) }));
     }
 
     handleFilesSelected(filesToAdd);
-  }, [mediaCounts, handleFilesSelected]);
+  }, [mediaCounts, handleFilesSelected, t]);
 
   const handlePublish = useCallback(() => {
     const mediaIds = uploadedAttachments.map(att => att.id);
@@ -210,7 +208,7 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
             'text-[var(--gp-text-secondary)] hover:bg-[var(--gp-hover)]',
             'transition-colors duration-300'
           )}
-          aria-label={t('common.close')}
+          aria-label={t('close')}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -229,7 +227,7 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
         </button>
 
         <h2 className="text-base font-semibold text-[var(--gp-text-primary)] transition-colors duration-300">
-          Nouvelle Story
+          {t('newStory')}
         </h2>
 
         <Button
@@ -238,7 +236,7 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
           onClick={handlePublish}
           disabled={!hasContent || isUploading}
         >
-          {isUploading ? 'Upload...' : 'Publier'}
+          {isUploading ? t('uploading') : t('publish')}
         </Button>
       </DialogHeader>
 
@@ -254,7 +252,7 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="Tapez votre story..."
+            placeholder={t('storyPlaceholder')}
             maxLength={500}
             className={cn(
               'z-10 w-full resize-none bg-transparent px-6 py-4 text-center text-xl text-white',
@@ -311,7 +309,7 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
                         'bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100',
                         'transition-opacity duration-200'
                       )}
-                      aria-label="Supprimer"
+                      aria-label={t('delete')}
                     >
                       x
                     </button>
@@ -448,7 +446,7 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
                 )}
               >
                 <span>{opt.icon}</span>
-                {opt.label}
+                {t(opt.labelKey)}
               </button>
             ))}
           </div>

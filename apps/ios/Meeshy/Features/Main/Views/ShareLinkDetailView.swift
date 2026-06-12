@@ -33,11 +33,11 @@ struct ShareLinkDetailView: View {
         }
         .navigationTitle(link.displayName)
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("Supprimer ce lien ?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button("Supprimer", role: .destructive) { deleteLink() }
-            Button("Annuler", role: .cancel) {}
+        .confirmationDialog(String(localized: "shareLink.deleteTitle", defaultValue: "Delete this link?", bundle: .main), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button(String(localized: "shareLink.delete", defaultValue: "Delete", bundle: .main), role: .destructive) { deleteLink() }
+            Button(String(localized: "common.cancel", defaultValue: "Cancel", bundle: .main), role: .cancel) {}
         } message: {
-            Text("Cette action est irréversible. Le lien ne sera plus accessible.")
+            Text(String(localized: "shareLink.deleteConfirmation", defaultValue: "This action is irreversible. The link will no longer be accessible.", bundle: .main))
         }
     }
 
@@ -46,10 +46,10 @@ struct ShareLinkDetailView: View {
     private var headerCard: some View {
         VStack(spacing: 12) {
             ZStack {
-                Circle().fill(Color(hex: isActive ? "08D9D6" : "888888").opacity(0.15))
+                Circle().fill((isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500).opacity(0.15))
                     .frame(width: 60, height: 60)
                 Image(systemName: isActive ? "link" : "link.badge.minus").font(.system(size: 28))
-                    .foregroundColor(Color(hex: isActive ? "08D9D6" : "888888"))
+                    .foregroundColor(isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500)
             }
             Text(link.displayName).font(.system(size: 20, weight: .bold))
                 .foregroundColor(theme.textPrimary)
@@ -66,26 +66,28 @@ struct ShareLinkDetailView: View {
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 20)
-                .fill(theme.surfaceGradient(tint: "08D9D6"))
+                .fill(theme.surfaceGradient(tint: MeeshyColors.shareAccentHex))
                 .overlay(RoundedRectangle(cornerRadius: 20)
-                    .stroke(Color(hex: "08D9D6").opacity(0.2), lineWidth: 1))
+                    .stroke(MeeshyColors.shareAccent.opacity(0.2), lineWidth: 1))
         )
     }
 
     private var statusBadge: some View {
-        Text(isActive ? "Actif" : "Inactif")
+        Text(isActive
+             ? String(localized: "common.active", defaultValue: "Actif", bundle: .main)
+             : String(localized: "common.inactive", defaultValue: "Inactif", bundle: .main))
             .font(.system(size: 12, weight: .semibold))
-            .foregroundColor(isActive ? Color(hex: "08D9D6") : .secondary)
+            .foregroundColor(isActive ? MeeshyColors.shareAccent : .secondary)
             .padding(.horizontal, 10).padding(.vertical, 4)
-            .background(Capsule().fill(isActive ? Color(hex: "08D9D6").opacity(0.15) : Color.gray.opacity(0.15)))
+            .background(Capsule().fill(isActive ? MeeshyColors.shareAccent.opacity(0.15) : Color.gray.opacity(0.15)))
     }
 
     // MARK: - Actions bar
 
     private var actionsBar: some View {
         HStack(spacing: 12) {
-            actionButton("Copier", icon: copiedFeedback ? "checkmark" : "doc.on.doc",
-                         color: copiedFeedback ? "2ECC71" : "08D9D6") {
+            actionButton(String(localized: "common.copy", defaultValue: "Copy", bundle: .main), icon: copiedFeedback ? "checkmark" : "doc.on.doc",
+                         color: copiedFeedback ? MeeshyColors.success : MeeshyColors.shareAccent) {
                 UIPasteboard.general.string = link.joinUrl
                 HapticFeedback.success()
                 withAnimation { copiedFeedback = true }
@@ -93,30 +95,30 @@ struct ShareLinkDetailView: View {
                     withAnimation { copiedFeedback = false }
                 }
             }
-            actionButton("Partager", icon: "square.and.arrow.up", color: "08D9D6") {
+            actionButton(String(localized: "common.share", defaultValue: "Share", bundle: .main), icon: "square.and.arrow.up", color: MeeshyColors.shareAccent) {
                 guard let url = URL(string: link.joinUrl) else { return }
                 let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
                 presentSheet(av)
             }
-            actionButton(isActive ? "Désactiver" : "Activer",
+            actionButton(isActive ? String(localized: "shareLink.disable", defaultValue: "Disable", bundle: .main) : String(localized: "shareLink.activate", defaultValue: "Activate", bundle: .main),
                          icon: isActive ? "pause.circle" : "play.circle",
-                         color: isActive ? "FF6B6B" : "2ECC71") {
+                         color: isActive ? MeeshyColors.warning : MeeshyColors.success) {
                 toggleActive()
             }
-            actionButton("Supprimer", icon: "trash", color: "FF2E63") {
+            actionButton(String(localized: "shareLink.delete", defaultValue: "Delete", bundle: .main), icon: "trash", color: MeeshyColors.error) {
                 showDeleteConfirm = true
             }
         }
     }
 
-    private func actionButton(_ label: String, icon: String, color: String, action: @escaping () -> Void) -> some View {
+    private func actionButton(_ label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12).fill(Color(hex: color).opacity(0.15))
+                    RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
                         .frame(width: 48, height: 48)
                     Image(systemName: icon).font(.system(size: 20))
-                        .foregroundColor(Color(hex: color))
+                        .foregroundColor(color)
                 }
                 Text(label).font(.system(size: 10, weight: .medium))
                     .foregroundColor(theme.textSecondary)
@@ -129,10 +131,10 @@ struct ShareLinkDetailView: View {
 
     private var statsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("STATISTIQUES")
+            sectionTitle(String(localized: "shareLink.stats.title", defaultValue: "STATISTIQUES", bundle: .main))
             HStack(spacing: 12) {
-                statCard("\(link.currentUses)", label: "Utilisations", icon: "person.fill.badge.plus", color: "08D9D6")
-                statCard(link.maxUses.map { "\($0)" } ?? "∞", label: "Maximum", icon: "infinity", color: "A855F7")
+                statCard("\(link.currentUses)", label: String(localized: "shareLink.stats.uses", defaultValue: "Utilisations", bundle: .main), icon: "person.fill.badge.plus", color: MeeshyColors.shareAccentHex)
+                statCard(link.maxUses.map { "\($0)" } ?? "∞", label: String(localized: "shareLink.stats.max", defaultValue: "Maximum", bundle: .main), icon: "infinity", color: MeeshyColors.brandPrimaryHex)
             }
         }
     }
@@ -159,14 +161,14 @@ struct ShareLinkDetailView: View {
 
     private var infoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionTitle("INFORMATIONS")
+            sectionTitle(String(localized: "shareLink.informations", defaultValue: "INFORMATIONS", bundle: .main))
             VStack(spacing: 0) {
-                infoRow("Identifiant", value: link.identifier ?? link.linkId)
+                infoRow(String(localized: "shareLink.identifier", defaultValue: "Identifiant", bundle: .main), value: link.identifier ?? link.linkId)
                 Divider().padding(.leading, 16)
-                infoRow("Créé le", value: link.createdAt.formatted(date: .abbreviated, time: .shortened))
+                infoRow(String(localized: "shareLink.createdAt", defaultValue: "Créé le", bundle: .main), value: link.createdAt.formatted(date: .abbreviated, time: .shortened))
                 if let expires = link.expiresAt {
                     Divider().padding(.leading, 16)
-                    infoRow("Expire le", value: expires.formatted(date: .abbreviated, time: .shortened))
+                    infoRow(String(localized: "shareLink.expiresAt", defaultValue: "Expire le", bundle: .main), value: expires.formatted(date: .abbreviated, time: .shortened))
                 }
             }
             .background(RoundedRectangle(cornerRadius: 14)

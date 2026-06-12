@@ -26,7 +26,7 @@ struct StatusBarView: View {
                 if viewModel.error != nil, viewModel.statuses.isEmpty {
                     HStack(spacing: 6) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundStyle(MeeshyColors.warning)
                             .accessibilityHidden(true)
                         Text(String(localized: "status.bar.load_error", defaultValue: "Erreur de chargement", bundle: .main))
@@ -75,9 +75,9 @@ struct StatusBarView: View {
         } label: {
             HStack(spacing: 6) {
                 Text(status.moodEmoji)
-                    .font(.system(size: 22))
+                    .font(.title2)
                 Text(String(localized: "status.bar.me", defaultValue: "Moi", bundle: .main))
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
             }
             .padding(.horizontal, 12)
@@ -96,10 +96,10 @@ struct StatusBarView: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "plus")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.subheadline.weight(.bold))
                     .foregroundStyle(MeeshyColors.avatarRingGradient)
                 Text(String(localized: "status.bar.status", defaultValue: "Status", bundle: .main))
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundColor(theme.textMuted)
             }
             .padding(.horizontal, 12)
@@ -118,9 +118,9 @@ struct StatusBarView: View {
         } label: {
             HStack(spacing: 6) {
                 Text(status.moodEmoji)
-                    .font(.system(size: 22))
+                    .font(.title2)
                 Text(status.username)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(1)
             }

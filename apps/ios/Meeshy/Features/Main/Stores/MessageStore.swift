@@ -297,38 +297,109 @@ public final class MessageStore: ObservableObject {
             next = records
         }
 
-        let afterIds = Set(next.map(\.localId))
+        // Collapse any duplicate physical rows that share a server id — an
+        // optimistic row (localId = client cid) plus a second server-mirror row
+        // (localId == serverId) left by a reconcile-miss race in the persistence
+        // actor. The diffable list keys on localId, so both would otherwise
+        // render as a "message en double" the moment a later event re-snapshots.
+        // Applied before the drop diagnostic so a collapsed mirror is never
+        // mistaken for an unintended drop (the prior publish was deduped too).
+        let published = Self.collapsingDuplicateServerIds(next)
+
+        let afterIds = Set(published.map(\.localId))
         let droppedIds = Set(beforeById.keys).subtracting(afterIds)
         if !droppedIds.isEmpty {
-            // What did we drop, and was any of it still in-flight / failed? That
-            // distinguishes a benign window scroll from the real bug (losing a
+            // Classify each dropped row: when its serverId survives in the
+            // published set under ANOTHER localId, the logical message is
+            // still on screen — the drop is the duplicate-mirror collapse
+            // (publish-boundary dedup or the persistence actor deleting a
+            // mirror GRDB row) and is the DESIRED behaviour, not a loss.
+            // Only rows whose content truly leaves the screen are the bug.
+            let publishedServerIds = Set(published.compactMap(\.serverId))
+            let trulyLost = droppedIds.compactMap { beforeById[$0] }.filter { record in
+                guard let serverId = record.serverId else { return true }
+                return !publishedServerIds.contains(serverId)
+            }
+            // Was any truly-lost row still in-flight / failed? That separates
+            // a benign window scroll from the worst case (losing a
             // sent/pending row the user can see).
-            let droppedInFlight = droppedIds.compactMap { beforeById[$0] }
+            let droppedInFlight = trulyLost
                 .filter { ["sending", "queued", "failed", "sent"].contains(String(describing: $0.state)) }
-            Logger.messages.error("""
-            [MessageStore][BUG1] publish DROPPED \(droppedIds.count) displayed row(s) \
-            before=\(beforeCount) records=\(records.count) result=\(next.count) \
-            merge=\(mergeInMemory) window=\(String(describing: self.windowMode)) \
-            droppedInFlightOrSent=\(droppedInFlight.count) \
-            ids=\(droppedIds.sorted().prefix(8).joined(separator: ","))
-            """)
+            if trulyLost.isEmpty {
+                Logger.messages.info("""
+                [MessageStore][BUG1-benign] publish collapsed \(droppedIds.count) duplicate-server-id row(s) \
+                before=\(beforeCount) records=\(records.count) result=\(next.count) \
+                merge=\(mergeInMemory) window=\(String(describing: self.windowMode)) \
+                ids=\(droppedIds.sorted().prefix(8).joined(separator: ","))
+                """)
+            } else {
+                Logger.messages.error("""
+                [MessageStore][BUG1] publish DROPPED \(trulyLost.count) displayed row(s) \
+                (collapsedMirrors=\(droppedIds.count - trulyLost.count)) \
+                before=\(beforeCount) records=\(records.count) result=\(next.count) \
+                merge=\(mergeInMemory) window=\(String(describing: self.windowMode)) \
+                droppedInFlightOrSent=\(droppedInFlight.count) \
+                ids=\(trulyLost.map(\.localId).sorted().prefix(8).joined(separator: ","))
+                """)
+            }
         } else if next.count != beforeCount {
             Logger.messages.debug("[MessageStore] publish before=\(beforeCount) -> after=\(next.count) records=\(records.count) merge=\(mergeInMemory) window=\(String(describing: self.windowMode))")
         }
 
-        messages = next
+        messages = published
         _idIndex = nil
         // Prune le cache domain aux messages encore chargés (les entrées
         // périmées sont de toute façon contournées par la clé changeVersion ;
         // ce prune ne sert qu'à borner la mémoire à la fenêtre courante).
         if !_domainCache.isEmpty {
-            let liveIds = Set(next.map(\.localId))
+            let liveIds = Set(published.map(\.localId))
             if _domainCache.count > liveIds.count {
                 _domainCache = _domainCache.filter { liveIds.contains($0.key) }
             }
         }
         recomputeSections()
         messagesDidChange.send()
+    }
+
+    /// Collapses physical rows that share a server id down to a single survivor.
+    /// Under a write-ordering race the persistence reconcile can leave two GRDB
+    /// rows for one logical message — the optimistic row (localId = client cid,
+    /// serverId backfilled by `serverAck`) plus a second server-mirror row
+    /// (localId == serverId) inserted because the 4-way match missed. The
+    /// diffable list keys on localId, so both render: the "message en double".
+    ///
+    /// Keeps the optimistic/tracked row (localId != serverId) so the diffable
+    /// identity and the send flow's cid tracking survive — matching the
+    /// successful-reconcile outcome. Rows without a serverId (un-acked) are
+    /// distinct messages and never merged; survivor order is preserved.
+    static func collapsingDuplicateServerIds(_ records: [MessageRecord]) -> [MessageRecord] {
+        // Fast path: bail out unless a serverId actually repeats.
+        var seen = Set<String>()
+        var hasCollision = false
+        for record in records {
+            guard let serverId = record.serverId else { continue }
+            if !seen.insert(serverId).inserted { hasCollision = true; break }
+        }
+        guard hasCollision else { return records }
+
+        // Per serverId, elect the survivor: prefer the row whose localId differs
+        // from the serverId (the optimistic/tracked row), else keep the first.
+        var survivorLocalId: [String: String] = [:]
+        for record in records {
+            guard let serverId = record.serverId else { continue }
+            if let current = survivorLocalId[serverId] {
+                if current == serverId, record.localId != serverId {
+                    survivorLocalId[serverId] = record.localId
+                }
+            } else {
+                survivorLocalId[serverId] = record.localId
+            }
+        }
+
+        return records.filter { record in
+            guard let serverId = record.serverId else { return true }
+            return survivorLocalId[serverId] == record.localId
+        }
     }
 
     /// Awaits the next main runloop tick. Used to escape the synchronous view

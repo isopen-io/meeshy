@@ -165,6 +165,58 @@ final class StoryReader_PrefetchTests: XCTestCase {
         XCTAssertTrue(prefetcher.bootstrapped.isEmpty)
     }
 
+    // MARK: - extraWarmItems (prefetch inter-groupes)
+
+    /// Le viewer passe le slide d'entrée du groupe voisin en extra : il doit
+    /// être bootstrappé en plus de la fenêtre intra-groupe, et survivre aux
+    /// updates tant qu'il reste passé.
+    func test_extraWarmItems_bootstrappedAndKept() {
+        let items = makeItems(4)
+        let neighbor = makeItem("g2-first")
+        let prefetcher = StoryReaderPrefetcher()
+
+        prefetcher.updateWindow(items: items,
+                                currentIndex: 1,
+                                context: .empty,
+                                preferredLanguages: ["fr"],
+                                extraWarmItems: [neighbor])
+        XCTAssertNotNil(prefetcher.view(for: "g2-first"),
+                        "L'entrée du groupe voisin doit être bootstrappée")
+        XCTAssertEqual(prefetcher.bootstrapped.count, 4, "[N-1, N, N+1] + 1 extra")
+
+        let kept = prefetcher.view(for: "g2-first")
+        prefetcher.updateWindow(items: items,
+                                currentIndex: 2,
+                                context: .empty,
+                                preferredLanguages: ["fr"],
+                                extraWarmItems: [neighbor])
+        XCTAssertTrue(prefetcher.view(for: "g2-first") === kept,
+                      "L'extra encore passé doit être réutilisé, pas re-bootstrappé")
+    }
+
+    /// Un extra qui n'est plus passé est évincé au prochain update (mémoire
+    /// bornée), et le défaut `[]` préserve le comportement historique.
+    func test_extraWarmItems_evictedWhenDropped() {
+        let items = makeItems(4)
+        let neighbor = makeItem("g2-first")
+        let prefetcher = StoryReaderPrefetcher()
+
+        prefetcher.updateWindow(items: items,
+                                currentIndex: 1,
+                                context: .empty,
+                                preferredLanguages: ["fr"],
+                                extraWarmItems: [neighbor])
+        XCTAssertNotNil(prefetcher.view(for: "g2-first"))
+
+        prefetcher.updateWindow(items: items,
+                                currentIndex: 1,
+                                context: .empty,
+                                preferredLanguages: ["fr"])
+        XCTAssertNil(prefetcher.view(for: "g2-first"),
+                     "Extra abandonné → évincé")
+        XCTAssertEqual(prefetcher.bootstrapped.count, 3)
+    }
+
     /// `detach()` must release all views and the host view from their
     /// parent. After detach the prefetcher behaves as freshly initialized.
     func test_detach_releasesAllViews() {

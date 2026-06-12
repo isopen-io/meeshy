@@ -251,4 +251,26 @@ final class AvatarContextTests: XCTestCase {
     func test_onlineDotSize_storyTray() {
         XCTAssertEqual(AvatarContext.storyTray.onlineDotSize, 88 * 0.26, accuracy: 0.01)
     }
+
+    // MARK: - makeInitials (memoized, behaviour preserved)
+
+    func test_makeInitials_twoWords_takesFirstLetterOfEach() {
+        XCTAssertEqual(MeeshyAvatar.makeInitials(from: "Ada Lovelace"), "AL")
+    }
+
+    func test_makeInitials_singleWord_takesFirstLetter() {
+        XCTAssertEqual(MeeshyAvatar.makeInitials(from: "Bjarne"), "B")
+    }
+
+    func test_makeInitials_threePlusWords_takesOnlyFirstTwo() {
+        XCTAssertEqual(MeeshyAvatar.makeInitials(from: "Jean Charles Mbiada"), "JC")
+    }
+
+    func test_makeInitials_accentedName_uppercasesAndKeepsDiacritics() {
+        XCTAssertEqual(MeeshyAvatar.makeInitials(from: "Élodie Çağ"), "ÉÇ")
+    }
+
+    func test_makeInitials_emptyName_returnsEmpty() {
+        XCTAssertEqual(MeeshyAvatar.makeInitials(from: ""), "")
+    }
 }

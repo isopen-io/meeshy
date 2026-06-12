@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_title">Messages</string>
+    <string name="chat_back">Retour</string>
+    <string name="chat_message_placeholder">Message</string>
+    <string name="chat_send">Envoyer</string>
+    <string name="chat_no_messages">Aucun message pour l\'instant</string>
+    <string name="chat_retry">Réessayer</string>
+    <string name="chat_send_failed_retry">Non envoyé — appuyez pour réessayer</string>
+    <string name="chat_action_copy">Copier</string>
+    <string name="chat_action_reply">Répondre</string>
+    <string name="chat_replying_to">En réponse à %1$s</string>
+    <string name="chat_cancel_reply">Annuler la réponse</string>
+    <string name="chat_action_show_original">Voir l’original</string>
+    <string name="chat_action_show_translation">Voir la traduction</string>
+    <string name="chat_action_edit">Modifier</string>
+    <string name="chat_action_delete">Supprimer</string>
+    <string name="chat_editing_label">Modification du message</string>
+    <string name="chat_cancel_edit">Annuler la modification</string>
+    <string name="chat_react_with">Réagir avec %1$s</string>
+    <string name="chat_message_actions">Actions du message</string>
+    <string name="chat_typing_one">%1$s est en train d\'écrire…</string>
+    <string name="chat_typing_two">%1$s et %2$s sont en train d\'écrire…</string>
+    <string name="chat_typing_many">%1$d personnes sont en train d\'écrire…</string>
+</resources>

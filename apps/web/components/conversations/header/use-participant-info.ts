@@ -1,6 +1,4 @@
 import { useCallback } from 'react';
-import { useUserStore } from '@/stores/user-store';
-import { getUserStatus, type UserStatus } from '@/lib/user-status';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
 import { UserRoleEnum } from '@meeshy/shared/types';
@@ -18,9 +16,6 @@ export function useParticipantInfo(
   currentUser: User,
   conversationParticipants: Participant[]
 ) {
-  const userStore = useUserStore();
-  const _lastStatusUpdate = userStore._lastStatusUpdate;
-
   const getConversationName = useCallback(() => {
     if (conversation.type !== 'direct') {
       return conversation.title || 'Groupe sans nom';
@@ -114,32 +109,25 @@ export function useParticipantInfo(
     return false;
   }, [conversation, currentUser, conversationParticipants]);
 
-  const getOtherParticipantStatus = useCallback((): UserStatus => {
-    if (conversation.type === 'direct') {
-      let otherUserId: string | undefined;
-      const otherParticipant = conversationParticipants.find(p => p.userId !== currentUser?.id);
-      if (otherParticipant) {
-        otherUserId = otherParticipant.userId;
-      } else {
-        const otherConvParticipant = (conversation as unknown).participants?.find((p: unknown) => p.userId !== currentUser?.id);
-        otherUserId = otherConvParticipant?.userId;
-      }
-
-      if (otherUserId) {
-        const userFromStore = userStore.getUserById(otherUserId);
-        if (userFromStore) {
-          return getUserStatus(userFromStore);
-        }
-
-        if (otherParticipant?.user) {
-          return getUserStatus(otherParticipant.user as ParticipantUser);
-        }
-      }
-
-      return 'offline';
+  const getOtherParticipantPresence = useCallback(() => {
+    if (conversation.type !== 'direct') {
+      return { otherUserId: undefined, presenceFallback: null };
     }
-    return 'online';
-  }, [conversation, conversationParticipants, currentUser?.id, userStore, _lastStatusUpdate]);
+
+    const otherParticipant = conversationParticipants.find(p => p.userId !== currentUser?.id);
+    if (otherParticipant) {
+      return {
+        otherUserId: otherParticipant.userId,
+        presenceFallback: (otherParticipant.user as ParticipantUser | undefined) ?? null,
+      };
+    }
+
+    const otherConvParticipant = (conversation as unknown).participants?.find((p: unknown) => p.userId !== currentUser?.id);
+    return {
+      otherUserId: otherConvParticipant?.userId,
+      presenceFallback: otherConvParticipant?.user ?? null,
+    };
+  }, [conversation, conversationParticipants, currentUser?.id]);
 
   const getCurrentUserRole = useCallback((): UserRoleEnum => {
     if (!conversation || !currentUser?.id || !conversationParticipants.length) {
@@ -150,11 +138,14 @@ export function useParticipantInfo(
     return currentUserParticipant?.role as UserRoleEnum || currentUser?.role as UserRoleEnum || UserRoleEnum.USER;
   }, [conversation, currentUser?.id, currentUser?.role, conversationParticipants]);
 
+  const { otherUserId, presenceFallback } = getOtherParticipantPresence();
+
   const participantInfo: ParticipantInfo = {
     name: getConversationName(),
     avatar: getConversationAvatar(),
     avatarUrl: getConversationAvatarUrl(),
-    status: getOtherParticipantStatus(),
+    otherUserId,
+    presenceFallback,
     isAnonymous: isOtherParticipantAnonymous(),
     role: getCurrentUserRole(),
   };

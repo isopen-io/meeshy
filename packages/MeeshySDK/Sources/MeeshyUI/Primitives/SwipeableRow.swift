@@ -96,10 +96,18 @@ public struct SwipeableRow<Content: View>: View {
 
     public var body: some View {
         ZStack(alignment: .leading) {
-            if !leadingActions.isEmpty {
+            // Render the action cells ONLY while the row is actually being
+            // swiped. At rest (`effectiveOffset == 0` — every row during a
+            // normal vertical scroll) the buttons were instantiated anyway and
+            // merely clipped, costing ~800k `TypedElement<…ButtonStyle…>`
+            // allocations across a scroll session (device Allocations trace
+            // 2026-06-10). The cells ramp from progress 0 (scale 0.4, opacity
+            // 0), so spawning them on the first horizontal drag movement is
+            // visually seamless; they're already invisible at offset 0.
+            if effectiveOffset > 0 && !leadingActions.isEmpty {
                 leadingBackground
             }
-            if !trailingActions.isEmpty {
+            if effectiveOffset < 0 && !trailingActions.isEmpty {
                 trailingBackground
             }
 

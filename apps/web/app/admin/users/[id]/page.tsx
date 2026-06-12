@@ -159,7 +159,7 @@ export default function UserDetailPage() {
       const response = await adminService.deleteUser(userId);
 
       if (response.success) {
-        toast.success('Utilisateur supprimé avec succès');
+        toast.success(t('usersDetail.deleteSuccess'));
         router.push('/admin/users');
       }
     } catch (error: unknown) {
@@ -198,13 +198,13 @@ export default function UserDetailPage() {
 
   const getRoleLabel = (role: string) => {
     const labels: Record<string, string> = {
-      'BIGBOSS': 'Super Admin',
-      'ADMIN': 'Administrateur',
-      'MODERATOR': 'Modérateur',
-      'MODO': 'Modérateur',
-      'AUDIT': 'Auditeur',
-      'ANALYST': 'Analyste',
-      'USER': 'Utilisateur'
+      'BIGBOSS': t('users.newUser.roleBigboss'),
+      'ADMIN': t('users.newUser.roleAdmin'),
+      'MODERATOR': t('users.newUser.roleModo'),
+      'MODO': t('users.newUser.roleModo'),
+      'AUDIT': t('users.newUser.roleAudit'),
+      'ANALYST': t('users.newUser.roleAnalyst'),
+      'USER': t('users.newUser.roleUser'),
     };
     return labels[role] || role;
   };
@@ -239,20 +239,20 @@ export default function UserDetailPage() {
       <div className="space-y-6 pb-16">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-4 min-w-0">
             <Button
               variant="outline"
               onClick={() => router.push('/admin/users')}
-              className="flex items-center space-x-2 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200"
+              className="flex items-center space-x-2 flex-shrink-0 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200"
             >
               <ArrowLeft className="h-4 w-4" />
               <span>{t('usersDetail.back')}</span>
             </Button>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">
                 {user.displayName || user.username}
               </h1>
-              <p className="text-sm text-gray-600 dark:text-gray-400">@{user.username}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 truncate">@{user.username}</p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
@@ -344,12 +344,12 @@ export default function UserDetailPage() {
                         value={roleEdit.role}
                         onChange={(e) => setRoleEdit({ ...roleEdit, role: e.target.value })}
                       >
-                        <option value="USER">Utilisateur</option>
-                        <option value="ADMIN">Administrateur</option>
-                        <option value="MODERATOR">Modérateur</option>
-                        <option value="AUDIT">Auditeur</option>
-                        <option value="ANALYST">Analyste</option>
-                        <option value="BIGBOSS">Super Admin</option>
+                        <option value="USER">{t('users.newUser.roleUser')}</option>
+                        <option value="ADMIN">{t('users.newUser.roleAdmin')}</option>
+                        <option value="MODERATOR">{t('users.newUser.roleModo')}</option>
+                        <option value="AUDIT">{t('users.newUser.roleAudit')}</option>
+                        <option value="ANALYST">{t('users.newUser.roleAnalyst')}</option>
+                        <option value="BIGBOSS">{t('users.newUser.roleBigboss')}</option>
                       </select>
                     </div>
                     <div className="space-y-2">

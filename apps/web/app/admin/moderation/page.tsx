@@ -390,7 +390,7 @@ export default function AdminModerationPage() {
                 </div>
                 <Select value={typeFilter} onValueChange={setTypeFilter}>
                   <SelectTrigger className="w-[140px]">
-                    <SelectValue placeholder="Type" />
+                    <SelectValue placeholder={t('moderation.typeAll')} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">{t('moderation.typeAll')}</SelectItem>
@@ -403,7 +403,7 @@ export default function AdminModerationPage() {
                 </Select>
                 <Select value={severityFilter} onValueChange={setSeverityFilter}>
                   <SelectTrigger className="w-[130px]">
-                    <SelectValue placeholder="Sévérité" />
+                    <SelectValue placeholder={t('moderation.severityAll')} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">{t('moderation.severityAll')}</SelectItem>

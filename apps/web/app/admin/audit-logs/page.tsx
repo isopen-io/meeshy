@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useI18n } from '@/hooks/use-i18n';
 import { ArrowLeft, Shield, Activity, AlertCircle, CheckCircle, XCircle, User, Settings, Key, FileText, Search, Filter, Download, Clock } from 'lucide-react';
-import { useI18n } from '@/hooks/use-i18n';
 
 import { StatsGrid, type StatItem } from '@/components/admin/Charts';
 
@@ -324,7 +323,7 @@ export default function AuditLogsPage() {
             <div className="flex items-center space-x-3">
               <Select value={dateRange} onValueChange={setDateRange}>
                 <SelectTrigger className="w-[150px] bg-white/10 border-white/20 text-white">
-                  <SelectValue placeholder="Période" />
+                  <SelectValue placeholder={t('auditLogs.periodLabel')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="24h">{t('auditLogs.period24h')}</SelectItem>

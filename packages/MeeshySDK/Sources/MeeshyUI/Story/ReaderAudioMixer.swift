@@ -357,11 +357,15 @@ public final class ReaderAudioMixer {
         let hostDelta = ReaderAudioMixer.hostTime(forDelaySeconds: delaySeconds)
         let scheduleAt = AVAudioTime(hostTime: originHost + hostDelta)
 
-        let completion: AVAudioNodeCompletionHandler? = entry.loop ? { [weak self, audioId = entry.audioId] in
+        let completion: (@Sendable () -> Void)? = entry.loop ? { @Sendable [weak self, audioId = entry.audioId] in
             // Re-schedule the same file at the next "now" host-time so the
             // loop has no audible gap. Using nil scheduleAt ensures playback
             // continues immediately upon completion.
-            Task { @MainActor [weak self] in
+            // `_ =` : discarde le handle du `Task` (fire-and-forget) pour que la
+            // closure retourne `Void` — sans ça l'expression `Task` unique est
+            // inférée comme valeur de retour (`() -> Task`), incompatible avec
+            // le type `@Sendable () -> Void` attendu par `scheduleFile`.
+            _ = Task { @MainActor [weak self] in
                 guard let self, let entry = self.entries[audioId], entry.node.isPlaying else { return }
                 entry.node.scheduleFile(entry.file, at: nil, completionHandler: nil)
             }
@@ -608,8 +612,10 @@ extension ReaderAudioMixer {
     /// the buffer on completion so the loop has no audible gap.
     private func scheduleBackgroundFile(at scheduleAt: AVAudioTime?) {
         guard let bg = backgroundEntry else { return }
-        let completion: AVAudioNodeCompletionHandler? = bg.looping ? { [weak self] in
-            Task { @MainActor [weak self] in
+        let completion: (@Sendable () -> Void)? = bg.looping ? { @Sendable [weak self] in
+            // `_ =` : voir `scheduleFile(originHost:)` — discarde le handle du
+            // `Task` pour que la closure retourne `Void`.
+            _ = Task { @MainActor [weak self] in
                 guard let self,
                       let live = self.backgroundEntry,
                       live.player.isPlaying else { return }

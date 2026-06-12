@@ -948,6 +948,11 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public var height: Int?
     /// D4 — responsive downscaled WebP variants for picking a lighter image.
     public var imageVariants: [MeeshyImageVariant]?
+    /// BUG2 A' — réactions par-image agrégées (emoji→count), miroir du reactionSummary
+    /// message-level. Vit dans attachmentsJson (Codable synthétisé), pas de colonne GRDB.
+    public var reactionSummary: [String: Int]?
+    /// BUG2 A' — emojis posés par l'utilisateur courant sur cette pièce jointe.
+    public var currentUserReactions: [String]?
     public var thumbnailPath: String?
     public var thumbnailUrl: String?
     public var thumbHash: String?
@@ -1031,7 +1036,9 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
                 latitude: Double? = nil, longitude: Double? = nil, thumbnailColor: String = "4ECDC4",
                 transcription: EmbeddedTranscription? = nil,
                 audioTranslations: [String: EmbeddedAudioTranslation]? = nil,
-                imageVariants: [MeeshyImageVariant]? = nil) {
+                imageVariants: [MeeshyImageVariant]? = nil,
+                reactionSummary: [String: Int]? = nil,
+                currentUserReactions: [String]? = nil) {
         self.id = id; self.messageId = messageId; self.fileName = fileName; self.originalName = originalName
         self.mimeType = mimeType; self.fileSize = fileSize; self.filePath = filePath; self.fileUrl = fileUrl
         self.title = title; self.alt = alt; self.caption = caption
@@ -1046,6 +1053,8 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
         self.latitude = latitude; self.longitude = longitude; self.thumbnailColor = thumbnailColor
         self.transcription = transcription; self.audioTranslations = audioTranslations
         self.imageVariants = imageVariants
+        self.reactionSummary = reactionSummary
+        self.currentUserReactions = currentUserReactions
     }
 
     public static func image(color: String = "4ECDC4") -> MeeshyMessageAttachment {

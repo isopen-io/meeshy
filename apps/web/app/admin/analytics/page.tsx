@@ -19,8 +19,7 @@ import {
   Zap,
   Download
 } from 'lucide-react';
-import { StatsGrid, TimeSeriesChart, DonutChart, type StatItem } from '@/components/admin/Charts';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { StatsGrid, TimeSeriesChart, DonutChart, SimpleBarChart, type StatItem } from '@/components/admin/Charts';
 import { useI18n } from '@/hooks/use-i18n';
 
 export default function AdminAnalyticsPage() {
@@ -268,21 +267,13 @@ export default function AdminAnalyticsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={hourlyActivityData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="hour" stroke="#6b7280" />
-                  <YAxis stroke="#6b7280" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px'
-                    }}
-                  />
-                  <Bar dataKey="activity" fill="#10b981" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <SimpleBarChart
+                data={hourlyActivityData}
+                xAxisKey="hour"
+                dataKey="activity"
+                color="#10b981"
+                height={300}
+              />
             </CardContent>
           </Card>
         </div>

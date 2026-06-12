@@ -94,6 +94,17 @@ final class DependencyContainer {
         wireOutboxLogoutHook()
         wireCurrentUserHook()
 
+        // Mirror every API message the SyncEngine sees (global `message:new`
+        // relay, push-driven `ensureMessages`, pagination) into the GRDB
+        // message store. The engine only maintains CacheCoordinator (list
+        // previews); the conversation timeline reads GRDB — without this hook
+        // a message received while its conversation is closed shows in the
+        // list preview but is missing when the conversation opens.
+        ConversationSyncEngine.shared.apiMessagePersistor = { [weak persistence] messages in
+            guard !messages.isEmpty else { return }
+            await persistence?.bufferIncomingAPIMessages(messages)
+        }
+
         // Skip the auto-vacuum tune when we're on the in-memory fallback —
         // there's no on-disk file to vacuum and the next launch will retry
         // against the real path anyway.

@@ -2,6 +2,7 @@
 
 import { forwardRef, useRef, useState, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/use-i18n';
 
 export interface VideoPlayerProps {
   /** Video source URL */
@@ -36,6 +37,7 @@ function formatDuration(seconds: number): string {
 
 const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
   ({ src, poster, duration, onPlay, onPause, onEnded, className }, ref) => {
+    const { t } = useI18n('components');
     const internalRef = useRef<HTMLVideoElement>(null);
     const videoRef = (ref as React.RefObject<HTMLVideoElement>) || internalRef;
     const containerRef = useRef<HTMLDivElement>(null);
@@ -114,6 +116,29 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
       [videoRef, videoDuration]
     );
 
+    // Keyboard seek on progress slider
+    const handleProgressKeyDown = useCallback(
+      (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (!videoRef.current || videoDuration <= 0) return;
+        const step = 5;
+        const targetTime =
+          e.key === 'ArrowRight' || e.key === 'ArrowUp'
+            ? Math.min(currentTime + step, videoDuration)
+            : e.key === 'ArrowLeft' || e.key === 'ArrowDown'
+              ? Math.max(currentTime - step, 0)
+              : e.key === 'Home'
+                ? 0
+                : e.key === 'End'
+                  ? videoDuration
+                  : null;
+        if (targetTime === null) return;
+        e.preventDefault();
+        videoRef.current.currentTime = targetTime;
+        setCurrentTime(targetTime);
+      },
+      [videoRef, currentTime, videoDuration]
+    );
+
     // Handle fullscreen toggle
     const toggleFullscreen = useCallback(() => {
       if (!containerRef.current) return;
@@ -168,8 +193,17 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
         {/* Thumbnail Overlay (shown when not playing and controls hidden) */}
         {!showControls && (
           <div
+            role="button"
+            tabIndex={0}
+            aria-label={t('videoPlayer.play')}
             className="absolute inset-0 flex items-center justify-center cursor-pointer group"
             onClick={startPlayback}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                startPlayback();
+              }
+            }}
           >
             {/* Poster image fallback */}
             {poster && (
@@ -234,8 +268,17 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
           >
             {/* Center Play/Pause Button */}
             <div
+              role="button"
+              tabIndex={0}
+              aria-label={isPlaying ? t('videoPlayer.pause') : t('videoPlayer.play')}
               className="absolute inset-0 flex items-center justify-center cursor-pointer"
               onClick={togglePlay}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  togglePlay();
+                }
+              }}
             >
               {!isPlaying && (
                 <div
@@ -262,8 +305,16 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
             <div className="relative z-10 p-3 space-y-2">
               {/* Progress Bar */}
               <div
+                role="slider"
+                tabIndex={0}
+                aria-label={t('videoPlayer.seek')}
+                aria-valuemin={0}
+                aria-valuemax={Math.round(videoDuration)}
+                aria-valuenow={Math.round(currentTime)}
+                aria-valuetext={formatDuration(currentTime)}
                 className="relative h-1 bg-[var(--gp-surface)]/30 rounded-full cursor-pointer group/progress"
                 onClick={handleProgressClick}
+                onKeyDown={handleProgressKeyDown}
                 onMouseDown={() => setIsSeeking(true)}
                 onMouseUp={() => setIsSeeking(false)}
                 onMouseLeave={() => setIsSeeking(false)}
@@ -297,7 +348,7 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
                       'text-white hover:bg-white/20',
                       'transition-colors duration-200'
                     )}
-                    aria-label={isPlaying ? 'Pause' : 'Play'}
+                    aria-label={isPlaying ? t('videoPlayer.pause') : t('videoPlayer.play')}
                   >
                     {isPlaying ? (
                       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">

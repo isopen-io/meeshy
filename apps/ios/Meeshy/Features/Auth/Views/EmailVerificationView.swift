@@ -63,7 +63,7 @@ struct EmailVerificationView: View {
                 .frame(width: 96, height: 96)
 
             Image(systemName: "envelope.open.fill")
-                .font(.system(size: 42, weight: .medium))
+                .font(.system(.largeTitle).weight(.medium))
                 .foregroundStyle(MeeshyColors.brandGradient)
         }
     }
@@ -72,7 +72,7 @@ struct EmailVerificationView: View {
 
     private var titleSection: some View {
         Text(String(localized: "emailVerification.title", defaultValue: "Verifiez votre email"))
-            .font(.system(size: 26, weight: .bold, design: .rounded))
+            .font(.system(.title, design: .rounded).weight(.bold))
             .foregroundStyle(theme.textPrimary)
     }
 
@@ -95,7 +95,7 @@ struct EmailVerificationView: View {
         )
         .keyboardType(.numberPad)
         .textContentType(.oneTimeCode)
-        .font(.system(size: 32, weight: .semibold, design: .monospaced))
+        .font(.system(.title, design: .monospaced).weight(.semibold))
         .multilineTextAlignment(.center)
         .padding(.vertical, 14)
         .padding(.horizontal, 24)
@@ -125,9 +125,9 @@ struct EmailVerificationView: View {
         if let errorMessage = viewModel.error {
             HStack(spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                 Text(errorMessage)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.subheadline.weight(.medium))
             }
             .foregroundStyle(MeeshyColors.error)
             .padding(.horizontal, 16)
@@ -214,12 +214,12 @@ struct EmailVerificationView: View {
 
                 VStack(spacing: 20) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 72))
+                        .font(.system(.largeTitle))
                         .foregroundStyle(MeeshyColors.success)
                         .adaptiveSymbolBounce(value: viewModel.verificationSuccess)
 
                     Text(String(localized: "emailVerification.success", defaultValue: "Email verifie !"))
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .font(.system(.title2, design: .rounded).weight(.bold))
                         .foregroundStyle(theme.textPrimary)
                 }
             }

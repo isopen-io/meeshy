@@ -11,6 +11,7 @@ import { Languages, ArrowLeft, Filter, Calendar, User, Globe, Brain, TrendingUp,
 
 import { adminService } from '@/services/admin.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 import { StatsGrid, TimeSeriesChart, DonutChart, StatItem, TimeSeriesDataPoint, DonutDataPoint } from '@/components/admin/Charts';
 import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleton';
 
@@ -89,6 +90,7 @@ const languageNames: Record<string, string> = {
 
 export default function AdminTranslationsPage() {
   const router = useRouter();
+  const { t } = useI18n('admin');
   const [translations, setTranslations] = useState<Translation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -143,7 +145,7 @@ export default function AdminTranslationsPage() {
       }
     } catch (error) {
       console.error('Erreur lors du chargement des traductions:', error);
-      toast.error('Erreur lors du chargement des traductions');
+      toast.error(t('translationsPage.loadError'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -187,56 +189,56 @@ export default function AdminTranslationsPage() {
   };
 
   const getConfidenceLabel = (score?: number) => {
-    if (!score) return 'Inconnu';
-    if (score >= 0.9) return 'Excellent';
-    if (score >= 0.7) return 'Bon';
-    return 'Faible';
+    if (!score) return t('translationsPage.confidenceUnknown');
+    if (score >= 0.9) return t('translationsPage.confidenceExcellent');
+    if (score >= 0.7) return t('translationsPage.confidenceGood');
+    return t('translationsPage.confidencePoor');
   };
 
   const getLanguageName = (code: string) => {
-    return languageNames[code] || code.toUpperCase();
+    return t('languages.langNames.' + code) || languageNames[code] || code.toUpperCase();
   };
 
   // Calcul des statistiques
   const avgConfidence = translations.length > 0
-    ? translations.reduce((acc, t) => acc + (t.confidenceScore || 0), 0) / translations.length
+    ? translations.reduce((acc, tr) => acc + (tr.confidenceScore || 0), 0) / translations.length
     : 0;
-  const uniqueLanguages = new Set(translations.map(t => t.sourceLanguage).concat(translations.map(t => t.targetLanguage))).size;
-  const excellentTranslations = translations.filter(t => (t.confidenceScore || 0) >= 0.9).length;
+  const uniqueLanguages = new Set(translations.map(tr => tr.sourceLanguage).concat(translations.map(tr => tr.targetLanguage))).size;
+  const excellentTranslations = translations.filter(tr => (tr.confidenceScore || 0) >= 0.9).length;
 
   // Données pour StatsGrid
   const stats: StatItem[] = [
     {
-      title: 'Total Traductions',
+      title: t('translationsPage.statTotal'),
       value: totalCount,
-      description: 'Traductions effectuées',
+      description: t('translationsPage.statTotalDesc'),
       icon: Languages,
       iconColor: 'text-purple-600 dark:text-purple-400',
       iconBgColor: 'bg-purple-100 dark:bg-purple-900/30',
       trend: { value: 15, isPositive: true }
     },
     {
-      title: 'Langues Uniques',
+      title: t('translationsPage.statUniqueLangs'),
       value: uniqueLanguages,
-      description: 'Langues détectées',
+      description: t('translationsPage.statUniqueLangsDesc'),
       icon: Globe,
       iconColor: 'text-pink-600 dark:text-pink-400',
       iconBgColor: 'bg-pink-100 dark:bg-pink-900/30',
       trend: { value: 3, isPositive: true }
     },
     {
-      title: 'Score Moyen',
+      title: t('translationsPage.statAvgScore'),
       value: avgConfidence.toFixed(2),
-      description: 'Confiance moyenne',
+      description: t('translationsPage.statAvgScoreDesc'),
       icon: TrendingUp,
       iconColor: 'text-blue-600 dark:text-blue-400',
       iconBgColor: 'bg-blue-100 dark:bg-blue-900/30',
       trend: { value: 5, isPositive: true }
     },
     {
-      title: 'Excellentes',
+      title: t('translationsPage.statExcellent'),
       value: excellentTranslations,
-      description: 'Score > 90%',
+      description: t('translationsPage.statExcellentDesc'),
       icon: CheckCircle,
       iconColor: 'text-green-600 dark:text-green-400',
       iconBgColor: 'bg-green-100 dark:bg-green-900/30',
@@ -246,13 +248,13 @@ export default function AdminTranslationsPage() {
 
   // Données pour le TimeSeriesChart
   const timeSeriesData: TimeSeriesDataPoint[] = [
-    { name: 'Lun', value: 145 },
-    { name: 'Mar', value: 189 },
-    { name: 'Mer', value: 165 },
-    { name: 'Jeu', value: 235 },
-    { name: 'Ven', value: 212 },
-    { name: 'Sam', value: 198 },
-    { name: 'Dim', value: 175 }
+    { name: t('translationsPage.dayMon'), value: 145 },
+    { name: t('translationsPage.dayTue'), value: 189 },
+    { name: t('translationsPage.dayWed'), value: 165 },
+    { name: t('translationsPage.dayThu'), value: 235 },
+    { name: t('translationsPage.dayFri'), value: 212 },
+    { name: t('translationsPage.daySat'), value: 198 },
+    { name: t('translationsPage.daySun'), value: 175 }
   ];
 
   // Données pour le DonutChart - Top langues cibles
@@ -303,11 +305,11 @@ export default function AdminTranslationsPage() {
                 size="sm"
               >
                 <ArrowLeft className="h-4 w-4" />
-                <span>Retour</span>
+                <span>{t('translationsPage.back')}</span>
               </Button>
               <div>
-                <h1 className="text-2xl font-bold">Gestion des Traductions</h1>
-                <p className="text-purple-100 mt-1">Administration et statistiques des traductions automatiques</p>
+                <h1 className="text-2xl font-bold">{t('translationsPage.pageTitle')}</h1>
+                <p className="text-purple-100 mt-1">{t('translationsPage.pageSubtitle')}</p>
               </div>
             </div>
           </div>
@@ -320,16 +322,16 @@ export default function AdminTranslationsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <TimeSeriesChart
             data={timeSeriesData}
-            title="Évolution des traductions"
-            description="Nombre de traductions effectuées cette semaine"
+            title={t('translationsPage.chartTitle')}
+            description={t('translationsPage.chartDesc')}
             color="#a855f7"
             showArea={true}
           />
           {donutData.length > 0 && (
             <DonutChart
               data={donutData}
-              title="Top 5 Langues Cibles"
-              description="Langues les plus traduites"
+              title={t('translationsPage.donutTitle')}
+              description={t('translationsPage.donutDesc')}
               showLegend={false}
             />
           )}
@@ -340,17 +342,17 @@ export default function AdminTranslationsPage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2 text-lg">
               <Filter className="h-5 w-5" />
-              <span>Filtres et recherche</span>
+              <span>{t('translationsPage.filtersTitle')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <Select value={sourceLanguage || 'all'} onValueChange={(value) => handleFilterChange('source', value)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Langue source" />
+                  <SelectValue placeholder={t('translationsPage.sourceLanguage')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes les sources</SelectItem>
+                  <SelectItem value="all">{t('translationsPage.allSources')}</SelectItem>
                   {Object.entries(languageNames).map(([code, name]) => (
                     <SelectItem key={code} value={code}>
                       {name} ({code.toUpperCase()})
@@ -361,10 +363,10 @@ export default function AdminTranslationsPage() {
 
               <Select value={targetLanguage || 'all'} onValueChange={(value) => handleFilterChange('target', value)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Langue cible" />
+                  <SelectValue placeholder={t('translationsPage.targetLanguage')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes les cibles</SelectItem>
+                  <SelectItem value="all">{t('translationsPage.allTargets')}</SelectItem>
                   {Object.entries(languageNames).map(([code, name]) => (
                     <SelectItem key={code} value={code}>
                       {name} ({code.toUpperCase()})
@@ -375,13 +377,13 @@ export default function AdminTranslationsPage() {
 
               <Select value={period || 'all'} onValueChange={(value) => handleFilterChange('period', value)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Période" />
+                  <SelectValue placeholder={t('translationsPage.periodLabel')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes les périodes</SelectItem>
-                  <SelectItem value="today">Aujourd&apos;hui</SelectItem>
-                  <SelectItem value="week">Cette semaine</SelectItem>
-                  <SelectItem value="month">Ce mois</SelectItem>
+                  <SelectItem value="all">{t('translationsPage.allPeriods')}</SelectItem>
+                  <SelectItem value="today">{t('translationsPage.periodToday')}</SelectItem>
+                  <SelectItem value="week">{t('translationsPage.periodWeek')}</SelectItem>
+                  <SelectItem value="month">{t('translationsPage.periodMonth')}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -390,9 +392,9 @@ export default function AdminTranslationsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="20">20 par page</SelectItem>
-                  <SelectItem value="50">50 par page</SelectItem>
-                  <SelectItem value="100">100 par page</SelectItem>
+                  <SelectItem value="20">{t('translationsPage.perPage20')}</SelectItem>
+                  <SelectItem value="50">{t('translationsPage.perPage50')}</SelectItem>
+                  <SelectItem value="100">{t('translationsPage.perPage100')}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -403,7 +405,7 @@ export default function AdminTranslationsPage() {
                 className="w-full"
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                Actualiser
+                {t('translationsPage.refresh')}
               </Button>
             </div>
           </CardContent>
@@ -414,7 +416,7 @@ export default function AdminTranslationsPage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2 text-lg">
               <Languages className="h-5 w-5" />
-              <span>Traductions ({totalCount})</span>
+              <span>{t('translationsPage.listTitle', { count: totalCount })}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -422,10 +424,10 @@ export default function AdminTranslationsPage() {
               <div className="text-center py-12">
                 <Languages className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                  Aucune traduction trouvée
+                  {t('translationsPage.empty')}
                 </h3>
                 <p className="text-gray-500 dark:text-gray-400">
-                  Aucune traduction ne correspond aux critères de recherche actuels.
+                  {t('translationsPage.emptySubtitle')}
                 </p>
               </div>
             ) : (
@@ -466,7 +468,7 @@ export default function AdminTranslationsPage() {
                         <div>
                           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
                             <Globe className="h-4 w-4 text-purple-600" />
-                            Message original ({getLanguageName(translation.message.originalLanguage)})
+{t('translationsPage.originalMessage', { lang: getLanguageName(translation.message.originalLanguage) })}
                           </h4>
                           <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
                             <p className="text-gray-900 dark:text-gray-100 leading-relaxed">{getOriginalContent(translation)}</p>
@@ -475,7 +477,7 @@ export default function AdminTranslationsPage() {
                         <div>
                           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
                             <CheckCircle className="h-4 w-4 text-pink-600" />
-                            Traduction ({getLanguageName(translation.targetLanguage)})
+{t('translationsPage.translationLabel', { lang: getLanguageName(translation.targetLanguage) })}
                           </h4>
                           <div className="bg-gradient-to-br from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 rounded-lg p-4 border border-pink-200 dark:border-pink-800">
                             <p className="text-gray-900 dark:text-gray-100 leading-relaxed">{translation.translatedContent}</p>
@@ -501,13 +503,13 @@ export default function AdminTranslationsPage() {
                             <span>
                               {translation.message.conversation.title ||
                                translation.message.conversation.identifier ||
-                               'Conversation'}
+                               t('translationsPage.conversation')}
                             </span>
                           </div>
                         </div>
                         <Button variant="outline" size="sm">
                           <Eye className="h-4 w-4 mr-1" />
-                          <span className="hidden sm:inline">Voir détails</span>
+                          <span className="hidden sm:inline">{t('translationsPage.viewDetails')}</span>
                         </Button>
                       </div>
                     </div>
@@ -520,7 +522,7 @@ export default function AdminTranslationsPage() {
             {translations && translations.length > 0 && (
               <div className="flex flex-col sm:flex-row items-center justify-between mt-6 gap-4 border-t dark:border-gray-700 pt-4">
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Page {currentPage} sur {totalPages} • {translations.length} traductions affichées • {totalCount} au total
+                  {t('translationsPage.paginationInfo', { page: currentPage, total: totalPages, shown: translations.length, totalCount })}
                 </div>
                 <div className="flex space-x-2">
                   <Button
@@ -530,7 +532,7 @@ export default function AdminTranslationsPage() {
                     onClick={() => setCurrentPage(currentPage - 1)}
                   >
                     <ChevronLeft className="h-4 w-4" />
-                    <span className="hidden sm:inline ml-1">Précédent</span>
+                    <span className="hidden sm:inline ml-1">{t('translationsPage.prev')}</span>
                   </Button>
                   <div className="flex items-center px-3 py-2 border dark:border-gray-700 rounded-md text-sm font-medium">
                     {currentPage} / {totalPages}
@@ -541,7 +543,7 @@ export default function AdminTranslationsPage() {
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage(currentPage + 1)}
                   >
-                    <span className="hidden sm:inline mr-1">Suivant</span>
+                    <span className="hidden sm:inline mr-1">{t('translationsPage.next')}</span>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>

@@ -47,6 +47,10 @@ extension ConversationView {
                             overlayState.contextOverlayDragOffset = 0
                         }
                     }
+                },
+                onOpenProfile: { user in
+                    dismissContextOverlay()
+                    router.deepLinkProfileUser = user
                 }
             )
             .zIndex(998)

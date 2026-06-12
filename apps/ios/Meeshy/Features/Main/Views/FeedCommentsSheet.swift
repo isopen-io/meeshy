@@ -237,10 +237,10 @@ struct CommentsSheetView: View {
                                         Task { await toggleCommentLike(commentId: commentId) }
                                     },
                                     moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
-                                    storyState: storyViewModel.storyGroupForUser(userId: comment.authorId).map { $0.hasUnviewed ? .unread : .read } ?? .none,
+                                    storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
                                     presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state ?? .offline,
                                     replyMoodResolver: { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
-                                    replyStoryResolver: { storyViewModel.storyGroupForUser(userId: $0).map { $0.hasUnviewed ? .unread : .read } ?? .none },
+                                    replyStoryResolver: { storyViewModel.storyRingState(forUserId: $0) },
                                     replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state ?? .offline }
                                 )
                             }

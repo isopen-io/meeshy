@@ -160,6 +160,7 @@
       "createAccount": "Criar uma conta"
     },
     "redirecting": "Redirecionando...",
+    "redirectingDescription": "Você será redirecionado para o seu destino",
     "featureGate": {
       "title": "Funcionalidade temporariamente indisponível",
       "passwordResetDisabled": "A redefinição de senha está temporariamente indisponível. Por favor, entre em contato com o suporte se precisar de ajuda para acessar sua conta.",
@@ -211,7 +212,66 @@
     "exitFullscreen": "Sair da tela cheia",
     "zoomIn": "Ampliar",
     "zoomOut": "Reduzir",
-    "rotate": "Girar"
+    "rotate": "Girar",
+    "clearSearch": "Limpar pesquisa",
+    "backToList": "Voltar à lista",
+    "backToConversations": "Voltar às conversas",
+    "breadcrumb": "Trilha de navegação",
+    "home": "Início",
+    "anonymous": "Anônimo",
+    "user": "Usuário",
+    "reactWith": "Reagir com {emoji}",
+    "limitReached": "Limite atingido: {limit} {category}s máximo",
+    "filesAdded": "Apenas {count} arquivo(s) adicionado(s)",
+    "send": "Enviar",
+    "noTrending": "Sem tendências no momento",
+    "breadcrumbLabels": {
+      "admin": "Admin",
+      "users": "Usuários",
+      "analytics": "Análises",
+      "moderation": "Moderação",
+      "settings": "Configurações",
+      "messages": "Mensagens",
+      "conversations": "Conversas",
+      "communities": "Comunidades",
+      "broadcasts": "Transmissões",
+      "reports": "Relatórios",
+      "ranking": "Classificação",
+      "agent": "Agente IA",
+      "monitoring": "Monitoramento",
+      "notifications": "Notificações",
+      "auditLogs": "Registros de auditoria",
+      "trackingLinks": "Links de rastreamento",
+      "shareLinks": "Links de compartilhamento",
+      "languages": "Idiomas",
+      "dashboard": "Painel de controle",
+      "contacts": "Contatos",
+      "feeds": "Feeds"
+    },
+    "newStory": "Novo story",
+    "publish": "Publicar",
+    "storyPlaceholder": "Digite seu story...",
+    "replyPlaceholder": "Responder...",
+    "mediaCategory": {
+      "photo": "foto",
+      "video": "vídeo",
+      "audio": "áudio"
+    },
+    "storyVisibility": {
+      "public": "Público",
+      "friends": "Amigos",
+      "private": "Privado"
+    },
+    "statusComposer": {
+      "title": "Qual é o seu mood?",
+      "placeholder": "O que você está fazendo?",
+      "preview": "Pré-visualização",
+      "yourName": "Seu nome",
+      "clear": "Limpar meu status"
+    },
+    "postPlaceholder": "No que você está pensando?",
+    "captionPlaceholder": "Adicione uma legenda (opcional)...",
+    "quotePlaceholder": "Adicione seus pensamentos..."
   },
   "copied": "Copiado",
   "never": "Nunca"

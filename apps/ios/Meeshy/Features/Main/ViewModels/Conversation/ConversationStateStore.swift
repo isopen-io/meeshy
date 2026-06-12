@@ -7,7 +7,16 @@ import MeeshyUI
 /// Separating state from command logic (ViewModel) simplifies the 3000-line God Object.
 @MainActor
 final class ConversationStateStore: ObservableObject {
-    @Published var messages: [Message] = []
+    /// Deliberately NOT `@Published`: no View ever reads it. The only observer
+    /// of this store is `ConversationView` (as `typingObserver`), and its body
+    /// reads typing/loading state, never `messages`. The three readers
+    /// (command/media handlers, `ConversationViewModel`) are synchronous point
+    /// reads, not view dependencies. Publishing it therefore bought nothing but
+    /// a wasted `objectWillChange` emission on `typingObserver` (plus its
+    /// dependency bookkeeping) on every mirror write — several times per second
+    /// on an active conversation. A plain stored property serves the readers
+    /// without that churn.
+    var messages: [Message] = []
     @Published var isLoadingInitial = false
     @Published var isLoadingOlder = false
     @Published var isLoadingNewer = false

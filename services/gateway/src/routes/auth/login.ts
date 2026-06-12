@@ -317,7 +317,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
     preValidation: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const userId = (request as any).user.userId;
+      const userId = request.user!.userId;
       const sessionToken = request.headers['x-session-token'] as string | undefined;
 
       await authService.updateOnlineStatus(userId, false);

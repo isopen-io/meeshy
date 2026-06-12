@@ -277,6 +277,13 @@ public final class StoryCanvasUIView: UIView {
     /// `.readyToPlay` or the background is replaced.
     private var videoStatusObserver: NSKeyValueObservation?
 
+    /// KVO token watching the background `AVPlayerLayer.isReadyForDisplay`
+    /// (première frame réellement décodée ET composée à l'écran). C'est CE
+    /// signal — pas la simple présence disque du fichier — qui gate la progress
+    /// bar, pour qu'elle n'avance jamais sur le flou ThumbHash pendant le
+    /// spinup du decoder. Libéré dans `teardownReadinessObservers`.
+    private var videoFirstFrameObserver: NSKeyValueObservation?
+
     /// Tâche de sondage utilisée pour la branche cache-miss de
     /// `scheduleContentReadyEvaluation(.video)` : quand `backgroundLayer
     /// .configure` lance une `Task` async pour télécharger l'URL distante,
@@ -538,6 +545,21 @@ public final class StoryCanvasUIView: UIView {
         observeAppLifecycle()
         observeMuteNotifications()
         observeStoryPlayerNotifications()
+        // Attach différé du player vidéo de fond (cache froid : l'URL distante
+        // est résolue/téléchargée par une Task async, le player n'existe pas
+        // encore quand `scheduleContentReadyEvaluation` tourne). Ré-arme
+        // l'observation de readiness à l'attach, sans fenêtre de temps —
+        // c'est le seul pont fiable entre « download terminé » et
+        // `contentReadyFired` (bug user 2026-06-11 : story vidéo figée sur
+        // thumbnail, progression sans frames ni audio).
+        backgroundLayer.onPlayerAttached = { [weak self] in
+            guard let self, !self.contentReadyFired else { return }
+            guard case .video = self.backgroundLayer.kind else { return }
+            guard self.backgroundLayer.avPlayer != nil else { return }
+            // `currentItem` volontairement optionnel : un AVQueuePlayer
+            // loopé l'expose nil quelques runloops après l'attach.
+            self.armBackgroundVideoReadinessObservation(item: self.backgroundLayer.avPlayer?.currentItem)
+        }
         // Single-owner audio registry: registering the reader mixer lets a
         // second reader surface (viewer + composer preview mounted together)
         // stop this engine before starting its own (RC4.6).
@@ -1075,9 +1097,14 @@ public final class StoryCanvasUIView: UIView {
                 case .interruptionBegan, .routeChangedOldDeviceUnavailable:
                     self.audioMixer.pause()
                 case .interruptionEndedShouldResume:
+                    // `!isPlaybackPaused` : si l'utilisateur était en pause
+                    // (long-press latch / pause UI) au moment de
+                    // l'interruption, la fin d'interruption ne doit PAS
+                    // relancer l'audio sous une slide visuellement gelée.
                     guard self.mode == .play,
                           self.window != nil,
-                          !self.completionFired else { return }
+                          !self.completionFired,
+                          !self.isPlaybackPaused else { return }
                     self.startAudioPlayback()
                 case .interruptionEndedShouldNotResume, .routeChangedOther:
                     break
@@ -1643,80 +1670,100 @@ public final class StoryCanvasUIView: UIView {
                 }
             }
         case .video:
-            if let item = backgroundLayer.avPlayer?.currentItem {
-                // Fast-path : URL `file://` (cache local déjà téléchargé) →
-                // l'`AVPlayerItem.status` transite de `.unknown` à
-                // `.readyToPlay` de façon asynchrone (~50-150 ms, le temps
-                // que l'AV decoder lise les metadata du conteneur MP4/MOV),
-                // même pour des fichiers locaux. Attendre ce KVO génère un
-                // flash de loader sur les vidéos déjà cachées, ce qui casse
-                // la sensation d'instantanéité (l'utilisateur SAIT que la
-                // vidéo est dispo en local). On considère le fichier local
-                // immédiatement prêt : le `.play()` enchaîne sur un decoder
-                // qui spinup en 1-2 vsyncs et le placeholder ThumbHash, s'il
-                // existe, couvre le gap.
-                let isLocalFile = (item.asset as? AVURLAsset)?.url.isFileURL ?? false
-                if isLocalFile || item.status == .readyToPlay {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.backgroundDidBecomeReady()
-                    }
-                } else {
-                    videoStatusObserver = item.observe(\.status, options: [.new]) { [weak self] observed, _ in
-                        guard observed.status == .readyToPlay else { return }
-                        Task { @MainActor in
-                            self?.backgroundDidBecomeReady()
-                        }
-                    }
-                    // Failsafe timeout 2s — bug user-reporté 2026-05-27 :
-                    // le KVO `.status` peut être attaché APRÈS la transition
-                    // `.unknown → .readyToPlay` sur les vidéos remote en
-                    // warm cache (item recyclé). Visible quand la vidéo
-                    // JOUE en boucle mais la progress bar reste à 0%
-                    // (`onPlaybackTime` jamais émis car
-                    // `displayLinkTick` gated sur `contentReadyFired`).
-                    // Le forced fire après 2s rattrape le KVO miss.
-                    pendingVideoReadinessTask?.cancel()
-                    pendingVideoReadinessTask = Task { @MainActor [weak self] in
-                        try? await Task.sleep(for: .seconds(2))
-                        if Task.isCancelled { return }
-                        guard let self else { return }
-                        guard !self.contentReadyFired else { return }
-                        self.backgroundDidBecomeReady()
-                    }
-                }
-            } else {
-                // Path cache miss : `backgroundLayer.configure` a démarré une
-                // `Task` async pour résoudre l'URL distante (download / cache
-                // disk). Le player n'est pas encore créé. Sans signal de fin,
-                // le loader reste coincé. On déclenche un sondage léger toutes
-                // les ~50 ms jusqu'à ce que le player apparaisse, puis on
-                // applique la même logique fast-path. Limité à 30 itérations
-                // (~1.5 s) pour ne pas tourner indéfiniment si quelque chose
-                // est cassé en amont.
-                pendingVideoReadinessTask?.cancel()
-                pendingVideoReadinessTask = Task { @MainActor [weak self] in
-                    for _ in 0..<30 {
-                        try? await Task.sleep(for: .milliseconds(50))
-                        if Task.isCancelled { return }
-                        guard let self else { return }
-                        if let item = self.backgroundLayer.avPlayer?.currentItem {
-                            let isLocalFile = (item.asset as? AVURLAsset)?.url.isFileURL ?? false
-                            if isLocalFile || item.status == .readyToPlay {
-                                self.backgroundDidBecomeReady()
-                                return
-                            }
-                            self.videoStatusObserver = item.observe(\.status, options: [.new]) { [weak self] observed, _ in
-                                guard observed.status == .readyToPlay else { return }
-                                Task { @MainActor in
-                                    self?.backgroundDidBecomeReady()
-                                }
-                            }
-                            return
-                        }
-                    }
+            storyMediaLog.debug("readiness eval kind=video hasPlayer=\(self.backgroundLayer.avPlayer != nil, privacy: .public) hasItem=\(self.backgroundLayer.avPlayer?.currentItem != nil, privacy: .public) mode=\(String(describing: self.mode), privacy: .public)")
+            // Gate sur la PRÉSENCE DU PLAYER, pas de `currentItem` : un
+            // `AVQueuePlayer` fraîchement attaché (fond loopé) a un
+            // `currentItem` nil le temps que son `AVPlayerLooper` enqueue le
+            // template — exiger l'item ici faisait rater l'armement et,
+            // `displayLinkTick` étant gated sur `contentReadyFired`, plus
+            // rien ne ré-évaluait jamais : slide gelée sur son thumbnail
+            // (bug user 2026-06-11).
+            if backgroundLayer.avPlayer != nil {
+                armBackgroundVideoReadinessObservation(item: backgroundLayer.avPlayer?.currentItem)
+            }
+            // Path cache miss : `backgroundLayer.configure` a démarré une
+            // `Task` async pour résoudre l'URL distante (download / cache
+            // disk) et le player n'est pas encore créé. Aucun sondage ici :
+            // `backgroundLayer.onPlayerAttached` (câblé dans l'init) ré-arme
+            // l'observation dès que l'attach différé survient — quelle que
+            // soit la durée du download. L'ancien sondage 30 × 50 ms
+            // abandonnait silencieusement après 1,5 s : un download plus
+            // lent laissait `contentReadyFired` à false pour toujours →
+            // thumbnail figé, progression sans frames ni audio, son qui ne
+            // démarrait qu'au retour foreground via le bypass
+            // `handleDidBecomeActive` (bug user 2026-06-11).
+        }
+    }
+
+    /// Arme l'observation de readiness du fond vidéo : première frame
+    /// composée (`isReadyForDisplay`), repli KVO `.status` quand aucun
+    /// `AVPlayerLayer` n'est exploitable, et failsafe 2 s (un KVO peut être
+    /// attaché APRÈS la transition sur un item recyclé warm — bug
+    /// user-reporté 2026-05-27 « progress bar reste à 0% »). Réutilisé par
+    /// l'évaluation initiale (player déjà attaché) ET par l'attach différé
+    /// (`onPlayerAttached`) — volontairement NON destructif : ne touche ni
+    /// `contentReadyFired` ni `backgroundContentReady`, donc inoffensif si
+    /// la readiness a déjà fire.
+    private func armBackgroundVideoReadinessObservation(item: AVPlayerItem?) {
+        storyMediaLog.debug("arm video readiness layerReady=\(self.backgroundLayer.avPlayerLayer?.isReadyForDisplay ?? false, privacy: .public) itemStatus=\(item?.status.rawValue ?? -1, privacy: .public)")
+        // La progress bar ne doit démarrer que sur la PREMIÈRE FRAME
+        // réellement à l'écran. `AVPlayerLayer.isReadyForDisplay`
+        // (false→true une fois la frame décodée ET composée) est le seul
+        // signal fiable : `isFileURL` ne prouve que la présence disque,
+        // le decoder spinup (~50-150 ms, parfois bien plus sur un
+        // fichier local lent/partiel) n'est PAS couvert — c'est ce qui
+        // faisait avancer la progression sur le flou ThumbHash (bug
+        // user-reporté 2026-06-09). Le ThumbHash reste visible pendant
+        // le gap (UX inchangée), seul le timer attend la vraie frame.
+        if waitBackgroundVideoFirstFrame() == false, let item {
+            // Aucun `AVPlayerLayer` exploitable (cas rare) — repli sur le
+            // KVO `.status` (métadonnées prêtes), ancien comportement.
+            // `item` peut être nil (AVQueuePlayer dont le looper n'a pas
+            // encore enqueué) — le failsafe 2 s ci-dessous couvre ce cas.
+            videoStatusObserver = item.observe(\.status, options: [.new]) { [weak self] observed, _ in
+                guard observed.status == .readyToPlay else { return }
+                Task { @MainActor in
+                    self?.backgroundDidBecomeReady()
                 }
             }
         }
+        pendingVideoReadinessTask?.cancel()
+        pendingVideoReadinessTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            if Task.isCancelled { return }
+            guard let self else { return }
+            guard !self.contentReadyFired else { return }
+            self.backgroundDidBecomeReady()
+        }
+    }
+
+    /// Démarre la readiness du fond vidéo sur la PREMIÈRE FRAME réellement
+    /// composée à l'écran (`AVPlayerLayer.isReadyForDisplay`), et NON sur la
+    /// simple présence disque du fichier. Fire `backgroundDidBecomeReady()`
+    /// quand la frame est prête (immédiatement si déjà composée — ré-attache
+    /// warm). Retourne `false` si aucun `AVPlayerLayer` n'est disponible : le
+    /// caller retombe alors sur un observer `AVPlayerItem.status`. Le token KVO
+    /// est libéré par `teardownReadinessObservers()`.
+    @discardableResult
+    private func waitBackgroundVideoFirstFrame() -> Bool {
+        guard let playerLayer = backgroundLayer.avPlayerLayer else { return false }
+        if playerLayer.isReadyForDisplay {
+            DispatchQueue.main.async { [weak self] in
+                self?.backgroundDidBecomeReady()
+            }
+            return true
+        }
+        // `.initial` re-lit la valeur courante à l'enregistrement : protège
+        // contre une transition false→true survenue entre le pré-check ci-dessus
+        // et l'attache du KVO. Le `guard` interne rend l'appel synchrone no-op
+        // tant que la frame n'est pas prête.
+        videoFirstFrameObserver = playerLayer.observe(\.isReadyForDisplay, options: [.new, .initial]) { [weak self] layer, _ in
+            guard layer.isReadyForDisplay else { return }
+            Task { @MainActor in
+                self?.backgroundDidBecomeReady()
+            }
+        }
+        return true
     }
 
     /// Marks the slide background as visually settled. The combined readiness
@@ -1732,15 +1779,20 @@ public final class StoryCanvasUIView: UIView {
         guard !contentReadyFired else { return }
         // The background must be settled first — a foreground video KVO ping
         // can otherwise call in before the background image bytes land.
-        guard backgroundContentReady else { return }
+        guard backgroundContentReady else {
+            storyMediaLog.debug("contentReady held: background not settled")
+            return
+        }
         // T6 — the background may be settled, but if a foreground video clip
         // is still preparing the slide is a black rectangle. Hold the signal
         // (and the progress timer) until at least one foreground video is
         // `.readyToPlay`; the KVO tokens re-trigger this method when it lands.
         guard foregroundVideosReady() else {
+            storyMediaLog.debug("contentReady held: foreground video(s) not ready")
             observePendingForegroundVideos()
             return
         }
+        storyMediaLog.debug("contentReady FIRED mode=\(String(describing: self.mode), privacy: .public) pendingActivation=\(self.pendingBackgroundActivation, privacy: .public)")
         contentReadyFired = true
         onContentReady?()
         // Consume pending background activation: vidéo bg ET audio bg
@@ -1836,6 +1888,8 @@ public final class StoryCanvasUIView: UIView {
         imageContentsObserver = nil
         videoStatusObserver?.invalidate()
         videoStatusObserver = nil
+        videoFirstFrameObserver?.invalidate()
+        videoFirstFrameObserver = nil
         pendingVideoReadinessTask?.cancel()
         pendingVideoReadinessTask = nil
         thumbHashPlaceholderRef = nil
@@ -2031,12 +2085,18 @@ public final class StoryCanvasUIView: UIView {
     }
 
     @objc private func handleDidBecomeActive() {
-        guard mode == .play else { return }
+        // `window != nil` est OBLIGATOIRE pour TOUTES les reprises, pas
+        // seulement l'audio mixer : un canvas `.play` retenu hors écran
+        // (viewer fermé mais instance vivante, canvas sortant de cross-fade)
+        // reçoit aussi cette notification — sans le guard, ses AVPlayer
+        // foreground + le fond vidéo rejouaient à la réouverture de l'app
+        // alors qu'aucun viewer n'était visible (bug user 2026-06-11).
+        guard mode == .play, window != nil else { return }
         forEachAVPlayer { $0.play() }
         backgroundLayer.handleAppLifecycle(active: true)
         // Resume reader audio (re-acquires the session via startAudioPlayback)
-        // only while the slide is still on screen and has not finished.
-        if window != nil, !completionFired {
+        // only while the slide has not finished.
+        if !completionFired {
             startAudioPlayback()
         }
     }
@@ -2456,8 +2516,8 @@ public final class StoryCanvasUIView: UIView {
 
     // MARK: - Snap guides
 
-    private static let snapTargets: [Double] = [0.18, 0.25, 0.5, 0.75, 0.82]
-    private static let snapTolerance: Double = 0.02
+    private nonisolated static let snapTargets: [Double] = [0.18, 0.25, 0.5, 0.75, 0.82]
+    private nonisolated static let snapTolerance: Double = 0.02
 
     private var snapGuideLayers: [CAShapeLayer] = []
 

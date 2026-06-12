@@ -2,6 +2,7 @@ import XCTest
 import Combine
 @testable import Meeshy
 import MeeshySDK
+import MeeshyUI
 
 @MainActor
 final class StoryViewModelTests: XCTestCase {
@@ -183,6 +184,36 @@ final class StoryViewModelTests: XCTestCase {
         await sut.loadStories(forceNetwork: true)
 
         XCTAssertLessThanOrEqual(mockStoryService.listCallCount, 2)
+    }
+
+    // MARK: - storyRingState(forUserId:) Tests
+
+    func test_storyRingState_userWithUnviewedStories_returnsUnread() {
+        let group = makeStoryGroup(userId: "u1", stories: [makeStoryItem(isViewed: false)])
+        sut.storyGroups = [group]
+
+        XCTAssertEqual(sut.storyRingState(forUserId: "u1"), .unread)
+    }
+
+    func test_storyRingState_userWithAllViewedStories_returnsRead() {
+        let group = makeStoryGroup(userId: "u1", stories: [makeStoryItem(isViewed: true)])
+        sut.storyGroups = [group]
+
+        XCTAssertEqual(sut.storyRingState(forUserId: "u1"), .read)
+    }
+
+    func test_storyRingState_userWithoutStories_returnsNone() {
+        sut.storyGroups = []
+
+        XCTAssertEqual(sut.storyRingState(forUserId: "u1"), StoryRingState.none)
+    }
+
+    func test_storyRingState_userWithFullyExpiredGroup_returnsNone() {
+        let expired = makeStoryItem(id: "old", createdAt: Date(timeIntervalSinceNow: -100_000))
+        let group = makeStoryGroup(userId: "u1", stories: [expired])
+        sut.storyGroups = [group]
+
+        XCTAssertEqual(sut.storyRingState(forUserId: "u1"), StoryRingState.none)
     }
 
     // MARK: - markViewed() Tests

@@ -50,6 +50,8 @@ dependencies {
     implementation(project(":feature:feed"))
     implementation(project(":feature:profile"))
     implementation(project(":feature:notifications"))
+    implementation(project(":feature:settings"))
+    implementation(project(":feature:contacts"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -66,6 +68,7 @@ dependencies {
     implementation(libs.hilt.work)
     ksp(libs.hilt.work.compiler)
     implementation(libs.work.runtime)
+    implementation(libs.firebase.messaging)
     implementation(libs.timber)
     debugImplementation(libs.compose.ui.tooling)
 

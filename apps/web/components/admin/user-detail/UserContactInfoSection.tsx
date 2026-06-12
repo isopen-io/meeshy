@@ -98,12 +98,12 @@ export function UserContactInfoSection({
       });
 
       if (response.data?.success) {
-        toast.success(t('usersDetail.roleUpdatedSuccess'));
+        toast.success(t('userDetail.contactUpdated'));
         setEditing(false);
         onUpdate();
       }
     } catch (error: unknown) {
-      toast.error(error.message || t('usersDetail.roleUpdateError'));
+      toast.error(error.message || t('userDetail.contactUpdateError'));
     } finally {
       setSaving(false);
     }
@@ -115,7 +115,7 @@ export function UserContactInfoSection({
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center space-x-2 dark:text-gray-100">
             <Mail className="h-5 w-5" />
-            <span>{t('usersDetail.sectionTitle')}</span>
+            <span>{t('userDetail.contactTitle')}</span>
           </CardTitle>
           {!editing ? (
             <Button
@@ -125,7 +125,7 @@ export function UserContactInfoSection({
               className="dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200"
             >
               <Edit2 className="h-4 w-4 mr-1" />
-              {t('usersDetail.editModifier')}
+              {t('usersDetail.editButton')}
             </Button>
           ) : (
             <div className="flex space-x-2">
@@ -137,7 +137,7 @@ export function UserContactInfoSection({
                 className="dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200"
               >
                 <X className="h-4 w-4 mr-1" />
-                {t('usersDetail.cancelEdit')}
+                {t('usersDetail.cancelButton')}
               </Button>
               <Button
                 size="sm"
@@ -146,7 +146,7 @@ export function UserContactInfoSection({
                 className="dark:bg-blue-700 dark:hover:bg-blue-800"
               >
                 <Save className="h-4 w-4 mr-1" />
-                {saving ? t('usersDetail.saveChanges') : t('usersDetail.saveButton2')}
+                {saving ? t('userDetail.saving') : t('usersDetail.saveButton')}
               </Button>
             </div>
           )}
@@ -156,7 +156,7 @@ export function UserContactInfoSection({
         {editing ? (
           <>
             <div className="space-y-2">
-              <label className="text-sm font-medium dark:text-gray-200">{t('usersDetail.labelEmail')}</label>
+              <label className="text-sm font-medium dark:text-gray-200">{t('userDetail.emailLabel')}</label>
               <Input
                 type="email"
                 value={formData.email}
@@ -166,7 +166,7 @@ export function UserContactInfoSection({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium dark:text-gray-200">{t('usersDetail.labelCountry')}</label>
+              <label className="text-sm font-medium dark:text-gray-200">{t('userDetail.countryLabel')}</label>
               <select
                 className="w-full p-2 border dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-800 dark:text-gray-100"
                 value={formData.phoneCountryCode}
@@ -182,7 +182,7 @@ export function UserContactInfoSection({
 
             <div className="space-y-2">
               <label className="text-sm font-medium dark:text-gray-200">
-                {t('usersDetail.labelPhone')} {getDialCode(formData.phoneCountryCode)}
+                {t('userDetail.phoneLabel')} {getDialCode(formData.phoneCountryCode)}
               </label>
               <Input
                 type="tel"
@@ -194,7 +194,7 @@ export function UserContactInfoSection({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium dark:text-gray-200">{t('usersDetail.labelTimezone')}</label>
+              <label className="text-sm font-medium dark:text-gray-200">{t('userDetail.timezoneLabel')}</label>
               <select
                 className="w-full p-2 border dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-800 dark:text-gray-100"
                 value={formData.timezone}
@@ -211,7 +211,7 @@ export function UserContactInfoSection({
             <div className="flex items-center text-sm">
               <span className="w-40 text-gray-600 dark:text-gray-400 flex items-center">
                 <Mail className="h-4 w-4 mr-2" />
-                {t('usersDetail.labelEmail')}:
+                {t('userDetail.emailLabel')}:
               </span>
               <span className="font-medium dark:text-gray-200">{user.email}</span>
             </div>
@@ -219,7 +219,7 @@ export function UserContactInfoSection({
               <div className="flex items-center text-sm">
                 <span className="w-40 text-gray-600 dark:text-gray-400 flex items-center">
                   <Phone className="h-4 w-4 mr-2" />
-                  {t('usersDetail.labelPhone')}:
+                  {t('userDetail.phoneLabel')}:
                 </span>
                 <span className="font-medium dark:text-gray-200">
                   {flagForCountry(resolveCountry(user.phoneNumber, (user as unknown).phoneCountryCode).code)}{' '}
@@ -230,7 +230,7 @@ export function UserContactInfoSection({
             <div className="flex items-center text-sm">
               <span className="w-40 text-gray-600 dark:text-gray-400 flex items-center">
                 <MapPin className="h-4 w-4 mr-2" />
-                {t('usersDetail.labelCountry')}:
+                {t('userDetail.countryLabel')}:
               </span>
               <span className="font-medium dark:text-gray-200">
                 {flagForCountry(resolveCountry(user.phoneNumber, (user as unknown).phoneCountryCode).code)}{' '}
@@ -241,7 +241,7 @@ export function UserContactInfoSection({
               <div className="flex items-center text-sm">
                 <span className="w-40 text-gray-600 dark:text-gray-400 flex items-center">
                   <Clock className="h-4 w-4 mr-2" />
-                  {t('usersDetail.labelTimezone')}:
+                  {t('userDetail.timezoneLabel')}:
                 </span>
                 <span className="font-medium dark:text-gray-200">{(user as unknown).timezone}</span>
               </div>

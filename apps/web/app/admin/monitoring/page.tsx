@@ -211,8 +211,8 @@ function RealtimeTab() {
 
       {hourlyData.length > 0 && (
         <TimeSeriesChart
-          title="Activite par heure"
-          subtitle="Volume de messages sur les dernieres 24h"
+          title={t('monitoring.hourlyTitle')}
+          subtitle={t('monitoring.hourlySubtitle')}
           data={hourlyData}
           dataKey="activity"
           xAxisKey="hour"
@@ -324,7 +324,7 @@ function HealthTab() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-              Database
+              {t('monitoring.health.dbTitle')}
             </CardTitle>
             <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
               <Database className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -345,7 +345,7 @@ function HealthTab() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-              Redis
+              {t('monitoring.health.redisTitle')}
             </CardTitle>
             <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
               <Server className="h-4 w-4 text-red-600 dark:text-red-400" />
@@ -379,7 +379,7 @@ function HealthTab() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-              Memory
+              {t('monitoring.health.memoryTitle')}
             </CardTitle>
             <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
               <HardDrive className="h-4 w-4 text-purple-600 dark:text-purple-400" />
@@ -402,7 +402,7 @@ function HealthTab() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-cyan-600" />
-            Circuit Breakers
+            {t('monitoring.health.circuitBreakers')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -416,10 +416,10 @@ function HealthTab() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Service</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">State</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Failures</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">Last Failure</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">{t('monitoring.health.colService')}</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">{t('monitoring.health.colState')}</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">{t('monitoring.health.colFailures')}</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">{t('monitoring.health.colLastFailure')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -594,7 +594,7 @@ function MetricsTab() {
         </p>
         <Select value={period} onValueChange={(v) => setPeriod(v as '7d' | '30d' | '90d')}>
           <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Periode" />
+            <SelectValue placeholder={t('monitoring.metrics.periodLabel')} />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="7d">{t('monitoring.metrics.7d')}</SelectItem>

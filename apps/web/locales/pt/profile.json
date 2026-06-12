@@ -12,6 +12,7 @@
     "addFriend": "Adicionar",
     "cancelFriendRequest": "Cancelar solicitação",
     "userNotFound": "Usuário não encontrado",
+    "profileNotFound": "Perfil não encontrado",
     "userNotFoundDescription": "Este usuário não existe ou não está mais disponível",
     "loading": "Carregando perfil...",
     "online": "Online",

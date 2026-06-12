@@ -10,6 +10,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useI18n } from '@/hooks/useI18n';
+import type { TFunction } from '@/hooks/useI18n';
 
 interface TranslatedAudio {
   targetLanguage: string;
@@ -112,7 +114,8 @@ const getSpeakerColor = (
 const getSpeakerLabel = (
   speakerId: string | undefined,
   voiceScore: number | null | undefined,
-  senderSpeakerId: string | null | undefined
+  senderSpeakerId: string | null | undefined,
+  t: TFunction
 ): { label: string; isUser: boolean; confidence: string } => {
   // Pas de speaker ID
   if (!speakerId) {
@@ -121,25 +124,25 @@ const getSpeakerLabel = (
 
   // Pas de profil vocal (score null)
   if (voiceScore === null || voiceScore === undefined) {
-    return { label: speakerId, isUser: false, confidence: '(pas de profil vocal)' };
+    return { label: speakerId, isUser: false, confidence: t('transcription.noVoiceProfile') };
   }
 
   // Utilisateur identifié avec score élevé
   if (senderSpeakerId === speakerId && voiceScore >= 0.6) {
     return {
-      label: 'Vous',
+      label: t('transcription.you'),
       isUser: true,
-      confidence: voiceScore >= 0.8 ? 'Haute confiance' : 'Confiance moyenne',
+      confidence: voiceScore >= 0.8 ? t('transcription.highConfidence') : t('transcription.mediumConfidence'),
     };
   }
 
   // Score faible
   if (voiceScore < 0.3) {
-    return { label: speakerId, isUser: false, confidence: 'Très faible' };
+    return { label: speakerId, isUser: false, confidence: t('transcription.veryLowConfidence') };
   }
 
   // Score incertain
-  return { label: `${speakerId} (?)`, isUser: false, confidence: 'Incertain' };
+  return { label: `${speakerId} (?)`, isUser: false, confidence: t('transcription.uncertain') };
 };
 
 /**
@@ -212,6 +215,7 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
   _showScores = false,
   userAvatar,
 }) => {
+  const { t } = useI18n('audioEffects');
   const [isVisible, setIsVisible] = useState(false);
   const transcriptionRef = useRef<HTMLDivElement>(null);
 
@@ -444,7 +448,8 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
               const { isUser } = getSpeakerLabel(
                 speaker.sid,
                 speaker.voiceSimilarityScore,
-                transcription.senderSpeakerId
+                transcription.senderSpeakerId,
+                t
               );
               const GenderIcon = getGenderIcon(speaker.voiceCharacteristics);
               const voiceDetails = formatVoiceDetails(speaker.voiceCharacteristics);
@@ -461,7 +466,7 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
                         <div className="relative w-full h-full rounded-full overflow-hidden">
                           <NextImage
                             src={userAvatar}
-                            alt="Vous"
+                            alt={t('transcription.you')}
                             fill
                             sizes="32px"
                             className="object-cover"

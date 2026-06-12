@@ -2,7 +2,6 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
-import { conversationStatsService } from '../../services/ConversationStatsService';
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { ConversationSchemas, validateSchema } from '@meeshy/shared/utils/validation';
@@ -71,6 +70,59 @@ export const conversationListParticipantSelect = {
       isOnline: true,
       lastActiveAt: true
     }
+  }
+} as const;
+
+/**
+ * Iter 33 (F1) — GET /conversations/:id DETAIL include. Participants are
+ * capped: a 500-member group used to ship ~500 KB of hydrated participants on
+ * every conversation open. Clients tolerate a partial list (web renders the
+ * first 3, iOS resolves DM titles from the first 2) and load the full roster
+ * through the dedicated paginated GET /conversations/:id/participants
+ * endpoint. The filtered `_count` carries the exact active-member total,
+ * surfaced as `memberCount` in the response (declared in
+ * `conversationSchema`, so it survives fast-json-stringify).
+ *
+ * Iter 35 (F8) — strict `select` instead of `include`: the wire schema
+ * (`conversationParticipantSchema`) declares no nested `user` and only the
+ * scalars below, so fast-json-stringify already stripped the rest — the DB was
+ * hydrating dead fields (including the sensitive `sessionTokenHash` and the
+ * embedded `anonymousSession` document) for up to 100 participants per open.
+ * The nested user is server-side only: `generateDefaultConversationTitle`
+ * reads displayName/username/firstName/lastName.
+ */
+export const CONVERSATION_DETAIL_PARTICIPANTS_CAP = 100;
+
+export const conversationDetailInclude = {
+  participants: {
+    where: { isActive: true },
+    orderBy: { joinedAt: 'asc' },
+    take: CONVERSATION_DETAIL_PARTICIPANTS_CAP,
+    select: {
+      id: true,
+      userId: true,
+      type: true,
+      displayName: true,
+      avatar: true,
+      role: true,
+      permissions: true,
+      isActive: true,
+      isOnline: true,
+      lastActiveAt: true,
+      joinedAt: true,
+      user: {
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          firstName: true,
+          lastName: true
+        }
+      }
+    }
+  },
+  _count: {
+    select: { participants: { where: { isActive: true } } }
   }
 } as const;
 
@@ -599,23 +651,7 @@ export function registerCoreRoutes(
       const conversation = await prisma.conversation.findFirst({
         where: { id: conversationId },
         include: {
-          participants: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  firstName: true,
-                  lastName: true,
-                  avatar: true,
-                  isOnline: true,
-                  lastActiveAt: true,
-                  role: true
-                }
-              }
-            }
-          },
+          ...conversationDetailInclude,
           userPreferences: {
             where: { userId: authRequest.authContext.userId },
             take: 1,
@@ -652,13 +688,6 @@ export function registerCoreRoutes(
                 userId
               ));
 
-      // Ajouter les statistiques de conversation dans les métadonnées (via cache 1h)
-      const stats = await conversationStatsService.getOrCompute(
-        prisma,
-        id,
-        () => [] // REST ne connaît pas les sockets ici; la partie onlineUsers sera vide si non connue par cache
-      );
-
       // Calculer le unreadCount pour l'utilisateur courant
       let unreadCount = 0;
       try {
@@ -675,41 +704,29 @@ export function registerCoreRoutes(
         logger.warn('failed to compute unreadCount for conversation', { conversationId, error: unreadError });
       }
 
-      // Marquer automatiquement toutes les notifications de cette conversation comme lues.
-      // Le filtre conversationId reste client-side (champ JSON `context`), mais
-      // l'update est collapsé en un seul updateMany pour éviter le N+1 round-trip.
-      try {
-        const notifications = await prisma.notification.findMany({
-          where: {
-            userId,
-            isRead: false
-          },
-          select: { id: true, context: true }
+      // Marquer automatiquement les notifications de cette conversation comme lues —
+      // délégué au service (1 seul update Mongo filtré sur context.conversationId,
+      // émet notification:counts pour resynchroniser cloche/badge) et fire-and-forget :
+      // effet de bord non essentiel, hors du chemin critique de la réponse
+      // (même pattern que posts/interactions.ts pour markPostNotificationsAsRead).
+      fastify.notificationService
+        ?.markConversationNotificationsAsRead(userId, conversationId)
+        .catch((notifError: unknown) => {
+          logger.error('error marking auto notifications for conversation', { conversationId, error: notifError });
         });
 
-        const idsToMark = notifications
-          .filter((n: any) => n.context?.conversationId === conversationId)
-          .map((n: any) => n.id);
-
-        if (idsToMark.length > 0) {
-          const result = await prisma.notification.updateMany({
-            where: { id: { in: idsToMark } },
-            data: { isRead: true, readAt: new Date() }
-          });
-          fastify.log.info(`✅ Auto-marqué ${result.count} notification(s) comme lues pour conversation ${conversationId}, userId ${userId}`);
-        }
-      } catch (notifError) {
-        // Ne pas bloquer la réponse si le marquage des notifications échoue
-        logger.error('error marking auto notifications for conversation', { conversationId, error: notifError });
-      }
-
+      // NOTE : l'ancien bloc `meta.conversationStats` (getOrCompute + payload)
+      // a été retiré — `conversationSchema` ne déclare pas `meta`, donc
+      // fast-json-stringify le strippait du wire : calcul DB coûteux
+      // (message.groupBy plein scan à froid, TTL 1h) pour un résultat jeté.
+      // Les clients consomment les stats via l'event Socket.IO
+      // `conversation:stats`, qui se recompute seul (updateOnNewMessage).
+      const { _count, ...conversationData } = conversation;
       return sendSuccess(reply, {
-        ...conversation,
+        ...conversationData,
         title: displayTitle,
-        unreadCount,
-        meta: {
-          conversationStats: stats
-        }
+        memberCount: _count.participants,
+        unreadCount
       });
 
     } catch (error) {
@@ -928,8 +945,7 @@ export function registerCoreRoutes(
       // pour compat avec les anciens clients pendant ~3 mois.
       try {
         const socketIOHandler = fastify.socketIOHandler;
-        const socketIOManager = socketIOHandler?.getManager?.();
-        const io = (socketIOManager as any)?.io || (socketIOHandler as any)?.io;
+        const io = socketIOHandler?.getManager()?.getIO();
         if (io) {
           const allParticipantIds = [userId, ...uniqueParticipantIds];
           const conversationNewPayload = {
@@ -1107,8 +1123,7 @@ export function registerCoreRoutes(
       if (autoTranslateEnabled !== undefined) changedFields.autoTranslateEnabled = autoTranslateEnabled
 
       const socketIOHandler = fastify.socketIOHandler
-      const socketIOManager = socketIOHandler?.getManager?.()
-      const io = (socketIOManager as any)?.io || (socketIOHandler as any)?.io
+      const io = socketIOHandler?.getManager()?.getIO()
       if (io) {
         const room = ROOMS.conversation(id)
         io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
@@ -1199,8 +1214,7 @@ export function registerCoreRoutes(
       });
 
       // Broadcast closure to all members
-      const socketIOManager = fastify.socketIOHandler?.getManager?.()
-      const io = (socketIOManager as any)?.io || (fastify.socketIOHandler as any)?.io
+      const io = fastify.socketIOHandler?.getManager()?.getIO()
       if (io) {
         io.to(ROOMS.conversation(conversationId)).emit(
           SERVER_EVENTS.CONVERSATION_CLOSED,

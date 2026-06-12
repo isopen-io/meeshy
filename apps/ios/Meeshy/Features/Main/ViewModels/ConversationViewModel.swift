@@ -6,6 +6,29 @@ import MeeshySDK
 import MeeshyUI
 import os
 
+// MARK: - Send Timeout Helper
+
+/// Caps an awaited async operation at `seconds`. On expiry the operation's
+/// task is cancelled, so a hung/slow REST send (typical on cellular) throws
+/// promptly instead of holding the optimistic `.sending` clock for the full
+/// URLSession `timeoutIntervalForRequest` (60s) before the socket/outbox
+/// fallback can take over. The send catch path re-emits with the SAME
+/// `clientMessageId`, so the gateway dedups — no duplicate row even if the
+/// cancelled POST actually landed server-side.
+@MainActor
+func withSendTimeout<T: Sendable>(
+    seconds: Double,
+    operation: @escaping () async throws -> T
+) async throws -> T {
+    let operationTask = Task { try await operation() }
+    let watchdog = Task {
+        try? await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
+        operationTask.cancel()
+    }
+    defer { watchdog.cancel() }
+    return try await operationTask.value
+}
+
 // MARK: - Real-time Translation Type (text translations, not in SDK)
 
 struct MessageTranslation: Identifiable, Equatable {
@@ -203,6 +226,34 @@ class ConversationViewModel: ObservableObject {
     /// Manual audio language override per message (user selected a language in Language tab for audio)
     /// nil value means user chose "show original audio"
     @Published var activeAudioLanguageOverrides: [String: String?] = [:]
+
+    /// Per-message language selection driven by the bubble's flag strip
+    /// (primary display language switch + inline secondary panel). Lifted out
+    /// of `ThemedMessageBubble`'s `@State` so the bubble can sit behind an
+    /// Equatable re-render gate: as plain inputs these flow through `==`, and
+    /// a flag tap publishes here → targeted cell reconfigure → the bubble
+    /// re-renders with the new selection. (The former in-bubble `@State` is
+    /// exactly what made `.equatable()` unsafe — see b9a39c2c.)
+    @Published private(set) var bubbleLanguageSelections: [String: BubbleLanguageSelection] = [:]
+
+    struct BubbleLanguageSelection: Equatable {
+        var activeDisplayLangCode: String?
+        var secondaryLangCode: String?
+    }
+
+    func setBubbleActiveDisplayLanguage(_ code: String?, for messageId: String) {
+        var selection = bubbleLanguageSelections[messageId] ?? BubbleLanguageSelection()
+        guard selection.activeDisplayLangCode != code else { return }
+        selection.activeDisplayLangCode = code
+        bubbleLanguageSelections[messageId] = selection
+    }
+
+    func setBubbleSecondaryLanguage(_ code: String?, for messageId: String) {
+        var selection = bubbleLanguageSelections[messageId] ?? BubbleLanguageSelection()
+        guard selection.secondaryLangCode != code else { return }
+        selection.secondaryLangCode = code
+        bubbleLanguageSelections[messageId] = selection
+    }
 
     /// B2 (Prisme Linguistique) — monotonically increasing counter bumped
     /// every time the viewer's preferred-content languages change (user
@@ -669,6 +720,19 @@ class ConversationViewModel: ObservableObject {
     private let offlineQueue: OfflineMessageQueueing
     private let decryptionActor = DecryptionActor(provider: LiveSessionProvider())
 
+    /// Captured at init so the heavy side-effects (DB observation, initial
+    /// load, Combine subscriptions, singleton mutations) can be deferred out
+    /// of `init` into `start()`. `init` MUST stay side-effect-free: SwiftUI
+    /// reconstructs `ConversationView` — and therefore eagerly allocates a
+    /// throwaway `ConversationViewModel` (discarded by `@StateObject`) — on
+    /// every parent re-evaluation. Running the GRDB window read / observation
+    /// registration / singleton thrash in `init` turned that into a constant
+    /// main-thread storm (device trace: ~57% of a P-core, battery heating).
+    /// See `start()`.
+    private let startupDependencies: ConversationDependencies
+    private let anonymousSession: AnonymousSessionContext?
+    private var hasStarted = false
+
     private var currentUserId: String { authManager.currentUser?.id ?? "" }
     /// Public read-only accessor for the view layer (UIKit bridge needs the user id).
     var currentUserIdForView: String { currentUserId }
@@ -811,6 +875,8 @@ class ConversationViewModel: ObservableObject {
         self.offlineQueue = offlineQueue
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
+        self.startupDependencies = dependencies
+        self.anonymousSession = anonymousSession
 
         // Split-handler scaffolding — see ConversationStateStore et al.
         // Built before MessageStore/socket so subsequent delegations always
@@ -859,13 +925,40 @@ class ConversationViewModel: ObservableObject {
         handler.delegate = self
         handler.persistence = dependencies.persistence
         self.socketHandler = handler
+    }
+
+    /// Activates the conversation: registers the GRDB window observation,
+    /// kicks off the initial DB load, wires every Combine subscription, and
+    /// declares the conversation as currently-open on the sync engine.
+    ///
+    /// CRITICAL — this MUST NOT run from `init`. `ConversationView` is
+    /// reconstructed by SwiftUI on every parent re-evaluation (RootView's
+    /// `navigationDestination` closure reads `router.pendingReplyContext`),
+    /// and each reconstruction eagerly allocates a throwaway VM that
+    /// `@StateObject` immediately discards. When this work lived in `init`,
+    /// every throwaway allocation paid for a full SQLite window read+decode on
+    /// the main actor and thrashed `syncEngine.setCurrentlyOpenConversation`
+    /// (`init` set it, the throwaway `deinit` cleared it), whose published
+    /// recompute re-rendered RootView → reconstructed ConversationView → a
+    /// self-sustaining main-thread storm (device trace: constant ~57% of a
+    /// P-core, thermal state Nominal→Fair). Driven once from the view's
+    /// `.task` (one run per `.id(conversationId)` identity); the `hasStarted`
+    /// guard makes re-entry (background→foreground re-task) a no-op.
+    func start() {
+        guard !hasStarted else { return }
+        hasStarted = true
         // Declare this conversation as currently visible so the sync engine
         // forces its `unreadCount` to 0 on every server broadcast (the user
         // IS reading it) and excludes it from the cross-conversation
         // aggregator. Cleared in `deinit`.
         syncEngine.setCurrentlyOpenConversation(conversationId)
-        store.startObserving(dbPool: dependencies.dbPool)
-        Task { await store.loadInitial() }
+        // Open side-effects (socket room join + active-conversation publish to
+        // the notification singletons). Lives here — NOT in the handler's init
+        // — so the throwaway VMs SwiftUI allocates on every parent
+        // re-evaluation never fire them (only the installed VM runs start()).
+        socketHandler?.activate()
+        messageStore.startObserving(dbPool: startupDependencies.dbPool)
+        Task { await messageStore.loadInitial() }
         messagesPersistCancellable = $messages
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
@@ -1137,10 +1230,24 @@ class ConversationViewModel: ObservableObject {
     deinit {
         // socketHandler deinit handles room leave & typing cleanup
         socketHandler = nil
+        // Only undo the singleton mutations `start()` performed. A throwaway VM
+        // (eagerly allocated by `ConversationView.init`, never activated because
+        // `@StateObject` discarded it before its `.task` ran) MUST NOT clear the
+        // anonymous token or the currently-open gate — doing so cancelled what
+        // the live VM's `start()` had just set and fed the re-render storm.
+        guard hasStarted else { return }
         APIClient.shared.anonymousSessionToken = nil
-        // Clear the currently-open conversation gate so cross-conversation
-        // surfaces (back-button pill on other screens) resume counting it.
-        syncEngine.setCurrentlyOpenConversation(nil)
+        // Relinquish the currently-open conversation gate so cross-conversation
+        // surfaces (back-button pill on other screens) resume counting it — but
+        // ONLY if the gate still points at THIS conversation. On a fast A→B
+        // switch the next VM's `start()` may set the gate to B before A's
+        // `deinit` runs (ARC teardown order is not guaranteed vs the async
+        // `.task`); an unconditional clear would then blank the gate while B is
+        // on screen — phantom unread on B + B re-counted in the back-button pill.
+        // Clearing by identity makes deinit order-safe.
+        if syncEngine.currentlyOpenConversationId == conversationId {
+            syncEngine.setCurrentlyOpenConversation(nil)
+        }
     }
 
     // MARK: - Typing Emission (delegated to socketHandler)
@@ -1185,6 +1292,12 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Load Messages (initial)
 
+    /// REST send timeout (seconds). Far below `APIClient.timeoutIntervalForRequest`
+    /// (60s): a slow/failing POST must fall through to the socket fallback +
+    /// durable outbox quickly instead of pinning the optimistic `.sending`
+    /// clock for a full minute on a single hung cellular attempt.
+    static let sendRESTTimeoutSeconds: Double = 12
+
     func loadMessages() async {
         guard !isLoadingInitial else { return }
         isLoadingInitial = true
@@ -1195,6 +1308,20 @@ class ConversationViewModel: ObservableObject {
         // après épuisement des tentatives » : la bulle affiche alors la barre
         // « Échec · Réessayer · Supprimer » au lieu d'un spinner figé.
         await messagePersistence.reconcileFailedFromOutbox(conversationId: conversationId)
+        // Et les lignes optimistes ORPHELINES (process tué / Task annulée
+        // entre l'insert optimiste et serverAck/sendFailed, AUCUN outbox
+        // vivant pour les rejouer) : sans ça l'horloge `.sending` réapparaît
+        // à chaque réouverture, pour toujours.
+        await messagePersistence.reconcileOrphanedSendingRows(conversationId: conversationId)
+
+        // Drain any push-prefetched messages the NSE wrote to the App Group
+        // BEFORE reading the GRDB snapshot. A message received while the app
+        // was backgrounded (the "j'ai reçu la notif" case) is otherwise only
+        // merged on `resumeFromBackground`, never on the conversation-open
+        // path — so it stayed absent from the thread until a network refresh.
+        // `consumeAll` now persists synchronously (awaited upsert), so the
+        // snapshot below picks the message up locally — no REST round-trip.
+        await NSEPendingMessageConsumer.shared.consumeAll()
 
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
         switch cached {
@@ -1226,13 +1353,17 @@ class ConversationViewModel: ObservableObject {
             await hydrateTranslationsFromCache(messageIds: freshSnapshot.map(\.localId))
             messageStore.apply(records: freshSnapshot)
             hydrateMetadataFromGRDB(from: freshSnapshot)
-            // Always revalidate from API in background — the GRDB local store may only
-            // contain messages WE sent (optimistic inserts) while messages received from
-            // other participants while the conversation was closed are absent because
-            // `handleNewMessage` only buffers into GRDB when the socket handler is armed
-            // (i.e. the conversation is open). Without this background refresh, messages
-            // received offline (e.g. Belva's messages while the app was in background)
-            // never appear until the user manually scrolls up to trigger pagination.
+            // Background revalidation — catches anything the local store missed
+            // while the conversation was closed (edits, reactions, translations,
+            // and any received message not already surfaced locally). The common
+            // gaps are now closed before this snapshot: the global SyncEngine
+            // sink (`handleNewMessage` → `apiMessagePersistor`) persists received
+            // messages into GRDB even for CLOSED conversations while connected,
+            // and `consumeAll()` above drains background-push messages from the
+            // App Group synchronously — so the just-notified message renders from
+            // local data on open, not after this round-trip. This refresh stays
+            // unconditional as the authoritative backstop for the foreground race
+            // (the sink's write still in flight) and offline-delivered deltas.
             isRevalidating = !messageStore.messages.isEmpty
             Task { [weak self] in
                 guard let self else { return }
@@ -1808,6 +1939,80 @@ class ConversationViewModel: ObservableObject {
         ].joined(separator: "\u{1F}")
     }
 
+    /// Shared post-ACK finalization for a successful send, used by BOTH the
+    /// socket-first fast path and the REST path so the two stay in lockstep:
+    /// records the tempId→serverId mapping, drives the `.serverAck` state
+    /// transition (⏱→✓), bumps the conversation to the top, persists the
+    /// server-id mapping for cold-start reconciliation, and clears the
+    /// ephemeral/blur/effect compose state + mention draft. `transport` only
+    /// tags the perf signpost (`perf:ios.send.ack ... transport=…`) so a device
+    /// trace can A/B socket-first vs rest.
+    private func finalizeSuccessfulSend(
+        tempId: String,
+        serverId: String,
+        serverCreatedAt: Date,
+        text: String,
+        sendStartedAt: Date,
+        transport: String
+    ) async {
+        // Register tempId → serverId so the `message:new` broadcast reconciles
+        // without creating a duplicate row. UI update (sent state) flows through
+        // persistence → store observation.
+        pendingServerIds[tempId] = serverId
+
+        // GRDB server ack — state machine transitions to .sent. `try?` swallows
+        // both errors AND a nil return (state machine rejected / record missing),
+        // logged so the ⏱→✓ transition is observable.
+        let ackResult = try? await messagePersistence.applyEvent(
+            localId: tempId,
+            event: .serverAck(serverId: serverId, at: serverCreatedAt)
+        )
+        Logger.messages.info("SendFlow PENDING->SENT tempId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) resultState=\(ackResult.map { String(describing: $0) } ?? "nil", privacy: .public) transport=\(transport, privacy: .public)")
+        let ackElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
+        Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) transport=\(transport, privacy: .public) durationMs=\(ackElapsedMs, privacy: .public)")
+
+        let convId = conversationId
+        let msgContent = text
+        let msgTime = serverCreatedAt
+
+        // Persist server-id mapping so a cold-start REST fetch reconciles without
+        // duplicate temp_…/server-id pairs.
+        Task { [weak self] in
+            await self?.persistMessagesUsingServerIds()
+        }
+        let sentSenderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
+        Task {
+            await ConversationSyncEngine.shared.updateConversationAfterSend(
+                conversationId: convId,
+                messagePreview: msgContent,
+                messageAt: msgTime,
+                senderName: sentSenderName
+            )
+        }
+
+        if ephemeralDuration != nil { ephemeralDuration = nil }
+        if isBlurEnabled { isBlurEnabled = false }
+        if pendingEffects.hasAnyEffect { pendingEffects = .none }
+        mentionController.clearDraft()
+    }
+
+    /// French preview shown in the conversation list for an OPTIMISTIC message:
+    /// the caption when present, else a short media label (mirrors the server's
+    /// last-message preview wording). Used to surface a just-sent message in the
+    /// list before any server ACK. `nonisolated static` so the media path can
+    /// compute it for a `Task.detached`.
+    nonisolated static func optimisticListPreview(text: String, messageType: Message.MessageType) -> String {
+        if !text.isEmpty { return text }
+        switch messageType {
+        case .image: return "📷 Photo"
+        case .video: return "🎥 Vidéo"
+        case .audio: return "🎙️ Message vocal"
+        case .file: return "📎 Fichier"
+        case .location: return "📍 Position"
+        default: return ""
+        }
+    }
+
     @discardableResult
     func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2087,6 +2292,19 @@ class ConversationViewModel: ObservableObject {
             do {
                 try await persistence.insertOptimistic(optimisticRecord)
                 Logger.messages.debug("SendFlow insertOptimistic OK tempId=\(tempId, privacy: .public) state=.sending convId=\(self.conversationId, privacy: .public)")
+                // Local-first: surface the just-sent message in the conversation
+                // list IMMEDIATELY (preview + bump to top), before any server ACK
+                // — via the same path realtime events use (cache update →
+                // conversationsDidChange → reloadFromCache). Previously only the
+                // offline branch did this, so an online PENDING message did not
+                // appear/reorder in the list until its ACK. finalizeSuccessfulSend
+                // refreshes it with the server timestamp at ACK time.
+                await ConversationSyncEngine.shared.updateConversationAfterSend(
+                    conversationId: conversationId,
+                    messagePreview: Self.optimisticListPreview(text: text, messageType: optimisticMessageType),
+                    messageAt: optimisticRecord.createdAt,
+                    senderName: authManager.currentUser?.displayName ?? authManager.currentUser?.username
+                )
             } catch {
                 Logger.messages.error("SendFlow insertOptimistic FAILED tempId=\(tempId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
             }
@@ -2131,73 +2349,78 @@ class ConversationViewModel: ObservableObject {
                 encryptionMode: encryptionMode,
                 clientMessageId: tempId
             )
+
+            // WebSocket-first send (re-enabled 2026-06-11). On a persistent
+            // socket the `message:send` ACK returns in ~200 ms, vs the 10-30 s a
+            // slow-cellular REST POST + 429/503 retries can pin the optimistic
+            // clock. Gated to plain text only — no attachments, no E2EE, no
+            // ephemeral/view-once/blur/effects — because `message:send` does not
+            // transport those; and only when the socket reports connected. A miss
+            // (nil ACK / no socket) falls straight through to the REST POST below
+            // with the SAME clientMessageId, so the gateway dedups (no duplicate
+            // row). The disabling note below (2026-05-16/17, channel non-functional)
+            // is superseded: the gateway handler is wired and ACKs are verified.
+            let socketFirstEligible = messageSocket.isConnected
+                && !isEncrypted
+                && (attachmentIds?.isEmpty ?? true)
+                && resolvedExpiresAt == nil
+                && !resolvedIsViewOnce
+                && resolvedBlur != true
+                && !pendingEffects.hasAnyEffect
+            if socketFirstEligible {
+                Logger.messages.info("SendFlow socket-first START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public) — message:send before REST")
+                if let socketAck = await messageSocket.sendViaSocketFallback(
+                    conversationId: conversationId,
+                    content: finalContent,
+                    attachmentIds: [],
+                    replyToId: replyToId,
+                    storyReplyToId: storyReplyToId,
+                    originalLanguage: originalLanguage ?? defaultComposeLanguage(),
+                    isEncrypted: false,
+                    clientMessageId: tempId
+                ) {
+                    await finalizeSuccessfulSend(
+                        tempId: tempId,
+                        serverId: socketAck.messageId,
+                        serverCreatedAt: socketAck.createdAt ?? Date(),
+                        text: text,
+                        sendStartedAt: sendStartedAt,
+                        transport: "socket-first"
+                    )
+                    return true
+                }
+                Logger.messages.info("SendFlow socket-first MISS tempId=\(tempId, privacy: .public) — no ACK, falling through to REST")
+            }
+
             // Send via REST. The WebSocket-first send path (commit 35b399f9,
-            // 2026-05-16) is disabled: the `message:send` Socket.IO event
-            // never reached the gateway handler — the socket data channel was
-            // non-functional, so every send burned the full 10 s `emitWithAck`
-            // timeout before falling back to REST anyway (root-cause
-            // investigation 2026-05-17). REST is direct (~25 ms server-side).
-            // Re-enable the WebSocket-first path once the Socket.IO channel
-            // is repaired and the `message:send` ACK round-trip is verified.
+            // 2026-05-16) was disabled because the `message:send` Socket.IO event
+            // did not reach the gateway handler (investigation 2026-05-17). It is
+            // now re-enabled above as a fast path; REST remains the fallback and
+            // is direct (~25 ms server-side).
             Logger.messages.info("SendFlow POST /messages START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public) — awaiting response (isSending held)")
-            let responseData = try await messageService.send(
-                conversationId: conversationId, request: body
-            )
+            // Cap the REST send at `sendRESTTimeoutSeconds` (12s) instead of the
+            // 60s URLSession request timeout: on a slow/intermittent cellular
+            // link a hung POST otherwise pins the optimistic `.sending` clock for
+            // a full minute before the socket fallback + durable outbox can take
+            // over. On timeout the throw routes into the catch below (socket
+            // re-emit with the SAME clientMessageId → gateway dedups).
+            let responseData = try await withSendTimeout(seconds: Self.sendRESTTimeoutSeconds) {
+                try await self.messageService.send(
+                    conversationId: self.conversationId, request: body
+                )
+            }
             let serverId = responseData.id
             let serverCreatedAt = responseData.createdAt
             Logger.messages.debug("SendFlow POST OK tempId=\(tempId, privacy: .public) serverId=\(responseData.id, privacy: .public)")
 
-            // Register tempId → serverId mapping so the socket handler can reconcile
-            // the `message:new` broadcast without creating a duplicate row.
-            // UI update (sent state) flows through persistence → store observation.
-            pendingServerIds[tempId] = serverId
-
-            // GRDB server ack — state machine transitions to .sent; store observation
-            // surfaces the change to the view without a direct messages[idx] write.
-            // Logging the result so we can see whether the ⏱→✓ transition actually
-            // took effect (the `try?` swallows both errors AND a nil return when
-            // the state machine rejects the event or the record is missing).
-            let ackResult = try? await messagePersistence.applyEvent(
-                localId: tempId,
-                event: .serverAck(serverId: serverId, at: serverCreatedAt)
+            await finalizeSuccessfulSend(
+                tempId: tempId,
+                serverId: serverId,
+                serverCreatedAt: serverCreatedAt,
+                text: text,
+                sendStartedAt: sendStartedAt,
+                transport: "rest"
             )
-            Logger.messages.info("SendFlow PENDING->SENT tempId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) resultState=\(ackResult.map { String(describing: $0) } ?? "nil", privacy: .public) transport=rest")
-            let ackElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
-            Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) transport=rest durationMs=\(ackElapsedMs, privacy: .public)")
-
-            // Move conversation to top of list immediately (optimistic)
-            let convId = conversationId
-            let msgContent = text
-            let msgTime = serverCreatedAt
-
-            // Persist the server-id mapping so that a future cold-start REST fetch
-            // reconciles without duplicate `temp_…` / server-id pairs.
-            Task { [weak self] in
-                await self?.persistMessagesUsingServerIds()
-            }
-            let sentSenderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
-            Task {
-                await ConversationSyncEngine.shared.updateConversationAfterSend(
-                    conversationId: convId,
-                    messagePreview: msgContent,
-                    messageAt: msgTime,
-                    senderName: sentSenderName
-                )
-            }
-
-            // Clear ephemeral duration after successful send
-            if ephemeralDuration != nil {
-                ephemeralDuration = nil
-            }
-            // Clear blur after successful send
-            if isBlurEnabled {
-                isBlurEnabled = false
-            }
-            // Clear pending effects after successful send
-            if pendingEffects.hasAnyEffect {
-                pendingEffects = .none
-            }
-            mentionController.clearDraft()
             return true
         } catch {
             let failElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
@@ -2214,7 +2437,7 @@ class ConversationViewModel: ObservableObject {
                 || resolvedBlur == true
                 || pendingEffects.hasAnyEffect
             if !hasSpecialProps {
-                Logger.messages.warning("SendFlow socket-fallback START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public) — REST failed, awaiting socket ack up to ~30s (isSending held)")
+                Logger.messages.warning("SendFlow socket-fallback START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public) — REST failed, awaiting socket ack up to ~10s (isSending held)")
                 let socketAck = await messageSocket.sendViaSocketFallback(
                     conversationId: conversationId,
                     content: finalContent,
@@ -2291,24 +2514,23 @@ class ConversationViewModel: ObservableObject {
         let failedMsg = messages[idx]
         guard failedMsg.deliveryStatus == .failed else { return }
 
-        // Delete the failed row from GRDB; store observation removes it from
-        // `messages` automatically. Then re-send, which inserts a fresh
-        // optimistic row.
-        //
-        // Phase 4 §6.2 — reuse the failed message's `clientMessageId` so
-        // the gateway dedup contract `(conversationId, clientMessageId)`
-        // catches a previous attempt that DID reach the server (e.g. ACK
-        // was lost mid-flight). A fresh `cid_*` here would bypass the
-        // dedup index and produce a duplicate server-side record.
-        // The local id of a Phase 4 optimistic message IS its
-        // `clientMessageId` (legacy `temp_/offline_/retry_*` prefixes are
-        // gone), so passing `messageId` straight through is correct.
+        // Resend IN PLACE — no delete + reinsert, so the bubble never flashes
+        // "message supprimé". `.retry` transitions the EXISTING row .failed →
+        // .queued (resets the retry budget) while preserving its content and
+        // position: the orange retry band disappears and the bubble shows the
+        // sending indicator immediately. `sendMessage` then re-drives the fast
+        // (socket-first) send reusing the SAME clientMessageId — Phase 4 §6.2,
+        // so the gateway dedup contract `(conversationId, clientMessageId)`
+        // catches a prior attempt that DID reach the server (lost ACK). Its
+        // optimistic insert harmlessly no-ops on the existing row (PK conflict,
+        // swallowed by the insert's own catch), and the serverAck reconciles it
+        // .queued → .sent. The local id of a Phase 4 optimistic message IS its
+        // clientMessageId (no legacy temp_/offline_/retry_ prefix), so passing
+        // `messageId` straight through as `existingTempId` is correct.
         let content = failedMsg.content
         let replyToId = failedMsg.replyToId
-        let priorClientMessageId = messageId
-        try? await messagePersistence.markDeleted(localId: messageId, deletedAt: Date())
-
-        await sendMessage(content: content, replyToId: replyToId, existingTempId: priorClientMessageId)
+        _ = try? await messagePersistence.applyEvent(localId: messageId, event: .retry)
+        await sendMessage(content: content, replyToId: replyToId, existingTempId: messageId)
     }
 
     func removeFailedMessage(messageId: String) {
@@ -2446,10 +2668,23 @@ class ConversationViewModel: ObservableObject {
         let persistence = messagePersistence
         let recordConversationId = record.conversationId
         let attachmentCount = attachments.count
+        // Captured for the conversation-list optimistic update below (computed on
+        // the MainActor before the detached insert).
+        let listPreview = Self.optimisticListPreview(text: content, messageType: messageType)
+        let listSenderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
         Task.detached(priority: .userInitiated) {
             do {
                 try await persistence.insertOptimistic(record)
                 Logger.messages.debug("SendFlow insertOptimisticMedia OK tempId=\(tempId, privacy: .public) convId=\(recordConversationId, privacy: .public) attachments=\(attachmentCount, privacy: .public)")
+                // Local-first: surface the media message in the conversation list
+                // immediately (preview + bump to top), before any server ACK —
+                // the media path previously never updated the list optimistically.
+                await ConversationSyncEngine.shared.updateConversationAfterSend(
+                    conversationId: recordConversationId,
+                    messagePreview: listPreview,
+                    messageAt: now,
+                    senderName: listSenderName
+                )
             } catch {
                 Logger.messages.error("SendFlow insertOptimisticMedia FAILED tempId=\(tempId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
             }
@@ -2571,6 +2806,11 @@ class ConversationViewModel: ObservableObject {
                 await OutboxFlushTrigger.flushNow()
             }
         } else {
+            // Marque la reaction comme "nouvelle" AVANT l'ecriture async : quand
+            // le store observe l'ajout et re-rend la bulle, la nouvelle pill
+            // verra `shouldAnimate == true` et jouera la comete. Un scroll
+            // ulterieur (hors fenetre) ne la re-animera pas.
+            ReactionAnimationGate.markAdded(messageId: messageId, emoji: emoji)
             let reactionId = UUID().uuidString
             Task { [weak self] in
                 try? await self?.messagePersistence.appendReaction(
@@ -2590,6 +2830,50 @@ class ConversationViewModel: ObservableObject {
             }
         }
 
+    }
+
+    // MARK: - Attachment Reactions (BUG2 A')
+
+    /// Réagit à UNE image d'un message multi-images. Optimiste in-memory + emit
+    /// direct socket (parité offline-queue différée, cf. spec) ; le cold-load REST
+    /// re-fournit les réactions persistées. Cap 1 emoji/user/PJ (miroir
+    /// message-level). La mutation de `messages` déclenche le reconfigure diffable
+    /// → re-render de la bulle avec le nouveau reactionSummary.
+    func toggleAttachmentReaction(attachmentId: String, messageId: String, emoji: String) {
+        guard let mIdx = messageIndex(for: messageId),
+              let aIdx = messages[mIdx].attachments.firstIndex(where: { $0.id == attachmentId }) else { return }
+        var summary = messages[mIdx].attachments[aIdx].reactionSummary ?? [:]
+        var mine = messages[mIdx].attachments[aIdx].currentUserReactions ?? []
+        let remoteId = serverId(for: messageId)
+
+        if mine.contains(emoji) {
+            summary[emoji] = max(0, (summary[emoji] ?? 1) - 1)
+            if summary[emoji] == 0 { summary.removeValue(forKey: emoji) }
+            mine.removeAll { $0 == emoji }
+            messageSocket.removeAttachmentReaction(attachmentId: attachmentId, messageId: remoteId, emoji: emoji)
+        } else {
+            // 1 emoji/user/PJ : retirer la réaction précédente de l'utilisateur.
+            for old in mine {
+                summary[old] = max(0, (summary[old] ?? 1) - 1)
+                if summary[old] == 0 { summary.removeValue(forKey: old) }
+            }
+            mine.removeAll()
+            summary[emoji] = (summary[emoji] ?? 0) + 1
+            mine.append(emoji)
+            messageSocket.addAttachmentReaction(attachmentId: attachmentId, messageId: remoteId, emoji: emoji)
+        }
+        messages[mIdx].attachments[aIdx].reactionSummary = summary.isEmpty ? nil : summary
+        messages[mIdx].attachments[aIdx].currentUserReactions = mine.isEmpty ? nil : mine
+    }
+
+    /// Applique un delta serveur : remplace le reactionSummary (comptes
+    /// autoritaires) de la pièce jointe. `currentUserReactions` reste géré côté
+    /// client (optimiste) — limite multi-device connue, comme message-level.
+    /// Lookup par `attachmentId` (server-unique), robuste au mapping local/server id.
+    func applyAttachmentReactionDelta(attachmentId: String, reactionSummary: [String: Int]) {
+        guard let mIdx = messages.firstIndex(where: { $0.attachments.contains { $0.id == attachmentId } }),
+              let aIdx = messages[mIdx].attachments.firstIndex(where: { $0.id == attachmentId }) else { return }
+        messages[mIdx].attachments[aIdx].reactionSummary = reactionSummary.isEmpty ? nil : reactionSummary
     }
 
     // MARK: - Fetch Reaction Details

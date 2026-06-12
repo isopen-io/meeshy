@@ -362,7 +362,33 @@
         "urlRequired": "Veuillez entrer une URL",
         "invalidUrl": "Veuillez entrer une URL valide"
       }
+    },
+    "v2": {
+      "title": "Mes liens",
+      "create": "Créer",
+      "totalClicks": "Clics totaux",
+      "activeLinks": "Liens actifs",
+      "myLinks": "MES LIENS",
+      "active": "Actif",
+      "inactive": "Inactif",
+      "clicksCount": "{count} clics",
+      "copyUrl": "Copier l'URL",
+      "toggleOn": "Activer le lien",
+      "toggleOff": "Désactiver le lien",
+      "modalTitle": "Créer un nouveau lien",
+      "linkName": "Nom du lien",
+      "linkNamePlaceholder": "Ex : Ma page de profil",
+      "generatedUrl": "URL générée",
+      "regenerateSlug": "Régénérer le slug",
+      "cancel": "Annuler",
+      "toasts": {
+        "nameRequired": "Veuillez entrer un nom pour le lien",
+        "created": "Lien créé avec succès",
+        "urlCopied": "URL copiée dans le presse-papier",
+        "copyError": "Erreur lors de la copie de l'URL",
+        "deactivated": "Lien désactivé",
+        "activated": "Lien activé"
+      }
     }
   }
 }
-

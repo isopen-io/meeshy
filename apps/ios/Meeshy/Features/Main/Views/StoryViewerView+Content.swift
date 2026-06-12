@@ -2,56 +2,9 @@ import SwiftUI
 import Combine
 import AVFoundation
 import QuartzCore
+import os
 import MeeshySDK
 import MeeshyUI
-
-// MARK: - Story progress display-link proxy
-
-/// Wraps a `CADisplayLink` that fires once per display refresh (typically 60Hz,
-/// up to 120Hz on ProMotion). The closure is invoked on the main run loop in
-/// `.common` mode so it keeps ticking during scroll. Lifetime is bridged via
-/// the parent's `AnyCancellable` — when that's cancelled the proxy is dropped
-/// and `invalidate()` is called explicitly from the cancellation closure.
-final class StoryProgressDisplayLinkProxy {
-    /// Tiny boxed Double so the tick closure can mutate the last-committed
-    /// progress between fires without requiring `inout` plumbing through a
-    /// closure that crosses concurrency boundaries.
-    final class MutableDouble {
-        var value: Double
-        init(_ value: Double) { self.value = value }
-    }
-
-    private var displayLink: CADisplayLink?
-    private let onTick: @MainActor () -> Void
-
-    init(onTick: @escaping @MainActor () -> Void) {
-        self.onTick = onTick
-    }
-
-    @MainActor
-    func start() {
-        invalidate()
-        let link = CADisplayLink(target: self, selector: #selector(handleTick))
-        if #available(iOS 15.0, *) {
-            link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 120, preferred: 60)
-        }
-        link.add(to: .main, forMode: .common)
-        displayLink = link
-    }
-
-    /// Safe to call from any context — `CADisplayLink.invalidate()` is documented
-    /// thread-safe and the run loop drops its strong reference to the proxy.
-    func invalidate() {
-        displayLink?.invalidate()
-        displayLink = nil
-    }
-
-    @objc private func handleTick() {
-        // CADisplayLink fires on its scheduled run loop (main, here). Hop the
-        // closure onto the MainActor explicitly for Swift 6 isolation correctness.
-        MainActor.assumeIsolated { onTick() }
-    }
-}
 
 // MARK: - Reveal Circle Shape
 
@@ -257,7 +210,12 @@ extension StoryViewerView {
                 }
 
                 switch gestureAxis {
-                case 1: horizontalDrag = dx
+                case 1:
+                    horizontalDrag = dx
+                    // Face du cube côté direction courante — recalculée à
+                    // chaque tick : le geste est réversible mi-course.
+                    let total = groupSlide + dx
+                    neighborPreviewDirection = total < 0 ? 1 : (total > 0 ? -1 : 0)
                 case 2: if dy > 0 { dragOffset = dy }
                 default: break
                 }
@@ -276,8 +234,9 @@ extension StoryViewerView {
                     let dx = value.translation.width
                     let predicted = value.predictedEndTranslation.width
 
-                    // Transfer interactive drag -> groupSlide (no visual snap)
-                    groupSlide += horizontalDrag * 0.5
+                    // Transfer interactive drag -> groupSlide (no visual snap).
+                    // 1:1 (Lot 3) — cohérent avec `totalSlideX` sans amorti.
+                    groupSlide += horizontalDrag
                     horizontalDrag = 0
 
                     if (dx < -60 || predicted < -150) && currentGroupIndex < groups.count - 1 {
@@ -295,9 +254,14 @@ extension StoryViewerView {
                             progress = 0
                         }
                     } else {
-                        // Snap back — animate groupSlide to 0
+                        // Snap back — animate groupSlide to 0. La face du cube
+                        // reste montée pendant le retour (elle sort de l'écran
+                        // avec l'animation), nettoyée une fois posée.
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             groupSlide = 0
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+                            if !isTransitioning { neighborPreviewDirection = 0 }
                         }
                         resumeTimer()
                     }
@@ -323,6 +287,9 @@ extension StoryViewerView {
             horizontalDrag = 0
             dragOffset = 0
             groupSlide = 0
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+            if !isTransitioning { neighborPreviewDirection = 0 }
         }
         resumeTimer()
     }
@@ -456,32 +423,37 @@ extension StoryViewerView {
         }
     }
 
-    /// Slide transition for navigating between different users' story groups
+    /// Transition cube entre groupes d'auteurs (Lot 3). Pendant le drag, les
+    /// deux faces (carte + aperçu voisin) suivent déjà le doigt ; le commit
+    /// termine la rotation jusqu'à ±90° puis swappe le contenu à l'arête —
+    /// la carte réelle remplace la face entrante à transform identité, swap
+    /// invisible. Le canvas voisin est chaud (prefetch inter-groupes), la
+    /// première frame réelle est instantanée.
     private func groupTransition(forward: Bool, update: @escaping () -> Void) {
         guard !isTransitioning else { return }
         isTransitioning = true
+        // Tap-en-bord / auto-advance arrivent ici sans drag : poser la
+        // direction pour que la face entrante participe au commit.
+        neighborPreviewDirection = forward ? 1 : -1
 
         let exitX: CGFloat = forward ? -screenW : screenW
-        let enterX: CGFloat = forward ? screenW : -screenW
-
-        // 1. Slide current card off-screen
-        withAnimation(.easeIn(duration: 0.2)) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
             groupSlide = exitX
         }
 
-        // 2. Swap content while off-screen, slide new card in immediately
-        //    ThumbHash provides instant visual — no need to await prefetch
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+        // Swap quand l'arête est quasi à 90° (~96 % de la course du spring) :
+        // la face entrante est alors à ~quelques points de l'identité.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) {
             update()
             markCurrentViewed()
             prefetchCurrentGroup()
 
-            groupSlide = enterX
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                groupSlide = 0
-            }
+            // Sans animation : la carte réelle prend la place exacte de la
+            // face entrante (transform identité), la face est démontée.
+            groupSlide = 0
+            neighborPreviewDirection = 0
             restartTimer()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 isTransitioning = false
             }
         }
@@ -491,7 +463,7 @@ extension StoryViewerView {
     func dismissViewer() {
         guard !isDismissing else { return }
         isTransitioning = true
-        timerCancellable?.cancel()
+        slideTimer.setPaused(true)
         // Déclencher le fade-out audio immédiat lors du dismiss
         NotificationCenter.default.post(name: .storyAudioFadeOut, object: nil)
 
@@ -546,12 +518,10 @@ extension StoryViewerView {
     }
 
     func startTimer() {
-        timerCancellable?.cancel()
         progress = 0
         isContentReady = false
         hasFiredFadeOut = false
         hasFiredNextPrefetch = false
-        lastPlaybackTime = 0
         showCommentsOverlay = false
         replyingToStoryComment = nil
         storyCommentRepliesMap = [:]
@@ -570,55 +540,18 @@ extension StoryViewerView {
         storyReactionCount = currentStory?.reactionCount ?? 0
         storyCurrentUserReactions = currentStory?.currentUserReactions ?? []
         updateStoryDuration()
-        let duration = computedStoryDuration
-        // Seuil d'amorçage du prefetch de la slide suivante : 5 secondes avant
-        // la fin de la slide en cours, borné à 50 % minimum. Sur une slide 6 s
-        // ce ratio donne 50 % (≈ 3 s avant la fin) au lieu de 17 % (≈ 5 s avant
-        // la fin → quasi immédiatement, ce qui faisait fire le prefetch sur la
-        // slide précédente et masquait le diagnostic du cache miss). Le bornage
-        // garantit qu'on reste cohérent avec l'intent « pré-charger pendant la
-        // 2ᵉ moitié de la slide » quelle que soit la durée.
-        let nextPrefetchThreshold = max(0.5, 1.0 - (5.0 / duration))
 
-        // PROGRESS BAR = wall-clock CACurrentMediaTime accumulator aligné sur
-        // `computedStoryDuration`. Gate `isContentReady` empêche le timer de
-        // démarrer avant que le canvas n'ait fait fire `onContentReady`
-        // (bg image / video / color settled, fg vidéos en .readyToPlay).
-        // Une fois armé, le wall-clock roule indépendamment du canvas tick
-        // — il est l'autorité de la durée slide.
-        let lastCommitted = StoryProgressDisplayLinkProxy.MutableDouble(0)
-        let elapsedAccumulator = StoryProgressDisplayLinkProxy.MutableDouble(0)
-        let lastTickTime = StoryProgressDisplayLinkProxy.MutableDouble(0)
-        let hasFiredGoToNext = StoryProgressDisplayLinkProxy.MutableDouble(0)
-        let proxy = StoryProgressDisplayLinkProxy { [self] in
-            guard hasFiredGoToNext.value == 0 else { return }
-            let now = CACurrentMediaTime()
-            let dt: Double = lastTickTime.value > 0 ? (now - lastTickTime.value) : 0
-            lastTickTime.value = now
-            guard !shouldPauseTimer, isContentReady else { return }
-            elapsedAccumulator.value += dt
-            let elapsed = elapsedAccumulator.value
-            let raw = min(1.0, CGFloat(elapsed / duration))
-            if abs(raw - CGFloat(lastCommitted.value)) >= 1.0 / 300.0 || raw >= 1.0 {
-                lastCommitted.value = Double(raw)
-                progress = raw
-            }
-            if raw >= nextPrefetchThreshold && !hasFiredNextPrefetch {
-                hasFiredNextPrefetch = true
-                _ = prefetchStory(at: currentStoryIndex + 1)
-            }
-            if elapsed >= duration {
-                hasFiredGoToNext.value = 1
-                goToNext()
-            }
-        }
-        proxy.start()
-
-        // Bridge the proxy lifetime to `timerCancellable` so existing `cancel()`
-        // sites at the top of this method, in `restartTimer()`, and in
-        // `onDisappear` keep working unchanged. The closure captures `proxy`
-        // strongly; cancelling the AnyCancellable invalidates the link.
-        timerCancellable = AnyCancellable { proxy.invalidate() }
+        // PROGRESS = StoryReaderTimerController (SDK), unique display-link de
+        // progression. Gating : `markContentReady` (canvas visible via
+        // `adaptiveOnChange(of: isContentReady)` + canvas préfetché via
+        // `refreshPrefetchWindowAndTimer`) empêche le compte avant contenu ;
+        // pause : `setPaused` asservi à `shouldPauseTimer`. La barre, le seuil
+        // de prefetch N+1 et `goToNext()` vivent dans les callbacks câblés par
+        // `installPrefetchPipelineIfNeeded`. Le wall-clock du controller reste
+        // l'autorité de la durée slide (cf. plan Lot 2 — l'asservissement au
+        // clock canvas clampé bloquerait l'auto-advance sur les pauses UI).
+        refreshPrefetchWindowAndTimer()
+        slideTimer.setPaused(shouldPauseTimer)
     }
 
     /// Restart timer AND clear manual pause (e.g., after drag->transition).
@@ -1416,7 +1349,11 @@ extension StoryViewerView {
             }
             storyCommentRepliesMap[commentId] = replies
         } catch {
-            storyCommentExpandedThreads.remove(commentId)
+            // Échec réseau transitoire : on garde le thread OUVERT (le
+            // refermer punissait l'utilisateur qui venait de l'ouvrir) —
+            // il affiche son état vide/spinner et le prochain toggle ou
+            // refetch opportuniste réessaiera.
+            Logger.messages.error("[StoryViewer] loadStoryCommentReplies failed for \(commentId, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -1628,7 +1565,12 @@ extension StoryViewerView {
                     await loadStoryCommentReplies(commentId: comment.id)
                 }
             }
-        } catch {}
+        } catch {
+            // Cache-first : l'overlay garde les commentaires cachés déjà
+            // affichés ; on logue l'échec du refresh réseau au lieu de
+            // l'avaler (diagnostic des overlays vides signalés).
+            Logger.messages.error("[StoryViewer] fetchStoryComments failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Seeds `storyCommentCount` for the slide that just became visible.

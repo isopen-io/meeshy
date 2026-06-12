@@ -63,12 +63,12 @@ export function UserPersonalInfoSection({
       });
 
       if (response.data?.success) {
-        toast.success(t('usersDetail.roleUpdatedSuccess'));
+        toast.success(t('userDetail.personalInfoUpdated'));
         setEditing(false);
         onUpdate();
       }
     } catch (error: unknown) {
-      toast.error(error.message || t('usersDetail.roleUpdateError'));
+      toast.error(error.message || t('userDetail.personalInfoUpdateError'));
     } finally {
       setSaving(false);
     }
@@ -80,7 +80,7 @@ export function UserPersonalInfoSection({
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center space-x-2 dark:text-gray-100">
             <User className="h-5 w-5" />
-            <span>{t('usersDetail.personalInfoTitle')}</span>
+            <span>{t('userDetail.personalInfoTitle')}</span>
           </CardTitle>
           {!editing ? (
             <Button
@@ -90,7 +90,7 @@ export function UserPersonalInfoSection({
               className="dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200"
             >
               <Edit2 className="h-4 w-4 mr-1" />
-              {t('usersDetail.editModifier')}
+              {t('usersDetail.editButton')}
             </Button>
           ) : (
             <div className="flex space-x-2">
@@ -102,7 +102,7 @@ export function UserPersonalInfoSection({
                 className="dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200"
               >
                 <X className="h-4 w-4 mr-1" />
-                {t('usersDetail.cancelEdit')}
+                {t('usersDetail.cancelButton')}
               </Button>
               <Button
                 size="sm"
@@ -111,7 +111,7 @@ export function UserPersonalInfoSection({
                 className="dark:bg-blue-700 dark:hover:bg-blue-800"
               >
                 <Save className="h-4 w-4 mr-1" />
-                {saving ? t('usersDetail.saveChanges') : t('usersDetail.saveButton2')}
+                {saving ? t('userDetail.saving') : t('usersDetail.saveButton')}
               </Button>
             </div>
           )}
@@ -122,7 +122,7 @@ export function UserPersonalInfoSection({
           <>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium dark:text-gray-200">{t('usersDetail.labelFirstName')}</label>
+                <label className="text-sm font-medium dark:text-gray-200">{t('userDetail.firstNameLabel')}</label>
                 <Input
                   value={formData.firstName}
                   onChange={(e) => handleChange('firstName', e.target.value)}
@@ -130,7 +130,7 @@ export function UserPersonalInfoSection({
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium dark:text-gray-200">{t('usersDetail.labelLastName')}</label>
+                <label className="text-sm font-medium dark:text-gray-200">{t('userDetail.lastNameLabel')}</label>
                 <Input
                   value={formData.lastName}
                   onChange={(e) => handleChange('lastName', e.target.value)}
@@ -140,17 +140,17 @@ export function UserPersonalInfoSection({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium dark:text-gray-200">{t('usersDetail.labelDisplayNameField')}</label>
+              <label className="text-sm font-medium dark:text-gray-200">{t('userDetail.displayNameLabel')}</label>
               <Input
                 value={formData.displayName || ''}
                 onChange={(e) => handleChange('displayName', e.target.value)}
                 className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
-                placeholder="Optionnel"
+                placeholder={t('userDetail.optionalPlaceholder')}
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium dark:text-gray-200">{t('usersDetail.labelUsernameField')}</label>
+              <label className="text-sm font-medium dark:text-gray-200">{t('userDetail.usernameLabel')} (username)</label>
               <Input
                 value={formData.username}
                 onChange={(e) => {
@@ -158,15 +158,15 @@ export function UserPersonalInfoSection({
                   handleChange('username', value);
                 }}
                 className="font-mono dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
-                placeholder="nom-utilisateur"
+                placeholder={t('userDetail.usernamePlaceholder')}
               />
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                {t('usersDetail.usernameHint')}
+                {t('userDetail.usernameHint')}
               </p>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium dark:text-gray-200">{t('usersDetail.labelBio')}</label>
+              <label className="text-sm font-medium dark:text-gray-200">{t('userDetail.bioLabel')}</label>
               <textarea
                 className="w-full p-2 border dark:border-gray-700 rounded-md text-sm min-h-[80px] dark:bg-gray-800 dark:text-gray-100"
                 value={formData.bio}
@@ -174,26 +174,26 @@ export function UserPersonalInfoSection({
                 maxLength={500}
               />
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                {t('usersDetail.charCount', { count: String(formData.bio?.length || 0) })}
+                {t('userDetail.bioCharCount', { count: formData.bio?.length || 0 })}
               </p>
             </div>
           </>
         ) : (
           <div className="space-y-3">
             <div className="flex items-center text-sm">
-              <span className="w-40 text-gray-600 dark:text-gray-400">{t('usersDetail.labelFullName')}</span>
+              <span className="w-40 text-gray-600 dark:text-gray-400">{t('userDetail.fullNameLabel')}:</span>
               <span className="font-medium dark:text-gray-200">
                 {user.firstName} {user.lastName}
               </span>
             </div>
             {user.displayName && (
               <div className="flex items-center text-sm">
-                <span className="w-40 text-gray-600 dark:text-gray-400">{t('usersDetail.labelDisplayName')}</span>
+                <span className="w-40 text-gray-600 dark:text-gray-400">{t('userDetail.displayNameLabel')}:</span>
                 <span className="font-medium dark:text-gray-200">{user.displayName}</span>
               </div>
             )}
             <div className="flex items-center text-sm">
-              <span className="w-40 text-gray-600 dark:text-gray-400">{t('usersDetail.labelUsername')}</span>
+              <span className="w-40 text-gray-600 dark:text-gray-400">Username:</span>
               <span className="font-medium font-mono flex items-center dark:text-gray-200">
                 <User className="h-4 w-4 mr-2 text-gray-400 dark:text-gray-500" />
                 @{user.username}
@@ -201,7 +201,7 @@ export function UserPersonalInfoSection({
             </div>
             {user.bio && (
               <div className="text-sm">
-                <span className="text-gray-600 dark:text-gray-400 block mb-1">{t('usersDetail.labelBio')}</span>
+                <span className="text-gray-600 dark:text-gray-400 block mb-1">{t('userDetail.bioLabel')}:</span>
                 <p className="text-gray-900 dark:text-gray-200">{user.bio}</p>
               </div>
             )}

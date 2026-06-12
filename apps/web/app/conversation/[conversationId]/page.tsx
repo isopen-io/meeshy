@@ -1,6 +1,8 @@
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { buildApiUrl } from '@/lib/config';
+import { isValidObjectId } from '@/utils/conversation-id-utils';
+import RedirectMessage from './RedirectMessage';
 import { getServerLocale } from '@/lib/i18n/server-locale';
 import { composeMetadata, getMetadataPage, interpolate, pageString } from '@/lib/i18n/metadata';
 
@@ -10,6 +12,11 @@ interface ConversationPageProps {
 
 export async function generateMetadata({ params }: ConversationPageProps): Promise<Metadata> {
   const { conversationId } = await params;
+
+  if (!isValidObjectId(conversationId)) {
+    notFound();
+  }
+
   const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3100';
   const locale = await getServerLocale();
   const meta = getMetadataPage(locale, 'conversationDetail');
@@ -63,13 +70,5 @@ export async function generateMetadata({ params }: ConversationPageProps): Promi
 }
 
 export default function ConversationPage() {
-  // Rediriger vers la page de conversation dans l'application
-  return (
-    <div className="flex items-center justify-center min-h-screen">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold mb-4">Redirection...</h1>
-        <p>Vous allez être redirigé vers la conversation.</p>
-      </div>
-    </div>
-  );
+  return <RedirectMessage />;
 }

@@ -25,8 +25,11 @@ public final class MeeshyVideoCanvasLayer: CALayer, @unchecked Sendable {
     private var statusObserver: NSKeyValueObservation?
 
     /// Fired once `AVPlayerItem.status` transitions to `.readyToPlay`.
+    /// Assign BEFORE `attach(url:)` — `observeItem` snapshots the callback at
+    /// observation time to avoid capturing `self` in a `@Sendable` closure.
     public var onReadyToPlay: (@Sendable () -> Void)?
     /// Fired when the (non-looping) item plays to end.
+    /// Assign BEFORE `attach(url:)` (see `onReadyToPlay`).
     public var onPlaybackEnded: (@Sendable () -> Void)?
 
     nonisolated public override init() {
@@ -95,16 +98,25 @@ public final class MeeshyVideoCanvasLayer: CALayer, @unchecked Sendable {
     }
 
     private func observeItem(_ item: AVPlayerItem) {
-        statusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
-            guard item.status == .readyToPlay else { return }
-            Task { @MainActor in self?.onReadyToPlay?() }
+        // Capturer les callbacks `@Sendable` (valeurs Sendable) AVANT de créer les
+        // observers, plutôt que `self`. La conformance `Sendable` de la classe est
+        // inférée isolée `@MainActor` (feature `InferIsolatedConformances`), donc
+        // `self` n'est PAS capturable dans une closure `@Sendable` (KVO /
+        // NotificationCenter) — c'est « Sending 'self' risks causing data races ».
+        // Les callbacks doivent donc être assignés avant `attach(url:)`.
+        let onReady = onReadyToPlay
+        let onEnded = onPlaybackEnded
+        statusObserver = item.observe(\.status, options: [.new]) { item, _ in
+            guard item.status == .readyToPlay, let onReady else { return }
+            Task { @MainActor in onReady() }
         }
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item,
             queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in self?.onPlaybackEnded?() }
+        ) { _ in
+            guard let onEnded else { return }
+            Task { @MainActor in onEnded() }
         }
     }
 }

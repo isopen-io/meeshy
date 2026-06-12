@@ -110,7 +110,7 @@ struct BubbleQuotedReply: View, Equatable {
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(quotedTitle)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.caption.weight(.bold))
                         .foregroundColor(nameColor)
                         .lineLimit(1)
 
@@ -123,7 +123,7 @@ struct BubbleQuotedReply: View, Equatable {
                             let attachmentKind = BubbleQuotedReply.resolveAttachmentKind(reply.attachmentType)
                             if let kind = attachmentKind {
                                 Image(systemName: kind.sfSymbolName)
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(.caption2.weight(.medium))
                                     .foregroundColor(previewColor)
                             }
 
@@ -218,23 +218,23 @@ struct BubbleMoodReplyPreview: View, Equatable {
         HStack(spacing: 5) {
             if let emoji = reply.moodEmoji {
                 Text(emoji)
-                    .font(.system(size: 13))
+                    .font(.footnote)
             }
 
             if let date = reply.storyPublishedAt {
                 Text(date, style: .relative)
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundColor(previewColor.opacity(0.8))
             }
 
             if !reply.previewText.isEmpty {
                 if reply.storyPublishedAt != nil {
                     Text("\u{2022}")
-                        .font(.system(size: 8))
+                        .font(.caption2)
                         .foregroundColor(previewColor.opacity(0.6))
                 }
                 Text(reply.previewText)
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundColor(previewColor)
                     .lineLimit(2)
             }
@@ -277,18 +277,18 @@ struct BubbleStoryReplyPreview: View, Equatable {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: "camera.fill")
-                .font(.system(size: 9, weight: .medium))
+                .font(.caption2.weight(.medium))
                 .foregroundColor(previewColor)
             Text(String(localized: "bubble.reply.story", defaultValue: "Story", bundle: .main))
-                .font(.system(size: 11, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundColor(previewColor)
 
             if let date = reply.storyPublishedAt {
                 Text("\u{2022}")
-                    .font(.system(size: 8))
+                    .font(.caption2)
                     .foregroundColor(previewColor.opacity(0.6))
                 Text(date, style: .relative)
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundColor(previewColor.opacity(0.8))
             }
 
@@ -296,33 +296,33 @@ struct BubbleStoryReplyPreview: View, Equatable {
             let comments = reply.storyCommentCount ?? 0
             if reactions > 0 || comments > 0 {
                 Text("(")
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundColor(previewColor.opacity(0.6))
                 if reactions > 0 {
                     HStack(spacing: 2) {
                         Image(systemName: "heart.fill")
-                            .font(.system(size: 8))
+                            .font(.caption2)
                         Text("\(reactions)")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.caption2.weight(.medium))
                     }
                     .foregroundColor(previewColor.opacity(0.8))
                 }
                 if reactions > 0 && comments > 0 {
                     Text("\u{2022}")
-                        .font(.system(size: 6))
+                        .font(.caption2)
                         .foregroundColor(previewColor.opacity(0.5))
                 }
                 if comments > 0 {
                     HStack(spacing: 2) {
                         Image(systemName: "bubble.right.fill")
-                            .font(.system(size: 8))
+                            .font(.caption2)
                         Text("\(comments)")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.caption2.weight(.medium))
                     }
                     .foregroundColor(previewColor.opacity(0.8))
                 }
                 Text(")")
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundColor(previewColor.opacity(0.6))
             }
         }

@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { Button, Card, Badge, LanguageOrb, theme, Input, useToast, PageHeader, Dialog, DialogBody, DialogFooter, Avatar, Skeleton, Textarea, Label } from '@/components/v2';
 import { useProfileV2 } from '@/hooks/v2';
 import { useAuth } from '@/hooks/use-auth';
+import { useI18n } from '@/hooks/use-i18n';
 
 function ProfileSkeleton() {
   return (
@@ -176,6 +177,7 @@ export default function V2ProfilePage() {
     isUpdating,
   } = useProfileV2();
 
+  const { t } = useI18n('settings');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -184,10 +186,10 @@ export default function V2ProfilePage() {
     setIsLoggingOut(true);
     try {
       await logout();
-      addToast('Deconnexion reussie', 'success');
+      addToast(t('v2me.logoutSuccess'), 'success');
       router.push('/v2/login');
     } catch (_err) {
-      addToast('Erreur lors de la deconnexion', 'error');
+      addToast(t('v2me.logoutError'), 'error');
       setIsLoggingOut(false);
     }
   };
@@ -195,10 +197,10 @@ export default function V2ProfilePage() {
   const handleSaveProfile = async (data: { displayName: string; bio: string }) => {
     try {
       await updateProfile(data);
-      addToast('Profil mis a jour avec succes', 'success');
+      addToast(t('v2me.profileUpdated'), 'success');
       setIsEditModalOpen(false);
     } catch (_err) {
-      addToast('Erreur lors de la mise a jour du profil', 'error');
+      addToast(t('v2me.profileUpdateError'), 'error');
     }
   };
 
@@ -304,7 +306,7 @@ export default function V2ProfilePage() {
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
-              Modifier le profil
+              {t('v2me.editProfile')}
             </Button>
           )}
         </div>

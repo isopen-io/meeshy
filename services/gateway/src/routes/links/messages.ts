@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
-import { sendSuccess } from '../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError, sendError } from '../../utils/response.js';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import {
   createUnifiedAuthMiddleware,
@@ -9,6 +9,7 @@ import {
   isRegisteredUser
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import {
   sendMessageSchema,
   sendMessageBodySchema,
@@ -112,10 +113,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       const sessionToken = request.headers['x-session-token'] as string;
 
       if (!sessionToken) {
-        return reply.status(401).send({
-          success: false,
-          message: 'Session token requis pour envoyer un message'
-        });
+        return sendUnauthorized(reply, 'Session token requis pour envoyer un message');
       }
 
       const isLinkId = identifier.startsWith('mshy_');
@@ -132,10 +130,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       }
 
       if (!shareLink) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Lien de partage non trouvé'
-        });
+        return sendNotFound(reply, 'Lien de partage non trouvé');
       }
 
       const { hashSessionToken } = await import('../../utils/session-token');
@@ -162,38 +157,23 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         : null;
 
       if (!anonymousParticipant || !participantShareLink) {
-        return reply.status(401).send({
-          success: false,
-          message: 'Session invalide ou non autorisée pour ce lien'
-        });
+        return sendUnauthorized(reply, 'Session invalide ou non autorisée pour ce lien');
       }
 
       if (!participantShareLink.isActive) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Ce lien n\'est plus actif'
-        });
+        return sendError(reply, 410, 'Ce lien n\'est plus actif');
       }
 
       if (participantShareLink.expiresAt && new Date() > participantShareLink.expiresAt) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Ce lien a expiré'
-        });
+        return sendError(reply, 410, 'Ce lien a expiré');
       }
 
       if (!participantShareLink.allowAnonymousMessages) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Les messages anonymes ne sont pas autorisés pour ce lien'
-        });
+        return sendForbidden(reply, 'Les messages anonymes ne sont pas autorisés pour ce lien');
       }
 
       if (!anonymousParticipant.permissions.canSendMessages) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Vous n\'êtes pas autorisé à envoyer des messages'
-        });
+        return sendForbidden(reply, 'Vous n\'êtes pas autorisé à envoyer des messages');
       }
 
       // Traiter les liens dans le message AVANT la sauvegarde
@@ -251,7 +231,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // Émettre l'événement WebSocket
       const socketIOManager = fastify.socketIOHandler.getManager();
       if (socketIOManager) {
-        (socketIOManager as any).io?.to(`conversation:${participantShareLink.conversationId}`).emit('link:message:new', {
+        socketIOManager.getIO()?.to(`conversation:${participantShareLink.conversationId}`).emit(SERVER_EVENTS.LINK_MESSAGE_NEW, {
           message: {
             id: message.id,
             content: message.content,
@@ -287,17 +267,10 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Données invalides',
-          errors: error.errors
-        });
+        return sendBadRequest(reply, 'Données invalides');
       }
       logError(fastify.log, 'Send link message error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -378,9 +351,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       const body = sendMessageSchema.parse(request.body);
 
       if (!isRegisteredUser(request.authContext)) {
-        return reply.status(403).send({
-          error: 'Utilisateur enregistré requis'
-        });
+        return sendForbidden(reply, 'Utilisateur enregistré requis');
       }
 
       const userId = request.authContext.registeredUser!.id;
@@ -419,24 +390,15 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       }
 
       if (!shareLink) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Lien de partage non trouvé'
-        });
+        return sendNotFound(reply, 'Lien de partage non trouvé');
       }
 
       if (!shareLink.isActive) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Ce lien n\'est plus actif'
-        });
+        return sendError(reply, 410, 'Ce lien n\'est plus actif');
       }
 
       if (shareLink.expiresAt && new Date() > shareLink.expiresAt) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Ce lien a expiré'
-        });
+        return sendError(reply, 410, 'Ce lien a expiré');
       }
 
       let participant = null;
@@ -463,10 +425,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       }
 
       if (!participant) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Vous n\'êtes pas membre de cette conversation'
-        });
+        return sendForbidden(reply, 'Vous n\'êtes pas membre de cette conversation');
       }
 
       // Traiter les liens dans le message AVANT la sauvegarde
@@ -522,7 +481,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // Émettre l'événement WebSocket
       const socketIOManager = fastify.socketIOHandler.getManager();
       if (socketIOManager) {
-        (socketIOManager as any).io?.to(`conversation:${shareLink.conversationId}`).emit('link:message:new', {
+        socketIOManager.getIO()?.to(`conversation:${shareLink.conversationId}`).emit(SERVER_EVENTS.LINK_MESSAGE_NEW, {
           message: {
             id: message.id,
             content: message.content,
@@ -558,17 +517,10 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Données invalides',
-          errors: error.errors
-        });
+        return sendBadRequest(reply, 'Données invalides');
       }
       logError(fastify.log, 'Send authenticated link message error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 }

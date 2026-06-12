@@ -94,6 +94,19 @@ final class MessageStateMachineTests: XCTestCase {
         XCTAssertEqual(sm.retryCount, 0)
     }
 
+    /// The ack is authoritative — the server HAS the message. A row can sit in
+    /// `.failed` from the orphan reconciler's grace-window guess (legitimately
+    /// slow in-flight send) or an exhausted outbox whose final attempt's ack
+    /// raced the exhaustion. The late ack MUST lift `.failed -> .sent` so a
+    /// delivered message never keeps the failed bar + retry affordance.
+    func test_apply_serverAck_fromFailed_transitionsToSent() {
+        var sm = MessageStateMachine(state: .failed, retryCount: 3)
+        let result = sm.apply(.serverAck(serverId: "srv_late", at: Date()))
+        XCTAssertEqual(result, .sent)
+        XCTAssertEqual(sm.state, .sent)
+        XCTAssertEqual(sm.serverId, "srv_late")
+    }
+
     // MARK: - Invalid Transitions
 
     func test_apply_serverAck_fromRead_returnsNil() {

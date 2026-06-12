@@ -23,6 +23,7 @@ import { useSocketCacheSync, useInvalidateOnReconnect } from '@/hooks/queries';
 import { useAutoRetryFailedMessages } from '@/hooks/use-auto-retry-failed-messages';
 import { useAuth } from '@/hooks/use-auth';
 import type { User, Message } from '@meeshy/shared/types';
+import { useI18n } from '@/hooks/use-i18n';
 import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 
 // ============================================================================
@@ -226,6 +227,7 @@ function MessageAttachments({ attachments, isSent }: { attachments: unknown[]; i
 }
 
 function EmptyConversation() {
+  const { t } = useI18n('conversations');
   return (
     <div className="flex-1 flex items-center justify-center bg-[var(--gp-background)]">
       <div className="text-center">
@@ -234,7 +236,7 @@ function EmptyConversation() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
           </svg>
         </div>
-        <p className="text-[var(--gp-text-muted)]">Selectionnez une conversation</p>
+        <p className="text-[var(--gp-text-muted)]">{t('conversationLayout.selectConversation')}</p>
       </div>
     </div>
   );
@@ -249,6 +251,7 @@ export default function V2ChatsPage() {
   const searchParams = useSearchParams();
   const { user: currentUser, isAuthenticated } = useAuth();
   const { goBackToList, isMobile, showRightPanel } = useSplitView();
+  const { t } = useI18n('settings');
 
   // Get selected conversation from URL
   const selectedConversationId = searchParams.get('id');
@@ -480,7 +483,7 @@ export default function V2ChatsPage() {
             disabled={isLoadingMore}
             className="self-center px-4 py-2 text-sm rounded-full transition-colors disabled:opacity-50 bg-[var(--gp-parchment)] text-[var(--gp-text-secondary)]"
           >
-            {isLoadingMore ? 'Chargement...' : 'Charger plus de messages'}
+            {isLoadingMore ? t('chats.loading') : t('chats.loadMore')}
           </button>
         )}
 
@@ -489,8 +492,8 @@ export default function V2ChatsPage() {
         ) : displayMessages.length === 0 && failedMessages.length === 0 ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
-              <p className="text-[var(--gp-text-muted)]">Aucun message dans cette conversation</p>
-              <p className="text-sm mt-2 text-[var(--gp-text-muted)]">Envoyez le premier message !</p>
+              <p className="text-[var(--gp-text-muted)]">{t('chats.emptyState')}</p>
+              <p className="text-sm mt-2 text-[var(--gp-text-muted)]">{t('chats.emptyStateCta')}</p>
             </div>
           </div>
         ) : (

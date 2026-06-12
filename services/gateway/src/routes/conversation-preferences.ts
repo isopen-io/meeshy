@@ -25,6 +25,7 @@ import type {
   UserPreferencesReorderedEventData,
 } from '@meeshy/shared/types/socketio-events';
 import { broadcastToUser } from '../utils/socket-broadcast';
+import { validatePagination } from '../utils/pagination';
 
 interface ConversationPrefRow {
   isPinned: boolean;
@@ -229,21 +230,6 @@ const successMessageResponseSchema = {
   }
 } as const;
 
-/**
- * Validate and sanitize pagination parameters
- * - Ensures offset is never negative
- * - Ensures limit is between 1 and maxLimit (default 100)
- */
-function validatePagination(
-  offset: string = '0',
-  limit: string = '50',
-  defaultLimit: number = 50,
-  maxLimit: number = 100
-): { offsetNum: number; limitNum: number } {
-  const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
-  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || defaultLimit), maxLimit);
-  return { offsetNum, limitNum };
-}
 
 export default async function conversationPreferencesRoutes(fastify: FastifyInstance) {
 
@@ -371,7 +357,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         const userId = authContext.userId;
         const { offset = '0', limit = '50' } = request.query as { offset?: string; limit?: string };
 
-        const { offsetNum, limitNum } = validatePagination(offset, limit);
+        const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 50 });
 
         const whereClause = { userId };
 
@@ -605,10 +591,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-          return reply.status(401).send({
-            success: false,
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const userId = authContext.userId;
@@ -641,10 +624,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         return sendSuccess(reply, { message: 'Conversations reordered successfully' });
       } catch (error) {
         logError(fastify.log, 'Error reordering conversations:', error);
-        reply.code(500).send({
-          success: false,
-          message: 'Error reordering conversations'
-        });
+        sendInternalError(reply, 'Error reordering conversations');
       }
     }
   );

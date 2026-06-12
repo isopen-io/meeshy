@@ -1,15 +1,19 @@
 import SwiftUI
 import MeeshySDK
 
-/// Overlay placeholder pour le reader stories. Affiche le ThumbHash du fond
-/// de la slide plein écran (ou un dégradé indigo neutre pour les slides sans
-/// ThumbHash) éventuellement surmonté d'un spinner discret + le pourcentage
-/// de progression. L'overlay reste rendu tant que `progress < threshold`
-/// (par défaut 95 %) — il sert de placeholder Cache-First instantané pendant
-/// que le canvas média se résout. Le caller contrôle `showSpinner` pour
-/// gater l'indicateur de progression (typique : on garde le backdrop visible
-/// dès le frame 0, on n'arme le spinner qu'après un délai de grâce de
-/// 200 ms afin de ne pas flasher sur les cache-hits rapides).
+/// Overlay placeholder pour le reader stories. Cascade de placeholders
+/// Cache-First, du plus immédiat au plus fidèle :
+///   1. ThumbHash flouté de la slide (décodage sync, frame 0) — ou dégradé
+///      indigo neutre pour les slides sans ThumbHash ;
+///   2. miniature réelle du fond (`coverThumbnailURL`, typiquement déjà
+///      chaude en cache : la tray vient de l'afficher) rendue NETTE dès
+///      qu'elle est résidente — bien avant que la vidéo/image pleine
+///      résolution n'arrive ;
+///   3. spinner discret, gaté par `showSpinner`.
+/// L'overlay reste rendu tant que `progress < threshold` (par défaut 95 %)
+/// pendant que le canvas média se résout. Le caller contrôle `showSpinner`
+/// (typique : backdrop visible dès le frame 0, spinner armé après un délai
+/// de grâce de 200 ms pour ne pas flasher sur les cache-hits rapides).
 ///
 /// Conçu pour être monté en `ZStack` au-dessus de `StoryReaderRepresentable`
 /// côté parent SwiftUI ; le composant ne se branche pas sur les KVO du canvas.
@@ -29,23 +33,31 @@ public struct StoryReaderLoadingOverlay: View {
     /// valeur l'overlay reste rendu pour servir de placeholder; au-dessus, il
     /// fade out et libère le canvas média.
     public let threshold: Double
-    /// Affiche le spinner circulaire + le pourcentage de progression au centre.
-    /// Couper ce flag permet au caller de monter l'overlay en mode
-    /// "backdrop only" — ThumbHash placeholder immédiat sans indicateur visuel
-    /// (le spinner peut être armé après un délai de grâce pour ne pas flasher
-    /// sur les cache-hits rapides).
+    /// Affiche le spinner circulaire au centre. Couper ce flag permet au
+    /// caller de monter l'overlay en mode "backdrop only" — ThumbHash
+    /// placeholder immédiat sans indicateur visuel (le spinner peut être armé
+    /// après un délai de grâce pour ne pas flasher sur les cache-hits rapides).
     public let showSpinner: Bool
+    /// URL (string brute, résolue par `CachedAsyncImage`) de la miniature
+    /// réelle du fond — typiquement `media.thumbnailUrl` de la story, que la
+    /// tray vient d'afficher donc déjà résidente en cache. Affichée NETTE
+    /// par-dessus le ThumbHash flouté dès qu'elle est disponible, en attendant
+    /// le média pleine résolution. `nil` = étage ignoré (comportement
+    /// historique ThumbHash seul).
+    public let coverThumbnailURL: String?
 
     public init(
         slide: StorySlide?,
         progress: Double,
         threshold: Double = 0.95,
-        showSpinner: Bool = true
+        showSpinner: Bool = true,
+        coverThumbnailURL: String? = nil
     ) {
         self.slide = slide
         self.progress = progress
         self.threshold = threshold
         self.showSpinner = showSpinner
+        self.coverThumbnailURL = coverThumbnailURL
     }
 
     public var body: some View {
@@ -78,29 +90,36 @@ public struct StoryReaderLoadingOverlay: View {
                 )
             }
 
-            if showSpinner {
-                // Layout en deux étages :
-                //   1) Cercle frosted (80×80) qui sert d'écrin au spinner ;
-                //      le spinner est scalé (2.0) pour OCCUPER tout l'espace
-                //      du cercle moins une petite marge interne, donnant
-                //      l'illusion que le cercle EST le spinner.
-                //   2) Pourcentage HORS cercle, en dessous, avec 12pt de gap.
-                // Le `VStack` reste centré dans le canvas via le ZStack parent.
-                VStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.black.opacity(0.35))
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .tint(.white)
-                            .scaleEffect(2.0)
-                    }
-                    .frame(width: 80, height: 80)
+            // Étage 2 — miniature réelle du fond, NETTE, par-dessus le
+            // ThumbHash flouté. `CachedAsyncImage` la résout warm-cache de
+            // façon synchrone à l'init (la tray vient de l'afficher) et le
+            // placeholder transparent laisse le ThumbHash visible le temps
+            // d'un éventuel chargement disque/réseau. User 2026-06-11 :
+            // « si le thumbnail est disponible avant le contenu, l'afficher
+            // juste après le ThumbHash ».
+            if let cover = coverThumbnailURL, !cover.isEmpty {
+                CachedAsyncImage(url: cover) { Color.clear }
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+            }
 
-                    Text("\(Int((progress.isFinite ? progress : 0) * 100))%")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.9))
+            if showSpinner {
+                // Cercle frosted (80×80) qui sert d'écrin au spinner ; le
+                // spinner est scalé (2.0) pour OCCUPER tout l'espace du
+                // cercle moins une petite marge interne, donnant l'illusion
+                // que le cercle EST le spinner. (Le pourcentage sous le
+                // cercle a été retiré — user 2026-06-11 « enlever le % en
+                // bas du spinner ».)
+                ZStack {
+                    Circle()
+                        .fill(Color.black.opacity(0.35))
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(.white)
+                        .scaleEffect(2.0)
                 }
+                .frame(width: 80, height: 80)
                 .transition(.opacity)
             }
         }

@@ -3,7 +3,10 @@
 import { memo } from 'react';
 import { Ghost, Image } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { OnlineIndicator } from '@/components/ui/online-indicator';
+import {
+  ParticipantPresenceIndicator,
+  type PresenceSource,
+} from '../conversation-item/ParticipantPresenceIndicator';
 import {
   Tooltip,
   TooltipContent,
@@ -20,7 +23,8 @@ interface HeaderAvatarProps {
   avatarUrl?: string;
   avatar: string;
   name: string;
-  status: string;
+  userId?: string;
+  presenceFallback?: PresenceSource | null;
   encryptionInfo: EncryptionInfo | null;
   onImageUploadClick?: () => void;
   t: (key: string) => string;
@@ -33,7 +37,8 @@ export const HeaderAvatar = memo(function HeaderAvatar({
   avatarUrl,
   avatar,
   name,
-  status,
+  userId,
+  presenceFallback,
   encryptionInfo,
   onImageUploadClick,
   t
@@ -62,9 +67,9 @@ export const HeaderAvatar = memo(function HeaderAvatar({
             {avatar}
           </AvatarFallback>
         </Avatar>
-        <OnlineIndicator
-          isOnline={status === 'online'}
-          status={status as unknown}
+        <ParticipantPresenceIndicator
+          userId={userId}
+          fallbackUser={presenceFallback}
           size="md"
           className="absolute -bottom-0.5 -right-0.5 ring-2 ring-card"
         />

@@ -160,6 +160,7 @@
       "createAccount": "Create an account"
     },
     "redirecting": "Redirecting...",
+    "redirectingDescription": "You will be redirected to your destination",
     "featureGate": {
       "title": "Feature Temporarily Unavailable",
       "passwordResetDisabled": "Password reset is temporarily unavailable. Please contact support if you need assistance accessing your account.",
@@ -211,7 +212,66 @@
     "exitFullscreen": "Exit fullscreen",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
-    "rotate": "Rotate"
+    "rotate": "Rotate",
+    "clearSearch": "Clear search",
+    "backToList": "Back to list",
+    "backToConversations": "Back to conversations",
+    "breadcrumb": "Breadcrumb",
+    "home": "Home",
+    "anonymous": "Anonymous",
+    "user": "User",
+    "reactWith": "React with {emoji}",
+    "limitReached": "Limit reached: {limit} {category}s maximum",
+    "filesAdded": "Only {count} file(s) added",
+    "send": "Send",
+    "noTrending": "No trends at the moment",
+    "breadcrumbLabels": {
+      "admin": "Admin",
+      "users": "Users",
+      "analytics": "Analytics",
+      "moderation": "Moderation",
+      "settings": "Settings",
+      "messages": "Messages",
+      "conversations": "Conversations",
+      "communities": "Communities",
+      "broadcasts": "Broadcasts",
+      "reports": "Reports",
+      "ranking": "Ranking",
+      "agent": "AI Agent",
+      "monitoring": "Monitoring",
+      "notifications": "Notifications",
+      "auditLogs": "Audit logs",
+      "trackingLinks": "Tracking links",
+      "shareLinks": "Share links",
+      "languages": "Languages",
+      "dashboard": "Dashboard",
+      "contacts": "Contacts",
+      "feeds": "Feeds"
+    },
+    "newStory": "New story",
+    "publish": "Publish",
+    "storyPlaceholder": "Type your story...",
+    "replyPlaceholder": "Reply...",
+    "mediaCategory": {
+      "photo": "photo",
+      "video": "video",
+      "audio": "audio"
+    },
+    "storyVisibility": {
+      "public": "Public",
+      "friends": "Friends",
+      "private": "Private"
+    },
+    "statusComposer": {
+      "title": "What's your mood?",
+      "placeholder": "What are you up to?",
+      "preview": "Preview",
+      "yourName": "Your name",
+      "clear": "Clear my status"
+    },
+    "postPlaceholder": "What's on your mind?",
+    "captionPlaceholder": "Add a caption (optional)...",
+    "quotePlaceholder": "Add your thoughts..."
   },
   "copied": "Copied",
   "never": "Never"

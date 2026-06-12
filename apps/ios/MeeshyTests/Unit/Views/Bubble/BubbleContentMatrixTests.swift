@@ -383,6 +383,96 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertEqual(content.meta.timeString, "EXPLICIT")
     }
 
+    // MARK: - BubbleHeightCache (sizeThatFits short-circuit, content-keyed)
+
+    private func makeContent(id: String = "m1", text: String) -> BubbleContent {
+        BubbleContent(
+            message: makeMessage(id: id, content: text),
+            translations: [],
+            preferredTranslation: nil,
+            currentUserId: "u1"
+        )
+    }
+
+    func test_heightCache_emptyCache_returnsNil() {
+        let cache = BubbleHeightCache(capacity: 100)
+        XCTAssertNil(cache.size(messageId: "m1", content: makeContent(text: "Salut"), width: 200))
+    }
+
+    func test_heightCache_storeThenSize_sameContentAndWidth_returnsStoredSize() {
+        let cache = BubbleHeightCache(capacity: 100)
+        let content = makeContent(text: "Salut")
+        cache.store(messageId: "m1", content: content, width: 200, size: CGSize(width: 180, height: 60))
+
+        XCTAssertEqual(cache.size(messageId: "m1", content: content, width: 200), CGSize(width: 180, height: 60))
+    }
+
+    func test_heightCache_differentContent_sameMessageIdAndWidth_returnsNil() {
+        // CRITICAL — this is the revert (d6ba7f958) guard: a recycled cell or an
+        // edited/translated message must NOT read a stale height. Content equality
+        // (BubbleContent ==) is the correctness boundary; a content change misses.
+        let cache = BubbleHeightCache(capacity: 100)
+        cache.store(messageId: "m1", content: makeContent(text: "Salut"), width: 200, size: CGSize(width: 180, height: 60))
+
+        XCTAssertNil(cache.size(messageId: "m1", content: makeContent(text: "Bonjour tout le monde"), width: 200))
+    }
+
+    func test_heightCache_differentWidthBucket_returnsNil() {
+        let cache = BubbleHeightCache(capacity: 100)
+        let content = makeContent(text: "Salut")
+        cache.store(messageId: "m1", content: content, width: 200, size: CGSize(width: 180, height: 60))
+
+        XCTAssertNil(cache.size(messageId: "m1", content: content, width: 260))
+    }
+
+    func test_heightCache_widthWithinSameRoundedBucket_returnsStoredSize() {
+        // Sub-pixel proposal jitter at the same integer width must still hit.
+        let cache = BubbleHeightCache(capacity: 100)
+        let content = makeContent(text: "Salut")
+        cache.store(messageId: "m1", content: content, width: 200.2, size: CGSize(width: 180, height: 60))
+
+        XCTAssertEqual(cache.size(messageId: "m1", content: content, width: 200.4), CGSize(width: 180, height: 60))
+    }
+
+    func test_heightCache_differentMessageId_returnsNil() {
+        let cache = BubbleHeightCache(capacity: 100)
+        let content = makeContent(text: "Salut")
+        cache.store(messageId: "m1", content: content, width: 200, size: CGSize(width: 180, height: 60))
+
+        XCTAssertNil(cache.size(messageId: "m2", content: content, width: 200))
+    }
+
+    func test_heightCache_storeSameMessageNewContent_overwrites_oldContentMisses() {
+        // An edited message keeps its id but changes content: the new content hits,
+        // the old content (now stale) misses — no two competing heights survive.
+        let cache = BubbleHeightCache(capacity: 100)
+        let original = makeContent(text: "Salut")
+        let edited = makeContent(text: "Salut (modifié)")
+        cache.store(messageId: "m1", content: original, width: 200, size: CGSize(width: 180, height: 60))
+        cache.store(messageId: "m1", content: edited, width: 200, size: CGSize(width: 180, height: 90))
+
+        XCTAssertEqual(cache.size(messageId: "m1", content: edited, width: 200), CGSize(width: 180, height: 90))
+        XCTAssertNil(cache.size(messageId: "m1", content: original, width: 200))
+    }
+
+    func test_heightCache_removeAll_clearsEntries() {
+        let cache = BubbleHeightCache(capacity: 100)
+        let content = makeContent(text: "Salut")
+        cache.store(messageId: "m1", content: content, width: 200, size: CGSize(width: 180, height: 60))
+        cache.removeAll()
+
+        XCTAssertNil(cache.size(messageId: "m1", content: content, width: 200))
+    }
+
+    func test_heightCache_overCapacity_doesNotGrowUnbounded() {
+        let cache = BubbleHeightCache(capacity: 2)
+        cache.store(messageId: "m1", content: makeContent(id: "m1", text: "a"), width: 200, size: CGSize(width: 10, height: 10))
+        cache.store(messageId: "m2", content: makeContent(id: "m2", text: "b"), width: 200, size: CGSize(width: 10, height: 10))
+        cache.store(messageId: "m3", content: makeContent(id: "m3", text: "c"), width: 200, size: CGSize(width: 10, height: 10))
+
+        XCTAssertLessThanOrEqual(cache.count, 2)
+    }
+
     // MARK: - Helpers
 
     private func makeMessage(
@@ -476,5 +566,48 @@ final class BubbleContentMatrixTests: XCTestCase {
             uploadedBy: "u1",
             createdAt: Date(timeIntervalSince1970: 0)
         )
+    }
+}
+
+// MARK: - BubbleBodyFooterLayout.bodyHeight (sizeThatFits double-measure removal)
+
+final class BubbleBodyFooterLayoutHeightTests: XCTestCase {
+
+    func test_bodyHeight_whenFooterDoesNotWiden_reusesProbeHeightWithoutRemeasure() {
+        // Common case: a multi-word message already wider than its meta row, so
+        // the resolved width equals the probed width. The probe height must be
+        // reused verbatim and the (expensive) full-subtree re-measure must NOT run.
+        let bodyProbe = CGSize(width: 220, height: 64)
+        var remeasureCalls = 0
+
+        let height = BubbleBodyFooterLayout.bodyHeight(
+            bodyProbe: bodyProbe,
+            resolvedWidth: 220
+        ) { _ in
+            remeasureCalls += 1
+            return 999  // sentinel that must never be reported
+        }
+
+        XCTAssertEqual(height, 64)
+        XCTAssertEqual(remeasureCalls, 0, "no re-measure when the footer floor did not widen the bubble")
+    }
+
+    func test_bodyHeight_whenFooterWidensBubble_remeasuresAtResolvedWidth() {
+        // Short message whose footer (timestamp + delivery) is wider than the
+        // text. The body must be re-measured at the wider resolved width — its
+        // height can shrink as the text stops wrapping.
+        let bodyProbe = CGSize(width: 40, height: 80)
+        var remeasuredWidth: CGFloat?
+
+        let height = BubbleBodyFooterLayout.bodyHeight(
+            bodyProbe: bodyProbe,
+            resolvedWidth: 96
+        ) { width in
+            remeasuredWidth = width
+            return 40
+        }
+
+        XCTAssertEqual(height, 40, "the re-measured height is reported, not the stale probe height")
+        XCTAssertEqual(remeasuredWidth, 96, "re-measure happens at the resolved (widened) width")
     }
 }

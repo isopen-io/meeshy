@@ -1,3 +1,4 @@
+import { validatePagination } from '../utils/pagination';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../utils/logger';
@@ -22,21 +23,6 @@ const updateFriendRequestSchema = z.object({
   status: z.enum(['accepted', 'rejected'])
 });
 
-/**
- * Validate and sanitize pagination parameters
- * - Ensures offset is never negative
- * - Ensures limit is between 1 and maxLimit (default 100)
- */
-function validatePagination(
-  offset: string = '0',
-  limit: string = '20',
-  defaultLimit: number = 20,
-  maxLimit: number = 100
-): { offsetNum: number; limitNum: number } {
-  const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
-  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || defaultLimit), maxLimit);
-  return { offsetNum, limitNum };
-}
 
 export async function friendRequestRoutes(fastify: FastifyInstance) {
   // Envoyer une demande d'ami
@@ -81,7 +67,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = createFriendRequestSchema.parse(request.body);
-      const { userId } = request.user as any;
+      const userId = request.user!.userId;
 
       // Verifier que l'utilisateur cible existe
       const targetUser = await fastify.prisma.user.findUnique({
@@ -239,10 +225,10 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { userId } = request.user as any;
+      const userId = request.user!.userId;
       const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
 
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       const whereClause = { receiverId: userId, status: 'pending' as const };
 
@@ -338,10 +324,10 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { userId } = request.user as any;
+      const userId = request.user!.userId;
       const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
 
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       const whereClause = { senderId: userId };
 
@@ -441,7 +427,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
     try {
       const { id } = request.params as { id: string };
       const body = updateFriendRequestSchema.parse(request.body);
-      const { userId } = request.user as any;
+      const userId = request.user!.userId;
 
       // Verifier que la demande existe et appartient a l'utilisateur
       const friendRequest = await fastify.prisma.friendRequest.findFirst({
@@ -671,7 +657,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
-      const { userId } = request.user as any;
+      const userId = request.user!.userId;
 
       // Verifier que la demande existe et appartient a l'utilisateur (envoyee ou recue)
       const friendRequest = await fastify.prisma.friendRequest.findFirst({

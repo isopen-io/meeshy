@@ -14,8 +14,8 @@ import AVKit
 // propre chrome (close/save/métadonnées/dismiss) → ce composant n'apporte QUE le
 // transport, sans scrim ni top bar (l'hôte fournit son fond + ses actions fichier).
 //
-// FOLLOW-UP unification : `_FullscreenOverlayControls` duplique encore ce transport
-// inline ; à recomposer dessus quand l'environnement de build/edit est stable.
+// `_FullscreenOverlayControls` compose désormais ce transport ; seul
+// `_InlineOverlayControls` (variante compacte distincte) garde sa propre copie.
 public struct VideoTransportControls: View {
     @ObservedObject private var manager: SharedAVPlayerManager
     private let accentColor: String

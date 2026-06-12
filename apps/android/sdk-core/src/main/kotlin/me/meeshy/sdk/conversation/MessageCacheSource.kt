@@ -26,6 +26,9 @@ internal class MessageSyncException(message: String) : Exception(message)
  * Room-backed [SwrCacheSource] for one conversation's messages
  * (ARCHITECTURE.md §4, §6). Each conversation has its own `sync_meta` key so
  * freshness is tracked per conversation.
+ *
+ * Optimistic local rows (`sendState` non-null) ride along with server rows and
+ * are reconciled by `clientMessageId` once the server list includes them.
  */
 internal class MessageCacheSource(
     private val conversationId: String,
@@ -34,11 +37,11 @@ internal class MessageCacheSource(
     private val syncMetaDao: SyncMetaDao,
     private val messageApi: MessageApi,
     private val clock: CacheClock,
-) : SwrCacheSource<List<ApiMessage>> {
+) : SwrCacheSource<List<LocalMessage>> {
 
     private val resourceKey = "messages:$conversationId"
 
-    override fun observe(): Flow<List<ApiMessage>?> =
+    override fun observe(): Flow<List<LocalMessage>?> =
         combine(
             messageDao.observeForConversation(conversationId),
             syncMetaDao.observe(resourceKey),
@@ -46,7 +49,14 @@ internal class MessageCacheSource(
             if (rows.isEmpty() && syncedAt == null) {
                 null
             } else {
-                rows.map { MeeshyApi.json.decodeFromString<ApiMessage>(it.payload) }
+                rows.map { row ->
+                    LocalMessage(
+                        message = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload),
+                        sendState = row.sendState
+                            ?.let { LocalSendState.valueOf(it) }
+                            ?: LocalSendState.SYNCED,
+                    )
+                }
             }
         }
 
@@ -71,9 +81,19 @@ internal class MessageCacheSource(
                 cachedAt = now,
             )
         }
+        val ackedLocalIds = messages.mapNotNull { it.clientMessageId }
         database.withTransaction {
             messageDao.upsertAll(rows)
-            messageDao.deleteMissing(conversationId, rows.map { it.id })
+            if (ackedLocalIds.isNotEmpty()) messageDao.deleteByIds(ackedLocalIds)
+            if (rows.isEmpty()) {
+                messageDao.deleteMissing(conversationId, emptyList())
+            } else {
+                messageDao.deleteMissingSince(
+                    conversationId,
+                    rows.minOf { it.createdAt },
+                    rows.map { it.id },
+                )
+            }
             syncMetaDao.upsert(SyncMetaEntity(resourceKey, now))
         }
     }

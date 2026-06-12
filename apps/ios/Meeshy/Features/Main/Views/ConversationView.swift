@@ -68,6 +68,10 @@ struct ConversationOverlayState {
     var storyViewerUserId: String? = nil
     var storyViewerGroupIndex: Int = 0
     var storyViewerSlideIndex: Int = 0
+    /// `true` quand le viewer est ouvert depuis l'avatar d'un expéditeur
+    /// (première non-vue) ; `false` quand une story-reply cible une slide
+    /// précise via `storyViewerSlideIndex`.
+    var storyViewerStartAtFirstUnviewed = false
     var showReplyThread = false
     var replyThreadParentId: String? = nil
 }
@@ -219,7 +223,13 @@ struct ConversationView: View {
     /// `internal` (not `private`): accessed by the `ConversationView+ScrollIndicators`
     /// extension, which lives in a separate file (private is file-scoped).
     @ObservedObject var typingObserver: ConversationStateStore
-    @State var messageText = ""
+    /// Texte du composer, ISOLÉ de l'arbre racine : tenu via `@State` (stockage
+    /// stable) mais JAMAIS lu dans ce body ni observé ici — seul
+    /// `ComposerTextHost` (+Composer) s'y abonne, donc la frappe ne ré-évalue
+    /// que le sous-arbre composer au lieu des ~1500 lignes de la racine.
+    /// Lecture/écriture depuis les handlers (send, mention, edit) via
+    /// `composerText.text` — hors body, donc sans créer de dépendance.
+    @State var composerText = ConversationComposerTextModel()
     @StateObject var audioRecorder = AudioRecorderManager()
     @StateObject var scrollButtonAudioPlayer = AudioPlaybackManager()
     @StateObject var pendingAudioPlayer = AudioPlaybackManager()
@@ -283,9 +293,10 @@ struct ConversationView: View {
 
     // MARK: - Computed Properties
 
-    var headerHasStoryRing: Bool {
-        guard let userId = conversation?.participantUserId else { return false }
-        return storyViewModel.hasStories(forUserId: userId)
+    var headerStoryRingState: StoryRingState {
+        guard conversation?.type == .direct,
+              let userId = conversation?.participantUserId else { return .none }
+        return storyViewModel.storyRingState(forUserId: userId)
     }
 
     var accentColor: String {
@@ -293,7 +304,7 @@ struct ConversationView: View {
     }
 
     var secondaryColor: String {
-        conversation?.colorPalette.secondary ?? "4ECDC4"
+        conversation?.colorPalette.secondary ?? MeeshyColors.indigo300Hex
     }
 
     var isDirect: Bool {
@@ -612,6 +623,7 @@ struct ConversationView: View {
                     },
                     singleGroup: true,
                     initialStoryIndex: overlayState.storyViewerSlideIndex,
+                    startAtFirstUnviewed: overlayState.storyViewerStartAtFirstUnviewed,
                     presentationSource: "ConversationView.overlay"
                 )
                 // Re-inject env objects required by StoryViewerView for its
@@ -738,6 +750,12 @@ struct ConversationView: View {
         bodyContent
             .background(InteractivePopEnabler())
             .task {
+                // Activate the live (StateObject-retained) VM exactly once.
+                // Heavy side-effects (GRDB observation, initial load, Combine
+                // subscriptions, sync-engine gate) are deferred here out of
+                // `init` so the throwaway VMs SwiftUI allocates on every
+                // reconstruction stay free — see ConversationViewModel.start().
+                viewModel.start()
                 viewModel.observeSync()
                 await viewModel.loadMessages()
                 MessageSocketManager.shared.connect()
@@ -779,8 +797,18 @@ struct ConversationView: View {
                           LanguageOption.defaults.contains(where: { $0.code == userLang }) {
                     composerState.selectedLanguage = userLang
                 }
-                if messageText.isEmpty, let draft = DraftStore.shared.load(for: viewModel.conversationId) {
-                    messageText = draft.text
+                // Brancher la persistance du brouillon (immédiate à chaque
+                // fin de mot / champ vidé, débouncée 400 ms en milieu de mot
+                // — cf. ConversationComposerTextModel). Vit sur le modèle
+                // isolé : la racine ne se ré-évalue plus à la frappe, donc un
+                // `onChange` ici ne fonctionnerait plus. La closure capture
+                // une copie de la vue mais lit les @State/@StateObject via
+                // leur stockage LIVE.
+                composerText.onPersistNeeded = { text in
+                    persistDraft(text: text)
+                }
+                if composerText.text.isEmpty, let draft = DraftStore.shared.load(for: viewModel.conversationId) {
+                    composerText.text = draft.text
                     // Restore inline reply context from the draft so the user
                     // sees the same compose chip they left — no hidden state
                     // transitions on app reopen.
@@ -819,14 +847,11 @@ struct ConversationView: View {
                 composerState.pendingReplyReference = ctx.toReplyReference
                 router.pendingReplyContext = nil
             }
-            .adaptiveOnChange(of: messageText) { _, newValue in
-                persistDraft(text: newValue)
-            }
-            .adaptiveOnChange(of: composerState.pendingReplyReference?.messageId) { _, _ in persistDraft(text: messageText) }
-            .adaptiveOnChange(of: composerState.selectedLanguage) { _, _ in persistDraft(text: messageText) }
-            .adaptiveOnChange(of: viewModel.pendingEffects.flags.rawValue) { _, _ in persistDraft(text: messageText) }
-            .adaptiveOnChange(of: viewModel.isBlurEnabled) { _, _ in persistDraft(text: messageText) }
-            .adaptiveOnChange(of: viewModel.ephemeralDuration?.rawValue) { _, _ in persistDraft(text: messageText) }
+            .adaptiveOnChange(of: composerState.pendingReplyReference?.messageId) { _, _ in persistDraft(text: composerText.text) }
+            .adaptiveOnChange(of: composerState.selectedLanguage) { _, _ in persistDraft(text: composerText.text) }
+            .adaptiveOnChange(of: viewModel.pendingEffects.flags.rawValue) { _, _ in persistDraft(text: composerText.text) }
+            .adaptiveOnChange(of: viewModel.isBlurEnabled) { _, _ in persistDraft(text: composerText.text) }
+            .adaptiveOnChange(of: viewModel.ephemeralDuration?.rawValue) { _, _ in persistDraft(text: composerText.text) }
             .adaptiveOnChange(of: scrollState.isNearBottom) { _, _ in
                 if composerState.showTextEmojiPicker {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
@@ -853,6 +878,26 @@ struct ConversationView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
                 keyboardHeight = 0
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+                // Le debounce de 400 ms a remplacé la persistance par frappe :
+                // sans ce flush, backgrounder l'app (ou la tuer depuis
+                // l'app-switcher) dans la fenêtre de debounce perdrait la fin
+                // de la saisie — onDisappear ne couvre que la navigation.
+                composerText.flushPendingChange()
+            }
+            .onDisappear {
+                composerText.flushPendingChange()
+                // Rompt le cycle de rétention : `onPersistNeeded` capture une
+                // copie de cette struct, dont le wrapper State retient (via sa
+                // box de stockage) le modèle vivant — soit modèle → closure →
+                // copie de la vue → State box → modèle. Sans ce nil, le modèle
+                // ET le ConversationViewModel (retenu transitivement par le
+                // wrapper @StateObject de la copie) fuiteraient à chaque
+                // teardown. onAppear réinstalle le callback si la vue revient
+                // (retour d'un fullScreenCover/sheet) — aucune frappe n'est
+                // possible pendant qu'elle est couverte.
+                composerText.onPersistNeeded = nil
             }
     }
 
@@ -959,8 +1004,17 @@ struct ConversationView: View {
                         overlayState.storyViewerUserId = group.id
                         overlayState.storyViewerGroupIndex = groupIdx
                         overlayState.storyViewerSlideIndex = slideIdx
+                        overlayState.storyViewerStartAtFirstUnviewed = false
                         overlayState.showStoryViewer = true
                     }
+                },
+                onViewSenderStory: { userId in
+                    // Anneau story d'un avatar de bulle (conversations de
+                    // groupe) → story de CET expéditeur, première non-vue.
+                    overlayState.storyViewerUserId = userId
+                    overlayState.storyViewerSlideIndex = 0
+                    overlayState.storyViewerStartAtFirstUnviewed = true
+                    overlayState.showStoryViewer = true
                 },
                 onSwipeReply: { messageId in
                     // Restore swipe-to-reply: BubbleSwipeContainer commits when
@@ -1000,6 +1054,9 @@ struct ConversationView: View {
                 onToggleReaction: { messageId, emoji in
                     viewModel.toggleReaction(messageId: messageId, emoji: emoji)
                 },
+                onReactToAttachment: { attachmentId, messageId, emoji in
+                    viewModel.toggleAttachmentReaction(attachmentId: attachmentId, messageId: messageId, emoji: emoji)
+                },
                 onOpenReactPicker: { messageId in
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     overlayState.detailSheetMessage = msg
@@ -1017,6 +1074,14 @@ struct ConversationView: View {
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     overlayState.detailSheetMessage = msg
                     overlayState.detailSheetInitialTab = .views
+                },
+                onRetry: { messageId in
+                    // Tap on the orange retry band of a FAILED outgoing message.
+                    // `retryMessage` deletes the failed row and re-sends with the
+                    // SAME clientMessageId (gateway dedup) AND kicks the outbox
+                    // flusher — so the resend actually fires (the old local
+                    // OfflineQueue reset never flushed on a foregrounded device).
+                    Task { await viewModel.retryMessage(messageId: messageId) }
                 },
                 onShowReactions: { messageId in
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
@@ -1179,7 +1244,7 @@ struct ConversationView: View {
             VStack(spacing: 0) {
                 ForEach(viewModel.mentionSuggestions) { candidate in
                     Button {
-                        messageText = viewModel.insertMention(candidate, into: messageText)
+                        composerText.text = viewModel.insertMention(candidate, into: composerText.text)
                     } label: {
                         HStack(spacing: 10) {
                             MeeshyAvatar(
@@ -1229,7 +1294,7 @@ struct ConversationView: View {
                     Spacer()
                     ThemedAvatarButton(
                         name: conversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
-                        isExpanded: false, hasStoryRing: headerHasStoryRing,
+                        isExpanded: false, storyState: headerStoryRingState,
                         avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
                         presenceState: headerPresenceState,
                         moodEmoji: headerMoodEmoji
@@ -1439,7 +1504,7 @@ struct ConversationView: View {
                 onEdit: {
                     composerState.editingMessageId = msg.id
                     composerState.editingOriginalContent = msg.content
-                    messageText = msg.content
+                    composerText.text = msg.content
                 },
                 onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
                 onToggleStar: {

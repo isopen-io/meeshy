@@ -9,6 +9,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray } from '../utils/translation-transformer';
 import { filterMessagePayloadForLanguages } from './utils/message-payload-filter';
+import { applyResolvedLanguagesRefresh } from './utils/resolved-languages-refresh';
 import { MaintenanceService } from '../services/MaintenanceService';
 import { StatusService } from '../services/StatusService';
 import { MessagingService } from '../services/MessagingService';
@@ -19,6 +20,8 @@ import { AuthHandler } from './handlers/AuthHandler';
 import { MessageHandler } from './handlers/MessageHandler';
 import { StatusHandler } from './handlers/StatusHandler';
 import { ReactionHandler } from './handlers/ReactionHandler';
+import { AttachmentReactionHandler } from './handlers/AttachmentReactionHandler';
+import { AttachmentReactionService } from '../services/AttachmentReactionService';
 import { CommentReactionHandler } from './handlers/CommentReactionHandler';
 import { PostReactionHandler } from './handlers/PostReactionHandler';
 import { ConversationHandler } from './handlers/ConversationHandler';
@@ -113,6 +116,7 @@ export class MeeshySocketIOManager {
   private messageHandler!: MessageHandler;
   private statusHandler!: StatusHandler;
   private reactionHandler!: ReactionHandler;
+  private attachmentReactionHandler!: AttachmentReactionHandler;
   private commentReactionHandler!: CommentReactionHandler;
   private postReactionHandler!: PostReactionHandler;
   private conversationHandler!: ConversationHandler;
@@ -278,6 +282,7 @@ export class MeeshySocketIOManager {
       agentClient: this.agentClient,
       attachmentService: new AttachmentService(prisma),
       readStatusService,
+      privacyPreferencesService: this.privacyPreferencesService,
     });
 
     this.statusHandler = new StatusHandler({
@@ -293,6 +298,14 @@ export class MeeshySocketIOManager {
       prisma: this.prisma,
       notificationService: this.notificationService,
       reactionService,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+    });
+
+    this.attachmentReactionHandler = new AttachmentReactionHandler({
+      io: this.io,
+      prisma: this.prisma,
+      service: new AttachmentReactionService(this.prisma),
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
     });
@@ -677,6 +690,14 @@ export class MeeshySocketIOManager {
 
       socket.on(CLIENT_EVENTS.REACTION_REQUEST_SYNC, async (messageId, callback) => {
         try { await this.reactionHandler.handleReactionSync(socket, messageId, callback); } catch (error) { logger.error('[REACTION_SYNC] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
+      });
+
+      socket.on(CLIENT_EVENTS.ATTACHMENT_REACTION_ADD, async (data, callback) => {
+        try { await this.attachmentReactionHandler.handleAdd(socket, data, callback); } catch (error) { logger.error('[ATTACHMENT_REACTION_ADD] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
+      });
+
+      socket.on(CLIENT_EVENTS.ATTACHMENT_REACTION_REMOVE, async (data, callback) => {
+        try { await this.attachmentReactionHandler.handleRemove(socket, data, callback); } catch (error) { logger.error('[ATTACHMENT_REACTION_REMOVE] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.COMMENT_REACTION_ADD, async (data, callback) => {
@@ -1598,6 +1619,13 @@ export class MeeshySocketIOManager {
               unreadCount
             });
 
+            // 5.3 SCOPE — le filtre SOCKET_LANG_FILTER s'applique au message:new
+            // ONLINE uniquement. L'enqueue offline ci-dessous stocke le payload
+            // complet (multi-traduit), NON filtré par langue. Acceptable car
+            // (a) le chemin principal `message:send` (MessageHandler) n'enqueue pas
+            // offline, et (b) le drain `_drainPendingMessages` est actuellement du
+            // code mort (jamais appelé) — sujet pré-existant à traiter séparément,
+            // hors périmètre 5.3.
             if (this.deliveryQueue && !connectedUserIds.has(roomTarget)) {
               this.deliveryQueue.enqueue(roomTarget, {
                 messageId: message.id,
@@ -1620,6 +1648,23 @@ export class MeeshySocketIOManager {
     } catch (error) {
       logger.error('[PHASE 3.1] Erreur broadcast message', error);
     }
+  }
+
+  /**
+   * B3 (5.3) — appelée par `PATCH /users/profile` quand un user change de langue,
+   * pour que `SOCKET_LANG_FILTER` filtre sur la nouvelle langue sans reconnexion.
+   * No-op si le user n'est pas connecté.
+   */
+  public refreshUserResolvedLanguages(
+    userId: string,
+    prefs: {
+      systemLanguage: string;
+      regionalLanguage?: string | null;
+      customDestinationLanguage?: string | null;
+      deviceLocale?: string | null;
+    }
+  ): void {
+    applyResolvedLanguagesRefresh(this.connectedUsers, userId, prefs);
   }
 
   /**

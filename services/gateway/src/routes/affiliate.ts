@@ -265,7 +265,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       const userId = authContext.userId;
       const { offset, limit } = request.query as { offset?: string; limit?: string };
 
-      const pagination = validatePagination(offset, limit, 100);
+      const pagination = validatePagination(offset, limit);
 
       const whereClause = { createdBy: userId };
 

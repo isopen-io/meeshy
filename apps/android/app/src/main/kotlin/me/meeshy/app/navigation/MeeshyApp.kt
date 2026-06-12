@@ -5,11 +5,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.PeopleOutline
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -17,34 +19,42 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavDestination.Companion.hasRoute
-import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
+import androidx.compose.ui.res.stringResource
+import me.meeshy.app.R
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.LoginScreen
+import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.app.chat.ChatScreen
 import me.meeshy.app.chat.ChatViewModel
+import me.meeshy.app.contacts.ContactsScreen
 import me.meeshy.app.conversations.ConversationListScreen
 import me.meeshy.app.feed.FeedScreen
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.profile.ProfileScreen
+import me.meeshy.app.settings.SettingsScreen
 
 object Routes {
     const val LOGIN = "login"
     const val CONVERSATIONS = "conversations"
     const val CHAT = "chat/{${ChatViewModel.CONVERSATION_ID_ARG}}"
+    const val CHAT_DEEP_LINK = "meeshy://$CHAT"
     const val FEED = "feed"
+    const val CONTACTS = "contacts"
     const val NOTIFICATIONS = "notifications"
-    const val PROFILE = "profile"
+    const val SETTINGS = "settings"
     const val PROFILE_USER = "profile/{userId}"
+    const val PROFILE_DEEP_LINK = "meeshy://$PROFILE_USER"
 
     fun chat(conversationId: String): String = "chat/$conversationId"
     fun profile(userId: String): String = "profile/$userId"
@@ -57,34 +67,43 @@ private data class TabItem(
     val unselectedIcon: @Composable () -> Unit,
 )
 
-private val tabs = listOf(
-    TabItem(
-        route = Routes.CONVERSATIONS,
-        label = "Messages",
-        selectedIcon = { Icon(Icons.Filled.ChatBubble, null) },
-        unselectedIcon = { Icon(Icons.Outlined.ChatBubbleOutline, null) },
-    ),
-    TabItem(
-        route = Routes.FEED,
-        label = "Feed",
-        selectedIcon = { Icon(Icons.Filled.Home, null) },
-        unselectedIcon = { Icon(Icons.Outlined.Home, null) },
-    ),
-    TabItem(
-        route = Routes.NOTIFICATIONS,
-        label = "Activity",
-        selectedIcon = { Icon(Icons.Filled.Notifications, null) },
-        unselectedIcon = { Icon(Icons.Outlined.Notifications, null) },
-    ),
-    TabItem(
-        route = Routes.PROFILE,
-        label = "Profile",
-        selectedIcon = { Icon(Icons.Filled.Person, null) },
-        unselectedIcon = { Icon(Icons.Outlined.PersonOutline, null) },
-    ),
-)
+@Composable
+private fun rememberTabs(): List<TabItem> {
+    val messages = stringResource(R.string.tab_messages)
+    val feed = stringResource(R.string.tab_feed)
+    val activity = stringResource(R.string.tab_activity)
+    val profile = stringResource(R.string.tab_profile)
+    return remember(messages, feed, activity, profile) {
+        listOf(
+            TabItem(
+                route = Routes.CONVERSATIONS,
+                label = messages,
+                selectedIcon = { Icon(Icons.Filled.ChatBubble, contentDescription = messages) },
+                unselectedIcon = { Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = messages) },
+            ),
+            TabItem(
+                route = Routes.FEED,
+                label = feed,
+                selectedIcon = { Icon(Icons.Filled.Home, contentDescription = feed) },
+                unselectedIcon = { Icon(Icons.Outlined.Home, contentDescription = feed) },
+            ),
+            TabItem(
+                route = Routes.NOTIFICATIONS,
+                label = activity,
+                selectedIcon = { Icon(Icons.Filled.Notifications, contentDescription = activity) },
+                unselectedIcon = { Icon(Icons.Outlined.Notifications, contentDescription = activity) },
+            ),
+            TabItem(
+                route = Routes.SETTINGS,
+                label = profile,
+                selectedIcon = { Icon(Icons.Filled.Settings, contentDescription = profile) },
+                unselectedIcon = { Icon(Icons.Outlined.Settings, contentDescription = profile) },
+            ),
+        )
+    }
+}
 
-private val tabRoutes = tabs.map { it.route }.toSet()
+private val tabRoutes = setOf(Routes.CONVERSATIONS, Routes.FEED, Routes.NOTIFICATIONS, Routes.SETTINGS)
 
 @Composable
 fun MeeshyApp() {
@@ -96,9 +115,11 @@ fun MeeshyApp() {
     val currentRoute = navBackStack?.destination?.route
     val showBottomBar = currentRoute in tabRoutes
 
-    val startDestination = if (authState.isAuthenticated) Routes.CONVERSATIONS else Routes.LOGIN
+    val startDestination = remember(authState.isAuthenticated) { if (authState.isAuthenticated) Routes.CONVERSATIONS else Routes.LOGIN }
+    val tabs = rememberTabs()
 
     Scaffold(
+        containerColor = MeeshyTheme.tokens.backgroundPrimary,
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
@@ -109,7 +130,7 @@ fun MeeshyApp() {
                             onClick = {
                                 if (!selected) {
                                     navController.navigate(tab.route) {
-                                        popUpTo(Routes.CONVERSATIONS) { saveState = true }
+                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
                                         launchSingleTop = true
                                         restoreState = true
                                     }
@@ -156,23 +177,41 @@ fun MeeshyApp() {
                 arguments = listOf(
                     navArgument(ChatViewModel.CONVERSATION_ID_ARG) { type = NavType.StringType },
                 ),
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = Routes.CHAT_DEEP_LINK },
+                ),
             ) {
                 ChatScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.FEED) {
                 FeedScreen(
-                    onPostClick = { /* future: navigate to post detail */ },
+                    onPostClick = { },
                 )
+            }
+            composable(Routes.CONTACTS) {
+                ContactsScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.NOTIFICATIONS) {
                 NotificationsScreen()
             }
-            composable(Routes.PROFILE) {
-                ProfileScreen(onBack = { navController.popBackStack() })
+            composable(Routes.SETTINGS) {
+                SettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onLogout = {
+                        authViewModel.logout()
+                        navController.navigate(Routes.LOGIN) {
+                            popUpTo(Routes.CONVERSATIONS) { inclusive = true }
+                        }
+                    },
+                    onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+                )
             }
             composable(
                 route = Routes.PROFILE_USER,
                 arguments = listOf(navArgument("userId") { type = NavType.StringType }),
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = Routes.PROFILE_DEEP_LINK },
+                ),
             ) {
                 ProfileScreen(onBack = { navController.popBackStack() })
             }

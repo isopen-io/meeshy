@@ -83,6 +83,11 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
     func applyAttachmentUpdate(_ event: AttachmentUpdatedEvent) {
         applyAttachmentUpdateEvents.append(event)
     }
+
+    var applyAttachmentReactionDeltas: [(attachmentId: String, reactionSummary: [String: Int])] = []
+    func applyAttachmentReactionDelta(attachmentId: String, reactionSummary: [String: Int]) {
+        applyAttachmentReactionDeltas.append((attachmentId, reactionSummary))
+    }
 }
 
 // MARK: - Tests
@@ -823,32 +828,50 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
     // MARK: - Room Management
 
-    func test_init_joinsConversationRoom() async throws {
+    func test_activate_joinsConversationRoom() async throws {
         let socket = MockMessageSocket()
-        // Retenir le handler au-delà de l'activation différée : seule une
-        // instance VIVANTE (réelle, installée par @StateObject) rejoint la
-        // room. Un jetable désalloué avant l'activation ne doit PAS — cf.
-        // test_init_discardedBeforeActivation_doesNotJoin.
         let sut = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: currentUserId,
             messageSocket: socket
         )
 
-        // Post Phase 1.5: init defers joinConversation via DispatchQueue.main.async
-        // (to escape the SwiftUI view-update cycle). Wait one runloop tick.
-        try await Task.sleep(nanoseconds: 100_000_000)
+        // L'activation est désormais explicite : seule la VM réellement
+        // installée (ConversationViewModel.start(), déclenché par le `.task`
+        // de la vue) appelle `activate()`. L'init seul ne joint jamais.
+        XCTAssertFalse(socket.joinConversationIds.contains(conversationId))
+
+        sut.activate()
 
         XCTAssertTrue(socket.joinConversationIds.contains(conversationId))
-        withExtendedLifetime(sut) {}
+    }
+
+    func test_activate_calledTwice_joinsOnlyOnce() async throws {
+        let socket = MockMessageSocket()
+        let sut = ConversationSocketHandler(
+            conversationId: conversationId,
+            currentUserId: currentUserId,
+            messageSocket: socket
+        )
+
+        sut.activate()
+        sut.activate()
+
+        XCTAssertEqual(
+            socket.joinConversationIds.filter { $0 == conversationId }.count, 1,
+            "activate() doit être idempotent — un seul conversation:join"
+        )
     }
 
     /// SwiftUI's `@StateObject` alloue EAGER un `ConversationViewModel` jetable
     /// (donc un handler jetable) à chaque ré-évaluation d'un parent montant
-    /// `ConversationView`, puis le jette. Un tel handler est désalloué AVANT
-    /// que son activation différée ne s'exécute : il ne doit donc PAS émettre
-    /// `conversation:join` — sinon le churn join/leave fait spiker le CPU et
-    /// sature `/read` (429). Garde de non-régression de la boucle.
+    /// `ConversationView`, puis le jette. Un tel handler n'est jamais activé
+    /// (seule la VM installée exécute `start()` → `activate()`) : il ne doit
+    /// donc PAS émettre `conversation:join` — sinon le churn join/leave fait
+    /// spiker le CPU et sature `/read` (429). Garde de non-régression de la
+    /// boucle : l'ancienne activation différée depuis `init`
+    /// (`DispatchQueue.main.async`) dépendait du timing de désallocation du
+    /// jetable et laissait la boucle repartir sous pression de re-render.
     func test_init_discardedBeforeActivation_doesNotJoin() async throws {
         let socket = MockMessageSocket()
         do {
@@ -858,13 +881,13 @@ final class ConversationSocketHandlerTests: XCTestCase {
                 messageSocket: socket
             )
         }
-        // Laisser passer l'activation différée : le handler jetable est déjà
-        // désalloué → `[weak self]` est nil → aucun join émis.
+        // Même en laissant tourner le runloop, aucun join ne doit partir :
+        // l'init ne programme plus aucun effet de bord différé.
         try await Task.sleep(nanoseconds: 150_000_000)
 
         XCTAssertFalse(
             socket.joinConversationIds.contains(conversationId),
-            "Un handler jetable désalloué avant activation ne doit pas rejoindre la room"
+            "Un handler jetable jamais activé ne doit pas rejoindre la room"
         )
     }
 
@@ -941,9 +964,8 @@ final class ConversationSocketHandlerTests: XCTestCase {
         sut.armSocketSubscriptions()
         sut.armSocketSubscriptions()
 
-        // The deferred join in init() runs via DispatchQueue.main.async; allow
-        // it to complete so the subscriber pipeline is fully wired before we
-        // emit. Otherwise the messageReceived sink may not be subscribed yet.
+        // Let the runloop settle so the Combine pipeline delivery (receive(on:
+        // DispatchQueue.main)) is fully wired before we emit.
         try await Task.sleep(nanoseconds: 100_000_000)
 
         let apiMsg = makeAPIMessage(id: "duptest", senderId: otherUserId, content: "Once")

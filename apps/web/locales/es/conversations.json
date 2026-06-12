@@ -103,6 +103,7 @@
     "copyShowingContent": "Copiar el contenido mostrado",
     "conversationHeader": {
       "backToList": "Volver a las conversaciones",
+      "unreadInOtherConversations": "mensajes no leídos en otras conversaciones",
       "share": "Compartir",
       "linkCopied": "¡Enlace copiado!",
       "linkCopyError": "Error al copiar el enlace",
@@ -131,7 +132,8 @@
       "settings": "Configuración",
       "encryptionE2EE": "Cifrado de extremo a extremo",
       "encryptionHybrid": "Cifrado híbrido",
-      "encryptionServer": "Cifrado del servidor"
+      "encryptionServer": "Cifrado del servidor",
+      "reactions": "Reacciones"
     },
     "conversationUI": {
       "participants": "Participantes",
@@ -455,7 +457,18 @@
       "refreshed": "Estados actualizados",
       "refreshError": "Error al actualizar",
       "roleError": "Error al actualizar el rol",
-      "addError": "Error al añadir participante"
+      "addError": "Error al añadir participante",
+      "roleUpdated": "Rol actualizado con éxito: {role}",
+      "invited": "{name} ha sido invitado a la conversación",
+      "added": "{name} añadido como {role}",
+      "promote": "Promover",
+      "demote": "Degradar",
+      "refreshStatuses": "Actualizar estados",
+      "roles": {
+        "MEMBER": "Miembro",
+        "MODERATOR": "Moderador",
+        "ADMIN": "Administrador"
+      }
     },
     "createLinkButton": {
       "notAuthenticated": "No se puede crear el enlace: usuario no conectado",
@@ -472,11 +485,43 @@
     "pinnedBanner": {
       "close": "Cerrar mensaje fijado"
     },
+    "links": {
+      "noDescription": "Sin descripción",
+      "loading": "Cargando enlaces...",
+      "empty": "No hay enlaces compartidos",
+      "title": "Enlaces para compartir",
+      "defaultName": "Enlace para compartir",
+      "statusActive": "Activo",
+      "statusExpired": "Expirado",
+      "statusDisabled": "Desactivado",
+      "copy": "Copiar",
+      "createdBy": "Creado por:",
+      "createdAt": "Creado el:",
+      "permissions": "Permisos",
+      "permissionMessages": "Mensajes",
+      "permissionImages": "Imágenes",
+      "permissionFiles": "Archivos",
+      "permissionHistory": "Historial",
+      "restrictions": "Restricciones",
+      "languagesLabel": "Idiomas:",
+      "countriesLabel": "Países:",
+      "activeLinks": "Enlaces activos ({count})",
+      "expiredLinks": "Enlaces expirados ({count})"
+    },
     "inviteModal": {
       "searchError": "Error al buscar usuarios",
       "inviteSuccess": "{count} usuario(s) invitado(s) con éxito",
       "partialError": "{count} invitación/invitaciones fallaron",
-      "inviteError": "Error al invitar usuarios"
+      "inviteError": "Error al invitar usuarios",
+      "noUsersFound": "No se encontraron usuarios",
+      "title": "Invitar usuarios",
+      "selectedUsers": "Usuarios seleccionados ({count})",
+      "searchResults": "Resultados de búsqueda",
+      "selected": "Seleccionado",
+      "add": "Añadir",
+      "cancel": "Cancelar",
+      "inviting": "Invitando...",
+      "inviteButton": "Invitar a {count} usuario(s)"
     },
     "drawer": {
       "title": "Opciones",
@@ -571,7 +616,25 @@
       "tooltipLocation": "Ubicación",
       "tooltipSend": "Enviar",
       "voiceAttachmentName": "Mensaje de voz ({duration})",
-      "locationAttachmentName": "Ubicación actual"
+      "locationAttachmentName": "Ubicación actual",
+      "replyTo": "Responder a {sender}",
+      "cancelReply": "Cancelar respuesta",
+      "messageInput": "Entrada de mensaje",
+      "attachFiles": "Seleccionar archivos para adjuntar",
+      "recordVoice": "Grabar mensaje de voz",
+      "attachFile": "Adjuntar archivo"
+    },
+    "userSelector": {
+      "subtitle": "Mensajería con traducción automática en el cliente",
+      "selectPrompt": "Selecciona un usuario para empezar a chatear",
+      "online": "En línea",
+      "offline": "Desconectado",
+      "systemLanguage": "Sistema:",
+      "regionalLanguage": "Región:",
+      "customLanguage": "Personalizado:",
+      "selectedUser": "Usuario seleccionado",
+      "loginAs": "Iniciarás sesión como {username}",
+      "login": "Iniciar sesión"
     }
   }
 }

@@ -21,6 +21,7 @@ interface MessageApi {
         @Path("cid") conversationId: String,
         @Query("offset") offset: Int? = null,
         @Query("limit") limit: Int? = null,
+        @Query("before") before: String? = null,
     ): ApiResponse<List<ApiMessage>>
 
     @POST("conversations/{cid}/messages")

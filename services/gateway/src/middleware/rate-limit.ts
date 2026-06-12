@@ -64,7 +64,7 @@ export async function registerRateLimiting(fastify: FastifyInstance): Promise<vo
     timeWindow: RATE_LIMITS.DEFAULT.timeWindow,
     cache: 10000,
     allowList: (req) => isLocalIp(req.ip),
-    redis: (fastify as any).redis, // Use Redis for distributed rate limiting (if available)
+    redis: fastify.redis ?? undefined, // Use Redis for distributed rate limiting (if available)
     skipOnError: true, // Don't block requests if Redis is down
     keyGenerator: (request) => {
       // Use user ID if authenticated, otherwise IP address
@@ -104,7 +104,7 @@ export async function registerRateLimiting(fastify: FastifyInstance): Promise<vo
   logger.info('✅ Rate limiting enabled', {
     defaultMax: RATE_LIMITS.DEFAULT.max,
     defaultWindow: RATE_LIMITS.DEFAULT.timeWindow,
-    redisEnabled: !!( fastify as any).redis
+    redisEnabled: !!fastify.redis
   });
 }
 

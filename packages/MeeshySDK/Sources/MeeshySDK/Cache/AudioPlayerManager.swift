@@ -31,13 +31,10 @@ public class AudioPlayerManager: ObservableObject {
 
         onWillPlay?()
 
-        // Configure audio session for background playback
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            // Silent failure
-        }
+        // Session de lecture via la source UNIQUE (call-aware) : ne stomp PAS un appel
+        // VoIP actif (sinon micro coupé). Options [] = pas de ducking (parité avec le
+        // comportement preview historique de ce player du composer story).
+        MediaSessionCoordinator.shared.activatePlaybackSync(options: [])
 
         let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
 
@@ -133,10 +130,8 @@ public class AudioPlayerManager: ObservableObject {
         stop()
         onWillPlay?()
 
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {}
+        // Session de lecture via la source UNIQUE (call-aware) — cf. play(urlString:).
+        MediaSessionCoordinator.shared.activatePlaybackSync(options: [])
 
         do {
             let data = try Data(contentsOf: url)

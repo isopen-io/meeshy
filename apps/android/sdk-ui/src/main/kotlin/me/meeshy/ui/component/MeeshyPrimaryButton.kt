@@ -15,9 +15,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.unit.dp
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
+import me.meeshy.ui.theme.MeeshyTheme
 
 /**
  * The primary call-to-action — the Indigo brand gradient (charte graphique
@@ -40,7 +42,7 @@ public fun MeeshyPrimaryButton(
                 if (active) {
                     Brush.linearGradient(MeeshyPalette.BrandGradient)
                 } else {
-                    SolidColor(MeeshyPalette.Indigo200)
+                    SolidColor(MeeshyTheme.tokens.backgroundTertiary)
                 },
             )
             .clickable(enabled = active, onClick = onClick),
@@ -53,7 +55,7 @@ public fun MeeshyPrimaryButton(
                 color = MeeshyPalette.White,
             )
         } else {
-            Text(text = text, color = MeeshyPalette.White, fontWeight = FontWeight.SemiBold)
+            Text(text = text, color = MeeshyPalette.White, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
         }
     }
 }

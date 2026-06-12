@@ -96,7 +96,15 @@ extension MessageRecord {
             // regress to .sent (single check) and the user would never
             // see the double check (✓✓). Same goes for `state == .read`.
             switch state {
-            case .sending, .queued: return .sending
+            case .sending: return .sending
+            // A row that has fallen back to the durable outbox (a failed or
+            // timed-out attempt that still has retries left) is genuinely
+            // struggling — surface the distinct "slow connection" affordance
+            // (warning clock + "Envoi lent") instead of an identical fresh-send
+            // clock, so the user can tell a retrying message from one that just
+            // left. Offline still takes precedence (hourglass) via
+            // BubbleDeliveryCheck's `isOffline` gate.
+            case .queued: return .slow
             case .failed: return .failed
             case .delivered: return .delivered
             case .read: return .read

@@ -13,10 +13,12 @@
 //   - `.standard`        → `BubbleStandardLayout` (Bubble/BubbleStandardLayout.swift)
 //
 // State ownership: this view keeps the @State for sheets, fullscreen
-// presentations, share URLs, language selection, and the lifecycle
-// controllers (ephemeral timer, blur reveal). They are forwarded to
-// `BubbleStandardLayout` as `@Binding`/`@ObservedObject` so the orchestrator
-// stays a leaf-friendly composition without state ownership chaos.
+// presentations, share URLs, and the lifecycle controllers (ephemeral timer,
+// blur reveal). They are forwarded to `BubbleStandardLayout` as
+// `@Binding`/`@ObservedObject` so the orchestrator stays a leaf-friendly
+// composition without state ownership chaos. The flag-strip language
+// selection is VM-owned (passed as inputs + change callbacks) so it flows
+// through the Equatable gate; unwired call sites fall back to a local @State.
 //
 // Equatable: the wrapper Equatable gates body re-evaluation — when this
 // returns true, SwiftUI skips body entirely, and the sub-view Equatables
@@ -57,10 +59,13 @@ struct ThemedMessageBubble: View {
     var onShowReactions: ((String) -> Void)? = nil
     /// Tap sur les coches de livraison -> ouvre le sheet detail sur "Vues".
     var onShowReadStatus: ((String) -> Void)? = nil
+    var onRetry: ((String) -> Void)? = nil
     var onReplyTap: ((String) -> Void)? = nil
     var onStoryReplyTap: ((String) -> Void)? = nil
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
+    /// BUG2 A' — réaction par-image (attachmentId, emoji).
+    var onReactToAttachment: ((String, String) -> Void)? = nil
     var onRequestTranslation: ((String, String) -> Void)? = nil
     var onShowTranslationDetail: ((String) -> Void)? = nil
     /// Phase 5 wiring (audio playback persistence): forwarded to
@@ -95,10 +100,40 @@ struct ThemedMessageBubble: View {
     var currentUserId: String = ""
     var userLanguages: (regional: String?, custom: String?) = (nil, nil)
 
+    // MARK: - Language selection (VM-owned when wired, local @State fallback)
+    //
+    // The flag-strip selection used to be two private `@State`s here — which
+    // is precisely what made the Equatable re-render gate unsafe (`==` can't
+    // see another instance's @State; on iOS 18+ the gate then swallows the
+    // flag tap — observed 2026-05-25, revert b9a39c2c). The conversation
+    // list now passes the selection as plain INPUTS (snapped from
+    // `ConversationViewModel.bubbleLanguageSelections[messageId]`) plus
+    // change callbacks, so the values flow through `==` and a tap round-trips
+    // VM → targeted reconfigure → fresh inputs. Call sites that don't wire
+    // the callbacks (overlay copies, onboarding demos, previews) fall back to
+    // the legacy local @State so their flag taps keep working unchanged.
+    var activeDisplayLangCode: String? = nil
+    var secondaryLangCode: String? = nil
+    var onSetActiveDisplayLanguage: ((String?) -> Void)? = nil
+    var onSetSecondaryLanguage: ((String?) -> Void)? = nil
+
+    /// Tap on the sender avatar/name → open this user's profile. Replaces the
+    /// former `@EnvironmentObject Router` dependency, which made EVERY visible
+    /// bubble re-render on EVERY Router publish (navigation, deep links).
+    var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
+
+    @State private var localActiveDisplayLangCode: String? = nil
+    @State private var localSecondaryLangCode: String? = nil
+
+    private var resolvedActiveDisplayLangCode: String? {
+        onSetActiveDisplayLanguage != nil ? activeDisplayLangCode : localActiveDisplayLangCode
+    }
+    private var resolvedSecondaryLangCode: String? {
+        onSetSecondaryLanguage != nil ? secondaryLangCode : localSecondaryLangCode
+    }
+
     // MARK: - State (forwarded as bindings to BubbleStandardLayout)
 
-    @State private var activeDisplayLangCode: String? = nil
-    @State private var secondaryLangCode: String? = nil
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var showShareSheet = false
     @State private var shareURL: URL? = nil
@@ -113,10 +148,6 @@ struct ThemedMessageBubble: View {
 
     @StateObject private var blurController = BubbleBlurRevealController()
     @StateObject private var ephemeralController = BubbleEphemeralController()
-
-    // MARK: - Environment
-
-    @EnvironmentObject private var router: Router
 
     // MARK: - Derived state for kind dispatch
 
@@ -140,8 +171,8 @@ struct ThemedMessageBubble: View {
             preferredTranslation: preferredTranslation,
             translatedAudios: translatedAudios,
             userLanguages: userLanguages,
-            secondaryLangCode: secondaryLangCode,
-            activeDisplayLangCode: activeDisplayLangCode,
+            secondaryLangCode: resolvedSecondaryLangCode,
+            activeDisplayLangCode: resolvedActiveDisplayLangCode,
             currentUserId: currentUserId,
             isEditSaving: isEditSaving,
             hasEditHistory: hasEditHistory
@@ -182,6 +213,12 @@ struct ThemedMessageBubble: View {
             content: content,
             message: message,
             contactColor: contactColor,
+            otherBubbleColor: DynamicColorGenerator.blendTwo(
+                message.senderColor ?? contactColor,
+                weight1: 0.30,
+                MeeshyColors.brandPrimaryHex,
+                weight2: 0.70
+            ),
             isDirect: isDirect,
             isDark: isDark,
             transcription: transcription,
@@ -208,16 +245,36 @@ struct ThemedMessageBubble: View {
             onOpenReactPicker: onOpenReactPicker,
             onShowReactions: onShowReactions,
             onShowReadStatus: onShowReadStatus,
+            onRetry: onRetry,
             onReplyTap: onReplyTap,
             onStoryReplyTap: onStoryReplyTap,
             onMediaTap: onMediaTap,
             onConsumeViewOnce: onConsumeViewOnce,
+            onReactToAttachment: onReactToAttachment,
             onRequestTranslation: onRequestTranslation,
             onShowTranslationDetail: onShowTranslationDetail,
             onPlayAudio: onPlayAudio,
             onScrollToMessage: onScrollToMessage,
-            activeDisplayLangCode: $activeDisplayLangCode,
-            secondaryLangCode: $secondaryLangCode,
+            activeDisplayLangCode: Binding(
+                get: { resolvedActiveDisplayLangCode },
+                set: { newValue in
+                    if let onSetActiveDisplayLanguage {
+                        onSetActiveDisplayLanguage(newValue)
+                    } else {
+                        localActiveDisplayLangCode = newValue
+                    }
+                }
+            ),
+            secondaryLangCode: Binding(
+                get: { resolvedSecondaryLangCode },
+                set: { newValue in
+                    if let onSetSecondaryLanguage {
+                        onSetSecondaryLanguage(newValue)
+                    } else {
+                        localSecondaryLangCode = newValue
+                    }
+                }
+            ),
             selectedProfileUser: $selectedProfileUser,
             showShareSheet: $showShareSheet,
             shareURL: $shareURL,
@@ -244,7 +301,7 @@ struct ThemedMessageBubble: View {
         .adaptiveOnChange(of: selectedProfileUser) { _, newValue in
             if let user = newValue {
                 selectedProfileUser = nil
-                router.deepLinkProfileUser = user
+                onOpenProfile?(user)
             }
         }
     }
@@ -315,6 +372,35 @@ extension ThemedMessageBubble: @MainActor Equatable {
         // User-level prefs — flipped from settings without touching the message
         lhs.userLanguages.regional == rhs.userLanguages.regional &&
         lhs.userLanguages.custom == rhs.userLanguages.custom &&
-        lhs.activeAudioLanguage == rhs.activeAudioLanguage
+        lhs.activeAudioLanguage == rhs.activeAudioLanguage &&
+        // Flag-strip selection — VM-owned inputs (lifted out of @State so the
+        // Equatable gate SEES them: a flag tap changes these and must re-render)
+        lhs.activeDisplayLangCode == rhs.activeDisplayLangCode &&
+        lhs.secondaryLangCode == rhs.secondaryLangCode
+    }
+}
+
+// MARK: - Equatable re-render gate (collection cells)
+//
+// Stateless Equatable wrapper applied at the cell-config site via
+// `.equatable()`. The gate must NOT be put on `ThemedMessageBubble` itself:
+// the bubble owns @State (sheets, fullscreen, carousel, local language
+// fallback) and on iOS 18+ an EquatableView re-consults `==` even on @State
+// invalidation of its *content* — since `==` can't see @State, the
+// interaction writes state but never re-renders (observed 2026-05-25,
+// revert b9a39c2c). This wrapper carries ZERO state of its own, so the only
+// invalidations that consult `==` are parent-driven reconfigurations — the
+// exact storm it exists to short-circuit. The bubble's own @State lives on a
+// CHILD node and invalidates it directly, bypassing the gate (same topology
+// as the Feed's proven `FeedPostCard().equatable()`).
+struct EquatableMessageBubble: View {
+    let bubble: ThemedMessageBubble
+
+    var body: some View { bubble }
+}
+
+extension EquatableMessageBubble: @MainActor Equatable {
+    static func == (lhs: EquatableMessageBubble, rhs: EquatableMessageBubble) -> Bool {
+        lhs.bubble == rhs.bubble
     }
 }

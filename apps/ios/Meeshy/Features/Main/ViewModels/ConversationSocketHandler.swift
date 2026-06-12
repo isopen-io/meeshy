@@ -57,6 +57,7 @@ protocol ConversationSocketDelegate: AnyObject {
     /// GRDB upsert so future opens of this conversation render the
     /// enriched attachment from cache without a refetch.
     func applyAttachmentUpdate(_ event: AttachmentUpdatedEvent)
+    func applyAttachmentReactionDelta(attachmentId: String, reactionSummary: [String: Int])
 }
 
 // MARK: - ConversationSocketHandler
@@ -89,17 +90,23 @@ final class ConversationSocketHandler {
     private static let typingSafetyTimeout: TimeInterval = 15.0
     nonisolated(unsafe) private var typingSafetyTimers: [String: Timer] = [:]
 
-    /// `true` une fois que l'activation différée de ce handler a réellement
-    /// tourné (instance réelle, installée par `@StateObject`). SwiftUI alloue
-    /// EAGER un `ConversationViewModel` jetable — donc un handler jetable — à
-    /// chaque ré-évaluation d'un parent qui monte `ConversationView` (ex.
-    /// `iPadRootView`, qui observe `NotificationToastManager`). Ces jetables
-    /// sont rejetés AVANT que l'activation différée ne s'exécute : ils ne
-    /// doivent donc émettre NI `conversation:join`/`leave` NI publier
-    /// `onConversationOpened`/`Closed` — sinon ils re-déclenchent la
-    /// ré-évaluation du parent et créent une boucle create/destroy
-    /// auto-entretenue (pic CPU, 429 répétés sur `/read`). Gater les deux
-    /// sites d'effets de bord sur `didActivate` les confine à l'instance réelle.
+    /// `true` une fois `activate()` exécuté (instance réelle, installée par
+    /// `@StateObject`). SwiftUI alloue EAGER un `ConversationViewModel`
+    /// jetable — donc un handler jetable — à chaque ré-évaluation d'un parent
+    /// qui monte `ConversationView` (ex. `iPadRootView`, qui observe
+    /// `NotificationToastManager`). Ces jetables ne doivent émettre NI
+    /// `conversation:join`/`leave` NI publier `onConversationOpened`/`Closed`
+    /// — sinon ils re-déclenchent la ré-évaluation du parent et créent une
+    /// boucle create/destroy auto-entretenue (pic CPU, storm 429 sur `/read`).
+    /// L'ancienne protection (side-effects différés via
+    /// `DispatchQueue.main.async { [weak self] }` depuis `init`) reposait sur
+    /// la désallocation du jetable AVANT le tick suivant — timing non garanti
+    /// sous pression de re-render : un jetable encore vivant s'activait, son
+    /// `deinit` publiait `onConversationClosed`, et le cycle open→close→open
+    /// relançait un POST `/notifications/conversation/:id/read` à chaque tour.
+    /// `activate()` n'est désormais appelé QUE depuis
+    /// `ConversationViewModel.start()` (déclenché par `.task` de la vue,
+    /// jamais exécuté par une VM jetable), ce qui supprime la course.
     nonisolated(unsafe) private var didActivate = false
 
     // MARK: - Init / Deinit
@@ -112,26 +119,19 @@ final class ConversationSocketHandler {
         self.conversationId = conversationId
         self.currentUserId = currentUserId
         self.messageSocket = messageSocket
-        // Defer side-effects (socket join + notification updates) off the
-        // current runloop tick. These calls mutate @Published state on
-        // shared singletons (NotificationCoordinator.conversationUnreadCounts,
-        // NotificationToastManager.unreadCount). When ConversationSocketHandler
-        // is created inside ConversationViewModel.init — which itself runs
-        // during ConversationView's body evaluation as @StateObject is
-        // bootstrapped — those synchronous @Published mutations trip
-        // "Publishing changes from within view updates is not allowed",
-        // which causes SwiftUI to dismiss the navigation push and the user
-        // sees an empty conversation list again.
-        let convId = conversationId
-        DispatchQueue.main.async { [weak self, messageSocket] in
-            // Le handler jetable (cf. didActivate) est déjà désalloué quand ce
-            // bloc s'exécute → `self` est nil → on n'émet aucun effet de bord.
-            guard let self else { return }
-            self.didActivate = true
-            messageSocket.joinConversation(convId)
-            NotificationToastManager.shared.onConversationOpened(convId)
-            NotificationCoordinator.shared.markConversationRead(convId)
-        }
+    }
+
+    /// Side-effects d'ouverture : join de la room socket + publication de la
+    /// conversation active aux singletons notifications. Mutations `@Published`
+    /// sur des singletons partagés → doit être appelé hors évaluation de body
+    /// (le `.task` de la vue, via `ConversationViewModel.start()`, satisfait
+    /// cette contrainte). Idempotent.
+    func activate() {
+        guard !didActivate else { return }
+        didActivate = true
+        messageSocket.joinConversation(conversationId)
+        NotificationToastManager.shared.onConversationOpened(conversationId)
+        NotificationCoordinator.shared.markConversationRead(conversationId)
     }
 
     func armSocketSubscriptions() {
@@ -352,8 +352,13 @@ final class ConversationSocketHandler {
                            let socketAttachments = apiMsg.attachments, !socketAttachments.isEmpty,
                            let idx = delegate.messageIndex(for: apiMsg.id) {
                             let existing = delegate.messages[idx]
+                            // `.slow` is a still-pending optimistic row (failed
+                            // once, retrying via the outbox) — like `.sending`,
+                            // its attachment data is local and must be refreshed
+                            // from the authoritative socket echo.
                             let hasNewData = existing.attachments.count != socketAttachments.count
                                 || existing.deliveryStatus == .sending
+                                || existing.deliveryStatus == .slow
                             if hasNewData, let persistence = self.persistence {
                                 // Write refreshed attachment data through persistence;
                                 // store observation surfaces the update to the view.
@@ -494,6 +499,18 @@ final class ConversationSocketHandler {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, let persistence = self.persistence else { return }
+                // Reaction d'un AUTRE utilisateur arrivant en temps reel : on
+                // marque la cle pour que la nouvelle pill joue la comete au
+                // prochain rendu. La propre reaction de l'utilisateur a deja ete
+                // marquee+animee par le toggle optimiste (`toggleReaction`), donc
+                // on ne la re-anime pas ici.
+                if event.participantId != self.currentUserId {
+                    let animMessageId = event.messageId
+                    let animEmoji = event.emoji
+                    Task { @MainActor in
+                        ReactionAnimationGate.markAdded(messageId: animMessageId, emoji: animEmoji)
+                    }
+                }
                 // Write through persistence; store observation surfaces the reaction.
                 // Pass the server's authoritative `aggregation.count` as a cap so an
                 // echo of the user's OWN reaction (keyed by the resolved
@@ -528,6 +545,27 @@ final class ConversationSocketHandler {
                         participantId: event.participantId
                     )
                 }
+            }
+            .store(in: &cancellables)
+
+        // BUG2 A' — réactions par-image : le delta porte le reactionSummary
+        // autoritaire ; on remplace les comptes in-memory (currentUserReactions
+        // reste géré optimiste côté VM, comme message-level).
+        socketManager.attachmentReactionAdded
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, let delegate = self.delegate, let summary = event.reactionSummary else { return }
+                delegate.applyAttachmentReactionDelta(attachmentId: event.attachmentId, reactionSummary: summary)
+            }
+            .store(in: &cancellables)
+
+        socketManager.attachmentReactionRemoved
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, let delegate = self.delegate, let summary = event.reactionSummary else { return }
+                delegate.applyAttachmentReactionDelta(attachmentId: event.attachmentId, reactionSummary: summary)
             }
             .store(in: &cancellables)
 

@@ -61,11 +61,11 @@ export function InviteUserModal({
         );
         setSearchResults(filteredUsers);
       } else {
-        toast.error(t('conversations.inviteModal.searchError'));
+        toast.error(t('inviteModal.searchError'));
       }
     } catch (error) {
       console.error('Erreur lors de la recherche:', error);
-      toast.error(t('conversations.inviteModal.searchError'));
+      toast.error(t('inviteModal.searchError'));
     } finally {
       setIsSearching(false);
     }
@@ -110,7 +110,7 @@ export function InviteUserModal({
       const failedInvites = results.filter(r => !(r.data as unknown)?.success);
 
       if (successfulInvites.length > 0) {
-        toast.success(t('conversations.inviteModal.inviteSuccess', { count: successfulInvites.length }));
+        toast.success(t('inviteModal.inviteSuccess', { count: successfulInvites.length }));
         
         // Notifier le parent des utilisateurs invités
         selectedUsers.forEach(user => onUserInvited(user));
@@ -123,12 +123,12 @@ export function InviteUserModal({
       }
 
       if (failedInvites.length > 0) {
-        toast.error(t('conversations.inviteModal.partialError', { count: failedInvites.length }));
+        toast.error(t('inviteModal.partialError', { count: failedInvites.length }));
       }
 
     } catch (error) {
       console.error('Erreur lors de l\'invitation:', error);
-      toast.error(t('conversations.inviteModal.inviteError'));
+      toast.error(t('inviteModal.inviteError'));
     } finally {
       setIsInviting(false);
     }
@@ -148,7 +148,7 @@ export function InviteUserModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="h-5 w-5" />
-            Inviter des utilisateurs
+            {t('inviteModal.title')}
           </DialogTitle>
         </DialogHeader>
 
@@ -170,7 +170,7 @@ export function InviteUserModal({
           {/* Utilisateurs sélectionnés */}
           {selectedUsers.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-sm font-medium">Utilisateurs sélectionnés ({selectedUsers.length})</h4>
+              <h4 className="text-sm font-medium">{t('inviteModal.selectedUsers', { count: selectedUsers.length })}</h4>
               <div className="flex flex-wrap gap-2">
                 {selectedUsers.map(user => (
                   <Badge key={user.id} variant="secondary" className="flex items-center gap-2">
@@ -199,12 +199,12 @@ export function InviteUserModal({
 
           {/* Résultats de recherche */}
           <div className="space-y-2">
-            <h4 className="text-sm font-medium">Résultats de recherche</h4>
+            <h4 className="text-sm font-medium">{t('inviteModal.searchResults')}</h4>
             <ScrollArea className="h-64">
               {searchResults.length === 0 && searchQuery.length >= 2 && !isSearching ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Users className="h-8 w-8 mx-auto mb-2" />
-                  <p>Aucun utilisateur trouvé</p>
+                  <p>{t('inviteModal.noUsersFound')}</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -234,7 +234,7 @@ export function InviteUserModal({
                         disabled={selectedUsers.some(u => u.id === user.id)}
                       >
                         <UserPlus className="h-4 w-4 mr-1" />
-                        {selectedUsers.some(u => u.id === user.id) ? 'Sélectionné' : 'Ajouter'}
+                        {selectedUsers.some(u => u.id === user.id) ? t('inviteModal.selected') : t('inviteModal.add')}
                       </Button>
                     </div>
                   ))}
@@ -246,7 +246,7 @@ export function InviteUserModal({
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose} disabled={isInviting}>
-            Annuler
+            {t('inviteModal.cancel')}
           </Button>
           <Button 
             onClick={inviteSelectedUsers} 
@@ -255,12 +255,12 @@ export function InviteUserModal({
             {isInviting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Invitation en cours...
+                {t('inviteModal.inviting')}
               </>
             ) : (
               <>
                 <UserPlus className="h-4 w-4 mr-2" />
-                Inviter {selectedUsers.length} utilisateur(s)
+                {t('inviteModal.inviteButton', { count: selectedUsers.length })}
               </>
             )}
           </Button>

@@ -133,8 +133,8 @@ export default function NewUserPage() {
               <span>{t('users.newUser.back')}</span>
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">{t('users.newUser.title')}</h1>
-              <p className="text-sm text-gray-600">{t('users.newUser.subtitle')}</p>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('users.newUser.title')}</h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400">{t('users.newUser.subtitle')}</p>
             </div>
           </div>
           <Badge className="bg-blue-600 text-white">
@@ -167,7 +167,7 @@ export default function NewUserPage() {
                       {errors.username}
                     </p>
                   )}
-                  <p className="text-xs text-gray-500">{t('users.newUser.hintUsername')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('users.newUser.hintUsername')}</p>
                 </div>
 
                 <div className="space-y-2">
@@ -252,7 +252,7 @@ export default function NewUserPage() {
                       {errors.password}
                     </p>
                   )}
-                  <p className="text-xs text-gray-500">{t('users.newUser.hintPassword')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('users.newUser.hintPassword')}</p>
                 </div>
 
                 <div className="space-y-2">
@@ -300,19 +300,19 @@ export default function NewUserPage() {
                     value={formData.phoneNumber}
                     onChange={(e) => handleChange('phoneNumber', e.target.value)}
                   />
-                  <p className="text-xs text-gray-500">{t('users.newUser.hintPhone')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('users.newUser.hintPhone')}</p>
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium">{t('users.newUser.labelBio')}</label>
                   <textarea
-                    className="w-full p-2 border rounded-md text-sm min-h-[80px] dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
-                    placeholder="À propos de cet utilisateur..."
+                    className="w-full p-2 border dark:border-gray-700 rounded-md text-sm min-h-[80px] bg-white dark:bg-gray-800 dark:text-gray-200"
+                    placeholder={t('users.newUser.placeholderBio')}
                     value={formData.bio}
                     onChange={(e) => handleChange('bio', e.target.value)}
                     maxLength={500}
                   />
-                  <p className="text-xs text-gray-500">{t('users.newUser.hintBioLength', { count: formData.bio.length })}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('users.newUser.hintBioLength', { count: formData.bio.length })}</p>
                 </div>
               </div>
             </CardContent>
@@ -330,7 +330,7 @@ export default function NewUserPage() {
                     {t('users.newUser.labelRole')} <span className="text-red-500">*</span>
                   </label>
                   <select
-                    className="w-full p-2 border rounded-md text-sm bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
+                    className="w-full p-2 border dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-800 dark:text-gray-200"
                     value={formData.role}
                     onChange={(e) => handleChange('role', e.target.value)}
                   >
@@ -346,7 +346,7 @@ export default function NewUserPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">{t('users.newUser.labelSystemLang')}</label>
                   <select
-                    className="w-full p-2 border rounded-md text-sm bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
+                    className="w-full p-2 border dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-800 dark:text-gray-200"
                     value={formData.systemLanguage}
                     onChange={(e) => handleChange('systemLanguage', e.target.value)}
                   >
@@ -369,7 +369,7 @@ export default function NewUserPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">{t('users.newUser.labelRegionalLang')}</label>
                   <select
-                    className="w-full p-2 border rounded-md text-sm bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
+                    className="w-full p-2 border dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-800 dark:text-gray-200"
                     value={formData.regionalLanguage}
                     onChange={(e) => handleChange('regionalLanguage', e.target.value)}
                   >

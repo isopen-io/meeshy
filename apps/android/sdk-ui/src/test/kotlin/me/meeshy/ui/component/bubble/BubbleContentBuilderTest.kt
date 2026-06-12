@@ -70,6 +70,39 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `showOriginal swaps a translated bubble back to its original text`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                content = "Hello",
+                translations = listOf(
+                    ApiTextTranslation(targetLanguage = "fr", translatedContent = "Bonjour"),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            showOriginal = true,
+        )
+
+        assertThat(content.text).isEqualTo("Hello")
+        assertThat(content.isShowingOriginal).isTrue()
+        assertThat(content.isTranslated).isTrue()
+        assertThat(content.originalText).isNull()
+    }
+
+    @Test
+    fun `showOriginal is inert on an untranslated bubble`() {
+        val content = BubbleContentBuilder.build(
+            message(content = "Hello"),
+            currentUserId = "me",
+            preferences = french,
+            showOriginal = true,
+        )
+
+        assertThat(content.text).isEqualTo("Hello")
+        assertThat(content.isShowingOriginal).isFalse()
+    }
+
+    @Test
     fun `with no matching translation the original content is shown (Prisme rule 1)`() {
         val content = BubbleContentBuilder.build(
             message(
@@ -101,6 +134,44 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `a reply to a deleted message carries the replyToDeleted flag and no preview text`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(
+                    id = "r1",
+                    content = "secret",
+                    senderDisplayName = "Alice",
+                    deletedAt = "2026-05-18T10:00:00Z",
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.replyToDeleted).isTrue()
+        assertThat(content.replyToText).isNull()
+        assertThat(content.replyToSenderName).isEqualTo("Alice")
+    }
+
+    @Test
+    fun `a reply to a live message keeps its preview text`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(
+                    id = "r1",
+                    content = "original",
+                    senderDisplayName = "Alice",
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.replyToDeleted).isFalse()
+        assertThat(content.replyToText).isEqualTo("original")
+    }
+
+    @Test
     fun `the sender name shows only for incoming messages when requested`() {
         val sender = ApiMessageSender(displayName = "Alice")
 
@@ -123,6 +194,43 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `a pending outgoing message shows the Pending status`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me"),
+            currentUserId = "me",
+            preferences = french,
+            isPending = true,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Pending)
+    }
+
+    @Test
+    fun `a failed outgoing message shows the Failed status even while pending`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "me"),
+            currentUserId = "me",
+            preferences = french,
+            isPending = true,
+            isFailed = true,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Failed)
+    }
+
+    @Test
+    fun `incoming messages never show a failure status`() {
+        val content = BubbleContentBuilder.build(
+            message(senderId = "other"),
+            currentUserId = "me",
+            preferences = french,
+            isFailed = true,
+        )
+
+        assertThat(content.deliveryStatus).isEqualTo(DeliveryStatus.Sent)
+    }
+
+    @Test
     fun `the edited flag passes through`() {
         val content = BubbleContentBuilder.build(
             message(isEdited = true),
@@ -132,4 +240,18 @@ class BubbleContentBuilderTest {
 
         assertThat(content.isEdited).isTrue()
     }
+
+    @Test
+    fun `own reactions mark their entry as includesMe`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(reactionSummary = mapOf("❤️" to 2, "🔥" to 1)),
+            currentUserId = "me",
+            preferences = french,
+            ownReactions = setOf("❤️"),
+        )
+
+        assertThat(content.reactions.single { it.emoji == "❤️" }.includesMe).isTrue()
+        assertThat(content.reactions.single { it.emoji == "🔥" }.includesMe).isFalse()
+    }
+
 }

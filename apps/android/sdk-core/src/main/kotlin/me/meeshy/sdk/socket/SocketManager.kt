@@ -33,7 +33,7 @@ class SocketManager @Inject constructor(
     val isConnected: Boolean get() = _socket?.connected() == true
 
     fun connect() {
-        val token = tokenStore.accessToken ?: return
+        val token = tokenStore.jwt ?: tokenStore.sessionToken ?: return
         val opts = IO.Options().apply {
             auth = mapOf("token" to token)
             transports = arrayOf("websocket")
@@ -70,8 +70,8 @@ class SocketManager @Inject constructor(
         connect()
     }
 
-    fun on(event: String, callback: (Array<Any>) -> Unit): Socket? {
-        return _socket?.on(event) { args -> callback(args) }
+    fun on(event: String, callback: (Array<Any>) -> Unit) {
+        _socket?.on(event) { args -> callback(args) }
     }
 
     fun emit(event: String, data: JSONObject) {

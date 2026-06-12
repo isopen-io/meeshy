@@ -3,8 +3,10 @@
 import Link from 'next/link';
 import { Button, Card, Input, LanguageOrb, ProgressSteps, theme } from '@/components/v2';
 import { useSignupV2 } from '@/hooks/v2/use-signup-v2';
+import { useI18n } from '@/hooks/useI18n';
 
 export default function V2SignupPage() {
+  const { t: tCommon } = useI18n('common');
   const {
     state,
     setName,
@@ -196,7 +198,7 @@ export default function V2SignupPage() {
                     className="flex-1"
                     onClick={goBack}
                   >
-                    Retour
+                    {tCommon('back')}
                   </Button>
                   <Button
                     type="submit"

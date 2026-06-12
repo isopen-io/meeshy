@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
-import { sendSuccess } from '../../utils/response.js';
-import { validatePagination, type AnonymousUserListQuery } from './types';
+import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
+import { type AnonymousUserListQuery } from './types';
+import { validatePagination } from '../../utils/pagination';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery } from '../../validation/helpers.js';
 import { AnonymousUsersQuerySchema } from '../../validation/admin-schemas.js';
@@ -9,20 +10,14 @@ import { AnonymousUsersQuerySchema } from '../../validation/admin-schemas.js';
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return reply.status(401).send({
-      success: false,
-      message: 'Authentification requise'
-    });
+    return sendUnauthorized(reply, 'Authentification requise');
   }
 
   const userRole = authContext.registeredUser.role;
   const canView = ['BIGBOSS', 'ADMIN', 'MODERATOR', 'AUDIT'].includes(userRole);
 
   if (!canView) {
-    return reply.status(403).send({
-      success: false,
-      message: 'Permission insuffisante'
-    });
+    return sendForbidden(reply, 'Permission insuffisante');
   }
 };
 
@@ -37,7 +32,7 @@ export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { offset = '0', limit = '20', search, status } = request.query as AnonymousUserListQuery;
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       const where: any = { type: 'anonymous' };
 
@@ -101,10 +96,7 @@ export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
         });
     } catch (error) {
       logError(fastify.log, 'Get admin anonymous users error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la recuperation des utilisateurs anonymes'
-      });
+      return sendInternalError(reply, 'Erreur lors de la recuperation des utilisateurs anonymes');
     }
   });
 }

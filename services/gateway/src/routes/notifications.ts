@@ -5,18 +5,12 @@
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { z } from 'zod';
 import { NotificationFormatter } from '../services/notifications/NotificationFormatter';
-import { validatePagination } from '../utils/pagination';
 import {
   notificationSchema,
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
-
-// Schemas de validation Zod
-const markAsReadSchema = z.object({
-  notificationId: z.string(),
-});
+import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../utils/response';
 
 export async function notificationRoutes(fastify: FastifyInstance) {
   const notificationService = fastify.notificationService;
@@ -85,10 +79,8 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as any;
-        const { offset = 0, limit = 20, unreadOnly = false } = request.query as any;
-
-        const pagination = validatePagination(offset, limit, 100);
+        const userId = request.user!.userId;
+        const { offset = 0, limit = 20, unreadOnly = false } = request.query as { offset?: number; limit?: number; unreadOnly?: boolean };
 
         // Récupérer les notifications BRUTES de Prisma (pas encore formatées)
         const where: any = { userId };
@@ -100,8 +92,8 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           fastify.prisma.notification.findMany({
             where,
             orderBy: { createdAt: 'desc' },
-            take: pagination.limit,
-            skip: pagination.offset,
+            take: limit,
+            skip: offset,
           }),
           fastify.prisma.notification.count({ where }),
           notificationService.getUnreadCount(userId),
@@ -111,16 +103,13 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         return NotificationFormatter.formatPaginatedResponse({
           notifications: rawNotifications,
           total,
-          offset: pagination.offset,
-          limit: pagination.limit,
+          offset,
+          limit,
           unreadCount,
         });
       } catch (error) {
         fastify.log.error({ error }, 'Error fetching notifications');
-        return reply.code(500).send({
-          success: false,
-          error: 'Failed to fetch notifications',
-        });
+        return sendInternalError(reply, 'Failed to fetch notifications');
       }
     }
   );
@@ -152,7 +141,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as any;
+        const userId = request.user!.userId;
         const count = await notificationService.getUnreadCount(userId);
 
         return {
@@ -161,10 +150,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         };
       } catch (error) {
         fastify.log.error({ error }, 'Error fetching unread count');
-        return reply.code(500).send({
-          success: false,
-          error: 'Failed to fetch unread count',
-        });
+        return sendInternalError(reply, 'Failed to fetch unread count');
       }
     }
   );
@@ -204,8 +190,8 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { id } = request.params as any;
-        const { userId } = request.user as any;
+        const { id } = request.params as { id: string };
+        const userId = request.user!.userId;
 
         // Vérifier que la notification appartient à l'utilisateur
         const notification = await fastify.prisma.notification.findUnique({
@@ -213,31 +199,19 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         });
 
         if (!notification) {
-          return reply.code(404).send({
-            success: false,
-            error: 'Notification not found',
-          });
+          return sendNotFound(reply, 'Notification not found');
         }
 
         if (notification.userId !== userId) {
-          return reply.code(403).send({
-            success: false,
-            error: 'Access denied',
-          });
+          return sendForbidden(reply, 'Access denied');
         }
 
         const updated = await notificationService.markAsRead(id);
 
-        return {
-          success: true,
-          data: updated,
-        };
+        return sendSuccess(reply, updated);
       } catch (error) {
         fastify.log.error({ error }, 'Error marking notification as read');
-        return reply.code(500).send({
-          success: false,
-          error: 'Failed to mark notification as read',
-        });
+        return sendInternalError(reply, 'Failed to mark notification as read');
       }
     }
   );
@@ -272,7 +246,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as any;
+        const userId = request.user!.userId;
         const count = await notificationService.markAllAsRead(userId);
 
         return {
@@ -281,10 +255,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         };
       } catch (error) {
         fastify.log.error({ error }, 'Error marking all notifications as read');
-        return reply.code(500).send({
-          success: false,
-          error: 'Failed to mark all notifications as read',
-        });
+        return sendInternalError(reply, 'Failed to mark all notifications as read');
       }
     }
   );
@@ -329,8 +300,8 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as any;
-        const { conversationId } = request.params as any;
+        const userId = request.user!.userId;
+        const { conversationId } = request.params as { conversationId: string };
 
         const count = await notificationService.markConversationNotificationsAsRead(
           userId,
@@ -343,10 +314,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         };
       } catch (error) {
         fastify.log.error({ error }, 'Error marking conversation notifications as read');
-        return reply.code(500).send({
-          success: false,
-          error: 'Failed to mark conversation notifications as read',
-        });
+        return sendInternalError(reply, 'Failed to mark conversation notifications as read');
       }
     }
   );
@@ -394,7 +362,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as any;
+        const userId = request.user!.userId;
         const { types } = request.body as { types: string[] };
 
         const count = await notificationService.markNotificationsByTypesAsRead(userId, types);
@@ -405,10 +373,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         };
       } catch (error) {
         fastify.log.error({ error }, 'Error marking notifications by types as read');
-        return reply.code(500).send({
-          success: false,
-          error: 'Failed to mark notifications as read',
-        });
+        return sendInternalError(reply, 'Failed to mark notifications as read');
       }
     }
   );
@@ -447,8 +412,8 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { id } = request.params as any;
-        const { userId } = request.user as any;
+        const { id } = request.params as { id: string };
+        const userId = request.user!.userId;
 
         // Vérifier que la notification appartient à l'utilisateur
         const notification = await fastify.prisma.notification.findUnique({
@@ -456,37 +421,23 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         });
 
         if (!notification) {
-          return reply.code(404).send({
-            success: false,
-            error: 'Notification not found',
-          });
+          return sendNotFound(reply, 'Notification not found');
         }
 
         if (notification.userId !== userId) {
-          return reply.code(403).send({
-            success: false,
-            error: 'Access denied',
-          });
+          return sendForbidden(reply, 'Access denied');
         }
 
-        const success = await notificationService.deleteNotification(id);
+        const deleted = await notificationService.deleteNotification(id);
 
-        if (!success) {
-          return reply.code(500).send({
-            success: false,
-            error: 'Failed to delete notification',
-          });
+        if (!deleted) {
+          return sendInternalError(reply, 'Failed to delete notification');
         }
 
-        return {
-          success: true,
-        };
+        return sendSuccess(reply, undefined);
       } catch (error) {
         fastify.log.error({ error }, 'Error deleting notification');
-        return reply.code(500).send({
-          success: false,
-          error: 'Failed to delete notification',
-        });
+        return sendInternalError(reply, 'Failed to delete notification');
       }
     }
   );
@@ -506,16 +457,10 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
         const result = await fastify.prisma.notification.deleteMany({});
 
-        return {
-          success: true,
-          deletedCount: result.count,
-        };
+        return sendSuccess(reply, { deletedCount: result.count });
       } catch (error) {
         fastify.log.error({ error }, 'Error clearing notifications');
-        return reply.code(500).send({
-          success: false,
-          error: 'Failed to clear notifications',
-        });
+        return sendInternalError(reply, 'Failed to clear notifications');
       }
     }
   );
@@ -531,8 +476,8 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as any;
-        const body = request.body as any;
+        const userId = request.user!.userId;
+        const body = request.body as { recipientUserId?: string; conversationId?: string; message?: string };
 
         const notification = await notificationService.createMessageNotification({
           recipientUserId: body.recipientUserId || userId,
@@ -542,16 +487,10 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           messagePreview: body.message || 'Test notification depuis API',
         });
 
-        return {
-          success: true,
-          notification,
-        };
+        return sendSuccess(reply, { notification });
       } catch (error) {
         fastify.log.error({ error }, 'Error creating test notification');
-        return reply.code(500).send({
-          success: false,
-          error: 'Failed to create test notification',
-        });
+        return sendInternalError(reply, 'Failed to create test notification');
       }
     }
   );
@@ -583,31 +522,21 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const user = request.user as any;
+        const user = request.user!;
 
         // Vérification admin
         if (user.role !== 'ADMIN' && user.role !== 'BIGBOSS') {
-          return reply.code(403).send({
-            success: false,
-            error: 'Admin access required',
-            debug: { user },
-          });
+          return sendForbidden(reply, 'Admin access required');
         }
 
         fastify.log.warn({ user }, 'Admin clearing all notifications');
 
         const result = await fastify.prisma.notification.deleteMany({});
 
-        return {
-          success: true,
-          deletedCount: result.count,
-        };
+        return sendSuccess(reply, { deletedCount: result.count });
       } catch (error) {
         fastify.log.error({ error }, 'Error clearing notifications');
-        return reply.code(500).send({
-          success: false,
-          error: 'Failed to clear notifications',
-        });
+        return sendInternalError(reply, 'Failed to clear notifications');
       }
     }
   );

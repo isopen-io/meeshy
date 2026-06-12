@@ -103,6 +103,7 @@
     "copyShowingContent": "Copier le contenu affiché",
     "conversationHeader": {
       "backToList": "Retour aux conversations",
+      "unreadInOtherConversations": "messages non lus dans les autres conversations",
       "share": "Partager",
       "linkCopied": "Lien copié !",
       "linkCopyError": "Erreur lors de la copie du lien",
@@ -131,7 +132,8 @@
       "settings": "Paramètres",
       "encryptionE2EE": "Chiffrement de bout en bout",
       "encryptionHybrid": "Chiffrement hybride",
-      "encryptionServer": "Chiffrement serveur"
+      "encryptionServer": "Chiffrement serveur",
+      "reactions": "Réactions"
     },
     "conversationUI": {
       "participants": "Participants",
@@ -463,7 +465,18 @@
       "refreshed": "Statuts rafraîchis",
       "refreshError": "Erreur lors du rafraîchissement",
       "roleError": "Erreur lors de la mise à jour du rôle",
-      "addError": "Erreur lors de l'ajout du participant"
+      "addError": "Erreur lors de l'ajout du participant",
+      "roleUpdated": "Rôle mis à jour avec succès : {role}",
+      "invited": "{name} a été invité à la conversation",
+      "added": "{name} ajouté comme {role}",
+      "promote": "Promouvoir",
+      "demote": "Rétrograder",
+      "refreshStatuses": "Rafraîchir les statuts",
+      "roles": {
+        "MEMBER": "Membre",
+        "MODERATOR": "Modérateur",
+        "ADMIN": "Administrateur"
+      }
     },
     "createLinkButton": {
       "notAuthenticated": "Impossible de créer le lien : utilisateur non connecté",
@@ -480,11 +493,43 @@
     "pinnedBanner": {
       "close": "Fermer le message épinglé"
     },
+    "links": {
+      "noDescription": "Aucune description",
+      "loading": "Chargement des liens...",
+      "empty": "Aucun lien de partage",
+      "title": "Liens de partage",
+      "defaultName": "Lien de partage",
+      "statusActive": "Actif",
+      "statusExpired": "Expiré",
+      "statusDisabled": "Désactivé",
+      "copy": "Copier",
+      "createdBy": "Créé par :",
+      "createdAt": "Créé le :",
+      "permissions": "Permissions",
+      "permissionMessages": "Messages",
+      "permissionImages": "Images",
+      "permissionFiles": "Fichiers",
+      "permissionHistory": "Historique",
+      "restrictions": "Restrictions",
+      "languagesLabel": "Langues :",
+      "countriesLabel": "Pays :",
+      "activeLinks": "Liens actifs ({count})",
+      "expiredLinks": "Liens expirés ({count})"
+    },
     "inviteModal": {
       "searchError": "Erreur lors de la recherche d'utilisateurs",
       "inviteSuccess": "{count} utilisateur(s) invité(s) avec succès",
       "partialError": "{count} invitation(s) ont échoué",
-      "inviteError": "Erreur lors de l'invitation des utilisateurs"
+      "inviteError": "Erreur lors de l'invitation des utilisateurs",
+      "noUsersFound": "Aucun utilisateur trouvé",
+      "title": "Inviter des utilisateurs",
+      "selectedUsers": "Utilisateurs sélectionnés ({count})",
+      "searchResults": "Résultats de recherche",
+      "selected": "Sélectionné",
+      "add": "Ajouter",
+      "cancel": "Annuler",
+      "inviting": "Invitation en cours...",
+      "inviteButton": "Inviter {count} utilisateur(s)"
     },
     "drawer": {
       "title": "Options",
@@ -579,7 +624,25 @@
       "tooltipLocation": "Position",
       "tooltipSend": "Envoyer",
       "voiceAttachmentName": "Message vocal ({duration})",
-      "locationAttachmentName": "Position actuelle"
+      "locationAttachmentName": "Position actuelle",
+      "replyTo": "Réponse à {sender}",
+      "cancelReply": "Annuler la réponse",
+      "messageInput": "Saisie du message",
+      "attachFiles": "Sélectionner des fichiers à joindre",
+      "recordVoice": "Enregistrer un message vocal",
+      "attachFile": "Joindre un fichier"
+    },
+    "userSelector": {
+      "subtitle": "Messagerie avec traduction automatique côté client",
+      "selectPrompt": "Sélectionnez un utilisateur pour commencer à discuter",
+      "online": "En ligne",
+      "offline": "Hors ligne",
+      "systemLanguage": "Système :",
+      "regionalLanguage": "Région :",
+      "customLanguage": "Personnalisée :",
+      "selectedUser": "Utilisateur sélectionné",
+      "loginAs": "Vous allez vous connecter en tant que {username}",
+      "login": "Se connecter"
     }
   }
 }

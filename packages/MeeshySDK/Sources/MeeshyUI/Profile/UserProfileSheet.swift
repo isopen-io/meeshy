@@ -18,6 +18,12 @@ public struct UserProfileSheet: View {
     public var onSendMessage: (() -> Void)?
     public var moodEmoji: String? = nil
     public var onMoodTap: ((CGPoint) -> Void)? = nil
+    /// État réel de l'anneau story de l'utilisateur, fourni par l'app
+    /// (paramètre opaque — le SDK n'encode aucune règle produit). `nil`
+    /// conserve l'anneau décoratif historique du sheet.
+    public var storyRingState: StoryRingState? = nil
+    /// Tap sur l'anneau → l'app présente son viewer de story.
+    public var onViewStory: (() -> Void)? = nil
 
     @State private var isBlocked: Bool = false
     @State private var isBlockedByTarget: Bool = false
@@ -55,7 +61,9 @@ public struct UserProfileSheet: View {
         onNavigateToConversation: ((MeeshyConversation) -> Void)? = nil,
         onSendMessage: (() -> Void)? = nil,
         moodEmoji: String? = nil,
-        onMoodTap: ((CGPoint) -> Void)? = nil
+        onMoodTap: ((CGPoint) -> Void)? = nil,
+        storyRingState: StoryRingState? = nil,
+        onViewStory: (() -> Void)? = nil
     ) {
         self.user = user
         self.onDismiss = onDismiss
@@ -63,6 +71,8 @@ public struct UserProfileSheet: View {
         self.onSendMessage = onSendMessage
         self.moodEmoji = moodEmoji
         self.onMoodTap = onMoodTap
+        self.storyRingState = storyRingState
+        self.onViewStory = onViewStory
     }
 
     private var resolvedAccent: String {
@@ -225,15 +235,19 @@ public struct UserProfileSheet: View {
     private var profileAvatar: some View {
         let avatarName = displayUser.resolvedDisplayName
         let showRing = !isBlockedByTarget && !isBlocked
+        // App câblée → état réel (pas d'anneau sans story active) ;
+        // call site legacy (nil) → anneau décoratif historique.
+        let ringState: StoryRingState = showRing ? (storyRingState ?? .read) : .none
 
         MeeshyAvatar(
             name: avatarName,
             context: .profileSheet,
             accentColor: isBlockedByTarget ? "888888" : resolvedAccent,
             avatarURL: displayUser.avatarURL,
-            storyState: showRing ? .read : .none,
+            storyState: ringState,
             moodEmoji: isBlockedByTarget ? nil : moodEmoji,
             presenceState: isBlockedByTarget ? .offline : presenceFromUser,
+            onViewStory: (showRing && ringState != .none) ? onViewStory : nil,
             onMoodTap: isBlockedByTarget ? nil : onMoodTap
         )
     }

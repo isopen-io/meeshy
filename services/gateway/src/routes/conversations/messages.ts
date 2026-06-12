@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import * as path from 'path';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
+import { aggregateAttachmentReactions } from '../../socketio/serializeAttachmentForSocket';
 import { MessagingService } from '../../services/messaging/MessagingService';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
@@ -108,7 +109,7 @@ const logger = enhancedLogger.child({ module: 'messages' });
  * Nettoie les attachments pour l'API en transformant les valeurs invalides
  * Fixe spécifiquement voiceSimilarityScore: false -> null pour compatibilité schéma
  */
-function cleanAttachmentsForApi(attachments: any[], languageFilter?: readonly string[]): any[] {
+function cleanAttachmentsForApi(attachments: any[], languageFilter?: readonly string[], currentParticipantId?: string): any[] {
   if (!attachments || !Array.isArray(attachments)) {
     return attachments;
   }
@@ -125,6 +126,13 @@ function cleanAttachmentsForApi(attachments: any[], languageFilter?: readonly st
 
   return attachments.map((att, attIndex) => {
     const cleaned = { ...att };
+
+    // BUG2 A' — agréger les réactions par-image en reactionSummary + currentUserReactions
+    // (miroir des réactions message-level) et retirer les rows brutes.
+    const __reactions = aggregateAttachmentReactions(cleaned.reactions, currentParticipantId);
+    cleaned.reactionSummary = __reactions.reactionSummary;
+    cleaned.currentUserReactions = __reactions.currentUserReactions;
+    delete cleaned.reactions;
 
     // Nettoyer la transcription
     if (cleaned.transcription && cleaned.transcription.segments) {
@@ -276,7 +284,7 @@ export function registerMessagesRoutes(
         summary
       };
 
-      const io = (socketIOManager as any).io;
+      const io = socketIOManager.getIO();
       const convRoom = ROOMS.conversation(conversationId);
       let emitter: any = io.to(convRoom);
       const seenRooms = new Set<string>([convRoom]);
@@ -404,7 +412,7 @@ export function registerMessagesRoutes(
       const afterMode = afterClause !== null;
 
       // Valider et parser les paramètres de pagination
-      const { offset, limit } = validatePagination(offsetStr, limitStr, 50);
+      const { offset, limit } = validatePagination(offsetStr, limitStr, { maxLimit: 50 });
 
       // Résoudre l'ID de conversation réel
       let t0 = performance.now();
@@ -974,7 +982,7 @@ export function registerMessagesRoutes(
             isOnline: message.sender.user?.isOnline ?? message.sender.isOnline ?? null,
             lastActiveAt: message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null,
           } : null,
-          attachments: cleanAttachmentsForApi(message.attachments, languageFilter),
+          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId),
           _count: message._count
         };
 
@@ -1806,7 +1814,7 @@ export function registerMessagesRoutes(
 
       // Broadcast pin event via Socket.IO
       if (socketIOHandler) {
-        (socketIOHandler as any).io?.to(`conversation:${conversationId}`).emit('message:pinned', {
+        fastify.socketIOHandler.getManager()?.getIO().to(`conversation:${conversationId}`).emit('message:pinned', {
           messageId,
           conversationId,
           pinnedAt: now.toISOString(),
@@ -1875,7 +1883,7 @@ export function registerMessagesRoutes(
 
       // Broadcast unpin event via Socket.IO
       if (socketIOHandler) {
-        (socketIOHandler as any).io?.to(`conversation:${conversationId}`).emit('message:unpinned', {
+        fastify.socketIOHandler.getManager()?.getIO().to(`conversation:${conversationId}`).emit('message:unpinned', {
           messageId,
           conversationId
         });
@@ -2157,7 +2165,7 @@ export function registerMessagesRoutes(
 
       // Broadcast consume event via Socket.IO
       if (socketIOHandler) {
-        (socketIOHandler as any).io?.to(`conversation:${conversationId}`).emit('message:consumed', {
+        fastify.socketIOHandler.getManager()?.getIO().to(`conversation:${conversationId}`).emit('message:consumed', {
           messageId,
           conversationId,
           userId,

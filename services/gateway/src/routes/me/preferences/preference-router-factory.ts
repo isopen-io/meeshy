@@ -10,7 +10,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { ConsentValidationService } from '../../../services/ConsentValidationService';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { withMutationLog } from '../../../utils/withMutationLog';
-import { sendSuccess } from '../../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
 
 type PreferenceCategory =
   | 'privacy'
@@ -44,9 +44,9 @@ export function createPreferenceRouter<T>(
 
     const emitPreferencesUpdated = (userId: string) => {
       try {
-        const manager = fastify.socketIOHandler?.getManager?.();
-        if ((manager as any)?.io) {
-          (manager as any).io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.USER_PREFERENCES_UPDATED, {
+        const io = fastify.socketIOHandler?.getManager?.()?.getIO?.();
+        if (io) {
+          io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.USER_PREFERENCES_UPDATED, {
             userId,
             category,
           });
@@ -78,14 +78,10 @@ export function createPreferenceRouter<T>(
         }
       },
       async (request: FastifyRequest, reply: FastifyReply) => {
-        const userId = (request as any).auth?.userId;
+        const userId = request.auth?.userId;
 
         if (!userId) {
-          return reply.status(401).send({
-            success: false,
-            error: 'UNAUTHORIZED',
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         try {
@@ -100,11 +96,7 @@ export function createPreferenceRouter<T>(
           return sendSuccess(reply, data);
         } catch (error: any) {
           fastify.log.error({ error, category }, 'Error fetching preferences');
-          return reply.status(500).send({
-            success: false,
-            error: 'FETCH_ERROR',
-            message: error.message || 'Failed to fetch preferences'
-          });
+          return sendInternalError(reply, error.message || 'Failed to fetch preferences');
         }
       }
     );
@@ -144,14 +136,10 @@ export function createPreferenceRouter<T>(
         }
       },
       async (request, reply) => {
-        const userId = (request as any).auth?.userId;
+        const userId = request.auth?.userId;
 
         if (!userId) {
-          return reply.status(401).send({
-            success: false,
-            error: 'UNAUTHORIZED',
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         try {
@@ -220,11 +208,7 @@ export function createPreferenceRouter<T>(
           }
 
           fastify.log.error({ error, category }, 'Error updating preferences');
-          return reply.status(500).send({
-            success: false,
-            error: 'UPDATE_ERROR',
-            message: error.message || 'Failed to update preferences'
-          });
+          return sendInternalError(reply, error.message || 'Failed to update preferences');
         }
       }
     );
@@ -264,14 +248,10 @@ export function createPreferenceRouter<T>(
         }
       },
       async (request, reply) => {
-        const userId = (request as any).auth?.userId;
+        const userId = request.auth?.userId;
 
         if (!userId) {
-          return reply.status(401).send({
-            success: false,
-            error: 'UNAUTHORIZED',
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         try {
@@ -347,11 +327,7 @@ export function createPreferenceRouter<T>(
           }
 
           fastify.log.error({ error, category }, 'Error partially updating preferences');
-          return reply.status(500).send({
-            success: false,
-            error: 'UPDATE_ERROR',
-            message: error.message || 'Failed to update preferences'
-          });
+          return sendInternalError(reply, error.message || 'Failed to update preferences');
         }
       }
     );
@@ -379,14 +355,10 @@ export function createPreferenceRouter<T>(
         }
       },
       async (request, reply) => {
-        const userId = (request as any).auth?.userId;
+        const userId = request.auth?.userId;
 
         if (!userId) {
-          return reply.status(401).send({
-            success: false,
-            error: 'UNAUTHORIZED',
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         try {
@@ -396,17 +368,10 @@ export function createPreferenceRouter<T>(
             data: { [category]: null }
           });
 
-          return reply.send({
-            success: true,
-            message: `${category} preferences reset to defaults`
-          });
+          return sendSuccess(reply, undefined, { message: `${category} preferences reset to defaults` });
         } catch (error: any) {
           fastify.log.error({ error, category }, 'Error resetting preferences');
-          return reply.status(500).send({
-            success: false,
-            error: 'RESET_ERROR',
-            message: error.message || 'Failed to reset preferences'
-          });
+          return sendInternalError(reply, error.message || 'Failed to reset preferences');
         }
       }
     );

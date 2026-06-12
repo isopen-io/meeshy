@@ -36,6 +36,12 @@ struct BubbleStandardLayout: View {
     let content: BubbleContent
     let message: Message
     let contactColor: String
+    /// Blended bubble accent for received bubbles (sender colour 30% over brand
+    /// 70%), pre-computed ONCE by the orchestrator. Was a computed `var` that
+    /// re-ran `blendTwo` (hex→RGB→HSB→hex) on each of its ~6 read sites per body
+    /// evaluation; the inputs (`message.senderColor`, `contactColor`) are stable
+    /// for the bubble's lifetime, so the blend belongs upstream of the body.
+    let otherBubbleColor: String
     let isDirect: Bool
     let isDark: Bool
     let transcription: MessageTranscription?
@@ -67,10 +73,18 @@ struct BubbleStandardLayout: View {
     /// Tap sur les coches de livraison -> ouvre le sheet detail a l'onglet
     /// "Vues" (read receipts). Passe `nil` pour rendre les coches inertes.
     let onShowReadStatus: ((String) -> Void)?
+    /// Manual resend of a FAILED outgoing message (id). Routed to
+    /// `ConversationViewModel.retryMessage`, which deletes the failed row and
+    /// re-sends with the SAME clientMessageId (gateway dedup) AND kicks the
+    /// outbox flusher — unlike the old local `OfflineQueue.retryByClientMessageId`
+    /// that reset the row but never triggered a flush, so the resend never fired.
+    let onRetry: ((String) -> Void)?
     let onReplyTap: ((String) -> Void)?
     let onStoryReplyTap: ((String) -> Void)?
     let onMediaTap: ((MessageAttachment) -> Void)?
     let onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
+    /// BUG2 A' — réaction par-image (attachmentId, emoji). Threadé jusqu'à BubbleGridCell.
+    let onReactToAttachment: ((String, String) -> Void)?
     let onRequestTranslation: ((String, String) -> Void)?
     let onShowTranslationDetail: ((String) -> Void)?
     /// Phase 5 wiring (audio playback persistence): a tap on the play button
@@ -201,16 +215,23 @@ struct BubbleStandardLayout: View {
         content.translation?.secondaryContent
     }
 
-    private var otherBubbleColor: String {
-        let senderHex = message.senderColor ?? contactColor
-        return DynamicColorGenerator.blendTwo(senderHex, weight1: 0.30, MeeshyColors.brandPrimaryHex, weight2: 0.70)
-    }
-
     private var hasTextOrNonMediaContent: Bool {
         content.hasTextOrNonMediaContent
     }
 
     private var isEmojiOnly: Bool { content.isEmojiOnly }
+
+    /// Cache key for `BubbleBodyFooterLayout`. nil (no caching) for expandable
+    /// bubbles: their measured height depends on the per-cell `isExpanded`
+    /// @State of `BubbleExpandableText`, which the content-keyed cache cannot
+    /// observe — so a long message always measures live and never risks a stale
+    /// collapsed/expanded height. Every other bubble keys on (id, content).
+    private var heightCacheContext: BubbleHeightCacheContext? {
+        if let raw = content.text?.raw, raw.count > BubbleExpandableText.truncateLimit {
+            return nil
+        }
+        return BubbleHeightCacheContext(messageId: content.messageId, content: content)
+    }
 
     /// True when audio attachments are the message's only content — no text,
     /// no non-media attachment, no reply, not emoji. In that case the bubble
@@ -284,6 +305,17 @@ struct BubbleStandardLayout: View {
     private var isFailedOutgoing: Bool {
         content.isMe && content.meta.deliveryStatus == .failed
     }
+
+    /// Width of the integrated trailing retry band (and the trailing inset the
+    /// bubble content reserves for it) on a failed outgoing message.
+    static let retryBandWidth: CGFloat = 34
+
+    /// BUG3 — single retry affordance. When the failed-outgoing orange
+    /// `BubbleFailedRetryBar` is shown, it owns the resend action, so the footer
+    /// must suppress its own `arrow.clockwise` retry button (otherwise the bubble
+    /// exposes two competing affordances and the footer tap collides with the
+    /// status sheet). The footer keeps its retry handler in every other case.
+    static func footerShowsRetry(isFailedOutgoing: Bool) -> Bool { !isFailedOutgoing }
 
     private var deliveryStatusAccessibilityLabel: String {
         switch message.deliveryStatus {
@@ -440,6 +472,14 @@ struct BubbleStandardLayout: View {
         .onReceive(SharedAVPlayerManager.shared.$activeURL) { newURL in
             // Local mirror — toggles `hasPlayingInlineVideo` to drive the
             // footer overlay visibility. Doesn't re-render on time ticks.
+            //
+            // Every visible bubble (text bubbles included) is subscribed, but
+            // only a bubble that actually owns a video has any reason to mirror
+            // this. Gating the @State write on video presence (and deduping the
+            // value) means a text bubble's body is never invalidated when the
+            // active inline video changes elsewhere in the list.
+            guard visualAttachments.contains(where: { $0.type == .video }),
+                  newURL != inlineVideoActiveURL else { return }
             inlineVideoActiveURL = newURL
         }
         .sheet(isPresented: $showShareSheet) {
@@ -461,10 +501,20 @@ struct BubbleStandardLayout: View {
         )) { attachment in
             switch attachment.type {
             case .image:
-                let urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+                let original = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+                // 5.2 — cible plein écran = largeur écran × scale. La variante la
+                // plus petite `>=` cette cible évite de charger l'original 4000px
+                // quand une 1920 suffit ; sans variante → original.
+                let targetPx = Int((UIScreen.main.bounds.width * UIScreen.main.scale).rounded())
+                let chosen = original.isEmpty ? "" : ImageVariantSelector.bestImageURL(
+                    variants: attachment.imageVariants ?? [],
+                    originalURL: original,
+                    originalWidth: attachment.width,
+                    targetWidthPx: targetPx
+                )
                 let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
                 ImageFullscreen(
-                    imageUrl: urlStr.isEmpty ? nil : MeeshyConfig.resolveMediaURL(urlStr),
+                    imageUrl: chosen.isEmpty ? nil : MeeshyConfig.resolveMediaURL(chosen),
                     accentColor: contactColor,
                     caption: caption,
                     mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
@@ -825,7 +875,7 @@ struct BubbleStandardLayout: View {
         // `placeSubviews` both derive every value from the same resolved
         // width, so the reported height is self-consistent (no
         // UICollectionView cell-height drift).
-        BubbleBodyFooterLayout(spacing: 4) {
+        BubbleBodyFooterLayout(spacing: 4, cacheContext: heightCacheContext) {
             // Wrapped in a VStack so the Layout sees the body as ONE opaque
             // subview — a bare @ViewBuilder property would be flattened into
             // its individual conditional branches.
@@ -846,14 +896,18 @@ struct BubbleStandardLayout: View {
                     .padding(.top, 6 + (content.reply != nil ? 52 : 0))
             }
         }
+        // FAILED outgoing send — reserve a trailing strip and glue the retry
+        // band INTO it as an integrated edge tab (clipped to the bubble's rounded
+        // corner, no gap). The content + footer are inset by the band width so
+        // the bubble's own timestamp + delivery state stay visible to its LEFT;
+        // and because the band lives INSIDE the bubble's frame, a failed bubble
+        // right-aligns exactly like every other bubble (no left-shift).
+        .padding(.trailing, isFailedOutgoing ? Self.retryBandWidth : 0)
         .background(bubbleBackground)
-        // BUG3 — failed outgoing message: an orange left-edge band attached to
-        // the bubble; tapping it re-triggers the send (placed before clipShape so
-        // it follows the rounded corners). Gated so non-failed bubbles are
-        // untouched.
-        .overlay(alignment: .leading) {
+        .overlay(alignment: .trailing) {
             if isFailedOutgoing {
                 BubbleFailedRetryBar(onRetry: { performManualRetry() })
+                    .frame(width: Self.retryBandWidth)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 18))
@@ -914,7 +968,10 @@ struct BubbleStandardLayout: View {
         let actions = BubbleFooterActions(
             onFlagTap: showFlags ? { code in handleFlagTap(code) } : nil,
             onTranslate: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
-            onRetry: { performManualRetry() },
+            // BUG3 — suppress the footer's own retry button for failed outgoing
+            // messages: the orange `BubbleFailedRetryBar` owns the resend so the
+            // bubble never shows two competing retry affordances.
+            onRetry: Self.footerShowsRetry(isFailedOutgoing: isFailedOutgoing) ? { performManualRetry() } : nil,
             onSenderTap: { selectedProfileUser = .from(message: message) },
             onViewStory: onViewStory,
             onShowReadStatus: readStatusCallback
@@ -941,17 +998,16 @@ struct BubbleStandardLayout: View {
         NetworkMonitor.shared.isOnline
     }
 
-    /// Manual retry path triggered by `BubbleFooter`'s failed-delivery retry
-    /// button. Resolves the outbox row from the message's `clientMessageId`
-    /// and resets the retry budget so the flusher's next pass picks it up
-    /// immediately. Errors are
-    /// swallowed (no-op if the row no longer exists — the optimistic message
-    /// has already been reconciled or the user manually cleared the queue).
+    /// Manual resend triggered by the orange retry band (or the footer's retry).
+    /// Delegates to the ViewModel via `onRetry` → `retryMessage(messageId:)`,
+    /// which re-inserts a fresh optimistic `.sending` row (immediate feedback,
+    /// the band swaps to the normal sending indicator), re-enqueues, AND kicks
+    /// the outbox flusher. The previous local path
+    /// (`OfflineQueue.retryByClientMessageId`) only reset the outbox row to
+    /// `.pending` without ever flushing it, so on a foregrounded/online device
+    /// the resend silently never fired.
     private func performManualRetry() {
-        let cmid = message.clientMessageId ?? message.id
-        Task {
-            try? await OfflineQueue.shared.retryByClientMessageId(cmid)
-        }
+        onRetry?(message.id)
     }
 
     // MARK: - Edited indicator
@@ -1250,10 +1306,45 @@ struct BubbleStandardLayout: View {
 // the same resolved width, so the reported size is self-consistent and the
 // hosting UICollectionView cell never drifts. Accepts one subview (body only,
 // when the footer is suppressed for an audio-in-quote bubble) or two.
+/// Identifies a bubble for the height cache: the message id plus the exact
+/// `BubbleContent` value it renders. nil at the call site = no caching (e.g.
+/// expandable bubbles whose height depends on per-cell `isExpanded` state).
+struct BubbleHeightCacheContext {
+    let messageId: String
+    let content: BubbleContent
+}
+
 struct BubbleBodyFooterLayout: Layout {
     var spacing: CGFloat = 4
+    var cacheContext: BubbleHeightCacheContext? = nil
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        // Cache lookup only for a concrete finite proposal width — the
+        // ideal/unspecified passes must not poison the width-keyed cache, and a
+        // hit returns the previously measured size without descending into the
+        // body subtree (the #1 CPU self-time at scroll). On a miss we measure
+        // and store; `placeSubviews` always re-measures the live content, so the
+        // cache only affects the *reported* size, never placement.
+        guard let ctx = cacheContext,
+              let proposedWidth = proposal.width,
+              proposedWidth.isFinite else {
+            return measuredSize(proposal: proposal, subviews: subviews)
+        }
+        // `Layout.sizeThatFits` is a nonisolated protocol requirement, but
+        // SwiftUI always runs layout on the main thread — so `assumeIsolated`
+        // safely bridges to the @MainActor cache (and `BubbleContent ==`).
+        return MainActor.assumeIsolated {
+            let cache = BubbleHeightCache.shared
+            if let cached = cache.size(messageId: ctx.messageId, content: ctx.content, width: proposedWidth) {
+                return cached
+            }
+            let size = measuredSize(proposal: proposal, subviews: subviews)
+            cache.store(messageId: ctx.messageId, content: ctx.content, width: proposedWidth, size: size)
+            return size
+        }
+    }
+
+    private func measuredSize(proposal: ProposedViewSize, subviews: Subviews) -> CGSize {
         guard let body = subviews.first else { return .zero }
         let bodyProbe = body.sizeThatFits(proposal)
         guard subviews.count > 1 else { return bodyProbe }
@@ -1261,9 +1352,33 @@ struct BubbleBodyFooterLayout: Layout {
         let footer = subviews[1]
         let footerFloor = footer.sizeThatFits(.unspecified).width
         let width = max(bodyProbe.width, footerFloor)
-        let bodyHeight = body.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        // Re-measure the body subtree only when the footer floor widened the
+        // bubble past the body's natural width. When `width == bodyProbe.width`
+        // (the common case: a multi-word message already wider than its meta
+        // row), `bodyProbe.height` is already the height at this width — the
+        // second measure was a redundant full-subtree pass, and that pass is the
+        // #1 CPU self-time during scroll. The placement pass (`placeSubviews`)
+        // still re-measures unconditionally, so alignment is unaffected.
+        let bodyHeight = Self.bodyHeight(bodyProbe: bodyProbe, resolvedWidth: width) {
+            body.sizeThatFits(ProposedViewSize(width: $0, height: nil)).height
+        }
         let footerHeight = footer.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
         return CGSize(width: width, height: bodyHeight + spacing + footerHeight)
+    }
+
+    /// Body height to report for a resolved width, reusing the probe height when
+    /// the resolved width equals the probed width (i.e. the footer floor did not
+    /// widen the bubble). Pure + testable: the layout supplies the re-measure
+    /// closure, which is invoked *only* when a re-measure is genuinely required.
+    /// The `==` comparison is exact-safe: `resolvedWidth` is `max(bodyProbe.width,
+    /// footerFloor)`, so when the footer does not widen it is literally the same
+    /// `bodyProbe.width` value (no float drift).
+    static func bodyHeight(
+        bodyProbe: CGSize,
+        resolvedWidth: CGFloat,
+        remeasure: (CGFloat) -> CGFloat
+    ) -> CGFloat {
+        resolvedWidth == bodyProbe.width ? bodyProbe.height : remeasure(resolvedWidth)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
@@ -1285,5 +1400,83 @@ struct BubbleBodyFooterLayout: Layout {
             proposal: ProposedViewSize(width: width, height: footerHeight)
         )
     }
+}
+
+// MARK: - Bubble height cache
+
+/// Content-keyed height cache that short-circuits the (expensive) full
+/// body-subtree measurement in `BubbleBodyFooterLayout.sizeThatFits` — the #1
+/// CPU self-time during scroll. A hit requires the SAME message rendering the
+/// SAME `BubbleContent` at the SAME (rounded) width.
+///
+/// Correctness boundary = `BubbleContent ==`: any height-affecting content
+/// change (edit, arriving translation, secondary panel toggle, reactions,
+/// attachment enrichment) produces a different value → a miss → a fresh
+/// measure. This is the exact invariant the bubble's own equatable gate already
+/// relies on, so the cache cannot be more stale than the rendered tree itself.
+/// A recycled cell reused for a different message keys on a different id, never
+/// reading another message's entry (the failure mode of the reverted
+/// width-only `Layout.Cache`, d6ba7f958).
+///
+/// `placeSubviews` is NEVER cached — it always re-measures the live content — so
+/// the cache only affects the *reported* size, not placement. The cache is
+/// flushed on Dynamic Type change and on memory warning; width buckets quantize
+/// to the nearest point so sub-pixel proposal jitter still hits, and a rotation
+/// (different proposed width) naturally misses. Expandable bubbles (text beyond
+/// the truncation limit, whose height depends on per-cell `isExpanded` @State)
+/// opt out at the call site rather than caching a state this key cannot see.
+///
+/// `@MainActor`: the SwiftUI layout pass (and thus every `sizeThatFits` call)
+/// runs on the main thread, and `BubbleContent`'s equality is main-actor
+/// isolated — so the cache shares that isolation and needs no lock. The system
+/// observers fire on the main queue; the flush closure re-enters via
+/// `assumeIsolated`.
+@MainActor
+final class BubbleHeightCache {
+    static let shared = BubbleHeightCache(observeSystemEvents: true)
+
+    private struct Entry {
+        let content: BubbleContent
+        let widthBucket: CGFloat
+        let size: CGSize
+    }
+
+    private var entries: [String: Entry] = [:]
+    private let capacity: Int
+
+    init(capacity: Int = 3000, observeSystemEvents: Bool = false) {
+        self.capacity = capacity
+        guard observeSystemEvents else { return }
+        let center = NotificationCenter.default
+        let flush: @Sendable (Notification) -> Void = { _ in
+            MainActor.assumeIsolated { BubbleHeightCache.shared.removeAll() }
+        }
+        center.addObserver(forName: UIContentSizeCategory.didChangeNotification, object: nil, queue: .main, using: flush)
+        center.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main, using: flush)
+    }
+
+    private static func bucket(_ width: CGFloat) -> CGFloat { width.rounded() }
+
+    func size(messageId: String, content: BubbleContent, width: CGFloat) -> CGSize? {
+        guard let entry = entries[messageId],
+              entry.widthBucket == Self.bucket(width),
+              entry.content == content else { return nil }
+        return entry.size
+    }
+
+    func store(messageId: String, content: BubbleContent, width: CGFloat, size: CGSize) {
+        // Bound growth: one entry per message id, reset wholesale on overflow
+        // (a cold re-measure is cheap next to a scroll's worth of hits).
+        if entries[messageId] == nil, entries.count >= capacity {
+            entries.removeAll(keepingCapacity: true)
+        }
+        entries[messageId] = Entry(content: content, widthBucket: Self.bucket(width), size: size)
+    }
+
+    func removeAll() {
+        entries.removeAll(keepingCapacity: true)
+    }
+
+    var count: Int { entries.count }
 }
 

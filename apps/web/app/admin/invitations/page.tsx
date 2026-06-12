@@ -450,7 +450,7 @@ export default function AdminInvitationsPage() {
 
               <Select value={statusFilter || 'all'} onValueChange={(value) => handleFilterChange('status', value)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Statut" />
+                  <SelectValue placeholder={t('invitations.statusAll')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('invitations.statusAll')}</SelectItem>
@@ -463,7 +463,7 @@ export default function AdminInvitationsPage() {
 
               <Select value={typeFilter || 'all'} onValueChange={(value) => handleFilterChange('type', value)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Type" />
+                  <SelectValue placeholder={t('invitations.typeAll')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('invitations.typeAll')}</SelectItem>

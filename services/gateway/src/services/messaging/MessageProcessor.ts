@@ -310,7 +310,7 @@ export class MessageProcessor {
     mentionedUserIds?: readonly string[];
     encryptedContent?: string;
     encryptionMetadata?: Prisma.InputJsonValue;
-    attachmentIds?: string[];
+    attachmentIds?: readonly string[];
     isBlurred?: boolean;
     effectFlags?: number;
     expiresAt?: Date;
@@ -598,7 +598,7 @@ export class MessageProcessor {
   private async handleAttachments(
     data: {
       senderId: string;
-      attachmentIds?: string[];
+      attachmentIds?: readonly string[];
       forwardedFromId?: string;
       conversationId: string;
     },
@@ -699,7 +699,7 @@ export class MessageProcessor {
    * Envoie les audios au service de traduction pour transcription/clonage
    */
   private async processAudioAttachments(
-    attachmentIds: string[],
+    attachmentIds: readonly string[],
     messageId: string,
     conversationId: string,
     senderId: string
@@ -708,7 +708,7 @@ export class MessageProcessor {
 
     try {
       const attachments = await this.prisma.messageAttachment.findMany({
-        where: { id: { in: attachmentIds } },
+        where: { id: { in: [...attachmentIds] } },
         select: { id: true, mimeType: true, fileUrl: true, filePath: true, duration: true, metadata: true, transcription: true }
       });
 

@@ -31,8 +31,8 @@ struct StoryTrayView: View {
     // otherwise crash on a missing `conversationListViewModel`.
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @State private var selectedProfileUser: ProfileSheetUser?
-    @State private var showOwnStoryViewer = false
     @State private var storyPreviewAssets: StoryPreviewAssets?
 
     var body: some View {
@@ -116,17 +116,6 @@ struct StoryTrayView: View {
                 .environmentObject(statusViewModel)
             }
         }
-        .fullScreenCover(isPresented: $showOwnStoryViewer) {
-            StoryViewerContainer(
-                viewModel: viewModel,
-                userId: AuthManager.shared.currentUser?.id ?? "",
-                isPresented: $showOwnStoryViewer,
-                singleGroup: true
-            )
-            .environmentObject(router)
-            .environmentObject(conversationListViewModel)
-            .environmentObject(statusViewModel)
-        }
         .withStatusBubble()
     }
 
@@ -174,7 +163,15 @@ struct StoryTrayView: View {
     private var myStoryButton: some View {
         MyStoryButton(
             viewModel: viewModel,
-            showOwnStoryViewer: $showOwnStoryViewer,
+            onViewMyStory: {
+                // Chemin de présentation unique : le coordinator (covers
+                // RootView / iPadRootView) remplace l'ancien fullScreenCover
+                // local — « ma story » est un contexte « personne précise ».
+                storyViewerCoordinator.present(StoryViewerRequest(
+                    id: AuthManager.shared.currentUser?.id ?? "",
+                    singleGroup: true
+                ))
+            },
             onAddStatus: onAddStatus
         )
     }
@@ -267,7 +264,7 @@ fileprivate func latestStoryThumbnailURL(_ group: StoryGroup) -> String? {
 
 private struct MyStoryButton: View {
     let viewModel: StoryViewModel
-    @Binding var showOwnStoryViewer: Bool
+    let onViewMyStory: () -> Void
     var onAddStatus: (() -> Void)?
 
     // Lecture directe sans @ObservedObject — leaf view rendue dans le tray,
@@ -300,7 +297,7 @@ private struct MyStoryButton: View {
                     presenceState: .offline,
                     onTap: {
                         if hasMyStory {
-                            showOwnStoryViewer = true
+                            onViewMyStory()
                         } else {
                             viewModel.showStoryComposer = true
                         }
@@ -314,7 +311,7 @@ private struct MyStoryButton: View {
                         var items: [AvatarContextMenuItem] = []
                         if hasMyStory {
                             items.append(AvatarContextMenuItem(label: "Voir ma story", icon: "play.circle.fill") {
-                                showOwnStoryViewer = true
+                                onViewMyStory()
                                 HapticFeedback.medium()
                             })
                         }

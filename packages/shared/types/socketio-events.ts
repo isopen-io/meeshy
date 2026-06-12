@@ -125,6 +125,8 @@ export const SERVER_EVENTS = {
   REACTION_ADDED: 'reaction:added',
   REACTION_REMOVED: 'reaction:removed',
   REACTION_SYNC: 'reaction:sync',
+  ATTACHMENT_REACTION_ADDED: 'attachment:reaction-added',
+  ATTACHMENT_REACTION_REMOVED: 'attachment:reaction-removed',
   MENTION_CREATED: 'mention:created',
   CALL_INITIATED: 'call:initiated',
   CALL_PARTICIPANT_JOINED: 'call:participant-joined',
@@ -172,6 +174,7 @@ export const SERVER_EVENTS = {
   CONVERSATION_DELETED: 'conversation:deleted',
   CONVERSATION_PARTICIPANT_UNBANNED: 'conversation:participant-unbanned',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
+  LINK_MESSAGE_NEW: 'link:message:new',
   /**
    * Emitted whenever an attachment on an existing message has been
    * enriched server-side : Whisper transcription finalized, NLLB+TTS
@@ -293,6 +296,8 @@ export const CLIENT_EVENTS = {
   REACTION_ADD: 'reaction:add',
   REACTION_REMOVE: 'reaction:remove',
   REACTION_REQUEST_SYNC: 'reaction:request-sync',
+  ATTACHMENT_REACTION_ADD: 'attachment:reaction-add',
+  ATTACHMENT_REACTION_REMOVE: 'attachment:reaction-remove',
   CALL_INITIATE: 'call:initiate',
   CALL_JOIN: 'call:join',
   CALL_LEAVE: 'call:leave',
@@ -567,6 +572,24 @@ export interface ReactionSyncEventData {
 }
 
 /**
+ * BUG2 A' — delta de réaction par-image. `reactionSummary` porte les comptes
+ * agrégés (emoji→count) de l'attachment APRÈS l'action. Le client met à jour les
+ * comptes ; l'état « ma réaction » reste maintenu côté client via
+ * `currentUserReactions` (optimiste + re-baké au cold-load REST), miroir des
+ * réactions message-level.
+ */
+export interface AttachmentReactionUpdateEventData {
+  readonly attachmentId: string;
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly participantId: string;
+  readonly emoji: string;
+  readonly action: 'add' | 'remove';
+  readonly reactionSummary: Readonly<Record<string, number>>;
+  readonly timestamp: string;
+}
+
+/**
  * Résumé des statuts de lecture pour enrichir les événements temps réel
  */
 export interface ReadStatusSummary {
@@ -766,7 +789,7 @@ export interface ParticipantRoleUpdatedEventData {
   readonly newRole: string;
   readonly updatedBy: string;
   /** Minimum guaranteed shape from gateway; actual payload may include additional fields */
-  readonly participant: {
+  readonly participant?: {
     readonly id: string;
     readonly role: string;
     readonly displayName: string;
@@ -928,6 +951,42 @@ export interface MentionCreatedEventData {
   readonly timestamp: string;
 }
 
+export interface ConversationParticipantBannedEventData {
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly bannedBy: { readonly id: string };
+  readonly bannedAt: string;
+}
+
+export interface ConversationParticipantUnbannedEventData {
+  readonly conversationId: string;
+  readonly userId: string;
+}
+
+export interface ConversationParticipantLeftEventData {
+  readonly conversationId: string;
+  readonly userId: string;
+  readonly displayName: string;
+  readonly leftAt: string;
+}
+
+export interface ConversationUpdatedEventData {
+  readonly conversationId: string;
+  readonly updatedBy: { readonly id: string };
+  readonly updatedAt: string;
+  readonly [key: string]: unknown;
+}
+
+export interface ConversationClosedEventData {
+  readonly conversationId: string;
+  readonly closedBy: string;
+  readonly closedAt: string;
+}
+
+export interface LinkMessageNewEventData {
+  readonly message: Record<string, unknown>;
+}
+
 // Événements du serveur vers le client
 export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_NEW]: (message: SocketIOMessage) => void;
@@ -952,6 +1011,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.REACTION_ADDED]: (data: ReactionUpdateEventData) => void;
   [SERVER_EVENTS.REACTION_REMOVED]: (data: ReactionUpdateEventData) => void;
   [SERVER_EVENTS.REACTION_SYNC]: (data: ReactionSyncEventData) => void;
+  [SERVER_EVENTS.ATTACHMENT_REACTION_ADDED]: (data: AttachmentReactionUpdateEventData) => void;
+  [SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED]: (data: AttachmentReactionUpdateEventData) => void;
   [SERVER_EVENTS.CALL_INITIATED]: (data: CallInitiatedEvent) => void;
   [SERVER_EVENTS.CALL_PARTICIPANT_JOINED]: (data: CallParticipantJoinedEvent) => void;
   [SERVER_EVENTS.CALL_PARTICIPANT_LEFT]: (data: CallParticipantLeftEvent) => void;
@@ -1049,6 +1110,20 @@ export interface ServerToClientEvents {
 
   // Delivery queue
   [SERVER_EVENTS.PENDING_MESSAGES_DELIVERED]: (data: { count: number }) => void;
+
+  // Conversation lifecycle
+  [SERVER_EVENTS.CONVERSATION_UPDATED]: (data: ConversationUpdatedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_CLOSED]: (data: ConversationClosedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_DELETED]: (data: ConversationDeletedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT]: (data: ConversationParticipantLeftEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED]: (data: ConversationParticipantBannedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED]: (data: ConversationParticipantUnbannedEventData) => void;
+
+  // Attachment status
+  [SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED]: (data: AttachmentStatusUpdatedEventData) => void;
+
+  // Share link messages
+  [SERVER_EVENTS.LINK_MESSAGE_NEW]: (data: LinkMessageNewEventData) => void;
 }
 
 /**
@@ -1201,6 +1276,8 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.REQUEST_TRANSLATION]: (data: RequestTranslationData) => void;
   [CLIENT_EVENTS.REACTION_ADD]: (data: ReactionAddData, callback?: (response: SocketIOResponse<ReactionUpdateEventData>) => void) => void;
   [CLIENT_EVENTS.REACTION_REMOVE]: (data: ReactionRemoveData, callback?: (response: SocketIOResponse<ReactionUpdateEventData>) => void) => void;
+  [CLIENT_EVENTS.ATTACHMENT_REACTION_ADD]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<unknown>) => void) => void;
+  [CLIENT_EVENTS.ATTACHMENT_REACTION_REMOVE]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<unknown>) => void) => void;
   [CLIENT_EVENTS.REACTION_REQUEST_SYNC]: (messageId: string, callback?: (response: SocketIOResponse<ReactionSyncEventData>) => void) => void;
   [CLIENT_EVENTS.CALL_INITIATE]: (data: CallInitiateEvent, ack: (response: CallInitiateAck) => void) => void;
   [CLIENT_EVENTS.CALL_JOIN]: (data: CallJoinEvent, ack: (response: CallJoinAck) => void) => void;

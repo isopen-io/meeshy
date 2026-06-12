@@ -134,13 +134,15 @@ public struct StoryAudioPlayerView: View {
                 object: newPlayer.currentItem,
                 queue: .main
             ) { [weak newPlayer] _ in
-                if shouldLoop {
-                    newPlayer?.seek(to: .zero)
-                    newPlayer?.play()
-                } else {
-                    isPlaying = false
-                    playbackProgress = 0
-                    newPlayer?.seek(to: .zero)
+                MainActor.assumeIsolated {
+                    if shouldLoop {
+                        newPlayer?.seek(to: .zero)
+                        newPlayer?.play()
+                    } else {
+                        isPlaying = false
+                        playbackProgress = 0
+                        newPlayer?.seek(to: .zero)
+                    }
                 }
             }
         }
@@ -157,10 +159,12 @@ public struct StoryAudioPlayerView: View {
         guard let target, playerObserver == nil else { return }
         let interval = CMTime(seconds: 0.05, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         playerObserver = target.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak target] time in
-            guard let duration = target?.currentItem?.duration.seconds,
-                  duration > 0 else { return }
-            playbackProgress = time.seconds / duration
-            isPlaying = (target?.rate ?? 0) > 0
+            MainActor.assumeIsolated {
+                guard let duration = target?.currentItem?.duration.seconds,
+                      duration > 0 else { return }
+                playbackProgress = time.seconds / duration
+                isPlaying = (target?.rate ?? 0) > 0
+            }
         }
     }
     #endif
@@ -297,9 +301,11 @@ public struct StoryAudioPlayerView: View {
                     object: newPlayer.currentItem,
                     queue: .main
                 ) { [weak newPlayer] _ in
-                    isPlaying = false
-                    playbackProgress = 0
-                    newPlayer?.seek(to: .zero)
+                    MainActor.assumeIsolated {
+                        isPlaying = false
+                        playbackProgress = 0
+                        newPlayer?.seek(to: .zero)
+                    }
                 }
             }
 

@@ -3,8 +3,11 @@ package me.meeshy.app.chat
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,11 +15,19 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.conversation.LocalMessage
+import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
-import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.ReactionUpdateEvent
+import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.theme.accentHex
+import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.BubbleContentBuilder
 import javax.inject.Inject
@@ -27,14 +38,28 @@ data class ChatUiState(
     val isSyncing: Boolean = false,
     val showSkeleton: Boolean = false,
     val errorMessage: String? = null,
+    val typingUsers: List<String> = emptyList(),
+    val conversationTitle: String? = null,
+    val accentColorHex: String? = null,
+    val actionMessageId: String? = null,
+    val editingMessageId: String? = null,
+    val replyingToMessageId: String? = null,
+    val ownReactions: Map<String, Set<String>> = emptyMap(),
+    val isLoadingOlder: Boolean = false,
+    val hasMoreOlder: Boolean = true,
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
+    val isEditing: Boolean get() = editingMessageId != null
 }
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val messageRepository: MessageRepository,
+    private val conversationRepository: ConversationRepository,
     private val sessionRepository: SessionRepository,
+    private val reactionRepository: ReactionRepository,
+    private val messageSocketManager: MessageSocketManager,
+    private val workManager: WorkManager,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -45,7 +70,29 @@ class ChatViewModel @Inject constructor(
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
+    private val ownReactions = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
+    private val showingOriginal = MutableStateFlow<Set<String>>(emptySet())
+    private val typingCleanupJobs = mutableMapOf<String, Job>()
+    private var latestMessages: List<LocalMessage> = emptyList()
+    private var isEmittingTyping = false
+    private var typingReemitJob: Job? = null
+    private var typingIdleJob: Job? = null
+
     init {
+        viewModelScope.launch { markConversationRead() }
+
+        viewModelScope.launch {
+            conversationRepository.conversationStream(conversationId).collect { conversation ->
+                if (conversation == null) return@collect
+                _state.update {
+                    it.copy(
+                        conversationTitle = conversation.displayTitle(),
+                        accentColorHex = conversation.accentHex(),
+                    )
+                }
+            }
+        }
+
         viewModelScope.launch {
             combine(
                 messageRepository.messagesStream(
@@ -57,31 +104,327 @@ class ChatViewModel @Inject constructor(
                     },
                 ),
                 sessionRepository.currentUser,
-            ) { result, user -> result to user }
-                .collect { (result, user) ->
-                    _state.update { it.applyResult(result, user) }
+                ownReactions,
+                showingOriginal,
+            ) { result, user, own, originals -> BubbleInputs(result, user, own, originals) }
+                .collect { (result, user, own, originals) ->
+                    latestMessages = result.valueOrNull() ?: latestMessages
+                    _state.update { it.applyResult(result, user, own, originals) }
                 }
         }
+
+        viewModelScope.launch {
+            launch {
+                messageSocketManager.messageReceived.collect { event ->
+                    if (event.conversationId == conversationId) {
+                        messageRepository.refresh(conversationId)
+                        markConversationRead()
+                    }
+                }
+            }
+            launch {
+                messageSocketManager.messageDeleted.collect { event ->
+                    if (event.conversationId == conversationId) {
+                        messageRepository.refresh(conversationId)
+                    }
+                }
+            }
+            launch {
+                messageSocketManager.messageUpdated.collect { event ->
+                    if (event.conversationId == conversationId) {
+                        messageRepository.refresh(conversationId)
+                    }
+                }
+            }
+            launch {
+                messageSocketManager.reactionAdded.collect { event ->
+                    applyPeerReactionEvent(event, delta = 1)
+                }
+            }
+            launch {
+                messageSocketManager.reactionRemoved.collect { event ->
+                    applyPeerReactionEvent(event, delta = -1)
+                }
+            }
+            launch {
+                messageSocketManager.readStatusUpdated.collect { event ->
+                    if (event.conversationId != conversationId) return@collect
+                    val ownId = sessionRepository.currentUser.value?.id ?: return@collect
+                    messageRepository.applyReadReceipt(
+                        conversationId = conversationId,
+                        ownSenderId = ownId,
+                        deliveredCount = event.summary.deliveredCount,
+                        readCount = event.summary.readCount,
+                        frontierIso = event.updatedAt,
+                    )
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            launch {
+                messageSocketManager.typingStarted.collect { event ->
+                    if (event.conversationId == conversationId) {
+                        val name = event.displayName ?: event.username ?: event.userId
+                        typingCleanupJobs[event.userId]?.cancel()
+                        _state.update { s ->
+                            s.copy(typingUsers = (s.typingUsers - name) + name)
+                        }
+                        typingCleanupJobs[event.userId] = viewModelScope.launch {
+                            delay(TYPING_TIMEOUT_MS)
+                            removeTypingUser(event.userId, event.displayName ?: event.username ?: event.userId)
+                        }
+                    }
+                }
+            }
+            launch {
+                messageSocketManager.typingStopped.collect { event ->
+                    if (event.conversationId == conversationId) {
+                        typingCleanupJobs.remove(event.userId)?.cancel()
+                        removeTypingUser(event.userId, event.displayName ?: event.username ?: event.userId)
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Mark-as-read never surfaces an error: the badge is non-critical and the
+     * queued receipt retries with the outbox on reconnect.
+     */
+    private suspend fun markConversationRead() {
+        try {
+            if (conversationRepository.markReadOptimistic(conversationId)) {
+                workManager.enqueue(OutboxFlushWorker.buildRequest())
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
+    }
+
+    /**
+     * Own echoes are skipped — the optimistic toggle already moved the cached
+     * summary; replaying the echo would double-count it.
+     */
+    private suspend fun applyPeerReactionEvent(event: ReactionUpdateEvent, delta: Int) {
+        if (event.conversationId != conversationId) return
+        if (event.userId == sessionRepository.currentUser.value?.id) return
+        messageRepository.applyReactionDelta(event.messageId, event.emoji, delta)
+    }
+
+    private fun removeTypingUser(userId: String, displayName: String) {
+        _state.update { s -> s.copy(typingUsers = s.typingUsers - displayName) }
     }
 
     fun onDraftChange(value: String) {
         _state.update { it.copy(draft = value) }
+        if (value.isBlank()) {
+            stopTypingEmission()
+        } else {
+            startTypingEmission()
+        }
+    }
+
+    /**
+     * Mirrors iOS ConversationSocketHandler: one `typing:start` on the first
+     * keystroke, re-emitted every 3 s while typing continues (server timeouts),
+     * one `typing:stop` after 3 s of silence, an emptied draft, or a send.
+     */
+    private fun startTypingEmission() {
+        if (!isEmittingTyping) {
+            isEmittingTyping = true
+            messageSocketManager.emitTypingStart(conversationId)
+            typingReemitJob = viewModelScope.launch {
+                while (true) {
+                    delay(TYPING_REEMIT_MS)
+                    messageSocketManager.emitTypingStart(conversationId)
+                }
+            }
+        }
+        typingIdleJob?.cancel()
+        typingIdleJob = viewModelScope.launch {
+            delay(TYPING_IDLE_MS)
+            stopTypingEmission()
+        }
+    }
+
+    private fun stopTypingEmission() {
+        typingReemitJob?.cancel()
+        typingReemitJob = null
+        typingIdleJob?.cancel()
+        typingIdleJob = null
+        if (!isEmittingTyping) return
+        isEmittingTyping = false
+        messageSocketManager.emitTypingStop(conversationId)
+    }
+
+    override fun onCleared() {
+        stopTypingEmission()
+        super.onCleared()
     }
 
     fun send() {
         val text = _state.value.draft.trim()
         if (text.isEmpty()) return
-        _state.update { it.copy(draft = "") }
-        val language = sessionRepository.currentUser.value?.systemLanguage
-            ?: LanguageResolver.FALLBACK_LANGUAGE
+        stopTypingEmission()
+        val editingId = _state.value.editingMessageId
+        if (editingId != null) {
+            applyEdit(editingId, text)
+            return
+        }
+        val user = sessionRepository.currentUser.value ?: return
+        val replyToId = _state.value.replyingToMessageId
+        _state.update { it.copy(draft = "", replyingToMessageId = null) }
         viewModelScope.launch {
             try {
-                messageRepository.send(conversationId, text, originalLanguage = language)
-                messageRepository.refresh(conversationId)
+                messageRepository.sendOptimistic(
+                    conversationId = conversationId,
+                    content = text,
+                    originalLanguage = user.systemLanguage ?: LanguageResolver.FALLBACK_LANGUAGE,
+                    sender = user,
+                    replyToId = replyToId,
+                )
+                workManager.enqueue(OutboxFlushWorker.buildRequest())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    fun onMessageLongPress(messageId: String) {
+        _state.update { it.copy(actionMessageId = messageId) }
+        viewModelScope.launch {
+            val details = reactionRepository.fetchDetails(messageId).getOrNull() ?: return@launch
+            ownReactions.update { it + (messageId to details.userReactions.toSet()) }
+        }
+    }
+
+    fun dismissMessageActions() {
+        _state.update { it.copy(actionMessageId = null) }
+    }
+
+    fun toggleShowOriginal(messageId: String) {
+        showingOriginal.update { if (messageId in it) it - messageId else it + messageId }
+        _state.update { it.copy(actionMessageId = null) }
+    }
+
+    fun toggleReaction(messageId: String, emoji: String) {
+        val mine = ownReactions.value[messageId] ?: emptySet()
+        val isAdding = emoji !in mine
+        ownReactions.update { it + (messageId to if (isAdding) mine + emoji else mine - emoji) }
+        _state.update { it.copy(actionMessageId = null) }
+        viewModelScope.launch {
+            try {
+                if (messageRepository.toggleReactionOptimistic(messageId, emoji, isAdding)) {
+                    workManager.enqueue(OutboxFlushWorker.buildRequest())
+                } else {
+                    ownReactions.update { it + (messageId to mine) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ownReactions.update { it + (messageId to mine) }
+                _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    fun startEdit(messageId: String) {
+        val message = latestMessages.firstOrNull {
+            it.message.id == messageId && it.sendState == LocalSendState.SYNCED
+        }?.message ?: return
+        if (message.deletedAt != null) return
+        _state.update {
+            it.copy(
+                editingMessageId = messageId,
+                draft = message.content,
+                actionMessageId = null,
+                replyingToMessageId = null,
+            )
+        }
+    }
+
+    fun startReply(messageId: String) {
+        val message = latestMessages.firstOrNull {
+            it.message.id == messageId && it.sendState == LocalSendState.SYNCED
+        }?.message ?: return
+        if (message.deletedAt != null) return
+        _state.update {
+            it.copy(
+                replyingToMessageId = messageId,
+                actionMessageId = null,
+                editingMessageId = null,
+                draft = if (it.isEditing) "" else it.draft,
+            )
+        }
+    }
+
+    fun cancelReply() {
+        _state.update { it.copy(replyingToMessageId = null) }
+    }
+
+    fun cancelEdit() {
+        _state.update { it.copy(editingMessageId = null, draft = "") }
+    }
+
+    fun deleteMessage(messageId: String) {
+        _state.update { it.copy(actionMessageId = null) }
+        viewModelScope.launch {
+            try {
+                if (messageRepository.deleteOptimistic(messageId)) {
+                    workManager.enqueue(OutboxFlushWorker.buildRequest())
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    private fun applyEdit(messageId: String, content: String) {
+        _state.update { it.copy(draft = "", editingMessageId = null) }
+        viewModelScope.launch {
+            try {
+                if (messageRepository.editOptimistic(messageId, content)) {
+                    workManager.enqueue(OutboxFlushWorker.buildRequest())
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    fun retryMessage(messageId: String) {
+        viewModelScope.launch {
+            try {
+                messageRepository.retrySend(messageId)
+                workManager.enqueue(OutboxFlushWorker.buildRequest())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    fun loadOlder() {
+        val current = _state.value
+        if (current.isLoadingOlder || !current.hasMoreOlder || current.messages.isEmpty()) return
+        _state.update { it.copy(isLoadingOlder = true) }
+        viewModelScope.launch {
+            try {
+                val hasMore = messageRepository.loadOlder(conversationId)
+                _state.update { it.copy(isLoadingOlder = false, hasMoreOlder = hasMore) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(isLoadingOlder = false, errorMessage = e.message) }
             }
         }
     }
@@ -103,46 +446,76 @@ class ChatViewModel @Inject constructor(
 
     companion object {
         const val CONVERSATION_ID_ARG: String = "conversationId"
+        private const val TYPING_TIMEOUT_MS = 5_000L
+        private const val TYPING_REEMIT_MS = 3_000L
+        private const val TYPING_IDLE_MS = 3_000L
     }
 }
 
+private data class BubbleInputs(
+    val result: CacheResult<List<LocalMessage>>,
+    val user: MeeshyUser?,
+    val ownReactions: Map<String, Set<String>>,
+    val showingOriginal: Set<String>,
+)
+
+private fun <T> CacheResult<List<T>>.valueOrNull(): List<T>? = when (this) {
+    is CacheResult.Fresh -> value
+    is CacheResult.Stale -> value
+    is CacheResult.Syncing -> value
+    CacheResult.Empty -> emptyList()
+}
+
 private fun ChatUiState.applyResult(
-    result: CacheResult<List<ApiMessage>>,
+    result: CacheResult<List<LocalMessage>>,
     currentUser: MeeshyUser?,
+    ownReactions: Map<String, Set<String>>,
+    showingOriginal: Set<String>,
 ): ChatUiState = when (result) {
     is CacheResult.Fresh -> copy(
-        messages = result.value.toBubbles(currentUser),
+        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal),
+        ownReactions = ownReactions,
         isSyncing = false,
         showSkeleton = false,
         errorMessage = null,
     )
     is CacheResult.Stale -> copy(
-        messages = result.value.toBubbles(currentUser),
+        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal),
+        ownReactions = ownReactions,
         isSyncing = true,
         showSkeleton = false,
     )
     is CacheResult.Syncing -> copy(
-        messages = result.value?.toBubbles(currentUser) ?: messages,
+        messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal) ?: messages,
+        ownReactions = ownReactions,
         isSyncing = true,
         showSkeleton = result.value == null && messages.isEmpty() && errorMessage == null,
     )
     CacheResult.Empty -> copy(
         messages = emptyList(),
+        ownReactions = ownReactions,
         isSyncing = false,
         showSkeleton = errorMessage == null,
     )
 }
 
-private fun List<ApiMessage>.toBubbles(currentUser: MeeshyUser?): List<BubbleContent> = map { message ->
+private fun List<LocalMessage>.toBubbles(
+    currentUser: MeeshyUser?,
+    ownReactions: Map<String, Set<String>>,
+    showingOriginal: Set<String>,
+): List<BubbleContent> = map { local ->
     BubbleContentBuilder.build(
-        message = message,
+        message = local.message,
         currentUserId = currentUser?.id,
         preferences = currentUser ?: EmptyContentPreferences,
         showSenderName = true,
+        isPending = local.sendState == LocalSendState.SENDING,
+        isFailed = local.sendState == LocalSendState.FAILED,
+        ownReactions = ownReactions[local.message.id] ?: emptySet(),
+        showOriginal = local.message.id in showingOriginal,
     )
 }
 
-/** Used only before the session loads — yields the fallback language. */
 private object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {
     override val systemLanguage: String? = null
     override val regionalLanguage: String? = null

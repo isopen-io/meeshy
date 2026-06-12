@@ -8,13 +8,22 @@ export interface PaginationParams {
 // Re-export PaginationMeta from shared for convenience
 export type { PaginationMeta, CursorPaginationMeta } from '@meeshy/shared/types';
 
+export interface PaginationOptions {
+  defaultLimit?: number;
+  maxLimit?: number;
+  maxOffset?: number;
+}
+
+export const MAX_PAGINATION_OFFSET = 100_000;
+
 export function validatePagination(
   offset: string = '0',
-  limit: string = '20',
-  maxLimit: number = 100
+  limit?: string,
+  options: PaginationOptions = {}
 ): PaginationParams {
-  const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
-  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), maxLimit);
+  const { defaultLimit = 20, maxLimit = 100, maxOffset = MAX_PAGINATION_OFFSET } = options;
+  const offsetNum = Math.min(Math.max(0, parseInt(offset, 10) || 0), maxOffset);
+  const limitNum = Math.min(Math.max(1, parseInt(limit ?? '', 10) || defaultLimit), maxLimit);
   return { offset: offsetNum, limit: limitNum };
 }
 

@@ -17,11 +17,11 @@ const logger = enhancedLogger.child({ module: 'BroadcastRoutes' });
 const requireBroadcastPermission = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return reply.status(401).send({ success: false, message: 'Authentification requise' });
+    return sendUnauthorized(reply, 'Authentification requise');
   }
   const userRole = authContext.registeredUser.role;
   if (!['BIGBOSS', 'ADMIN'].includes(userRole)) {
-    return reply.status(403).send({ success: false, message: 'Permission insuffisante' });
+    return sendForbidden(reply, 'Permission insuffisante');
   }
 };
 
@@ -397,10 +397,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         logger.error(`Broadcast job failed for id=${id}: ${err.message}`);
       });
 
-      return reply.send({
-        success: true,
-        message: 'Envoi en cours',
-      });
+      return sendSuccess(reply, undefined, { message: 'Envoi en cours' });
     } catch (error: any) {
       logger.error('Error sending broadcast');
       return sendInternalError(reply, 'Erreur lors du lancement de l\'envoi du broadcast');
@@ -425,17 +422,11 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       });
 
       if (!broadcast) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Broadcast non trouve',
-        });
+        return sendNotFound(reply, 'Broadcast non trouve');
       }
 
       if (!['DRAFT', 'READY'].includes(broadcast.status)) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Seuls les broadcasts en statut DRAFT ou READY peuvent etre supprimes',
-        });
+        return sendBadRequest(reply, 'Seuls les broadcasts en statut DRAFT ou READY peuvent etre supprimes');
       }
 
       // Audit log before deletion
@@ -456,16 +447,10 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         where: { id },
       });
 
-      return reply.send({
-        success: true,
-        message: 'Broadcast supprime',
-      });
+      return sendSuccess(reply, undefined, { message: 'Broadcast supprime' });
     } catch (error: any) {
       logger.error('Error deleting broadcast');
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la suppression du broadcast',
-      });
+      return sendInternalError(reply, 'Erreur lors de la suppression du broadcast');
     }
   });
 }

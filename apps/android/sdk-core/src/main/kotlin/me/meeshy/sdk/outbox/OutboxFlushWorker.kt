@@ -12,9 +12,11 @@ import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.serialization.json.Json
+import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddReactionRequest
+import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.ReactionApi
@@ -34,8 +36,10 @@ class OutboxFlushWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val outboxRepository: OutboxRepository,
+    private val messageRepository: MessageRepository,
     private val messageApi: MessageApi,
     private val reactionApi: ReactionApi,
+    private val conversationApi: ConversationApi,
     private val json: Json,
 ) : CoroutineWorker(context, params) {
 
@@ -43,7 +47,11 @@ class OutboxFlushWorker @AssistedInject constructor(
         outboxRepository.recoverInflight()
 
         val senders = buildSenders()
-        val drainer = OutboxDrainer(outboxRepository, senders)
+        val drainer = OutboxDrainer(outboxRepository, senders) { row ->
+            if (row.kindEnum == OutboxKind.SEND_MESSAGE) {
+                messageRepository.markSendFailed(row.cmid)
+            }
+        }
 
         val lanes = listOf(
             OutboxLanes.REACTION,
@@ -81,15 +89,18 @@ class OutboxFlushWorker @AssistedInject constructor(
         OutboxKind.SEND_MESSAGE to MutationSender { row ->
             val req = runCatching { json.decodeFromString<SendMessageRequest>(row.payload) }
                 .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
-            when (apiCall { messageApi.send(row.targetId, req) }) {
-                is NetworkResult.Success -> SendResult.Success
+            when (val result = apiCall { messageApi.send(row.targetId, req) }) {
+                is NetworkResult.Success -> {
+                    messageRepository.reconcileSent(row.cmid, result.data)
+                    SendResult.Success
+                }
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }
         },
         OutboxKind.EDIT_MESSAGE to MutationSender { row ->
-            val body = runCatching { json.decodeFromString<EditMessagePayload>(row.payload) }
+            val body = runCatching { json.decodeFromString<EditMessageRequest>(row.payload) }
                 .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
-            when (apiCall { messageApi.edit(row.targetId, EditMessageRequest(body.content)) }) {
+            when (apiCall { messageApi.edit(row.targetId, body) }) {
                 is NetworkResult.Success -> SendResult.Success
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }
@@ -116,13 +127,13 @@ class OutboxFlushWorker @AssistedInject constructor(
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }
         },
+        OutboxKind.READ_RECEIPT to MutationSender { row ->
+            when (apiCall { conversationApi.markRead(row.targetId) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
     )
-
-    @kotlinx.serialization.Serializable
-    private data class EditMessagePayload(val content: String)
-
-    @kotlinx.serialization.Serializable
-    private data class ReactionPayload(val emoji: String)
 
     companion object {
         const val TAG = "OutboxFlushWorker"

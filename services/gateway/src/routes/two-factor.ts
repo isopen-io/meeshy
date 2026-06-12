@@ -77,7 +77,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
     preValidation: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const userId = (request as any).user.userId;
+      const userId = request.user!.userId;
       const status = await twoFactorService.getStatus(userId);
 
       return sendSuccess(reply, status);
@@ -129,7 +129,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
     preValidation: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const userId = (request as any).user.userId;
+      const userId = request.user!.userId;
       const result = await twoFactorService.setup(userId);
 
       if (!result.success) {
@@ -186,7 +186,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
     preHandler: [validateBody(EnableBodySchema)]
   }, async (request: FastifyRequest<{ Body: EnableBody }>, reply: FastifyReply) => {
     try {
-      const userId = (request as any).user.userId;
+      const userId = request.user!.userId;
       const { code } = request.body;
 
       const result = await twoFactorService.enable(userId, code);
@@ -248,7 +248,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
     preHandler: [validateBody(DisableBodySchema)]
   }, async (request: FastifyRequest<{ Body: DisableBody }>, reply: FastifyReply) => {
     try {
-      const userId = (request as any).user.userId;
+      const userId = request.user!.userId;
       const { password, code } = request.body;
 
       const result = await twoFactorService.disable(userId, password, code);
@@ -310,7 +310,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
     preHandler: [validateBody(VerifyBodySchema)]
   }, async (request: FastifyRequest<{ Body: VerifyBody }>, reply: FastifyReply) => {
     try {
-      const userId = (request as any).user.userId;
+      const userId = request.user!.userId;
       const { code } = request.body;
 
       const result = await twoFactorService.verify(userId, code);
@@ -368,7 +368,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
     preHandler: [validateBody(BackupCodesBodySchema)]
   }, async (request: FastifyRequest<{ Body: RegenerateBackupCodesBody }>, reply: FastifyReply) => {
     try {
-      const userId = (request as any).user.userId;
+      const userId = request.user!.userId;
       const { code } = request.body;
 
       const result = await twoFactorService.regenerateBackupCodes(userId, code);
@@ -413,7 +413,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
     preValidation: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const userId = (request as any).user.userId;
+      const userId = request.user!.userId;
       const result = await twoFactorService.cancelSetup(userId);
 
       if (!result.success) {

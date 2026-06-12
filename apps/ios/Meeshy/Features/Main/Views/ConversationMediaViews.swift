@@ -35,11 +35,14 @@ struct DownloadBadgeView: View {
     private var accent: Color { Color(hex: accentColor) }
 
     /// Local optimistic media (a `file://` URL) and messages still in their
-    /// optimistic phase (`.sending` / `.invisible`) are already on disk — a
-    /// download badge must never appear for them. See Sprint 3 RC3.2.
+    /// optimistic phase (`.sending` / `.slow` / `.invisible`) are already on
+    /// disk — a download badge must never appear for them. `.slow` is a row
+    /// that failed once and is retrying via the outbox: still optimistic, still
+    /// local. See Sprint 3 RC3.2.
     var hidesForLocalOrOptimisticMedia: Bool {
         attachment.fileUrl.hasPrefix("file://")
             || messageDeliveryStatus == .sending
+            || messageDeliveryStatus == .slow
             || messageDeliveryStatus == .invisible
     }
 
@@ -246,6 +249,10 @@ final class AttachmentDownloader: ObservableObject {
     }
 
     private var downloadTask: Task<Void, Never>?
+    /// The inner byte-streaming task registered in the cache store's network
+    /// funnel. Held separately because cancelling the outer `downloadTask`
+    /// (which merely awaits this one) does not propagate cancellation to it.
+    private var activeByteTask: Task<Data, Error>?
 
     /// Resolves whether the attachment's media is already available locally.
     /// Routes to the correct typed cache store via `attachment.type` and
@@ -326,59 +333,92 @@ final class AttachmentDownloader: ObservableObject {
         downloadTask = Task.detached { [weak self] in
             do {
                 guard let url = MeeshyConfig.resolveMediaURL(urlString) else { throw URLError(.badURL) }
-
-                let (asyncBytes, response) = try await URLSession.shared.bytes(from: url)
-
-                guard let http = response as? HTTPURLResponse,
-                      (200...299).contains(http.statusCode) else {
-                    throw URLError(.badServerResponse)
-                }
-
-                let expectedLength = http.expectedContentLength
-                if expectedLength > 0 {
-                    await MainActor.run { [weak self] in self?.totalBytes = expectedLength }
-                }
-
-                var data = Data()
-                if expectedLength > 0 {
-                    data.reserveCapacity(Int(expectedLength))
-                }
-
-                var buffer = [UInt8]()
-                buffer.reserveCapacity(16384)
-
-                for try await byte in asyncBytes {
-                    guard !Task.isCancelled else { return }
-                    buffer.append(byte)
-
-                    if buffer.count >= 16384 {
-                        data.append(contentsOf: buffer)
-                        buffer.removeAll(keepingCapacity: true)
-                        let current = Int64(data.count)
-                        await MainActor.run { [weak self] in self?.downloadedBytes = current }
-                    }
-                }
-
-                guard !Task.isCancelled else { return }
-
-                if !buffer.isEmpty {
-                    data.append(contentsOf: buffer)
-                }
-
-                // Seed under the exact key the renderer resolves to, in the
-                // store that matches the media type — a download triggered by
-                // the badge must never need to re-fetch on the next render.
-                let resolvedKey = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+                let resolvedKey = url.absoluteString
+                let store: DiskCacheStore
                 switch cacheStore {
-                case .audio:
-                    await CacheCoordinator.shared.audio.store(data, for: resolvedKey)
-                case .image:
-                    await CacheCoordinator.shared.images.store(data, for: resolvedKey)
-                    if let image = UIImage(data: data) {
-                        DiskCacheStore.cacheImageForPreview(image, key: resolvedKey)
+                case .audio: store = await CacheCoordinator.shared.audio
+                case .image: store = await CacheCoordinator.shared.images
+                case .video: store = await CacheCoordinator.shared.video
+                }
+
+                // Piggyback: another path (conversation prefetch, another
+                // surface, the player warm-up) is ALREADY fetching this media
+                // through the store's network funnel. Await that fetch instead
+                // of opening a duplicate connection — duplicate concurrent
+                // downloads of the same voice note were observed saturating
+                // slow cellular links (NSURLError -1001 bursts). Byte-level
+                // progress isn't available on this path; the badge completes
+                // when the shared fetch lands.
+                if let existing = await store.inFlightDownload(for: resolvedKey) {
+                    let data = try await existing.value
+                    let finalSize = Int64(data.count)
+                    await MainActor.run { [weak self] in
+                        self?.downloadedBytes = finalSize
+                        self?.totalBytes = finalSize
+                        self?.isDownloading = false
+                        self?.downloadingURL = nil
+                        self?.isCached = true
+                        HapticFeedback.success()
                     }
-                case .video:
-                    await CacheCoordinator.shared.video.store(data, for: resolvedKey)
+                    return
+                }
+
+                // Stream the bytes ourselves (progress UI) and persist into
+                // the typed cache INSIDE the task, then register it in the
+                // store's funnel so concurrent `data(for:)`/`image(for:)`
+                // callers coalesce onto this download.
+                let byteTask = Task<Data, Error> { [weak self] in
+                    let (asyncBytes, response) = try await URLSession.shared.bytes(from: url)
+
+                    guard let http = response as? HTTPURLResponse,
+                          (200...299).contains(http.statusCode) else {
+                        throw URLError(.badServerResponse)
+                    }
+
+                    let expectedLength = http.expectedContentLength
+                    if expectedLength > 0 {
+                        await MainActor.run { [weak self] in self?.totalBytes = expectedLength }
+                    }
+
+                    var data = Data()
+                    if expectedLength > 0 {
+                        data.reserveCapacity(Int(expectedLength))
+                    }
+
+                    var buffer = [UInt8]()
+                    buffer.reserveCapacity(16384)
+
+                    for try await byte in asyncBytes {
+                        try Task.checkCancellation()
+                        buffer.append(byte)
+
+                        if buffer.count >= 16384 {
+                            data.append(contentsOf: buffer)
+                            buffer.removeAll(keepingCapacity: true)
+                            let current = Int64(data.count)
+                            await MainActor.run { [weak self] in self?.downloadedBytes = current }
+                        }
+                    }
+
+                    try Task.checkCancellation()
+
+                    if !buffer.isEmpty {
+                        data.append(contentsOf: buffer)
+                    }
+
+                    // Seed under the exact key the renderer resolves to — a
+                    // download triggered by the badge must never need to
+                    // re-fetch on the next render. Persisted before returning
+                    // so funnel piggybackers observe a warm cache.
+                    await store.store(data, for: resolvedKey)
+                    return data
+                }
+                await MainActor.run { [weak self] in self?.activeByteTask = byteTask }
+                await store.registerInFlightDownload(byteTask, for: resolvedKey)
+                let data = try await byteTask.value
+
+                if case .image = cacheStore, let image = UIImage(data: data) {
+                    DiskCacheStore.cacheImageForPreview(image, key: resolvedKey)
                 }
 
                 let finalSize = Int64(data.count)
@@ -391,7 +431,7 @@ final class AttachmentDownloader: ObservableObject {
                     HapticFeedback.success()
                 }
             } catch {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, !(error is CancellationError) else { return }
                 await MainActor.run { [weak self] in
                     self?.isDownloading = false
                     self?.downloadingURL = nil
@@ -402,6 +442,8 @@ final class AttachmentDownloader: ObservableObject {
     }
 
     func cancel() {
+        activeByteTask?.cancel()
+        activeByteTask = nil
         downloadTask?.cancel()
         downloadTask = nil
         isDownloading = false

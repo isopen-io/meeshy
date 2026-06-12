@@ -269,6 +269,55 @@ final class ConversationSyncEngineTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 100_000_000)
     }
 
+    // MARK: - GRDB persistor hook (apiMessagePersistor)
+
+    /// The engine only maintains CacheCoordinator (list previews); the
+    /// conversation timeline reads the app's GRDB store. `ensureMessages`
+    /// (the push-notification refresh path) must hand the fetched payload to
+    /// the installed persistor or the message stays invisible inside the
+    /// conversation even though the list preview shows it.
+    func test_ensureMessages_invokesAPIMessagePersistor_withFetchedPayload() async {
+        let apiMsg = TestFactories.makeAPIMessage(id: "msg-persist-1", conversationId: "conv-persist")
+        let response = MessagesAPIResponse(
+            success: true, data: [apiMsg], pagination: nil,
+            cursorPagination: nil, hasNewer: nil, meta: nil
+        )
+        mockMsgService.listResult = .success(response)
+        await CacheCoordinator.shared.messages.invalidate(for: "conv-persist")
+
+        let collector = PersistedMessagesCollector()
+        engine.apiMessagePersistor = { messages in
+            await collector.append(messages)
+        }
+
+        await engine.ensureMessages(for: "conv-persist", force: true)
+
+        let batches = await collector.batches
+        XCTAssertEqual(batches.count, 1)
+        XCTAssertEqual(batches.first?.map(\.id), ["msg-persist-1"])
+    }
+
+    /// Same contract on the global `message:new` relay — the ONLY sink that
+    /// sees broadcasts for CLOSED conversations.
+    func test_messageNewRelay_invokesAPIMessagePersistor() async {
+        await engine.startSocketRelay()
+
+        let persisted = expectation(description: "persistor invoked from message:new relay")
+        persisted.assertForOverFulfill = false
+        engine.apiMessagePersistor = { messages in
+            if messages.contains(where: { $0.id == "msg-relay-persist" }) {
+                persisted.fulfill()
+            }
+        }
+
+        let apiMsg = TestFactories.makeAPIMessage(
+            id: "msg-relay-persist", conversationId: "conv-relay-persist"
+        )
+        mockMessageSocket.messageReceived.send(apiMsg)
+
+        await fulfillment(of: [persisted], timeout: 2.0)
+    }
+
     // MARK: - Total Unread Aggregator (cross-conversation)
 
     /// The sync engine must expose a CurrentValueSubject that aggregates the
@@ -853,5 +902,14 @@ final class LastMessageSurvivorTests: XCTestCase {
             existing: [conv("a"), conv("b")], deltas: [])
         XCTAssertEqual(Set(merged.map(\.id)), ["a", "b"])
         XCTAssertTrue(removedIds.isEmpty)
+    }
+}
+
+/// Thread-safe collector for the `apiMessagePersistor` hook (the hook is a
+/// `@Sendable` async closure — an actor is the simplest race-free recorder).
+private actor PersistedMessagesCollector {
+    private(set) var batches: [[APIMessage]] = []
+    func append(_ messages: [APIMessage]) {
+        batches.append(messages)
     }
 }

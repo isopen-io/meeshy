@@ -125,7 +125,7 @@ struct ThemedAvatarButton: View {
     let color: String
     let secondaryColor: String
     let isExpanded: Bool
-    var hasStoryRing: Bool = false
+    var storyState: StoryRingState = .none
     var avatarURL: String? = nil
     var presenceState: PresenceState = .offline
     var moodEmoji: String? = nil
@@ -146,7 +146,7 @@ struct ThemedAvatarButton: View {
                 accentColor: color,
                 secondaryColor: secondaryColor,
                 avatarURL: avatarURL,
-                storyState: hasStoryRing ? .unread : .none,
+                storyState: storyState,
                 moodEmoji: moodEmoji,
                 presenceState: presenceState
             )

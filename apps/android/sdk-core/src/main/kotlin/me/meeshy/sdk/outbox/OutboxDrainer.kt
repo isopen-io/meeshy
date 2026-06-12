@@ -38,6 +38,7 @@ public data class DrainReport(
 public class OutboxDrainer(
     private val outbox: OutboxRepository,
     private val senders: Map<OutboxKind, MutationSender>,
+    private val onExhausted: suspend (OutboxEntity) -> Unit = {},
 ) {
     public suspend fun drainLane(lane: String): DrainReport {
         var delivered = 0
@@ -48,6 +49,7 @@ public class OutboxDrainer(
             val sender = senders[row.kindEnum]
             if (sender == null) {
                 outbox.markExhausted(row.cmid, "No sender registered for ${row.kind}")
+                onExhausted(row)
                 exhausted++
                 continue
             }
@@ -58,11 +60,15 @@ public class OutboxDrainer(
                     delivered++
                 }
                 SendResult.TransientFailure -> {
-                    outbox.markFailed(row.cmid)
+                    if (outbox.markFailed(row.cmid) == OutboxState.EXHAUSTED) {
+                        onExhausted(row)
+                        exhausted++
+                    }
                     return DrainReport(delivered, exhausted, stoppedOnTransientFailure = true)
                 }
                 is SendResult.PermanentFailure -> {
                     outbox.markExhausted(row.cmid, result.reason)
+                    onExhausted(row)
                     exhausted++
                 }
             }

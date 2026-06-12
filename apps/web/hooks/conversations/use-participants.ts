@@ -102,7 +102,7 @@ export function useParticipants({ conversationId }: UseParticipantsOptions): Use
   const [isLoading, setIsLoading] = useState(false);
   const [totalCount, setTotalCount] = useState<number | undefined>(undefined);
   const participantsRef = useRef<Participant[]>([]);
-  const userStore = useUserStore();
+  const mergeParticipants = useUserStore(state => state.mergeParticipants);
 
   // Sync ref avec state
   useEffect(() => {
@@ -164,7 +164,7 @@ export function useParticipants({ conversationId }: UseParticipantsOptions): Use
         .map(p => p.user)
         .filter((u): u is NonNullable<typeof u> => Boolean(u));
 
-      userStore.setParticipants(users as Parameters<typeof userStore.setParticipants>[0]);
+      mergeParticipants(users as Parameters<typeof mergeParticipants>[0]);
       setParticipants(uniqueParticipants);
       setTotalCount(participantsData.totalCount);
     } catch (error) {
@@ -173,7 +173,7 @@ export function useParticipants({ conversationId }: UseParticipantsOptions): Use
     } finally {
       setIsLoading(false);
     }
-  }, [userStore]);
+  }, [mergeParticipants]);
 
   return {
     participants,

@@ -29,14 +29,14 @@ export default memo(function DeliveryQueuePanel({ conversationId }: DeliveryQueu
       if (res.success && res.data) {
         setItems(Array.isArray(res.data) ? res.data : []);
       } else {
-        setError(res.error ?? 'Erreur lors du chargement');
+        setError(res.error ?? t('agent.deliveryQueue.loadError'));
       }
     } catch {
-      setError('Agent service indisponible');
+      setError(t('agent.deliveryQueue.serviceUnavailable'));
     } finally {
       setLoading(false);
     }
-  }, [conversationId]);
+  }, [conversationId, t]);
 
   useEffect(() => {
     setLoading(true);
@@ -92,7 +92,7 @@ export default memo(function DeliveryQueuePanel({ conversationId }: DeliveryQueu
         <p className="text-xs text-gray-500">{error}</p>
         <Button variant="outline" size="sm" onClick={fetchQueue} className="h-7 text-xs gap-1">
           <RefreshCw className="h-3 w-3" />
-          Réessayer
+          {t('agent.deliveryQueue.retry')}
         </Button>
       </div>
     );
@@ -107,7 +107,7 @@ export default memo(function DeliveryQueuePanel({ conversationId }: DeliveryQueu
             {items.length}
           </Badge>
           <span className="text-[10px] text-gray-400 uppercase tracking-wider">
-            en attente
+            {t('agent.deliveryQueue.pending')}
           </span>
         </div>
         <Button
@@ -124,7 +124,7 @@ export default memo(function DeliveryQueuePanel({ conversationId }: DeliveryQueu
       {items.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-6">
           <Package className="h-8 w-8 text-gray-300 dark:text-gray-600" />
-          <p className="text-xs text-gray-400">Aucun message en attente</p>
+          <p className="text-xs text-gray-400">{t('agent.deliveryQueue.empty')}</p>
         </div>
       ) : (
         <div className="space-y-2">

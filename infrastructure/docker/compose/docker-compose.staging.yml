@@ -221,6 +221,9 @@ services:
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - UPLOAD_PATH=/app/uploads
       - PUBLIC_URL=https://gate.staging.${DOMAIN:-meeshy.me}
+      - TURN_SECRET=${TURN_SECRET}
+      - TURN_SERVERS=${TURN_SERVERS:-}
+      - TURN_CREDENTIAL_TTL=${TURN_CREDENTIAL_TTL:-600}
       - MAX_TRANSLATION_LENGTH=10000
       # Variables d'initialisation
       - FORCE_DB_RESET=${FORCE_DB_RESET:-false}
@@ -267,6 +270,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=meeshy_meeshy-network"
       - "traefik.http.routers.gateway-staging.rule=Host(`gate.staging.${DOMAIN:-meeshy.me}`)"
+      - "traefik.http.routers.gateway-staging.middlewares=compress@file"
       - "traefik.http.routers.gateway-staging.entrypoints=websecure"
       - "traefik.http.routers.gateway-staging.tls.certresolver=letsencrypt"
       - "traefik.http.services.gateway-staging.loadbalancer.server.port=3000"
@@ -295,6 +299,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=meeshy_meeshy-network"
       - "traefik.http.routers.static-staging.rule=Host(`static.staging.${DOMAIN:-meeshy.me}`)"
+      - "traefik.http.routers.static-staging.middlewares=compress@file"
       - "traefik.http.routers.static-staging.entrypoints=websecure"
       - "traefik.http.routers.static-staging.tls.certresolver=letsencrypt"
       - "traefik.http.services.static-staging.loadbalancer.server.port=80"
@@ -344,6 +349,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=meeshy_meeshy-network"
       - "traefik.http.routers.frontend-staging.rule=Host(`staging.${DOMAIN:-meeshy.me}`)"
+      - "traefik.http.routers.frontend-staging.middlewares=compress@file"
       - "traefik.http.routers.frontend-staging.entrypoints=websecure"
       - "traefik.http.routers.frontend-staging.tls.certresolver=letsencrypt"
       - "traefik.http.services.frontend-staging.loadbalancer.server.port=3100"

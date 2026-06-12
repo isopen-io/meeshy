@@ -66,6 +66,11 @@ public final class PushDeliveryReceiptService: PushReceipting, @unchecked Sendab
 
     /// Acknowledge a push. Non-throwing — failures are queued for retry.
     public func ack(conversationId: String, messageId: String?) async {
+        // Un push sans conversation (notification post-only, payload partiel)
+        // ne doit JAMAIS entrer dans la queue : un id vide produit l'URL
+        // `/conversations//mark-as-received` → 404 "Route not found" permanent,
+        // et la ligne empoisonnée se re-enfile à chaque resume.
+        guard !conversationId.isEmpty else { return }
         guard deps.isAuthenticated() else {
             logger.info("ack skipped: not authenticated, queuing")
             enqueue(conversationId: conversationId, messageId: messageId)
@@ -84,7 +89,9 @@ public final class PushDeliveryReceiptService: PushReceipting, @unchecked Sendab
     /// the background transition (best-effort). Each success is removed
     /// from the queue; failures remain for the next attempt.
     public func flushPending() async {
-        let pending = drainQueueSnapshot()
+        // Purge défensive des lignes corrompues persistées par d'anciens
+        // builds (conversationId vide → 404 permanent à chaque tentative).
+        let pending = drainQueueSnapshot().filter { !$0.conversationId.isEmpty }
         guard !pending.isEmpty else { return }
         guard deps.isAuthenticated() else {
             // Put it back untouched — we cannot authenticate right now.
@@ -98,7 +105,14 @@ public final class PushDeliveryReceiptService: PushReceipting, @unchecked Sendab
                 try await deps.markAsReceived(item.conversationId)
             } catch {
                 logger.error("flushPending failed for \(item.conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                failed.append(item)
+                // Seules les erreurs TRANSITOIRES méritent un retry. Un 4xx
+                // (validation, route inconnue, conversation supprimée/quittée)
+                // est permanent : re-enfiler garantit le même échec à chaque
+                // resume, pour toujours. 401 (session à rafraîchir), 408 et
+                // 429 restent retryables.
+                if Self.isRetryable(error) {
+                    failed.append(item)
+                }
             }
         }
 
@@ -106,6 +120,21 @@ public final class PushDeliveryReceiptService: PushReceipting, @unchecked Sendab
             // Preserve order: failures go back to the front, anything that
             // was enqueued in parallel remains at the tail.
             requeuePrepend(failed)
+        }
+    }
+
+    /// `false` pour les erreurs serveur permanentes (4xx hors 401/408/429,
+    /// et 403 `.forbidden` — l'utilisateur n'a plus accès à la conversation) —
+    /// celles-là sont abandonnées au lieu d'être re-enfilées indéfiniment.
+    static func isRetryable(_ error: Error) -> Bool {
+        switch error {
+        case MeeshyError.forbidden:
+            return false
+        case let MeeshyError.server(statusCode, _):
+            guard (400...499).contains(statusCode) else { return true }
+            return [401, 408, 429].contains(statusCode)
+        default:
+            return true
         }
     }
 

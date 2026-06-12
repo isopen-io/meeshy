@@ -81,67 +81,67 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
   const navigationItems = [
     {
       icon: BarChart3,
-      label: 'Tableau de bord',
+      label: t('layout.navDashboard'),
       href: '/admin',
       permission: 'canAccessAdmin',
     },
     {
       icon: Users,
-      label: 'Gestion utilisateurs',
+      label: t('layout.navUsers'),
       href: '/admin/users',
       permission: 'canManageUsers',
     },
     {
       icon: Shield,
-      label: 'Modération',
+      label: t('layout.navModeration'),
       href: '/admin/moderation',
       permission: 'canModerateContent',
     },
     {
       icon: FileText,
-      label: 'Logs d\'audit',
+      label: t('layout.navAuditLogs'),
       href: '/admin/audit',
       permission: 'canViewAuditLogs',
     },
     {
       icon: BarChart3,
-      label: 'Analyses',
+      label: t('layout.navAnalytics'),
       href: '/admin/analytics',
       permission: 'canViewAnalytics',
     },
     {
       icon: Link2,
-      label: 'Tracking Links',
+      label: t('layout.navTrackingLinks'),
       href: '/admin/tracking-links',
       permission: 'canViewAnalytics',
     },
     {
       icon: Trophy,
-      label: 'Classements',
+      label: t('layout.navRanking'),
       href: '/admin/ranking',
       permission: 'canViewAnalytics',
     },
     {
       icon: Mail,
-      label: 'Broadcasts',
+      label: t('layout.navBroadcasts'),
       href: '/admin/broadcasts',
       permission: 'canManageNotifications',
     },
     {
       icon: Settings,
-      label: 'Paramètres système',
+      label: t('layout.navSettings'),
       href: '/admin/settings',
       permission: 'canManageTranslations',
     },
     {
       icon: Bot,
-      label: 'Agent IA',
+      label: t('layout.navAgent'),
       href: '/admin/agent',
       permission: 'canAccessAdmin',
     },
     {
       icon: Activity,
-      label: 'Monitoring',
+      label: t('layout.navMonitoring'),
       href: '/admin/monitoring',
       permission: 'canAccessAdmin',
     },
@@ -212,7 +212,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                 size="sm"
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                 className="p-2 hidden md:flex"
-                aria-label={isSidebarOpen ? 'Réduire le menu' : 'Ouvrir le menu'}
+                aria-label={isSidebarOpen ? t('layout.collapseMenu') : t('layout.openMenu')}
               >
                 {isSidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
               </Button>
@@ -222,7 +222,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                 size="sm"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="p-2 md:hidden"
-                aria-label="Fermer le menu"
+                aria-label={t('layout.closeMenu')}
               >
                 <X className="w-4 h-4" />
               </Button>
@@ -316,7 +316,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                   size="sm"
                   onClick={() => setIsMobileMenuOpen(true)}
                   className="p-2 md:hidden"
-                  aria-label="Ouvrir le menu"
+                  aria-label={t('layout.openMenu')}
                 >
                   <Menu className="w-5 h-5" />
                 </Button>
@@ -336,7 +336,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                     {currentPage === '/admin/monitoring' && t('layout.pageMonitoring')}
                   </h2>
                   <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 hidden sm:block">
-                    Administration Meeshy - Niveau d&apos;accès: {PermissionsService.getRoleDisplayName(user.role)}
+                    {t('layout.accessLevel', { role: PermissionsService.getRoleDisplayName(user.role) })}
                   </p>
                 </div>
               </div>

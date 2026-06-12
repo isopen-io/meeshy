@@ -43,6 +43,10 @@ public object OutboxLanes {
     public const val SETTINGS: String = "settings"
 }
 
+/** Payload of an `ADD_REACTION` / `REMOVE_REACTION` outbox row. */
+@kotlinx.serialization.Serializable
+public data class ReactionPayload(val emoji: String)
+
 /** Input to [OutboxRepository.enqueue] — a mutation to deliver. */
 public data class OutboxMutation(
     val kind: OutboxKind,

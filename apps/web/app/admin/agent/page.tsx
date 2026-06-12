@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
 import AdminLayout from '@/components/admin/AdminLayout';
+import { useI18n } from '@/hooks/use-i18n';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, BarChart3, MessageSquare, Cpu, Users, Activity, Settings, History, Tag } from 'lucide-react';
 
@@ -54,27 +55,28 @@ function SectionLoader() {
   );
 }
 
-const tabs = [
-  { id: 'overview', label: 'Vue d\'ensemble', icon: BarChart3 },
-  { id: 'conversations', label: 'Conversations', icon: MessageSquare },
-  { id: 'global', label: 'Global', icon: Settings },
-  { id: 'llm', label: 'Config LLM', icon: Cpu },
-  { id: 'archetypes', label: 'Archétypes', icon: Users },
-  { id: 'topics', label: 'Topics', icon: Tag },
-  { id: 'live', label: 'Live', icon: Activity },
-  { id: 'history', label: 'Historique', icon: History },
-] as const;
-
 export default function AgentAdminPage() {
   const [activeTab, setActiveTab] = useState('overview');
+  const { t } = useI18n('admin');
+
+  const tabs = [
+    { id: 'overview', label: t('agent.tabOverview'), icon: BarChart3 },
+    { id: 'conversations', label: t('agent.tabConversations'), icon: MessageSquare },
+    { id: 'global', label: t('agent.tabGlobal'), icon: Settings },
+    { id: 'llm', label: t('agent.tabLlm'), icon: Cpu },
+    { id: 'archetypes', label: t('agent.tabArchetypes'), icon: Users },
+    { id: 'topics', label: t('agent.tabTopics'), icon: Tag },
+    { id: 'live', label: t('agent.tabLive'), icon: Activity },
+    { id: 'history', label: t('agent.tabHistory'), icon: History },
+  ];
 
   return (
     <AdminLayout currentPage="/admin/agent">
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Agent IA</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('agent.pageTitle')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Configuration et supervision du service agent conversationnel
+            {t('agent.pageSubtitle')}
           </p>
         </div>
 

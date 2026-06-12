@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { sendInternalError } from '../utils/response';
 
 const ACHIEVEMENT_THRESHOLDS = {
   polyglotte: { field: 'languagesUsed', threshold: 5, icon: 'globe', color: '#3498DB' },
@@ -37,7 +38,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as { userId: string };
+        const userId = request.user!.userId;
 
         const [
           totalMessages,
@@ -98,10 +99,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
         };
       } catch (error) {
         fastify.log.error({ error }, 'Error fetching user stats');
-        return reply.code(500).send({
-          success: false,
-          error: 'Failed to fetch user stats',
-        });
+        return sendInternalError(reply, 'Failed to fetch user stats');
       }
     }
   );
@@ -135,7 +133,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as { userId: string };
+        const userId = request.user!.userId;
         const { days = 30 } = request.query as { days?: number };
 
         const startDate = new Date();
@@ -173,10 +171,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
         return { success: true, data: timeline };
       } catch (error) {
         fastify.log.error({ error }, 'Error fetching user timeline');
-        return reply.code(500).send({
-          success: false,
-          error: 'Failed to fetch user timeline',
-        });
+        return sendInternalError(reply, 'Failed to fetch user timeline');
       }
     }
   );
@@ -204,7 +199,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const { userId } = request.user as { userId: string };
+        const userId = request.user!.userId;
 
         const [
           totalMessages,
@@ -257,10 +252,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
         return { success: true, data: computeAchievements(stats) };
       } catch (error) {
         fastify.log.error({ error }, 'Error fetching achievements');
-        return reply.code(500).send({
-          success: false,
-          error: 'Failed to fetch achievements',
-        });
+        return sendInternalError(reply, 'Failed to fetch achievements');
       }
     }
   );

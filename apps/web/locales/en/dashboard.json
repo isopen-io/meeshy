@@ -86,6 +86,28 @@
       "membersCount": "{count} members",
       "conversationsCount": "{count} conv."
     },
+    "createGroupModal": {
+      "title": "Create a new community",
+      "description": "Create a community to organize your conversations with several people",
+      "nameLabel": "Community name *",
+      "namePlaceholder": "E.g. Marketing team, Family, Friends...",
+      "descriptionLabel": "Description (optional)",
+      "descriptionPlaceholder": "Describe the purpose of this community...",
+      "privateLabel": "Private community",
+      "privateHint": "Only invited members can join",
+      "publicHint": "The community can be discovered and joined by others",
+      "searchLabel": "Search members",
+      "searchPlaceholder": "Search by name or username...",
+      "selectedMembers": "Selected members ({count} total, including you)",
+      "removeMember": "Remove {name}",
+      "availableUsers": "Available users",
+      "loadingUsers": "Loading users...",
+      "noUsersFound": "No users found for this search",
+      "noUsersAvailable": "No users available",
+      "cancel": "Cancel",
+      "create": "Create community",
+      "creating": "Creating..."
+    },
     "yesterday": "Yesterday {time}",
     "anonymous": "Anonymous"
   }

@@ -64,7 +64,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockAuthManager.simulateLoggedIn(user: currentUser)
 
         let deps = dependencies ?? makeTestDependencies()
-        return ConversationViewModel(
+        let sut = ConversationViewModel(
             conversationId: conversationId ?? testConversationId,
             unreadCount: unreadCount,
             isDirect: isDirect,
@@ -78,6 +78,11 @@ final class ConversationViewModelTests: XCTestCase {
             messageSocket: mockMessageSocket,
             dependencies: deps
         )
+        // Activate the VM as the view's `.task` does: `init` is now
+        // side-effect-free, so the GRDB observation / initial load / Combine
+        // subscriptions only come alive after `start()`.
+        sut.start()
+        return sut
     }
 
     private func makeTestDependencies() -> ConversationDependencies {
@@ -390,7 +395,7 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(mockMessageService.sendCallCount, 1)
     }
 
-    func test_sendMessage_failure_keepsOptimisticAsSendingForRetry() async {
+    func test_sendMessage_failure_keepsOptimisticAsSlowForRetry() async {
         mockMessageService.sendResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Send failed"]))
         let sut = makeSUT()
 
@@ -398,8 +403,11 @@ final class ConversationViewModelTests: XCTestCase {
 
         XCTAssertFalse(result)
         XCTAssertEqual(sut.messages.count, 1)
-        // On failure, message stays in .sending status as it's enqueued for retry
-        XCTAssertEqual(sut.messages.first?.deliveryStatus, .sending)
+        // On failure the message is enqueued for retry (state `.queued`), which
+        // surfaces as `.slow` ("Envoi lent") — distinct from a fresh `.sending`
+        // clock — so the user can tell a struggling/retrying send from one that
+        // just left. It is NOT removed and NOT `.failed` (retries remain).
+        XCTAssertEqual(sut.messages.first?.deliveryStatus, .slow)
     }
 
     func test_sendMessage_surfacesOptimisticMessage() async {
@@ -451,6 +459,57 @@ final class ConversationViewModelTests: XCTestCase {
 
         XCTAssertTrue(result)
         XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 0)
+    }
+
+    // MARK: - sendMessage Socket-First Fast Path
+
+    func test_sendMessage_socketConnected_plainText_usesSocketFirst_skipsRest() async {
+        // Socket-first fast path: a connected socket ACKs `message:send` before
+        // the REST POST is ever attempted (avoids the 10-30s slow-cellular POST).
+        mockMessageSocket.isConnected = true
+        mockMessageSocket.sendViaSocketFallbackResult = MessageSocketManager.SendMessageAck(
+            messageId: "server-id-socket-first", clientMessageId: nil, createdAt: Date()
+        )
+        let sut = makeSUT()
+
+        let result = await sut.sendMessage(content: "Fast via socket")
+
+        XCTAssertTrue(result)
+        XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1, "socket-first sends via the socket")
+        XCTAssertEqual(mockMessageService.sendCallCount, 0, "REST is not called when the socket ACKs first")
+    }
+
+    func test_sendMessage_socketConnectedButNoAck_fallsThroughToRest() async {
+        // Socket connected but no ACK (nil) → fall straight through to the REST
+        // POST with the SAME clientMessageId. Both transports attempted once.
+        mockMessageSocket.isConnected = true
+        mockMessageSocket.sendViaSocketFallbackResult = nil
+        let sut = makeSUT()
+
+        let result = await sut.sendMessage(content: "Socket miss then REST")
+
+        XCTAssertTrue(result)
+        XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1, "socket-first was attempted")
+        XCTAssertEqual(mockMessageService.sendCallCount, 1, "REST is the fallback on a socket miss")
+    }
+
+    // MARK: - Conversation-list optimistic preview
+
+    func test_optimisticListPreview_text_returnsTheText() {
+        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "Salut", messageType: .text), "Salut")
+    }
+
+    func test_optimisticListPreview_captionedMedia_prefersTheCaption() {
+        // A media message WITH a caption shows the caption, not the media label.
+        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "Regarde", messageType: .image), "Regarde")
+    }
+
+    func test_optimisticListPreview_captionlessMedia_returnsMediaLabel() {
+        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .image), "📷 Photo")
+        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .video), "🎥 Vidéo")
+        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .audio), "🎙️ Message vocal")
+        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .file), "📎 Fichier")
+        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .location), "📍 Position")
     }
 
     func test_sendMessage_restAndSocketBothFail_returnsFalse() async {
@@ -532,6 +591,67 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(decoded.count, 1)
         XCTAssertEqual(decoded.first?.id, "att_image_001")
         XCTAssertEqual(decoded.first?.fileUrl, "file:///tmp/photo.jpg")
+    }
+
+    // MARK: - Attachment Reactions (BUG2 A')
+
+    private func makeImageMessage(id: String = "m1", attachmentId: String = "a1") -> Message {
+        var msg = makeMessage(id: id)
+        msg.attachments = [MeeshyMessageAttachment(
+            id: attachmentId, mimeType: "image/jpeg", fileUrl: "file:///x.jpg", uploadedBy: testUserId
+        )]
+        return msg
+    }
+
+    func test_toggleAttachmentReaction_addsOptimistically_andEmits() throws {
+        let pool = try makeInMemoryPool()
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        sut.messages = [makeImageMessage()]
+
+        sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
+
+        let att = sut.messages.first?.attachments.first
+        XCTAssertEqual(att?.reactionSummary?["❤️"], 1)
+        XCTAssertEqual(att?.currentUserReactions, ["❤️"])
+        XCTAssertEqual(mockMessageSocket.addAttachmentReactionCallCount, 1)
+    }
+
+    func test_toggleAttachmentReaction_secondTapSameEmoji_removes() throws {
+        let pool = try makeInMemoryPool()
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        sut.messages = [makeImageMessage()]
+
+        sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
+        sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
+
+        let att = sut.messages.first?.attachments.first
+        XCTAssertNil(att?.reactionSummary)
+        XCTAssertNil(att?.currentUserReactions)
+        XCTAssertEqual(mockMessageSocket.removeAttachmentReactionCallCount, 1)
+    }
+
+    func test_toggleAttachmentReaction_capsAtOneEmojiPerUser() throws {
+        let pool = try makeInMemoryPool()
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        sut.messages = [makeImageMessage()]
+
+        sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
+        sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "👍")
+
+        let att = sut.messages.first?.attachments.first
+        XCTAssertNil(att?.reactionSummary?["❤️"])
+        XCTAssertEqual(att?.reactionSummary?["👍"], 1)
+        XCTAssertEqual(att?.currentUserReactions, ["👍"])
+    }
+
+    func test_applyAttachmentReactionDelta_replacesSummary() throws {
+        let pool = try makeInMemoryPool()
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        sut.messages = [makeImageMessage()]
+
+        sut.applyAttachmentReactionDelta(attachmentId: "a1", reactionSummary: ["👍": 3])
+
+        XCTAssertEqual(sut.messages.first?.attachments.first?.reactionSummary?["👍"], 3)
     }
 
     func test_insertOptimisticMediaMessage_surfacesBubbleInViewModel() async throws {
@@ -1717,6 +1837,31 @@ final class ConversationViewModelTests: XCTestCase {
         let matching = viewModel.messages.filter { $0.id == "m1" || $0.content == "hello" }
         XCTAssertFalse(matching.isEmpty, "messages should reflect the inserted MessageRecord via store observation")
         XCTAssertEqual(matching.first?.content, "hello")
+    }
+
+    // MARK: - withSendTimeout (S1 — send-clock latency cap)
+
+    func test_withSendTimeout_fastOperation_returnsValue() async throws {
+        let result = try await withSendTimeout(seconds: 5) { () async throws -> Int in
+            return 42
+        }
+        XCTAssertEqual(result, 42)
+    }
+
+    func test_withSendTimeout_slowOperation_cancelsAndThrows() async {
+        do {
+            _ = try await withSendTimeout(seconds: 0.05) { () async throws -> Int in
+                // Far longer than the 50ms cap — the watchdog must cancel it.
+                try await Task.sleep(nanoseconds: 5_000_000_000)
+                return 1
+            }
+            XCTFail("Expected the timed-out operation to be cancelled and rethrow")
+        } catch is CancellationError {
+            // Expected: the watchdog cancelled the operation task, whose
+            // `Task.sleep` surfaces a CancellationError that `.value` rethrows.
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
+        }
     }
 
     // MARK: - Helpers
