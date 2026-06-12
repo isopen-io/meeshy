@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { LinkConversationService, type LinkConversationData } from '@/services/link-conversation.service';
 import { BubbleStreamPage } from '@/components/common/bubble-stream-page';
+import { JoinError } from '@/components/join';
 import { Header } from '@/components/layout/Header';
 import { useI18n } from '@/hooks/useI18n';
 import { authManager } from '@/services/auth-manager.service';
@@ -140,12 +141,7 @@ export default function ChatLinkPage() {
   }
 
   if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500" />
-        <p className="text-gray-600">{t('redirecting') || 'Redirection en cours...'}</p>
-      </div>
-    );
+    return <JoinError error={error} />;
   }
 
   if (!conversationData || !conversationData.currentUser) {
@@ -155,7 +151,7 @@ export default function ChatLinkPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500" />
-        <p className="text-gray-600">{t('redirecting') || 'Redirection en cours...'}</p>
+        <p className="text-gray-600">{t('redirecting')}</p>
       </div>
     );
   }

@@ -51,3 +51,17 @@ Analyse : `docs/analyses/uiux/2026-06-12-iteration-41.md`.
 Reprendre les différés listés en fin d'analyse 41 (hex iOS hors liens par surface : SettingsView,
 NotificationSettingsView, OnboardingView, DataExportView ; ContactsTab enum Android ; parité stories
 Android ; réactions par pièce jointe web/Android).
+
+---
+
+## Addendum — passe parallèle PR #580 (branche claude/blissful-ritchie-68j2oq)
+
+Tâches additionnelles réalisées par la passe parallèle, hors périmètre ci-dessus :
+- [x] Android : deep link `meeshy://chat/{conversationId}` (navDeepLink + intent-filter host=chat)
+- [x] Android : onglets ContactsScreen localisés (labelRes, 4 clés en+fr) — solde le différé « ContactsTab enum »
+- [x] Android : ellipsis email SettingsScreen
+- [x] Web : i18n routes `app/` (l/[token], chat/[id] état erreur → JoinError, forgot-password,
+      communities/[id], search Rejoindre, signup Retour) — 4 langues
+- [x] Web : dark mode admin/users/new (textarea/selects/hints), truncate admin/users/[id]
+- [x] iOS : DataExportView FF6B6B → MeeshyColors.error ; overloads ThemeManager(tint: Color)
+- [x] Résolution des conflits avec la PR #577 (périmètre recouvrant → version main retenue)

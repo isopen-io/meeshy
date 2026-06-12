@@ -29,6 +29,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import androidx.compose.ui.res.stringResource
 import me.meeshy.app.R
 import me.meeshy.app.auth.AuthViewModel
@@ -47,6 +48,7 @@ object Routes {
     const val LOGIN = "login"
     const val CONVERSATIONS = "conversations"
     const val CHAT = "chat/{${ChatViewModel.CONVERSATION_ID_ARG}}"
+    const val CHAT_DEEP_LINK = "meeshy://$CHAT"
     const val FEED = "feed"
     const val CONTACTS = "contacts"
     const val NOTIFICATIONS = "notifications"
@@ -173,6 +175,9 @@ fun MeeshyApp() {
                 route = Routes.CHAT,
                 arguments = listOf(
                     navArgument(ChatViewModel.CONVERSATION_ID_ARG) { type = NavType.StringType },
+                ),
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = Routes.CHAT_DEEP_LINK },
                 ),
             ) {
                 ChatScreen(onBack = { navController.popBackStack() })

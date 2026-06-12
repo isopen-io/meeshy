@@ -39,6 +39,7 @@ import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
 import { ConversationDropdown } from '@/components/contacts/ConversationDropdown';
 import { useUser } from '@/stores';
+import { useI18n } from '@/hooks/useI18n';
 import type { ConversationType, Community as BaseCommunity } from '@meeshy/shared/types';
 
 type Community = BaseCommunity & {
@@ -73,6 +74,7 @@ interface FriendRequest {
 export function SearchPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t: tGroups } = useI18n('groups');
   const inputRef = useRef<HTMLInputElement>(null);
   const currentUser = useUser();
 
@@ -755,7 +757,7 @@ export function SearchPageContent() {
                                 className="flex items-center gap-2 h-9 px-4 bg-orange-600 hover:bg-orange-700 dark:bg-orange-700 dark:hover:bg-orange-800 shadow-md hover:shadow-lg transition-all"
                               >
                                 <UserPlus className="h-4 w-4" />
-                                <span className="text-sm">Rejoindre</span>
+                                <span className="text-sm">{tGroups('actions.join')}</span>
                               </Button>
                             </div>
                           </div>

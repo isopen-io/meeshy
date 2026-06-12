@@ -1,5 +1,6 @@
 package me.meeshy.app.contacts
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -59,7 +60,7 @@ fun ContactsScreen(
                     Tab(
                         selected = index == selectedIndex,
                         onClick = { viewModel.selectTab(tab) },
-                        text = { Text(tab.name) },
+                        text = { Text(stringResource(tab.labelRes)) },
                     )
                 }
             }
@@ -76,3 +77,12 @@ fun ContactsScreen(
         }
     }
 }
+
+@get:StringRes
+private val ContactsTab.labelRes: Int
+    get() = when (this) {
+        ContactsTab.Contacts -> R.string.contacts_tab_contacts
+        ContactsTab.Requests -> R.string.contacts_tab_requests
+        ContactsTab.Discover -> R.string.contacts_tab_discover
+        ContactsTab.Blocked -> R.string.contacts_tab_blocked
+    }
