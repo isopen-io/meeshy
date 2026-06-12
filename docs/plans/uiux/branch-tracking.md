@@ -16,13 +16,13 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | **46w** (web only : i18n surface v2 — CommentComposer 7 clés, StatusBar timeRemaining, ThemeToggle 5 clés, TranslationToggle/MediaImageCard `language.original`/`availableTranslations`/`captionLanguage` ; admin UserPicker 8 clés `agent.userPicker.*` ; MessageComposer `#EF4444`×3 → `var(--gp-error)` + hover theme-aware ; overlays click-outside `aria-hidden` MessageBubble/MediaImageCard ; hygiène docs : 36/36 analyses annotées, carry-over purgé de 3 faux restes) |
-| Last merged PR | #597 (45), #596 (45w), #595 (45i), #604 (routine fraîcheur) ; iter-46w sur `claude/elegant-noether-09t4x2` |
-| Last Merged Base (commit) | 945a8d74 (merge #604, contient #597) — base de la branche iter-46w |
-| Next iteration | **47w** — repartir de `main` HEAD post-merge iter-46w |
+| Last completed iteration | **47w** (web only : migration i18n admin agent COMPLÈTE — `AgentConfigDialog` ~122 strings FR dures → `agentConfig.*` (sections Comportement/Triggers/Seuils/Planificateur/Instructions/Recherche Web/Sujets neufs/Génération/Quality Gate/Scheduling/Timeline/Rôles + footer `tCommon('cancel')`/`save` + `createButton` + compteurs paramétrés `{percent}`/`{factor}`/`{count}`/topics) ; `AgentLlmTab` 6 tooltips → `llm.*Help` ; `AgentGlobalConfigTab` 15 tooltips + placeholder → `globalConfig.*Help` ; +145 clés × 4 locales fr/en/es/pt, parité vérifiée par script) |
+| Last merged PR | #605 (46w), #604 (routine fraîcheur), #597 (45) ; iter-47w sur `claude/blissful-ritchie-8d57jg` |
+| Last Merged Base (commit) | d10a80c5 (merge #605) — base de la branche iter-47w (+ merge #608 avant push) |
+| Next iteration | **48** — repartir de `main` HEAD post-merge iter-47w |
 
-### Deferred carry-over — web (pour 47w+)
-- admin : `AgentConfigDialog` (~58 labels/tooltips FR) + tooltips InfoIcon `AgentLlmTab` (6) / `AgentGlobalConfigTab` (15) — à traiter en un lot sous `agent.config.*` (vérifié 46w : debug.tsx, AgentArchetypesTab, BackSoundDetails, UserPicker DÉJÀ corrigés — ne plus auditer)
+### Deferred carry-over — web (pour 48+)
+- ~~admin AgentConfigDialog/AgentLlmTab/AgentGlobalConfigTab i18n~~ → **SOLDÉ en 47w** (arbres `agentConfig.*`/`llm.*Help`/`globalConfig.*Help` étendus — ne plus auditer ces 3 fichiers)
 - chart hex sans variante dark : `RankingStatsImpl` (10+ hex recharts), `MermaidDiagramImpl` (thème mermaid fixe `default`, 6 hex), `AgentOverviewTab` (2 hex pie) ; consolidation `notifications/preferences` page vs composant
 - réactions par pièce jointe (wiring gateway, feature commune web+Android)
 - audit qualité es/pt (relecture des traductions existantes)
@@ -72,4 +72,5 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 45w | claude/elegant-noether-1pen57 | #596 | ✅ |
 | 45i | claude/wizardly-rubin-ux84an | #595 | ✅ |
 | 45 | claude/blissful-ritchie-dp7ibu | #597 | ✅ |
-| 46w | claude/elegant-noether-09t4x2 | ⏳ | ⏳ |
+| 46w | claude/elegant-noether-09t4x2 | #605 | ✅ |
+| 47w | claude/blissful-ritchie-8d57jg | ⏳ | ⏳ |
