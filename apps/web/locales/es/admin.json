@@ -340,7 +340,20 @@
     "created": "Configuración creada",
     "updated": "Configuración actualizada",
     "saveError": "Error al guardar la configuración",
-    "pendingPropagation": "Config guardada — propagación al servicio de agente pendiente (caché puede tardar unos minutos)"
+    "pendingPropagation": "Config guardada — propagación al servicio de agente pendiente (caché puede tardar unos minutos)",
+    "conversationToConfigure": "Conversación a configurar",
+    "searchPlaceholder": "Buscar un grupo, un canal o una discusión...",
+    "conversationSection": "Conversación",
+    "createdOn": "Creado el",
+    "creator": "Creador",
+    "lastActivity": "Última actividad",
+    "identifier": "Identificador",
+    "general": "General",
+    "behaviorContext": "Comportamiento y contexto",
+    "agentEnabled": "Agente activado",
+    "agentEnabledHelp": "Interruptor principal. Si está desactivado, el agente no analizará ningún mensaje y nunca responderá, liberando recursos del servidor.",
+    "autoPickup": "Auto-pickup",
+    "autoPickupHelp": "Modo dinámico: el agente detecta a los usuarios que dejan de responder (ver Umbral de inactividad) y asume su identidad para mantener la conversación activa."
   },
   "security": {
     "enable2FA": "Activar 2FA",

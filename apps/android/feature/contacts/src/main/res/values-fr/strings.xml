@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="contacts_title">Contacts</string>
+    <string name="contacts_back">Retour</string>
+    <string name="contacts_coming_soon">Bientôt disponible</string>
+</resources>

@@ -44,7 +44,7 @@ struct CreateShareLinkView: View {
     @State private var isCreating = false
     @State private var errorMessage: String? = nil
 
-    private let accent = Color(hex: "08D9D6")
+    private let accent = MeeshyColors.shareAccent
 
     var body: some View {
         NavigationStack {
@@ -159,7 +159,7 @@ struct CreateShareLinkView: View {
                     String(localized: "share.link.create.access.account_required", defaultValue: "Compte requis", bundle: .main),
                     subtitle: String(localized: "share.link.create.access.account_required.subtitle", defaultValue: "Seuls les membres Meeshy peuvent rejoindre", bundle: .main),
                     icon: "person.fill.checkmark",
-                    iconColor: "08D9D6",
+                    iconColor: MeeshyColors.shareAccentHex,
                     isOn: $requireAccount
                 )
                 divider
@@ -167,7 +167,7 @@ struct CreateShareLinkView: View {
                     String(localized: "share.link.create.access.nickname_required", defaultValue: "Pseudonyme requis", bundle: .main),
                     subtitle: String(localized: "share.link.create.access.nickname_required.subtitle", defaultValue: "Le visiteur doit choisir un pseudo", bundle: .main),
                     icon: "person.fill",
-                    iconColor: "A855F7",
+                    iconColor: MeeshyColors.trackingAccentHex,
                     isOn: $requireNickname
                 )
                 .disabled(requireAccount)
@@ -177,7 +177,7 @@ struct CreateShareLinkView: View {
                     String(localized: "share.link.create.access.email_required", defaultValue: "Email requis", bundle: .main),
                     subtitle: String(localized: "share.link.create.access.email_required.subtitle", defaultValue: "Le visiteur doit fournir son email", bundle: .main),
                     icon: "envelope.fill",
-                    iconColor: "F8B500",
+                    iconColor: MeeshyColors.communityAccentHex,
                     isOn: $requireEmail
                 )
                 .disabled(requireAccount)
@@ -187,7 +187,7 @@ struct CreateShareLinkView: View {
                     String(localized: "share.link.create.access.birthday_required", defaultValue: "Date de naissance requise", bundle: .main),
                     subtitle: String(localized: "share.link.create.access.birthday_required.subtitle", defaultValue: "Permet le contrôle d'âge", bundle: .main),
                     icon: "calendar",
-                    iconColor: "FF6B6B",
+                    iconColor: MeeshyColors.warningHex,
                     isOn: $requireBirthday
                 )
                 .disabled(requireAccount)
@@ -206,7 +206,7 @@ struct CreateShareLinkView: View {
                     String(localized: "share.link.create.permission.send_messages", defaultValue: "Envoyer des messages", bundle: .main),
                     subtitle: String(localized: "share.link.create.permission.send_messages.subtitle", defaultValue: "Les invités peuvent écrire dans la conversation", bundle: .main),
                     icon: "bubble.left.fill",
-                    iconColor: "08D9D6",
+                    iconColor: MeeshyColors.shareAccentHex,
                     isOn: $allowAnonymousMessages
                 )
                 divider
@@ -214,7 +214,7 @@ struct CreateShareLinkView: View {
                     String(localized: "share.link.create.permission.send_images", defaultValue: "Envoyer des images", bundle: .main),
                     subtitle: String(localized: "share.link.create.permission.send_images.subtitle", defaultValue: "Les invités peuvent partager des photos", bundle: .main),
                     icon: "photo.fill",
-                    iconColor: "4ECDC4",
+                    iconColor: MeeshyColors.indigo300Hex,
                     isOn: $allowAnonymousImages
                 )
                 divider
@@ -222,7 +222,7 @@ struct CreateShareLinkView: View {
                     String(localized: "share.link.create.permission.send_files", defaultValue: "Envoyer des fichiers", bundle: .main),
                     subtitle: String(localized: "share.link.create.permission.send_files.subtitle", defaultValue: "Les invités peuvent envoyer des documents", bundle: .main),
                     icon: "paperclip",
-                    iconColor: "A855F7",
+                    iconColor: MeeshyColors.trackingAccentHex,
                     isOn: $allowAnonymousFiles
                 )
                 divider
@@ -230,7 +230,7 @@ struct CreateShareLinkView: View {
                     String(localized: "share.link.create.permission.view_history", defaultValue: "Voir l'historique", bundle: .main),
                     subtitle: String(localized: "share.link.create.permission.view_history.subtitle", defaultValue: "Les invités voient les messages précédents", bundle: .main),
                     icon: "clock.fill",
-                    iconColor: "F8B500",
+                    iconColor: MeeshyColors.communityAccentHex,
                     isOn: $allowViewHistory
                 )
             }
@@ -245,7 +245,7 @@ struct CreateShareLinkView: View {
             VStack(spacing: 0) {
                 // Max utilisations
                 HStack(spacing: 12) {
-                    iconBadge("person.2.fill", color: "08D9D6")
+                    iconBadge("person.2.fill", color: MeeshyColors.shareAccentHex)
                     Toggle(isOn: $maxUsesEnabled) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(String(localized: "share.link.create.limit_uses", defaultValue: "Limiter les utilisations", bundle: .main))
@@ -294,14 +294,14 @@ struct CreateShareLinkView: View {
 
                 // Expiration
                 HStack(spacing: 12) {
-                    iconBadge("clock.badge.xmark", color: "FF6B6B")
+                    iconBadge("clock.badge.xmark", color: MeeshyColors.warningHex)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(String(localized: "share.link.create.expiration", defaultValue: "Expiration", bundle: .main))
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(theme.textPrimary)
                         Text(expirationOption.label)
                             .font(.system(size: 12))
-                            .foregroundColor(expirationOption == .never ? theme.textSecondary : Color(hex: "FF6B6B"))
+                            .foregroundColor(expirationOption == .never ? theme.textSecondary : MeeshyColors.warning)
                     }
                     Spacer()
                     Picker(String(localized: "share.link.create.expiration", defaultValue: "Expiration", bundle: .main), selection: $expirationOption) {
@@ -356,7 +356,7 @@ struct CreateShareLinkView: View {
                     } else {
                         RoundedRectangle(cornerRadius: 16)
                             .fill(LinearGradient(
-                                colors: [Color(hex: "08D9D6"), Color(hex: "4ECDC4")],
+                                colors: [MeeshyColors.shareAccent, MeeshyColors.indigo300],
                                 startPoint: .leading, endPoint: .trailing
                             ))
                     }
@@ -466,12 +466,12 @@ struct CreateShareLinkView: View {
 
     private func conversationTypeIcon(_ type: Conversation.ConversationType) -> some View {
         let (icon, color): (String, String) = switch type {
-        case .group:     ("person.3.fill", "08D9D6")
-        case .community: ("person.3.sequence.fill", "F8B500")
-        case .channel:   ("megaphone.fill", "A855F7")
-        case .public:    ("globe", "4ECDC4")
-        case .broadcast:  ("megaphone.fill", "A855F7")
-        default:         ("bubble.left.and.bubble.right.fill", "08D9D6")
+        case .group:     ("person.3.fill", MeeshyColors.shareAccentHex)
+        case .community: ("person.3.sequence.fill", MeeshyColors.communityAccentHex)
+        case .channel:   ("megaphone.fill", MeeshyColors.trackingAccentHex)
+        case .public:    ("globe", MeeshyColors.indigo300Hex)
+        case .broadcast:  ("megaphone.fill", MeeshyColors.trackingAccentHex)
+        default:         ("bubble.left.and.bubble.right.fill", MeeshyColors.shareAccentHex)
         }
         return iconBadge(icon, color: color)
     }
@@ -565,7 +565,7 @@ private struct ConversationPickerSheet: View {
                                         Spacer()
                                         if selected?.id == conv.id {
                                             Image(systemName: "checkmark.circle.fill")
-                                                .foregroundColor(Color(hex: "08D9D6"))
+                                                .foregroundColor(MeeshyColors.shareAccent)
                                         }
                                     }
                                 }
@@ -588,7 +588,7 @@ private struct ConversationPickerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { isPresented = false }
-                        .foregroundColor(Color(hex: "08D9D6"))
+                        .foregroundColor(MeeshyColors.shareAccent)
                 }
             }
         }
@@ -630,14 +630,14 @@ private enum ExpirationOption: String, CaseIterable {
 private extension MeeshyConversation.ConversationType {
     var displayLabel: String {
         switch self {
-        case .direct:    "Message direct"
-        case .group:     "Groupe"
-        case .public:    "Public"
-        case .global:    "Globale"
-        case .community: "Communauté"
-        case .channel:   "Canal"
-        case .bot:       "Bot"
-        case .broadcast: "Communication"
+        case .direct:    String(localized: "conversationType.direct", defaultValue: "Message direct", bundle: .main)
+        case .group:     String(localized: "conversationType.group", defaultValue: "Groupe", bundle: .main)
+        case .public:    String(localized: "conversationType.public", defaultValue: "Public", bundle: .main)
+        case .global:    String(localized: "conversationType.global", defaultValue: "Globale", bundle: .main)
+        case .community: String(localized: "conversationType.community", defaultValue: "Communauté", bundle: .main)
+        case .channel:   String(localized: "conversationType.channel", defaultValue: "Canal", bundle: .main)
+        case .bot:       String(localized: "conversationType.bot", defaultValue: "Bot", bundle: .main)
+        case .broadcast: String(localized: "conversationType.broadcast", defaultValue: "Communication", bundle: .main)
         }
     }
 }
