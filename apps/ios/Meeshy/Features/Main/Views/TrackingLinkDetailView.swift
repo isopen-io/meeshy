@@ -50,31 +50,31 @@ struct TrackingLinkDetailView: View {
     private var headerCard: some View {
         VStack(spacing: 10) {
             ZStack {
-                Circle().fill(Color(hex: link.isActive ? "A855F7" : "888888").opacity(0.15))
+                Circle().fill((link.isActive ? MeeshyColors.trackingAccent : MeeshyColors.inactiveState).opacity(0.15))
                     .frame(width: 60, height: 60)
                 Image(systemName: "chart.bar.fill").font(.system(size: 26))
-                    .foregroundColor(Color(hex: link.isActive ? "A855F7" : "888888"))
+                    .foregroundColor((link.isActive ? MeeshyColors.trackingAccent : MeeshyColors.inactiveState))
             }
             Text(link.displayName).font(.system(size: 18, weight: .bold)).foregroundColor(theme.textPrimary)
             Text(link.shortUrl).font(.system(size: 12, design: .monospaced))
                 .foregroundColor(theme.textSecondary).lineLimit(1)
             HStack(spacing: 6) {
-                if let c = link.campaign { utmTag(c, color: "A855F7") }
-                if let s = link.source { utmTag(s, color: "6366F1") }
-                if let m = link.medium { utmTag(m, color: "08D9D6") }
+                if let c = link.campaign { utmTag(c, color: MeeshyColors.trackingAccent) }
+                if let s = link.source { utmTag(s, color: MeeshyColors.indigo500) }
+                if let m = link.medium { utmTag(m, color: MeeshyColors.shareLinkAccent) }
             }
         }
         .padding(20).frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 20).fill(theme.surfaceGradient(tint: "A855F7"))
+        .background(RoundedRectangle(cornerRadius: 20).fill(theme.surfaceGradient(tint: MeeshyColors.trackingAccent))
             .overlay(RoundedRectangle(cornerRadius: 20)
-                .stroke(Color(hex: "A855F7").opacity(0.2), lineWidth: 1)))
+                .stroke(MeeshyColors.trackingAccent.opacity(0.2), lineWidth: 1)))
     }
 
-    private func utmTag(_ value: String, color: String) -> some View {
+    private func utmTag(_ value: String, color: Color) -> some View {
         Text(value).font(.system(size: 11, weight: .medium))
-            .foregroundColor(Color(hex: color))
+            .foregroundColor(color)
             .padding(.horizontal, 8).padding(.vertical, 3)
-            .background(Capsule().fill(Color(hex: color).opacity(0.12)))
+            .background(Capsule().fill(color.opacity(0.12)))
     }
 
     // MARK: - Actions bar
@@ -82,38 +82,40 @@ struct TrackingLinkDetailView: View {
     private var actionsBar: some View {
         HStack(spacing: 10) {
             detailActionButton(String(localized: "tracking.link.detail.copy", defaultValue: "Copier", bundle: .main), icon: copiedFeedback ? "checkmark" : "doc.on.doc",
-                               color: copiedFeedback ? "2ECC71" : "A855F7") {
+                               color: copiedFeedback ? MeeshyColors.success : MeeshyColors.trackingAccent) {
                 UIPasteboard.general.string = link.shortUrl
                 HapticFeedback.success()
                 withAnimation { copiedFeedback = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation { copiedFeedback = false } }
             }
-            detailActionButton(String(localized: "tracking.link.detail.share", defaultValue: "Partager", bundle: .main), icon: "square.and.arrow.up", color: "A855F7") {
+            detailActionButton(String(localized: "tracking.link.detail.share", defaultValue: "Partager", bundle: .main), icon: "square.and.arrow.up", color: MeeshyColors.trackingAccent) {
                 guard let url = URL(string: link.shortUrl) else { return }
                 let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
                 presentVC(av)
             }
-            detailActionButton(String(localized: "tracking.link.detail.qr", defaultValue: "QR Code", bundle: .main), icon: "qrcode", color: "6366F1") {
+            detailActionButton(String(localized: "tracking.link.detail.qr", defaultValue: "QR Code", bundle: .main), icon: "qrcode", color: MeeshyColors.indigo500) {
                 generateQRAndShare()
             }
-            detailActionButton(String(localized: "tracking.link.detail.delete", defaultValue: "Supprimer", bundle: .main), icon: "trash", color: "FF2E63") {
+            detailActionButton(String(localized: "tracking.link.detail.delete", defaultValue: "Supprimer", bundle: .main), icon: "trash", color: Color(hex: "FF2E63")) {
                 showDeleteConfirm = true
             }
         }
     }
 
-    private func detailActionButton(_ label: String, icon: String, color: String, action: @escaping () -> Void) -> some View {
+    private func detailActionButton(_ label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 5) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12).fill(Color(hex: color).opacity(0.15))
+                    RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
                         .frame(width: 46, height: 46)
                     Image(systemName: icon).font(.system(size: 18))
-                        .foregroundColor(Color(hex: color))
+                        .foregroundColor(color)
                 }
                 Text(label).font(.system(size: 9, weight: .medium)).foregroundColor(theme.textSecondary)
             }
-        }.frame(maxWidth: .infinity)
+        }
+        .accessibilityLabel(label)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Main stats
@@ -122,8 +124,8 @@ struct TrackingLinkDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle(String(localized: "tracking.link.detail.stats.title", defaultValue: "STATISTIQUES", bundle: .main))
             HStack(spacing: 12) {
-                bigStatCard("\(link.totalClicks)", label: String(localized: "tracking.link.detail.stats.totalClicks", defaultValue: "Total clics", bundle: .main), icon: "cursorarrow.click", color: "A855F7")
-                bigStatCard("\(link.uniqueClicks)", label: String(localized: "tracking.link.detail.stats.uniqueClicks", defaultValue: "Clics uniques", bundle: .main), icon: "person.fill", color: "6366F1")
+                bigStatCard("\(link.totalClicks)", label: String(localized: "tracking.link.detail.stats.totalClicks", defaultValue: "Total clics", bundle: .main), icon: "cursorarrow.click", color: MeeshyColors.trackingAccent)
+                bigStatCard("\(link.uniqueClicks)", label: String(localized: "tracking.link.detail.stats.uniqueClicks", defaultValue: "Clics uniques", bundle: .main), icon: "person.fill", color: MeeshyColors.indigo500)
             }
             if let last = link.lastClickedAt {
                 HStack {
@@ -136,9 +138,9 @@ struct TrackingLinkDetailView: View {
         }
     }
 
-    private func bigStatCard(_ value: String, label: String, icon: String, color: String) -> some View {
+    private func bigStatCard(_ value: String, label: String, icon: String, color: Color) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).font(.system(size: 24)).foregroundColor(Color(hex: color))
+            Image(systemName: icon).font(.system(size: 24)).foregroundColor(color)
             VStack(alignment: .leading, spacing: 2) {
                 Text(value).font(.system(size: 26, weight: .bold)).foregroundColor(theme.textPrimary)
                 Text(label).font(.system(size: 12)).foregroundColor(theme.textSecondary)
@@ -147,28 +149,28 @@ struct TrackingLinkDetailView: View {
         }
         .padding(14).frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: 14).fill(theme.surfaceGradient(tint: color))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: color).opacity(0.2), lineWidth: 1)))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(color.opacity(0.2), lineWidth: 1)))
     }
 
     // MARK: - Geo breakdown
 
     private var geoBreakdown: some View {
-        breakdownCard(title: String(localized: "tracking.link.detail.countries", defaultValue: "PAYS", bundle: .main), icon: "globe", color: "08D9D6", items: viewModel.topCountries)
+        breakdownCard(title: String(localized: "tracking.link.detail.countries", defaultValue: "PAYS", bundle: .main), icon: "globe", color: MeeshyColors.shareLinkAccent, items: viewModel.topCountries)
     }
 
     // MARK: - Device breakdown
 
     private var deviceBreakdown: some View {
         VStack(spacing: 12) {
-            breakdownCard(title: String(localized: "tracking.link.detail.devices", defaultValue: "APPAREILS", bundle: .main), icon: "iphone", color: "6366F1", items: viewModel.topDevices)
-            breakdownCard(title: String(localized: "tracking.link.detail.browsers", defaultValue: "NAVIGATEURS", bundle: .main), icon: "safari.fill", color: "2ECC71", items: viewModel.topBrowsers)
+            breakdownCard(title: String(localized: "tracking.link.detail.devices", defaultValue: "APPAREILS", bundle: .main), icon: "iphone", color: MeeshyColors.indigo500, items: viewModel.topDevices)
+            breakdownCard(title: String(localized: "tracking.link.detail.browsers", defaultValue: "NAVIGATEURS", bundle: .main), icon: "safari.fill", color: MeeshyColors.success, items: viewModel.topBrowsers)
         }
     }
 
-    private func breakdownCard(title: String, icon: String, color: String, items: [(String, Int)]) -> some View {
+    private func breakdownCard(title: String, icon: String, color: Color, items: [(String, Int)]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: icon).font(.system(size: 13)).foregroundColor(Color(hex: color))
+                Image(systemName: icon).font(.system(size: 13)).foregroundColor(color)
                 sectionTitle(title)
             }
             if items.isEmpty {
@@ -188,14 +190,14 @@ struct TrackingLinkDetailView: View {
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.08), lineWidth: 1)))
     }
 
-    private func breakdownRow(_ label: String, count: Int, total: Int, color: String) -> some View {
+    private func breakdownRow(_ label: String, count: Int, total: Int, color: Color) -> some View {
         let pct = total > 0 ? CGFloat(count) / CGFloat(total) : 0
         return HStack(spacing: 8) {
             Text(label).font(.system(size: 13)).foregroundColor(theme.textPrimary).frame(width: 80, alignment: .leading)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4).fill(Color(hex: color).opacity(0.15)).frame(height: 8)
-                    RoundedRectangle(cornerRadius: 4).fill(Color(hex: color).opacity(0.7))
+                    RoundedRectangle(cornerRadius: 4).fill(color.opacity(0.15)).frame(height: 8)
+                    RoundedRectangle(cornerRadius: 4).fill(color.opacity(0.7))
                         .frame(width: geo.size.width * pct, height: 8)
                 }
             }
@@ -211,7 +213,7 @@ struct TrackingLinkDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "list.bullet.clipboard").font(.system(size: 13))
-                    .foregroundColor(Color(hex: "A855F7"))
+                    .foregroundColor(MeeshyColors.trackingAccent)
                 sectionTitle(String(localized: "tracking.link.detail.recentClicks", defaultValue: "DERNIERS CLICS", bundle: .main))
                 Spacer()
                 if viewModel.isLoadingMore { ProgressView().scaleEffect(0.7) }
@@ -242,7 +244,7 @@ struct TrackingLinkDetailView: View {
                     Text(click.city ?? click.country ?? String(localized: "tracking.link.detail.unknown", defaultValue: "Inconnu", bundle: .main))
                         .font(.system(size: 13, weight: .medium)).foregroundColor(theme.textPrimary)
                     if let social = click.socialSource {
-                        Text("· \(social)").font(.system(size: 12)).foregroundColor(Color(hex: "A855F7"))
+                        Text("· \(social)").font(.system(size: 12)).foregroundColor(MeeshyColors.trackingAccent)
                     }
                 }
                 HStack(spacing: 4) {
@@ -269,17 +271,17 @@ struct TrackingLinkDetailView: View {
 
     private var utmInfoSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("CONFIGURATION UTM")
+            sectionTitle(String(localized: "tracking.link.detail.utm.title", defaultValue: "CONFIGURATION UTM", bundle: .main))
             VStack(spacing: 0) {
-                if let c = link.campaign { infoRow("Campaign", value: c) }
+                if let c = link.campaign { infoRow(String(localized: "tracking.link.detail.utm.campaign", defaultValue: "Campaign", bundle: .main), value: c) }
                 if link.campaign != nil && link.source != nil { Divider().padding(.leading, 16) }
-                if let s = link.source { infoRow("Source", value: s) }
+                if let s = link.source { infoRow(String(localized: "tracking.link.detail.utm.source", defaultValue: "Source", bundle: .main), value: s) }
                 if link.source != nil && link.medium != nil { Divider().padding(.leading, 16) }
-                if let m = link.medium { infoRow("Medium", value: m) }
+                if let m = link.medium { infoRow(String(localized: "tracking.link.detail.utm.medium", defaultValue: "Medium", bundle: .main), value: m) }
                 Divider().padding(.leading, 16)
-                infoRow("URL destination", value: link.originalUrl)
+                infoRow(String(localized: "tracking.link.detail.utm.destination", defaultValue: "URL destination", bundle: .main), value: link.originalUrl)
                 Divider().padding(.leading, 16)
-                infoRow("Créé le", value: link.createdAt.formatted(date: .abbreviated, time: .shortened))
+                infoRow(String(localized: "tracking.link.detail.utm.createdAt", defaultValue: "Créé le", bundle: .main), value: link.createdAt.formatted(date: .abbreviated, time: .shortened))
             }
             .background(RoundedRectangle(cornerRadius: 14)
                 .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
@@ -312,10 +314,10 @@ struct TrackingLinkDetailView: View {
 
     private func deviceColor(_ device: String?) -> Color {
         switch device?.lowercased() {
-        case "mobile", "phone": return Color(hex: "A855F7")
-        case "tablet": return Color(hex: "6366F1")
-        case "desktop": return Color(hex: "08D9D6")
-        default: return Color(hex: "888888")
+        case "mobile", "phone": return MeeshyColors.trackingAccent
+        case "tablet": return MeeshyColors.indigo500
+        case "desktop": return MeeshyColors.shareLinkAccent
+        default: return MeeshyColors.inactiveState
         }
     }
 

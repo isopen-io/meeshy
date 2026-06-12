@@ -50,6 +50,13 @@ public nonisolated struct MeeshyColors {
         isDark ? errorDark : error
     }
 
+    // MARK: - Feature Accents (link surfaces)
+
+    public static let trackingAccent = indigo600
+    public static let shareLinkAccent = indigo400
+    public static let communityAccent = warning
+    public static let inactiveState = neutral400
+
     // MARK: - Brand Gradient (The Signature)
 
     public static let brandGradient = LinearGradient(

@@ -30,30 +30,30 @@ struct CommunityLinkDetailView: View {
     private var headerCard: some View {
         VStack(spacing: 10) {
             ZStack {
-                Circle().fill(Color(hex: "F8B500").opacity(0.15)).frame(width: 60, height: 60)
+                Circle().fill(MeeshyColors.communityAccent.opacity(0.15)).frame(width: 60, height: 60)
                 Image(systemName: "person.3.fill").font(.system(size: 26))
-                    .foregroundColor(Color(hex: "F8B500"))
+                    .foregroundColor(MeeshyColors.communityAccent)
             }
             Text(link.name).font(.system(size: 20, weight: .bold)).foregroundColor(theme.textPrimary)
             Text(link.joinUrl).font(.system(size: 12, design: .monospaced))
                 .foregroundColor(theme.textSecondary).lineLimit(2).multilineTextAlignment(.center)
         }
         .padding(20).frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 20).fill(theme.surfaceGradient(tint: "F8B500"))
+        .background(RoundedRectangle(cornerRadius: 20).fill(theme.surfaceGradient(tint: MeeshyColors.communityAccent))
             .overlay(RoundedRectangle(cornerRadius: 20)
-                .stroke(Color(hex: "F8B500").opacity(0.2), lineWidth: 1)))
+                .stroke(MeeshyColors.communityAccent.opacity(0.2), lineWidth: 1)))
     }
 
     private var actionsBar: some View {
         HStack(spacing: 12) {
             communityActionButton(String(localized: "common.copy", defaultValue: "Copy", bundle: .main), icon: copiedFeedback ? "checkmark" : "doc.on.doc",
-                                  color: copiedFeedback ? "2ECC71" : "F8B500") {
+                                  color: copiedFeedback ? MeeshyColors.success : MeeshyColors.communityAccent) {
                 UIPasteboard.general.string = link.joinUrl
                 HapticFeedback.success()
                 withAnimation { copiedFeedback = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation { copiedFeedback = false } }
             }
-            communityActionButton(String(localized: "common.share", defaultValue: "Share", bundle: .main), icon: "square.and.arrow.up", color: "F8B500") {
+            communityActionButton(String(localized: "common.share", defaultValue: "Share", bundle: .main), icon: "square.and.arrow.up", color: MeeshyColors.communityAccent) {
                 guard let url = URL(string: link.joinUrl) else { return }
                 let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
                 guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -61,20 +61,20 @@ struct CommunityLinkDetailView: View {
                       let root = window.rootViewController else { return }
                 root.present(av, animated: true)
             }
-            communityActionButton(String(localized: "communityLink.identify", defaultValue: "Identify", bundle: .main), icon: "doc.plaintext", color: "6366F1") {
+            communityActionButton(String(localized: "communityLink.identify", defaultValue: "Identify", bundle: .main), icon: "doc.plaintext", color: MeeshyColors.indigo500) {
                 UIPasteboard.general.string = link.identifier
                 HapticFeedback.light()
             }
         }
     }
 
-    private func communityActionButton(_ label: String, icon: String, color: String, action: @escaping () -> Void) -> some View {
+    private func communityActionButton(_ label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12).fill(Color(hex: color).opacity(0.15))
+                    RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
                         .frame(width: 52, height: 52)
-                    Image(systemName: icon).font(.system(size: 22)).foregroundColor(Color(hex: color))
+                    Image(systemName: icon).font(.system(size: 22)).foregroundColor(color)
                 }
                 Text(label).font(.system(size: 10, weight: .medium)).foregroundColor(theme.textSecondary)
             }
@@ -85,19 +85,19 @@ struct CommunityLinkDetailView: View {
         HStack(spacing: 12) {
             communityStatCard("\(link.memberCount)",
                               label: String(localized: "communityLink.members", defaultValue: "Membres", bundle: .main),
-                              icon: "person.fill", color: "F8B500")
+                              icon: "person.fill", color: MeeshyColors.communityAccent)
             communityStatCard(link.isActive
                               ? String(localized: "common.active", defaultValue: "Actif", bundle: .main)
                               : String(localized: "common.inactive", defaultValue: "Inactif", bundle: .main),
                               label: String(localized: "communityLink.status", defaultValue: "Statut", bundle: .main),
                               icon: "checkmark.circle.fill",
-                              color: link.isActive ? "2ECC71" : "888888")
+                              color: link.isActive ? MeeshyColors.success : MeeshyColors.inactiveState)
         }
     }
 
-    private func communityStatCard(_ value: String, label: String, icon: String, color: String) -> some View {
+    private func communityStatCard(_ value: String, label: String, icon: String, color: Color) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).font(.system(size: 22)).foregroundColor(Color(hex: color))
+            Image(systemName: icon).font(.system(size: 22)).foregroundColor(color)
             VStack(alignment: .leading, spacing: 2) {
                 Text(value).font(.system(size: 22, weight: .bold)).foregroundColor(theme.textPrimary)
                 Text(label).font(.system(size: 12)).foregroundColor(theme.textSecondary)
@@ -106,7 +106,7 @@ struct CommunityLinkDetailView: View {
         }
         .padding(14).frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: 14).fill(theme.surfaceGradient(tint: color))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: color).opacity(0.2), lineWidth: 1)))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(color.opacity(0.2), lineWidth: 1)))
     }
 
     private var infoSection: some View {

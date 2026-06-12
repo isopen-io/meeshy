@@ -462,7 +462,7 @@ struct FeedView: View {
                     .frame(width: 40, height: 40)
 
                 Text("M")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.headline)
                     .foregroundColor(.white)
             }
 
@@ -478,7 +478,7 @@ struct FeedView: View {
             }) {
                 HStack {
                     Text(String(localized: "Partager quelque chose avec le monde...", defaultValue: "Partager quelque chose avec le monde..."))
-                        .font(.system(size: 14))
+                        .font(.callout)
                         .foregroundColor(theme.textMuted)
                     Spacer()
                 }
@@ -787,10 +787,10 @@ struct FeedView: View {
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.up")
-                                .font(.system(size: 12, weight: .bold))
+                                .font(.body.weight(.bold))
 
                             Text(newPostsBannerText)
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.subheadline.weight(.semibold))
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, 20)
@@ -948,14 +948,14 @@ struct FeedView: View {
                         }
                     } label: {
                         Text(String(localized: "Annuler", defaultValue: "Annuler"))
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.body.weight(.medium))
                             .foregroundColor(theme.textSecondary)
                     }
 
                     Spacer()
 
                     Text(String(localized: "Nouveau post", defaultValue: "Nouveau post"))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.headline)
                         .foregroundColor(theme.textPrimary)
 
                     Spacer()
@@ -969,7 +969,7 @@ struct FeedView: View {
                                 .scaleEffect(0.8)
                         } else {
                             Text(String(localized: "Publier", defaultValue: "Publier"))
-                                .font(.system(size: 15, weight: .bold))
+                                .font(.body.weight(.bold))
                                 .foregroundColor(composerHasContent ? MeeshyColors.indigo300 : theme.textMuted)
                         }
                     }
@@ -992,7 +992,7 @@ struct FeedView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(getUserDisplayName(AuthManager.shared.currentUser, fallback: "Moi"))
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.callout.weight(.semibold))
                             .foregroundColor(theme.textPrimary)
 
                         Menu {
@@ -1008,9 +1008,9 @@ struct FeedView: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: postVisibility == "PUBLIC" ? "globe" : postVisibility == "FRIENDS" ? "person.2" : "lock")
-                                    .font(.system(size: 10))
+                                    .font(.caption2)
                                 Text(postVisibility == "PUBLIC" ? String(localized: "Public", defaultValue: "Public") : postVisibility == "FRIENDS" ? String(localized: "Amis", defaultValue: "Amis") : String(localized: "Prive", defaultValue: "Priv\u{00E9}"))
-                                    .font(.system(size: 12))
+                                    .font(.caption)
                             }
                             .foregroundColor(theme.textMuted)
                         }
@@ -1025,7 +1025,7 @@ struct FeedView: View {
                 ZStack(alignment: .topLeading) {
                     if composerText.isEmpty {
                         Text(String(localized: "Qu'avez-vous en tete ?", defaultValue: "Qu'avez-vous en t\u{00EA}te ?"))
-                            .font(.system(size: 17))
+                            .font(.body)
                             .foregroundColor(theme.textMuted)
                             .padding(.horizontal, 16)
                             .padding(.top, 12)
@@ -1035,7 +1035,7 @@ struct FeedView: View {
                         .focused($isComposerFocused)
                         .scrollContentBackground(.hidden)
                         .foregroundColor(theme.textPrimary)
-                        .font(.system(size: 17))
+                        .font(.body)
                         .frame(minHeight: 120)
                         .padding(.horizontal, 12)
                         .padding(.top, 4)
@@ -1109,9 +1109,9 @@ struct FeedView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "globe")
-                                .font(.system(size: 14))
+                                .font(.caption)
                             Text(composerLanguageDisplayName)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.caption.weight(.semibold))
                         }
                         .foregroundColor(MeeshyColors.indigo500)
                         .padding(.horizontal, 10)

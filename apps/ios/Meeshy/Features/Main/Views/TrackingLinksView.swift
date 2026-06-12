@@ -11,7 +11,7 @@ struct TrackingLinksView: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    private let accentColor = "A855F7"
+    private let accentColor = MeeshyColors.trackingAccent
 
     var body: some View {
         ZStack {
@@ -52,7 +52,7 @@ struct TrackingLinksView: View {
             } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundColor(accentColor)
             }
 
             Spacer()
@@ -69,7 +69,7 @@ struct TrackingLinksView: View {
             } label: {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 22))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundColor(accentColor)
             }
         }
         .padding(.horizontal, 16)
@@ -89,7 +89,7 @@ struct TrackingLinksView: View {
         VStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.system(size: 16))
-                .foregroundColor(Color(hex: "A855F7"))
+                .foregroundColor(MeeshyColors.trackingAccent)
             Text(value)
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(theme.textPrimary)
@@ -101,9 +101,9 @@ struct TrackingLinksView: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(theme.surfaceGradient(tint: "A855F7"))
+                .fill(theme.surfaceGradient(tint: MeeshyColors.trackingAccent))
                 .overlay(RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color(hex: "A855F7").opacity(0.2), lineWidth: 1))
+                    .stroke(MeeshyColors.trackingAccent.opacity(0.2), lineWidth: 1))
         )
     }
 
@@ -131,7 +131,7 @@ struct TrackingLinksView: View {
     private var trackingEmptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "chart.bar.fill")
-                .font(.system(size: 40)).foregroundColor(Color(hex: "A855F7").opacity(0.6))
+                .font(.system(size: 40)).foregroundColor(MeeshyColors.trackingAccent.opacity(0.6))
             Text(String(localized: "tracking.links.empty.title", defaultValue: "Aucun lien de tracking", bundle: .main)).font(.system(size: 15, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
             Text(String(localized: "tracking.links.empty.subtitle", defaultValue: "Créez un lien pour suivre vos clics et campagnes", bundle: .main))
@@ -144,11 +144,11 @@ struct TrackingLinksView: View {
     private func trackingLinkRow(_ link: TrackingLink) -> some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle().fill(Color(hex: link.isActive ? "A855F7" : "888888").opacity(0.15))
+                Circle().fill((link.isActive ? MeeshyColors.trackingAccent : MeeshyColors.inactiveState).opacity(0.15))
                     .frame(width: 40, height: 40)
                 Image(systemName: "chart.bar.fill")
                     .font(.system(size: 16))
-                    .foregroundColor(Color(hex: link.isActive ? "A855F7" : "888888"))
+                    .foregroundColor((link.isActive ? MeeshyColors.trackingAccent : MeeshyColors.inactiveState))
             }
 
             VStack(alignment: .leading, spacing: 3) {
@@ -156,7 +156,7 @@ struct TrackingLinksView: View {
                     .foregroundColor(theme.textPrimary).lineLimit(1)
                 HStack(spacing: 6) {
                     Text(String(localized: "tracking.links.row.clicks", defaultValue: "\(link.totalClicks) clics", bundle: .main))
-                        .font(.system(size: 12)).foregroundColor(Color(hex: "A855F7"))
+                        .font(.system(size: 12)).foregroundColor(MeeshyColors.trackingAccent)
                     Text(String(localized: "tracking.links.row.uniques", defaultValue: "· \(link.uniqueClicks) uniques", bundle: .main))
                         .font(.system(size: 12)).foregroundColor(theme.textMuted)
                     if let c = link.campaign {
@@ -172,17 +172,19 @@ struct TrackingLinksView: View {
                 HapticFeedback.success()
             } label: {
                 Image(systemName: "doc.on.doc").font(.system(size: 16))
-                    .foregroundColor(Color(hex: "A855F7"))
-            }.padding(.horizontal, 4)
+                    .foregroundColor(MeeshyColors.trackingAccent)
+            }
+            .accessibilityLabel(String(localized: "action.copy", defaultValue: "Copier", bundle: .main))
+            .padding(.horizontal, 4)
 
             Image(systemName: "chevron.right").font(.system(size: 12)).foregroundColor(theme.textMuted)
         }
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(theme.surfaceGradient(tint: "A855F7"))
+                .fill(theme.surfaceGradient(tint: MeeshyColors.trackingAccent))
                 .overlay(RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color(hex: "A855F7").opacity(0.15), lineWidth: 1))
+                    .stroke(MeeshyColors.trackingAccent.opacity(0.15), lineWidth: 1))
         )
     }
 }
