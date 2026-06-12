@@ -1355,7 +1355,7 @@ export class NotificationService {
      * bucket 1 est sauté pour éviter la double notification.
      * Défaut STORY (compat avec les appels existants).
      */
-    postType?: 'STORY' | 'POST' | 'MOOD' | 'STATUS';
+    postType?: 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
     /**
      * User IDs to exclude from fan-out buckets (story_thread_reply, friend_story_comment).
      * Use to pass mentionedUserIds so users who received user_mentioned don't also get
@@ -1394,18 +1394,20 @@ export class NotificationService {
     // restauré côté NSE après la donation d'intent), le body reste le contenu
     // du commentaire.
     const postType = params.postType ?? 'STORY';
-    const NOUN: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS', string> = {
+    const NOUN: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL', string> = {
       STORY: 'story',
       POST: 'publication',
       MOOD: 'humeur',
       STATUS: 'statut',
+      REEL: 'reel',
     };
     const noun = NOUN[postType];
-    const ARTICLE: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS', string> = {
+    const ARTICLE: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL', string> = {
       STORY: 'une',
       POST: 'une',
       MOOD: 'une',
       STATUS: 'un',
+      REEL: 'un',
     };
     const article = ARTICLE[postType];
     const authorName = postAuthor?.displayName?.trim()
@@ -1691,7 +1693,7 @@ export class NotificationService {
   async createFriendContentNotificationsBatch(params: {
     postId: string;
     authorId: string;
-    contentType: 'STORY' | 'POST' | 'MOOD' | 'STATUS';
+    contentType: 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
     excerpt?: string;
     /**
      * User IDs to exclude from fan-out.
@@ -1699,11 +1701,12 @@ export class NotificationService {
      */
     excludeUserIds?: string[];
   }): Promise<void> {
-    const typeMap: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS', 'friend_new_story' | 'friend_new_post' | 'friend_new_mood'> = {
+    const typeMap: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL', 'friend_new_story' | 'friend_new_post' | 'friend_new_mood'> = {
       STORY: 'friend_new_story',
       POST: 'friend_new_post',
       MOOD: 'friend_new_mood',
       STATUS: 'friend_new_mood',
+      REEL: 'friend_new_post',
     };
     const notificationType = typeMap[params.contentType];
 
@@ -1727,21 +1730,24 @@ export class NotificationService {
     const excludeSet = new Set(params.excludeUserIds ?? []);
     const excerpt = params.excerpt ? this.truncateMessage(params.excerpt) : '';
 
-    const fallbackContent: Record<'friend_new_story' | 'friend_new_post' | 'friend_new_mood', string> = {
-      friend_new_story: 'a publié une nouvelle story',
-      friend_new_post: 'a publié un nouveau post',
-      friend_new_mood: 'a publié une nouvelle humeur',
+    const fallbackContent: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL', string> = {
+      STORY: 'a publié une nouvelle story',
+      POST: 'a publié un nouveau post',
+      MOOD: 'a publié une nouvelle humeur',
+      STATUS: 'a publié une nouvelle humeur',
+      REEL: 'a publié un nouveau reel',
     };
-    const content = excerpt || fallbackContent[notificationType];
+    const content = excerpt || fallbackContent[params.contentType];
 
     // Subtitle typé : quand le body est l'extrait du contenu, le destinataire
     // doit quand même savoir s'il s'agit d'une story, d'une publication ou
     // d'une humeur — le type voyage en subtitle (APN-natif, restauré par le NSE).
-    const subtitleByContentType: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS', string> = {
+    const subtitleByContentType: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL', string> = {
       STORY: 'Nouvelle story',
       POST: 'Nouvelle publication',
       MOOD: 'Nouvelle humeur',
       STATUS: 'Nouveau statut',
+      REEL: 'Nouveau reel',
     };
     const subtitle = subtitleByContentType[params.contentType];
 
@@ -2163,7 +2169,7 @@ export class NotificationService {
     commentId: string;
     commentPreview: string;
     /** Type du post commenté — pilote le wording du subtitle. Défaut POST. */
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS';
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
     /** Extrait du post commenté (≤ ~80 chars) pour identifier LE post visé. */
     postPreview?: string;
   }): Promise<Notification | null> {
@@ -2178,11 +2184,12 @@ export class NotificationService {
     // Subtitle = la cible du commentaire (« Votre humeur : « … » ») ; body =
     // le texte du commentaire. Le destinataire sait QUOI a été commenté sans
     // ouvrir l'app.
-    const ownerLabel: Record<'POST' | 'STORY' | 'MOOD' | 'STATUS', string> = {
+    const ownerLabel: Record<'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL', string> = {
       POST: 'Votre publication',
       STORY: 'Votre story',
       MOOD: 'Votre humeur',
       STATUS: 'Votre statut',
+      REEL: 'Votre reel',
     };
     const label = ownerLabel[params.postType ?? 'POST'];
     const trimmedPostPreview = params.postPreview?.trim() ?? '';
@@ -2227,7 +2234,7 @@ export class NotificationService {
     postAuthorId: string;
     repostId: string;
     /** Type du post partagé — pilote le wording. Défaut POST. */
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS';
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
     /** Extrait du post partagé pour identifier LE contenu repris. */
     postPreview?: string;
   }): Promise<Notification | null> {
@@ -2239,11 +2246,12 @@ export class NotificationService {
     });
     if (!actor) return null;
 
-    const repostNoun: Record<'POST' | 'STORY' | 'MOOD' | 'STATUS', string> = {
+    const repostNoun: Record<'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL', string> = {
       POST: 'votre publication',
       STORY: 'votre story',
       MOOD: 'votre humeur',
       STATUS: 'votre statut',
+      REEL: 'votre reel',
     };
     const trimmedPostPreview = params.postPreview?.trim() ?? '';
     const subtitle = trimmedPostPreview !== ''

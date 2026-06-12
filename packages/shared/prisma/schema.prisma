@@ -2694,6 +2694,7 @@ enum PostType {
   POST   // Permanent — feed classique (texte, media, reposts, commentaires)
   STORY  // Éphémère 21h — image/texte/vidéo/lien avec effets et audio
   STATUS // Éphémère 1h  — mood textuel avec audio optionnel
+  REEL   // Permanent — média plein écran (vidéo / images), feed vertical dédié à scroll continu
 }
 
 /// Visibilité d'un post

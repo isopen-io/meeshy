@@ -87,6 +87,38 @@ export function registerFeedRoutes(
     }
   });
 
+  // GET /posts/feed/reels — Vertical continuous media feed (cursor pagination)
+  fastify.get('/posts/feed/reels', {
+    preValidation: [requiredAuth],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+      }
+
+      const query = FeedQuerySchema.safeParse(request.query);
+      const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
+
+      const result = await feedService.getReels(authContext.registeredUser.id, cursor, limit);
+
+      reply.header('Cache-Control', 'private, no-cache');
+
+      const reelContents = collectPostContents(result.items);
+      const reelMentionedUsers = reelContents.length > 0
+        ? await resolveMentionedUsers(prisma, reelContents)
+        : [];
+
+      return sendSuccess(reply, result.items, {
+        pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
+        meta: { mentionedUsers: reelMentionedUsers },
+      });
+    } catch (error) {
+      fastify.log.error(`[GET /posts/feed/reels] Error: ${error}`);
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
+    }
+  });
+
   // GET /posts/feed/statuses — Active statuses/moods
   fastify.get('/posts/feed/statuses', {
     preValidation: [requiredAuth],
