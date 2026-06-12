@@ -30,17 +30,17 @@ extension UniversalComposerBar {
         HStack(spacing: 6) {
             // Type icon
             Image(systemName: iconForType(attachment.type))
-                .font(.system(size: 12))
+                .font(.caption)
                 .foregroundColor(Color(hex: attachment.thumbnailColor))
 
             Text(attachment.name)
-                .font(.system(size: 12, weight: .medium))
+                .font(.caption.weight(.medium))
                 .lineLimit(1)
                 .frame(maxWidth: 120)
 
             if let size = attachment.size {
                 Text(formatFileSize(size))
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .opacity(0.6)
             }
 
@@ -52,13 +52,14 @@ extension UniversalComposerBar {
                 }
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.caption2.weight(.bold))
                     .foregroundColor(mutedColor)
                     .frame(width: 18, height: 18)
                     .background(
                         Circle().fill(style == .dark ? Color.white.opacity(0.15) : theme.textMuted.opacity(0.15))
                     )
             }
+            .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pi\u{00E8}ce jointe", bundle: .main))
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -87,32 +88,38 @@ extension UniversalComposerBar {
                     onRequestTextEmoji?()
                 }
             }
+            .accessibilityLabel(String(localized: "composer.a11y.emojiPicker", defaultValue: "Ouvrir le s\u{00E9}lecteur d'emojis", bundle: .main))
             // File picker
             attachLadderButton(icon: "doc.fill", color: "45B7D1", delay: 0.04) {
                 closeAttachMenu()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onFilePicker?() }
             }
+            .accessibilityLabel(String(localized: "composer.a11y.filePicker", defaultValue: "Joindre un fichier", bundle: .main))
             // Location
             attachLadderButton(icon: "location.fill", color: "2ECC71", delay: 0.08) {
                 closeAttachMenu()
                 HapticFeedback.light()
                 onLocationRequest?()
             }
+            .accessibilityLabel(String(localized: "composer.a11y.shareLocation", defaultValue: "Partager ma position", bundle: .main))
             // Camera
             attachLadderButton(icon: "camera.fill", color: "F8B500", delay: 0.12) {
                 closeAttachMenu()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onCamera?() }
             }
+            .accessibilityLabel(String(localized: "composer.a11y.camera", defaultValue: "Prendre une photo", bundle: .main))
             // Photo library
             attachLadderButton(icon: "photo.fill", color: "9B59B6", delay: 0.16) {
                 closeAttachMenu()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onPhotoLibrary?() }
             }
+            .accessibilityLabel(String(localized: "composer.a11y.photoLibrary", defaultValue: "Choisir dans la phototh\u{00E8}que", bundle: .main))
             // Voice recording
             attachLadderButton(icon: "mic.fill", color: "E74C3C", delay: 0.20) {
                 closeAttachMenu()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { startRecording() }
             }
+            .accessibilityLabel(String(localized: "composer.a11y.startRecording", defaultValue: "Enregistrer un message vocal", bundle: .main))
         }
         .padding(.bottom, 52)
     }
@@ -136,7 +143,7 @@ extension UniversalComposerBar {
                     .shadow(color: Color(hex: color).opacity(0.45), radius: 8, y: 3)
 
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundColor(.white)
             }
         }
@@ -167,7 +174,7 @@ extension UniversalComposerBar {
             }
         }) {
             Image(systemName: showAttachOptions ? "xmark" : "plus")
-                .font(.system(size: showAttachOptions ? 16 : 20, weight: .semibold))
+                .font((showAttachOptions ? Font.callout : Font.title3).weight(.semibold))
                 .foregroundColor(iconColor)
                 .rotationEffect(.degrees(showAttachOptions ? 0 : attachRotation))
                 .frame(width: 44, height: 44)
@@ -181,6 +188,9 @@ extension UniversalComposerBar {
                 )
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showAttachOptions)
         }
+        .accessibilityLabel(showAttachOptions
+            ? String(localized: "composer.a11y.closeAttachMenu", defaultValue: "Fermer le menu des pi\u{00E8}ces jointes", bundle: .main)
+            : String(localized: "composer.a11y.openAttachMenu", defaultValue: "Ouvrir le menu des pi\u{00E8}ces jointes", bundle: .main))
     }
 
     // MARK: - Close Attach Menu
@@ -214,21 +224,21 @@ extension UniversalComposerBar {
     func clipboardContentPreview(_ clip: ClipboardContent) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "doc.plaintext.fill")
-                .font(.system(size: 18))
+                .font(.body)
                 .foregroundColor(MeeshyColors.indigo500)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(String(localized: "composer.clipboard.title", defaultValue: "Contenu du presse-papier", bundle: .main))
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.caption2.weight(.bold))
                     .foregroundColor(style == .dark ? .white : theme.textPrimary)
 
                 Text(clip.truncatedPreview)
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundColor(style == .dark ? .white.opacity(0.6) : theme.textSecondary)
                     .lineLimit(2)
 
                 Text(String(localized: "composer.clipboard.charCount", defaultValue: "\(clip.charCount) caract\u{00E8}res", bundle: .main))
-                    .font(.system(size: 9, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(MeeshyColors.indigo500)
             }
 
@@ -240,9 +250,10 @@ extension UniversalComposerBar {
                 }
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 16))
+                    .font(.callout)
                     .foregroundColor(MeeshyColors.error)
             }
+            .accessibilityLabel(String(localized: "composer.a11y.removeClipboardContent", defaultValue: "Retirer le contenu du presse-papier", bundle: .main))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

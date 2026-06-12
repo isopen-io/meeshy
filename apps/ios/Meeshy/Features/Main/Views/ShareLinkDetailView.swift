@@ -48,7 +48,7 @@ struct ShareLinkDetailView: View {
             ZStack {
                 Circle().fill((isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500).opacity(0.15))
                     .frame(width: 60, height: 60)
-                Image(systemName: isActive ? "link" : "link.badge.minus").font(.system(size: 28))
+                Image(systemName: isActive ? "link" : "link.badge.minus").font(.title)
                     .foregroundColor(isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500)
             }
             Text(link.displayName).font(.title3.weight(.bold))
@@ -59,7 +59,7 @@ struct ShareLinkDetailView: View {
                     Text(conv).font(.footnote).foregroundColor(theme.textMuted).lineLimit(1)
                 }
             }
-            Text(link.joinUrl).font(.caption.monospaced())
+            Text(link.joinUrl).font(.system(.caption, design: .monospaced))
                 .foregroundColor(theme.textSecondary).lineLimit(2).multilineTextAlignment(.center)
         }
         .padding(20)
@@ -117,7 +117,7 @@ struct ShareLinkDetailView: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
                         .frame(width: 48, height: 48)
-                    Image(systemName: icon).font(.system(size: 20))
+                    Image(systemName: icon).font(.title3)
                         .foregroundColor(color)
                 }
                 Text(label).font(.caption2.weight(.medium))
@@ -141,7 +141,7 @@ struct ShareLinkDetailView: View {
 
     private func statCard(_ value: String, label: String, icon: String, color: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).font(.system(size: 22)).foregroundColor(Color(hex: color))
+            Image(systemName: icon).font(.title2).foregroundColor(Color(hex: color))
             VStack(alignment: .leading, spacing: 2) {
                 Text(value).font(.title2.weight(.bold)).foregroundColor(theme.textPrimary)
                 Text(label).font(.caption).foregroundColor(theme.textSecondary)

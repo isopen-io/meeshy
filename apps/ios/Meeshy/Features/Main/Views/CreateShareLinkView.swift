@@ -459,7 +459,7 @@ struct CreateShareLinkView: View {
                 .fill(Color(hex: color).opacity(0.15))
                 .frame(width: 34, height: 34)
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(Color(hex: color))
         }
     }
@@ -537,9 +537,9 @@ private struct ConversationPickerSheet: View {
 
     private var grouped: [(label: String, items: [Conversation])] {
         let groups: [(label: String, types: [Conversation.ConversationType])] = [
-            (String(localized: "share.link.create.picker.group.groups", defaultValue: "Groupes", bundle: .main), [.group]),
-            (String(localized: "share.link.create.picker.group.communities", defaultValue: "Communautés", bundle: .main), [.community]),
-            (String(localized: "share.link.create.picker.group.channels", defaultValue: "Canaux & Public", bundle: .main), [.channel, .public, .global]),
+            (String(localized: "share.link.create.picker.section.groups", defaultValue: "Groupes", bundle: .main), [.group]),
+            (String(localized: "share.link.create.picker.section.communities", defaultValue: "Communautés", bundle: .main), [.community]),
+            (String(localized: "share.link.create.picker.section.channels", defaultValue: "Canaux & Public", bundle: .main), [.channel, .public, .global]),
         ]
         return groups.compactMap { g in
             let items = filtered.filter { g.types.contains($0.type) }
