@@ -22,6 +22,7 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ReactionUpdateEvent
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.session.SessionRepository
@@ -60,6 +61,7 @@ class ChatViewModel @Inject constructor(
     private val reactionRepository: ReactionRepository,
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
+    private val config: MeeshyConfig,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -106,7 +108,9 @@ class ChatViewModel @Inject constructor(
             ) { result, user, own, originals -> BubbleInputs(result, user, own, originals) }
                 .collect { (result, user, own, originals) ->
                     latestMessages = result.valueOrNull() ?: latestMessages
-                    _state.update { it.applyResult(result, user, own, originals) }
+                    _state.update {
+                        it.applyResult(result, user, own, originals, config.socketUrl)
+                    }
                 }
         }
 
@@ -409,22 +413,24 @@ private fun ChatUiState.applyResult(
     currentUser: MeeshyUser?,
     ownReactions: Map<String, Set<String>>,
     showingOriginal: Set<String>,
+    mediaBaseUrl: String,
 ): ChatUiState = when (result) {
     is CacheResult.Fresh -> copy(
-        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal),
+        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl),
         ownReactions = ownReactions,
         isSyncing = false,
         showSkeleton = false,
         errorMessage = null,
     )
     is CacheResult.Stale -> copy(
-        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal),
+        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl),
         ownReactions = ownReactions,
         isSyncing = true,
         showSkeleton = false,
     )
     is CacheResult.Syncing -> copy(
-        messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal) ?: messages,
+        messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl)
+            ?: messages,
         ownReactions = ownReactions,
         isSyncing = true,
         showSkeleton = result.value == null && messages.isEmpty() && errorMessage == null,
@@ -441,6 +447,7 @@ private fun List<LocalMessage>.toBubbles(
     currentUser: MeeshyUser?,
     ownReactions: Map<String, Set<String>>,
     showingOriginal: Set<String>,
+    mediaBaseUrl: String,
 ): List<BubbleContent> = map { local ->
     BubbleContentBuilder.build(
         message = local.message,
@@ -451,6 +458,7 @@ private fun List<LocalMessage>.toBubbles(
         isFailed = local.sendState == LocalSendState.FAILED,
         ownReactions = ownReactions[local.message.id] ?: emptySet(),
         showOriginal = local.message.id in showingOriginal,
+        mediaBaseUrl = mediaBaseUrl,
     )
 }
 

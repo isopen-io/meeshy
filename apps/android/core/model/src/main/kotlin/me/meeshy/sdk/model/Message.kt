@@ -55,6 +55,7 @@ data class ApiMessage(
     val readByAllAt: String? = null,
     val replyTo: ApiMessageReplyPreview? = null,
     val clientMessageId: String? = null,
+    val attachments: List<ApiMessageAttachment> = emptyList(),
 ) {
     /**
      * Content to display under the Prisme Linguistique: the preferred translation,

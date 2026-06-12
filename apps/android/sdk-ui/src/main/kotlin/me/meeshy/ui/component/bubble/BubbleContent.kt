@@ -19,6 +19,22 @@ data class ReactionEntry(
 )
 
 @Immutable
+public data class BubbleImage(
+    val attachmentId: String,
+    val url: String,
+    val thumbnailUrl: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+)
+
+@Immutable
+public data class BubbleFile(
+    val attachmentId: String,
+    val name: String,
+    val sizeBytes: Int? = null,
+)
+
+@Immutable
 public data class BubbleContent(
     val messageId: String,
     val text: String,
@@ -37,4 +53,6 @@ public data class BubbleContent(
     val replyToSenderName: String? = null,
     val isPending: Boolean = false,
     val clientMessageId: String? = null,
+    val images: List<BubbleImage> = emptyList(),
+    val files: List<BubbleFile> = emptyList(),
 )

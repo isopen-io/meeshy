@@ -30,6 +30,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ReactionSyncResponse
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.net.ApiError
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.session.SessionRepository
@@ -105,7 +106,16 @@ class ChatViewModelTest {
         val workManager = mockk<WorkManager>(relaxed = true)
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
         return Harness(
-            ChatViewModel(repo, conversations, session, reactions, socketManager(), workManager, handle),
+            ChatViewModel(
+                repo,
+                conversations,
+                session,
+                reactions,
+                socketManager(),
+                workManager,
+                MeeshyConfig(),
+                handle,
+            ),
             repo,
             workManager,
             reactions,

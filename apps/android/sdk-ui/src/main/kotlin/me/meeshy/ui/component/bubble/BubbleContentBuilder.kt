@@ -2,6 +2,7 @@ package me.meeshy.ui.component.bubble
 
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 
 public object BubbleContentBuilder {
 
@@ -14,6 +15,7 @@ public object BubbleContentBuilder {
         isFailed: Boolean = false,
         ownReactions: Set<String> = emptySet(),
         showOriginal: Boolean = false,
+        mediaBaseUrl: String? = null,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
@@ -36,6 +38,27 @@ public object BubbleContentBuilder {
         val replyToText = message.replyTo?.let { reply ->
             if (reply.deletedAt != null) "Message deleted" else reply.content
         }
+        val visibleAttachments = if (isDeleted) emptyList() else message.attachments
+        val images = visibleAttachments
+            .filter { it.isImage && it.fileUrl != null }
+            .map { attachment ->
+                BubbleImage(
+                    attachmentId = attachment.id,
+                    url = resolveMediaUrl(attachment.fileUrl!!, mediaBaseUrl),
+                    thumbnailUrl = attachment.thumbnailUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                    width = attachment.width,
+                    height = attachment.height,
+                )
+            }
+        val files = visibleAttachments
+            .filterNot { it.isImage }
+            .map { attachment ->
+                BubbleFile(
+                    attachmentId = attachment.id,
+                    name = attachment.originalName ?: attachment.fileName ?: "Fichier",
+                    sizeBytes = attachment.fileSize,
+                )
+            }
         return BubbleContent(
             messageId = message.id,
             text = when {
@@ -59,6 +82,17 @@ public object BubbleContentBuilder {
             replyToSenderName = message.replyTo?.senderDisplayName,
             isPending = isPending,
             clientMessageId = message.clientMessageId,
+            images = images,
+            files = files,
         )
+    }
+
+    private val ApiMessageAttachment.isImage: Boolean
+        get() = mimeType?.startsWith("image/") == true
+
+    private fun resolveMediaUrl(url: String, mediaBaseUrl: String?): String = when {
+        url.startsWith("http") -> url
+        mediaBaseUrl == null -> url
+        else -> mediaBaseUrl.trimEnd('/') + (if (url.startsWith("/")) url else "/$url")
     }
 }

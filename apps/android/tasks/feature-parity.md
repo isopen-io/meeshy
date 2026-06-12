@@ -212,8 +212,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [~] Reply: long-press → Répondre, bannière composer (accent, annulable),
       replyToId optimiste + aperçu cité dans la bulle ; swipe / forward / jump pending
 - [ ] Reply-count pills + reply thread overlay
-- [ ] Message bubbles: text, emoji-only (oversized), image/video grid (1–4+ collage), inline
-      carousel, audio, files, location, shared-contact card
+- [~] Message bubbles: text done ; pièces jointes image (grille 1–4 + overlay « +N »,
+      URL relative résolue contre l'origine gateway, `ApiMessage.attachments` persisté
+      via le payload Room) + repli fichier générique (nom + taille) done ;
+      emoji-only / carousel / audio / location / contact pending
 - [ ] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight)
 - [ ] Quoted-reply previews incl. story-reply previews (counts, thumbnails)
 - [ ] Delivery status (8-state) checkmarks + offline-pending hourglass + failed-message retry
