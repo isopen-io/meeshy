@@ -1,36 +1,38 @@
 # UI/UX Plan — Iteration 44 (2026-06-12)
 
-Analyse : `docs/analyses/uiux/2026-06-12-iteration-44.md`
-Branche : `claude/keen-dirac-485vpk` (synchronisée avec main @ 813b7fe3 post-merge #588)
+## Objective
+1. Make the web date-formatting infrastructure locale-aware (single source of truth fix) and internationalize MessageTimestamp (web)
+2. Close the three admin i18n leftovers deferred since iteration 43 (web)
+3. Speech recognition language follows the Prisme resolution instead of browser locale (web)
+4. Complete the links-surface Dynamic Type pass: ShareLinkDetailView, TrackingLinkDetailView, CreateShareLinkView, CreateTrackingLinkView + icon-button a11y labels (iOS)
+5. Localize the "System" notification sender fallback; wire the `meeshy://conversations` deep link in the NavHost (Android)
 
-## Objectif
-Passe complète iOS sur `ThemedConversationRow` (surface n°1) : i18n, Dynamic Type, tokens de charte, a11y — plus consolidation du formateur de temps relatif.
+## Web Actions
+1. `utils/date-format.ts` — add `locale?: string` to `DateFormatOptions` (fallback `'fr'` preserves legacy behavior); thread through all `toLocale*` calls; `formatFullDate(date, locale?)` uses locale-aware formatting instead of manual French `à` concatenation; update `__tests__/utils/date-format.test.ts`
+2. Callers pass locale from `useI18n`/language store: `BubbleMessage.tsx`, `bubble-message/MessageNameDate.tsx`, `dashboard/ConversationsWidget.tsx`, `dashboard/CommunitiesWidget.tsx`, `hooks/use-message-interactions.ts`
+3. `components/v2/MessageTimestamp.tsx` — `useI18n('conversations')`; new `timestamp.*` keys (today/yesterday/todayAt/yesterdayAt/dayAt) in `locales/{en,fr,es,pt}/conversations.json`; locale-aware `toLocale*`; localized aria-label
+4. `app/admin/debug.tsx` — new `debug.*` section in admin.json (4 locales), wire via `useI18n('admin')`
+5. `components/admin/agent/AgentArchetypesTab.tsx` — new `agent.archetypes.*` keys in admin.json (4 locales), including emoji-usage labels keyed by enum value
+6. `components/translation/translation-monitor.tsx:233` — `t('translationMonitor.cacheHit')` + key in admin.json (4 locales)
+7. `components/v2/AudioPostComposer.tsx` — `recognition.lang` from `resolveUserPreferredLanguage(user)` (auth store) with `navigator.language` fallback
 
-## Étapes
+## iOS Actions (text → semantic fonts; decorative/hero icons stay fixed per iter-32 precedent)
+8. `ShareLinkDetailView.swift` — convert 13 text fonts (20→`.title3.weight(.bold)`, 13→`.footnote`, 12→`.caption`, 10→`.caption2`, 22→`.title2`); `.accessibilityLabel` on icon-only action buttons
+9. `TrackingLinkDetailView.swift` — convert ~25 text fonts with same size→semantic mapping
+10. `CreateShareLinkView.swift` — convert ~24 text fonts
+11. `CreateTrackingLinkView.swift` — convert 6 text fonts
 
-- [x] 1. **SDK — `MeeshyColors`** : ajouter les tokens statiques theme-aware `textPrimary(isDark:)`, `textSecondary(isDark:)`, `textMuted(isDark:)`, `backgroundSecondary(isDark:)` (miroirs des valeurs canoniques ThemeManager, exprimés via l'échelle indigo)
-- [x] 2. **SDK — `ThemeManager`** : déléguer `textPrimary/textSecondary/textMuted/backgroundSecondary` aux statiques `MeeshyColors` (source unique de vérité)
-- [x] 3. **App — `ConversationListHelpers.swift`** : ajouter `ShortRelativeTime.label(for:now:)` — helper pur, localisé, `now` injectable pour les tests (pas de nouveau fichier : pbxproj à références explicites)
-- [x] 4. **App — `ThemedConversationRow.swift`** :
-  - couleurs stone → tokens `MeeshyColors.*(isDark:)`
-  - 26 polices figées → sémantiques (15→`.subheadline`, 13→`.footnote`, 12→`.caption`, ≤11→`.caption2`, poids préservés)
-  - badge non-lus : cercle figé 24×24 → capsule `minWidth/minHeight: 24` (scale Dynamic Type)
-  - i18n : toutes les chaînes FR → `String(localized:defaultValue:bundle:)` ; réutiliser `accessibility.opens_conversation`, « Conversation », « Voir le profil », « Infos conversation »
-  - `timeAgo` → `ShortRelativeTime.label`
-  - faute « epingle » → « épinglée »
-- [x] 5. **App — `RootViewComponents.swift`** : `timeAgoShort` → `ShortRelativeTime.label` (supprime le doublon français)
-- [x] 6. **Localizable.xcstrings** : 21 nouvelles clés (time.short.*, typing.*, draft.*, accessibility.*, menu.create_share_link) × 5 locales (fr source + de/en/es/pt-BR), insertion chirurgicale (round-trip JSON byte-identique vérifié)
-- [x] 7. **Tests** : `ShortRelativeTimeTests` (buckets maintenant/min/h/j/sem + bornes) ajoutés dans `ConversationListViewModelTests.swift` (pas de nouveau fichier)
-- [x] 8. Annoter l'analyse iter-43 (statut soldé via PR #576/#579/#588) + mettre à jour `branch-tracking.md`
-- [x] 9. Commit + push `claude/keen-dirac-485vpk`, PR vers main, CI (ios-tests + sdk-tests), merge, suppression de branche
+## Android Actions
+12. `feature/notifications` strings.xml (en/fr/es/pt) — add `notifications_system_sender`; wire in `NotificationsScreen.kt:133`
+13. `MeeshyApp.kt` / `Routes` — add `meeshy://conversations` deep link on the conversations route (manifest already declares it)
 
-## Risques & garde-fous
-- Pas de compilation locale possible (conteneur Linux) → CI ios-tests (macOS, suite MeeshyTests complète) est le gate ; édits limités à des patterns Swift éprouvés dans le repo
-- Aucune création de fichier (pbxproj objectVersion 63 à références explicites)
-- xcstrings : sérialisation `json.dumps(indent=2, separators=(',', ' : '))` vérifiée byte-identique en round-trip
-- Changement visuel assumé : texte de la cellule passe de la palette stone à la palette indigo canonique (règle charte) ; tailles 8-9 pt remontées à `.caption2` (minimum HIG 11 pt)
+## Verification
+- Web: jest `date-format` + related suites, `tsc --noEmit` if runnable; JSON locale validity check
+- iOS: size→semantic mapping consistent with iterations 42-43 (`.caption2`≤11, `.caption`=12, `.footnote`=13, `.subheadline`=14-15, `.callout`=16, `.body`=17, `.headline`=18, `.title3`=20, `.title2`=22, `.title`=28); CI ios-tests on PR
+- Android: no local toolchain — review + CI
+- CI green → merge PR into main; update branch-tracking.md
 
-## Review (fin d'itération)
-- PR #589 mergée dans main (CI ios-tests + sdk-tests vertes)
-- `branch-tracking.md` mis à jour : prochaine itération 45 depuis main post-merge
-- Reports tracés dans l'analyse iter-44 § Deferred
+## Continuity
+- Base: main @ aa5dfa6 (merge PR #586)
+- Branch: claude/blissful-ritchie-foe2wg
+- Next iteration candidates: web user-settings.tsx toasts (17) + participants-drawer/links-section toasts; migrate remaining 14 `'fr-FR'` files to locale-aware date-format helpers; converge FriendRequestCard local formatter; iOS ConversationInfoSheet (52) + ConversationDashboardView (43) + TwoFactorSetupView (42, text only) font passes; Android stories parity (large)

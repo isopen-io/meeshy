@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/use-i18n';
 import { theme } from './theme';
 
 export interface MessageTimestampProps {
@@ -15,19 +16,27 @@ export interface MessageTimestampProps {
   className?: string;
 }
 
+type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
+
+interface SmartTimestampContext {
+  t: TranslateFn;
+  locale: string;
+}
+
 /**
  * Formats a timestamp with smart relative date handling.
  *
- * Rules:
- * - Today: "Aujourd'hui a HH:mm"
- * - Yesterday: "Hier a HH:mm"
- * - This week: "Lundi a HH:mm"
- * - This year: "27 janvier"
- * - Older: "27 janvier 2025"
+ * Rules (localized through the conversations namespace):
+ * - Today: "Today at HH:mm"
+ * - Yesterday: "Yesterday at HH:mm"
+ * - This week: "Monday at HH:mm"
+ * - This year: "January 27"
+ * - Older: "January 27, 2025"
  */
 function formatSmartTimestamp(
   date: Date,
-  format: 'time' | 'date' | 'datetime' | 'relative'
+  format: 'time' | 'date' | 'datetime' | 'relative',
+  { t, locale }: SmartTimestampContext
 ): string {
   const now = new Date();
 
@@ -38,9 +47,10 @@ function formatSmartTimestamp(
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
   // Format time consistently
-  const timeStr = date.toLocaleTimeString('fr-FR', {
+  const timeStr = date.toLocaleTimeString(locale, {
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
   });
 
   // Time only format
@@ -51,26 +61,16 @@ function formatSmartTimestamp(
   // Date only format
   if (format === 'date') {
     if (diffDays === 0) {
-      return "Aujourd'hui";
+      return t('timestamp.today');
     }
     if (diffDays === 1) {
-      return 'Hier';
+      return t('timestamp.yesterday');
     }
     if (diffDays < 7 && diffDays > 0) {
-      const dayName = date.toLocaleDateString('fr-FR', { weekday: 'long' });
+      const dayName = date.toLocaleDateString(locale, { weekday: 'long' });
       return capitalizeFirst(dayName);
     }
-    // Same year - no need to show year
-    if (date.getFullYear() === now.getFullYear()) {
-      const day = date.getDate();
-      const month = date.toLocaleDateString('fr-FR', { month: 'long' });
-      return `${day} ${month}`;
-    }
-    // Different year - show full date
-    const day = date.getDate();
-    const month = date.toLocaleDateString('fr-FR', { month: 'long' });
-    const year = date.getFullYear();
-    return `${day} ${month} ${year}`;
+    return formatMonthDay(date, now, locale);
   }
 
   // Relative format (smart datetime)
@@ -78,29 +78,34 @@ function formatSmartTimestamp(
     if (diffDays === 0) {
       return format === 'relative'
         ? timeStr
-        : `Aujourd'hui a ${timeStr}`;
+        : t('timestamp.todayAt', { time: timeStr });
     }
     if (diffDays === 1) {
-      return `Hier a ${timeStr}`;
+      return t('timestamp.yesterdayAt', { time: timeStr });
     }
     if (diffDays < 7 && diffDays > 0) {
-      const dayName = date.toLocaleDateString('fr-FR', { weekday: 'long' });
-      return `${capitalizeFirst(dayName)} a ${timeStr}`;
+      const dayName = date.toLocaleDateString(locale, { weekday: 'long' });
+      return t('timestamp.dayAt', { day: capitalizeFirst(dayName), time: timeStr });
     }
-    // Same year
-    if (date.getFullYear() === now.getFullYear()) {
-      const day = date.getDate();
-      const month = date.toLocaleDateString('fr-FR', { month: 'long' });
-      return `${day} ${month}`;
-    }
-    // Different year
-    const day = date.getDate();
-    const month = date.toLocaleDateString('fr-FR', { month: 'long' });
-    const year = date.getFullYear();
-    return `${day} ${month} ${year}`;
+    return formatMonthDay(date, now, locale);
   }
 
   return timeStr;
+}
+
+/**
+ * Formats a month + day (and year when different from the current one)
+ * using the active locale ordering.
+ */
+function formatMonthDay(date: Date, now: Date, locale: string): string {
+  if (date.getFullYear() === now.getFullYear()) {
+    return date.toLocaleDateString(locale, { day: 'numeric', month: 'long' });
+  }
+  return date.toLocaleDateString(locale, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 }
 
 /**
@@ -124,12 +129,12 @@ function capitalizeFirst(str: string): string {
  * @example
  * // Smart relative datetime
  * <MessageTimestamp timestamp={new Date()} format="datetime" />
- * // Output: "Aujourd'hui a 14:32"
+ * // Output: "Today at 14:32"
  *
  * @example
  * // With separator lines
  * <MessageTimestamp timestamp={yesterday} showSeparators />
- * // Output: "--- Hier a 09:15 ---"
+ * // Output: "--- Yesterday at 09:15 ---"
  */
 export function MessageTimestamp({
   timestamp,
@@ -137,6 +142,8 @@ export function MessageTimestamp({
   showSeparators = false,
   className,
 }: MessageTimestampProps) {
+  const { t, locale } = useI18n('conversations');
+
   // Parse and memoize the formatted timestamp
   const formattedTimestamp = useMemo(() => {
     const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
@@ -146,8 +153,8 @@ export function MessageTimestamp({
       return '';
     }
 
-    return formatSmartTimestamp(date, format);
-  }, [timestamp, format]);
+    return formatSmartTimestamp(date, format, { t, locale });
+  }, [timestamp, format, t, locale]);
 
   // Don't render if invalid timestamp
   if (!formattedTimestamp) {
@@ -161,7 +168,7 @@ export function MessageTimestamp({
         className
       )}
       role="separator"
-      aria-label={`Message timestamp: ${formattedTimestamp}`}
+      aria-label={t('timestamp.ariaLabel', { timestamp: formattedTimestamp })}
     >
       {/* Left separator line */}
       {showSeparators && (

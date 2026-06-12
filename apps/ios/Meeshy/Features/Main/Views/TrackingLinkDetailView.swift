@@ -55,8 +55,8 @@ struct TrackingLinkDetailView: View {
                 Image(systemName: "chart.bar.fill").font(.system(size: 26))
                     .foregroundColor(link.isActive ? MeeshyColors.trackingAccent : MeeshyColors.neutral500)
             }
-            Text(link.displayName).font(.system(size: 18, weight: .bold)).foregroundColor(theme.textPrimary)
-            Text(link.shortUrl).font(.system(size: 12, design: .monospaced))
+            Text(link.displayName).font(.headline.weight(.bold)).foregroundColor(theme.textPrimary)
+            Text(link.shortUrl).font(.caption.monospaced())
                 .foregroundColor(theme.textSecondary).lineLimit(1)
             HStack(spacing: 6) {
                 if let c = link.campaign { utmTag(c, color: MeeshyColors.trackingAccent) }
@@ -71,7 +71,7 @@ struct TrackingLinkDetailView: View {
     }
 
     private func utmTag(_ value: String, color: Color) -> some View {
-        Text(value).font(.system(size: 11, weight: .medium))
+        Text(value).font(.caption2.weight(.medium))
             .foregroundColor(color)
             .padding(.horizontal, 8).padding(.vertical, 3)
             .background(Capsule().fill(color.opacity(0.12)))
@@ -111,7 +111,7 @@ struct TrackingLinkDetailView: View {
                     Image(systemName: icon).font(.system(size: 18))
                         .foregroundColor(color)
                 }
-                Text(label).font(.system(size: 9, weight: .medium)).foregroundColor(theme.textSecondary)
+                Text(label).font(.caption2.weight(.medium)).foregroundColor(theme.textSecondary)
             }
         }.frame(maxWidth: .infinity)
     }
@@ -129,7 +129,7 @@ struct TrackingLinkDetailView: View {
                 HStack {
                     Image(systemName: "clock").foregroundColor(theme.textMuted)
                     Text(String(localized: "tracking.link.detail.lastClick", defaultValue: "Dernier clic : \(last.formatted(date: .abbreviated, time: .shortened))", bundle: .main))
-                        .font(.system(size: 13)).foregroundColor(theme.textMuted)
+                        .font(.footnote).foregroundColor(theme.textMuted)
                 }
                 .padding(.horizontal, 4)
             }
@@ -140,8 +140,8 @@ struct TrackingLinkDetailView: View {
         HStack(spacing: 12) {
             Image(systemName: icon).font(.system(size: 24)).foregroundColor(Color(hex: color))
             VStack(alignment: .leading, spacing: 2) {
-                Text(value).font(.system(size: 26, weight: .bold)).foregroundColor(theme.textPrimary)
-                Text(label).font(.system(size: 12)).foregroundColor(theme.textSecondary)
+                Text(value).font(.title.weight(.bold)).foregroundColor(theme.textPrimary)
+                Text(label).font(.caption).foregroundColor(theme.textSecondary)
             }
             Spacer()
         }
@@ -168,11 +168,11 @@ struct TrackingLinkDetailView: View {
     private func breakdownCard(title: String, icon: String, color: Color, items: [(String, Int)]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: icon).font(.system(size: 13)).foregroundColor(color)
+                Image(systemName: icon).font(.footnote).foregroundColor(color)
                 sectionTitle(title)
             }
             if items.isEmpty {
-                Text(String(localized: "tracking.link.detail.noData", defaultValue: "Aucune donnée", bundle: .main)).font(.system(size: 13)).foregroundColor(theme.textMuted)
+                Text(String(localized: "tracking.link.detail.noData", defaultValue: "Aucune donnée", bundle: .main)).font(.footnote).foregroundColor(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .center).padding(.vertical, 8)
             } else {
                 VStack(spacing: 8) {
@@ -191,7 +191,7 @@ struct TrackingLinkDetailView: View {
     private func breakdownRow(_ label: String, count: Int, total: Int, color: Color) -> some View {
         let pct = total > 0 ? CGFloat(count) / CGFloat(total) : 0
         return HStack(spacing: 8) {
-            Text(label).font(.system(size: 13)).foregroundColor(theme.textPrimary).frame(width: 80, alignment: .leading)
+            Text(label).font(.footnote).foregroundColor(theme.textPrimary).frame(width: 80, alignment: .leading)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 4).fill(color.opacity(0.15)).frame(height: 8)
@@ -200,7 +200,7 @@ struct TrackingLinkDetailView: View {
                 }
             }
             .frame(height: 8)
-            Text("\(count)").font(.system(size: 12, weight: .semibold)).foregroundColor(theme.textSecondary)
+            Text("\(count)").font(.caption.weight(.semibold)).foregroundColor(theme.textSecondary)
                 .frame(width: 30, alignment: .trailing)
         }
     }
@@ -210,7 +210,7 @@ struct TrackingLinkDetailView: View {
     private var clicksTimeline: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: "list.bullet.clipboard").font(.system(size: 13))
+                Image(systemName: "list.bullet.clipboard").font(.footnote)
                     .foregroundColor(MeeshyColors.trackingAccent)
                 sectionTitle(String(localized: "tracking.link.detail.recentClicks", defaultValue: "DERNIERS CLICS", bundle: .main))
                 Spacer()
@@ -238,26 +238,26 @@ struct TrackingLinkDetailView: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    if let country = click.country { Text(countryFlag(country)).font(.system(size: 16)) }
+                    if let country = click.country { Text(countryFlag(country)).font(.callout) }
                     Text(click.city ?? click.country ?? String(localized: "tracking.link.detail.unknown", defaultValue: "Inconnu", bundle: .main))
-                        .font(.system(size: 13, weight: .medium)).foregroundColor(theme.textPrimary)
+                        .font(.footnote.weight(.medium)).foregroundColor(theme.textPrimary)
                     if let social = click.socialSource {
-                        Text("· \(social)").font(.system(size: 12)).foregroundColor(MeeshyColors.trackingAccent)
+                        Text("· \(social)").font(.caption).foregroundColor(MeeshyColors.trackingAccent)
                     }
                 }
                 HStack(spacing: 4) {
                     if let browser = click.browser {
-                        Text(browser).font(.system(size: 11)).foregroundColor(theme.textMuted)
+                        Text(browser).font(.caption2).foregroundColor(theme.textMuted)
                     }
                     if let os = click.os {
-                        Text("· \(os)").font(.system(size: 11)).foregroundColor(theme.textMuted)
+                        Text("· \(os)").font(.caption2).foregroundColor(theme.textMuted)
                     }
                 }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text(click.clickedAt.formatted(.relative(presentation: .named)))
-                    .font(.system(size: 11)).foregroundColor(theme.textMuted)
+                    .font(.caption2).foregroundColor(theme.textMuted)
                 Circle().fill(click.redirectStatus == "confirmed" ? MeeshyColors.success : MeeshyColors.error)
                     .frame(width: 6, height: 6)
             }
@@ -289,14 +289,14 @@ struct TrackingLinkDetailView: View {
     // MARK: - Helpers
 
     private func sectionTitle(_ text: String) -> some View {
-        Text(text).font(.system(size: 12, weight: .semibold)).foregroundColor(theme.textSecondary).kerning(0.8)
+        Text(text).font(.caption.weight(.semibold)).foregroundColor(theme.textSecondary).kerning(0.8)
     }
 
     private func infoRow(_ label: String, value: String) -> some View {
         HStack {
-            Text(label).font(.system(size: 14)).foregroundColor(theme.textSecondary)
+            Text(label).font(.subheadline).foregroundColor(theme.textSecondary)
             Spacer()
-            Text(value).font(.system(size: 14, weight: .medium)).foregroundColor(theme.textPrimary).lineLimit(1)
+            Text(value).font(.subheadline.weight(.medium)).foregroundColor(theme.textPrimary).lineLimit(1)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
     }

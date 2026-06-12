@@ -51,15 +51,15 @@ struct ShareLinkDetailView: View {
                 Image(systemName: isActive ? "link" : "link.badge.minus").font(.system(size: 28))
                     .foregroundColor(isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500)
             }
-            Text(link.displayName).font(.system(size: 20, weight: .bold))
+            Text(link.displayName).font(.title3.weight(.bold))
                 .foregroundColor(theme.textPrimary)
             HStack(spacing: 8) {
                 statusBadge
                 if let conv = link.conversationTitle {
-                    Text(conv).font(.system(size: 13)).foregroundColor(theme.textMuted).lineLimit(1)
+                    Text(conv).font(.footnote).foregroundColor(theme.textMuted).lineLimit(1)
                 }
             }
-            Text(link.joinUrl).font(.system(size: 12, design: .monospaced))
+            Text(link.joinUrl).font(.caption.monospaced())
                 .foregroundColor(theme.textSecondary).lineLimit(2).multilineTextAlignment(.center)
         }
         .padding(20)
@@ -76,7 +76,7 @@ struct ShareLinkDetailView: View {
         Text(isActive
              ? String(localized: "common.active", defaultValue: "Actif", bundle: .main)
              : String(localized: "common.inactive", defaultValue: "Inactif", bundle: .main))
-            .font(.system(size: 12, weight: .semibold))
+            .font(.caption.weight(.semibold))
             .foregroundColor(isActive ? MeeshyColors.shareAccent : .secondary)
             .padding(.horizontal, 10).padding(.vertical, 4)
             .background(Capsule().fill(isActive ? MeeshyColors.shareAccent.opacity(0.15) : Color.gray.opacity(0.15)))
@@ -120,7 +120,7 @@ struct ShareLinkDetailView: View {
                     Image(systemName: icon).font(.system(size: 20))
                         .foregroundColor(color)
                 }
-                Text(label).font(.system(size: 10, weight: .medium))
+                Text(label).font(.caption2.weight(.medium))
                     .foregroundColor(theme.textSecondary)
             }
         }
@@ -143,8 +143,8 @@ struct ShareLinkDetailView: View {
         HStack(spacing: 12) {
             Image(systemName: icon).font(.system(size: 22)).foregroundColor(Color(hex: color))
             VStack(alignment: .leading, spacing: 2) {
-                Text(value).font(.system(size: 22, weight: .bold)).foregroundColor(theme.textPrimary)
-                Text(label).font(.system(size: 12)).foregroundColor(theme.textSecondary)
+                Text(value).font(.title2.weight(.bold)).foregroundColor(theme.textPrimary)
+                Text(label).font(.caption).foregroundColor(theme.textSecondary)
             }
             Spacer()
         }
@@ -178,16 +178,16 @@ struct ShareLinkDetailView: View {
 
     private func infoRow(_ label: String, value: String) -> some View {
         HStack {
-            Text(label).font(.system(size: 14)).foregroundColor(theme.textSecondary)
+            Text(label).font(.subheadline).foregroundColor(theme.textSecondary)
             Spacer()
-            Text(value).font(.system(size: 14, weight: .medium)).foregroundColor(theme.textPrimary)
+            Text(value).font(.subheadline.weight(.medium)).foregroundColor(theme.textPrimary)
                 .lineLimit(1)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
     }
 
     private func sectionTitle(_ text: String) -> some View {
-        Text(text).font(.system(size: 12, weight: .semibold))
+        Text(text).font(.caption.weight(.semibold))
             .foregroundColor(theme.textSecondary).kerning(0.8)
     }
 

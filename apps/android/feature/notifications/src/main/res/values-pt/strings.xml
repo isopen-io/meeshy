@@ -3,4 +3,5 @@
     <string name="notifications_title">Notificações</string>
     <string name="notifications_mark_all_read">Marcar tudo como lido</string>
     <string name="notifications_empty">Nenhuma notificação</string>
+    <string name="notifications_system_sender">Sistema</string>
 </resources>

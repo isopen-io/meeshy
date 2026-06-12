@@ -1,9 +1,12 @@
+'use client';
+
 import { Users as UsersIcon, MessageSquare } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { formatConversationDate } from '@/utils/date-format';
+import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import type { DashboardCommunity } from '@/services/dashboard.service';
 
 interface CommunitiesWidgetProps {
@@ -21,6 +24,7 @@ export function CommunitiesWidget({
   onViewAll,
   onCreateCommunity,
 }: CommunitiesWidgetProps) {
+  const locale = useCurrentInterfaceLanguage();
   return (
     <Card className="bg-white dark:bg-gray-800/50 border-gray-200 dark:border-gray-700">
       <CardHeader>
@@ -73,7 +77,7 @@ export function CommunitiesWidget({
                       )}
                       {community.updatedAt && (
                         <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                          {formatConversationDate(community.updatedAt, { t })}
+                          {formatConversationDate(community.updatedAt, { t, locale })}
                         </span>
                       )}
                     </div>

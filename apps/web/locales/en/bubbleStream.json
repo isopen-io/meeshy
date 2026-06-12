@@ -61,6 +61,7 @@
     "quickReactions": "Quick reactions",
     "moreReactions": "More reactions",
     "messageCopied": "Message copied",
+    "messageCopyBy": "by",
     "copied": "Copied to clipboard",
     "copyFailed": "Copy failed",
     "copyMessage": "Copy message",
@@ -96,7 +97,7 @@
     "translationOptions": "Translation options",
     "copyShowingContent": "Copy showing content",
     "showOriginal": "Show original text",
-    "showInUserLanguage": "Show in your language", 
+    "showInUserLanguage": "Show in your language",
     "translate": "Translate",
     "selectLanguage": "Select language",
     "searchLanguage": "Search for a language...",
@@ -154,4 +155,3 @@
     }
   }
 }
-

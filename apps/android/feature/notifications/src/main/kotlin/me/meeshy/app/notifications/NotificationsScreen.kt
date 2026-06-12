@@ -130,7 +130,8 @@ private fun NotificationItem(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = notification.actor?.displayName ?: notification.actor?.username ?: "System",
+                        text = notification.actor?.displayName ?: notification.actor?.username
+                            ?: stringResource(R.string.notifications_system_sender),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Normal,
                     )
