@@ -663,6 +663,19 @@
       "minutes": "{count} min",
       "hours": "{count}h",
       "days": "{count}d"
+    },
+    "v2chat": {
+      "someoneTyping": "Alguém está escrevendo…",
+      "online": "Online",
+      "participants": "{count} participantes",
+      "audioCall": "Chamada de áudio",
+      "options": "Opções",
+      "reply": "Responder",
+      "react": "Reagir",
+      "replyPlaceholder": "Responder…",
+      "writeMessage": "Escreva sua mensagem…",
+      "file": "Arquivo",
+      "document": "Documento"
     }
   }
 }

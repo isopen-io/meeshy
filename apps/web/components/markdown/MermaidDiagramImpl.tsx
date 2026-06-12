@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState, Component, ErrorInfo, ReactNode } from 'react';
 import mermaid from 'mermaid';
+import { useTheme } from 'next-themes';
 import { useI18n } from '@/hooks/useI18n';
 
 export interface MermaidDiagramProps {
@@ -42,26 +43,27 @@ class MermaidErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 }
 
-// Configuration globale de Mermaid
-let mermaidInitialized = false;
+// Configuration globale de Mermaid — réinitialisée quand le thème change
+let mermaidInitializedTheme: 'dark' | 'default' | null = null;
 
-const initializeMermaid = () => {
-  if (!mermaidInitialized) {
+const initializeMermaid = (isDark: boolean) => {
+  const theme = isDark ? 'dark' : 'default';
+  if (mermaidInitializedTheme !== theme) {
     mermaid.initialize({
       startOnLoad: false,
-      theme: 'default',
+      theme,
       securityLevel: 'strict',
       fontFamily: 'ui-sans-serif, system-ui, sans-serif',
       themeVariables: {
         primaryColor: '#a855f7',
         primaryTextColor: '#fff',
         primaryBorderColor: '#9333ea',
-        lineColor: '#6b7280',
+        lineColor: isDark ? '#9ca3af' : '#6b7280',
         secondaryColor: '#ec4899',
         tertiaryColor: '#3b82f6',
       },
     });
-    mermaidInitialized = true;
+    mermaidInitializedTheme = theme;
   }
 };
 
@@ -75,6 +77,8 @@ const MermaidDiagramInner: React.FC<MermaidDiagramProps> = ({
   className = '',
 }) => {
   const { t } = useI18n('mermaid');
+  const { theme: themeMode, resolvedTheme } = useTheme();
+  const isDark = themeMode === 'dark' || resolvedTheme === 'dark';
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [svg, setSvg] = useState<string>('');
@@ -84,7 +88,7 @@ const MermaidDiagramInner: React.FC<MermaidDiagramProps> = ({
 
     const renderDiagram = async () => {
       try {
-        initializeMermaid();
+        initializeMermaid(isDark);
 
         // Valider le chart avant de tenter le rendu
         if (!chart.trim()) {
@@ -137,7 +141,7 @@ const MermaidDiagramInner: React.FC<MermaidDiagramProps> = ({
       setError(t('mermaid.error.renderError'));
       setSvg('');
     });
-  }, [chart, t]);
+  }, [chart, t, isDark]);
 
   if (error) {
     return (

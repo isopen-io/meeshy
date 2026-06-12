@@ -72,4 +72,5 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 45w | claude/elegant-noether-1pen57 | #596 | ✅ |
 | 45i | claude/wizardly-rubin-ux84an | #595 | ✅ |
 | 45 | claude/blissful-ritchie-dp7ibu | #597 | ✅ |
-| 46w | claude/elegant-noether-09t4x2 | ⏳ | ⏳ |
+| 46w | claude/elegant-noether-09t4x2 | #605 | ✅ |
+| 47 | claude/blissful-ritchie-9jc6xs | ⏳ | ⏳ |

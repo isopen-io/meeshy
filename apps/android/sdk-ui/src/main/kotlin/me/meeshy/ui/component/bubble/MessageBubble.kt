@@ -37,6 +37,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -258,10 +260,12 @@ private fun BubbleImageGrid(
                                     modifier = Modifier.size(124.dp),
                                 )
                                 if (isLastCell) {
+                                    val hiddenLabel = stringResource(R.string.bubble_hidden_images, hiddenCount)
                                     Box(
                                         modifier = Modifier
                                             .size(124.dp)
-                                            .background(Color.Black.copy(alpha = 0.45f)),
+                                            .background(Color.Black.copy(alpha = 0.45f))
+                                            .clearAndSetSemantics { contentDescription = hiddenLabel },
                                         contentAlignment = Alignment.Center,
                                     ) {
                                         Text(
