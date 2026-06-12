@@ -38,7 +38,7 @@ struct SettingsView: View {
     @State private var showMediaDownload = false
     @State private var scrollOffset: CGFloat = 0
 
-    private let accentColor = "6366F1"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
         ZStack {
@@ -208,12 +208,12 @@ struct SettingsView: View {
     }
 
     private var accountSection: some View {
-        settingsSection(title: String(localized: "settings.section.account", defaultValue: "Compte", bundle: .main), icon: "person.circle.fill", color: "9B59B6") {
+        settingsSection(title: String(localized: "settings.section.account", defaultValue: "Compte", bundle: .main), icon: "person.circle.fill", color: MeeshyColors.brandDeepHex) {
             Button {
                 HapticFeedback.light()
                 showPrivacySettings = true
             } label: {
-                settingsRow(icon: "lock.fill", title: String(localized: "settings.privacy.title", defaultValue: "Confidentialité", bundle: .main), color: "E91E63") {
+                settingsRow(icon: "lock.fill", title: String(localized: "settings.privacy.title", defaultValue: "Confidentialité", bundle: .main), color: MeeshyColors.errorHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -226,7 +226,7 @@ struct SettingsView: View {
                 HapticFeedback.light()
                 showSecurity = true
             } label: {
-                settingsRow(icon: "shield.fill", title: String(localized: "settings.security.title", defaultValue: "Sécurité", bundle: .main), color: "3498DB") {
+                settingsRow(icon: "shield.fill", title: String(localized: "settings.security.title", defaultValue: "Sécurité", bundle: .main), color: MeeshyColors.infoHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -239,7 +239,7 @@ struct SettingsView: View {
                 HapticFeedback.light()
                 showBlockedUsers = true
             } label: {
-                settingsRow(icon: "lock.shield", title: String(localized: "settings.blocked_users", defaultValue: "Utilisateurs bloques", bundle: .main), color: "EF4444") {
+                settingsRow(icon: "lock.shield", title: String(localized: "settings.blocked_users", defaultValue: "Utilisateurs bloques", bundle: .main), color: MeeshyColors.errorHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -252,7 +252,7 @@ struct SettingsView: View {
                 HapticFeedback.heavy()
                 showDeleteAccount = true
             } label: {
-                settingsRow(icon: "person.crop.circle.badge.minus", title: String(localized: "settings.delete_account", defaultValue: "Supprimer le compte", bundle: .main), color: "EF4444") {
+                settingsRow(icon: "person.crop.circle.badge.minus", title: String(localized: "settings.delete_account", defaultValue: "Supprimer le compte", bundle: .main), color: MeeshyColors.errorHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(MeeshyColors.error.opacity(0.6))
@@ -266,7 +266,7 @@ struct SettingsView: View {
     // MARK: - Appearance Section
 
     private var appearanceSection: some View {
-        settingsSection(title: String(localized: "settings.section.appearance", defaultValue: "Apparence", bundle: .main), icon: "paintbrush.fill", color: "F8B500") {
+        settingsSection(title: String(localized: "settings.section.appearance", defaultValue: "Apparence", bundle: .main), icon: "paintbrush.fill", color: MeeshyColors.warningHex) {
             settingsRow(icon: theme.preference.icon, title: String(localized: "settings.theme", defaultValue: "Thème", bundle: .main), color: theme.preference.tintColor) {
                 HStack(spacing: 8) {
                     ForEach(ThemePreference.allCases, id: \.self) { pref in
@@ -299,7 +299,7 @@ struct SettingsView: View {
                 }
             }
 
-            settingsRow(icon: "globe", title: String(localized: "settings.interface_language", defaultValue: "Langue de l'interface", bundle: .main), color: "4ECDC4") {
+            settingsRow(icon: "globe", title: String(localized: "settings.interface_language", defaultValue: "Langue de l'interface", bundle: .main), color: MeeshyColors.indigo300Hex) {
                 Picker("", selection: Binding(
                     get: { prefs.application.interfaceLanguage },
                     set: { val in prefs.updateApplication { $0.interfaceLanguage = val } }
@@ -321,8 +321,8 @@ struct SettingsView: View {
     // MARK: - Notifications Section
 
     private var notificationsSection: some View {
-        settingsSection(title: String(localized: "settings.section.notifications", defaultValue: "Notifications", bundle: .main), icon: "bell.fill", color: "FF6B6B") {
-            settingsRow(icon: "bell.badge.fill", title: String(localized: "settings.notifications.title", defaultValue: "Notifications", bundle: .main), color: "FF6B6B") {
+        settingsSection(title: String(localized: "settings.section.notifications", defaultValue: "Notifications", bundle: .main), icon: "bell.fill", color: MeeshyColors.errorHex) {
+            settingsRow(icon: "bell.badge.fill", title: String(localized: "settings.notifications.title", defaultValue: "Notifications", bundle: .main), color: MeeshyColors.errorHex) {
                 Toggle("", isOn: Binding(
                     get: { prefs.notification.pushEnabled },
                     set: { val in prefs.updateNotification { $0.pushEnabled = val } }
@@ -333,7 +333,7 @@ struct SettingsView: View {
                 .accessibilityValue(prefs.notification.pushEnabled ? String(localized: "settings.value.active", defaultValue: "active", bundle: .main) : String(localized: "settings.value.disabled", defaultValue: "desactive", bundle: .main))
             }
 
-            settingsRow(icon: "speaker.wave.2.fill", title: String(localized: "settings.notif.sounds", defaultValue: "Sons", bundle: .main), color: "4ECDC4") {
+            settingsRow(icon: "speaker.wave.2.fill", title: String(localized: "settings.notif.sounds", defaultValue: "Sons", bundle: .main), color: MeeshyColors.indigo300Hex) {
                 Toggle("", isOn: Binding(
                     get: { prefs.notification.soundEnabled },
                     set: { val in prefs.updateNotification { $0.soundEnabled = val } }
@@ -344,7 +344,7 @@ struct SettingsView: View {
                 .accessibilityValue(prefs.notification.soundEnabled ? String(localized: "settings.value.active", defaultValue: "active", bundle: .main) : String(localized: "settings.value.disabled", defaultValue: "desactive", bundle: .main))
             }
 
-            settingsRow(icon: "iphone.radiowaves.left.and.right", title: String(localized: "settings.notif.vibrations", defaultValue: "Vibrations", bundle: .main), color: "9B59B6") {
+            settingsRow(icon: "iphone.radiowaves.left.and.right", title: String(localized: "settings.notif.vibrations", defaultValue: "Vibrations", bundle: .main), color: MeeshyColors.brandDeepHex) {
                 Toggle("", isOn: Binding(
                     get: { prefs.notification.vibrationEnabled },
                     set: { val in prefs.updateNotification { $0.vibrationEnabled = val } }
@@ -359,7 +359,7 @@ struct SettingsView: View {
                 HapticFeedback.light()
                 showNotificationSettings = true
             } label: {
-                settingsRow(icon: "slider.horizontal.3", title: String(localized: "settings.notif.more_options", defaultValue: "Plus d'options", bundle: .main), color: "FF6B6B") {
+                settingsRow(icon: "slider.horizontal.3", title: String(localized: "settings.notif.more_options", defaultValue: "Plus d'options", bundle: .main), color: MeeshyColors.errorHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -373,12 +373,12 @@ struct SettingsView: View {
     // MARK: - Data Section
 
     private var dataSection: some View {
-        settingsSection(title: String(localized: "settings.section.data", defaultValue: "Donnees", bundle: .main), icon: "externaldrive.fill", color: "E67E22") {
+        settingsSection(title: String(localized: "settings.section.data", defaultValue: "Donnees", bundle: .main), icon: "externaldrive.fill", color: MeeshyColors.warningHex) {
             Button {
                 HapticFeedback.light()
                 showDataStorage = true
             } label: {
-                settingsRow(icon: "internaldrive.fill", title: String(localized: "settings.storage", defaultValue: "Stockage", bundle: .main), color: "E67E22") {
+                settingsRow(icon: "internaldrive.fill", title: String(localized: "settings.storage", defaultValue: "Stockage", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -391,7 +391,7 @@ struct SettingsView: View {
                 HapticFeedback.light()
                 showMediaDownload = true
             } label: {
-                settingsRow(icon: "arrow.down.circle.fill", title: String(localized: "settings.media.download.title", defaultValue: "Telechargement auto", bundle: .main), color: "F39C12") {
+                settingsRow(icon: "arrow.down.circle.fill", title: String(localized: "settings.media.download.title", defaultValue: "Telechargement auto", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -404,7 +404,7 @@ struct SettingsView: View {
                 HapticFeedback.light()
                 showDataExport = true
             } label: {
-                settingsRow(icon: "square.and.arrow.up.fill", title: String(localized: "settings.export_data", defaultValue: "Exporter mes donnees", bundle: .main), color: "E67E22") {
+                settingsRow(icon: "square.and.arrow.up.fill", title: String(localized: "settings.export_data", defaultValue: "Exporter mes donnees", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -418,12 +418,12 @@ struct SettingsView: View {
     // MARK: - Voice Profile Section
 
     private var voiceProfileSection: some View {
-        settingsSection(title: String(localized: "settings.section.voice", defaultValue: "Profil vocal", bundle: .main), icon: "waveform.and.mic", color: "A855F7") {
+        settingsSection(title: String(localized: "settings.section.voice", defaultValue: "Profil vocal", bundle: .main), icon: "waveform.and.mic", color: MeeshyColors.brandDeepHex) {
             Button {
                 HapticFeedback.light()
                 showVoiceProfileManage = true
             } label: {
-                settingsRow(icon: "waveform.circle.fill", title: String(localized: "settings.voice.manage", defaultValue: "Gerer le profil vocal", bundle: .main), color: "A855F7") {
+                settingsRow(icon: "waveform.circle.fill", title: String(localized: "settings.voice.manage", defaultValue: "Gerer le profil vocal", bundle: .main), color: MeeshyColors.brandDeepHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -436,7 +436,7 @@ struct SettingsView: View {
                 HapticFeedback.light()
                 showVoiceProfileWizard = true
             } label: {
-                settingsRow(icon: "plus.circle.fill", title: String(localized: "settings.voice.create", defaultValue: "Creer un profil vocal", bundle: .main), color: "2ECC71") {
+                settingsRow(icon: "plus.circle.fill", title: String(localized: "settings.voice.create", defaultValue: "Creer un profil vocal", bundle: .main), color: MeeshyColors.successHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -446,18 +446,18 @@ struct SettingsView: View {
             .accessibilityHint(String(localized: "settings.voice.create.hint", defaultValue: "Lance l'assistant de creation de profil vocal", bundle: .main))
         }
         .sheet(isPresented: $showVoiceProfileWizard) {
-            VoiceProfileWizardView(accentColor: "A855F7")
+            VoiceProfileWizardView(accentColor: MeeshyColors.brandDeepHex)
         }
         .sheet(isPresented: $showVoiceProfileManage) {
-            VoiceProfileManageView(accentColor: "A855F7")
+            VoiceProfileManageView(accentColor: MeeshyColors.brandDeepHex)
         }
     }
 
     // MARK: - Transcription Section
 
     private var transcriptionSection: some View {
-        settingsSection(title: String(localized: "settings.section.transcription", defaultValue: "Transcription", bundle: .main), icon: "text.quote", color: "4ECDC4") {
-            settingsRow(icon: "waveform", title: String(localized: "settings.transcription.auto", defaultValue: "Transcription automatique", bundle: .main), color: "4ECDC4") {
+        settingsSection(title: String(localized: "settings.section.transcription", defaultValue: "Transcription", bundle: .main), icon: "text.quote", color: MeeshyColors.indigo300Hex) {
+            settingsRow(icon: "waveform", title: String(localized: "settings.transcription.auto", defaultValue: "Transcription automatique", bundle: .main), color: MeeshyColors.indigo300Hex) {
                 Toggle("", isOn: Binding(
                     get: { prefs.audio.autoTranscribeIncoming },
                     set: { val in prefs.updateAudio { $0.autoTranscribeIncoming = val } }
@@ -468,7 +468,7 @@ struct SettingsView: View {
                     .accessibilityValue(prefs.audio.autoTranscribeIncoming ? String(localized: "settings.value.active", defaultValue: "active", bundle: .main) : String(localized: "settings.value.disabled", defaultValue: "desactive", bundle: .main))
             }
 
-            settingsRow(icon: "info.circle", title: String(localized: "settings.transcription.engine", defaultValue: "Apple Speech (on-device)", bundle: .main), color: "6B7280") {
+            settingsRow(icon: "info.circle", title: String(localized: "settings.transcription.engine", defaultValue: "Apple Speech (on-device)", bundle: .main), color: MeeshyColors.neutral500Hex) {
                 EmptyView()
             }
             .accessibilityLabel(String(localized: "settings.transcription.engine.a11y", defaultValue: "Moteur de transcription: Apple Speech sur l'appareil", bundle: .main))
@@ -478,12 +478,12 @@ struct SettingsView: View {
     // MARK: - Meeshy Tools Section
 
     private var meeshyToolsSection: some View {
-        settingsSection(title: String(localized: "settings.section.tools", defaultValue: "Outils", bundle: .main), icon: "wrench.and.screwdriver.fill", color: "2ECC71") {
+        settingsSection(title: String(localized: "settings.section.tools", defaultValue: "Outils", bundle: .main), icon: "wrench.and.screwdriver.fill", color: MeeshyColors.successHex) {
             Button {
                 HapticFeedback.light()
                 router.push(.starredMessages)
             } label: {
-                settingsRow(icon: "star.fill", title: String(localized: "settings.tools.starred", defaultValue: "Messages favoris", bundle: .main), color: "FBBF24") {
+                settingsRow(icon: "star.fill", title: String(localized: "settings.tools.starred", defaultValue: "Messages favoris", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -496,7 +496,7 @@ struct SettingsView: View {
                 HapticFeedback.light()
                 showStats = true
             } label: {
-                settingsRow(icon: "chart.bar.fill", title: String(localized: "settings.tools.stats", defaultValue: "Statistiques", bundle: .main), color: "4ECDC4") {
+                settingsRow(icon: "chart.bar.fill", title: String(localized: "settings.tools.stats", defaultValue: "Statistiques", bundle: .main), color: MeeshyColors.indigo300Hex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -509,7 +509,7 @@ struct SettingsView: View {
                 HapticFeedback.light()
                 showAffiliate = true
             } label: {
-                settingsRow(icon: "link.badge.plus", title: String(localized: "settings.tools.affiliate", defaultValue: "Parrainage", bundle: .main), color: "2ECC71") {
+                settingsRow(icon: "link.badge.plus", title: String(localized: "settings.tools.affiliate", defaultValue: "Parrainage", bundle: .main), color: MeeshyColors.successHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -523,12 +523,12 @@ struct SettingsView: View {
     // MARK: - Support Section
 
     private var supportSection: some View {
-        settingsSection(title: String(localized: "settings.section.help", defaultValue: "Aide", bundle: .main), icon: "questionmark.circle.fill", color: "27AE60") {
+        settingsSection(title: String(localized: "settings.section.help", defaultValue: "Aide", bundle: .main), icon: "questionmark.circle.fill", color: MeeshyColors.successHex) {
             Button {
                 HapticFeedback.light()
                 showSupport = true
             } label: {
-                settingsRow(icon: "lifepreserver.fill", title: String(localized: "settings.help_center", defaultValue: "Centre d'aide", bundle: .main), color: "27AE60") {
+                settingsRow(icon: "lifepreserver.fill", title: String(localized: "settings.help_center", defaultValue: "Centre d'aide", bundle: .main), color: MeeshyColors.successHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -542,12 +542,12 @@ struct SettingsView: View {
     // MARK: - About Section
 
     private var aboutSection: some View {
-        settingsSection(title: String(localized: "settings.section.about", defaultValue: "A propos", bundle: .main), icon: "info.circle.fill", color: "45B7D1") {
+        settingsSection(title: String(localized: "settings.section.about", defaultValue: "A propos", bundle: .main), icon: "info.circle.fill", color: MeeshyColors.infoHex) {
             Button {
                 HapticFeedback.light()
                 showAbout = true
             } label: {
-                settingsRow(icon: "info.circle.fill", title: String(localized: "settings.about.meeshy", defaultValue: "A propos de Meeshy", bundle: .main), color: "45B7D1") {
+                settingsRow(icon: "info.circle.fill", title: String(localized: "settings.about.meeshy", defaultValue: "A propos de Meeshy", bundle: .main), color: MeeshyColors.infoHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -560,7 +560,7 @@ struct SettingsView: View {
                 HapticFeedback.light()
                 showTerms = true
             } label: {
-                settingsRow(icon: "doc.text.fill", title: String(localized: "settings.terms", defaultValue: "Conditions d'utilisation", bundle: .main), color: "45B7D1") {
+                settingsRow(icon: "doc.text.fill", title: String(localized: "settings.terms", defaultValue: "Conditions d'utilisation", bundle: .main), color: MeeshyColors.infoHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -573,7 +573,7 @@ struct SettingsView: View {
                 HapticFeedback.light()
                 showPrivacyPolicy = true
             } label: {
-                settingsRow(icon: "hand.raised.fill", title: String(localized: "settings.privacy_policy", defaultValue: "Politique de confidentialite", bundle: .main), color: "45B7D1") {
+                settingsRow(icon: "hand.raised.fill", title: String(localized: "settings.privacy_policy", defaultValue: "Politique de confidentialite", bundle: .main), color: MeeshyColors.infoHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -586,7 +586,7 @@ struct SettingsView: View {
                 HapticFeedback.light()
                 showLicenses = true
             } label: {
-                settingsRow(icon: "checkmark.seal.fill", title: String(localized: "settings.licenses", defaultValue: "Licences open source", bundle: .main), color: "45B7D1") {
+                settingsRow(icon: "checkmark.seal.fill", title: String(localized: "settings.licenses", defaultValue: "Licences open source", bundle: .main), color: MeeshyColors.infoHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -595,7 +595,7 @@ struct SettingsView: View {
             .accessibilityLabel(String(localized: "settings.licenses", defaultValue: "Licences open source", bundle: .main))
             .accessibilityHint(String(localized: "settings.licenses.hint", defaultValue: "Ouvre la liste des licences open source", bundle: .main))
 
-            settingsRow(icon: "sparkles", title: String(localized: "settings.version", defaultValue: "Version", bundle: .main), color: "F8B500") {
+            settingsRow(icon: "sparkles", title: String(localized: "settings.version", defaultValue: "Version", bundle: .main), color: MeeshyColors.warningHex) {
                 Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(theme.textMuted)
