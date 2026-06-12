@@ -54,20 +54,41 @@ describe('buildPushHeader', () => {
     expect(result.subtitle).toBeUndefined();
   });
 
-  it('omits subtitle for non-message notification types (reactions, mentions...)', () => {
+  it('builds subtitle=conv for group reactions and mentions (conversation-scoped types)', () => {
+    // Précision des notifications (2026-06-12) : une réaction ou une mention
+    // dans un groupe doit dire DANS QUEL groupe — même mécanisme subtitle que
+    // new_message, restauré côté NSE après la donation d'intent.
     const reactionResult = buildPushHeader({
       type: 'message_reaction',
       actor: { id: 'u1', username: 'alice', displayName: 'Alice' },
       context: { conversationType: 'group', conversationTitle: 'Équipe Dev' },
     });
-    expect(reactionResult.subtitle).toBeUndefined();
+    expect(reactionResult.subtitle).toBe('Équipe Dev');
 
     const mentionResult = buildPushHeader({
       type: 'user_mentioned',
       actor: { id: 'u1', username: 'alice', displayName: 'Alice' },
       context: { conversationType: 'global', conversationTitle: 'Meeshy Global' },
     });
-    expect(mentionResult.subtitle).toBeUndefined();
+    expect(mentionResult.subtitle).toBe('Meeshy Global');
+  });
+
+  it('omits subtitle for group reactions/mentions in direct conversations', () => {
+    const result = buildPushHeader({
+      type: 'message_reaction',
+      actor: { id: 'u1', username: 'alice', displayName: 'Alice' },
+      context: { conversationType: 'direct', conversationTitle: 'Alice & Bob' },
+    });
+    expect(result.subtitle).toBeUndefined();
+  });
+
+  it('omits subtitle for non-conversation notification types (friend requests...)', () => {
+    const result = buildPushHeader({
+      type: 'friend_request',
+      actor: { id: 'u1', username: 'alice', displayName: 'Alice' },
+      context: { conversationType: 'group', conversationTitle: 'Équipe Dev' },
+    });
+    expect(result.subtitle).toBeUndefined();
   });
 
   it('honours an explicit customTitle override (e.g. security alerts)', () => {
