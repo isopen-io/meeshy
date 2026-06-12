@@ -6,6 +6,7 @@
 
 import type { Conversation, Message } from '@meeshy/shared/types';
 import type { ConversationItemData, ConversationTag } from '@/components/v2';
+import { getCurrentInterfaceLocale } from '@/stores/language-store';
 
 export interface TransformConversationOptions {
   typingUserIds?: Set<string>;
@@ -32,7 +33,7 @@ function formatRelativeTime(date: Date | string | undefined): string {
   if (diffDays < 7) return `${diffDays}j`;
 
   // Format as date for older messages
-  return messageDate.toLocaleDateString('fr-FR', {
+  return messageDate.toLocaleDateString(getCurrentInterfaceLocale(), {
     day: 'numeric',
     month: 'short',
   });

@@ -168,6 +168,10 @@ export const useLanguageStore = create<LanguageStore>()(
   )
 );
 
+// Accès hors React (services, helpers module-level) — composants : préférer les selector hooks
+export const getCurrentInterfaceLocale = (): string =>
+  useLanguageStore.getState().currentInterfaceLanguage;
+
 // Selector hooks
 export const useCurrentInterfaceLanguage = () => useLanguageStore((state) => state.currentInterfaceLanguage);
 export const useAvailableLanguages = () => useLanguageStore((state) => state.availableLanguages);

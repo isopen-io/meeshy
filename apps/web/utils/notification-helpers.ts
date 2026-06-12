@@ -11,6 +11,7 @@ import {
   type NotificationIcon
 } from '@/types/notification';
 import { getUserDisplayName } from './user-display-name';
+import { getCurrentInterfaceLocale } from '@/stores/language-store';
 
 // Type pour la fonction de traduction
 type TranslateFunction = (key: string, params?: Record<string, string>) => string;
@@ -122,7 +123,7 @@ export function formatNotificationTimestamp(createdAt: Date | string): string {
   if (diffHours < 24) return `il y a ${diffHours}h`;
   if (diffDays < 7) return `il y a ${diffDays}j`;
 
-  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  return date.toLocaleDateString(getCurrentInterfaceLocale(), { day: 'numeric', month: 'short' });
 }
 
 /**

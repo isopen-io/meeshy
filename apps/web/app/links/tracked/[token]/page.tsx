@@ -64,7 +64,7 @@ interface TrackingLinkStats {
 export default function TrackingLinkDetailsPage() {
   const router = useRouter();
   const params = useParams();
-  const { t } = useI18n('links');
+  const { t, locale } = useI18n('links');
   const token = params.token as string;
 
   const [isLoading, setIsLoading] = useState(true);
@@ -165,7 +165,7 @@ export default function TrackingLinkDetailsPage() {
   };
 
   const formatDate = (date: string | Date) => {
-    return new Date(date).toLocaleDateString('fr-FR', {
+    return new Date(date).toLocaleDateString(locale, {
       day: 'numeric',
       month: 'short',
       year: 'numeric'
@@ -715,7 +715,7 @@ export default function TrackingLinkDetailsPage() {
 
             // Préparer les données pour le graphique
             const chartData = stats.clicksByDate.slice(-14).map(item => ({
-              date: new Date(item.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }),
+              date: new Date(item.date).toLocaleDateString(locale, { day: '2-digit', month: 'short' }),
               fullDate: item.date,
               [t('stats.totalClicks')]: item.clicks,
               [t('stats.uniqueClicks')]: item.uniqueClicks,

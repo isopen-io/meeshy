@@ -75,7 +75,7 @@ const LoadingSpinner = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { t, isLoading: isI18nLoading } = useI18n('auth');
+  const { t, locale, isLoading: isI18nLoading } = useI18n('auth');
 
   const token = searchParams.get('token');
   const email = searchParams.get('email');
@@ -99,7 +99,7 @@ function VerifyEmailContent() {
   const formatDate = useCallback((dateString: string): string => {
     try {
       const date = new Date(dateString);
-      return new Intl.DateTimeFormat('fr-FR', {
+      return new Intl.DateTimeFormat(locale, {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
@@ -109,7 +109,7 @@ function VerifyEmailContent() {
     } catch {
       return dateString;
     }
-  }, []);
+  }, [locale]);
 
   // Vérifier l'email au montage (attendre que les traductions soient chargées)
   useEffect(() => {

@@ -100,7 +100,7 @@ export default function AdminTrackingLinksPage() {
   const [clicksPage, setClicksPage] = useState(1);
   const [clicksLoading, setClicksLoading] = useState(false);
   const clicksPageSize = 50;
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
 
   // -- Load links --
   const loadLinks = useCallback(async () => {
@@ -235,7 +235,7 @@ export default function AdminTrackingLinksPage() {
   }, [selectedLink, loadClicks]);
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('fr-FR', {
+    return new Date(dateString).toLocaleString(locale, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

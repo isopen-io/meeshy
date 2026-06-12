@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useConversationsQuery, useConversationQuery } from '@/hooks/queries/use-conversations-query';
 import { useInfiniteMessagesQuery, useMessagesQueryHelpers } from '@/hooks/queries/use-messages-query';
 import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
+import { useLanguageStore } from '@/stores/language-store';
 import type { Conversation, Message, User } from '@meeshy/shared/types';
 import type { ConversationItemData } from '@/components/v2/ConversationItem';
 
@@ -67,6 +68,7 @@ export function useChatV2(options: UseChatV2Options = {}): UseChatV2Return {
 
   // Auth
   const { user: currentUser, isAuthenticated, isChecking } = useAuth();
+  const interfaceLocale = useLanguageStore((state) => state.currentInterfaceLanguage);
 
   // State
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(initialConversationId);
@@ -182,7 +184,7 @@ export function useChatV2(options: UseChatV2Options = {}): UseChatV2Return {
           content: lastMessage.content || '',
           type: messageType as 'text' | 'photo' | 'voice' | 'file',
           timestamp: lastMessage.createdAt
-            ? new Date(lastMessage.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+            ? new Date(lastMessage.createdAt).toLocaleTimeString(interfaceLocale, { hour: '2-digit', minute: '2-digit' })
             : '',
           senderName: conv.isGroup ? lastMessage.sender?.displayName || (lastMessage.sender as any)?.username : undefined,
         };
@@ -207,7 +209,7 @@ export function useChatV2(options: UseChatV2Options = {}): UseChatV2Return {
         isTyping: isTypingInConv,
       };
     });
-  }, [conversations, currentUser, typingUsers]);
+  }, [conversations, currentUser, typingUsers, interfaceLocale]);
 
   // Get messages from infinite query
   const messages = useMemo(() => {

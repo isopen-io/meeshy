@@ -52,7 +52,7 @@ export function AttachmentGallery({
   currentUserId,
   onAttachmentDeleted,
 }: AttachmentGalleryProps) {
-  const { t } = useI18n('attachments');
+  const { t, locale } = useI18n('attachments');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -244,7 +244,7 @@ export function AttachmentGallery({
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleString('fr-FR', {
+    return date.toLocaleString(locale, {
       day: 'numeric',
       month: 'long',
       year: 'numeric',

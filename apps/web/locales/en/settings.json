@@ -38,6 +38,10 @@
       "description": "Personal information",
       "settingsTitle": "Profile Settings",
       "settingsDescription": "Settings for {username}",
+      "avatar": {
+        "invalidFile": "Invalid file",
+        "uploadError": "Error uploading avatar"
+      },
       "photo": {
         "title": "Profile Photo",
         "description": "Customize your profile photo visible to other users",

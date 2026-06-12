@@ -77,7 +77,7 @@ import { deleteTrackingLink, deactivateTrackingLink } from '@/services/tracking-
 import { authManager } from '@/services/auth-manager.service';
 
 export default function LinksPage() {
-  const { t } = useI18n('links');
+  const { t, locale } = useI18n('links');
   const { t: tConversations } = useI18n('conversations');
   const user = useUser();
   const router = useRouter();
@@ -451,7 +451,7 @@ export default function LinksPage() {
 
   // Formater la date
   const _formatDate = (date: string | Date) => {
-    return new Date(date).toLocaleDateString('fr-FR', {
+    return new Date(date).toLocaleDateString(locale, {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
