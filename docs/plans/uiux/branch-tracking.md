@@ -16,10 +16,10 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | **46w** (web only : i18n surface v2 — CommentComposer 7 clés, StatusBar timeRemaining, ThemeToggle 5 clés, TranslationToggle/MediaImageCard `language.original`/`availableTranslations`/`captionLanguage` ; admin UserPicker 8 clés `agent.userPicker.*` ; MessageComposer `#EF4444`×3 → `var(--gp-error)` + hover theme-aware ; overlays click-outside `aria-hidden` MessageBubble/MediaImageCard ; hygiène docs : 36/36 analyses annotées, carry-over purgé de 3 faux restes) |
-| Last merged PR | #597 (45), #596 (45w), #595 (45i), #604 (routine fraîcheur) ; iter-46w sur `claude/elegant-noether-09t4x2` |
-| Last Merged Base (commit) | 945a8d74 (merge #604, contient #597) — base de la branche iter-46w |
-| Next iteration | **47w** — repartir de `main` HEAD post-merge iter-46w |
+| Last completed iteration | **46i** (iOS only : épuration MessageComposer.swift + SampleData.swift + ThemedFeedCard/FeedActionButton/10 wrappers Legacy supprimés (pbxproj nettoyé) ; ancienne palette `4ECDC4`/`FF2E63`/`08D9D6` du target app à ZÉRO (RootViewComponents, FeedView, FeedView+Attachments, WidgetPreviewView, AboutView, ConversationAnimatedBackground, divers ×1, MeeshyWidgets samples) ; défauts AttachmentPreparationService → `AttachmentKind.hexTintColor` ; token SDK `warningDeep` ; FriendRequestListView 10 polices sémantiques + `relativeTime` fr_FR → `ShortRelativeTime` ; clé `common.unknown` cataloguée 5 locales ; 6 a11y labels toolbar sheet composer ; `widget.preview.action.*` 4 clés) — précédée de **46w** (#605, web-only) |
+| Last merged PR | #605 (46w), #608 (notification details iOS) ; iter-46i sur `claude/wizardly-rubin-v9thim` (PR #612 ⏳) |
+| Last Merged Base (commit) | 61d0122 (merge #608) — base de la branche iter-46i |
+| Next iteration | **47i** — repartir de `main` HEAD post-merge #612 |
 
 ### Deferred carry-over — web (pour 47w+)
 - admin : `AgentConfigDialog` (~58 labels/tooltips FR) + tooltips InfoIcon `AgentLlmTab` (6) / `AgentGlobalConfigTab` (15) — à traiter en un lot sous `agent.config.*` (vérifié 46w : debug.tsx, AgentArchetypesTab, BackSoundDetails, UserPicker DÉJÀ corrigés — ne plus auditer)
@@ -30,8 +30,14 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 - optimisations 45w toujours ouvertes : deep links `/v2/chats?id=` (parité iOS/Android), swipe-back mobile web, audit dark pages admin
 - locale maps intentionnelles NON à migrer : share-affiliate-modal, AudioPostComposer (speech), use-voice-recording (SpeechRecognition lang) ; StoryViewer `select-none` text-objects = design (parité stories iOS)
 
-### Deferred carry-over — iOS (pour 46+, post-45i/45)
-SampleData.swift suppression fichier mort (pbxproj + build local) ; FriendRequestListView 11 polices ; PostDetailView (.textSelection + 21 hex — re-vérifié OK iter-45, retirer si confirmé) ; arbitrage `time.*` (FeedPostCard) vs `time.short.*` (ShortRelativeTime) — timeAgo FeedCommentsSheet réglé en 45, ChangePasswordView réglé en 45 ; ConversationInfoSheet (52 polices), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (27), NewConversationView (16), DataExportView (16), DataStorageView (11) ; reliquats ancienne palette : RootViewComponents (11), FeedView (8), FeedView+Attachments (10), WidgetPreviewView (7), AboutView (5), MessageComposer (4), AttachmentPreparationService (3), ConversationAnimatedBackground (2), divers ×1 (ConversationInfoSheet, MemberManagementSection, BlockedUsersView, UserStatsView, StoryViewerView+Content, MediaDownloadSettingsView) ; washes AudioPostComposer (décision design) ; ladder pièces jointes arc-en-ciel (à arbitrer charte) ; VoiceProfileWizardView/TrackingLinksView Color(hex:) ; IncomingCallView .white contraste ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) ; ThemedConversationRow theme-aware (leaf-view)
+### Deferred carry-over — iOS (pour 47i+, post-46i)
+PURGÉ en 46i : SampleData ✓ supprimé, FriendRequestListView polices ✓, PostDetailView ✓ re-vérifié conforme (textSelection présent, 0 hex hors charte — retiré), reliquats ancienne palette app ✓ tous traités, StoryViewerView+Content ✓ reclassé conforme (wash filtre photo « cool », intentionnel).
+Restent :
+- ladders catégorielles à arbitrer charte EN UN LOT : pièces jointes (`AttachmentKind.hexTintColor` = désormais le seul point à changer), sections AboutView (9B59B6/F8B500), cartes UserStatsView (5 hex), `attachmentOptions` ThemedFeedComposer, policyPickers MediaDownloadSettingsView (F39C12/E74C3C), quick action « Post » WidgetPreviewView (A855F7)
+- arbitrage `time.*` (FeedPostCard) vs `time.short.*` (ShortRelativeTime)
+- grandes surfaces polices : ConversationInfoSheet (52), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (27), NewConversationView (16), DataExportView (16), DataStorageView (11)
+- reliquats ancienne palette SDK MeeshyUI (passe dédiée, fort volume) : Auth (AuthTextField, LanguageSelector, MeeshyForgotPasswordView), Community (CreateView/ListView/DetailView/SettingsView), Primitives (FloatingButtons, LanguagePickerSheet, EmojiReactionPicker, ChatBubble, UserIdentityBar, StatsCard, AchievementBadge, EmptyStateView), viewers Media défauts `08D9D6`, NotificationListView
+- washes AudioPostComposer (décision design, conforme) ; VoiceProfileWizardView/TrackingLinksView Color(hex:) ; IncomingCallView .white contraste ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) ; ThemedConversationRow theme-aware (leaf-view)
 
 ### Deferred carry-over — Android (pour 46+)
 parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ; exceptions documentées : SettingsScreen 14.dp, emoji 22.sp (acceptées, ne pas re-flagger)
@@ -72,4 +78,5 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 45w | claude/elegant-noether-1pen57 | #596 | ✅ |
 | 45i | claude/wizardly-rubin-ux84an | #595 | ✅ |
 | 45 | claude/blissful-ritchie-dp7ibu | #597 | ✅ |
-| 46w | claude/elegant-noether-09t4x2 | ⏳ | ⏳ |
+| 46w | claude/elegant-noether-09t4x2 | #605 | ✅ |
+| 46i | claude/wizardly-rubin-v9thim | #612 | ⏳ |
