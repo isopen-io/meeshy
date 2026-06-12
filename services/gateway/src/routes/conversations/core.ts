@@ -82,6 +82,14 @@ export const conversationListParticipantSelect = {
  * endpoint. The filtered `_count` carries the exact active-member total,
  * surfaced as `memberCount` in the response (declared in
  * `conversationSchema`, so it survives fast-json-stringify).
+ *
+ * Iter 35 (F8) — strict `select` instead of `include`: the wire schema
+ * (`conversationParticipantSchema`) declares no nested `user` and only the
+ * scalars below, so fast-json-stringify already stripped the rest — the DB was
+ * hydrating dead fields (including the sensitive `sessionTokenHash` and the
+ * embedded `anonymousSession` document) for up to 100 participants per open.
+ * The nested user is server-side only: `generateDefaultConversationTitle`
+ * reads displayName/username/firstName/lastName.
  */
 export const CONVERSATION_DETAIL_PARTICIPANTS_CAP = 100;
 
@@ -90,18 +98,25 @@ export const conversationDetailInclude = {
     where: { isActive: true },
     orderBy: { joinedAt: 'asc' },
     take: CONVERSATION_DETAIL_PARTICIPANTS_CAP,
-    include: {
+    select: {
+      id: true,
+      userId: true,
+      type: true,
+      displayName: true,
+      avatar: true,
+      role: true,
+      permissions: true,
+      isActive: true,
+      isOnline: true,
+      lastActiveAt: true,
+      joinedAt: true,
       user: {
         select: {
           id: true,
           username: true,
           displayName: true,
           firstName: true,
-          lastName: true,
-          avatar: true,
-          isOnline: true,
-          lastActiveAt: true,
-          role: true
+          lastName: true
         }
       }
     }
@@ -689,33 +704,16 @@ export function registerCoreRoutes(
         logger.warn('failed to compute unreadCount for conversation', { conversationId, error: unreadError });
       }
 
-      // Marquer automatiquement toutes les notifications de cette conversation comme lues.
-      // Le filtre conversationId reste client-side (champ JSON `context`), mais
-      // l'update est collapsé en un seul updateMany pour éviter le N+1 round-trip.
-      try {
-        const notifications = await prisma.notification.findMany({
-          where: {
-            userId,
-            isRead: false
-          },
-          select: { id: true, context: true }
+      // Marquer automatiquement les notifications de cette conversation comme lues —
+      // délégué au service (1 seul update Mongo filtré sur context.conversationId,
+      // émet notification:counts pour resynchroniser cloche/badge) et fire-and-forget :
+      // effet de bord non essentiel, hors du chemin critique de la réponse
+      // (même pattern que posts/interactions.ts pour markPostNotificationsAsRead).
+      fastify.notificationService
+        ?.markConversationNotificationsAsRead(userId, conversationId)
+        .catch((notifError: unknown) => {
+          logger.error('error marking auto notifications for conversation', { conversationId, error: notifError });
         });
-
-        const idsToMark = notifications
-          .filter((n: any) => n.context?.conversationId === conversationId)
-          .map((n: any) => n.id);
-
-        if (idsToMark.length > 0) {
-          const result = await prisma.notification.updateMany({
-            where: { id: { in: idsToMark } },
-            data: { isRead: true, readAt: new Date() }
-          });
-          fastify.log.info(`✅ Auto-marqué ${result.count} notification(s) comme lues pour conversation ${conversationId}, userId ${userId}`);
-        }
-      } catch (notifError) {
-        // Ne pas bloquer la réponse si le marquage des notifications échoue
-        logger.error('error marking auto notifications for conversation', { conversationId, error: notifError });
-      }
 
       // NOTE : l'ancien bloc `meta.conversationStats` (getOrCompute + payload)
       // a été retiré — `conversationSchema` ne déclare pas `meta`, donc

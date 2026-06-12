@@ -9,10 +9,8 @@ import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
 import { useConversationPreference, useConversationPreferencesActions } from '@/stores/conversation-preferences-store';
 import { getTagColor } from '@/utils/tag-colors';
 import { toast } from 'sonner';
-import { OnlineIndicator } from '@/components/ui/online-indicator';
-import { getUserStatus } from '@/lib/user-status';
 import { formatConversationDate } from '@/utils/date-format';
-import { useUserStore } from '@/stores/user-store';
+import { ParticipantPresenceIndicator } from './ParticipantPresenceIndicator';
 import { ConversationItemActions } from './ConversationItemActions';
 import { usePrefetchOnHover } from '@/hooks/use-prefetch-on-hover';
 import { useI18n } from '@/hooks/use-i18n';
@@ -65,9 +63,6 @@ export const ConversationItem = memo(function ConversationItem({
   const localIsArchived = storePrefs?.isArchived ?? isArchived;
   const localReaction = storePrefs?.reaction ?? reaction;
 
-  // Statuts temps réel : getUserById est stable, le tick ne concerne que les conversations directes
-  const getUserById = useUserStore(state => state.getUserById);
-  const _presenceTick = useUserStore(state => (conversation.type === 'direct' ? state._lastStatusUpdate : 0));
   // Actions du menu - utilisent le store pour la réactivité
   const handleTogglePin = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -228,17 +223,15 @@ export const ConversationItem = memo(function ConversationItem({
             {icon || conversationAvatar}
           </AvatarFallback>
         </Avatar>
-        {/* Indicateur de présence - pour les conversations directes */}
+        {/* Indicateur de présence - pour les conversations directes.
+            Feuille abonnée seule au user store : la row ne re-rend plus sur les ticks de présence */}
         {conversation.type === 'direct' && (() => {
           const participantUser = getOtherParticipantUser();
           if (participantUser) {
-            const userFromStore = getUserById(participantUser.id);
-            const effectiveUser = userFromStore || participantUser;
-            const status = getUserStatus(effectiveUser);
             return (
-              <OnlineIndicator
-                isOnline={status === 'online'}
-                status={status}
+              <ParticipantPresenceIndicator
+                userId={participantUser.id}
+                fallbackUser={participantUser}
                 size="md"
                 className="absolute -bottom-0.5 -right-0.5"
               />
