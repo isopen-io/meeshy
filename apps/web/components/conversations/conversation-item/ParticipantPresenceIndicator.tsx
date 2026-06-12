@@ -5,7 +5,7 @@ import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
 import { useUserById, useUserStatusTick } from '@/stores/user-store';
 
-type PresenceSource = {
+export type PresenceSource = {
   isOnline?: boolean;
   lastActiveAt?: Date | string | number | null;
 };

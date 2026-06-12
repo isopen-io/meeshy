@@ -70,9 +70,7 @@ import type { Conversation, Message } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
 import type { UserConversationPreferences } from '@meeshy/shared/types/user-preferences';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
-import { OnlineIndicator } from '@/components/ui/online-indicator';
-import { getUserStatus } from '@/lib/user-status';
-import { useUserStore, useUserStatusTick } from '@/stores/user-store';
+import { ParticipantPresenceIndicator } from './conversation-item/ParticipantPresenceIndicator';
 import { AttachmentService } from '@/services/attachmentService';
 import {
   FoldableSection,
@@ -137,8 +135,6 @@ export function ConversationSettingsModal({
   const router = useRouter();
   const searchParams = useSearchParams();
   const preferencesActions = useConversationPreferencesActions();
-  const getUserById = useUserStore(state => state.getUserById);
-  const statusTick = useUserStatusTick();
 
   // Utilisateur factice si currentUser n'est pas fourni (pour compatibilité avec anciens appels)
   const safeCurrentUser = currentUser || {
@@ -183,14 +179,6 @@ export function ConversationSettingsModal({
     }
     return conversation.title || t('conversationDetails.conversation');
   }, [isDirect, otherUser, conversation.title, t]);
-
-  // Statut en temps réel de l'autre utilisateur
-  const otherUserStatus = useMemo(() => {
-    if (!isDirect || !otherUser) return 'offline';
-    const freshUser = getUserById(otherUser.id);
-    if (freshUser) return getUserStatus(freshUser);
-    return getUserStatus(otherUser);
-  }, [isDirect, otherUser, getUserById, statusTick]);
 
   // Hooks pour les stats et la gestion des participants
   const { _isAdmin, canModifyImage } = useParticipantManagement(conversation, safeCurrentUser);
@@ -528,9 +516,9 @@ export function ConversationSettingsModal({
                         {displayTitle.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    <OnlineIndicator
-                      isOnline={otherUserStatus === 'online'}
-                      status={otherUserStatus as unknown}
+                    <ParticipantPresenceIndicator
+                      userId={otherUser.id}
+                      fallbackUser={otherUser}
                       size="md"
                       className="absolute -bottom-0.5 -right-0.5 ring-[3px] ring-white dark:ring-gray-900"
                     />
