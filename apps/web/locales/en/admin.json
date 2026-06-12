@@ -269,7 +269,25 @@
     "tabLive": "Live",
     "tabHistory": "History",
     "pageTitle": "AI Agent",
-    "pageSubtitle": "Configuration and supervision of the conversational agent service"
+    "pageSubtitle": "Configuration and supervision of the conversational agent service",
+    "archetypes": {
+      "title": "Archetype catalog",
+      "subtitle": "Predefined profiles for personality generation.",
+      "available": "{count} available",
+      "toneTooltip": "Communication tone",
+      "vocabularyTooltip": "Vocabulary level used",
+      "emojiTooltip": "Emoji usage frequency",
+      "lengthTooltip": "Typical message length",
+      "catchphrases": "Catchphrases",
+      "triggers": "Triggers",
+      "respondsTo": "Responds to:",
+      "silentOn": "Silent on:",
+      "emojiUsage": {
+        "occasionnel": "Occasional",
+        "abondant": "Abundant",
+        "jamais": "Never"
+      }
+    }
   },
   "agentLive": {
     "selectConversation": "Select a conversation to monitor its real-time state",
@@ -321,7 +339,8 @@
   },
   "translationMonitor": {
     "loadingMetrics": "Loading metrics...",
-    "languageBreakdown": "Language breakdown"
+    "languageBreakdown": "Language breakdown",
+    "cacheHit": "Cache hit"
   },
   "llm": {
     "generationSettings": "Generation Settings",
@@ -1655,6 +1674,21 @@
     "navAgent": "AI Agent",
     "navMonitoring": "Monitoring",
     "accessLevel": "Meeshy administration - Access level: {role}"
+  },
+  "debug": {
+    "loading": "Loading debug information...",
+    "title": "Debug — Admin Access",
+    "backToAdmin": "Back to admin",
+    "generalInfo": "General information",
+    "tokenPresent": "Token present",
+    "role": "Role",
+    "canAccessAdmin": "Can access admin",
+    "yes": "Yes",
+    "no": "No",
+    "userLocalStorage": "User (localStorage)",
+    "apiResponse": "API response /auth/me",
+    "permissionsApi": "Permissions (API)",
+    "permissionsDefault": "Permissions (default)"
   },
   "rankingPage": {
     "back": "Back",

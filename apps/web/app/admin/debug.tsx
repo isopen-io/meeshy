@@ -8,6 +8,7 @@ import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { getDefaultPermissions } from '@/utils/user-adapter';
 
 import { authManager } from '@/services/auth-manager.service';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface DebugInfo {
   token: string | null;
@@ -20,6 +21,7 @@ interface DebugInfo {
 }
 
 const AdminDebug: React.FC = () => {
+  const { t } = useI18n('admin');
   const router = useRouter();
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,7 +71,7 @@ const AdminDebug: React.FC = () => {
         });
 
       } catch (error) {
-        console.error('Erreur lors du chargement des informations de debug:', error);
+        console.error('Failed to load debug info:', error);
       } finally {
         setLoading(false);
       }
@@ -83,7 +85,7 @@ const AdminDebug: React.FC = () => {
       <div className="container mx-auto p-6">
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2">Chargement des informations de debug...</span>
+          <span className="ml-2">{t('debug.loading')}</span>
         </div>
       </div>
     );
@@ -92,9 +94,9 @@ const AdminDebug: React.FC = () => {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Debug - Accès Administration</h1>
+        <h1 className="text-2xl font-bold">{t('debug.title')}</h1>
         <Button onClick={() => router.push('/admin')}>
-          Retour à l&apos;admin
+          {t('debug.backToAdmin')}
         </Button>
       </div>
 
@@ -103,19 +105,19 @@ const AdminDebug: React.FC = () => {
           {/* Informations générales */}
           <Card>
             <CardHeader>
-              <CardTitle>Informations générales</CardTitle>
+              <CardTitle>{t('debug.generalInfo')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <strong>Token présent:</strong> {debugInfo.token ? 'Oui' : 'Non'}
+                <strong>{t('debug.tokenPresent')}:</strong> {debugInfo.token ? t('debug.yes') : t('debug.no')}
               </div>
               <div>
-                <strong>Rôle:</strong> {debugInfo.role}
+                <strong>{t('debug.role')}:</strong> {debugInfo.role}
               </div>
               <div>
-                <strong>Peut accéder à l&apos;admin:</strong> 
+                <strong>{t('debug.canAccessAdmin')}:</strong> 
                 <span className={debugInfo.canAccessAdmin ? 'text-green-600 ml-2' : 'text-red-600 ml-2'}>
-                  {debugInfo.canAccessAdmin ? 'Oui' : 'Non'}
+                  {debugInfo.canAccessAdmin ? t('debug.yes') : t('debug.no')}
                 </span>
               </div>
             </CardContent>
@@ -124,7 +126,7 @@ const AdminDebug: React.FC = () => {
           {/* Utilisateur depuis localStorage */}
           <Card>
             <CardHeader>
-              <CardTitle>Utilisateur (localStorage)</CardTitle>
+              <CardTitle>{t('debug.userLocalStorage')}</CardTitle>
             </CardHeader>
             <CardContent>
               <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">
@@ -136,7 +138,7 @@ const AdminDebug: React.FC = () => {
           {/* Réponse API */}
           <Card>
             <CardHeader>
-              <CardTitle>Réponse API /auth/me</CardTitle>
+              <CardTitle>{t('debug.apiResponse')}</CardTitle>
             </CardHeader>
             <CardContent>
               <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">
@@ -148,7 +150,7 @@ const AdminDebug: React.FC = () => {
           {/* Permissions depuis API */}
           <Card>
             <CardHeader>
-              <CardTitle>Permissions (API)</CardTitle>
+              <CardTitle>{t('debug.permissionsApi')}</CardTitle>
             </CardHeader>
             <CardContent>
               <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">
@@ -160,7 +162,7 @@ const AdminDebug: React.FC = () => {
           {/* Permissions par défaut */}
           <Card>
             <CardHeader>
-              <CardTitle>Permissions (par défaut)</CardTitle>
+              <CardTitle>{t('debug.permissionsDefault')}</CardTitle>
             </CardHeader>
             <CardContent>
               <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">

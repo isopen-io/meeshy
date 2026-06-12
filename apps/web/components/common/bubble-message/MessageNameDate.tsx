@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Ghost } from 'lucide-react';
 import { getUserDisplayName } from '@/utils/user-display-name';
 import { formatRelativeDate } from '@/utils/date-format';
+import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import { cn } from '@/lib/utils';
 import type { MessageSender } from './types';
 
@@ -22,6 +23,7 @@ export const MessageNameDate = memo(function MessageNameDate({
   isOwnMessage,
   t,
 }: MessageNameDateProps) {
+  const locale = useCurrentInterfaceLanguage();
   const user = message.sender;
   const username = message.sender?.username;
   const displayName = getUserDisplayName(user, t('anonymous'));
@@ -52,7 +54,7 @@ export const MessageNameDate = memo(function MessageNameDate({
       )}
       <span className="text-gray-400 dark:text-gray-500">•</span>
       <time className="text-xs text-gray-500 dark:text-gray-400">
-        {formatRelativeDate(message.createdAt, { t })}
+        {formatRelativeDate(message.createdAt, { t, locale })}
       </time>
     </div>
   );

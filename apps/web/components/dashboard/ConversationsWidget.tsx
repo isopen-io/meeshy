@@ -1,3 +1,5 @@
+'use client';
+
 import { MessageSquare, Users as UsersIcon, User as UserIcon } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -5,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Conversation } from '@/types';
 import { LastMessagePreview } from '@/app/dashboard/LastMessagePreview';
 import { formatConversationDate } from '@/utils/date-format';
+import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 
 interface ConversationsWidgetProps {
   conversations: Conversation[];
@@ -23,6 +26,7 @@ export function ConversationsWidget({
   onViewAll,
   onStartConversation,
 }: ConversationsWidgetProps) {
+  const locale = useCurrentInterfaceLanguage();
   return (
     <Card className="bg-white dark:bg-gray-800/50 border-gray-200 dark:border-gray-700">
       <CardHeader>
@@ -72,7 +76,7 @@ export function ConversationsWidget({
                     <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
                       <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
                         {conversation.lastMessage &&
-                          formatConversationDate(conversation.lastMessage.createdAt, { t })}
+                          formatConversationDate(conversation.lastMessage.createdAt, { t, locale })}
                       </p>
                     </div>
                   </div>
