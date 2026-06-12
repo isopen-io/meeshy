@@ -16,12 +16,13 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | **45** (web : i18n participants-drawer 6 clés ×4 locales, `timeCompact.*` aligné iOS dans transform-conversation, `getLastSeenFormatted` localisé via `contacts.status.*`, suppression code mort notification-helpers, locale sur 2 dates ; iOS : régression FR timeAgo FeedCommentsSheet → `ShortRelativeTime`, ChangePasswordView tokens 6366F1/9B59B6 + 13 polices sémantiques ; Android : dédoublonnage `chat_date_*` es/pt) |
-| Last merged PR | #594 (iter-44 finale) ; iter-45 en cours sur `claude/blissful-ritchie-dp7ibu` |
-| Last Merged Base (commit) | 09e08439 (merge #594) |
+| Last completed iteration | **45** (cette PR : web i18n participants-drawer 6 clés ×4 locales, `timeCompact.*` aligné iOS dans transform-conversation, `getLastSeenFormatted` localisé via `contacts.status.*`, suppression code mort notification-helpers, locale sur 2 dates ; iOS : régression FR timeAgo FeedCommentsSheet → `ShortRelativeTime`, ChangePasswordView tokens 6366F1/9B59B6 + 13 polices sémantiques ; Android : dédoublonnage `chat_date_*` es/pt) + **45w** mergée (#596, web-only : migration 37 fichiers `'fr-FR'` → locale interface, avatar toasts i18n, SwipeableRow a11y) |
+| Last merged PR | #596 (45w), #598 (admin dashboard push) ; iter-45 en cours sur `claude/blissful-ritchie-dp7ibu` |
+| Last Merged Base (commit) | 883b284d (merge #598) — réintégré dans la branche iter-45 |
+| Note de réconciliation 45×45w | 45w a remplacé `'fr-FR'` par `getCurrentInterfaceLocale()` dans transform-conversation/users.service/notification-helpers en gardant les libellés FR en dur ; iter-45 i18n-ise complètement ces trois sites (clés `timeCompact.*`/`contacts.status.*` + suppression code mort) — la version iter-45 supersède, imports `getCurrentInterfaceLocale` orphelins retirés |
 | Next iteration | **46** |
 | Next branch to create from | `main` (HEAD post-merge iter-45) |
-| Deferred carry-over for 46 | Voir « Différés » de `docs/analyses/uiux/2026-06-12-iteration-45.md` — web : batch admin i18n (debug.tsx, AgentArchetypesTab, AgentConfigDialog, UserPicker), 'fr-FR' admin (~10 fichiers), chart hex dark, BackSoundDetails, consolidation notifications/preferences, audit qualité es/pt ; iOS : grandes surfaces polices (ConversationInfoSheet 52, ConversationDashboardView 43, TwoFactorSetupView 42, CallView 34, InviteFriendsSheet 33, ProfileView/GlobalSearchView 32, SettingsView 27, VoiceProfileManageView 29, FeedView 29, NewConversationView 16, DataExportView 16, DataStorageView 11), ancienne palette 08D9D6/FF2E63/4ECDC4 (~10 fichiers), washes AudioPostComposer, ladder arc-en-ciel attachments, ThemedConversationRow theme-aware, arbitrage `time.*` vs `time.short.*` ; Android : parité stories (large) OU réactions par pièce jointe (wiring gateway) |
+| Deferred carry-over for 46 | Voir « Différés » de `docs/analyses/uiux/2026-06-12-iteration-45.md` — web : batch admin i18n (debug.tsx, AgentArchetypesTab, AgentConfigDialog, UserPicker, tooltips InfoIcon LlmTab/GlobalConfigTab), chart hex dark, BackSoundDetails, consolidation notifications/preferences, audit qualité es/pt ; locale maps intentionnelles NON à migrer : share-affiliate-modal, AudioPostComposer (speech), use-voice-recording (SpeechRecognition lang) ; iOS : grandes surfaces polices (ConversationInfoSheet 52, ConversationDashboardView 43, TwoFactorSetupView 42, CallView 34, InviteFriendsSheet 33, ProfileView/GlobalSearchView 32, SettingsView 27, VoiceProfileManageView 29, FeedView 29, NewConversationView 16, DataExportView 16, DataStorageView 11), ancienne palette 08D9D6/FF2E63/4ECDC4 (~10 fichiers), washes AudioPostComposer, ladder arc-en-ciel attachments, ThemedConversationRow theme-aware, arbitrage `time.*` vs `time.short.*` ; Android : parité stories (large) OU réactions par pièce jointe (wiring gateway, commune web+Android) |
 
 ---
 
@@ -50,10 +51,11 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 42 | claude/blissful-ritchie-fst8wf | #582 | ✅ |
 | 42b | claude/blissful-ritchie-e672ur | #579 | ✅ |
 | 43 | claude/blissful-ritchie-6709o7 | #576 | ✅ |
-| 44 | claude/blissful-ritchie-kay6v7 | #594 | ✅ |
-| 44 | claude/blissful-ritchie-jls4lb | #592 | ✅ |
 | 43b | claude/awesome-albattani-xaqlhj | #587 | ✅ |
 | 44 | claude/keen-dirac-485vpk | #589, #591 | ✅ |
-| 44b | claude/keen-dirac-a53ki2 | #590 | ✅ |
 | 44 | claude/blissful-ritchie-foe2wg | #589 | ✅ |
-| 45 | claude/blissful-ritchie-dp7ibu | (cette PR) | ⏳ |
+| 44 | claude/blissful-ritchie-jls4lb | #592 | ✅ |
+| 44 | claude/blissful-ritchie-kay6v7 | #594 | ✅ |
+| 44b | claude/keen-dirac-a53ki2 | #590 | ✅ |
+| 45w | claude/elegant-noether-1pen57 | #596 | ✅ |
+| 45 | claude/blissful-ritchie-dp7ibu | #597 | ⏳ |

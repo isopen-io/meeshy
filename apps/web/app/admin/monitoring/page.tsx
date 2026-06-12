@@ -229,7 +229,7 @@ function RealtimeTab() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function HealthTab() {
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   const [loading, setLoading] = useState(true);
   const [healthData, setHealthData] = useState<Record<string, unknown> | null>(null);
   const [circuitBreakers, setCircuitBreakers] = useState<Array<Record<string, unknown>>>([]);
@@ -442,7 +442,7 @@ function HealthTab() {
                         </td>
                         <td className="py-3 px-4 text-gray-500 dark:text-gray-400">
                           {lastFailure
-                            ? new Date(lastFailure).toLocaleString('fr-FR')
+                            ? new Date(lastFailure).toLocaleString(locale)
                             : '-'
                           }
                         </td>

@@ -26,7 +26,7 @@ const getStatusBadge = (status: string, t: (key: string) => string) => {
 
 export default function AdminBroadcastsPage() {
   const router = useRouter();
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   const [broadcasts, setBroadcasts] = useState<unknown[]>([]);
   const [, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -119,7 +119,7 @@ export default function AdminBroadcastsPage() {
   const formatDate = (date: Date | string) => {
     try {
       const d = new Date(date);
-      return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     } catch {
       return 'N/A';
     }

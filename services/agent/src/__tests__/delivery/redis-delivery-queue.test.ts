@@ -103,6 +103,7 @@ function createMockRedis() {
     async expire(_key: string, _seconds: number): Promise<number> {
       return 1;
     },
+    publish: jest.fn(async (_channel: string, _message: string): Promise<number> => 1),
 
     multi() {
       const ops: Array<() => Promise<unknown>> = [];
@@ -614,5 +615,109 @@ describe('RedisDeliveryQueue — polling lifecycle', () => {
 
     queue.startPolling(5000);
     queue.stopPolling();
+  });
+});
+
+describe('RedisDeliveryQueue — admin notifications (agent:admin-event)', () => {
+  function adminEvents(redis: ReturnType<typeof createMockRedis>): Array<{ kind: string; conversationId?: string }> {
+    return (redis.publish as jest.Mock).mock.calls
+      .filter(([channel]) => channel === 'agent:admin-event')
+      .map(([, message]) => JSON.parse(message));
+  }
+
+  it('publishes a delivery-queue event on enqueue', async () => {
+    const redis = createMockRedis();
+    const queue = new RedisDeliveryQueue(redis as any, makePublisher(), makePersistence());
+
+    await queue.enqueue('conv-1', makeMessage());
+
+    expect(adminEvents(redis)).toContainEqual({ kind: 'delivery-queue', conversationId: 'conv-1' });
+  });
+
+  it('publishes a delivery-queue event when merging into an existing item', async () => {
+    const redis = createMockRedis();
+    const queue = new RedisDeliveryQueue(redis as any, makePublisher(), makePersistence());
+
+    await queue.enqueue('conv-1', makeMessage({ topicCategory: 'general', delaySeconds: 60 }));
+    (redis.publish as jest.Mock).mockClear();
+    await queue.enqueue('conv-1', makeMessage({ topicCategory: 'general', delaySeconds: 60 }));
+
+    expect(adminEvents(redis)).toContainEqual({ kind: 'delivery-queue', conversationId: 'conv-1' });
+  });
+
+  it('publishes a delivery-queue event when an item is delivered by poll', async () => {
+    const redis = createMockRedis();
+    const queue = new RedisDeliveryQueue(redis as any, makePublisher(), makePersistence());
+
+    await queue.enqueue('conv-1', makeMessage({ delaySeconds: 0 }));
+    (redis.publish as jest.Mock).mockClear();
+    await queue.poll();
+
+    expect(adminEvents(redis)).toContainEqual({ kind: 'delivery-queue', conversationId: 'conv-1' });
+  });
+
+  it('publishes a delivery-queue event on deleteById', async () => {
+    const redis = createMockRedis();
+    const queue = new RedisDeliveryQueue(redis as any, makePublisher(), makePersistence());
+
+    const id = await queue.enqueue('conv-1', makeMessage({ delaySeconds: 60 }));
+    (redis.publish as jest.Mock).mockClear();
+    await queue.deleteById(id);
+
+    expect(adminEvents(redis)).toContainEqual({ kind: 'delivery-queue', conversationId: 'conv-1' });
+  });
+
+  it('publishes a delivery-queue event on editMessageById', async () => {
+    const redis = createMockRedis();
+    const queue = new RedisDeliveryQueue(redis as any, makePublisher(), makePersistence());
+
+    const id = await queue.enqueue('conv-1', makeMessage({ delaySeconds: 60 }));
+    (redis.publish as jest.Mock).mockClear();
+    await queue.editMessageById(id, 'Nouveau contenu');
+
+    expect(adminEvents(redis)).toContainEqual({ kind: 'delivery-queue', conversationId: 'conv-1' });
+  });
+
+  it('publishes a single delivery-queue event on cancelForConversation', async () => {
+    const redis = createMockRedis();
+    const queue = new RedisDeliveryQueue(redis as any, makePublisher(), makePersistence());
+
+    await queue.enqueue('conv-1', makeMessage({ topicCategory: 'a', delaySeconds: 60 }));
+    await queue.enqueue('conv-1', makeReaction({ delaySeconds: 30 }));
+    (redis.publish as jest.Mock).mockClear();
+    await queue.cancelForConversation('conv-1');
+
+    expect(adminEvents(redis)).toEqual([{ kind: 'delivery-queue', conversationId: 'conv-1' }]);
+  });
+
+  it('publishes a delivery-queue event without conversationId on clearAll', async () => {
+    const redis = createMockRedis();
+    const queue = new RedisDeliveryQueue(redis as any, makePublisher(), makePersistence());
+
+    await queue.enqueue('conv-1', makeMessage());
+    (redis.publish as jest.Mock).mockClear();
+    await queue.clearAll();
+
+    expect(adminEvents(redis)).toEqual([{ kind: 'delivery-queue' }]);
+  });
+
+  it('does not publish on cancelForConversation when nothing was cancelled', async () => {
+    const redis = createMockRedis();
+    const queue = new RedisDeliveryQueue(redis as any, makePublisher(), makePersistence());
+
+    await queue.cancelForConversation('conv-empty');
+
+    expect(adminEvents(redis)).toEqual([]);
+  });
+
+  it('enqueue still succeeds when publish fails', async () => {
+    const redis = createMockRedis();
+    (redis.publish as jest.Mock).mockRejectedValue(new Error('redis down'));
+    const queue = new RedisDeliveryQueue(redis as any, makePublisher(), makePersistence());
+
+    const id = await queue.enqueue('conv-1', makeMessage());
+
+    expect(typeof id).toBe('string');
+    expect(await queue.pendingCount).toBe(1);
   });
 });

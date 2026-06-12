@@ -90,7 +90,7 @@ const languageNames: Record<string, string> = {
 
 export default function AdminTranslationsPage() {
   const router = useRouter();
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   const [translations, setTranslations] = useState<Translation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -172,7 +172,7 @@ export default function AdminTranslationsPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('fr-FR', {
+    return new Date(dateString).toLocaleString(locale, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

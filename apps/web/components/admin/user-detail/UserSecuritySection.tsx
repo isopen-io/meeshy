@@ -22,13 +22,13 @@ export function UserSecuritySection({
   onUpdate,
   onResetPassword
 }: UserSecuritySectionProps) {
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   const { t: tCommon } = useI18n('common');
 
   const formatDate = (date: Date | string | null) => {
     if (!date) return tCommon('never');
     try {
-      return new Date(date).toLocaleDateString('fr-FR', {
+      return new Date(date).toLocaleDateString(locale, {
         day: '2-digit',
         month: 'long',
         year: 'numeric',

@@ -18,6 +18,7 @@ import {
   useDeleteNotificationMutation,
 } from '@/hooks/queries/use-notifications-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
+import { getCurrentInterfaceLocale } from '@/stores/language-store';
 import type { Notification, NotificationType } from '@/types/notification';
 
 export interface NotificationV2 {
@@ -83,7 +84,7 @@ function formatRelativeTime(date: Date | string | undefined): string {
   if (diffDays === 1) return 'Hier';
   if (diffDays < 7) return `Il y a ${diffDays}j`;
 
-  return notifDate.toLocaleDateString('fr-FR', {
+  return notifDate.toLocaleDateString(getCurrentInterfaceLocale(), {
     day: 'numeric',
     month: 'short',
   });

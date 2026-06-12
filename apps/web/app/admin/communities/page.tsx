@@ -45,7 +45,7 @@ type Community = BaseCommunity & {
 
 export default function AdminCommunitiesPage() {
   const router = useRouter();
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   const [communities, setCommunities] = useState<Community[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -125,7 +125,7 @@ export default function AdminCommunitiesPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('fr-FR', {
+    return new Date(dateString).toLocaleString(locale, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
