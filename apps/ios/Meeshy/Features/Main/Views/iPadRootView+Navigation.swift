@@ -458,6 +458,47 @@ extension iPadRootView {
         }
     }
 
+    // MARK: - Notification Preview (long-press / pull-down)
+
+    /// Long-press / pull-down on a notification toast: open the conversation as
+    /// a preview over the columns (reuses `ConversationView` with `previewMode`)
+    /// instead of opening it fully. Resolves cache-first (in-memory → GRDB →
+    /// network), falling back to normal handling when it can't be resolved.
+    func openNotificationPreview(for event: SocketNotificationEvent) {
+        guard let conversationId = event.conversationId, !conversationId.isEmpty else {
+            handleSocketNotificationTap(event)
+            return
+        }
+        suppressToastTap = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { suppressToastTap = false }
+        HapticFeedback.medium()
+        notificationManager.dismissToast()
+
+        if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
+            notificationPreviewConversation = existing
+            return
+        }
+        Task { @MainActor in
+            let cachedList = await CacheCoordinator.shared.conversations.load(for: "list")
+            let cachedConversations: [MeeshyConversation]? = {
+                switch cachedList {
+                case .fresh(let list, _), .stale(let list, _): return list
+                case .expired, .empty: return nil
+                }
+            }()
+            if let cached = cachedConversations?.first(where: { $0.id == conversationId }) {
+                notificationPreviewConversation = cached
+                return
+            }
+            let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+            if let apiConv = try? await ConversationService.shared.getById(conversationId) {
+                notificationPreviewConversation = apiConv.toConversation(currentUserId: currentUserId)
+            } else {
+                handleSocketNotificationTap(event)
+            }
+        }
+    }
+
     // MARK: - Story Notification Heuristics
     //
     // Mirrors the iPhone (RootView) heuristic: a `.postComment` /

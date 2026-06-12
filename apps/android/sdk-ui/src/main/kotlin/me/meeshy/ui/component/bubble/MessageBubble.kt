@@ -37,6 +37,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -224,7 +227,7 @@ private fun BubbleImageGrid(
                     .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
                     .let { base ->
                         if (onImageClick == null) base
-                        else base.clickable { onImageClick(0) }
+                        else base.clickable { onImageClick(0) }.semantics { role = Role.Button }
                     },
             )
         }
@@ -249,6 +252,7 @@ private fun BubbleImageGrid(
                                     .let { base ->
                                         if (onImageClick == null) base
                                         else base.clickable { onImageClick(imageIndex) }
+                                            .semantics { role = Role.Button }
                                     },
                             ) {
                                 AsyncImage(
@@ -416,7 +420,10 @@ private fun ReactionChip(entry: ReactionEntry, onClick: (() -> Unit)?) {
                     base
                 }
             }
-            .let { base -> if (onClick == null) base else base.clickable(onClick = onClick) }
+            .let { base ->
+                if (onClick == null) base
+                else base.clickable(onClick = onClick).semantics { role = Role.Button }
+            }
             .padding(horizontal = MeeshySpacing.xs, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp),

@@ -5,6 +5,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { RankingItem } from '@/hooks/use-ranking-data';
 import { RANKING_CRITERIA } from './constants';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
+import { useTheme } from 'next-themes';
+import { useI18n } from '@/hooks/useI18n';
 
 export interface RankingStatsProps {
   rankings: RankingItem[];
@@ -19,6 +21,12 @@ function formatCount(count: unknown, locale: string) {
 
 export function RankingStats({ rankings, criterion, entityType }: RankingStatsProps) {
   const locale = useCurrentInterfaceLanguage();
+  const { t } = useI18n('admin');
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+  const chartColors = isDark
+    ? { grid: '#78350f', axis: '#fbbf24', tooltipBg: '#1c1917', tooltipBorder: '#d97706', tooltipText: '#fde68a', gold: '#fbbf24', silver: '#9ca3af', bronze: '#d97706', rest: '#b45309' }
+    : { grid: '#fef3c7', axis: '#d97706', tooltipBg: '#fffbeb', tooltipBorder: '#fbbf24', tooltipText: '#92400e', gold: '#fbbf24', silver: '#d1d5db', bronze: '#d97706', rest: '#fcd34d' };
   const currentCriterion = React.useMemo(() => {
     return RANKING_CRITERIA[entityType].find(c => c.value === criterion);
   }, [entityType, criterion]);
@@ -41,7 +49,7 @@ export function RankingStats({ rankings, criterion, entityType }: RankingStatsPr
         <CardHeader className="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20">
           <CardTitle className="flex items-center space-x-2">
             <BarChart2 className="h-5 w-5 text-yellow-600" />
-            <span>Visualisation - Top {Math.min(10, rankings.length)}</span>
+            <span>{t('ranking.charts.topTitle', { count: Math.min(10, rankings.length) })}</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-6">
@@ -51,21 +59,21 @@ export function RankingStats({ rankings, criterion, entityType }: RankingStatsPr
               layout="vertical"
               margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#fef3c7" />
-              <XAxis type="number" stroke="#d97706" />
+              <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+              <XAxis type="number" stroke={chartColors.axis} />
               <YAxis
                 dataKey="name"
                 type="category"
                 width={150}
-                stroke="#d97706"
+                stroke={chartColors.axis}
                 tick={{ fontSize: 12 }}
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#fffbeb',
-                  border: '2px solid #fbbf24',
+                  backgroundColor: chartColors.tooltipBg,
+                  border: `2px solid ${chartColors.tooltipBorder}`,
                   borderRadius: '8px',
-                  color: '#92400e'
+                  color: chartColors.tooltipText
                 }}
                 formatter={(value: unknown) => [formatCount(value, locale), currentCriterion?.label]}
               />
@@ -75,12 +83,12 @@ export function RankingStats({ rankings, criterion, entityType }: RankingStatsPr
                     key={`cell-${index}`}
                     fill={
                       index === 0
-                        ? '#fbbf24'
+                        ? chartColors.gold
                         : index === 1
-                        ? '#d1d5db'
+                        ? chartColors.silver
                         : index === 2
-                        ? '#d97706'
-                        : '#fcd34d'
+                        ? chartColors.bronze
+                        : chartColors.rest
                     }
                   />
                 ))}
@@ -94,7 +102,7 @@ export function RankingStats({ rankings, criterion, entityType }: RankingStatsPr
         <CardHeader className="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20">
           <CardTitle className="flex items-center space-x-2">
             <TrendingUp className="h-5 w-5 text-yellow-600" />
-            <span>Évolution et distribution des performances</span>
+            <span>{t('ranking.charts.evolutionTitle')}</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-6">
@@ -109,26 +117,26 @@ export function RankingStats({ rankings, criterion, entityType }: RankingStatsPr
                   <stop offset="95%" stopColor="#fbbf24" stopOpacity={0.1}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#fef3c7" />
+              <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
               <XAxis
                 dataKey="position"
-                stroke="#d97706"
+                stroke={chartColors.axis}
                 tick={{ fontSize: 11 }}
                 interval={rankings.length > 10 ? 1 : 0}
               />
               <YAxis
-                stroke="#d97706"
+                stroke={chartColors.axis}
                 tick={{ fontSize: 12 }}
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#fffbeb',
-                  border: '2px solid #fbbf24',
+                  backgroundColor: chartColors.tooltipBg,
+                  border: `2px solid ${chartColors.tooltipBorder}`,
                   borderRadius: '8px',
-                  color: '#92400e'
+                  color: chartColors.tooltipText
                 }}
                 formatter={(value: unknown) => [formatCount(value, locale), currentCriterion?.label]}
-                labelFormatter={(label) => `Position ${label}`}
+                labelFormatter={(label) => t('ranking.charts.position', { label: String(label) })}
               />
               <Area
                 type="monotone"
@@ -149,8 +157,8 @@ export function RankingStats({ rankings, criterion, entityType }: RankingStatsPr
             </AreaChart>
           </ResponsiveContainer>
           <div className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
-            <p>Ce graphique montre la distribution des performances du top {Math.min(20, rankings.length)} classé par rang.</p>
-            <p className="text-xs mt-1">La courbe descendante indique comment les valeurs diminuent à travers les positions.</p>
+            <p>{t('ranking.charts.distributionNote', { count: Math.min(20, rankings.length) })}</p>
+            <p className="text-xs mt-1">{t('ranking.charts.curveNote')}</p>
           </div>
         </CardContent>
       </Card>

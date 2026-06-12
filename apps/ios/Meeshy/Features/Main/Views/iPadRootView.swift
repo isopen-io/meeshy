@@ -52,6 +52,13 @@ struct iPadRootView: View {
     @State private var feedIsVisible = true
     @State private var leftColumnRatio: CGFloat = 0.38
 
+    /// Conversation surfaced by a long-press / pull-down on a notification toast
+    /// — presented as a reusable `ConversationView` preview over the columns.
+    @State var notificationPreviewConversation: Conversation?
+    /// Swallows the toast Button's release tap that can fire right after the
+    /// long-press / drag opened the preview (prevents double action).
+    @State var suppressToastTap = false
+
     private var isConversationOpen: Bool {
         activeConversation != nil
     }

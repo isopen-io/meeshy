@@ -323,6 +323,7 @@ export function MessageBubble({
         <div
           className="fixed inset-0 z-10"
           onClick={() => setShowLanguageMenu(false)}
+          aria-hidden="true"
         />
       )}
     </div>

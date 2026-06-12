@@ -16,7 +16,7 @@ struct BlockedUsersView: View {
     @State private var isUnblocking = false
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "blocked-users")
-    private let accentColor = "FF6B6B"
+    private let accentColor = MeeshyColors.errorHex
 
     var body: some View {
         ZStack {
@@ -158,7 +158,7 @@ struct BlockedUsersView: View {
                         } label: {
                             Label(String(localized: "blocked.users.unblock.action", defaultValue: "Debloquer", bundle: .main), systemImage: "person.crop.circle.badge.checkmark")
                         }
-                        .tint(Color(hex: "4ECDC4"))
+                        .tint(MeeshyColors.success)
                     }
             }
         }

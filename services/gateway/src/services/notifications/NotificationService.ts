@@ -933,7 +933,7 @@ export class NotificationService {
       }),
       this.prisma.conversation.findUnique({
         where: { id: params.conversationId },
-        select: { title: true, type: true },
+        select: { title: true, type: true, avatar: true },
       }),
     ]);
 
@@ -970,6 +970,9 @@ export class NotificationService {
       context: {
         conversationId: params.conversationId,
         conversationTitle: conversation?.title,
+        // Group avatar — used by the iOS in-app toast as a fallback when the
+        // sender has no personal avatar (group messages).
+        conversationAvatar: conversation?.avatar ?? undefined,
         conversationType: conversation?.type as any,
         messageId: params.messageId,
         // Phase A — propagation au payload APN pour rendu media inline iOS.
@@ -1023,7 +1026,7 @@ export class NotificationService {
       }),
       this.prisma.conversation.findUnique({
         where: { id: params.conversationId },
-        select: { title: true, type: true },
+        select: { title: true, type: true, avatar: true },
       }),
     ]);
 
@@ -1046,6 +1049,9 @@ export class NotificationService {
       context: {
         conversationId: params.conversationId,
         conversationTitle: conversation?.title,
+        // Group avatar — fallback for the iOS in-app toast when the sender
+        // has no personal avatar (group messages).
+        conversationAvatar: conversation?.avatar ?? undefined,
         conversationType: conversation?.type as any,
         messageId: params.messageId,
       },
