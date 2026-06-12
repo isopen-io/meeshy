@@ -22,4 +22,5 @@
     <string name="chat_date_today">Today</string>
     <string name="chat_date_yesterday">Yesterday</string>
     <string name="chat_date_day_before_yesterday">Two days ago</string>
+    <string name="chat_scroll_to_bottom">Scroll to latest</string>
 </resources>

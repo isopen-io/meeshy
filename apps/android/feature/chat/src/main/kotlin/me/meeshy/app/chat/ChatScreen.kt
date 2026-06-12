@@ -15,12 +15,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
@@ -39,13 +41,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +72,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.ZoneId
 import java.util.Locale
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.bubble.BubbleContent
@@ -87,14 +93,24 @@ fun ChatScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val listItems = remember(state.messages) {
         buildChatListItems(state.messages, ZoneId.systemDefault())
     }
 
+    // Auto-scroll on a new message only when the user is already at the
+    // bottom — or when the message is their own. Reading history must never
+    // be yanked down; the scroll-to-bottom control covers that case.
     LaunchedEffect(state.messages.lastOrNull()?.messageId) {
-        if (listItems.isNotEmpty()) {
+        if (listItems.isEmpty()) return@LaunchedEffect
+        val isOwnMessage = state.messages.lastOrNull()?.isOutgoing == true
+        if (isOwnMessage || listState.isNearBottom(listItems.lastIndex)) {
             listState.animateScrollToItem(listItems.lastIndex)
         }
+    }
+
+    val showScrollToBottom by remember(listItems.lastIndex) {
+        derivedStateOf { !listState.isNearBottom(listItems.lastIndex) }
     }
 
     LaunchedEffect(listState) {
@@ -166,9 +182,10 @@ fun ChatScreen(
                     ChatNotice(stringResource(R.string.chat_no_messages), onRetry = null)
 
                 else -> Column(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.weight(1f)) {
                     LazyColumn(
                         state = listState,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(vertical = MeeshySpacing.sm),
                     ) {
                         if (state.isLoadingOlder) {
@@ -224,6 +241,28 @@ fun ChatScreen(
                             }
                         }
                     }
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showScrollToBottom,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(MeeshySpacing.lg),
+                    ) {
+                        SmallFloatingActionButton(
+                            onClick = {
+                                scope.launch {
+                                    listState.animateScrollToItem(listItems.lastIndex)
+                                }
+                            },
+                            containerColor = accentColor,
+                            contentColor = MeeshyPalette.White,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.ArrowDownward,
+                                contentDescription = stringResource(R.string.chat_scroll_to_bottom),
+                            )
+                        }
+                    }
+                    }
                     TypingIndicator(typingUsers = state.typingUsers)
                 }
             }
@@ -261,6 +300,13 @@ fun ChatScreen(
 }
 
 private const val LOAD_OLDER_THRESHOLD = 2
+private const val BOTTOM_TOLERANCE_ITEMS = 2
+
+private fun LazyListState.isNearBottom(lastIndex: Int): Boolean {
+    if (lastIndex <= 0) return true
+    val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+    return lastVisible >= lastIndex - BOTTOM_TOLERANCE_ITEMS
+}
 
 @Composable
 private fun DaySeparator(dayMillis: Long, modifier: Modifier = Modifier) {
