@@ -63,8 +63,18 @@ public fun MessageBubble(
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
         horizontalArrangement = if (content.isOutgoing) Arrangement.End else Arrangement.Start,
     ) {
-        val onColor = if (content.isOutgoing) MeeshyPalette.White else MeeshyTheme.tokens.textPrimary
-        val bubbleBackground = if (content.isOutgoing) outgoingColor else MeeshyTheme.tokens.backgroundTertiary
+        val isFreeEmoji =
+            content.emojiOnlyCount > 0 && content.replyToText == null && !content.isDeleted
+        val onColor = when {
+            isFreeEmoji -> MeeshyTheme.tokens.textPrimary
+            content.isOutgoing -> MeeshyPalette.White
+            else -> MeeshyTheme.tokens.textPrimary
+        }
+        val bubbleBackground = when {
+            isFreeEmoji -> Color.Transparent
+            content.isOutgoing -> outgoingColor
+            else -> MeeshyTheme.tokens.backgroundTertiary
+        }
         Column(
             modifier = Modifier
                 .widthIn(max = 300.dp)
@@ -121,11 +131,25 @@ public fun MessageBubble(
                     color = onColor.copy(alpha = 0.6f),
                 )
             } else if (content.text.isNotBlank() || !hasAttachments) {
-                Text(
-                    text = content.text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = onColor,
-                )
+                val emojiFontSize = EmojiDetector.fontSizeSp(content.emojiOnlyCount)
+                if (emojiFontSize != null) {
+                    Text(
+                        text = content.text,
+                        fontSize = emojiFontSize.sp,
+                        lineHeight = (emojiFontSize + 8).sp,
+                        modifier = if (content.replyToText != null) {
+                            Modifier.align(Alignment.CenterHorizontally)
+                        } else {
+                            Modifier
+                        },
+                    )
+                } else {
+                    Text(
+                        text = content.text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = onColor,
+                    )
+                }
             }
 
             if (content.reactions.isNotEmpty()) {

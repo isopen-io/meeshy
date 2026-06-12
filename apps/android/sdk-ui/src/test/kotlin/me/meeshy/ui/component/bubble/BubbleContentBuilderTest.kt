@@ -312,6 +312,43 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `an emoji-only message carries its cluster count`() {
+        val content = BubbleContentBuilder.build(
+            message(content = "😂🔥"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.emojiOnlyCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `attachments disable the emoji-only treatment`() {
+        val content = BubbleContentBuilder.build(
+            message(content = "😂").copy(
+                attachments = listOf(
+                    ApiMessageAttachment(id = "a1", mimeType = "image/jpeg", fileUrl = "/p.jpg"),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.emojiOnlyCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `regular text is not emoji-only`() {
+        val content = BubbleContentBuilder.build(
+            message(content = "Hello"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.emojiOnlyCount).isEqualTo(0)
+    }
+
+    @Test
     fun `own reactions mark their entry as includesMe`() {
         val content = BubbleContentBuilder.build(
             message().copy(reactionSummary = mapOf("❤️" to 2, "🔥" to 1)),

@@ -55,4 +55,5 @@ public data class BubbleContent(
     val clientMessageId: String? = null,
     val images: List<BubbleImage> = emptyList(),
     val files: List<BubbleFile> = emptyList(),
+    val emojiOnlyCount: Int = 0,
 )

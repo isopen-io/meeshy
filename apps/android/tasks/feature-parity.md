@@ -215,7 +215,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [~] Message bubbles: text done ; pièces jointes image (grille 1–4 + overlay « +N »,
       URL relative résolue contre l'origine gateway, `ApiMessage.attachments` persisté
       via le payload Room) + repli fichier générique (nom + taille) done ;
-      emoji-only / carousel / audio / location / contact pending
+      emoji-only oversized done (`EmojiDetector` port iOS 90/60/45, free-floating
+      sans bulle, dans la bulle centré si reply) ;
+      carousel / audio / location / contact pending
 - [ ] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight)
 - [ ] Quoted-reply previews incl. story-reply previews (counts, thumbnails)
 - [ ] Delivery status (8-state) checkmarks + offline-pending hourglass + failed-message retry

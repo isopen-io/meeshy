@@ -59,13 +59,14 @@ public object BubbleContentBuilder {
                     sizeBytes = attachment.fileSize,
                 )
             }
+        val text = when {
+            isDeleted -> ""
+            isShowingOriginal -> message.content
+            else -> message.displayContent(preferences)
+        }
         return BubbleContent(
             messageId = message.id,
-            text = when {
-                isDeleted -> ""
-                isShowingOriginal -> message.content
-                else -> message.displayContent(preferences)
-            },
+            text = text,
             isOutgoing = isOutgoing,
             isTranslated = isTranslated,
             isShowingOriginal = isShowingOriginal,
@@ -84,6 +85,11 @@ public object BubbleContentBuilder {
             clientMessageId = message.clientMessageId,
             images = images,
             files = files,
+            emojiOnlyCount = if (visibleAttachments.isEmpty()) {
+                EmojiDetector.emojiOnlyCount(text)
+            } else {
+                0
+            },
         )
     }
 
