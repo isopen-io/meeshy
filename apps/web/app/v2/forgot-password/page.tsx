@@ -5,8 +5,10 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Button, Card, Input, theme } from '@/components/v2';
 import { useForgotPasswordV2 } from '@/hooks/v2/use-forgot-password-v2';
+import { useI18n } from '@/hooks/useI18n';
 
 function ForgotPasswordForm() {
+  const { t } = useI18n('auth');
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
   const {
@@ -72,10 +74,10 @@ function ForgotPasswordForm() {
                   className="text-2xl font-bold mb-2"
                   style={{ fontFamily: theme.fonts.display, color: 'var(--gp-charcoal)' }}
                 >
-                  Mot de passe modifie !
+                  {t('resetPassword.success.passwordReset')}
                 </h1>
                 <p style={{ color: 'var(--gp-text-secondary)' }}>
-                  Vous allez etre redirige vers la page de connexion...
+                  {t('resetPassword.success.redirectingToLogin')}
                 </p>
               </div>
             ) : (
@@ -85,10 +87,10 @@ function ForgotPasswordForm() {
                     className="text-2xl font-bold mb-2"
                     style={{ fontFamily: theme.fonts.display, color: 'var(--gp-charcoal)' }}
                   >
-                    Nouveau mot de passe
+                    {t('resetPassword.title')}
                   </h1>
                   <p style={{ color: 'var(--gp-text-secondary)' }}>
-                    Choisissez un nouveau mot de passe securise
+                    {t('resetPassword.subtitle')}
                   </p>
                 </div>
 
@@ -114,7 +116,7 @@ function ForgotPasswordForm() {
                       className="block text-sm font-medium mb-2"
                       style={{ color: 'var(--gp-text-primary)' }}
                     >
-                      Nouveau mot de passe
+                      {t('resetPassword.newPasswordLabel')}
                     </label>
                     <Input
                       type="password"
@@ -155,7 +157,7 @@ function ForgotPasswordForm() {
                       className="block text-sm font-medium mb-2"
                       style={{ color: 'var(--gp-text-primary)' }}
                     >
-                      Confirmer le mot de passe
+                      {t('resetPassword.confirmPasswordLabel')}
                     </label>
                     <Input
                       type="password"
@@ -177,7 +179,7 @@ function ForgotPasswordForm() {
                     className="w-full"
                     isLoading={resetState.isLoading}
                   >
-                    Reinitialiser le mot de passe
+                    {t('resetPassword.submitButton')}
                   </Button>
                 </form>
               </>
@@ -190,7 +192,7 @@ function ForgotPasswordForm() {
               className="font-medium"
               style={{ color: 'var(--gp-terracotta)' }}
             >
-              Retour a la connexion
+              {t('forgotPassword.backToLogin')}
             </Link>
           </p>
         </div>
@@ -248,13 +250,13 @@ function ForgotPasswordForm() {
                 className="text-2xl font-bold mb-2"
                 style={{ fontFamily: theme.fonts.display, color: 'var(--gp-charcoal)' }}
               >
-                Email envoye !
+                {t('forgotPassword.success.emailSentTitle')}
               </h1>
               <p style={{ color: 'var(--gp-text-secondary)' }}>
-                Si un compte existe avec cet email, vous recevrez un lien de reinitialisation.
+                {t('forgotPassword.success.emailSentDescription')}
               </p>
               <p className="mt-4 text-sm" style={{ color: 'var(--gp-text-muted)' }}>
-                Pensez a verifier vos spams.
+                {t('forgotPassword.success.checkSpam')}
               </p>
             </div>
           ) : (
@@ -264,10 +266,10 @@ function ForgotPasswordForm() {
                   className="text-2xl font-bold mb-2"
                   style={{ fontFamily: theme.fonts.display, color: 'var(--gp-charcoal)' }}
                 >
-                  Mot de passe oublie ?
+                  {t('forgotPassword.title')}
                 </h1>
                 <p style={{ color: 'var(--gp-text-secondary)' }}>
-                  Entrez votre email pour recevoir un lien de reinitialisation
+                  {t('forgotPassword.description')}
                 </p>
               </div>
 
@@ -293,11 +295,11 @@ function ForgotPasswordForm() {
                     className="block text-sm font-medium mb-2"
                     style={{ color: 'var(--gp-text-primary)' }}
                   >
-                    Email
+                    {t('forgotPassword.emailLabel')}
                   </label>
                   <Input
                     type="email"
-                    placeholder="vous@exemple.com"
+                    placeholder={t('forgotPassword.emailPlaceholder')}
                     value={state.email}
                     onChange={(e) => setEmail(e.target.value)}
                     icon={
@@ -315,7 +317,7 @@ function ForgotPasswordForm() {
                   className="w-full"
                   isLoading={state.isLoading}
                 >
-                  Envoyer le lien
+                  {t('forgotPassword.submitButton')}
                 </Button>
               </form>
             </>
@@ -328,7 +330,7 @@ function ForgotPasswordForm() {
             className="font-medium"
             style={{ color: 'var(--gp-terracotta)' }}
           >
-            Retour a la connexion
+            {t('forgotPassword.backToLogin')}
           </Link>
         </p>
       </div>
@@ -345,6 +347,8 @@ function ForgotPasswordForm() {
 }
 
 export default function V2ForgotPasswordPage() {
+  const { t } = useI18n('common');
+
   return (
     <Suspense fallback={
       <div
@@ -359,7 +363,7 @@ export default function V2ForgotPasswordPage() {
             }}
           />
           <p style={{ color: 'var(--gp-text-muted)' }}>
-            Chargement...
+            {t('loading')}
           </p>
         </div>
       </div>

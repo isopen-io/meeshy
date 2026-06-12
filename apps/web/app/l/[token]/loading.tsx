@@ -1,8 +1,14 @@
+'use client';
+
 /**
  * Page de chargement pendant la redirection du lien de tracking
  */
 
+import { useI18n } from '@/hooks/useI18n';
+
 export default function LoadingTrackingLink() {
+  const { t } = useI18n('common');
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
       <div className="text-center space-y-6 p-8">
@@ -17,10 +23,10 @@ export default function LoadingTrackingLink() {
         {/* Texte */}
         <div className="space-y-2">
           <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">
-            Redirection en cours...
+            {t('redirecting')}
           </h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Vous allez être redirigé vers votre destination
+            {t('redirectingDescription')}
           </p>
         </div>
 

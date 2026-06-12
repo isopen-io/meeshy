@@ -160,6 +160,7 @@
       "createAccount": "Crear una cuenta"
     },
     "redirecting": "Redirigiendo...",
+    "redirectingDescription": "Serás redirigido a tu destino",
     "featureGate": {
       "title": "Función temporalmente no disponible",
       "passwordResetDisabled": "El restablecimiento de contraseña no está disponible temporalmente. Por favor, contacte con soporte si necesita ayuda para acceder a su cuenta.",

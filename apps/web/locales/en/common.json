@@ -160,6 +160,7 @@
       "createAccount": "Create an account"
     },
     "redirecting": "Redirecting...",
+    "redirectingDescription": "You will be redirected to your destination",
     "featureGate": {
       "title": "Feature Temporarily Unavailable",
       "passwordResetDisabled": "Password reset is temporarily unavailable. Please contact support if you need assistance accessing your account.",

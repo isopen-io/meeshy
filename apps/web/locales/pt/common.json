@@ -160,6 +160,7 @@
       "createAccount": "Criar uma conta"
     },
     "redirecting": "Redirecionando...",
+    "redirectingDescription": "Você será redirecionado para o seu destino",
     "featureGate": {
       "title": "Funcionalidade temporariamente indisponível",
       "passwordResetDisabled": "A redefinição de senha está temporariamente indisponível. Por favor, entre em contato com o suporte se precisar de ajuda para acessar sua conta.",

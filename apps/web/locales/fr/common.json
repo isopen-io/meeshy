@@ -160,6 +160,7 @@
       "createAccount": "Créer un compte"
     },
     "redirecting": "Redirection...",
+    "redirectingDescription": "Vous allez être redirigé vers votre destination",
     "featureGate": {
       "title": "Fonctionnalité temporairement indisponible",
       "passwordResetDisabled": "La réinitialisation du mot de passe est temporairement indisponible. Veuillez contacter le support si vous avez besoin d'aide pour accéder à votre compte.",
