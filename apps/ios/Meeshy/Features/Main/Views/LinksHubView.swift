@@ -81,8 +81,9 @@ struct LinksHubView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 Image(systemName: "link.badge.plus")
-                    .font(.system(size: 28, weight: .bold))
+                    .font(.title.weight(.bold))
                     .foregroundColor(MeeshyColors.communityAccent)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(localized: "links.hub.banner.title", defaultValue: "Gérez vos liens", bundle: .main))
                         .font(.headline.weight(.bold))
@@ -174,7 +175,7 @@ struct LinksHubView: View {
                         .fill(accent.opacity(0.15))
                         .frame(width: 48, height: 48)
                     Image(systemName: icon)
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.title3.weight(.semibold))
                         .foregroundColor(accent)
                 }
 
@@ -199,7 +200,7 @@ struct LinksHubView: View {
                             onCreate()
                         } label: {
                             Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 22))
+                                .font(.title2)
                                 .foregroundColor(accent)
                         }
                         .buttonStyle(.plain)
@@ -207,7 +208,7 @@ struct LinksHubView: View {
                     }
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }

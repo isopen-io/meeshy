@@ -191,6 +191,22 @@ final class VideoSurvivalControllerTests: XCTestCase {
         sut.handle(level: level, userWantsVideo: wants)
     }
 
+    /// `onTransition` se déclenche au DÉBUT de l'appel actuator, mais
+    /// `isVideoSuspended` n'est posé qu'après le task group — on poll
+    /// jusqu'à l'état attendu au lieu d'asserter immédiatement (flaky CI).
+    private func waitForSuspendedState(
+        _ expected: Bool,
+        in sut: VideoSurvivalController,
+        timeout: TimeInterval = 5.0
+    ) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if sut.isVideoSuspended == expected { return }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTFail("isVideoSuspended did not become \(expected) within \(timeout)s")
+    }
+
     func test_handle_sustainedPoor_callsSuspendAndPublishes() async {
         let (sut, mock, advance) = makeSUT()
         let exp = expectation(description: "suspend")
@@ -202,7 +218,7 @@ final class VideoSurvivalControllerTests: XCTestCase {
 
         await fulfillment(of: [exp], timeout: 1)
         XCTAssertEqual(mock.suspendCallCount, 1)
-        XCTAssertTrue(sut.isVideoSuspended)
+        await waitForSuspendedState(true, in: sut)
     }
 
     func test_handle_suspendFailure_revertsForRetry() async {
@@ -226,7 +242,7 @@ final class VideoSurvivalControllerTests: XCTestCase {
         mock.onTransition = { suspendExp.fulfill() }
         feed(sut, .poor); advance(6); feed(sut, .poor)
         await fulfillment(of: [suspendExp], timeout: 1)
-        XCTAssertTrue(sut.isVideoSuspended)
+        await waitForSuspendedState(true, in: sut)
 
         let resumeExp = expectation(description: "resume")
         mock.onTransition = { resumeExp.fulfill() }
@@ -235,7 +251,7 @@ final class VideoSurvivalControllerTests: XCTestCase {
         feed(sut, .good)            // → resume
         await fulfillment(of: [resumeExp], timeout: 1)
         XCTAssertEqual(mock.resumeCallCount, 1)
-        XCTAssertFalse(sut.isVideoSuspended)
+        await waitForSuspendedState(false, in: sut)
     }
 
     func test_handle_userTurnsVideoOff_doesNotSuspend() async {
@@ -254,7 +270,7 @@ final class VideoSurvivalControllerTests: XCTestCase {
         mock.onTransition = { exp.fulfill() }
         feed(sut, .poor); advance(6); feed(sut, .poor)
         await fulfillment(of: [exp], timeout: 1)
-        XCTAssertTrue(sut.isVideoSuspended)
+        await waitForSuspendedState(true, in: sut)
 
         sut.reset()
         XCTAssertFalse(sut.isVideoSuspended)

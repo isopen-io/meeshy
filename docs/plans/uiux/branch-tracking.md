@@ -4,7 +4,7 @@
 Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Protocol
-1. At the start of each iteration: create the working branch from the **Last Merged Base** below
+1. At the start of each iteration: create the working branch from the **Last Merged Base** below (or sync the assigned branch with `main`)
 2. Develop, commit, push on the working branch
 3. Once CI passes: merge into main via PR
 4. After merge: update this file with the new base
@@ -16,13 +16,13 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | 41 (PR #577 + PR #580 mergées) |
-| Last merged PR | #580 (mergée 2026-06-12T07:42Z) |
-| Last Merged Base (commit) | 0977931 (merge #580) |
-| Current iteration | **42** — branche `claude/blissful-ritchie-fst8wf` (reset sur 0977931) |
-| Next iteration | 43 |
-| Carry-over traités en 42 | hex iOS hors surface liens ; polices fixes vues liens iOS ; AudioEffectTile role=button web ; validation client ID conversation web (selon findings) |
-| Deferred carry-over for 43 | parité stories Android ; réactions par pièce jointe web+Android (wiring gateway attachment:reaction-*) ; audit qualité es/pt |
+| Last completed iteration | 43 (web search i18n + iOS Dynamic Type Bookmarks/PostTranslation/LinksHub + déflake tests grouping/loadMore/VideoSurvival iOS) |
+| Last merged PR | pending — iteration 43 PR #576 from claude/blissful-ritchie-6709o7 |
+| Last Merged Base (commit) | ddcc428 (merge #582, itération 42) |
+| Next iteration | **44** |
+| Next branch to create from | `main` after PR #576 merges |
+| Carry-over traités en 42 (#582) | hex iOS hors surface liens ; polices fixes vues liens iOS ; AudioEffectTile role=button web ; validation client ID conversation web |
+| Deferred carry-over for 44 | parité stories Android ; réactions par pièce jointe web+Android (wiring gateway attachment:reaction-*) ; audit qualité es/pt ; iOS SettingsView/NewConversationView fonts + PostDetailView textSelection ; web admin debug + AgentArchetypesTab i18n ; Android es/pt strings.xml |
 
 ---
 
@@ -47,4 +47,5 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 40 | claude/friendly-brown-xuzpju | #575 | ✅ |
 | 41 | claude/blissful-ritchie-9vesx9 | #577 | ✅ |
 | 41b | claude/blissful-ritchie-68j2oq | #580 | ✅ |
-| 42 | claude/blissful-ritchie-fst8wf | TBD | ⏳ |
+| 42 | claude/blissful-ritchie-fst8wf | #582 | ✅ |
+| 43 | claude/blissful-ritchie-6709o7 | #576 | ⏳ |

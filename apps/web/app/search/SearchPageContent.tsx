@@ -33,13 +33,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { buildApiUrl } from '@/lib/config';
+import { useI18n } from '@/hooks/useI18n';
 import { User } from '@/types';
 import { authManager } from '@/services/auth-manager.service';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
 import { ConversationDropdown } from '@/components/contacts/ConversationDropdown';
 import { useUser } from '@/stores';
-import { useI18n } from '@/hooks/useI18n';
 import type { ConversationType, Community as BaseCommunity } from '@meeshy/shared/types';
 
 type Community = BaseCommunity & {
@@ -74,9 +74,9 @@ interface FriendRequest {
 export function SearchPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { t: tGroups } = useI18n('groups');
   const inputRef = useRef<HTMLInputElement>(null);
   const currentUser = useUser();
+  const { t, currentLanguage } = useI18n('search');
 
   const [query, setQuery] = useState('');
   const [users, setUsers] = useState<User[]>([]);
@@ -127,7 +127,7 @@ export function SearchPageContent() {
     try {
       const token = authManager.getAuthToken();
       if (!token) {
-        toast.error('Vous devez être connecté pour effectuer une recherche');
+        toast.error(t('toasts.loginRequired'));
         router.push('/login');
         return;
       }
@@ -170,11 +170,11 @@ export function SearchPageContent() {
 
     } catch (error) {
       console.error('Erreur lors de la recherche:', error);
-      toast.error('Erreur lors de la recherche');
+      toast.error(t('toasts.searchError'));
     } finally {
       setLoading(false);
     }
-  }, [currentUser, router]);
+  }, [currentUser, router, t]);
 
   // Initialiser la recherche depuis l'URL
   useEffect(() => {
@@ -242,15 +242,15 @@ export function SearchPageContent() {
       });
 
       if (response.ok) {
-        toast.success('Demande d\'ami envoyée');
+        toast.success(t('toasts.requestSent'));
         loadFriendRequests();
       } else {
         const error = await response.json();
-        toast.error(error.error || 'Erreur lors de l\'envoi de la demande');
+        toast.error(error.error || t('toasts.requestError'));
       }
     } catch (error) {
       console.error('Erreur:', error);
-      toast.error('Erreur lors de l\'envoi de la demande');
+      toast.error(t('toasts.requestError'));
     }
   };
 
@@ -266,14 +266,14 @@ export function SearchPageContent() {
       });
 
       if (response.ok) {
-        toast.success('Demande annulée');
+        toast.success(t('toasts.requestCancelled'));
         loadFriendRequests();
       } else {
-        toast.error('Erreur lors de l\'annulation');
+        toast.error(t('toasts.cancelError'));
       }
     } catch (error) {
       console.error('Erreur:', error);
-      toast.error('Erreur lors de l\'annulation');
+      toast.error(t('toasts.cancelError'));
     }
   };
 
@@ -310,15 +310,15 @@ export function SearchPageContent() {
       if (response.ok) {
         const result = await response.json();
         if (result.success && result.data) {
-          toast.success('Conversation créée');
+          toast.success(t('toasts.conversationCreated'));
           router.push(`/conversations/${result.data.id}`);
         }
       } else {
-        toast.error('Erreur lors de la création de la conversation');
+        toast.error(t('toasts.conversationError'));
       }
     } catch (error) {
       console.error('Erreur:', error);
-      toast.error('Erreur lors de la création de la conversation');
+      toast.error(t('toasts.conversationError'));
     }
   };
 
@@ -335,14 +335,14 @@ export function SearchPageContent() {
       });
 
       if (response.ok) {
-        toast.success('Vous avez rejoint la communauté');
+        toast.success(t('toasts.joinedCommunity'));
         handleSearch(query);
       } else {
-        toast.error('Impossible de rejoindre la communauté');
+        toast.error(t('toasts.joinError'));
       }
     } catch (error) {
       console.error('Erreur:', error);
-      toast.error('Erreur lors de la tentative de rejoindre la communauté');
+      toast.error(t('toasts.joinAttemptError'));
     }
   };
 
@@ -357,7 +357,7 @@ export function SearchPageContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex flex-col">
-      <DashboardLayout title="Recherche" className="!bg-none !bg-transparent !h-auto">
+      <DashboardLayout title={t('pageTitle')} className="!bg-none !bg-transparent !h-auto">
         <div className="relative z-10 max-w-7xl mx-auto space-y-8 pb-8 w-full py-8">
           {/* Hero Section */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 dark:from-blue-700 dark:via-indigo-700 dark:to-purple-800 p-8 md:p-12 text-white shadow-2xl">
@@ -367,10 +367,10 @@ export function SearchPageContent() {
                 <div className="p-3 bg-white/20 backdrop-blur-sm rounded-2xl">
                   <Search className="h-8 w-8" />
                 </div>
-                <h1 className="text-4xl md:text-5xl font-bold">Recherche</h1>
+                <h1 className="text-4xl md:text-5xl font-bold">{t('hero.title')}</h1>
               </div>
               <p className="text-lg md:text-xl text-blue-100 max-w-2xl">
-                Découvrez des utilisateurs, conversations et communautés sur Meeshy
+                {t('hero.subtitle')}
               </p>
             </div>
             {/* Decorative elements */}
@@ -388,7 +388,8 @@ export function SearchPageContent() {
                   <Input
                     ref={inputRef}
                     type="text"
-                    placeholder="Rechercher des utilisateurs, conversations, communautés..."
+                    aria-label={t('form.inputLabel')}
+                    placeholder={t('form.placeholder')}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     className="pl-10 h-12 text-base border-2 focus:border-primary dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 dark:placeholder-gray-500"
@@ -402,12 +403,12 @@ export function SearchPageContent() {
                   {loading ? (
                     <>
                       <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2" />
-                      Recherche...
+                      {t('form.searching')}
                     </>
                   ) : (
                     <>
                       <Search className="h-5 w-5 mr-2" />
-                      Rechercher
+                      {t('form.submit')}
                     </>
                   )}
                 </Button>
@@ -422,21 +423,21 @@ export function SearchPageContent() {
                       className="data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:text-gray-300 dark:data-[state=active]:text-white py-2 md:py-3 px-2 md:px-6 rounded-lg font-medium transition-all flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2"
                     >
                       <Users className="h-4 w-4" />
-                      <span className="text-xs md:text-sm">Utilisateurs ({stats.users})</span>
+                      <span className="text-xs md:text-sm">{t('tabs.users')} ({stats.users})</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value="conversations"
                       className="data-[state=active]:bg-purple-500 data-[state=active]:text-white dark:text-gray-300 dark:data-[state=active]:text-white py-2 md:py-3 px-2 md:px-6 rounded-lg font-medium transition-all flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2"
                     >
                       <MessageSquare className="h-4 w-4" />
-                      <span className="text-xs md:text-sm">Conversations ({stats.conversations})</span>
+                      <span className="text-xs md:text-sm">{t('tabs.conversations')} ({stats.conversations})</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value="communities"
                       className="data-[state=active]:bg-orange-500 data-[state=active]:text-white dark:text-gray-300 dark:data-[state=active]:text-white py-2 md:py-3 px-2 md:px-6 rounded-lg font-medium transition-all flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2"
                     >
                       <Building className="h-4 w-4" />
-                      <span className="text-xs md:text-sm">Communautés ({stats.communities})</span>
+                      <span className="text-xs md:text-sm">{t('tabs.communities')} ({stats.communities})</span>
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
@@ -446,7 +447,7 @@ export function SearchPageContent() {
               {query && stats.total > 0 && (
                 <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border dark:border-gray-800">
                   <p className="text-sm font-medium text-muted-foreground dark:text-gray-400">
-                    {stats.total} résultat{stats.total > 1 ? 's' : ''} pour &quot;{query}&quot;
+                    {t(stats.total > 1 ? 'results.countPlural' : 'results.count', { count: stats.total, query })}
                   </p>
                 </div>
               )}
@@ -463,7 +464,7 @@ export function SearchPageContent() {
                       <div className="animate-spin rounded-full h-16 w-16 border-4 border-gray-200 dark:border-gray-700 border-t-primary dark:border-t-primary"></div>
                       <Zap className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-6 w-6 text-primary" />
                     </div>
-                    <p className="mt-4 text-muted-foreground dark:text-gray-400 font-medium">Recherche en cours...</p>
+                    <p className="mt-4 text-muted-foreground dark:text-gray-400 font-medium">{t('results.loading')}</p>
                   </CardContent>
                 </Card>
               ) : activeTab === 'users' ? (
@@ -477,10 +478,10 @@ export function SearchPageContent() {
                         </div>
                       </div>
                       <h3 className="text-2xl font-bold text-foreground dark:text-gray-100 mb-3 text-center">
-                        Aucun utilisateur trouvé
+                        {t('empty.users')}
                       </h3>
                       <p className="text-muted-foreground dark:text-gray-400 text-base text-center max-w-md">
-                        Essayez avec un autre terme de recherche
+                        {t('empty.hint')}
                       </p>
                     </CardContent>
                   </Card>
@@ -525,11 +526,11 @@ export function SearchPageContent() {
                                           : 'bg-gray-400 hover:bg-gray-500'
                                       }`}
                                     >
-                                      {user.isOnline ? 'En ligne' : 'Hors ligne'}
+                                      {user.isOnline ? t('user.online') : t('user.offline')}
                                     </Badge>
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="h-8 w-8 sm:h-10 sm:w-10 p-0 hover:bg-gray-200 dark:hover:bg-gray-700 flex-shrink-0">
+                                        <Button variant="ghost" size="sm" aria-label={t('user.moreActions')} className="h-8 w-8 sm:h-10 sm:w-10 p-0 hover:bg-gray-200 dark:hover:bg-gray-700 flex-shrink-0">
                                           <MoreVertical className="h-4 w-4 sm:h-5 sm:w-5" />
                                         </Button>
                                       </DropdownMenuTrigger>
@@ -540,7 +541,7 @@ export function SearchPageContent() {
                                             className="py-3 text-orange-600 dark:text-orange-400"
                                           >
                                             <X className="h-4 w-4 mr-3" />
-                                            <span className="font-medium">Annuler la demande</span>
+                                            <span className="font-medium">{t('user.cancelRequest')}</span>
                                           </DropdownMenuItem>
                                         ) : (
                                           <DropdownMenuItem
@@ -548,7 +549,7 @@ export function SearchPageContent() {
                                             className="py-3 dark:hover:bg-gray-800"
                                           >
                                             <UserPlus className="h-4 w-4 mr-3" />
-                                            <span className="font-medium">Ajouter en ami</span>
+                                            <span className="font-medium">{t('user.addFriend')}</span>
                                           </DropdownMenuItem>
                                         )}
                                         <DropdownMenuItem
@@ -556,14 +557,14 @@ export function SearchPageContent() {
                                           className="py-3 dark:hover:bg-gray-800"
                                         >
                                           <UserCheck className="h-4 w-4 mr-3" />
-                                          <span className="font-medium">Voir le profil</span>
+                                          <span className="font-medium">{t('user.viewProfile')}</span>
                                         </DropdownMenuItem>
                                         <DropdownMenuItem
                                           onClick={() => startConversation(user.id)}
                                           className="py-3 dark:hover:bg-gray-800"
                                         >
                                           <MessageSquare className="h-4 w-4 mr-3" />
-                                          <span className="font-medium">Envoyer un message</span>
+                                          <span className="font-medium">{t('user.sendMessage')}</span>
                                         </DropdownMenuItem>
                                       </DropdownMenuContent>
                                     </DropdownMenu>
@@ -586,7 +587,7 @@ export function SearchPageContent() {
                                       className="flex items-center gap-2 h-9 px-4 border-2 border-orange-500 text-orange-600 hover:bg-orange-50 dark:border-orange-600 dark:text-orange-400 dark:hover:bg-orange-950/30 shadow-md hover:shadow-lg transition-all"
                                     >
                                       <X className="h-4 w-4" />
-                                      <span className="text-sm">Annuler</span>
+                                      <span className="text-sm">{t('user.cancel')}</span>
                                     </Button>
                                   ) : (
                                     <Button
@@ -595,7 +596,7 @@ export function SearchPageContent() {
                                       className="flex items-center gap-2 h-9 px-4 bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800 shadow-md hover:shadow-lg transition-all"
                                     >
                                       <UserPlus className="h-4 w-4" />
-                                      <span className="text-sm">Ajouter</span>
+                                      <span className="text-sm">{t('user.add')}</span>
                                     </Button>
                                   )}
 
@@ -623,10 +624,10 @@ export function SearchPageContent() {
                         </div>
                       </div>
                       <h3 className="text-2xl font-bold text-foreground dark:text-gray-100 mb-3 text-center">
-                        Aucune conversation trouvée
+                        {t('empty.conversations')}
                       </h3>
                       <p className="text-muted-foreground dark:text-gray-400 text-base text-center max-w-md">
-                        Essayez avec un autre terme de recherche
+                        {t('empty.hint')}
                       </p>
                     </CardContent>
                   </Card>
@@ -645,36 +646,38 @@ export function SearchPageContent() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-2 mb-2">
                                 <h3 className="text-base sm:text-xl font-bold text-gray-900 dark:text-white break-words flex-1">
-                                  {conversation.title || 'Conversation sans titre'}
+                                  {conversation.title || t('conversation.untitled')}
                                 </h3>
                                 <Badge
                                   variant="secondary"
                                   className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-semibold flex-shrink-0"
                                 >
                                   {conversation.type === 'direct' ? (
-                                    <>👤 Direct</>
+                                    <>👤 {t('conversation.typeDirect')}</>
                                   ) : conversation.type === 'group' ? (
-                                    <>👥 Groupe</>
+                                    <>👥 {t('conversation.typeGroup')}</>
                                   ) : conversation.type === 'public' ? (
-                                    <><Globe className="h-3 w-3 inline mr-1" />Public</>
+                                    <><Globe className="h-3 w-3 inline mr-1" />{t('conversation.typePublic')}</>
                                   ) : (
-                                    <>🌍 Global</>
+                                    <>🌍 {t('conversation.typeGlobal')}</>
                                   )}
                                 </Badge>
                               </div>
 
                               {conversation.unreadCount > 0 && (
                                 <Badge className="bg-red-500 hover:bg-red-600 mb-2">
-                                  {conversation.unreadCount} message{conversation.unreadCount > 1 ? 's' : ''} non lu{conversation.unreadCount > 1 ? 's' : ''}
+                                  {t(conversation.unreadCount > 1 ? 'conversation.unreadPlural' : 'conversation.unread', { count: conversation.unreadCount })}
                                 </Badge>
                               )}
 
                               {conversation.lastMessageAt && (
                                 <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                                  Dernière activité : {new Date(conversation.lastMessageAt).toLocaleDateString('fr-FR', {
-                                    day: 'numeric',
-                                    month: 'long',
-                                    year: 'numeric'
+                                  {t('conversation.lastActivity', {
+                                    date: new Date(conversation.lastMessageAt).toLocaleDateString(currentLanguage, {
+                                      day: 'numeric',
+                                      month: 'long',
+                                      year: 'numeric'
+                                    })
                                   })}
                                 </p>
                               )}
@@ -696,10 +699,10 @@ export function SearchPageContent() {
                         </div>
                       </div>
                       <h3 className="text-2xl font-bold text-foreground dark:text-gray-100 mb-3 text-center">
-                        Aucune communauté trouvée
+                        {t('empty.communities')}
                       </h3>
                       <p className="text-muted-foreground dark:text-gray-400 text-base text-center max-w-md">
-                        Essayez avec un autre terme de recherche
+                        {t('empty.hint')}
                       </p>
                     </CardContent>
                   </Card>
@@ -728,12 +731,12 @@ export function SearchPageContent() {
                                 {community.isPrivate ? (
                                   <Badge variant="secondary" className="flex items-center gap-1">
                                     <Lock className="h-3 w-3" />
-                                    Privé
+                                    {t('community.private')}
                                   </Badge>
                                 ) : (
                                   <Badge variant="secondary" className="flex items-center gap-1">
                                     <Globe className="h-3 w-3" />
-                                    Public
+                                    {t('community.public')}
                                   </Badge>
                                 )}
                               </div>
@@ -747,7 +750,7 @@ export function SearchPageContent() {
                               <div className="flex items-center gap-4 mb-3">
                                 <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
                                   <Users className="h-4 w-4" />
-                                  <span>{community.memberCount ?? 0} membre{(community.memberCount ?? 0) > 1 ? 's' : ''}</span>
+                                  <span>{t((community.memberCount ?? 0) > 1 ? 'community.memberPlural' : 'community.member', { count: community.memberCount ?? 0 })}</span>
                                 </div>
                               </div>
 
@@ -757,7 +760,7 @@ export function SearchPageContent() {
                                 className="flex items-center gap-2 h-9 px-4 bg-orange-600 hover:bg-orange-700 dark:bg-orange-700 dark:hover:bg-orange-800 shadow-md hover:shadow-lg transition-all"
                               >
                                 <UserPlus className="h-4 w-4" />
-                                <span className="text-sm">{tGroups('actions.join')}</span>
+                                <span className="text-sm">{t('community.join')}</span>
                               </Button>
                             </div>
                           </div>
