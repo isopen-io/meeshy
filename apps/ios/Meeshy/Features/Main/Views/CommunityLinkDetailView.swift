@@ -39,7 +39,7 @@ struct CommunityLinkDetailView: View {
                 .foregroundColor(theme.textSecondary).lineLimit(2).multilineTextAlignment(.center)
         }
         .padding(20).frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 20).fill(theme.surfaceGradient(tint: MeeshyColors.communityAccent))
+        .background(RoundedRectangle(cornerRadius: 20).fill(theme.surfaceGradient(tint: MeeshyColors.communityAccentHex))
             .overlay(RoundedRectangle(cornerRadius: 20)
                 .stroke(MeeshyColors.communityAccent.opacity(0.2), lineWidth: 1)))
     }
@@ -61,7 +61,7 @@ struct CommunityLinkDetailView: View {
                       let root = window.rootViewController else { return }
                 root.present(av, animated: true)
             }
-            communityActionButton(String(localized: "communityLink.identify", defaultValue: "Identify", bundle: .main), icon: "doc.plaintext", color: MeeshyColors.indigo500) {
+            communityActionButton(String(localized: "communityLink.identify", defaultValue: "Identify", bundle: .main), icon: "doc.plaintext", color: MeeshyColors.brandPrimary) {
                 UIPasteboard.general.string = link.identifier
                 HapticFeedback.light()
             }
@@ -85,19 +85,19 @@ struct CommunityLinkDetailView: View {
         HStack(spacing: 12) {
             communityStatCard("\(link.memberCount)",
                               label: String(localized: "communityLink.members", defaultValue: "Membres", bundle: .main),
-                              icon: "person.fill", color: MeeshyColors.communityAccent)
+                              icon: "person.fill", color: MeeshyColors.communityAccentHex)
             communityStatCard(link.isActive
                               ? String(localized: "common.active", defaultValue: "Actif", bundle: .main)
                               : String(localized: "common.inactive", defaultValue: "Inactif", bundle: .main),
                               label: String(localized: "communityLink.status", defaultValue: "Statut", bundle: .main),
                               icon: "checkmark.circle.fill",
-                              color: link.isActive ? MeeshyColors.success : MeeshyColors.inactiveState)
+                              color: link.isActive ? MeeshyColors.successHex : MeeshyColors.neutral500Hex)
         }
     }
 
-    private func communityStatCard(_ value: String, label: String, icon: String, color: Color) -> some View {
+    private func communityStatCard(_ value: String, label: String, icon: String, color: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).font(.system(size: 22)).foregroundColor(color)
+            Image(systemName: icon).font(.system(size: 22)).foregroundColor(Color(hex: color))
             VStack(alignment: .leading, spacing: 2) {
                 Text(value).font(.system(size: 22, weight: .bold)).foregroundColor(theme.textPrimary)
                 Text(label).font(.system(size: 12)).foregroundColor(theme.textSecondary)
@@ -106,7 +106,7 @@ struct CommunityLinkDetailView: View {
         }
         .padding(14).frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: 14).fill(theme.surfaceGradient(tint: color))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(color.opacity(0.2), lineWidth: 1)))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: color).opacity(0.2), lineWidth: 1)))
     }
 
     private var infoSection: some View {

@@ -115,7 +115,7 @@ struct CreateTrackingLinkView: View {
         .frame(maxWidth: .infinity).padding(.vertical, 14)
         .background(
             Capsule().fill(LinearGradient(
-                colors: [MeeshyColors.trackingAccent, MeeshyColors.indigo500],
+                colors: [MeeshyColors.trackingAccent, MeeshyColors.brandPrimary],
                 startPoint: .leading, endPoint: .trailing
             ))
         )

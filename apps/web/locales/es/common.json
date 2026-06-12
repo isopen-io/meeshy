@@ -261,7 +261,17 @@
       "public": "Público",
       "friends": "Amigos",
       "private": "Privado"
-    }
+    },
+    "statusComposer": {
+      "title": "¿Cuál es tu mood?",
+      "placeholder": "¿Qué estás haciendo?",
+      "preview": "Vista previa",
+      "yourName": "Tu nombre",
+      "clear": "Borrar mi estado"
+    },
+    "postPlaceholder": "¿Qué estás pensando?",
+    "captionPlaceholder": "Añade una leyenda (opcional)...",
+    "quotePlaceholder": "Añade tus pensamientos..."
   },
   "copied": "Copiado",
   "never": "Nunca"

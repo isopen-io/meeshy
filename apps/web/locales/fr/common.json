@@ -261,7 +261,17 @@
       "public": "Public",
       "friends": "Amis",
       "private": "Privé"
-    }
+    },
+    "statusComposer": {
+      "title": "Quel est ton mood ?",
+      "placeholder": "Qu'est-ce que tu fais ?",
+      "preview": "Aperçu",
+      "yourName": "Ton nom",
+      "clear": "Effacer mon statut"
+    },
+    "postPlaceholder": "Qu'est-ce qui te passe par la tête ?",
+    "captionPlaceholder": "Ajoute une légende (optionnel)...",
+    "quotePlaceholder": "Ajoute ton commentaire..."
   },
   "copied": "Copié",
   "never": "Jamais"

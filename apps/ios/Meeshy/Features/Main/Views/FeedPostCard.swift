@@ -184,12 +184,12 @@ struct FeedPostCard: View {
                     let truncation = truncatedContent
                     if isTextExpanded {
                         Text(effectiveContent)
-                            .font(.body)
+                            .font(.subheadline)
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(nil)
 
                         Text(String(localized: "feed.post.see_less", defaultValue: "voir moins", bundle: .main))
-                            .font(.body.weight(.medium))
+                            .font(.subheadline.weight(.medium))
                             .foregroundColor(theme.textMuted)
                             .onTapGesture {
                                 withAnimation(.easeInOut(duration: 0.25)) {
@@ -198,13 +198,13 @@ struct FeedPostCard: View {
                             }
                     } else {
                         Text(truncation.text + (truncation.isTruncated ? "..." : ""))
-                            .font(.body)
+                            .font(.subheadline)
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(nil)
 
                         if truncation.isTruncated {
                             Text(String(localized: "feed.post.see_more", defaultValue: "voir plus", bundle: .main))
-                                .font(.body.weight(.medium))
+                                .font(.subheadline.weight(.medium))
                                 .foregroundColor(theme.textMuted)
                                 .onTapGesture {
                                     withAnimation(.easeInOut(duration: 0.25)) {
@@ -236,7 +236,7 @@ struct FeedPostCard: View {
                                     }
                                 }
                                 Text(content)
-                                    .font(.callout)
+                                    .font(.footnote)
                                     .foregroundColor(theme.textPrimary.opacity(0.8))
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -371,7 +371,7 @@ struct FeedPostCard: View {
                 onViewStory: onViewAuthorStory,
                 onMoodTap: onAuthorMoodTap,
                 contextMenuItems: [
-                    AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                    AvatarContextMenuItem(label: String(localized: "feed.post.view_profile", defaultValue: "Voir le profil", bundle: .main), icon: "person.fill") {
                         selectedProfileUser = .from(feedPost: post)
                     }
                 ]
@@ -381,7 +381,7 @@ struct FeedPostCard: View {
                 // Author name with repost indicator
                 HStack(spacing: 6) {
                     Text(post.author)
-                        .font(.headline)
+                        .font(.subheadline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
 
                     // Repost indicator inline
@@ -423,16 +423,22 @@ struct FeedPostCard: View {
                             }
                             .animation(.easeInOut(duration: 0.2), value: isActive)
                             .onTapGesture { handleFlagTap(code) }
+                            .accessibilityLabel(String(localized: "feed.post.flag.a11y", defaultValue: "Afficher en \(display?.name ?? code)", bundle: .main))
+                            .accessibilityAddTraits(.isButton)
                         }
 
                         if post.translations != nil, !post.translations!.isEmpty {
                             Image(systemName: "translate")
                                 .font(.caption2.weight(.medium))
                                 .foregroundColor(MeeshyColors.indigo400)
+                                .frame(minWidth: 32, minHeight: 32)
+                                .contentShape(Rectangle())
                                 .onTapGesture {
                                     HapticFeedback.light()
                                     showTranslationSheet = true
                                 }
+                                .accessibilityLabel(String(localized: "feed.post.translate.a11y", defaultValue: "Voir les traductions", bundle: .main))
+                                .accessibilityAddTraits(.isButton)
                         }
                     }
                 }
@@ -495,7 +501,7 @@ struct FeedPostCard: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.body)
+                    .font(.system(size: 16))
                     .foregroundColor(theme.textMuted)
                     .padding(8)
             }
@@ -521,7 +527,7 @@ struct FeedPostCard: View {
                     )
 
                     Text(repost.author)
-                        .font(.callout.weight(.semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundColor(theme.accentText(repost.authorColor))
 
                     Text("·")
@@ -534,7 +540,7 @@ struct FeedPostCard: View {
 
                 // Original content
                 Text(repost.content)
-                    .font(.callout)
+                    .font(.footnote)
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(4)
 
@@ -605,7 +611,7 @@ struct FeedPostCard: View {
 
                         let heartColor: Color = effectiveIsLiked ? MeeshyColors.error : (effectiveLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
                         Image(systemName: effectiveIsLiked || effectiveLikeCount > 0 ? "heart.fill" : "heart")
-                            .font(.body)
+                            .font(.system(size: 18))
                             .foregroundColor(heartColor)
                             .scaleEffect(likeAnimating ? 1.3 : (effectiveIsLiked ? 1.1 : 1.0))
                             .rotationEffect(.degrees(likeAnimating ? -15 : 0))
@@ -613,7 +619,7 @@ struct FeedPostCard: View {
                     }
 
                     Text("\(effectiveLikeCount)")
-                        .font(.caption.weight(.medium))
+                        .font(.footnote.weight(.medium))
                         .foregroundColor(effectiveIsLiked ? MeeshyColors.error : (effectiveLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary))
                         .contentTransition(.numericText())
                 }
@@ -631,11 +637,11 @@ struct FeedPostCard: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "bubble.right")
-                        .font(.body)
+                        .font(.system(size: 17))
 
                     if post.commentCount > 0 {
                         Text("\(post.commentCount)")
-                            .font(.caption.weight(.medium))
+                            .font(.footnote.weight(.medium))
                     }
                 }
                 .foregroundColor(showCommentsSheet ? theme.accentText(accentColor) : theme.textSecondary)
@@ -652,12 +658,12 @@ struct FeedPostCard: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: isReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
-                        .font(.body)
+                        .font(.system(size: 17))
                         .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
                     let count = displayRepostCount ?? post.repostCount
                     if count > 0 {
                         Text("\(count)")
-                            .font(.caption.weight(.medium))
+                            .font(.footnote.weight(.medium))
                             .contentTransition(.numericText())
                     }
                 }
@@ -667,7 +673,7 @@ struct FeedPostCard: View {
             }
             .disabled(isRepostInFlight)
             .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
-            .confirmationDialog("Repartager", isPresented: $showRepostOptions) {
+            .confirmationDialog(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
                 Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) { onRepost?(post.id) }
                 Button(String(localized: "feed.post.quote", defaultValue: "Citer", bundle: .main)) { onQuote?(post.id) }
                 Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
@@ -682,12 +688,12 @@ struct FeedPostCard: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
-                        .font(.body)
+                        .font(.system(size: 17))
                         .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
                     let count = displayBookmarkCount ?? post.bookmarkCount
                     if count > 0 {
                         Text("\(count)")
-                            .font(.caption.weight(.medium))
+                            .font(.footnote.weight(.medium))
                             .contentTransition(.numericText())
                     }
                 }
@@ -708,7 +714,7 @@ struct FeedPostCard: View {
                 HStack(spacing: 6) {
                     ZStack {
                         Image(systemName: "square.and.arrow.up")
-                            .font(.body)
+                            .font(.system(size: 17))
                             .opacity(isShareInFlight ? 0 : 1)
                         if isShareInFlight {
                             ProgressView()
@@ -719,7 +725,7 @@ struct FeedPostCard: View {
                     let count = displayShareCount ?? post.shareCount
                     if count > 0 {
                         Text("\(count)")
-                            .font(.caption.weight(.medium))
+                            .font(.footnote.weight(.medium))
                             .contentTransition(.numericText())
                     }
                 }
@@ -772,7 +778,7 @@ struct FeedPostCard: View {
                         }
 
                         Text(String(localized: "feed.post.view_comments", defaultValue: "Voir les \(post.comments.count) commentaires", bundle: .main))
-                            .font(.callout.weight(.semibold))
+                            .font(.footnote.weight(.semibold))
                             .foregroundColor(theme.accentText(accentColor))
 
                         Spacer()
@@ -807,7 +813,7 @@ struct FeedPostCard: View {
                     onViewProfile: { selectedProfileUser = .from(feedComment: comment) },
                     onMoodTap: commentMood?.tapHandler,
                     contextMenuItems: [
-                        AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                        AvatarContextMenuItem(label: String(localized: "feed.post.view_profile", defaultValue: "Voir le profil", bundle: .main), icon: "person.fill") {
                             selectedProfileUser = .from(feedComment: comment)
                         }
                     ]
@@ -817,7 +823,7 @@ struct FeedPostCard: View {
                     // Author name + language flags
                     HStack(spacing: 4) {
                         Text(comment.author)
-                            .font(.callout.weight(.semibold))
+                            .font(.footnote.weight(.semibold))
                             .foregroundColor(theme.accentText(comment.authorColor))
 
                         if let origLang = comment.originalLanguage, comment.translatedContent != nil {
@@ -841,7 +847,7 @@ struct FeedPostCard: View {
 
                     // Content (Prisme Linguistique)
                     Text(comment.displayContent)
-                        .font(.callout)
+                        .font(.footnote)
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(2)
 
@@ -893,10 +899,10 @@ struct FeedPostCard: View {
 
     func timeAgo(from date: Date) -> String {
         let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return "À l'instant" }
-        if seconds < 3600 { return "\(seconds / 60)m" }
-        if seconds < 86400 { return "\(seconds / 3600)h" }
-        return "\(seconds / 86400)j"
+        if seconds < 60 { return String(localized: "time.justNow", defaultValue: "À l'instant", bundle: .main) }
+        if seconds < 3600 { return String(localized: "time.minutesShort", defaultValue: "\(seconds / 60)m", bundle: .main) }
+        if seconds < 86400 { return String(localized: "time.hoursShort", defaultValue: "\(seconds / 3600)h", bundle: .main) }
+        return String(localized: "time.daysShort", defaultValue: "\(seconds / 86400)j", bundle: .main)
     }
 }
 

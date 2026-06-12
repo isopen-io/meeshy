@@ -428,7 +428,7 @@ struct FeedView: View {
             if sizeClass != .regular {
                 VStack(spacing: 0) {
                     CollapsibleHeader(
-                        title: "Feeds",
+                        title: String(localized: "feed.title", defaultValue: "Feeds", bundle: .main),
                         scrollOffset: headerScrollOffset,
                         showBackButton: false,
                         titleColor: theme.textPrimary,
@@ -462,7 +462,7 @@ struct FeedView: View {
                     .frame(width: 40, height: 40)
 
                 Text("M")
-                    .font(.headline)
+                    .font(.headline.weight(.bold))
                     .foregroundColor(.white)
             }
 
@@ -478,7 +478,7 @@ struct FeedView: View {
             }) {
                 HStack {
                     Text(String(localized: "Partager quelque chose avec le monde...", defaultValue: "Partager quelque chose avec le monde..."))
-                        .font(.callout)
+                        .font(.subheadline)
                         .foregroundColor(theme.textMuted)
                     Spacer()
                 }
@@ -787,7 +787,7 @@ struct FeedView: View {
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.up")
-                                .font(.body.weight(.bold))
+                                .font(.caption.weight(.bold))
 
                             Text(newPostsBannerText)
                                 .font(.subheadline.weight(.semibold))
@@ -948,14 +948,14 @@ struct FeedView: View {
                         }
                     } label: {
                         Text(String(localized: "Annuler", defaultValue: "Annuler"))
-                            .font(.body.weight(.medium))
+                            .font(.subheadline.weight(.medium))
                             .foregroundColor(theme.textSecondary)
                     }
 
                     Spacer()
 
                     Text(String(localized: "Nouveau post", defaultValue: "Nouveau post"))
-                        .font(.headline)
+                        .font(.headline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
 
                     Spacer()
@@ -969,7 +969,7 @@ struct FeedView: View {
                                 .scaleEffect(0.8)
                         } else {
                             Text(String(localized: "Publier", defaultValue: "Publier"))
-                                .font(.body.weight(.bold))
+                                .font(.subheadline.weight(.bold))
                                 .foregroundColor(composerHasContent ? MeeshyColors.indigo300 : theme.textMuted)
                         }
                     }
@@ -991,8 +991,8 @@ struct FeedView: View {
                     )
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(getUserDisplayName(AuthManager.shared.currentUser, fallback: "Moi"))
-                            .font(.callout.weight(.semibold))
+                        Text(getUserDisplayName(AuthManager.shared.currentUser, fallback: String(localized: "feed.composer.me", defaultValue: "Moi", bundle: .main)))
+                            .font(.subheadline.weight(.semibold))
                             .foregroundColor(theme.textPrimary)
 
                         Menu {
@@ -1109,9 +1109,9 @@ struct FeedView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "globe")
-                                .font(.caption)
+                                .font(.footnote)
                             Text(composerLanguageDisplayName)
-                                .font(.caption.weight(.semibold))
+                                .font(.footnote.weight(.semibold))
                         }
                         .foregroundColor(MeeshyColors.indigo500)
                         .padding(.horizontal, 10)

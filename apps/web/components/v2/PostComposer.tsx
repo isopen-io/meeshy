@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
@@ -33,6 +34,7 @@ function PostComposer({
   disabled = false,
   className,
 }: PostComposerProps) {
+  const { t } = useI18n('common');
   const [content, setContent] = useState('');
   const [visibility, setVisibility] = useState<PostVisibility>('PUBLIC');
   const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
@@ -90,7 +92,7 @@ function PostComposer({
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={handleKeyDown}
               onFocus={() => setIsExpanded(true)}
-              placeholder="What's on your mind?"
+              placeholder={t('postPlaceholder')}
               rows={isExpanded ? 4 : 2}
               maxLength={5000}
               disabled={disabled}

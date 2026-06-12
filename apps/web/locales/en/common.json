@@ -261,7 +261,17 @@
       "public": "Public",
       "friends": "Friends",
       "private": "Private"
-    }
+    },
+    "statusComposer": {
+      "title": "What's your mood?",
+      "placeholder": "What are you up to?",
+      "preview": "Preview",
+      "yourName": "Your name",
+      "clear": "Clear my status"
+    },
+    "postPlaceholder": "What's on your mind?",
+    "captionPlaceholder": "Add a caption (optional)...",
+    "quotePlaceholder": "Add your thoughts..."
   },
   "copied": "Copied",
   "never": "Never"

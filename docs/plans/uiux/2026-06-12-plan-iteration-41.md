@@ -1,48 +1,67 @@
 # Plan — UI/UX Iteration 41 (2026-06-12)
 
-> Base: main @ 1c7d571 (merge PR #578). Continuité: clôture des reliquats différés de l'itération 40
-> (hex colors iOS, fonts Feed) + nouveaux audits ciblés sur les axes peu couverts (deep links Android,
-> i18n modules manquants, a11y boutons copy).
+Base : main @ f313ab23. Branche : `claude/blissful-ritchie-9vesx9`.
+Analyse : `docs/analyses/uiux/2026-06-12-iteration-41.md`.
 
-## Périmètre
+## Objectifs
+1. Solder les 2 reports différés iOS de l'itération 40 (tokens hex liens, polices Feed)
+2. Couvrir les surfaces jamais auditées : Settings/Contacts Android, modales affiliate/dashboard/admin web
+3. Cohérence : toute la surface "liens" iOS (9 fichiers) passe sur les nouveaux tokens, pas seulement les 5 vues différées
 
-### iOS (carry-over iter-40 + nouvelles trouvailles)
-- [ ] **Décision tokens (actée)** : mapper les accents off-brand des écrans liens vers la palette de marque
-      (règle SDK « new code MUST use indigo50–950 or semantic names ») :
-      `A855F7` → `trackingAccent = indigo600`, `08D9D6` → `shareLinkAccent = indigo400`,
-      `F8B500` → `communityAccent = warning`, `888888` → `inactiveState = neutral400`,
-      `FF6B6B` → `error`, `2ECC71` → `success`, `4ECDC4`/`6366F1` → `indigo500`.
-      Nouveaux alias ajoutés dans `MeeshyColors.swift` (section Feature Accents).
-- [ ] Remplacement des ~34 hex dans TrackingLinks*/ShareLink*/CommunityLink*/CreateTrackingLink/CreateShareLink + DataExportView
-- [ ] FeedPostCard/FeedView : migration ~40 polices fixes → Dynamic Type (.body/.headline/.callout/.caption/.caption2)
-- [ ] i18n : ShareLinkDetailView "Actif/Inactif", TrackingLinkDetailView "CONFIGURATION UTM" + labels infoRow
-- [ ] A11y : accessibilityLabel sur boutons copy icône-seuls (TrackingLinksView, ShareLinksView, CommunityLinksView)
-      et sur les 4 actions de TrackingLinkDetailView
+## Tâches
 
-### Android (continuité iter-24/40 + nouvelles trouvailles)
-- [ ] **CRITIQUE** : modules `feature/settings` et `feature/contacts` sans `res/` — créer strings.xml en+fr,
-      convertir SettingsScreen (20+ chaînes) et ContactsScreen (3 chaînes + noms d'onglets enum.name)
-- [ ] **Deep link chat (reliquat iter-24 A12, toujours absent)** : `navDeepLink meeshy://chat/{conversationId}`
-      sur la destination chat + `<data>` host dans AndroidManifest
-- [ ] SettingsScreen : email sans maxLines/ellipsis ; contentDescription "Back" hardcodée
-- [ ] Touch targets : avatars NotificationsScreen 44dp / FeedScreen 40dp — corriger seulement si cliquables
+### SDK iOS (MeeshyUI)
+- [x] `MeeshyColors` : +`trackingAccent/Hex`, `shareAccent/Hex`, `communityAccent/Hex` (alias indigo600/indigo400/warning), +`successHex`, `warningHex`, `neutral500Hex`, `indigo300Hex`
 
-### Web (selon audit — axes non couverts par iter 1–40)
-- [ ] Audit ciblé deep links/scroll-to-message, dark mode récent, sélection/copie, alignements/truncate,
-      focus-visible, i18n restant hors fichiers déjà traités
-- [ ] Corrections selon trouvailles (complété après audit — voir analyse)
+### iOS — surface liens (9 fichiers, 68 occurrences hex → tokens)
+- [x] TrackingLinksView, TrackingLinkDetailView : A855F7→trackingAccent, 888888→neutral500, 08D9D6→indigo300, 2ECC71→success, FF2E63→error, 6366F1→brandPrimary ; helpers `utmTag`/`detailActionButton`/`breakdownCard`/`breakdownRow`/`deviceColor` passent de `String` hex à `Color`
+- [x] ShareLinksView, ShareLinkDetailView, CreateShareLinkView : 08D9D6→shareAccent, FF6B6B→warning, 4ECDC4→indigo300 ; `actionButton` → `Color`
+- [x] CommunityLinksView, CommunityLinkDetailView : F8B500→communityAccent ; `communityActionButton` → `Color`
+- [x] LinksHubView, CreateTrackingLinkView : params accentHex → constantes tokens
+- [x] i18n : statusBadge Actif/Inactif, STATISTIQUES/INFORMATIONS/Identifiant/Créé le/Expire le (ShareLinkDetail), CONFIGURATION UTM/URL destination/Créé le (TrackingLinkDetail), ConversationType.displayLabel (8 libellés)
+- [x] a11y : labels boutons retour/créer/copier (TrackingLinksView, CommunityLinksView)
 
-### Différés reconduits
-- Réactions par pièce jointe web/Android (parité feature iOS) — nécessite wiring gateway
-  `attachment:reaction-*`, dépasse une passe UI/UX.
+### iOS — Feed (Dynamic Type + a11y + i18n)
+- [x] FeedPostCard : 36 polices fixes → sémantiques ; icône translate (label + trait bouton + cible 32pt) ; drapeaux langue (labels VoiceOver) ; `timeAgo` localisé ; "Voir le profil"/"Feeds"/"Moi" localisés
+- [x] FeedView : 14 polices fixes → sémantiques (13 icônes grandes tailles conservées, justifiées)
 
-## Cohérence cross-frontend
-- iOS modifié (couleurs liens) → vérifier que web utilise déjà des tokens pour ses écrans liens ;
-  les écrans liens n'existent pas sur Android (rien à aligner).
-- Android modifié (deep link chat) → web gère déjà /chat/:id ; iOS a ses deep links (15 routes, iter-1).
-- i18n : chaque chaîne ajoutée l'est en fr ET en sur les deux plateformes mobiles.
+### Android
+- [x] feature/settings : création res values + values-fr (23 clés), SettingsScreen entièrement sur stringResource
+- [x] feature/contacts : création res values + values-fr (3 clés), ContactsScreen localisé
+- [x] feature/feed : `feed_unknown_author` (fallbacks Unknown/Author)
+- [x] feature/profile : `profile_avatar` + displayName prioritaire en contentDescription
+- [x] sdk-ui MessageBubble : compteur réactions → typography.labelSmall
 
-## Sortie
-1. Analyse : `docs/analyses/uiux/2026-06-12-iteration-41.md`
-2. Implémentation sur `claude/blissful-ritchie-68j2oq`
-3. PR vers main, CI verte, merge, mise à jour `branch-tracking.md`
+### Web
+- [x] share-affiliate-modal : 100 % i18n (namespace affiliate, 4 locales), suggestions via tArray
+- [x] CreateGroupModal : i18n (namespace dashboard) + a11y (bouton X aria-label, row role/tabIndex/onKeyDown) + dark mode bouton primaire
+- [x] StatusComposer, PostComposer, AudioPostComposer, RepostModal : i18n namespace v2 existant
+- [x] AgentConfigDialog + ConversationPicker : i18n namespace admin, accents corrigés, locale dynamique pour toLocaleDateString
+- [x] PhoneField : placeholder localisé
+- [x] Parité clés en/fr/es/pt vérifiée + JSON valides + tsc --noEmit sans nouvelle erreur
+
+## Vérifications
+- [x] Aucun hex hors charte restant sur la surface liens iOS (grep négatif)
+- [x] Parité locales web 4 langues
+- [x] Parité values/values-fr Android (script)
+- [ ] CI verte sur la PR
+- [ ] Merge dans main + mise à jour branch-tracking
+
+## Continuité itération 42
+Reprendre les différés listés en fin d'analyse 41 (hex iOS hors liens par surface : SettingsView,
+NotificationSettingsView, OnboardingView, DataExportView ; ContactsTab enum Android ; parité stories
+Android ; réactions par pièce jointe web/Android).
+
+---
+
+## Addendum — passe parallèle PR #580 (branche claude/blissful-ritchie-68j2oq)
+
+Tâches additionnelles réalisées par la passe parallèle, hors périmètre ci-dessus :
+- [x] Android : deep link `meeshy://chat/{conversationId}` (navDeepLink + intent-filter host=chat)
+- [x] Android : onglets ContactsScreen localisés (labelRes, 4 clés en+fr) — solde le différé « ContactsTab enum »
+- [x] Android : ellipsis email SettingsScreen
+- [x] Web : i18n routes `app/` (l/[token], chat/[id] état erreur → JoinError, forgot-password,
+      communities/[id], search Rejoindre, signup Retour) — 4 langues
+- [x] Web : dark mode admin/users/new (textarea/selects/hints), truncate admin/users/[id]
+- [x] iOS : DataExportView FF6B6B → MeeshyColors.error ; overloads ThemeManager(tint: Color)
+- [x] Résolution des conflits avec la PR #577 (périmètre recouvrant → version main retenue)
