@@ -101,6 +101,7 @@
     "copyShowingContent": "Copy showing content",
     "conversationHeader": {
       "backToList": "Back to conversations",
+      "unreadInOtherConversations": "unread messages in other conversations",
       "share": "Share",
       "linkCopied": "Link copied!",
       "linkCopyError": "Error copying link",

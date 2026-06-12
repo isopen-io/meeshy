@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Bell } from 'lucide-react';
+import { useI18n } from '@/hooks/use-i18n';
 import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
 
 interface NotificationBellProps {
@@ -18,9 +19,12 @@ export function NotificationBell({
   showBadge = true,
   onClick
 }: NotificationBellProps) {
+  const { t } = useI18n('notifications');
   const { unreadCount } = useNotificationsManagerRQ();
 
-  const ariaLabel = `Notifications${unreadCount > 0 ? ` (${unreadCount} non lues)` : ''}`;
+  const ariaLabel = unreadCount > 0
+    ? t('bell.labelWithUnread', { count: unreadCount })
+    : t('bell.label');
 
   const bellContent = (
     <>
