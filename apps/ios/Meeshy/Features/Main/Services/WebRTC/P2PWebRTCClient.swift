@@ -269,7 +269,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             // LOCALE et on ne nil-e les propriétés que si elles pointent
             // encore notre capturer — un nouvel appel a pu poser les siennes.
             Logger.webrtc.warning("[WEBRTC] session changed during camera warm-up — stopping orphan capture")
-            capturer.stopCapture()
+            await capturer.stopCapture()
             if videoCapturer === capturer {
                 localVideoTrack_ = nil
                 videoCapturer = nil
