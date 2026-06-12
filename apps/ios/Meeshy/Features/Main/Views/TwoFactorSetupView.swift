@@ -83,7 +83,7 @@ struct TwoFactorSetupView: View {
                 .padding(.top, 20)
 
             Text(String(localized: "2fa_scan_instruction", defaultValue: "Scannez ce QR code avec votre application d'authentification"))
-                .font(.system(size: 14, weight: .medium))
+                .font(.subheadline.weight(.medium))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
@@ -107,12 +107,12 @@ struct TwoFactorSetupView: View {
 
             VStack(spacing: 8) {
                 Text(String(localized: "2fa_manual_entry_label", defaultValue: "Ou entrez cette cle manuellement :"))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundColor(theme.textMuted)
 
                 HStack(spacing: 8) {
                     Text(setup.otpauthUrl)
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .font(.system(.subheadline, design: .monospaced).weight(.semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
