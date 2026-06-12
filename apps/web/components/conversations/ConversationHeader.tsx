@@ -128,7 +128,8 @@ export function ConversationHeader({
               avatarUrl={participantInfo.avatarUrl}
               avatar={participantInfo.avatar}
               name={participantInfo.name}
-              status={participantInfo.status}
+              userId={participantInfo.otherUserId}
+              presenceFallback={participantInfo.presenceFallback}
               encryptionInfo={encryptionInfo}
               onImageUploadClick={() => setIsImageUploadDialogOpen(true)}
               t={t}

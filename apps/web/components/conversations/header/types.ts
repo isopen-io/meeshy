@@ -4,7 +4,7 @@ import type {
 } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
 import type { UserRoleEnum } from '@meeshy/shared/types';
-import type { UserStatus } from '@/lib/user-status';
+import type { PresenceSource } from '../conversation-item/ParticipantPresenceIndicator';
 
 export interface ConversationHeaderProps {
   conversation: Conversation;
@@ -46,7 +46,8 @@ export interface ParticipantInfo {
   name: string;
   avatar: string;
   avatarUrl?: string;
-  status: UserStatus;
+  otherUserId?: string;
+  presenceFallback?: PresenceSource | null;
   isAnonymous: boolean;
   role: UserRoleEnum;
 }

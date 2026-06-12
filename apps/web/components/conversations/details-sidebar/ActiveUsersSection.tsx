@@ -1,9 +1,8 @@
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { OnlineIndicator } from '@/components/ui/online-indicator';
+import { ParticipantPresenceIndicator } from '../conversation-item/ParticipantPresenceIndicator';
 import { Users } from 'lucide-react';
-import { getUserStatus } from '@/lib/user-status';
 import { getLanguageDisplayName, getLanguageFlag } from '@/utils/language-utils';
 import type { User } from '@meeshy/shared/types';
 import { useI18n } from '@/hooks/use-i18n';
@@ -53,9 +52,9 @@ export function ActiveUsersSection({ activeUsers }: ActiveUsersSectionProps) {
               {getLanguageDisplayName(user.systemLanguage)} {getLanguageFlag(user.systemLanguage)}
             </p>
           </div>
-          <OnlineIndicator
-            isOnline={getUserStatus(user) === 'online'}
-            status={getUserStatus(user)}
+          <ParticipantPresenceIndicator
+            userId={user.id}
+            fallbackUser={user}
             size="sm"
           />
         </div>
