@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useUserStore } from '@/stores/user-store';
+import { useUserStore, useUserStatusTick } from '@/stores/user-store';
 import { getUserStatus, type UserStatus } from '@/lib/user-status';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
@@ -18,8 +18,8 @@ export function useParticipantInfo(
   currentUser: User,
   conversationParticipants: Participant[]
 ) {
-  const userStore = useUserStore();
-  const _lastStatusUpdate = userStore._lastStatusUpdate;
+  const getUserById = useUserStore(state => state.getUserById);
+  const _lastStatusUpdate = useUserStatusTick();
 
   const getConversationName = useCallback(() => {
     if (conversation.type !== 'direct') {
@@ -126,7 +126,7 @@ export function useParticipantInfo(
       }
 
       if (otherUserId) {
-        const userFromStore = userStore.getUserById(otherUserId);
+        const userFromStore = getUserById(otherUserId);
         if (userFromStore) {
           return getUserStatus(userFromStore);
         }
@@ -139,7 +139,7 @@ export function useParticipantInfo(
       return 'offline';
     }
     return 'online';
-  }, [conversation, conversationParticipants, currentUser?.id, userStore, _lastStatusUpdate]);
+  }, [conversation, conversationParticipants, currentUser?.id, getUserById, _lastStatusUpdate]);
 
   const getCurrentUserRole = useCallback((): UserRoleEnum => {
     if (!conversation || !currentUser?.id || !conversationParticipants.length) {
