@@ -392,6 +392,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         PushNotificationManager.shared.resetSession()
         await BlockService.shared.reset()
         StoryService.shared.reset()
+        await ConversationStore.shared.reset()
         UserPreferencesManager.shared.resetSession()
         FriendshipCache.shared.clear()
 

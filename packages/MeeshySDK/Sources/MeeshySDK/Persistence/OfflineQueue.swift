@@ -514,9 +514,7 @@ public actor OfflineQueue {
     /// Tombstones des outcomes déjà publiés (cap FIFO) : un abonné tardif
     /// reçoit l'outcome immédiatement au lieu d'attendre pour toujours un
     /// `publishOutcome` qui ne reviendra pas.
-    private var outcomeTombstones: [String: OutboxOutcome] = [:]
-    private var outcomeTombstoneOrder: [String] = []
-    private let outcomeTombstoneCapacity = 200
+    private var outcomeTombstones = BoundedFIFOMap<String, OutboxOutcome>(capacity: 200)
 
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
@@ -596,7 +594,7 @@ public actor OfflineQueue {
         // ne se referme jamais une fois la file vidée.
         Task { await self.refreshPendingCount() }
 
-        recordTombstone(outcome)
+        outcomeTombstones[outcome.cmid] = outcome
         guard let observers = outcomeContinuations.removeValue(forKey: outcome.cmid) else {
             return
         }
@@ -604,21 +602,6 @@ public actor OfflineQueue {
             continuation.yield(outcome)
             continuation.finish()
         }
-    }
-
-    private func recordTombstone(_ outcome: OutboxOutcome) {
-        if outcomeTombstones.updateValue(outcome, forKey: outcome.cmid) == nil {
-            outcomeTombstoneOrder.append(outcome.cmid)
-            if outcomeTombstoneOrder.count > outcomeTombstoneCapacity {
-                let evicted = outcomeTombstoneOrder.removeFirst()
-                outcomeTombstones.removeValue(forKey: evicted)
-            }
-        }
-    }
-
-    private func clearTombstone(for cmid: String) {
-        guard outcomeTombstones.removeValue(forKey: cmid) != nil else { return }
-        outcomeTombstoneOrder.removeAll { $0 == cmid }
     }
 
     /// Internal: removes the single continuation identified by `token` after
@@ -660,7 +643,7 @@ public actor OfflineQueue {
         // Le retry ré-arme la ligne avec le MÊME cmid : sans cette purge, un
         // abonné post-retry (`outcomeStream(for:)`) recevait instantanément
         // le tombstone `.exhausted` périmé pour une mutation encore en vol.
-        clearTombstone(for: record.clientMessageId)
+        outcomeTombstones.removeValue(forKey: record.clientMessageId)
 
         let now = Date()
         do {
@@ -2265,7 +2248,6 @@ public actor OfflineQueue {
         // Wipe complet (logout, tests) : les tombstones d'une session ne
         // doivent pas pouvoir rejouer un outcome dans la suivante.
         outcomeTombstones.removeAll()
-        outcomeTombstoneOrder.removeAll()
         guard let pool = outboxPool else {
             await refreshPendingCount()
             return

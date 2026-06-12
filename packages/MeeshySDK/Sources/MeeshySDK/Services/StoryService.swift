@@ -20,12 +20,11 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
     // In-memory cache used by notification deep-links and reposts that need a
     // post by id without re-listing the feed. Stories expire after 24h so a
     // single-session dictionary is sufficient — no cross-session persistence.
-    // Borné (éviction FIFO) et purgé au logout : sans ça les payloads de
-    // l'utilisateur A restaient résidents pendant la session de l'utilisateur B.
+    // Borné (éviction FIFO via BoundedFIFOMap) et purgé au logout : sans ça
+    // les payloads de l'utilisateur A restaient résidents pendant la session
+    // de l'utilisateur B.
     private let cacheLock = NSLock()
-    private var postCache: [String: APIPost] = [:]
-    private var cacheOrder: [String] = []
-    private let cacheCapacity = 500
+    private var postCache = BoundedFIFOMap<String, APIPost>(capacity: 500)
 
     init(api: APIClientProviding = APIClient.shared) {
         self.api = api
@@ -87,24 +86,14 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
 
     private func cachePost(_ post: APIPost) {
         cacheLock.lock()
-        cachePostLocked(post)
+        postCache[post.id] = post
         cacheLock.unlock()
     }
 
     private func cachePosts(_ posts: [APIPost]) {
         cacheLock.lock()
-        for post in posts { cachePostLocked(post) }
+        for post in posts { postCache[post.id] = post }
         cacheLock.unlock()
-    }
-
-    private func cachePostLocked(_ post: APIPost) {
-        if postCache.updateValue(post, forKey: post.id) == nil {
-            cacheOrder.append(post.id)
-            if cacheOrder.count > cacheCapacity {
-                let evicted = cacheOrder.removeFirst()
-                postCache.removeValue(forKey: evicted)
-            }
-        }
     }
 
     /// Purge au logout (cascade `AuthManager.logout`) — isolation des données
@@ -112,7 +101,6 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
     public func reset() {
         cacheLock.lock()
         postCache.removeAll()
-        cacheOrder.removeAll()
         cacheLock.unlock()
     }
 }

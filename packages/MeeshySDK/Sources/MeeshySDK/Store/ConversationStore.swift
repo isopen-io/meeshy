@@ -72,6 +72,12 @@ final class ConversationStoreSubjects: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         perConv.removeValue(forKey: id)
     }
+
+    func removeAll() {
+        lock.lock(); defer { lock.unlock() }
+        perConv.removeAll()
+        list.send([])
+    }
 }
 
 // MARK: - Errors
@@ -144,6 +150,19 @@ public actor ConversationStore {
         self.categoryService = categoryService
         self.cache = cache
         self.outbox = outbox
+    }
+
+    // MARK: - Session teardown
+
+    /// Purge au logout (cascade `AuthManager.logout`) — isolation des données
+    /// entre comptes sur le même device : sans elle, les conversations de
+    /// l'utilisateur A (et un `CurrentValueSubject` par conversation hydratée,
+    /// jamais évincé) restaient résidents pendant toute la session de
+    /// l'utilisateur B. Les publishers per-conv encore détenus par une UI en
+    /// cours de teardown deviennent orphelins (plus d'émission) — attendu.
+    public func reset() {
+        conversations.removeAll()
+        subjects.removeAll()
     }
 
     // MARK: - Read

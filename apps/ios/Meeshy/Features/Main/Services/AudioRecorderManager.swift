@@ -90,19 +90,14 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         // deactivate it to avoid leaking the microphone indicator + battery
         // drain (previously the AVAudioRecorder init failure left the
         // session active indefinitely).
-        let fileName = "voice_\(Int(Date().timeIntervalSince1970)).m4a"
+        let fileName = "voice_\(Int(Date().timeIntervalSince1970)).\(settings.codec.fileExtension)"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
 
-        let recSettings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: settings.sampleRate,
-            AVNumberOfChannelsKey: settings.numberOfChannels,
-            AVEncoderBitRateKey: settings.bitRate,
-            AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
-        ]
-
         do {
-            recorder = try AVAudioRecorder(url: url, settings: recSettings)
+            // Dictionnaire dérivé du codec via la source unique du SDK
+            // (`AudioRecordingSettings.avRecorderSettings`) — le défaut `.aac`
+            // reproduit l'ancien dictionnaire AAC/M4A à l'identique.
+            recorder = try AVAudioRecorder(url: url, settings: settings.avRecorderSettings)
             recorder?.isMeteringEnabled = true
             recorder?.record()
             recordedFileURL = url

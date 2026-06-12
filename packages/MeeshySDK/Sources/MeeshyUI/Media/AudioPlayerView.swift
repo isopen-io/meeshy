@@ -368,15 +368,21 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     }
 
     // MARK: - Autoplay Registry (static)
-    private static var autoplayRegistry: [(url: String, play: () -> Void)] = []
+    // Keyé par id d'attachement (stable) et non par URL : l'URL optimiste
+    // `file://` est remplacée par l'URL serveur après upload — une entrée
+    // enregistrée sous l'ancienne URL devenait introuvable au disappear et
+    // retenait son moteur (closure forte) pour toute la vie du process. Le
+    // déclenchement reste matché par URL (c'est celle que le player vient de
+    // finir) ; une ré-apparition met l'entrée à jour via le dedupe par id.
+    private static var autoplayRegistry: [(id: String, url: String, play: () -> Void)] = []
 
-    public static func registerAutoplay(url: String, play: @escaping () -> Void) {
-        autoplayRegistry.removeAll { $0.url == url }
-        autoplayRegistry.append((url: url, play: play))
+    public static func registerAutoplay(id: String, url: String, play: @escaping () -> Void) {
+        autoplayRegistry.removeAll { $0.id == id }
+        autoplayRegistry.append((id: id, url: url, play: play))
     }
 
-    public static func unregisterAutoplay(url: String) {
-        autoplayRegistry.removeAll { $0.url == url }
+    public static func unregisterAutoplay(id: String) {
+        autoplayRegistry.removeAll { $0.id == id }
     }
 
     private static func triggerAutoplayNext(afterUrl: String) {
@@ -669,7 +675,10 @@ public struct AudioPlayerView: View {
             // `onDisappear` is gated symmetrically.
             if !usesExternalPlayer {
                 let autoplayUrl = attachment.fileUrl
-                AudioPlaybackManager.registerAutoplay(url: autoplayUrl) { [player] in
+                // Capture weak en défense : la closure vit dans un registre
+                // STATIQUE — une entrée orpheline ne doit pas retenir le moteur.
+                AudioPlaybackManager.registerAutoplay(id: attachment.id, url: autoplayUrl) { [weak player] in
+                    guard let player else { return }
                     // Optimistic local audio can never load through the cache
                     // (DiskCacheStore.data(for:) rejects file://) — autoplay it
                     // straight from disk. See Sprint 3 RC3.2.
@@ -690,8 +699,10 @@ public struct AudioPlayerView: View {
             // untouched here.
             guard Self.shouldStopOwnedEngineOnDisappear(usesExternalPlayer: usesExternalPlayer) else { return }
             // Symmetrical to onAppear (BUG A fix): the legacy autoplay closure
-            // is registered only in the owned-engine path.
-            AudioPlaybackManager.unregisterAutoplay(url: attachment.fileUrl)
+            // is registered only in the owned-engine path. Désenregistré par
+            // id : `attachment.fileUrl` peut avoir changé entre appear et
+            // disappear (swap URL optimiste → serveur), l'id est stable.
+            AudioPlaybackManager.unregisterAutoplay(id: attachment.id)
             // Leak fix — stop owned playback deterministically. Relying on ARC
             // to dealloc the `@StateObject` is non-deterministic, and once the
             // engine is unregistered from `PlaybackCoordinator` (next line) it
