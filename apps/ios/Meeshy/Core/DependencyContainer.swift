@@ -265,10 +265,25 @@ final class DependencyContainer {
     // MARK: - App Group shared path (O6)
 
     static func databasePath() -> String {
-        let container = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: "group.me.meeshy.apps"
-        )!
-        let dbDir = container.appendingPathComponent("Database")
+        databasePath(
+            groupContainer: FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: "group.me.meeshy.apps"
+            )
+        )
+    }
+
+    /// `groupContainer` is `nil` when the signed binary lost the app-group
+    /// entitlement (seen on Xcode Cloud distribution-signed TestFlight
+    /// builds — launch crash-loop of build 1125, 2026-06-12). Trapping here
+    /// boot-loops the app on EVERY launch; falling back to Application
+    /// Support keeps the user in the app, merely without NSE/widget data
+    /// sharing until the signing issue is fixed.
+    static func databasePath(groupContainer: URL?) -> String {
+        if groupContainer == nil {
+            containerLogger.fault("App-group container unavailable (missing entitlement?) — falling back to Application Support for the message store")
+        }
+        let base = groupContainer ?? URL.applicationSupportDirectory
+        let dbDir = base.appendingPathComponent("Database")
         try? FileManager.default.createDirectory(at: dbDir, withIntermediateDirectories: true)
         return dbDir.appendingPathComponent("meeshy_messages.sqlite").path
     }
