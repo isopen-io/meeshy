@@ -223,7 +223,44 @@
     "limitReached": "Limite atingido: {limit} {category}s máximo",
     "filesAdded": "Apenas {count} arquivo(s) adicionado(s)",
     "send": "Enviar",
-    "noTrending": "Sem tendências no momento"
+    "noTrending": "Sem tendências no momento",
+    "breadcrumbLabels": {
+      "admin": "Admin",
+      "users": "Usuários",
+      "analytics": "Análises",
+      "moderation": "Moderação",
+      "settings": "Configurações",
+      "messages": "Mensagens",
+      "conversations": "Conversas",
+      "communities": "Comunidades",
+      "broadcasts": "Transmissões",
+      "reports": "Relatórios",
+      "ranking": "Classificação",
+      "agent": "Agente IA",
+      "monitoring": "Monitoramento",
+      "notifications": "Notificações",
+      "auditLogs": "Registros de auditoria",
+      "trackingLinks": "Links de rastreamento",
+      "shareLinks": "Links de compartilhamento",
+      "languages": "Idiomas",
+      "dashboard": "Painel de controle",
+      "contacts": "Contatos",
+      "feeds": "Feeds"
+    },
+    "newStory": "Novo story",
+    "publish": "Publicar",
+    "storyPlaceholder": "Digite seu story...",
+    "replyPlaceholder": "Responder...",
+    "mediaCategory": {
+      "photo": "foto",
+      "video": "vídeo",
+      "audio": "áudio"
+    },
+    "storyVisibility": {
+      "public": "Público",
+      "friends": "Amigos",
+      "private": "Privado"
+    }
   },
   "copied": "Copiado",
   "never": "Nunca"

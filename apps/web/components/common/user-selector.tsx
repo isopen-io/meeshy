@@ -58,10 +58,10 @@ export function UserSelector({ users, onUserSelect, isLoading = false }: UserSel
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-foreground mb-2">Meeshy</h1>
           <p className="text-xl text-muted-foreground">
-            Messagerie avec traduction automatique côté client
+            {t('userSelector.subtitle')}
           </p>
           <p className="text-sm text-muted-foreground mt-2">
-            Sélectionnez un utilisateur pour commencer à discuter
+            {t('userSelector.selectPrompt')}
           </p>
         </div>
 
@@ -95,11 +95,11 @@ export function UserSelector({ users, onUserSelect, isLoading = false }: UserSel
                 <CardDescription>
                   {user.isOnline ? (
                     <Badge variant="default" className="bg-green-500">
-                      En ligne
+                      {t('userSelector.online')}
                     </Badge>
                   ) : (
                     <Badge variant="secondary">
-                      Hors ligne
+                      {t('userSelector.offline')}
                     </Badge>
                   )}
                 </CardDescription>
@@ -107,7 +107,7 @@ export function UserSelector({ users, onUserSelect, isLoading = false }: UserSel
               
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Système:</span>
+                  <span className="text-muted-foreground">{t('userSelector.systemLanguage')}</span>
                   <span className="flex items-center gap-1">
                     {getLanguageFlag(user.systemLanguage)}
                     {getLanguageName(user.systemLanguage)}
@@ -115,7 +115,7 @@ export function UserSelector({ users, onUserSelect, isLoading = false }: UserSel
                 </div>
                 
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Région:</span>
+                  <span className="text-muted-foreground">{t('userSelector.regionalLanguage')}</span>
                   <span className="flex items-center gap-1">
                     {getLanguageFlag(user.regionalLanguage)}
                     {getLanguageName(user.regionalLanguage)}
@@ -124,7 +124,7 @@ export function UserSelector({ users, onUserSelect, isLoading = false }: UserSel
 
                 {user.customDestinationLanguage && (
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Personnalisée:</span>
+                    <span className="text-muted-foreground">{t('userSelector.customLanguage')}</span>
                     <span className="flex items-center gap-1">
                       {getLanguageFlag(user.customDestinationLanguage)}
                       {getLanguageName(user.customDestinationLanguage)}
@@ -147,14 +147,14 @@ export function UserSelector({ users, onUserSelect, isLoading = false }: UserSel
           <div className="mt-8 text-center">
             <Card className="max-w-md mx-auto">
               <CardHeader>
-                <CardTitle>Utilisateur sélectionné</CardTitle>
+                <CardTitle>{t('userSelector.selectedUser')}</CardTitle>
                 <CardDescription>
-                  Vous allez vous connecter en tant que {selectedUser.username}
+                  {t('userSelector.loginAs', { username: selectedUser.username })}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <Button onClick={handleLogin} className="w-full" size="lg">
-                  Se connecter
+                  {t('userSelector.login')}
                 </Button>
               </CardContent>
             </Card>

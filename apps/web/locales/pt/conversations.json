@@ -487,14 +487,40 @@
     "links": {
       "noDescription": "Sem descrição",
       "loading": "Carregando links...",
-      "empty": "Nenhum link compartilhado"
+      "empty": "Nenhum link compartilhado",
+      "title": "Links de compartilhamento",
+      "defaultName": "Link de compartilhamento",
+      "statusActive": "Ativo",
+      "statusExpired": "Expirado",
+      "statusDisabled": "Desativado",
+      "copy": "Copiar",
+      "createdBy": "Criado por:",
+      "createdAt": "Criado em:",
+      "permissions": "Permissões",
+      "permissionMessages": "Mensagens",
+      "permissionImages": "Imagens",
+      "permissionFiles": "Arquivos",
+      "permissionHistory": "Histórico",
+      "restrictions": "Restrições",
+      "languagesLabel": "Idiomas:",
+      "countriesLabel": "Países:",
+      "activeLinks": "Links ativos ({count})",
+      "expiredLinks": "Links expirados ({count})"
     },
     "inviteModal": {
       "searchError": "Erro ao procurar usuários",
       "inviteSuccess": "{count} usuário(s) convidado(s) com sucesso",
       "partialError": "{count} convite(s) falharam",
       "inviteError": "Erro ao convidar usuários",
-      "noUsersFound": "Nenhum usuário encontrado"
+      "noUsersFound": "Nenhum usuário encontrado",
+      "title": "Convidar usuários",
+      "selectedUsers": "Usuários selecionados ({count})",
+      "searchResults": "Resultados da pesquisa",
+      "selected": "Selecionado",
+      "add": "Adicionar",
+      "cancel": "Cancelar",
+      "inviting": "Convidando...",
+      "inviteButton": "Convidar {count} usuário(s)"
     },
     "drawer": {
       "title": "Opções",
@@ -596,6 +622,18 @@
       "attachFiles": "Selecionar arquivos para anexar",
       "recordVoice": "Gravar mensagem de voz",
       "attachFile": "Anexar arquivo"
+    },
+    "userSelector": {
+      "subtitle": "Mensagens com tradução automática no cliente",
+      "selectPrompt": "Selecione um usuário para começar a conversar",
+      "online": "Online",
+      "offline": "Offline",
+      "systemLanguage": "Sistema:",
+      "regionalLanguage": "Região:",
+      "customLanguage": "Personalizado:",
+      "selectedUser": "Usuário selecionado",
+      "loginAs": "Você entrará como {username}",
+      "login": "Entrar"
     }
   }
 }

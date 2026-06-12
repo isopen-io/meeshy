@@ -185,7 +185,11 @@
       "delete": "Excluir",
       "deleteConfirmTitle": "Excluir esta mensagem?",
       "deleteConfirmDescription": "Esta mensagem não será enviada. Esta ação é irreversível.",
-      "empty": "Nenhuma mensagem pendente"
+      "empty": "Nenhuma mensagem pendente",
+      "loadError": "Erro ao carregar a fila",
+      "serviceUnavailable": "Serviço do agente indisponível",
+      "retry": "Tentar novamente",
+      "pending": "pendentes"
     },
     "scanControl": {
       "title": "Controles",
@@ -296,7 +300,24 @@
     "contactUpdated": "Informações de contato atualizadas",
     "contactUpdateError": "Erro ao atualizar as informações de contato",
     "personalInfoUpdated": "Informações pessoais atualizadas",
-    "personalInfoUpdateError": "Erro ao atualizar as informações pessoais"
+    "personalInfoUpdateError": "Erro ao atualizar as informações pessoais",
+    "contactTitle": "Contato e localização",
+    "personalInfoTitle": "Informações pessoais",
+    "saving": "Salvando...",
+    "emailLabel": "E-mail",
+    "countryLabel": "País",
+    "phoneLabel": "Telefone",
+    "timezoneLabel": "Fuso horário",
+    "firstNameLabel": "Nome",
+    "lastNameLabel": "Sobrenome",
+    "displayNameLabel": "Nome de exibição",
+    "usernameLabel": "Nome de usuário",
+    "usernamePlaceholder": "nome-usuario",
+    "usernameHint": "Apenas letras, números, hífens e sublinhados",
+    "bioLabel": "Biografia",
+    "bioCharCount": "{count}/500 caracteres",
+    "fullNameLabel": "Nome completo",
+    "optionalPlaceholder": "Opcional"
   },
   "translationMonitor": {
     "loadingMetrics": "Carregando métricas...",
@@ -1573,5 +1594,22 @@
     "paginationInfo": "Página {page} de {total} • {shown} exibidas • {totalCount} no total",
     "prev": "Anterior",
     "next": "Próximo"
+  },
+  "layout": {
+    "collapseMenu": "Recolher o menu",
+    "openMenu": "Abrir o menu",
+    "closeMenu": "Fechar o menu",
+    "navDashboard": "Painel de controle",
+    "navUsers": "Gestão de usuários",
+    "navModeration": "Moderação",
+    "navAuditLogs": "Registros de auditoria",
+    "navAnalytics": "Análises",
+    "navTrackingLinks": "Links de rastreamento",
+    "navRanking": "Classificações",
+    "navBroadcasts": "Transmissões",
+    "navSettings": "Configurações do sistema",
+    "navAgent": "Agente IA",
+    "navMonitoring": "Monitoramento",
+    "accessLevel": "Administração Meeshy - Nível de acesso: {role}"
   }
 }

@@ -487,7 +487,15 @@
       "inviteSuccess": "{count} user(s) invited successfully",
       "partialError": "{count} invitation(s) failed",
       "inviteError": "Error inviting users",
-      "noUsersFound": "No users found"
+      "noUsersFound": "No users found",
+      "title": "Invite users",
+      "selectedUsers": "Selected users ({count})",
+      "searchResults": "Search results",
+      "selected": "Selected",
+      "add": "Add",
+      "cancel": "Cancel",
+      "inviting": "Inviting...",
+      "inviteButton": "Invite {count} user(s)"
     },
     "drawer": {
       "title": "Options",
@@ -568,7 +576,25 @@
     "links": {
       "noDescription": "No description",
       "loading": "Loading links...",
-      "empty": "No shared links"
+      "empty": "No shared links",
+      "title": "Share links",
+      "defaultName": "Share link",
+      "statusActive": "Active",
+      "statusExpired": "Expired",
+      "statusDisabled": "Disabled",
+      "copy": "Copy",
+      "createdBy": "Created by:",
+      "createdAt": "Created on:",
+      "permissions": "Permissions",
+      "permissionMessages": "Messages",
+      "permissionImages": "Images",
+      "permissionFiles": "Files",
+      "permissionHistory": "History",
+      "restrictions": "Restrictions",
+      "languagesLabel": "Languages:",
+      "countriesLabel": "Countries:",
+      "activeLinks": "Active links ({count})",
+      "expiredLinks": "Expired links ({count})"
     },
     "composer": {
       "placeholder": "Write your message...",
@@ -594,6 +620,18 @@
       "attachFiles": "Select files to attach",
       "recordVoice": "Record voice message",
       "attachFile": "Attach file"
+    },
+    "userSelector": {
+      "subtitle": "Messaging with client-side automatic translation",
+      "selectPrompt": "Select a user to start chatting",
+      "online": "Online",
+      "offline": "Offline",
+      "systemLanguage": "System:",
+      "regionalLanguage": "Region:",
+      "customLanguage": "Custom:",
+      "selectedUser": "Selected user",
+      "loginAs": "You will log in as {username}",
+      "login": "Log in"
     }
   }
 }
