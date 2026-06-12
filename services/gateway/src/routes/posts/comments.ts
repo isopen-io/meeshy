@@ -134,7 +134,7 @@ export function registerCommentRoutes(
       const socialEvents = fastify.socialEvents;
       const post = await fastify.prisma?.post?.findUnique({
         where: { id: postId },
-        select: { authorId: true, commentCount: true },
+        select: { authorId: true, commentCount: true, type: true, content: true },
       });
       if (socialEvents && post) {
         socialEvents.broadcastCommentAdded({
@@ -148,10 +148,12 @@ export function registerCommentRoutes(
       const notifService = fastify.notificationService;
       if (notifService) {
         if (parsed.data.parentId) {
-          // Reply to a comment — notify the parent comment author
+          // Reply to a comment — notify the parent comment author. Le contenu
+          // du commentaire parent voyage en subtitle (« En réponse à « … » »)
+          // pour que le destinataire sache À QUOI on lui répond.
           const parentComment = await fastify.prisma?.postComment?.findUnique({
             where: { id: parsed.data.parentId },
-            select: { authorId: true },
+            select: { authorId: true, content: true },
           });
           if (parentComment?.authorId) {
             notifService.createCommentReplyNotification({
@@ -160,16 +162,23 @@ export function registerCommentRoutes(
               commentAuthorId: parentComment.authorId,
               commentId: comment.id,
               replyPreview: parsed.data.content,
+              parentCommentPreview: parentComment.content?.slice(0, 80),
             }).catch(() => {});
           }
-        } else if (post?.authorId) {
-          // Top-level comment — notify post author
+        } else if (post?.authorId && post.type !== 'STORY') {
+          // Top-level comment on a regular post/mood/status — notify the
+          // author with the typed subtitle. Pour une STORY, l'auteur est
+          // notifié par le bucket story_new_comment du fan-out ci-dessous
+          // (avant ce gate, il recevait DEUX notifications pour le même
+          // commentaire : post_comment + story_new_comment).
           notifService.createPostCommentNotification({
             actorId: authContext.registeredUser.id,
             postId,
             postAuthorId: post.authorId,
             commentId: comment.id,
             commentPreview: parsed.data.content,
+            postType: post.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS',
+            postPreview: post.content?.slice(0, 80),
           }).catch(() => {});
         }
       }
@@ -209,6 +218,7 @@ export function registerCommentRoutes(
           storyAuthorId: post.authorId,
           commenterId: authContext.registeredUser.id,
           commentExcerpt: parsed.data.content?.slice(0, 100),
+          postType: post.type as 'STORY' | 'POST' | 'MOOD' | 'STATUS',
           excludeUserIds: mentionedUserIds,
         }).catch(err => fastify.log.error(`story comment notification fan-out failed: ${err}`));
       }
@@ -273,15 +283,21 @@ export function registerCommentRoutes(
         }, result.authorId);
       }
 
-      // Notify comment author
+      // Notify comment author — l'extrait du commentaire liké voyage en
+      // subtitle pour identifier QUEL commentaire reçoit la réaction.
       const notifService = fastify.notificationService;
       if (notifService && result.authorId) {
+        const likedComment = await fastify.prisma?.postComment?.findUnique({
+          where: { id: commentId },
+          select: { content: true },
+        });
         notifService.createCommentLikeNotification({
           actorId: authContext.registeredUser.id,
           postId: request.params.postId,
           commentId,
           commentAuthorId: result.authorId,
           emoji,
+          commentPreview: likedComment?.content?.slice(0, 80),
         }).catch(() => {});
       }
 
