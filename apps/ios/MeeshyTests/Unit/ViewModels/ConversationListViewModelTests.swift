@@ -2142,6 +2142,11 @@ final class ConversationListViewModelTests: XCTestCase {
         conversationService.listPageResult = .success(
             ConversationPage(items: [], nextCursor: nil, hasMore: true)
         )
+        // Sans latence, le 1er appel peut se terminer AVANT que le 2e ne
+        // démarre — les deux fetchent alors légitimement (le guard ne
+        // coalesce que le chevauchement). Le délai force le chevauchement.
+        conversationService.listPageDelayNanoseconds = 200_000_000
+
         let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
 
         // Fire two concurrent loadMore calls; the guard inside the
