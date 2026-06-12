@@ -220,7 +220,7 @@ struct MemberManagementSection: View {
                     Text(String(localized: "member-management.role.moderator", defaultValue: "Modérateur", bundle: .main))
                         .font(.system(size: 11, weight: .medium))
                 }
-                .foregroundColor(Color(hex: "4ECDC4"))
+                .foregroundColor(MeeshyColors.success)
 
             case .member:
                 EmptyView()

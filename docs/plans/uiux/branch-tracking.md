@@ -16,11 +16,10 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | **45** (PR #597 : web i18n participants-drawer 6 clés ×4 locales, `timeCompact.*` aligné iOS dans transform-conversation, `getLastSeenFormatted` localisé via `contacts.status.*`, suppression code mort notification-helpers, locale sur 2 dates ; iOS : régression FR timeAgo FeedCommentsSheet → `ShortRelativeTime`, ChangePasswordView tokens 6366F1/9B59B6 + 13 polices sémantiques ; Android : dédoublonnage `chat_date_*` es/pt) — co-mergée avec **45w** (#596, web-only) et **45i** (#595, iOS-only) |
-| Last merged PR | #595 (45i), #596 (45w), #598 (admin dashboard push) ; iter-45 (#597) en cours sur `claude/blissful-ritchie-dp7ibu` |
-| Last Merged Base (commit) | d33b41f2 (merge #595) — réintégré dans la branche iter-45 |
-| Note de réconciliation 45×45w | 45w a remplacé `'fr-FR'` par `getCurrentInterfaceLocale()` dans transform-conversation/users.service/notification-helpers en gardant les libellés FR en dur ; iter-45 i18n-ise complètement ces trois sites (clés `timeCompact.*`/`contacts.status.*` + suppression code mort) — la version iter-45 supersède, imports `getCurrentInterfaceLocale` orphelins retirés. 45i (refonte ConversationListHelpers) ne touche pas `ShortRelativeTime` ni les fichiers iter-45 — merge propre vérifié |
-| Next iteration | **46** — repartir de `main` HEAD post-merge #597 |
+| Last completed iteration | **45** (#597 ✅ mergée, avec 45w #596 et 45i #595) |
+| In progress | **46i** (iOS-only) sur `claude/wizardly-rubin-a15oib`, basée `main` @ 945a8d74 (post-#604) : éradication FINALE ancienne palette (24 sites vivants + mapping documenté), épuration 14 structs mortes RootViewComponents + suppression fichiers `MessageComposer.swift`/`SampleData.swift` (pbxproj), Dynamic Type FriendRequestListView, 6 clés i18n ×5 locales, 8 labels a11y |
+| Last Merged Base (commit) | 945a8d74 (merge #604) |
+| Next iteration | **47** — repartir de `main` HEAD post-merge 46i ; supprimer `claude/wizardly-rubin-a15oib` après merge |
 
 ### Deferred carry-over — web (pour 46+)
 - admin : `debug.tsx` (~15 strings), `AgentArchetypesTab`, `AgentConfigDialog`, `UserPicker`, tooltips InfoIcon `LlmTab`/`GlobalConfigTab`
@@ -30,8 +29,8 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 - console.error en français (participants-drawer ×5, links-section ×3) — logs dev, non bloquant
 - locale maps intentionnelles NON à migrer : share-affiliate-modal, AudioPostComposer (speech), use-voice-recording (SpeechRecognition lang)
 
-### Deferred carry-over — iOS (pour 46+, post-45i/45)
-SampleData.swift suppression fichier mort (pbxproj + build local) ; FriendRequestListView 11 polices ; PostDetailView (.textSelection + 21 hex — re-vérifié OK iter-45, retirer si confirmé) ; arbitrage `time.*` (FeedPostCard) vs `time.short.*` (ShortRelativeTime) — timeAgo FeedCommentsSheet réglé en 45, ChangePasswordView réglé en 45 ; ConversationInfoSheet (52 polices), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (27), NewConversationView (16), DataExportView (16), DataStorageView (11) ; reliquats ancienne palette : RootViewComponents (11), FeedView (8), FeedView+Attachments (10), WidgetPreviewView (7), AboutView (5), MessageComposer (4), AttachmentPreparationService (3), ConversationAnimatedBackground (2), divers ×1 (ConversationInfoSheet, MemberManagementSection, BlockedUsersView, UserStatsView, StoryViewerView+Content, MediaDownloadSettingsView) ; washes AudioPostComposer (décision design) ; ladder pièces jointes arc-en-ciel (à arbitrer charte) ; VoiceProfileWizardView/TrackingLinksView Color(hex:) ; IncomingCallView .white contraste ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) ; ThemedConversationRow theme-aware (leaf-view)
+### Deferred carry-over — iOS (pour 47+, post-46i)
+PostDetailView (.textSelection + 21 hex — re-vérifié OK iter-45, retirer si confirmé) ; arbitrage `time.*` (FeedPostCard) vs `time.short.*` (ShortRelativeTime) ; ConversationInfoSheet (52 polices), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (27), NewConversationView (16), DataExportView (16), DataStorageView (11) ; ladder catégoriel arc-en-ciel (FF9F43/45B7D1/2ECC71/F8B500/9B59B6/E74C3C/FF6B6B/E91E63/3498DB/A855F7 — à arbitrer charte : UserStatsView, AboutView sections, MediaDownloadSettingsView, toolbars feed, WidgetPreviewView « Post ») ; `FeedItem`/`ConversationTag` possiblement orphelins post-46i (audit avant suppression) ; washes AudioPostComposer (décision design, OK) ; filtre photo « cool » 08D9D6 StoryViewerView+Content:180 (exception documentée 46i — NE PLUS FLAGGER) ; VoiceProfileWizardView/TrackingLinksView Color(hex:) ; IncomingCallView .white contraste ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) ; ThemedConversationRow theme-aware (leaf-view). **Réglés en 46i : ancienne palette (toutes surfaces vivantes), SampleData/MessageComposer supprimés, FriendRequestListView polices+a11y, RootViewComponents épuré**
 
 ### Deferred carry-over — Android (pour 46+)
 parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ; exceptions documentées : SettingsScreen 14.dp, emoji 22.sp (acceptées, ne pas re-flagger)
@@ -71,4 +70,5 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 44b | claude/keen-dirac-a53ki2 | #590 | ✅ |
 | 45w | claude/elegant-noether-1pen57 | #596 | ✅ |
 | 45i | claude/wizardly-rubin-ux84an | #595 | ✅ |
-| 45 | claude/blissful-ritchie-dp7ibu | #597 | ⏳ |
+| 45 | claude/blissful-ritchie-dp7ibu | #597 | ✅ |
+| 46i | claude/wizardly-rubin-a15oib | — | ⏳ |

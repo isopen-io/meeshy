@@ -5,8 +5,7 @@ import MeeshySDK
 import MeeshyUI
 
 // Components extracted to RootViewComponents.swift:
-// ThemedFloatingButton, ThemedActionButton, ThemedFeedOverlay,
-// ThemedFeedComposer, ThemedFeedCard, FeedActionButton, legacy wrappers
+// ThemedActionButton, ThemedFeedOverlay
 
 /// Identifiable wrapper so the fullScreenCover receives the userId directly in
 /// its content closure, avoiding the SwiftUI race where isPresented flips true
