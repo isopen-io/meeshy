@@ -82,6 +82,30 @@ public nonisolated struct MeeshyColors {
         isDark ? errorDark : error
     }
 
+    // MARK: - Theme-Aware Text & Surface Tokens
+    //
+    // Miroirs statiques des tokens canoniques de ThemeManager, pour les leaf
+    // views qui reçoivent `isDark: Bool` en primitive (règle Zero Unnecessary
+    // Re-render : pas d'@ObservedObject sur un singleton dans une cellule de
+    // liste). ThemeManager délègue à ces fonctions — les valeurs n'existent
+    // qu'ici.
+
+    public static func textPrimary(isDark: Bool) -> Color {
+        isDark ? indigo50 : indigo950
+    }
+
+    public static func textSecondary(isDark: Bool) -> Color {
+        isDark ? indigo300 : indigo700.opacity(0.6)
+    }
+
+    public static func textMuted(isDark: Bool) -> Color {
+        isDark ? indigo400.opacity(0.5) : indigo500.opacity(0.4)
+    }
+
+    public static func backgroundSecondary(isDark: Bool) -> Color {
+        isDark ? Color(hex: "13111C") : Color(hex: "F8F7FF")
+    }
+
     // MARK: - Brand Gradient (The Signature)
 
     public static let brandGradient = LinearGradient(

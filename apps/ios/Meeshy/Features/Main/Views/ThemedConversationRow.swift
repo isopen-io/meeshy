@@ -45,10 +45,10 @@ struct ThemedConversationRow: View {
     private var accent: Color { Color(hex: accentColor) }
     private var accentSecondary: Color { Color(hex: conversation.colorPalette.secondary) }
 
-    private var textPrimary: Color { isDark ? Color(hex: "F5F5F0") : Color(hex: "1C1917") }
-    private var textSecondary: Color { isDark ? Color(hex: "F5F5F0").opacity(0.7) : Color(hex: "1C1917").opacity(0.6) }
-    private var textMuted: Color { isDark ? Color(hex: "F5F5F0").opacity(0.5) : Color(hex: "1C1917").opacity(0.4) }
-    private var backgroundSecondary: Color { isDark ? Color(hex: "191920") : Color(hex: "FFFFFF") }
+    private var textPrimary: Color { MeeshyColors.textPrimary(isDark: isDark) }
+    private var textSecondary: Color { MeeshyColors.textSecondary(isDark: isDark) }
+    private var textMuted: Color { MeeshyColors.textMuted(isDark: isDark) }
+    private var backgroundSecondary: Color { MeeshyColors.backgroundSecondary(isDark: isDark) }
 
     // MARK: - Activity Heat (0 = cold/pastel, 1 = hot/vibrant)
     private var conversationHeat: CGFloat {
@@ -140,7 +140,7 @@ struct ThemedConversationRow: View {
                     // Name with type indicator
                     HStack(spacing: 6) {
                         Text(conversation.displayName)
-                            .font(.system(size: 15, weight: conversation.userState.unreadCount > 0 ? .bold : .semibold))
+                            .font(.subheadline.weight(conversation.userState.unreadCount > 0 ? .bold : .semibold))
                             .foregroundColor(textPrimary)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -148,7 +148,7 @@ struct ThemedConversationRow: View {
                         // Reaction emoji (favorites classification)
                         if let r = conversation.userState.reaction, !r.isEmpty {
                             Text(r)
-                                .font(.system(size: 12))
+                                .font(.caption)
                                 .accessibilityLabel(Text(String(localized: "conversation.row.reaction.a11y", defaultValue: "Reaction \(r)", bundle: .main)))
                         }
 
@@ -168,15 +168,15 @@ struct ThemedConversationRow: View {
                     // philosophy. Re-renders via renderFingerprint's hasPendingSync.
                     if conversation.userState.hasPendingSync {
                         Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.caption2.weight(.semibold))
                             .foregroundColor(accent.opacity(0.7))
                             .padding(.top, 2)
                             .accessibilityHidden(true)
                     }
 
                     // Timestamp — layoutPriority(1) pour ne jamais être écrasé
-                    Text(timeAgo(conversation.lastMessageAt))
-                        .font(.system(size: 11, weight: .medium))
+                    Text(ShortRelativeTime.label(for: conversation.lastMessageAt))
+                        .font(.caption2.weight(.medium))
                         .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent))
                         .layoutPriority(1)
                         .padding(.top, 2)
@@ -235,37 +235,45 @@ struct ThemedConversationRow: View {
         .animation(.easeOut(duration: 0.2), value: isSelected)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(conversationAccessibilityLabel)
-        .accessibilityValue(conversation.userState.unreadCount > 0 ? "\(conversation.userState.unreadCount) messages non lus" : "")
-        .accessibilityHint("Ouvre la conversation")
+        .accessibilityValue(conversation.userState.unreadCount > 0
+            ? String(localized: "accessibility.unread_messages", defaultValue: "\(conversation.userState.unreadCount) messages non lus", bundle: .main)
+            : "")
+        .accessibilityHint(String(localized: "accessibility.opens_conversation", defaultValue: "Ouvre la conversation", bundle: .main))
         .accessibilityAddTraits(.isButton)
     }
 
     private var conversationAccessibilityLabel: String {
         var parts: [String] = []
-        parts.append("Conversation avec \(conversation.name)")
+        parts.append(String(localized: "accessibility.conversation_with", defaultValue: "Conversation avec \(conversation.name)", bundle: .main))
         switch lastMessageSummary {
         case .expired:
-            parts.append("dernier message expiré")
+            parts.append(String(localized: "accessibility.last_message_expired", defaultValue: "dernier message expiré", bundle: .main))
         case .hidden:
-            parts.append("dernier message masqué")
+            parts.append(String(localized: "accessibility.last_message_hidden", defaultValue: "dernier message masqué", bundle: .main))
         case .viewOnce:
-            parts.append("dernier message : vue unique")
+            parts.append(String(localized: "accessibility.last_message_view_once", defaultValue: "dernier message : vue unique", bundle: .main))
         case .ephemeralActive:
             if let preview = conversation.lastMessagePreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                parts.append("dernier message éphémère : \(preview)")
+                parts.append(String(localized: "accessibility.last_message_ephemeral", defaultValue: "dernier message éphémère : \(preview)", bundle: .main))
             }
         case .standard:
             if let preview = conversation.lastMessagePreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                parts.append("dernier message: \(preview)")
+                parts.append(String(localized: "accessibility.last_message_preview", defaultValue: "dernier message : \(preview)", bundle: .main))
             }
         }
-        parts.append(timeAgo(conversation.lastMessageAt))
+        parts.append(ShortRelativeTime.label(for: conversation.lastMessageAt))
         if conversation.userState.unreadCount > 0 {
-            parts.append("\(conversation.userState.unreadCount) non lus")
+            parts.append(String(localized: "accessibility.unread_count", defaultValue: "\(conversation.userState.unreadCount) non lus", bundle: .main))
         }
-        if conversation.userState.isMuted { parts.append("en silence") }
-        if conversation.userState.isPinned { parts.append("epingle") }
-        if conversation.userState.hasPendingSync { parts.append("synchronisation en attente") }
+        if conversation.userState.isMuted {
+            parts.append(String(localized: "accessibility.muted", defaultValue: "en silence", bundle: .main))
+        }
+        if conversation.userState.isPinned {
+            parts.append(String(localized: "accessibility.pinned", defaultValue: "épinglée", bundle: .main))
+        }
+        if conversation.userState.hasPendingSync {
+            parts.append(String(localized: "accessibility.pending_sync", defaultValue: "synchronisation en attente", bundle: .main))
+        }
         return parts.joined(separator: ", ")
     }
 
@@ -281,7 +289,7 @@ struct ThemedConversationRow: View {
             // Show +N if more tags
             if tagInfo.remaining > 0 {
                 Text("+\(tagInfo.remaining)")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.caption2.weight(.bold))
                     .foregroundColor(textMuted)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -313,10 +321,11 @@ struct ThemedConversationRow: View {
     private var typeBadge: some View {
         HStack(spacing: 3) {
             Image(systemName: typeBadgeIcon)
-                .font(.system(size: 8))
+                .font(.caption2)
+                .imageScale(.small)
             if conversation.memberCount > 1 {
                 Text("\(conversation.memberCount)")
-                    .font(.system(size: 9, weight: .medium))
+                    .font(.caption2.weight(.medium))
             }
         }
         .foregroundColor(accent)
@@ -342,16 +351,17 @@ struct ThemedConversationRow: View {
     // MARK: - Unread Badge
     private var unreadBadge: some View {
         let badgeColor = MeeshyColors.unreadBadgeBackground(isDark: isDark)
-        return ZStack {
-            Circle()
-                .fill(badgeColor)
-                .frame(width: 24, height: 24)
-                .shadow(color: badgeColor.opacity(0.25), radius: 3)
-
-            Text("\(min(conversation.userState.unreadCount, 99))")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(.white)
-        }
+        return Text("\(min(conversation.userState.unreadCount, 99))")
+            .font(.caption2.weight(.bold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .frame(minWidth: 24, minHeight: 24)
+            .background(
+                Capsule()
+                    .fill(badgeColor)
+                    .shadow(color: badgeColor.opacity(0.25), radius: 3)
+            )
     }
 
     /// Teinte de l'indicateur de durée. Reprend le rouge du badge de non-lus
@@ -360,15 +370,6 @@ struct ThemedConversationRow: View {
     /// badge (#991B1B) pour que le texte 11pt reste lisible en mode sombre.
     static func timestampColor(unreadCount: Int, accent: Color) -> Color {
         unreadCount > 0 ? MeeshyColors.error : accent
-    }
-
-    private func timeAgo(_ date: Date) -> String {
-        let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return "maintenant" }
-        if seconds < 3600 { return "\(seconds / 60) min" }
-        if seconds < 86400 { return "\(seconds / 3600)h" }
-        if seconds < 604800 { return "\(seconds / 86400)j" }
-        return "\(seconds / 604800)sem"
     }
 
     // MARK: - Typing Indicator
@@ -401,8 +402,10 @@ struct ThemedConversationRow: View {
     @ViewBuilder
     private var typingIndicatorView: some View {
         HStack(spacing: 5) {
-            Text(typingUsername.map { "\($0) écrit" } ?? "est en train d'écrire")
-                .font(.system(size: 13).italic())
+            Text(typingUsername.map { name in
+                String(localized: "typing.named", defaultValue: "\(name) écrit", bundle: .main)
+            } ?? String(localized: "typing.anonymous", defaultValue: "est en train d'écrire", bundle: .main))
+                .font(.footnote.italic())
                 .foregroundColor(accent)
                 .lineLimit(1)
             TypingDotsView(accentColor: accentColor)
@@ -414,12 +417,14 @@ struct ThemedConversationRow: View {
     @ViewBuilder
     private func draftPreviewView(_ draft: DraftSummary) -> some View {
         HStack(spacing: 4) {
-            Text(draft.previewText.isEmpty ? "Brouillon" : "Brouillon :")
-                .font(.system(size: 13, weight: .semibold))
+            Text(draft.previewText.isEmpty
+                ? String(localized: "draft.label", defaultValue: "Brouillon", bundle: .main)
+                : String(localized: "draft.label_prefix", defaultValue: "Brouillon :", bundle: .main))
+                .font(.footnote.weight(.semibold))
                 .foregroundColor(MeeshyColors.error)
             if !draft.previewText.isEmpty {
                 Text(draft.previewText)
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundColor(textSecondary)
                     .lineLimit(1)
             }
@@ -436,7 +441,7 @@ struct ThemedConversationRow: View {
         HStack(spacing: 4) {
             if showEphemeralIcon {
                 Image(systemName: "timer")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(accent)
             }
             senderLabel
@@ -446,18 +451,18 @@ struct ThemedConversationRow: View {
                 attachmentMeta(for: att)
                 if totalCount > 1 {
                     Text("+\(totalCount - 1)")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.caption2.weight(.semibold))
                         .foregroundColor(accent)
                 }
             } else if hasText {
                 if !attachments.isEmpty {
                     attachmentIcon(for: attachments[0].mimeType)
-                        .font(.system(size: 11))
+                        .font(.caption2)
                 }
                 // B1 — apply Prisme Linguistique. Falls back to the raw
                 // preview when no translations are attached.
                 Text(conversation.resolvedLastMessagePreview(preferredLanguages: preferredContentLanguages) ?? "")
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundColor(textSecondary)
                     .lineLimit(1)
             }
@@ -475,10 +480,10 @@ struct ThemedConversationRow: View {
             case .expired:
                 HStack(spacing: 4) {
                     Image(systemName: "timer.badge.xmark")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundColor(textMuted)
                     Text(String(localized: "message.expired", defaultValue: "Message expiré"))
-                        .font(.system(size: 13).italic())
+                        .font(.footnote.italic())
                         .foregroundColor(textMuted)
                         .lineLimit(1)
                 }
@@ -487,10 +492,10 @@ struct ThemedConversationRow: View {
                 HStack(spacing: 4) {
                     senderLabel
                     Image(systemName: "eye.slash")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundColor(textSecondary)
                     Text(String(localized: "conversation.summary.hidden", defaultValue: "1 message caché"))
-                        .font(.system(size: 13).italic())
+                        .font(.footnote.italic())
                         .foregroundColor(textSecondary)
                         .lineLimit(1)
                 }
@@ -499,10 +504,10 @@ struct ThemedConversationRow: View {
                 HStack(spacing: 4) {
                     senderLabel
                     Image(systemName: "flame")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundColor(accent)
                     Text(String(localized: "conversation.summary.view_once", defaultValue: "1 message vue unique"))
-                        .font(.system(size: 13).italic())
+                        .font(.footnote.italic())
                         .foregroundColor(accent)
                         .lineLimit(1)
                 }
@@ -517,7 +522,7 @@ struct ThemedConversationRow: View {
                     standardMessageContent(showEphemeralIcon: false)
                 } else {
                     Text("")
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundColor(textSecondary)
                 }
             }
@@ -528,7 +533,7 @@ struct ThemedConversationRow: View {
     private var senderLabel: some View {
         if let name = conversation.lastMessageSenderName, !name.isEmpty {
             Text(name)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.caption2.weight(.semibold))
                 .foregroundColor(accent)
                 .lineLimit(1)
                 .layoutPriority(1)
@@ -540,7 +545,7 @@ struct ThemedConversationRow: View {
     private func attachmentIcon(for mimeType: String) -> some View {
         let display = AttachmentDisplay.make(for: mimeType)
         return Image(systemName: display.icon)
-            .font(.system(size: 12, weight: .medium))
+            .font(.caption.weight(.medium))
             .foregroundColor(display.tintColor)
     }
 
@@ -567,7 +572,7 @@ struct ThemedConversationRow: View {
         }
 
         return Text(meta)
-            .font(.system(size: 13))
+            .font(.footnote)
             .foregroundColor(textSecondary)
             .lineLimit(1)
     }
@@ -617,10 +622,10 @@ private struct ConversationAvatarView: View {
 
     private var directContextMenuItems: [AvatarContextMenuItem] {
         var items: [AvatarContextMenuItem] = []
-        items.append(AvatarContextMenuItem(label: "Conversation", icon: "info.circle.fill") {
+        items.append(AvatarContextMenuItem(label: String(localized: "Conversation", bundle: .main), icon: "info.circle.fill") {
             onViewConversationInfo?()
         })
-        items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle.fill") {
+        items.append(AvatarContextMenuItem(label: String(localized: "Voir le profil", bundle: .main), icon: "person.circle.fill") {
             onViewProfile?()
         })
         return items
@@ -628,12 +633,12 @@ private struct ConversationAvatarView: View {
 
     private var groupContextMenuItems: [AvatarContextMenuItem] {
         var items: [AvatarContextMenuItem] = []
-        items.append(AvatarContextMenuItem(label: "Infos conversation", icon: "info.circle.fill") {
+        items.append(AvatarContextMenuItem(label: String(localized: "Infos conversation", bundle: .main), icon: "info.circle.fill") {
             onViewConversationInfo?()
         })
         let sharableTypes: [MeeshyConversation.ConversationType] = [.group, .public, .global, .broadcast]
         if sharableTypes.contains(conversation.type), let handler = onCreateShareLink {
-            items.append(AvatarContextMenuItem(label: "Créer un lien de partage", icon: "link.badge.plus") {
+            items.append(AvatarContextMenuItem(label: String(localized: "menu.create_share_link", defaultValue: "Créer un lien de partage", bundle: .main), icon: "link.badge.plus") {
                 handler()
             })
         }
@@ -673,7 +678,7 @@ private struct ConversationAvatarView: View {
             // Last seen tooltip
             if showLastSeenTooltip, let text = conversation.lastSeenText {
                 Text(text)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
