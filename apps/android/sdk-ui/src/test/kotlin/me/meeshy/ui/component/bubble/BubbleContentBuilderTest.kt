@@ -3,7 +3,6 @@ package me.meeshy.ui.component.bubble
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
-import me.meeshy.sdk.model.ApiMessageReplyPreview
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.ApiTextTranslation
 import org.junit.Test
@@ -135,6 +134,44 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `a reply to a deleted message carries the replyToDeleted flag and no preview text`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(
+                    id = "r1",
+                    content = "secret",
+                    senderDisplayName = "Alice",
+                    deletedAt = "2026-05-18T10:00:00Z",
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.replyToDeleted).isTrue()
+        assertThat(content.replyToText).isNull()
+        assertThat(content.replyToSenderName).isEqualTo("Alice")
+    }
+
+    @Test
+    fun `a reply to a live message keeps its preview text`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(
+                    id = "r1",
+                    content = "original",
+                    senderDisplayName = "Alice",
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.replyToDeleted).isFalse()
+        assertThat(content.replyToText).isEqualTo("original")
+    }
+
+    @Test
     fun `the sender name shows only for incoming messages when requested`() {
         val sender = ApiMessageSender(displayName = "Alice")
 
@@ -217,31 +254,4 @@ class BubbleContentBuilderTest {
         assertThat(content.reactions.single { it.emoji == "🔥" }.includesMe).isFalse()
     }
 
-    @Test
-    fun `a reply to a live message keeps its preview text`() {
-        val content = BubbleContentBuilder.build(
-            message().copy(
-                replyTo = ApiMessageReplyPreview(id = "r1", content = "Original", senderDisplayName = "Ana"),
-            ),
-            currentUserId = "me",
-            preferences = french,
-        )
-
-        assertThat(content.replyToText).isEqualTo("Original")
-        assertThat(content.replyToIsDeleted).isFalse()
-    }
-
-    @Test
-    fun `a reply to a deleted message exposes the deleted flag without baked text`() {
-        val content = BubbleContentBuilder.build(
-            message().copy(
-                replyTo = ApiMessageReplyPreview(id = "r1", content = "Original", deletedAt = "2026-06-12T00:00:00Z"),
-            ),
-            currentUserId = "me",
-            preferences = french,
-        )
-
-        assertThat(content.replyToText).isNull()
-        assertThat(content.replyToIsDeleted).isTrue()
-    }
 }

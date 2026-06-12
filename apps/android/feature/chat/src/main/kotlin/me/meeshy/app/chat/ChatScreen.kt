@@ -52,7 +52,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -315,7 +317,7 @@ private fun MessageActionsSheet(
 private fun QuickReactionButton(emoji: String, isMine: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(44.dp)
+            .size(48.dp)
             .clip(CircleShape)
             .background(
                 if (isMine) MeeshyPalette.Indigo500.copy(alpha = 0.22f) else Color.Transparent,
@@ -343,6 +345,7 @@ private fun SheetAction(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
+            .semantics { role = Role.Button }
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
@@ -431,13 +434,13 @@ private fun ChatComposer(
                     Icon(
                         imageVector = Icons.Filled.Edit,
                         contentDescription = null,
-                        tint = MeeshyPalette.Indigo400,
+                        tint = accentColor,
                         modifier = Modifier.size(16.dp),
                     )
                     Text(
                         text = stringResource(R.string.chat_editing_label),
                         style = MaterialTheme.typography.labelMedium,
-                        color = MeeshyPalette.Indigo400,
+                        color = accentColor,
                         modifier = Modifier
                             .weight(1f)
                             .padding(start = MeeshySpacing.xs),

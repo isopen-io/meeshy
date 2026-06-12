@@ -495,14 +495,40 @@
     "links": {
       "noDescription": "Aucune description",
       "loading": "Chargement des liens...",
-      "empty": "Aucun lien de partage"
+      "empty": "Aucun lien de partage",
+      "title": "Liens de partage",
+      "defaultName": "Lien de partage",
+      "statusActive": "Actif",
+      "statusExpired": "Expiré",
+      "statusDisabled": "Désactivé",
+      "copy": "Copier",
+      "createdBy": "Créé par :",
+      "createdAt": "Créé le :",
+      "permissions": "Permissions",
+      "permissionMessages": "Messages",
+      "permissionImages": "Images",
+      "permissionFiles": "Fichiers",
+      "permissionHistory": "Historique",
+      "restrictions": "Restrictions",
+      "languagesLabel": "Langues :",
+      "countriesLabel": "Pays :",
+      "activeLinks": "Liens actifs ({count})",
+      "expiredLinks": "Liens expirés ({count})"
     },
     "inviteModal": {
       "searchError": "Erreur lors de la recherche d'utilisateurs",
       "inviteSuccess": "{count} utilisateur(s) invité(s) avec succès",
       "partialError": "{count} invitation(s) ont échoué",
       "inviteError": "Erreur lors de l'invitation des utilisateurs",
-      "noUsersFound": "Aucun utilisateur trouvé"
+      "noUsersFound": "Aucun utilisateur trouvé",
+      "title": "Inviter des utilisateurs",
+      "selectedUsers": "Utilisateurs sélectionnés ({count})",
+      "searchResults": "Résultats de recherche",
+      "selected": "Sélectionné",
+      "add": "Ajouter",
+      "cancel": "Annuler",
+      "inviting": "Invitation en cours...",
+      "inviteButton": "Inviter {count} utilisateur(s)"
     },
     "drawer": {
       "title": "Options",
@@ -604,6 +630,18 @@
       "attachFiles": "Sélectionner des fichiers à joindre",
       "recordVoice": "Enregistrer un message vocal",
       "attachFile": "Joindre un fichier"
+    },
+    "userSelector": {
+      "subtitle": "Messagerie avec traduction automatique côté client",
+      "selectPrompt": "Sélectionnez un utilisateur pour commencer à discuter",
+      "online": "En ligne",
+      "offline": "Hors ligne",
+      "systemLanguage": "Système :",
+      "regionalLanguage": "Région :",
+      "customLanguage": "Personnalisée :",
+      "selectedUser": "Utilisateur sélectionné",
+      "loginAs": "Vous allez vous connecter en tant que {username}",
+      "login": "Se connecter"
     }
   }
 }

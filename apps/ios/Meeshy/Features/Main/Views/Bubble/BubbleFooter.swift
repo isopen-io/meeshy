@@ -45,7 +45,7 @@ struct BubbleFooter: View, Equatable {
                         HStack(spacing: 3) {
                             deliveryView(tint: compactMetaColor, readTint: readColor)
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.caption2.weight(.bold))
                                 .foregroundColor(MeeshyColors.error)
                         }
                         .contentShape(Rectangle())
@@ -89,7 +89,7 @@ struct BubbleFooter: View, Equatable {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 4) {
                         Text(sender.name)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.footnote.weight(.semibold))
                             .lineLimit(1)
                         roleBadge(sender.role)
                         metaLeading
@@ -98,7 +98,7 @@ struct BubbleFooter: View, Equatable {
                     }
                     if let username = sender.username {
                         Text(username)
-                            .font(.system(size: 11))
+                            .font(.caption2)
                             .foregroundColor(metaColor.opacity(0.8))
                             .lineLimit(1)
                     }
@@ -121,7 +121,7 @@ struct BubbleFooter: View, Equatable {
             HStack(spacing: 3) {
                 if let timestamp = model.timestamp {
                     Text(timestamp)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.caption2.weight(.semibold))
                         .foregroundColor(.white)
                 }
                 deliveryView(tint: .white.opacity(0.85), readTint: MeeshyColors.indigo400)
@@ -152,7 +152,7 @@ struct BubbleFooter: View, Equatable {
         if let onTranslate = actions.onTranslate {
             Button(action: { onTranslate(); HapticFeedback.light() }) {
                 Image(systemName: "translate")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(MeeshyColors.indigo400)
             }
             .buttonStyle(.plain)
@@ -183,7 +183,7 @@ struct BubbleFooter: View, Equatable {
                     HStack(spacing: 3) {
                         deliveryView(tint: metaColor, readTint: readColor)
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.caption2.weight(.bold))
                             .foregroundColor(MeeshyColors.error)
                     }
                     .contentShape(Rectangle())
@@ -241,7 +241,7 @@ struct BubbleFooter: View, Equatable {
         } label: {
             VStack(spacing: 1) {
                 Text(display?.flag ?? flag.code.uppercased())
-                    .font(.system(size: flag.isActive ? 12 : 10))
+                    .font(flag.isActive ? .caption : .caption2)
                 if flag.isActive {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
@@ -259,9 +259,9 @@ struct BubbleFooter: View, Equatable {
     private func roleBadge(_ role: MemberRole?) -> some View {
         if let role, role != .member {
             Label {
-                Text(role.displayName).font(.system(size: 11))
+                Text(role.displayName).font(.caption2)
             } icon: {
-                Image(systemName: role.icon).font(.system(size: 11))
+                Image(systemName: role.icon).font(.caption2)
             }
             .foregroundColor(role == .creator ? MeeshyColors.warning : MeeshyColors.indigo500)
         }
@@ -270,10 +270,18 @@ struct BubbleFooter: View, Equatable {
     private func avatarMenu(sender: SenderIdentity) -> [AvatarContextMenuItem]? {
         var items: [AvatarContextMenuItem] = []
         if let onViewStory = actions.onViewStory, sender.storyRing != .none {
-            items.append(AvatarContextMenuItem(label: "Voir la story", icon: "play.circle.fill", action: onViewStory))
+            items.append(AvatarContextMenuItem(
+                label: String(localized: "bubble.avatar.viewStory", defaultValue: "Voir la story", bundle: .main),
+                icon: "play.circle.fill",
+                action: onViewStory
+            ))
         }
         if let onSenderTap = actions.onSenderTap {
-            items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle", action: onSenderTap))
+            items.append(AvatarContextMenuItem(
+                label: String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main),
+                icon: "person.circle",
+                action: onSenderTap
+            ))
         }
         return items.isEmpty ? nil : items
     }

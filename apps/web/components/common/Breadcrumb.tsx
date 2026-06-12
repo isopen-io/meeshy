@@ -20,28 +20,28 @@ interface BreadcrumbProps {
   className?: string;
 }
 
-const DEFAULT_LABEL_MAP: Record<string, string> = {
-  admin: 'Admin',
-  users: 'Utilisateurs',
-  analytics: 'Analytics',
-  moderation: 'Modération',
-  settings: 'Paramètres',
-  messages: 'Messages',
-  conversations: 'Conversations',
-  communities: 'Communautés',
-  broadcasts: 'Diffusions',
-  reports: 'Rapports',
-  ranking: 'Classement',
-  agent: 'Agent IA',
-  monitoring: 'Monitoring',
-  notifications: 'Notifications',
-  'audit-logs': 'Journaux d\'audit',
-  'tracking-links': 'Liens de tracking',
-  'share-links': 'Liens de partage',
-  languages: 'Langues',
-  dashboard: 'Tableau de bord',
-  contacts: 'Contacts',
-  feeds: 'Feeds',
+const DEFAULT_LABEL_KEYS: Record<string, string> = {
+  admin: 'breadcrumbLabels.admin',
+  users: 'breadcrumbLabels.users',
+  analytics: 'breadcrumbLabels.analytics',
+  moderation: 'breadcrumbLabels.moderation',
+  settings: 'breadcrumbLabels.settings',
+  messages: 'breadcrumbLabels.messages',
+  conversations: 'breadcrumbLabels.conversations',
+  communities: 'breadcrumbLabels.communities',
+  broadcasts: 'breadcrumbLabels.broadcasts',
+  reports: 'breadcrumbLabels.reports',
+  ranking: 'breadcrumbLabels.ranking',
+  agent: 'breadcrumbLabels.agent',
+  monitoring: 'breadcrumbLabels.monitoring',
+  notifications: 'breadcrumbLabels.notifications',
+  'audit-logs': 'breadcrumbLabels.auditLogs',
+  'tracking-links': 'breadcrumbLabels.trackingLinks',
+  'share-links': 'breadcrumbLabels.shareLinks',
+  languages: 'breadcrumbLabels.languages',
+  dashboard: 'breadcrumbLabels.dashboard',
+  contacts: 'breadcrumbLabels.contacts',
+  feeds: 'breadcrumbLabels.feeds',
 };
 
 export function Breadcrumb({ segments, labelMap, className }: BreadcrumbProps) {
@@ -56,14 +56,18 @@ export function Breadcrumb({ segments, labelMap, className }: BreadcrumbProps) {
     const parts = pathname.split('/').filter(Boolean);
     if (parts.length <= 1) return [];
 
-    const merged = { ...DEFAULT_LABEL_MAP, ...labelMap };
+    return parts.map((part, i) => {
+      const fallback = part.charAt(0).toUpperCase() + part.slice(1).replace(/-/g, ' ');
+      const labelKey = DEFAULT_LABEL_KEYS[part];
+      const defaultLabel = labelKey ? t(labelKey, fallback) : fallback;
 
-    return parts.map((part, i) => ({
-      label: merged[part] ?? part.charAt(0).toUpperCase() + part.slice(1).replace(/-/g, ' '),
-      href: '/' + parts.slice(0, i + 1).join('/'),
-      isCurrent: i === parts.length - 1,
-    }));
-  }, [pathname, segments, labelMap]);
+      return {
+        label: labelMap?.[part] ?? defaultLabel,
+        href: '/' + parts.slice(0, i + 1).join('/'),
+        isCurrent: i === parts.length - 1,
+      };
+    });
+  }, [pathname, segments, labelMap, t]);
 
   if (resolvedSegments.length === 0) return null;
 

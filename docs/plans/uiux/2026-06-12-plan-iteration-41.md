@@ -1,4 +1,4 @@
-# UI/UX Plan — Iteration 33 (2026-06-12)
+# UI/UX Plan — Iteration 41 (2026-06-12)
 
 ## Objective
 1. Internationalize the web search page (new `search` namespace, 4 locales) + fix hardcoded fr-FR date locale + a11y labels (web)

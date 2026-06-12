@@ -81,11 +81,10 @@ public fun MessageBubble(
                 )
             }
 
-            if (content.replyToText != null || content.replyToIsDeleted) {
+            if (content.replyToText != null || content.replyToDeleted) {
                 ReplyPreview(
                     senderName = content.replyToSenderName,
-                    previewText = content.replyToText
-                        ?: stringResource(R.string.bubble_message_deleted),
+                    previewText = content.replyToText ?: stringResource(R.string.bubble_message_deleted),
                     accentColor = onColor,
                     modifier = Modifier.padding(bottom = MeeshySpacing.xs),
                 )
@@ -274,7 +273,7 @@ private fun DeliveryStatusIcon(
         DeliveryStatus.Read -> Icon(
             imageVector = Icons.Filled.DoneAll,
             contentDescription = stringResource(R.string.bubble_status_read),
-            tint = Color(0xFF60A5FA),
+            tint = MeeshyTheme.tokens.info,
             modifier = Modifier.size(16.dp),
         )
         DeliveryStatus.Failed -> Icon(

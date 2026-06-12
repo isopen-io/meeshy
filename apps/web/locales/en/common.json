@@ -223,7 +223,44 @@
     "limitReached": "Limit reached: {limit} {category}s maximum",
     "filesAdded": "Only {count} file(s) added",
     "send": "Send",
-    "noTrending": "No trends at the moment"
+    "noTrending": "No trends at the moment",
+    "breadcrumbLabels": {
+      "admin": "Admin",
+      "users": "Users",
+      "analytics": "Analytics",
+      "moderation": "Moderation",
+      "settings": "Settings",
+      "messages": "Messages",
+      "conversations": "Conversations",
+      "communities": "Communities",
+      "broadcasts": "Broadcasts",
+      "reports": "Reports",
+      "ranking": "Ranking",
+      "agent": "AI Agent",
+      "monitoring": "Monitoring",
+      "notifications": "Notifications",
+      "auditLogs": "Audit logs",
+      "trackingLinks": "Tracking links",
+      "shareLinks": "Share links",
+      "languages": "Languages",
+      "dashboard": "Dashboard",
+      "contacts": "Contacts",
+      "feeds": "Feeds"
+    },
+    "newStory": "New story",
+    "publish": "Publish",
+    "storyPlaceholder": "Type your story...",
+    "replyPlaceholder": "Reply...",
+    "mediaCategory": {
+      "photo": "photo",
+      "video": "video",
+      "audio": "audio"
+    },
+    "storyVisibility": {
+      "public": "Public",
+      "friends": "Friends",
+      "private": "Private"
+    }
   },
   "copied": "Copied",
   "never": "Never"

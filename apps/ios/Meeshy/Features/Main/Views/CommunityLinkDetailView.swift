@@ -83,9 +83,14 @@ struct CommunityLinkDetailView: View {
 
     private var statsSection: some View {
         HStack(spacing: 12) {
-            communityStatCard("\(link.memberCount)", label: "Membres", icon: "person.fill", color: "F8B500")
-            communityStatCard(link.isActive ? "Actif" : "Inactif",
-                              label: "Statut", icon: "checkmark.circle.fill",
+            communityStatCard("\(link.memberCount)",
+                              label: String(localized: "communityLink.members", defaultValue: "Membres", bundle: .main),
+                              icon: "person.fill", color: "F8B500")
+            communityStatCard(link.isActive
+                              ? String(localized: "common.active", defaultValue: "Actif", bundle: .main)
+                              : String(localized: "common.inactive", defaultValue: "Inactif", bundle: .main),
+                              label: String(localized: "communityLink.status", defaultValue: "Statut", bundle: .main),
+                              icon: "checkmark.circle.fill",
                               color: link.isActive ? "2ECC71" : "888888")
         }
     }
@@ -106,14 +111,15 @@ struct CommunityLinkDetailView: View {
 
     private var infoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("INFORMATIONS").font(.caption.weight(.semibold))
+            Text(String(localized: "communityLink.informations", defaultValue: "INFORMATIONS", bundle: .main))
+                .font(.caption.weight(.semibold))
                 .foregroundColor(theme.textSecondary).kerning(0.8)
             VStack(spacing: 0) {
-                infoRow("Identifiant", value: link.identifier)
+                infoRow(String(localized: "communityLink.identifier", defaultValue: "Identifiant", bundle: .main), value: link.identifier)
                 Divider().padding(.leading, 16)
-                infoRow("Lien complet", value: link.joinUrl)
+                infoRow(String(localized: "communityLink.fullLink", defaultValue: "Lien complet", bundle: .main), value: link.joinUrl)
                 Divider().padding(.leading, 16)
-                infoRow("Créé le", value: link.createdAt.formatted(date: .abbreviated, time: .shortened))
+                infoRow(String(localized: "communityLink.createdAt", defaultValue: "Créé le", bundle: .main), value: link.createdAt.formatted(date: .abbreviated, time: .shortened))
             }
             .background(RoundedRectangle(cornerRadius: 14)
                 .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
