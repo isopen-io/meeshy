@@ -485,7 +485,13 @@
         "MEMBER": "Membre",
         "MODERATOR": "Modérateur",
         "ADMIN": "Administrateur"
-      }
+      },
+      "addUserSection": "Ajouter un utilisateur",
+      "addAction": "Ajouter",
+      "noUserFound": "Aucun utilisateur trouvé",
+      "allAlreadyMembersOne": "1 utilisateur trouvé — déjà membre",
+      "allAlreadyMembersOther": "{count} utilisateurs trouvés — tous déjà membres",
+      "loadMoreRemaining": "Charger plus ({count} restants)"
     },
     "createLinkButton": {
       "notAuthenticated": "Impossible de créer le lien : utilisateur non connecté",
@@ -659,6 +665,12 @@
       "todayAt": "Aujourd'hui à {time}",
       "yesterdayAt": "Hier à {time}",
       "dayAt": "{day} à {time}"
+    },
+    "timeCompact": {
+      "now": "maintenant",
+      "minutes": "{count} min",
+      "hours": "{count}h",
+      "days": "{count}j"
     }
   }
 }

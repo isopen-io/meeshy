@@ -54,7 +54,7 @@ export function LinkTypeStep({
   isLoadingConversations,
   onSelectNewConversation
 }: LinkTypeStepProps) {
-  const { t } = useI18n('modals');
+  const { t, locale } = useI18n('modals');
 
   return (
     <div className="space-y-6">
@@ -160,7 +160,7 @@ export function LinkTypeStep({
                           {getConversationTypeLabel(conversation.type)}
                         </Badge>
                         <span className="text-xs text-muted-foreground">
-                          {new Date(conversation.createdAt).toLocaleDateString()}
+                          {new Date(conversation.createdAt).toLocaleDateString(locale)}
                         </span>
                       </div>
                     </div>

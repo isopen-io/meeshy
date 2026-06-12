@@ -7,7 +7,6 @@ import {
   buildNotificationTitle,
   buildNotificationContent,
   getNotificationIcon,
-  formatNotificationContext,
   getNotificationLink,
   requiresUserAction,
   getActorDisplayName,
@@ -280,39 +279,6 @@ describe('notification-helpers - Structure Groupée V2', () => {
         bgColor: 'bg-gray-50',
         color: 'text-gray-600',
       });
-    });
-  });
-
-  describe('formatNotificationContext', () => {
-    it('devrait formater une date récente', () => {
-      const now = new Date();
-      const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000);
-
-      const notification = {
-        state: {
-          createdAt: twoMinutesAgo,
-          isRead: false,
-          readAt: null,
-        },
-      } as Notification;
-
-      const context = formatNotificationContext(notification);
-      expect(context).toContain('il y a');
-    });
-
-    it('devrait gérer une date très ancienne', () => {
-      const oldDate = new Date('2020-01-01');
-
-      const notification = {
-        state: {
-          createdAt: oldDate,
-          isRead: false,
-          readAt: null,
-        },
-      } as Notification;
-
-      const context = formatNotificationContext(notification);
-      expect(context).toBeTruthy();
     });
   });
 

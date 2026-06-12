@@ -29,6 +29,14 @@ jest.mock('@/services/users.service', () => ({
   },
 }));
 
+// Mock i18n hook (avoids pulling the stores/socketio import graph into jest)
+jest.mock('@/hooks/useI18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => key,
+    locale: 'fr',
+  }),
+}));
+
 // Mock query hooks
 const mockCurrentUserData = jest.fn();
 const mockOtherUserData = jest.fn();
