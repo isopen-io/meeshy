@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
-import { sendSuccess, sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 
@@ -11,20 +11,14 @@ const DASHBOARD_CACHE_TTL = 600; // 10 minutes
 const requireDashboardPermission = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return reply.status(401).send({
-      success: false,
-      message: 'Authentification requise'
-    });
+    return sendUnauthorized(reply, 'Authentification requise');
   }
 
   const userRole = authContext.registeredUser.role;
   const canViewDashboard = ['BIGBOSS', 'ADMIN', 'AUDIT', 'ANALYST'].includes(userRole);
 
   if (!canViewDashboard) {
-    return reply.status(403).send({
-      success: false,
-      message: 'Permission insuffisante pour voir le tableau de bord'
-    });
+    return sendForbidden(reply, 'Permission insuffisante pour voir le tableau de bord');
   }
 };
 
@@ -142,10 +136,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, { statistics, recentActivity, userPermissions, timestamp: now.toISOString() });
     } catch (error) {
       logError(fastify.log, 'Error fetching admin dashboard stats:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération des statistiques'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des statistiques');
     }
   });
 

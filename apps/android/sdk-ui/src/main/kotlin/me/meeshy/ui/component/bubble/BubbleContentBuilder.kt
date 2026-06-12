@@ -57,6 +57,7 @@ public object BubbleContentBuilder {
             replyToText = replyToText,
             replyToDeleted = replyToDeleted,
             replyToSenderName = message.replyTo?.senderDisplayName,
+            replyToIsDeleted = replyToIsDeleted,
             isPending = isPending,
             clientMessageId = message.clientMessageId,
         )

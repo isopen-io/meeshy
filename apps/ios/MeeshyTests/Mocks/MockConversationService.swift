@@ -58,6 +58,10 @@ final class MockConversationService: ConversationServiceProviding {
     /// precedence over `listPageResult` and is invoked with the cursor
     /// the ViewModel passed in.
     var listPageHandler: (@Sendable (String?) -> Result<ConversationPage, Error>)?
+    /// Artificial latency before listPage returns — lets concurrency tests
+    /// guarantee that two calls actually overlap instead of racing the
+    /// instant-return mock (the in-flight guard only coalesces overlap).
+    var listPageDelayNanoseconds: UInt64 = 0
 
     var getByIdCallCount = 0
     var lastGetByIdConversationId: String?
@@ -138,12 +142,14 @@ final class MockConversationService: ConversationServiceProviding {
 
     nonisolated func listPage(before cursor: String?, limit: Int, currentUserId: String) async throws -> ConversationPage {
         let handler = await MainActor.run { listPageHandler }
+        let delay = await MainActor.run { listPageDelayNanoseconds }
         await MainActor.run {
             listPageCallCount += 1
             lastListPageCursor = cursor
             lastListPageLimit = limit
             lastListPageCurrentUserId = currentUserId
         }
+        if delay > 0 { try? await Task.sleep(nanoseconds: delay) }
         if let handler {
             return try handler(cursor).get()
         }
@@ -303,6 +309,7 @@ final class MockConversationService: ConversationServiceProviding {
         lastListPageLimit = nil
         lastListPageCurrentUserId = nil
         listPageHandler = nil
+        listPageDelayNanoseconds = 0
         getByIdCallCount = 0
         lastGetByIdConversationId = nil
         createCallCount = 0

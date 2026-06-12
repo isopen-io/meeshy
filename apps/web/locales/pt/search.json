@@ -1,0 +1,72 @@
+{
+  "search": {
+    "pageTitle": "Pesquisa",
+    "hero": {
+      "title": "Pesquisa",
+      "subtitle": "Descubra usuários, conversas e comunidades no Meeshy"
+    },
+    "form": {
+      "inputLabel": "Pesquisar",
+      "placeholder": "Pesquisar usuários, conversas, comunidades...",
+      "submit": "Pesquisar",
+      "searching": "Pesquisando..."
+    },
+    "tabs": {
+      "users": "Usuários",
+      "conversations": "Conversas",
+      "communities": "Comunidades"
+    },
+    "results": {
+      "count": "{count} resultado para \"{query}\"",
+      "countPlural": "{count} resultados para \"{query}\"",
+      "loading": "Pesquisando..."
+    },
+    "empty": {
+      "users": "Nenhum usuário encontrado",
+      "conversations": "Nenhuma conversa encontrada",
+      "communities": "Nenhuma comunidade encontrada",
+      "hint": "Tente outro termo de pesquisa"
+    },
+    "user": {
+      "online": "Online",
+      "offline": "Offline",
+      "moreActions": "Mais ações",
+      "cancelRequest": "Cancelar solicitação",
+      "addFriend": "Adicionar amigo",
+      "viewProfile": "Ver perfil",
+      "sendMessage": "Enviar mensagem",
+      "cancel": "Cancelar",
+      "add": "Adicionar"
+    },
+    "conversation": {
+      "untitled": "Conversa sem título",
+      "typeDirect": "Direta",
+      "typeGroup": "Grupo",
+      "typePublic": "Pública",
+      "typeGlobal": "Global",
+      "unread": "{count} mensagem não lida",
+      "unreadPlural": "{count} mensagens não lidas",
+      "lastActivity": "Última atividade: {date}"
+    },
+    "community": {
+      "private": "Privada",
+      "public": "Pública",
+      "member": "{count} membro",
+      "memberPlural": "{count} membros",
+      "join": "Entrar"
+    },
+    "toasts": {
+      "loginRequired": "Você precisa estar conectado para pesquisar",
+      "searchError": "Erro ao pesquisar",
+      "requestSent": "Solicitação de amizade enviada",
+      "requestError": "Erro ao enviar a solicitação",
+      "requestCancelled": "Solicitação cancelada",
+      "cancelError": "Erro ao cancelar a solicitação",
+      "conversationCreated": "Conversa criada",
+      "conversationError": "Erro ao criar a conversa",
+      "joinedCommunity": "Você entrou na comunidade",
+      "joinError": "Não foi possível entrar na comunidade",
+      "joinAttemptError": "Erro ao tentar entrar na comunidade"
+    }
+  }
+}

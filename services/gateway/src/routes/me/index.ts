@@ -14,7 +14,7 @@ import { userPreferencesRoutes } from './preferences';
 import { deleteAccountRoutes } from './delete-account';
 import { dataExportRoutes } from './export';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { sendSuccess } from '../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendNotFound } from '../../utils/response.js';
 
 export default async function meRoutes(fastify: FastifyInstance) {
   // Register preferences routes under /me/preferences
@@ -75,10 +75,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
 
       if (!authContext?.isAuthenticated || !authContext?.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          message: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const user = await fastify.prisma.user.findUnique({
@@ -94,10 +91,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.status(404).send({
-          success: false,
-          message: 'User not found'
-        });
+        return sendNotFound(reply, 'User not found');
       }
 
       return sendSuccess(reply, user);

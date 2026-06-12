@@ -59,11 +59,12 @@ struct PostTranslationSheet: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.subheadline.weight(.semibold))
                             .foregroundColor(theme.textSecondary)
                             .frame(width: 32, height: 32)
                             .background(Circle().fill(theme.inputBackground))
                     }
+                    .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                 }
             }
         }
@@ -84,18 +85,18 @@ struct PostTranslationSheet: View {
                     let display = LanguageDisplay.from(code: post.originalLanguage)
                     Text(display?.flag ?? languageFlag(post.originalLanguage ?? "?"))
                     Text("\(String(localized: "feed.post.translation.original", defaultValue: "Original", bundle: .main)) (\(display?.name ?? post.originalLanguage ?? "?"))")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
 
                     Spacer()
 
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 16))
+                        .font(.callout)
                         .foregroundColor(MeeshyColors.success)
                 }
 
                 Text(post.content)
-                    .font(.system(size: 15))
+                    .font(.subheadline)
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(4)
                     .multilineTextAlignment(.leading)
@@ -119,7 +120,7 @@ struct PostTranslationSheet: View {
     private var translationsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(String(localized: "feed.post.translation.available", defaultValue: "Traductions disponibles", bundle: .main))
-                .font(.system(size: 14, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
 
             ForEach(Array(availableTranslations.keys.sorted()), id: \.self) { lang in
@@ -131,16 +132,16 @@ struct PostTranslationSheet: View {
                     HStack(spacing: 10) {
                         let display = LanguageDisplay.from(code: lang)
                         Text(display?.flag ?? languageFlag(lang))
-                            .font(.system(size: 20))
+                            .font(.title3)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(display?.name ?? Locale.current.localizedString(forLanguageCode: lang) ?? lang)
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.subheadline.weight(.medium))
                                 .foregroundColor(theme.textPrimary)
 
                             if let text = availableTranslations[lang]?.text {
                                 Text(text)
-                                    .font(.system(size: 12))
+                                    .font(.caption)
                                     .foregroundColor(theme.textMuted)
                                     .lineLimit(1)
                             }
@@ -150,12 +151,12 @@ struct PostTranslationSheet: View {
 
                         if let confidence = availableTranslations[lang]?.confidenceScore {
                             Text("\(Int(confidence * 100))%")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.caption.weight(.medium))
                                 .foregroundColor(theme.textMuted)
                         }
 
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.caption.weight(.semibold))
                             .foregroundColor(theme.textMuted)
                     }
                     .padding(12)
@@ -178,17 +179,17 @@ struct PostTranslationSheet: View {
     private var requestTranslationSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(String(localized: "feed.post.translation.other_languages", defaultValue: "Autres langues", bundle: .main))
-                .font(.system(size: 14, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
 
             ForEach(missingLanguages, id: \.self) { lang in
                 HStack(spacing: 10) {
                     let display = LanguageDisplay.from(code: lang)
                     Text(display?.flag ?? languageFlag(lang))
-                        .font(.system(size: 20))
+                        .font(.title3)
 
                     Text(display?.name ?? Locale.current.localizedString(forLanguageCode: lang) ?? lang)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .foregroundColor(theme.textPrimary)
 
                     Spacer()
@@ -196,9 +197,9 @@ struct PostTranslationSheet: View {
                     if requestedLanguages.contains(lang) {
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.caption2.weight(.bold))
                             Text(String(localized: "feed.post.translation.requested", defaultValue: "Demandee", bundle: .main))
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.caption2.weight(.medium))
                         }
                         .foregroundColor(MeeshyColors.success)
                     } else if requestingLanguages.contains(lang) {
@@ -222,9 +223,9 @@ struct PostTranslationSheet: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "translate")
-                                    .font(.system(size: 12, weight: .medium))
+                                    .font(.caption.weight(.medium))
                                 Text(String(localized: "feed.post.translation.translate", defaultValue: "Traduire", bundle: .main))
-                                    .font(.system(size: 12, weight: .semibold))
+                                    .font(.caption.weight(.semibold))
                             }
                             .foregroundColor(.white)
                             .padding(.horizontal, 12)
