@@ -1416,12 +1416,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     private func buildFeedMedia(from post: APIPost, fallback uploadResult: TusUploadResult?) -> [FeedMedia] {
         let apiMedia = (post.media ?? []).map { m in
             FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl, thumbHash: m.thumbHash,
-                      thumbnailColor: "4ECDC4", width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
+                      thumbnailColor: MeeshyColors.brandPrimaryHex, width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
         }
         if !apiMedia.isEmpty { return apiMedia }
         if let uploaded = uploadResult {
             return [FeedMedia(id: uploaded.id, type: .image, url: uploaded.fileUrl,
-                              thumbHash: uploaded.thumbHash, thumbnailColor: "4ECDC4",
+                              thumbHash: uploaded.thumbHash, thumbnailColor: MeeshyColors.brandPrimaryHex,
                               width: uploaded.width, height: uploaded.height)]
         }
         return []
