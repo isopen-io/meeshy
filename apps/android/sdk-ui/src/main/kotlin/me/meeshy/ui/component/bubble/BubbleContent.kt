@@ -35,6 +35,7 @@ public data class BubbleContent(
     val reactions: List<ReactionEntry> = emptyList(),
     val replyToText: String? = null,
     val replyToSenderName: String? = null,
+    val replyToDeleted: Boolean = false,
     val isPending: Boolean = false,
     val clientMessageId: String? = null,
 )
