@@ -18,6 +18,7 @@ import javax.inject.Inject
 data class ConversationListUiState(
     val conversations: List<ApiConversation> = emptyList(),
     val isSyncing: Boolean = false,
+    val isUserRefreshing: Boolean = false,
     val showSkeleton: Boolean = false,
     val errorMessage: String? = null,
 )
@@ -63,8 +64,10 @@ class ConversationListViewModel @Inject constructor(
         }
     }
 
+    /** Pull-to-refresh: the visible spinner tracks the user gesture only —
+     * background SWR revalidations stay silent ([ConversationListUiState.isSyncing]). */
     fun refresh() {
-        _state.update { it.copy(errorMessage = null, isSyncing = true) }
+        _state.update { it.copy(errorMessage = null, isSyncing = true, isUserRefreshing = true) }
         viewModelScope.launch {
             try {
                 repository.refresh()
@@ -72,8 +75,10 @@ class ConversationListViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 _state.update {
-                    it.copy(errorMessage = e.message, isSyncing = false, showSkeleton = false)
+                    it.copy(errorMessage = e.message, showSkeleton = false)
                 }
+            } finally {
+                _state.update { it.copy(isUserRefreshing = false, isSyncing = false) }
             }
         }
     }

@@ -183,7 +183,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Splash screen with brand animation + minimum display duration
 
 ## B. Conversations list
-- [ ] Cache-first instant load, cursor-based infinite scroll, pull-to-refresh (branded)
+- [~] Cache-first instant load done ; pull-to-refresh done (`PullToRefreshBox`,
+      spinner gated sur le geste utilisateur — les revalidations SWR de fond
+      restent silencieuses) ; cursor-based infinite scroll / branding pending
 - [ ] Sectioned list with collapsible user categories + pinned section + drag-to-category
 - [ ] Filtering (all/unread/personal/private/open/global/channels/favorites/archived) + search overlay
 - [ ] Communities carousel + category filter chips

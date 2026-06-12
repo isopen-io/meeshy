@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -83,12 +84,18 @@ fun ConversationListScreen(
                 state.conversations.isEmpty() ->
                     CenteredMessage(stringResource(R.string.conversations_empty), null, null)
 
-                else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(state.conversations, key = { it.id }) { conversation ->
-                        ConversationRow(
-                            conversation = conversation,
-                            onClick = { onConversationClick(conversation.id) },
-                        )
+                else -> PullToRefreshBox(
+                    isRefreshing = state.isUserRefreshing,
+                    onRefresh = viewModel::refresh,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        items(state.conversations, key = { it.id }) { conversation ->
+                            ConversationRow(
+                                conversation = conversation,
+                                onClick = { onConversationClick(conversation.id) },
+                            )
+                        }
                     }
                 }
             }

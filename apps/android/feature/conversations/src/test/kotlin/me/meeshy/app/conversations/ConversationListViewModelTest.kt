@@ -113,5 +113,28 @@ class ConversationListViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.errorMessage).isEqualTo("Network unavailable")
+        assertThat(vm.state.value.isUserRefreshing).isFalse()
+    }
+
+    @Test
+    fun pull_to_refresh_spinner_tracks_the_user_gesture_only() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(
+                CacheResult.Stale(
+                    listOf(ApiConversation(id = "c1", title = "Team")),
+                    ageMillis = 0,
+                ),
+            ),
+        )
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.isSyncing).isTrue()
+        assertThat(vm.state.value.isUserRefreshing).isFalse()
+
+        vm.refresh()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.isUserRefreshing).isFalse()
     }
 }
