@@ -161,14 +161,14 @@ struct AboutView: View {
 
     private var liensSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "about.section.links", defaultValue: "Liens", bundle: .main), icon: "link", color: "4ECDC4")
+            sectionHeader(title: String(localized: "about.section.links", defaultValue: "Liens", bundle: .main), icon: "link", color: MeeshyColors.shareAccentHex)
 
             VStack(spacing: 0) {
-                linkRow(icon: "globe", title: String(localized: "about.link.website", defaultValue: "Site web", bundle: .main), url: "https://meeshy.me", color: "4ECDC4")
-                linkRow(icon: "at", title: String(localized: "about.link.twitter", defaultValue: "Twitter / X", bundle: .main), url: "https://twitter.com/meeshy", color: "4ECDC4")
-                linkRow(icon: "chevron.left.forwardslash.chevron.right", title: String(localized: "about.link.github", defaultValue: "GitHub", bundle: .main), url: "https://github.com/meeshy", color: "4ECDC4")
+                linkRow(icon: "globe", title: String(localized: "about.link.website", defaultValue: "Site web", bundle: .main), url: "https://meeshy.me", color: MeeshyColors.shareAccentHex)
+                linkRow(icon: "at", title: String(localized: "about.link.twitter", defaultValue: "Twitter / X", bundle: .main), url: "https://twitter.com/meeshy", color: MeeshyColors.shareAccentHex)
+                linkRow(icon: "chevron.left.forwardslash.chevron.right", title: String(localized: "about.link.github", defaultValue: "GitHub", bundle: .main), url: "https://github.com/meeshy", color: MeeshyColors.shareAccentHex)
             }
-            .background(sectionBackground(tint: "4ECDC4"))
+            .background(sectionBackground(tint: MeeshyColors.shareAccentHex))
         }
     }
 

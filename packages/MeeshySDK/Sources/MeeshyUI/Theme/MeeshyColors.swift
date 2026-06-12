@@ -52,6 +52,8 @@ public nonisolated struct MeeshyColors {
     public static let errorStrong = Color(hex: "EF4444")
     /// emerald-500 — stop appuyé des gradients de succès.
     public static let successDeep = Color(hex: "10B981")
+    /// amber-500 — stop appuyé des gradients d'avertissement.
+    public static let warningDeep = Color(hex: "F59E0B")
 
     // MARK: - Semantic Hex Strings (for tint parameters, e.g. ThemeManager.surfaceGradient)
 

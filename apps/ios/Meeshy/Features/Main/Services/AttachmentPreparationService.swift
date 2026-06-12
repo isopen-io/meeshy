@@ -129,7 +129,7 @@ final class AttachmentPreparationService {
 
     func prepareImage(_ image: UIImage,
                              context: MediaContext = .message,
-                             accentColor: String = "4ECDC4") -> PreparingAttachment {
+                             accentColor: String = AttachmentKind.image.hexTintColor) -> PreparingAttachment {
         let prep = PreparingAttachment(kind: .image, initialThumbnail: image, accentColor: accentColor)
         prep.stage = .compressing
         Task { [weak self] in
@@ -143,7 +143,7 @@ final class AttachmentPreparationService {
     func prepareImageData(_ data: Data,
                                  image: UIImage,
                                  context: MediaContext = .message,
-                                 accentColor: String = "4ECDC4") -> PreparingAttachment {
+                                 accentColor: String = AttachmentKind.image.hexTintColor) -> PreparingAttachment {
         let prep = PreparingAttachment(kind: .image, initialThumbnail: image, accentColor: accentColor)
         prep.stage = .compressing
         Task { [weak self] in
@@ -157,7 +157,7 @@ final class AttachmentPreparationService {
     func prepareVideo(sourceURL: URL,
                              deleteSourceAfterCompression: Bool,
                              context: MediaContext = .message,
-                             accentColor: String = "FF6B6B") -> PreparingAttachment {
+                             accentColor: String = AttachmentKind.video.hexTintColor) -> PreparingAttachment {
         let prep = PreparingAttachment(kind: .video, accentColor: accentColor)
         prep.stage = .compressing
         Task { [weak self] in
@@ -195,10 +195,10 @@ final class AttachmentPreparationService {
 
     func preparePhotosPickerItem(_ item: PhotosPickerItem,
                                         context: MediaContext = .message,
-                                        accentColor: String) -> PreparingAttachment {
+                                        accentColor: String = "") -> PreparingAttachment {
         let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
         let resolvedColor = accentColor.isEmpty
-            ? (isVideo ? "FF6B6B" : "4ECDC4")
+            ? (isVideo ? AttachmentKind.video : AttachmentKind.image).hexTintColor
             : accentColor
         let prep = PreparingAttachment(
             kind: isVideo ? .video : .image,

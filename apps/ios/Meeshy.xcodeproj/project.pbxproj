@@ -76,7 +76,6 @@
 		667AF6B8F348C44CC56EFD40 /* ConversationStateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F022E943E745BEF515078916 /* ConversationStateStore.swift */; };
 		689F77EEC404C2A855F716E2 /* CrashDiagnosticsManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D76BBB5EB4ED2304836A9E37 /* CrashDiagnosticsManagerTests.swift */; };
 		6E75FBB8A88317499B405448 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */; };
-		72CD89ACB142EA00D2E6AF80 /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */; };
 		738E225E02495FB6C1A4D074 /* DiscoverViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B66A6D610352D04764BA347D /* DiscoverViewModel.swift */; };
 		75F796AFDAAFB88DFFB87706 /* ConversationView+Composer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB514257655035123C7AD2F8 /* ConversationView+Composer.swift */; };
 		771A2B4444A9EE150DAFDDAA /* AchievementBadgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D6759DBEFCC294911F97F5C /* AchievementBadgeView.swift */; };
@@ -118,7 +117,6 @@
 		AA00BB11CC22DD33EE440001 /* Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440011 /* Conversation.swift */; };
 		AA00BB11CC22DD33EE440002 /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440012 /* Message.swift */; };
 		AA00BB11CC22DD33EE440003 /* FeedModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440013 /* FeedModels.swift */; };
-		AA00BB11CC22DD33EE440004 /* SampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440014 /* SampleData.swift */; };
 		AA00BB11CC22DD33EE440005 /* RootViewComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440015 /* RootViewComponents.swift */; };
 		AA00BB11CC22DD33EE440007 /* MessageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440017 /* MessageModels.swift */; };
 		AA00BB11CC22DD33EE440021 /* FeedPostCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440031 /* FeedPostCard.swift */; };
@@ -660,7 +658,6 @@
 		66F7B674B538960BE3F198D4 /* VoIPDedupRingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoIPDedupRingTests.swift; sourceTree = "<group>"; };
 		674A915642772CC82D9344C6 /* ContactsShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsShared.swift; sourceTree = "<group>"; };
 		67CC3F2F25BE7ED204EC43B5 /* ConversationListView+Overlays.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ConversationListView+Overlays.swift"; sourceTree = "<group>"; };
-		67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageComposer.swift; sourceTree = "<group>"; };
 		6869F392DC8BDAA2D8B5BDA8 /* ConversationLoadingPhaseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationLoadingPhaseTests.swift; sourceTree = "<group>"; };
 		68F3549575D94405B9476C73 /* MeeshyTests/Unit/Views/Bubble/MessageFrameTrackerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/MessageFrameTrackerTests.swift; sourceTree = SOURCE_ROOT; };
 		694F8FDCDD76F6AEB93FFEAE /* OverlayMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayMenu.swift; sourceTree = "<group>"; };
@@ -704,7 +701,6 @@
 		AA00BB11CC22DD33EE440011 /* Conversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Conversation.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440012 /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440013 /* FeedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedModels.swift; sourceTree = "<group>"; };
-		AA00BB11CC22DD33EE440014 /* SampleData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleData.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440015 /* RootViewComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootViewComponents.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440017 /* MessageModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageModels.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440018 /* AuthModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthModels.swift; sourceTree = "<group>"; };
@@ -1212,7 +1208,6 @@
 				AA2000000000001FA2 /* LocationPickerView.swift */,
 				AA5000000000001FA5 /* VideoPreviewView.swift */,
 				ATTLT001000000000000F001 /* AttachmentLoadingTile.swift */,
-				67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */,
 				CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */,
 				CC11DD22EE33FF44AA5500AC /* ComposerModels.swift */,
 				CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */,
@@ -1773,7 +1768,6 @@
 				AA00BB11CC22DD33EE440013 /* FeedModels.swift */,
 				AA00BB11CC22DD33EE440012 /* Message.swift */,
 				AA00BB11CC22DD33EE440017 /* MessageModels.swift */,
-				AA00BB11CC22DD33EE440014 /* SampleData.swift */,
 				AA00BB11CC22DD33EE44001B /* StoryModels.swift */,
 				AA00BB11CC22DD33EE44001A /* PostModels.swift */,
 				AA00BB11CC22DD33EE440018 /* AuthModels.swift */,
@@ -2373,7 +2367,6 @@
 				470F5AC07EAF99E5F119C3E6 /* MeeshyApp.swift in Sources */,
 				009B4248B90F6AC8EE19E3B7 /* AppDelegate.swift in Sources */,
 				MUIEXP002A002A002A002A02 /* MeeshyUIExports.swift in Sources */,
-				72CD89ACB142EA00D2E6AF80 /* MessageComposer.swift in Sources */,
 				63036D51D98A1B79ADC9401D /* OverlayMenu.swift in Sources */,
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* AdaptiveRootView.swift in Sources */,
 				D4E5F6A7B8C9D0E1F2A3B4D9 /* iPadRootView.swift in Sources */,
@@ -2464,7 +2457,6 @@
 				ANONSC00000000002001 /* AnonymousSessionContext.swift in Sources */,
 				ANYCD00000000002001 /* AnyCodable.swift in Sources */,
 				D41332567A1DF21830750E35 /* AnonymousSessionStore.swift in Sources */,
-				AA00BB11CC22DD33EE440004 /* SampleData.swift in Sources */,
 				AA00BB11CC22DD33EE440005 /* RootViewComponents.swift in Sources */,
 				BB22CC33DD44EE55FF660058 /* StoryViewerView+Content.swift in Sources */,
 				82C6C143D1C7470481A1B2FE /* ConversationListView+Rows.swift in Sources */,

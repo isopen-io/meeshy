@@ -601,10 +601,10 @@ struct FeedView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 20)
-                .fill(theme.surfaceGradient(tint: "4ECDC4"))
+                .fill(theme.surfaceGradient(tint: MeeshyColors.brandPrimaryHex))
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(theme.border(tint: "4ECDC4", intensity: 0.25), lineWidth: 1)
+                        .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.25), lineWidth: 1)
                 )
         )
         .padding(.horizontal, 16)
@@ -1024,8 +1024,6 @@ struct FeedView: View {
                     MeeshyAvatar(
                         name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
                         context: .feedComposer,
-                        accentColor: "FF6B6B",
-                        secondaryColor: "4ECDC4",
                         avatarURL: AuthManager.shared.currentUser?.avatar
                     )
 
@@ -1093,7 +1091,7 @@ struct FeedView: View {
 
                 // Upload progress
                 if isUploading, let progress = uploadProgress {
-                    UploadProgressBar(progress: progress, accentColor: "4ECDC4")
+                    UploadProgressBar(progress: progress, accentColor: MeeshyColors.brandPrimaryHex)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 4)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -1106,7 +1104,7 @@ struct FeedView: View {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "4ECDC4"))
+                            .foregroundColor(MeeshyColors.indigo400)
                     }
                     .accessibilityLabel(String(localized: "Ajouter une photo", defaultValue: "Ajouter une photo"))
                     Button { showCamera = true; HapticFeedback.light() } label: {
@@ -1118,13 +1116,13 @@ struct FeedView: View {
                     Button { showEmojiPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "face.smiling.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "F8B500"))
+                            .foregroundColor(MeeshyColors.warning)
                     }
                     .accessibilityLabel(String(localized: "Ajouter un emoji", defaultValue: "Ajouter un emoji"))
                     Button { showFilePicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "doc.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "9B59B6"))
+                            .foregroundColor(MeeshyColors.indigo600)
                     }
                     .accessibilityLabel(String(localized: "Joindre un fichier", defaultValue: "Joindre un fichier"))
                     Button { showLocationPicker = true; HapticFeedback.light() } label: {
@@ -1136,7 +1134,7 @@ struct FeedView: View {
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "FF2E63"))
+                            .foregroundColor(MeeshyColors.brandPrimary)
                     }
                     .accessibilityLabel(String(localized: "Enregistrer un audio", defaultValue: "Enregistrer un audio"))
 
@@ -1173,7 +1171,7 @@ struct FeedView: View {
             .clipShape(RoundedRectangle(cornerRadius: 24))
             .overlay(
                 RoundedRectangle(cornerRadius: 24)
-                    .stroke(theme.border(tint: "4ECDC4", intensity: 0.3), lineWidth: 1)
+                    .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.3), lineWidth: 1)
             )
             .padding(.horizontal, 16)
             .padding(.vertical, 80)
@@ -1197,7 +1195,7 @@ struct FeedView: View {
             .ignoresSafeArea()
         }
         .sheet(isPresented: $showLocationPicker) {
-            LocationPickerView(accentColor: "4ECDC4") { coordinate, address in
+            LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { coordinate, address in
                 handleFeedLocationSelection(coordinate: coordinate, address: address)
             }
         }

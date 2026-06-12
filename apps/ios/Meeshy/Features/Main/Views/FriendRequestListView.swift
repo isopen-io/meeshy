@@ -29,14 +29,14 @@ struct FriendRequestListView: View {
                 dismiss()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
             }
 
             Spacer()
 
             Text(String(localized: "friends.requests.title", defaultValue: "Demandes d'amis", bundle: .main))
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .font(.system(.headline, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -83,11 +83,11 @@ struct FriendRequestListView: View {
                 .foregroundColor(theme.textMuted.opacity(0.4))
 
             Text(String(localized: "friends.requests.empty.title", defaultValue: "Aucune demande", bundle: .main))
-                .font(.system(size: 18, weight: .semibold))
+                .font(.headline)
                 .foregroundColor(theme.textMuted)
 
             Text(String(localized: "friends.requests.empty.subtitle", defaultValue: "Les demandes d'amis apparaitront ici", bundle: .main))
-                .font(.system(size: 14, weight: .medium))
+                .font(.subheadline.weight(.medium))
                 .foregroundColor(theme.textMuted.opacity(0.7))
 
             Spacer()
@@ -98,7 +98,7 @@ struct FriendRequestListView: View {
 
     private func friendRequestRow(_ request: FriendRequest) -> some View {
         let sender = request.sender
-        let name = sender?.name ?? "Inconnu"
+        let name = sender?.name ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main)
         let color = DynamicColorGenerator.colorForName(name)
 
         return HStack(spacing: 14) {
@@ -113,25 +113,25 @@ struct FriendRequestListView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(name)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 if let username = sender?.username {
                     Text("@\(username)")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundColor(theme.textMuted)
                 }
 
                 if let message = request.message, !message.isEmpty {
                     Text(message)
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(2)
                 }
 
-                Text(relativeTime(from: request.createdAt))
-                    .font(.system(size: 11, weight: .medium))
+                Text(ShortRelativeTime.label(for: request.createdAt))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textMuted)
             }
 
@@ -142,7 +142,7 @@ struct FriendRequestListView: View {
                     Task { await viewModel.respond(to: request.id, accepted: false) }
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.caption.weight(.bold))
                         .foregroundColor(theme.textMuted)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(theme.textMuted.opacity(0.12)))
@@ -152,7 +152,7 @@ struct FriendRequestListView: View {
                     Task { await viewModel.respond(to: request.id, accepted: true) }
                 } label: {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.caption.weight(.bold))
                         .foregroundColor(.white)
                         .frame(width: 36, height: 36)
                         .background(
@@ -172,19 +172,6 @@ struct FriendRequestListView: View {
         .padding(.vertical, 12)
     }
 
-    // MARK: - Helpers
-
-    private func relativeTime(from date: Date) -> String {
-        let interval = Date().timeIntervalSince(date)
-        if interval < 60 { return String(localized: "friends.requests.time.just_now", defaultValue: "A l'instant", bundle: .main) }
-        if interval < 3600 { return String(localized: "friends.requests.time.minutes_ago", defaultValue: "Il y a \(Int(interval / 60))min", bundle: .main) }
-        if interval < 86400 { return String(localized: "friends.requests.time.hours_ago", defaultValue: "Il y a \(Int(interval / 3600))h", bundle: .main) }
-        if interval < 604800 { return String(localized: "friends.requests.time.days_ago", defaultValue: "Il y a \(Int(interval / 86400))j", bundle: .main) }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "dd MMM"
-        return formatter.string(from: date)
-    }
 }
 
 // MARK: - ViewModel

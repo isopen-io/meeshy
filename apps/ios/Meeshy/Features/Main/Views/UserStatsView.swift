@@ -75,7 +75,7 @@ struct UserStatsView: View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
                 statCard(value: "\(viewModel.stats?.totalMessages ?? 0)", label: String(localized: "user.stats.messages", defaultValue: "Messages", bundle: .main), color: "FF6B6B", icon: "bubble.left.fill")
-                statCard(value: "\(viewModel.stats?.totalConversations ?? 0)", label: String(localized: "user.stats.conversations", defaultValue: "Conversations", bundle: .main), color: "4ECDC4", icon: "person.2.fill")
+                statCard(value: "\(viewModel.stats?.totalConversations ?? 0)", label: String(localized: "user.stats.conversations", defaultValue: "Conversations", bundle: .main), color: MeeshyColors.brandPrimaryHex, icon: "person.2.fill")
             }
             HStack(spacing: 12) {
                 statCard(value: "\(viewModel.stats?.totalTranslations ?? 0)", label: String(localized: "user.stats.translations", defaultValue: "Traductions", bundle: .main), color: "9B59B6", icon: "globe")

@@ -119,7 +119,7 @@ final class Router: ObservableObject {
     /// appears (on tap of a story's reply button). Cleared when the conversation
     /// view applies it. Lives on Router so any view can set it (StoryViewerContainer
     /// is presented from multiple parents — RootView, iPadRootView, ConversationView,
-    /// FeedOverlay) without each parent maintaining its own copy.
+    /// ThemedFeedOverlay) without each parent maintaining its own copy.
     @Published var pendingReplyContext: ReplyContext? {
         didSet { if pendingReplyContext != nil { replyContextVersion &+= 1 } }
     }

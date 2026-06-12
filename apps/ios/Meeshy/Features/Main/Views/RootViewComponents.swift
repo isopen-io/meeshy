@@ -418,7 +418,7 @@ struct ThemedFeedOverlay: View {
                 theme.backgroundGradient
 
                 Circle()
-                    .fill(Color(hex: "4ECDC4").opacity(isDark ? 0.1 : 0.06))
+                    .fill(MeeshyColors.indigo400.opacity(isDark ? 0.1 : 0.06))
                     .frame(width: 300, height: 300)
                     .blur(radius: 80)
                     .offset(x: -80, y: -100)
@@ -454,9 +454,7 @@ struct ThemedFeedOverlay: View {
                         HStack(spacing: 12) {
                             MeeshyAvatar(
                                 name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
-                                context: .feedComposer,
-                                accentColor: "FF6B6B",
-                                secondaryColor: "4ECDC4"
+                                context: .feedComposer
                             )
 
                             Text(String(localized: "composer.placeholder.share", defaultValue: "Share something…", bundle: .main))
@@ -557,7 +555,7 @@ struct ThemedFeedOverlay: View {
                     // Loading indicator
                     if viewModel.isLoadingMore {
                         ProgressView()
-                            .tint(Color(hex: "4ECDC4"))
+                            .tint(MeeshyColors.brandPrimary)
                             .padding()
                     }
                 }
@@ -727,8 +725,6 @@ struct ThemedFeedComposer: View {
                 MeeshyAvatar(
                     name: getUserDisplayName(authManager.currentUser, fallback: "M"),
                     context: .feedComposer,
-                    accentColor: "FF6B6B",
-                    secondaryColor: "4ECDC4",
                     onViewProfile: {
                         if let user = authManager.currentUser {
                             selectedProfileUser = .from(user: user)
@@ -772,7 +768,7 @@ struct ThemedFeedComposer: View {
                             RoundedRectangle(cornerRadius: 16)
                                 .stroke(
                                     isFocused ?
-                                    Color(hex: "4ECDC4").opacity(0.5) :
+                                    MeeshyColors.brandPrimary.opacity(0.5) :
                                     theme.inputBorder,
                                     lineWidth: 1
                                 )
@@ -800,14 +796,14 @@ struct ThemedFeedComposer: View {
                                 .fill(
                                     LinearGradient(
                                         colors: showAttachmentMenu ?
-                                            [Color(hex: "F8B500"), Color(hex: "FF9500")] :
-                                            [Color(hex: "4ECDC4"), Color(hex: "45B7D1")],
+                                            [MeeshyColors.warning, MeeshyColors.warningDeep] :
+                                            [MeeshyColors.indigo500, MeeshyColors.indigo700],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
                                 )
                                 .frame(width: 32, height: 32)
-                                .shadow(color: (showAttachmentMenu ? Color(hex: "F8B500") : Color(hex: "4ECDC4")).opacity(0.4), radius: 6, y: 3)
+                                .shadow(color: (showAttachmentMenu ? MeeshyColors.warning : MeeshyColors.indigo500).opacity(0.4), radius: 6, y: 3)
 
                             Image(systemName: showAttachmentMenu ? "mic.fill" : "plus")
                                 .font(.system(size: 14, weight: .bold))
@@ -849,10 +845,10 @@ struct ThemedFeedComposer: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(theme.surfaceGradient(tint: "4ECDC4"))
+                    .fill(theme.surfaceGradient(tint: MeeshyColors.brandPrimaryHex))
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
-                            .stroke(theme.border(tint: "4ECDC4", intensity: 0.25), lineWidth: 1)
+                            .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.25), lineWidth: 1)
                     )
             )
 
@@ -909,205 +905,3 @@ struct ThemedFeedComposer: View {
         }
     }
 }
-
-// MARK: - Themed Feed Card
-struct ThemedFeedCard: View {
-    let item: FeedItem
-    private var theme: ThemeManager { ThemeManager.shared }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
-    @State private var isLiked = false
-    @State private var isBookmarked = false
-    @State private var showCopiedToast = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header
-            HStack(spacing: 12) {
-                MeeshyAvatar(
-                    name: item.author,
-                    context: .feedComposer,
-                    accentColor: item.color
-                )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.author)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
-
-                    Text(ShortRelativeTime.label(for: item.timestamp))
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color(hex: item.color))
-                }
-
-                Spacer()
-
-                Menu {
-                    Button {
-                        UIPasteboard.general.string = item.content
-                        HapticFeedback.success()
-                    } label: {
-                        Label("Copier le texte", systemImage: "doc.on.doc")
-                    }
-                    Button {
-                        let activityVC = UIActivityViewController(activityItems: [item.content], applicationActivities: nil)
-                        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                           let root = scene.windows.first?.rootViewController {
-                            root.present(activityVC, animated: true)
-                        }
-                        HapticFeedback.light()
-                    } label: {
-                        Label("Partager", systemImage: "square.and.arrow.up")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .foregroundColor(theme.textMuted)
-                }
-            }
-
-            // Content
-            Text(item.content)
-                .font(.system(size: 15))
-                .foregroundColor(theme.textSecondary)
-                .lineLimit(3)
-
-            // Actions
-            HStack(spacing: 20) {
-                FeedActionButton(icon: isLiked ? "heart.fill" : "heart", color: "FF6B6B", count: item.likes + (isLiked ? 1 : 0), isActive: isLiked) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { isLiked.toggle() }
-                }
-                FeedActionButton(icon: "bubble.right", color: "4ECDC4", count: 0)
-                FeedActionButton(icon: "arrow.2.squarepath", color: "9B59B6", count: 0)
-
-                Spacer()
-
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { isBookmarked.toggle() }
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
-                        .foregroundColor(Color(hex: "F8B500"))
-                }
-                .accessibilityLabel(isBookmarked ? "Retirer des favoris" : "Ajouter aux favoris")
-            }
-            .padding(.top, 4)
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(theme.surfaceGradient(tint: item.color))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(theme.border(tint: item.color), lineWidth: 1)
-                )
-                .shadow(color: Color(hex: item.color).opacity(isDark ? 0.15 : 0.1), radius: 8, y: 4)
-        )
-    }
-
-}
-
-// MARK: - Feed Action Button
-struct FeedActionButton: View {
-    let icon: String
-    let color: String
-    let count: Int
-    var isActive: Bool = false
-    var action: (() -> Void)? = nil
-
-    @State private var bounce = false
-
-    var body: some View {
-        Button(action: {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
-                bounce = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                bounce = false
-            }
-            action?()
-        }) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 14))
-                    .scaleEffect(bounce ? 1.3 : 1)
-                    .rotationEffect(.degrees(bounce ? -15 : 0))
-                Text("\(count)")
-                    .font(.system(size: 13, weight: .medium))
-            }
-            .foregroundColor(Color(hex: color).opacity(isActive ? 1 : 0.7))
-            .scaleEffect(isActive ? 1.1 : 1)
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.5), value: isActive)
-        .animation(.spring(response: 0.25, dampingFraction: 0.5), value: bounce)
-    }
-}
-
-// MARK: - Legacy Support
-struct FeedOverlay: View {
-    var body: some View { ThemedFeedOverlay() }
-}
-
-struct ColorfulFeedOverlay: View {
-    var body: some View { ThemedFeedOverlay() }
-}
-
-struct ColorfulFeedComposer: View {
-    @Binding var text: String
-    @FocusState var isFocused: Bool
-    var body: some View { ThemedFeedComposer(text: $text, isFocused: _isFocused) }
-}
-
-struct ColorfulFeedCard: View {
-    let author: String
-    let content: String
-    let time: String
-    let color: String
-    var body: some View {
-        ThemedFeedCard(item: FeedItem(author: author, content: content, likes: 0, color: color))
-    }
-}
-
-struct ColorfulFeedAction: View {
-    let icon: String
-    let color: String
-    let count: Int
-    var body: some View { FeedActionButton(icon: icon, color: color, count: count) }
-}
-
-struct ColorfulQuickActionButton: View {
-    let icon: String
-    let color: String
-    var badge: Int = 0
-    let action: () -> Void
-    var body: some View { ThemedActionButton(icon: icon, color: color, badge: badge, action: action) }
-}
-
-struct QuickActionButton: View {
-    let icon: String
-    let color: String
-    var badge: Int = 0
-    let action: () -> Void
-    var body: some View { ThemedActionButton(icon: icon, color: color, badge: badge, action: action) }
-}
-
-struct FeedComposer: View {
-    @Binding var text: String
-    @FocusState var isFocused: Bool
-    var body: some View { ThemedFeedComposer(text: $text, isFocused: _isFocused) }
-}
-
-struct LegacyFeedCard: View {
-    let author: String
-    let content: String
-    let time: String
-    var body: some View {
-        ThemedFeedCard(item: FeedItem(author: author, content: content))
-    }
-}
-
-struct FeedAction: View {
-    let icon: String
-    let count: Int
-    var body: some View { FeedActionButton(icon: icon, color: "4ECDC4", count: count) }
-}
-
