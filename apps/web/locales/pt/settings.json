@@ -861,6 +861,15 @@
       "loadMore": "Carregar mais mensagens",
       "emptyState": "Nenhuma mensagem nesta conversa",
       "emptyStateCta": "Envie a primeira mensagem!"
+    },
+    "translationStats": {
+      "title": "Estatísticas de tradução",
+      "description": "Visão geral da sua atividade de tradução",
+      "total": "Total de traduções",
+      "lastUsed": "Último uso",
+      "never": "Nunca",
+      "serviceActive": "Serviço de tradução API ativo",
+      "serverSide": "Traduções processadas no servidor"
     }
   },
   "consentDialog": {

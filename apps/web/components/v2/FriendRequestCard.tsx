@@ -15,6 +15,7 @@ export interface FriendRequestCardProps {
   currentUserId?: string;
   onAction: (action: FriendRequestAction, requestId: string, userId?: string) => void;
   t: (key: string, params?: Record<string, unknown>) => string;
+  locale?: string;
   className?: string;
 }
 
@@ -30,7 +31,11 @@ function getUserDisplayName(user?: { displayName?: string; firstName?: string; l
   return fullName || user.username || '?';
 }
 
-function formatRelativeDate(dateStr: string, t: (key: string, params?: Record<string, unknown>) => string): string {
+function formatRelativeDate(
+  dateStr: string,
+  t: (key: string, params?: Record<string, unknown>) => string,
+  locale?: string
+): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -39,7 +44,7 @@ function formatRelativeDate(dateStr: string, t: (key: string, params?: Record<st
   if (diffDays === 0) return t('status.justNow');
   if (diffDays === 1) return t('status.daysAgo', { count: 1 });
   if (diffDays < 7) return t('status.daysAgo', { count: diffDays });
-  return date.toLocaleDateString();
+  return date.toLocaleDateString(locale);
 }
 
 export const FriendRequestCard = memo(function FriendRequestCard({
@@ -47,6 +52,7 @@ export const FriendRequestCard = memo(function FriendRequestCard({
   currentUserId,
   onAction,
   t,
+  locale,
   className,
 }: FriendRequestCardProps) {
   const isSender = request.senderId === currentUserId;
@@ -77,11 +83,11 @@ export const FriendRequestCard = memo(function FriendRequestCard({
         <p className="text-xs text-[var(--gp-text-muted)] mt-0.5">
           {request.status === 'pending' && (
             isSender
-              ? t('messages.requestSent', { date: formatRelativeDate(request.createdAt, t) })
-              : t('messages.requestReceived', { date: formatRelativeDate(request.createdAt, t) })
+              ? t('messages.requestSent', { date: formatRelativeDate(request.createdAt, t, locale) })
+              : t('messages.requestReceived', { date: formatRelativeDate(request.createdAt, t, locale) })
           )}
           {request.status === 'rejected' &&
-            t('messages.requestRejected', { date: formatRelativeDate(request.updatedAt, t) })}
+            t('messages.requestRejected', { date: formatRelativeDate(request.updatedAt, t, locale) })}
         </p>
       </div>
 

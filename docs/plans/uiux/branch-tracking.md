@@ -16,6 +16,11 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
+| Last completed iteration | 44 (web MessageTimestamp + notif-prefs + modales i18n/locale ; iOS CreateShareLink/TrackingLinkDetail Dynamic Type + ProfileView hex/a11y ; Android parité es/pt + sender format) |
+| Last merged PR | #588 (feat/uiux-iter33) ; iter-44 en cours |
+| Last Merged Base (commit) | 813b7fe3 |
+| Next iteration | **45** (carry-over: admin i18n batch web, GlobalSearchView/FeedCommentsSheet iOS, stories Android — voir plan iter-44) |
+| Next branch to create from | `main` (HEAD post-merge iter-44) |
 | Last completed iteration | 44 (audit post-#587 Android : i18n attachments/viewer/file-size + 12 clés es/pt ; web : i18n video-calls + dates locale-aware + dark mode bubbles ; iOS : 'Hier' localisé, Dynamic Type ProfileView/TwoFactorSetup/Call, tokens PrivacySettingsView) |
 | Last merged PR | #593 ; iter-44 (PR #592) en cours de merge |
 | Last Merged Base (commit) | 6d1375e (merge #593) |
@@ -62,6 +67,7 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 42 | claude/blissful-ritchie-fst8wf | #582 | ✅ |
 | 42b | claude/blissful-ritchie-e672ur | #579 | ✅ |
 | 43 | claude/blissful-ritchie-6709o7 | #576 | ✅ |
+| 44 | claude/blissful-ritchie-kay6v7 | — | ⏳ |
 | 44 | claude/blissful-ritchie-jls4lb | (cette PR) | ⏳ |
 | 43b | claude/awesome-albattani-xaqlhj | #587 | ✅ |
 | 44 | claude/keen-dirac-485vpk | #589, #591 | ✅ |

@@ -1,38 +1,45 @@
 # UI/UX Plan — Iteration 44 (2026-06-12)
 
-Branch: `claude/blissful-ritchie-jls4lb` (from main `7358047`, post #587/#588)
-Analysis: `docs/analyses/uiux/2026-06-12-iteration-44.md`
+Base: main @ 813b7fe3 (post-merge #576 iter-43, #579 iter-42b, #588 iter-33). No open PRs at start.
 
-## Part 1 — Web (apps/web)
-- [ ] video-calls i18n: `LocalVideoTile` "You", `VideoStream` "Unknown", `CarouselNavigation` aria-labels, `EffectCard` ON/OFF → keys in `calls.json` / `audioEffects.json` (en/fr/es/pt)
-- [ ] `BackSoundDetails` French strings → `audioEffects.json`
-- [ ] `ConnectionQualityBadge:95` + `translation-monitor:307` → `toLocaleTimeString(locale)` ; `translation-stats:67` → `toLocaleDateString(locale)`
-- [ ] `groups/ConversationsList:92,99` → t() keys + `toLocaleDateString(locale)`
-- [ ] `conversation-image-upload-dialog:135` error toast → i18n key
-- [ ] Dark mode: `DeleteConfirmationView:347`, `ReactionSelectionMessageView:273,302,407` → add `dark:` variants
-- [ ] Cohérence : nouvelles clés présentes dans les 4 locales, mêmes namespaces que l'existant
+## Goals
+1. Web — kill the remaining user-facing locale freezes on product surfaces (v2 thread timestamps, notification preferences, conversation modals, translation widgets)
+2. iOS — close the link-surfaces Dynamic Type carry-over (CreateShareLinkView, TrackingLinkDetailView) + ProfileView hex/a11y
+3. Android — restore es/pt parity broken by parallel iterations 40-42 and make the conversation preview sender prefix localizable
 
-## Part 2 — iOS (apps/ios)
-- [ ] `ConversationView+MessageRow:243` "Hier" → `String(localized:defaultValue:)` (vérifier libellés frères Aujourd'hui/etc.)
-- [ ] `ProfileView:65` → semantic font (.footnote)
-- [ ] `TwoFactorSetupView` text fonts → semantic (hero icons fixes conservés)
-- [ ] `CallView:35` / `IncomingCallView:35` caller name → `.title` semantic
-- [ ] `PrivacySettingsView` hex → MeeshyColors tokens
-- [ ] Cohérence : pattern identique aux migrations 32/42/43, xcstrings à jour
+## Checklist
 
-## Part 3 — Android (apps/android)
-- [ ] sdk-ui strings.xml (en/fr/es/pt) : `bubble_file_size_*` units, `image_viewer_close`, `bubble_image_description`, `bubble_attachment_file_fallback`
-- [ ] `MessageBubble.formatFileSize` → stringResource ; contentDescriptions localisées
-- [ ] `MeeshyImageViewer` "Fermer"/"Image" → stringResource
-- [ ] `BubbleContentBuilder:57` fallback "Fichier" → sortir du value model, résoudre au rendu (pattern replyToDeleted iter-43) ; adapter `BubbleContentBuilderTest`
-- [ ] `feature/conversations` values-es/pt : +9 clés preview/banner ; `feature/chat` values-es/pt : +3 clés date
-- [ ] `ChatScreen:533,564` cancel icons → touch target 48dp (`minimumInteractiveComponentSize`)
-- [ ] Cohérence : libellés preview alignés sur iOS/web (📷 Photo / 🎬 Vídeo / etc.)
+### Android
+- [x] es/pt strings: auth (1), chat (4), conversations (9), sdk-ui (1) — 14 keys × 2 locales
+- [x] `conversations_preview_sender_format` key (4 locales) + `LastMessagePreviewLabels.senderFormat` + wiring + test
+- [x] `SettingsScreen.kt:88` → MeeshySpacing.lg/md
+- [x] Parity script green (values vs values-fr/es/pt, all modules)
 
-## Deferred to iteration 45+
-- Web admin: debug.tsx, AgentArchetypesTab, InfoIcon tooltips LlmTab/GlobalConfigTab, ranking/monitoring/anonymous-users 'fr-FR'
-- iOS: famille composer Color(hex:) (ComposerModels/UniversalComposerBar/AudioPostComposer/VoiceProfileWizard) — design pass identité couleurs requis ; AudioFullscreenView .white audit ; FeedPostCard pluriels
-- Android: MeeshySpacing 2.dp residuals, emoji lineHeight token ; parité stories (UI absente) ; réactions par pièce jointe web+Android (wiring gateway)
+### Web
+- [x] `MessageTimestamp.tsx` → useI18n('conversations') + `messageTimestamp.*` keys (4 locales), locale-aware dates, localized aria-label
+- [x] `app/notifications/preferences/page.tsx` → existing `notifPrefs.*` keys + 14 new keys (4 locales)
+- [x] `quick-link-config-modal` / `link-summary-modal` / `translation-stats` / `translation-monitor` → hook locale, `settings.translationStats` + `admin.translationMonitor.cacheHit` keys
+- [x] `ConversationLayout` loader → `authGuard.checking`; `create-conversation-modal` → `preview.title`; `FriendRequestCard` locale prop
+- [x] Locale parity check on touched namespaces (en/fr/es/pt)
+- [x] Jest: pre-existing ConversationLayout failures confirmed identical on clean tree (env mock gap, not introduced)
 
-## Exit criteria
-- CI verte sur la PR ; merge dans main ; branch-tracking mis à jour (iteration 45 next)
+### iOS
+- [x] `CreateShareLinkView` 24 fonts → semantic; ExpirationOption + picker sections localized
+- [x] `TrackingLinkDetailView` 18 text fonts → semantic (icons kept fixed)
+- [x] `PrivacySettingsView` accent literal → `MeeshyColors.brandPrimaryHex`
+- [x] `ProfileView` hex sweep (11 literals → tokens) + avatar-edit `.accessibilityLabel`
+
+### Process
+- [x] Analysis + plan docs written, anti-repetition check vs iterations 32-43
+- [ ] Commit + push branch `claude/blissful-ritchie-kay6v7`
+- [ ] PR → main, CI green (ios-tests, android tests, web jest/build)
+- [ ] Merge to main, update branch-tracking
+
+## Carry-over for iteration 45
+- Web admin i18n batch: debug.tsx, AgentArchetypesTab, AgentConfigDialog, AgentConversationsTab, UserPicker + 9 admin 'fr-FR' date sites
+- Web chart dark-mode theming (RankingStatsImpl, MermaidDiagramImpl, AgentOverviewTab)
+- Web BackSoundDetails (4 FR strings); no-locale dates: ConnectionQualityBadge, ConversationEncryptionSection, LinkTypeStep; share-affiliate-modal locale map
+- iOS big-font surfaces by priority: GlobalSearchView (32), FeedCommentsSheet (27, + textSelection), remaining ProfileView text fonts, CallView (34)
+- iOS AudioPostComposerView gradient hex (design decision needed on the 2 dark washes), ThemedConversationRow text colors
+- Android: stories UI parity (large feature, tracked in feature-parity.md); SettingsScreen 14.dp rhythm (needs token decision)
+- Accepted, do not re-flag: ChatScreen.kt:442 emoji 22.sp; iOS hero icons 50-80pt; sdk-ui bubble layout dp

@@ -294,9 +294,9 @@ struct TrackingLinkDetailView: View {
 
     private func infoRow(_ label: String, value: String) -> some View {
         HStack {
-            Text(label).font(.subheadline).foregroundColor(theme.textSecondary)
+            Text(label).font(.footnote).foregroundColor(theme.textSecondary)
             Spacer()
-            Text(value).font(.subheadline.weight(.medium)).foregroundColor(theme.textPrimary).lineLimit(1)
+            Text(value).font(.footnote.weight(.medium)).foregroundColor(theme.textPrimary).lineLimit(1)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
     }

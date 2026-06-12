@@ -280,7 +280,7 @@ struct CreateShareLinkView: View {
                                 .font(.system(.title, design: .rounded).weight(.bold))
                                 .foregroundColor(accent)
                             Text(String(localized: "share.link.create.uses_label", defaultValue: "utilisations", bundle: .main))
-                                .font(.subheadline)
+                                .font(.footnote)
                                 .foregroundColor(theme.textSecondary)
                             Spacer()
                         }
@@ -539,7 +539,7 @@ private struct ConversationPickerSheet: View {
         let groups: [(label: String, types: [Conversation.ConversationType])] = [
             (String(localized: "share.link.create.picker.section.groups", defaultValue: "Groupes", bundle: .main), [.group]),
             (String(localized: "share.link.create.picker.section.communities", defaultValue: "Communautés", bundle: .main), [.community]),
-            (String(localized: "share.link.create.picker.section.channels", defaultValue: "Canaux & Public", bundle: .main), [.channel, .public, .global]),
+            (String(localized: "share.link.create.picker.section.channels_public", defaultValue: "Canaux & Public", bundle: .main), [.channel, .public, .global]),
         ]
         return groups.compactMap { g in
             let items = filtered.filter { g.types.contains($0.type) }

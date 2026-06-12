@@ -10,6 +10,7 @@ data class LastMessagePreviewLabels(
     val location: String,
     val none: String,
     val you: String,
+    val senderFormat: String,
 )
 
 /**
@@ -41,5 +42,5 @@ fun lastMessagePreview(
         currentUserId != null && message.senderId == currentUserId -> labels.you
         else -> message.senderName?.takeIf { it.isNotBlank() }
     }
-    return if (sender == null) body else "$sender : $body"
+    return if (sender == null) body else labels.senderFormat.format(sender, body)
 }

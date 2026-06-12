@@ -73,15 +73,17 @@ interface ConversationLayoutProps {
   selectedConversationId?: string;
 }
 
-// Loader statique hoisted (rendering-hoist-jsx)
-const AuthCheckingLoader = (
-  <div className="flex items-center justify-center min-h-screen bg-background">
-    <div className="text-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
-      <p className="text-muted-foreground">Vérification de l&apos;authentification...</p>
+function AuthCheckingLoader() {
+  const { t } = useI18n('common');
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" role="status" />
+        <p className="text-muted-foreground">{t('authGuard.checking')}</p>
+      </div>
     </div>
-  </div>
-);
+  );
+}
 
 // createOptimisticMessage and OptimisticMessage type imported from @/utils/optimistic-message
 
@@ -827,7 +829,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
   // ========== RENDER ==========
 
-  if (isAuthChecking) return AuthCheckingLoader;
+  if (isAuthChecking) return <AuthCheckingLoader />;
   if (!user) return null;
 
   // Mode mobile avec conversation ouverte

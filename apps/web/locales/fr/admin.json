@@ -340,7 +340,7 @@
   "translationMonitor": {
     "loadingMetrics": "Chargement des métriques...",
     "languageBreakdown": "Répartition par langue",
-    "cacheHit": "Succès cache"
+    "cacheHit": "Cache utilisé"
   },
   "llm": {
     "generationSettings": "Paramètres de génération",

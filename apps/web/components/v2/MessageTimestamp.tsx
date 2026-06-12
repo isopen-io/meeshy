@@ -24,7 +24,8 @@ interface SmartTimestampContext {
 }
 
 /**
- * Formats a timestamp with smart relative date handling.
+ * Formats a timestamp with smart relative date handling, in the interface
+ * language (i18n keys under `conversations.messageTimestamp`).
  *
  * Rules (localized through the conversations namespace):
  * - Today: "Today at HH:mm"
@@ -36,7 +37,8 @@ interface SmartTimestampContext {
 function formatSmartTimestamp(
   date: Date,
   format: 'time' | 'date' | 'datetime' | 'relative',
-  { t, locale }: SmartTimestampContext
+  locale: string,
+  t: (key: string, params?: Record<string, unknown>) => string
 ): string {
   const now = new Date();
 
@@ -61,16 +63,21 @@ function formatSmartTimestamp(
   // Date only format
   if (format === 'date') {
     if (diffDays === 0) {
-      return t('timestamp.today');
+      return t('messageTimestamp.today');
     }
     if (diffDays === 1) {
-      return t('timestamp.yesterday');
+      return t('messageTimestamp.yesterday');
     }
     if (diffDays < 7 && diffDays > 0) {
       const dayName = date.toLocaleDateString(locale, { weekday: 'long' });
       return capitalizeFirst(dayName);
     }
-    return formatMonthDay(date, now, locale);
+    // Same year - no need to show year
+    if (date.getFullYear() === now.getFullYear()) {
+      return date.toLocaleDateString(locale, { day: 'numeric', month: 'long' });
+    }
+    // Different year - show full date
+    return date.toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
   }
 
   // Relative format (smart datetime)
@@ -78,16 +85,21 @@ function formatSmartTimestamp(
     if (diffDays === 0) {
       return format === 'relative'
         ? timeStr
-        : t('timestamp.todayAt', { time: timeStr });
+        : t('messageTimestamp.todayAt', { time: timeStr });
     }
     if (diffDays === 1) {
-      return t('timestamp.yesterdayAt', { time: timeStr });
+      return t('messageTimestamp.yesterdayAt', { time: timeStr });
     }
     if (diffDays < 7 && diffDays > 0) {
       const dayName = date.toLocaleDateString(locale, { weekday: 'long' });
-      return t('timestamp.dayAt', { day: capitalizeFirst(dayName), time: timeStr });
+      return t('messageTimestamp.dayAt', { day: capitalizeFirst(dayName), time: timeStr });
     }
-    return formatMonthDay(date, now, locale);
+    // Same year
+    if (date.getFullYear() === now.getFullYear()) {
+      return date.toLocaleDateString(locale, { day: 'numeric', month: 'long' });
+    }
+    // Different year
+    return date.toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
   }
 
   return timeStr;
@@ -153,8 +165,8 @@ export function MessageTimestamp({
       return '';
     }
 
-    return formatSmartTimestamp(date, format, { t, locale });
-  }, [timestamp, format, t, locale]);
+    return formatSmartTimestamp(date, format, locale, t);
+  }, [timestamp, format, locale, t]);
 
   // Don't render if invalid timestamp
   if (!formattedTimestamp) {
@@ -168,7 +180,7 @@ export function MessageTimestamp({
         className
       )}
       role="separator"
-      aria-label={t('timestamp.ariaLabel', { timestamp: formattedTimestamp })}
+      aria-label={formattedTimestamp}
     >
       {/* Left separator line */}
       {showSeparators && (
