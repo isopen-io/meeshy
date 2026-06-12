@@ -20,9 +20,9 @@ import {
 import {
   AddMemberSchema,
   UpdateMemberRoleSchema,
-  CommunityRole,
-  validatePagination
+  CommunityRole
 } from './types';
+import { validatePagination } from '../../utils/pagination';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 
 export async function registerMemberRoutes(fastify: FastifyInstance) {
@@ -133,7 +133,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
       }
 
       const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       const [members, totalCount] = await Promise.all([
         fastify.prisma.communityMember.findMany({

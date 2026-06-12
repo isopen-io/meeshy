@@ -412,7 +412,7 @@ export function registerMessagesRoutes(
       const afterMode = afterClause !== null;
 
       // Valider et parser les paramètres de pagination
-      const { offset, limit } = validatePagination(offsetStr, limitStr, 50);
+      const { offset, limit } = validatePagination(offsetStr, limitStr, { maxLimit: 50 });
 
       // Résoudre l'ID de conversation réel
       let t0 = performance.now();

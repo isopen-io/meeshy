@@ -32,7 +32,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
-      const pagination = validatePagination(query.offset, query.limit, 100);
+      const pagination = validatePagination(query.offset, query.limit);
 
       // Construire les filtres
       const where: any = {};

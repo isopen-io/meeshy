@@ -16,6 +16,7 @@ import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendNotFound, send
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { COMMUNITY_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
 import { UnifiedAuthRequest } from '../middleware/auth';
+import { validatePagination } from '../utils/pagination';
 
 interface CommunityPreferencesBody {
   isPinned?: boolean;
@@ -127,19 +128,6 @@ const successMessageResponseSchema = {
   }
 } as const;
 
-/**
- * Validate and sanitize pagination parameters
- */
-function validatePagination(
-  offset: string = '0',
-  limit: string = '50',
-  defaultLimit: number = 50,
-  maxLimit: number = 100
-): { offsetNum: number; limitNum: number } {
-  const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
-  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || defaultLimit), maxLimit);
-  return { offsetNum, limitNum };
-}
 
 export default async function communityPreferencesRoutes(fastify: FastifyInstance) {
 
@@ -259,7 +247,7 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
         const userId = authContext.userId;
         const { offset = '0', limit = '50' } = request.query as { offset?: string; limit?: string };
 
-        const { offsetNum, limitNum } = validatePagination(offset, limit);
+        const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 50 });
 
         const whereClause = { userId };
 
