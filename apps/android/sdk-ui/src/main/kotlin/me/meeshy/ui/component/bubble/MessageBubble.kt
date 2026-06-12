@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,6 +43,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -95,10 +97,10 @@ public fun MessageBubble(
                 )
             }
 
-            if (content.replyToText != null) {
+            if (content.replyToText != null || content.replyToDeleted) {
                 ReplyPreview(
                     senderName = content.replyToSenderName,
-                    previewText = content.replyToText,
+                    previewText = content.replyToText ?: stringResource(R.string.bubble_message_deleted),
                     accentColor = onColor,
                     modifier = Modifier.padding(bottom = MeeshySpacing.xs),
                 )
@@ -125,7 +127,7 @@ public fun MessageBubble(
             val hasAttachments = content.images.isNotEmpty() || content.files.isNotEmpty()
             if (content.isDeleted) {
                 Text(
-                    text = "Message deleted",
+                    text = stringResource(R.string.bubble_message_deleted),
                     style = MaterialTheme.typography.bodyMedium,
                     fontStyle = FontStyle.Italic,
                     color = onColor.copy(alpha = 0.6f),
@@ -171,14 +173,14 @@ public fun MessageBubble(
                     if (content.isTranslated) {
                         Icon(
                             imageVector = Icons.Filled.Translate,
-                            contentDescription = "Translated",
+                            contentDescription = stringResource(R.string.bubble_translated),
                             tint = onColor.copy(alpha = 0.7f),
                             modifier = Modifier.size(14.dp),
                         )
                     }
                     if (content.isEdited) {
                         Text(
-                            text = "edited",
+                            text = stringResource(R.string.bubble_edited),
                             style = MaterialTheme.typography.labelSmall,
                             color = onColor.copy(alpha = 0.7f),
                             modifier = Modifier.padding(start = MeeshySpacing.xs),
@@ -420,7 +422,7 @@ private fun ReactionChip(entry: ReactionEntry, onClick: (() -> Unit)?) {
         )
         Text(
             text = entry.count.toString(),
-            fontSize = 12.sp,
+            style = MaterialTheme.typography.labelSmall,
             color = if (entry.includesMe) MeeshyPalette.Indigo400 else MeeshyTheme.tokens.textPrimary,
             fontWeight = if (entry.includesMe) FontWeight.SemiBold else null,
         )
@@ -435,31 +437,31 @@ private fun DeliveryStatusIcon(
     when (status) {
         DeliveryStatus.Pending -> Icon(
             imageVector = Icons.Filled.Schedule,
-            contentDescription = "Pending",
+            contentDescription = stringResource(R.string.bubble_status_pending),
             tint = onColor.copy(alpha = 0.5f),
             modifier = Modifier.size(16.dp),
         )
         DeliveryStatus.Sent -> Icon(
             imageVector = Icons.Filled.Done,
-            contentDescription = "Sent",
+            contentDescription = stringResource(R.string.bubble_status_sent),
             tint = onColor.copy(alpha = 0.5f),
             modifier = Modifier.size(16.dp),
         )
         DeliveryStatus.Delivered -> Icon(
             imageVector = Icons.Filled.DoneAll,
-            contentDescription = "Delivered",
+            contentDescription = stringResource(R.string.bubble_status_delivered),
             tint = onColor.copy(alpha = 0.5f),
             modifier = Modifier.size(16.dp),
         )
         DeliveryStatus.Read -> Icon(
             imageVector = Icons.Filled.DoneAll,
-            contentDescription = "Read",
-            tint = Color(0xFF60A5FA),
+            contentDescription = stringResource(R.string.bubble_status_read),
+            tint = MeeshyTheme.tokens.info,
             modifier = Modifier.size(16.dp),
         )
         DeliveryStatus.Failed -> Icon(
             imageVector = Icons.Filled.ErrorOutline,
-            contentDescription = "Failed",
+            contentDescription = stringResource(R.string.bubble_status_failed),
             tint = MeeshyPalette.Error,
             modifier = Modifier.size(16.dp),
         )

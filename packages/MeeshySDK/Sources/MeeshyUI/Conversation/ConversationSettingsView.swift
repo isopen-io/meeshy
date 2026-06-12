@@ -158,14 +158,21 @@ public struct ConversationSettingsView: View {
     // MARK: - Visual Section (Hero Banner + Avatar)
 
     private var visualSection: some View {
-        VStack(spacing: 0) {
+        // Valeurs `@MainActor` (bundle localisé, couleurs theme/viewModel) hissées
+        // hors des closures de label `PhotosPicker` (inférées `@Sendable`) : on les
+        // capture en constantes Sendable pour éviter « main actor-isolated property
+        // can not be referenced from a Sendable closure ».
+        let bannerEditLabel = String(localized: "conversation.settings.banner.edit", defaultValue: "Modifier", bundle: .module)
+        let avatarPencilColor = Color(hex: viewModel.accentColor)
+        let avatarPencilBackground = theme.backgroundPrimary
+        return VStack(spacing: 0) {
             ZStack(alignment: .bottomTrailing) {
                 bannerView
                     .frame(height: 120)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
 
                 PhotosPicker(selection: $bannerItem, matching: .images) {
-                    Label(String(localized: "conversation.settings.banner.edit", defaultValue: "Modifier", bundle: .module), systemImage: "photo.fill")
+                    Label(bannerEditLabel, systemImage: "photo.fill")
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                         .padding(.horizontal, 10)
@@ -199,8 +206,8 @@ public struct ConversationSettingsView: View {
                 PhotosPicker(selection: $avatarItem, matching: .images) {
                     Image(systemName: "pencil.circle.fill")
                         .font(.system(size: 28))
-                        .foregroundColor(Color(hex: viewModel.accentColor))
-                        .background(Circle().fill(theme.backgroundPrimary))
+                        .foregroundColor(avatarPencilColor)
+                        .background(Circle().fill(avatarPencilBackground))
                 }
                 .disabled(viewModel.isUploadingAvatar)
                 .offset(x: 4, y: 4)

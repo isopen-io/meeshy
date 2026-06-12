@@ -44,6 +44,7 @@ import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rat
 import type { ZmqAgentClient } from '../../services/zmq-agent/ZmqAgentClient.js';
 import { AttachmentService } from '../../services/attachments/AttachmentService';
 import { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
+import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService.js';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketMessageSendSchema, SocketMessageSendWithAttachmentsSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
@@ -64,6 +65,7 @@ export interface MessageHandlerDependencies {
   agentClient?: ZmqAgentClient | null;
   attachmentService: AttachmentService;
   readStatusService: MessageReadStatusService;
+  privacyPreferencesService: PrivacyPreferencesService;
 }
 
 export class MessageHandler {
@@ -79,6 +81,7 @@ export class MessageHandler {
   private agentClient: ZmqAgentClient | null;
   private attachmentService: AttachmentService;
   private readStatusService: MessageReadStatusService;
+  private privacyPreferencesService: PrivacyPreferencesService;
   private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: MessageHandlerDependencies) {
@@ -94,6 +97,7 @@ export class MessageHandler {
     this.agentClient = deps.agentClient ?? null;
     this.attachmentService = deps.attachmentService;
     this.readStatusService = deps.readStatusService;
+    this.privacyPreferencesService = deps.privacyPreferencesService;
   }
 
   /**
@@ -364,12 +368,15 @@ export class MessageHandler {
 
       const attachmentService = this.attachmentService;
 
-      for (const attachmentId of validated.attachmentIds) {
-        const attachment = await attachmentService.getAttachment(attachmentId);
-        if (!attachment || attachment.uploadedBy !== (userId || participantId)) {
-          this._sendError(callback, `Attachment ${attachmentId} invalid`, socket);
-          return;
-        }
+      const attachments = await Promise.all(
+        validated.attachmentIds.map((attachmentId: string) => attachmentService.getAttachment(attachmentId))
+      );
+      const invalidIndex = attachments.findIndex(
+        (attachment) => !attachment || attachment.uploadedBy !== (userId || participantId)
+      );
+      if (invalidIndex !== -1) {
+        this._sendError(callback, `Attachment ${validated.attachmentIds[invalidIndex]} invalid`, socket);
+        return;
       }
 
       const corr: Record<string, any> = {
@@ -725,43 +732,44 @@ export class MessageHandler {
     if (!senderId) return;
 
     const participants = await this.prisma.participant.findMany({
-      where: { conversationId, isActive: true, id: { not: senderId } },
+      where: { conversationId, isActive: true },
       select: { id: true, userId: true }
     });
 
     const onlineRecipients = participants.filter(
-      (p) => p.userId && this.connectedUsers.has(p.userId)
+      (p): p is { id: string; userId: string } =>
+        p.id !== senderId && !!p.userId && this.connectedUsers.has(p.userId)
     );
     handlerLogger.debug('auto-deliver', { conversationId, messageId: message.id, participants: participants.length, onlineRecipients: onlineRecipients.length });
     if (onlineRecipients.length === 0) return;
 
-    const { PrivacyPreferencesService } = await import('../../services/PrivacyPreferencesService.js');
-    const privacyService = new PrivacyPreferencesService(this.prisma);
+    const preferences = await this.privacyPreferencesService.getPreferencesForUsers(
+      onlineRecipients.map((r) => ({ id: r.userId, isAnonymous: false }))
+    );
+    const allowedRecipients = onlineRecipients.filter(
+      (r) => preferences.get(r.userId)?.showReadReceipts
+    );
 
-    let didMarkAny = false;
-    let firstAcker: { id: string; userId: string } | null = null;
-
-    for (const recipient of onlineRecipients) {
-      if (!recipient.userId) continue;
-      const allowsReceipts = await privacyService.shouldShowReadReceipts(recipient.userId, false);
-      if (!allowsReceipts) continue;
-      try {
-        await this.readStatusService.markMessagesAsReceived(
-          recipient.id,
-          conversationId,
-          message.id
-        );
-        didMarkAny = true;
-        if (!firstAcker) firstAcker = { id: recipient.id, userId: recipient.userId };
-      } catch (err) {
-        handlerLogger.warn('auto-deliver markAsReceived failed', { error: err });
+    const results = await Promise.allSettled(
+      allowedRecipients.map((r) =>
+        this.readStatusService.markMessagesAsReceived(r.id, conversationId, message.id)
+      )
+    );
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        handlerLogger.warn('auto-deliver markAsReceived failed', {
+          participantId: allowedRecipients[index].id,
+          error: result.reason
+        });
       }
-    }
+    });
 
-    if (!didMarkAny || !firstAcker) {
-      handlerLogger.debug('auto-deliver skipped — no receipts marked', { conversationId, didMarkAny });
+    const firstAckerIndex = results.findIndex((r) => r.status === 'fulfilled');
+    if (firstAckerIndex === -1) {
+      handlerLogger.debug('auto-deliver skipped — no receipts marked', { conversationId, didMarkAny: false });
       return;
     }
+    const firstAcker = allowedRecipients[firstAckerIndex];
 
     const summary = await this.readStatusService.getLatestMessageSummary(conversationId);
 
@@ -774,15 +782,10 @@ export class MessageHandler {
       summary
     };
 
-    const allParticipants = await this.prisma.participant.findMany({
-      where: { conversationId, isActive: true },
-      select: { userId: true }
-    });
-
     const convRoom = ROOMS.conversation(conversationId);
     let emitter: ReturnType<SocketIOServer['to']> = this.io.to(convRoom);
     const seen = new Set<string>([convRoom]);
-    for (const p of allParticipants) {
+    for (const p of participants) {
       if (!p.userId) continue;
       const userRoom = ROOMS.user(p.userId);
       if (seen.has(userRoom)) continue;

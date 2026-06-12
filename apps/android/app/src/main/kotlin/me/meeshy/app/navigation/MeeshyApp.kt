@@ -29,6 +29,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import androidx.compose.ui.res.stringResource
 import me.meeshy.app.R
 import me.meeshy.app.auth.AuthViewModel
@@ -47,11 +48,13 @@ object Routes {
     const val LOGIN = "login"
     const val CONVERSATIONS = "conversations"
     const val CHAT = "chat/{${ChatViewModel.CONVERSATION_ID_ARG}}"
+    const val CHAT_DEEP_LINK = "meeshy://$CHAT"
     const val FEED = "feed"
     const val CONTACTS = "contacts"
     const val NOTIFICATIONS = "notifications"
     const val SETTINGS = "settings"
     const val PROFILE_USER = "profile/{userId}"
+    const val PROFILE_DEEP_LINK = "meeshy://$PROFILE_USER"
 
     fun chat(conversationId: String): String = "chat/$conversationId"
     fun profile(userId: String): String = "profile/$userId"
@@ -174,6 +177,9 @@ fun MeeshyApp() {
                 arguments = listOf(
                     navArgument(ChatViewModel.CONVERSATION_ID_ARG) { type = NavType.StringType },
                 ),
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = Routes.CHAT_DEEP_LINK },
+                ),
             ) {
                 ChatScreen(onBack = { navController.popBackStack() })
             }
@@ -197,11 +203,15 @@ fun MeeshyApp() {
                             popUpTo(Routes.CONVERSATIONS) { inclusive = true }
                         }
                     },
+                    onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
                 )
             }
             composable(
                 route = Routes.PROFILE_USER,
                 arguments = listOf(navArgument("userId") { type = NavType.StringType }),
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = Routes.PROFILE_DEEP_LINK },
+                ),
             ) {
                 ProfileScreen(onBack = { navController.popBackStack() })
             }

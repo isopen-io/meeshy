@@ -185,7 +185,11 @@
       "delete": "Delete",
       "deleteConfirmTitle": "Delete this message?",
       "deleteConfirmDescription": "This message will not be sent. This action is irreversible.",
-      "empty": "No pending messages"
+      "empty": "No pending messages",
+      "loadError": "Error loading the queue",
+      "serviceUnavailable": "Agent service unavailable",
+      "retry": "Retry",
+      "pending": "pending"
     },
     "scanControl": {
       "title": "Controls",
@@ -296,7 +300,24 @@
     "contactUpdated": "Contact information updated",
     "contactUpdateError": "Error updating contact information",
     "personalInfoUpdated": "Personal information updated",
-    "personalInfoUpdateError": "Error updating personal information"
+    "personalInfoUpdateError": "Error updating personal information",
+    "contactTitle": "Contact & Location",
+    "personalInfoTitle": "Personal Information",
+    "saving": "Saving...",
+    "emailLabel": "Email",
+    "countryLabel": "Country",
+    "phoneLabel": "Phone",
+    "timezoneLabel": "Timezone",
+    "firstNameLabel": "First name",
+    "lastNameLabel": "Last name",
+    "displayNameLabel": "Display name",
+    "usernameLabel": "Username",
+    "usernamePlaceholder": "user-name",
+    "usernameHint": "Only letters, numbers, dashes and underscores",
+    "bioLabel": "Bio",
+    "bioCharCount": "{count}/500 characters",
+    "fullNameLabel": "Full name",
+    "optionalPlaceholder": "Optional"
   },
   "translationMonitor": {
     "loadingMetrics": "Loading metrics...",
@@ -319,7 +340,20 @@
     "created": "Configuration created",
     "updated": "Configuration updated",
     "saveError": "Error saving configuration",
-    "pendingPropagation": "Config saved — propagation to agent service pending (cache may take a few minutes)"
+    "pendingPropagation": "Config saved — propagation to agent service pending (cache may take a few minutes)",
+    "conversationToConfigure": "Conversation to configure",
+    "searchPlaceholder": "Search for a group, channel or discussion...",
+    "conversationSection": "Conversation",
+    "createdOn": "Created on",
+    "creator": "Creator",
+    "lastActivity": "Last activity",
+    "identifier": "Identifier",
+    "general": "General",
+    "behaviorContext": "Behavior & Context",
+    "agentEnabled": "Agent enabled",
+    "agentEnabledHelp": "Main switch. When disabled, the agent will not analyze any message and will never reply, freeing up server resources.",
+    "autoPickup": "Auto-pickup",
+    "autoPickupHelp": "Dynamic mode: the agent detects users who stop replying (see Inactivity threshold) and takes over their identity to keep the conversation active."
   },
   "security": {
     "enable2FA": "Enable 2FA",
@@ -1573,5 +1607,22 @@
     "paginationInfo": "Page {page} of {total} • {shown} shown • {totalCount} total",
     "prev": "Previous",
     "next": "Next"
+  },
+  "layout": {
+    "collapseMenu": "Collapse menu",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "navDashboard": "Dashboard",
+    "navUsers": "User management",
+    "navModeration": "Moderation",
+    "navAuditLogs": "Audit logs",
+    "navAnalytics": "Analytics",
+    "navTrackingLinks": "Tracking links",
+    "navRanking": "Rankings",
+    "navBroadcasts": "Broadcasts",
+    "navSettings": "System settings",
+    "navAgent": "AI Agent",
+    "navMonitoring": "Monitoring",
+    "accessLevel": "Meeshy administration - Access level: {role}"
   }
 }

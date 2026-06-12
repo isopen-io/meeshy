@@ -14,8 +14,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshyPalette
 
 /**
@@ -31,12 +33,13 @@ public fun MeeshyAvatar(
     contentColor: Color = MeeshyPalette.White,
 ) {
     val textSize = with(LocalDensity.current) { (size * 0.4f).toSp() }
+    val fallbackDescription = stringResource(R.string.avatar_fallback)
     Box(
         modifier = modifier
             .size(size)
             .clip(CircleShape)
             .background(containerColor)
-            .semantics { contentDescription = name.ifBlank { "Avatar" } },
+            .semantics { contentDescription = name.ifBlank { fallbackDescription } },
         contentAlignment = Alignment.Center,
     ) {
         Text(

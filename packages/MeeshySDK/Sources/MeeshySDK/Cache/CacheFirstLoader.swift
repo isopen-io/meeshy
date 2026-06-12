@@ -1,6 +1,14 @@
 import Foundation
 import os
 
+/// Enferme l'opération `save` (qui capture le métatype générique `Store.Type`,
+/// non-`Sendable`) dans une box `@unchecked Sendable`. `run` est une closure
+/// non-`@Sendable` : ses captures ne sont pas soumises au contrôle de
+/// concurrence, et seule la box franchit la frontière `@Sendable` du `Task`.
+private struct CacheSaveWork<Items>: @unchecked Sendable {
+    let run: (Items) async throws -> Void
+}
+
 // MARK: - CacheFirstLoader
 
 /// Generic helper that implements the cache-first / stale-while-revalidate
@@ -80,6 +88,10 @@ public final class CacheFirstLoader<Store: MutableCacheStore>: @unchecked Sendab
             let key = self.key
             let monitor = self.networkMonitor
             let keyDescription = String(describing: key)
+            // `Store.Type` (métatype générique) n'est pas `Sendable` ; on enferme
+            // l'opération `save` dans une box `@unchecked Sendable` pour qu'aucun
+            // métatype ne traverse la frontière `@Sendable` du `Task`.
+            let saveWork = CacheSaveWork<Items> { items in try await store.save(items, for: key) }
             return Task {
                 guard !Task.isCancelled else { return }
                 do {
@@ -89,7 +101,7 @@ public final class CacheFirstLoader<Store: MutableCacheStore>: @unchecked Sendab
                         apply(fresh)
                         setLoadState(.loaded)
                     }
-                    try await store.save(fresh, for: key)
+                    try await saveWork.run(fresh)
                 } catch {
                     Logger.cache.warning(
                         "CacheFirstLoader silent revalidate failed for \(keyDescription, privacy: .public): \(error.localizedDescription, privacy: .public)"

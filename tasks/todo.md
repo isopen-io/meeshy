@@ -1,62 +1,62 @@
-# Android iteration — chat message actions (reactions, edit, delete)
+# Android iteration — chat vivant : accusés de lecture temps réel + émission de frappe
 
-Contexte : itération /loop Android. Baseline verte (testDebugUnitTest + assembleDebug).
-La couche outbox (ADD_REACTION/REMOVE_REACTION/EDIT_MESSAGE/DELETE_MESSAGE senders +
-coalescing) existe déjà ; il manque les mutations optimistes Room, le ViewModel et l'UI.
+Contexte : itération /loop Android. Baseline verte (testDebugUnitTest, SDK bootstrappé
+dans le conteneur). Le rendu ✓/✓✓ (DeliveryStatusIcon) et l'indicateur de frappe
+ENTRANT existent déjà ; il manque le flux temps réel `read-status:updated` → cache
+Room et l'émission de frappe SORTANTE (parité iOS ConversationSocketHandler).
 
 ## Plan
 
-- [x] Audit état Android vs iOS (agent) — cible retenue : réactions + édition + suppression dans le chat
-- [x] RED — tests MessageRepository : toggleReactionOptimistic (add/remove, reactionSummary ±1),
-      editOptimistic (content + isEdited + translations purgées + outbox EDIT_MESSAGE,
-      refus des bulles pending), deleteOptimistic (deletedAt + outbox DELETE_MESSAGE)
-- [x] RED — tests BubbleContentBuilder : ownReactions → ReactionEntry.includesMe
-- [x] RED — tests ChatViewModel : long-press ouvre la feuille + hydrate ownReactions via
-      ReactionRepository.fetchDetails ; toggleReaction décide add/remove ; startEdit remplit
-      le draft avec le contenu original ; send() en mode édition appelle editOptimistic ;
-      deleteMessage délègue ; cancelEdit nettoie ; events socket des pairs → delta Room,
-      échos de soi ignorés (pas de double comptage)
-- [x] GREEN — MessageRepository : toggleReactionOptimistic / applyReactionDelta /
-      editOptimistic / deleteOptimistic (updateCachedMessage transactionnel partagé)
-- [x] GREEN — BubbleContentBuilder param ownReactions ; ReactionChip highlight indigo + tap
-- [x] GREEN — ChatViewModel : actionMessageId, editingMessageId, ownReactions (optimiste +
-      hydratation fetchDetails + socket reaction:added/removed des autres → delta Room)
-- [x] GREEN — ChatScreen : ModalBottomSheet actions (rangée emoji rapide ❤️😂🔥👏😮😢🥰👍,
-      Copier/Modifier/Supprimer), bandeau mode édition dans le composer (icône check),
-      bulles long-press + chips tappables
-- [x] i18n EN + FR (feature:chat strings.xml)
-- [x] Vérif : testDebugUnitTest + :app:assembleDebug verts (BUILD SUCCESSFUL)
-- [x] Commit + push sur claude/wonderful-noether-gmdqqj
+- [x] RED — MessageRepositoryTest.applyReadReceipt : upgrade des messages propres
+      server-acked ≤ frontière (deliveredCount/readCount), peers intouchés,
+      bulles pending intouchées, pas de downgrade read→delivered, messages
+      postérieurs à la frontière intouchés
+- [x] RED — ChatViewModelTest : event read-status de la conversation ouverte →
+      applyReadReceipt avec le summary ; event d'une autre conversation ignoré ;
+      première frappe → emitTypingStart (une seule fois, throttle) ; re-émission
+      après 3 s de frappe continue ; 3 s d'inactivité → emitTypingStop ; draft
+      vidé → stop immédiat ; send → stop ; pas de stop si jamais démarré
+- [x] GREEN — modèle : ReadStatusSummary + champ `summary` sur ReadStatusUpdatedEvent
+      (défaut vide — robustesse décodage)
+- [x] GREEN — MessageDao.listForConversation + MessageRepository.applyReadReceipt
+      (transactionnel, upgrade monotone, sémantique frontière identique à iOS
+      ConversationSyncEngine.applyReadReceipt)
+- [x] GREEN — MessageSocketManager.emitTypingStart/emitTypingStop
+- [x] GREEN — ChatViewModel : collect readStatusUpdated ; machine d'émission de
+      frappe (start once + reemit 3 s + idle 3 s + stop sur send/clear)
+- [x] Vérif : testDebugUnitTest + :app:assembleDebug verts
+- [x] Commit + push sur claude/awesome-albattani-cecsyc
 
 ## Décisions
 
-- Réactions "à moi" : pas dans le payload message REST (gateway n'envoie que reactionSummary) →
-  état session dans le ViewModel, hydraté de façon autoritaire par fetchDetails(messageId)
-  à l'ouverture de la feuille d'actions, mis à jour par les toggles optimistes ; les échos
-  socket de ses propres réactions sont ignorés (déjà comptés optimistiquement).
-- Édition/suppression : uniquement messages propres, server-acked (sendState == null),
-  non supprimés. Lane = message:{conversationId} (FIFO avec les sends ; le coalescer gère
-  déjà edit-merge et delete-supersedes-edit). Réactions sur lane partagée `reaction`
-  (toggle annihilé par le coalescer).
-- Édition purge les translations en cache (le Prisme ne doit jamais montrer une traduction
-  périmée de l'ancien texte) ; la retraduction arrive par socket message:translated.
-- Suppression = tombstone local immédiat (content + translations vidés — invariant de
-  rétention ARCHITECTURE.md §18).
-- Payloads outbox partagés (ReactionPayload public dans OutboxModel, EditMessageRequest
-  réutilisé) au lieu des duplications privées du worker.
+- Le summary du gateway est autoritaire (counts recalculés serveur) — on l'applique
+  tel quel comme iOS, sans filtrer sur l'auteur de l'ack.
+- Statut par message : read (readByAllAt non-null ou readCount>0) > delivered
+  (deliveredCount>0) > sent. Upgrade only, jamais de downgrade.
+- Frontière = event.updatedAt comparée à MessageEntity.createdAt (epoch millis,
+  déjà calculé à l'insertion) — pas de re-parse ISO des payloads.
+- Émission de frappe : timings iOS (re-emit 3 s, idle 3 s), emit direct sur le
+  socket (pas d'outbox — un typing offline n'a aucun sens à rejouer).
+- Vérifié côté gateway : getLatestMessageSummary exclut le curseur de l'expéditeur
+  du dernier message — ma propre lecture ne marque jamais mes messages « lus ».
 
 ## Review
 
-Itération livrée : les trois actions de message du chat (réagir, modifier, supprimer)
-fonctionnent en optimistic-first avec file offline et temps réel.
+Itération livrée : le chat devient « vivant » des deux côtés du fil.
 
-- sdk-core : 4 nouvelles mutations repository, transactionnelles, testées (7 tests Robolectric).
-- sdk-ui : ReactionChip interactif avec état "ma réaction" (indigo, charte respectée),
-  bulle long-press via combinedClickable. 1 test builder.
-- feature:chat : feuille d'actions bottom-sheet, mode édition du composer, 11 nouveaux
-  tests ViewModel. Réactions des pairs appliquées en delta cache sans refetch complet.
+- core/model : ReadStatusSummary (+ summary sur ReadStatusUpdatedEvent, défaut vide).
+- core/database : MessageDao.listForConversation.
+- sdk-core : MessageRepository.applyReadReceipt (transactionnel, upgrade monotone
+  sent→delivered→read, frontière = updatedAt vs createdAt epoch, 5 tests Robolectric) ;
+  MessageSocketManager.emitTypingStart/Stop (payload {conversationId}, parité iOS).
+- feature:chat : collect read-status:updated → cache Room (les ✓✓ existants dans
+  MessageBubble se mettent à jour en temps réel via l'invalidation Room) ; machine
+  d'émission de frappe (start à la 1re frappe, re-emit 3 s, stop après 3 s d'idle /
+  draft vidé / send / onCleared), 7 tests ViewModel.
+- Zéro changement UI nécessaire : DeliveryStatusIcon et TypingIndicator étaient
+  déjà en place, seuls les flux manquaient.
 - Suite complète verte : testDebugUnitTest + :app:assembleDebug.
 
-Prochain incrément suggéré : filtres + recherche de la liste de conversations, ou
-affichage de l'original sur bulle traduite (toggle Prisme), ou vue détail des réactions
-(la plomberie fetchDetails est déjà en place).
+Prochain incrément suggéré : pièces jointes images (picker + upload multipart +
+rendu grille), ou présence en ligne (user:status + presence:snapshot → header),
+ou recherche dans la conversation (MessageApi.search déjà câblé).

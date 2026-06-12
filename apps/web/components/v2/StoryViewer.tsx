@@ -882,7 +882,7 @@ function StoryViewer({
                   onFocus={handleInputFocus}
                   onBlur={handleInputBlur}
                   onKeyDown={handleReplyKeyDown}
-                  placeholder="Repondre..."
+                  placeholder={t('replyPlaceholder')}
                   className="flex-1 bg-transparent text-white text-sm placeholder:text-white/50 outline-none"
                 />
                 <button

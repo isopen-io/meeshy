@@ -1,5 +1,6 @@
 package me.meeshy.app.auth
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -8,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.feature.auth.R
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.net.NetworkResult
 import javax.inject.Inject
@@ -17,6 +19,7 @@ data class AuthUiState(
     val password: String = "",
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
+    @get:StringRes val errorRes: Int? = null,
     val isAuthenticated: Boolean = false,
 ) {
     val canSubmit: Boolean get() = username.isNotBlank() && password.isNotBlank() && !isSubmitting
@@ -37,20 +40,20 @@ class AuthViewModel @Inject constructor(
     }
 
     fun onUsernameChange(value: String) {
-        _state.update { it.copy(username = value, errorMessage = null) }
+        _state.update { it.copy(username = value, errorMessage = null, errorRes = null) }
     }
 
     fun onPasswordChange(value: String) {
-        _state.update { it.copy(password = value, errorMessage = null) }
+        _state.update { it.copy(password = value, errorMessage = null, errorRes = null) }
     }
 
     fun login() {
         val current = _state.value
         if (current.username.isBlank() || current.password.isBlank()) {
-            _state.update { it.copy(errorMessage = "Username and password are required") }
+            _state.update { it.copy(errorRes = R.string.login_error_required) }
             return
         }
-        _state.update { it.copy(isSubmitting = true, errorMessage = null) }
+        _state.update { it.copy(isSubmitting = true, errorMessage = null, errorRes = null) }
         viewModelScope.launch {
             val result = authRepository.login(current.username.trim(), current.password)
             _state.update {

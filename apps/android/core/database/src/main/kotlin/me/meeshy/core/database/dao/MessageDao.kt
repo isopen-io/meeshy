@@ -20,6 +20,9 @@ public interface MessageDao {
     @Query("SELECT * FROM messages WHERE id = :id")
     public suspend fun find(id: String): MessageEntity?
 
+    @Query("SELECT * FROM messages WHERE conversationId = :conversationId")
+    public suspend fun listForConversation(conversationId: String): List<MessageEntity>
+
     @Upsert
     public suspend fun upsertAll(rows: List<MessageEntity>)
 

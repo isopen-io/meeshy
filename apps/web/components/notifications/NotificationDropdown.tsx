@@ -23,7 +23,7 @@ type NotificationDropdownProps = {
 
 export function NotificationDropdown({ className = '' }: NotificationDropdownProps) {
   const [open, setOpen] = useState(false);
-  const { t } = useI18n('notifications');
+  const { t, locale } = useI18n('notifications');
   const router = useRouter();
 
   const {
@@ -67,7 +67,7 @@ export function NotificationDropdown({ className = '' }: NotificationDropdownPro
     const diffDays = Math.floor(diffHours / 24);
     if (diffDays < 7) return t('timeAgo.day').replace('{count}', diffDays.toString());
 
-    return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+    return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
   };
 
   const ariaLabel = `Notifications${unreadCount > 0 ? ` (${unreadCount})` : ''}`;

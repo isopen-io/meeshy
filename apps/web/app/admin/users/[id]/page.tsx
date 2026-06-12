@@ -239,20 +239,20 @@ export default function UserDetailPage() {
       <div className="space-y-6 pb-16">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-4 min-w-0">
             <Button
               variant="outline"
               onClick={() => router.push('/admin/users')}
-              className="flex items-center space-x-2 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200"
+              className="flex items-center space-x-2 flex-shrink-0 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200"
             >
               <ArrowLeft className="h-4 w-4" />
               <span>{t('usersDetail.back')}</span>
             </Button>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">
                 {user.displayName || user.username}
               </h1>
-              <p className="text-sm text-gray-600 dark:text-gray-400">@{user.username}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 truncate">@{user.username}</p>
             </div>
           </div>
           <div className="flex items-center space-x-2">

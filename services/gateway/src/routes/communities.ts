@@ -23,6 +23,7 @@ import {
 import { UnifiedAuthRequest } from '../middleware/auth';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../utils/response';
+import { validatePagination } from '../utils/pagination';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesRoutes' });
 
@@ -79,24 +80,6 @@ const UpdateMemberRoleSchema = z.object({
   role: z.enum([CommunityRole.ADMIN, CommunityRole.MODERATOR, CommunityRole.MEMBER])
 });
 
-/**
- * Validate and sanitize pagination parameters
- * @param offset - Raw offset string from query
- * @param limit - Raw limit string from query
- * @param defaultLimit - Default limit if not provided (default: 20)
- * @param maxLimit - Maximum allowed limit (default: 100)
- * @returns Validated offset and limit numbers
- */
-function validatePagination(
-  offset: string = '0',
-  limit: string = '20',
-  defaultLimit: number = 20,
-  maxLimit: number = 100
-): { offsetNum: number; limitNum: number } {
-  const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
-  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || defaultLimit), maxLimit);
-  return { offsetNum, limitNum };
-}
 
 type CommunityWithCount = {
   _count: { members: number; Conversation: number };
@@ -262,7 +245,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       const userId = authContext.userId;
       const { search, offset = '0', limit = '20' } = request.query as { search?: string; offset?: string; limit?: string };
 
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       // Build where clause with optional search
       const whereClause: any = {
@@ -418,7 +401,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         return sendPaginatedSuccess(reply, [], { total: 0, limit: 20, offset: 0, hasMore: false });
       }
 
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       // Build where clause for public communities
       const whereClause = {
@@ -958,7 +941,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       }
 
       const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       const [members, totalCount] = await Promise.all([
         fastify.prisma.communityMember.findMany({

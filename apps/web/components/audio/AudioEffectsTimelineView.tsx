@@ -41,7 +41,7 @@ const EFFECT_CONFIG: Record<AudioEffectType, { color: string; bgColor: string; i
 };
 
 export function AudioEffectsTimelineView({ timeline }: AudioEffectsTimelineViewProps) {
-  const { t } = useI18n('audioEffects');
+  const { t, locale } = useI18n('audioEffects');
 
   // Calculer les statistiques
   const stats = calculateEffectsStats(timeline);
@@ -180,7 +180,7 @@ export function AudioEffectsTimelineView({ timeline }: AudioEffectsTimelineViewP
 
       {/* Info version */}
       <div className="text-center text-[10px] text-gray-500 border-t border-white/5 pt-2">
-        Timeline v{timeline.version} • {new Date(timeline.createdAt).toLocaleDateString()}
+        Timeline v{timeline.version} • {new Date(timeline.createdAt).toLocaleDateString(locale)}
       </div>
     </div>
   );

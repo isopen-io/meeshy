@@ -207,7 +207,14 @@
       "unlike": "Unlike post",
       "repost": "Repost",
       "bookmark": "Bookmark",
-      "removeBookmark": "Remove bookmark"
+      "removeBookmark": "Remove bookmark",
+      "translate": "Translate",
+      "translatePost": "Translate post"
+    },
+    "videoPlayer": {
+      "play": "Play",
+      "pause": "Pause",
+      "seek": "Video progress"
     }
   }
 }

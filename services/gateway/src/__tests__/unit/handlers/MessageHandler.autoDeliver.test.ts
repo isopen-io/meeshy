@@ -11,6 +11,9 @@
  * - Recipients whose `showReadReceipts` privacy preference is `false` MUST
  *   be skipped (no `markMessagesAsReceived`, no broadcast triggered by
  *   them).
+ * - Privacy preferences MUST be resolved through the shared injected
+ *   service in a single batched call, and participants MUST be fetched
+ *   with a single query reused for both recipients and room fanout.
  *
  * @jest-environment node
  */
@@ -32,13 +35,6 @@ jest.mock('../../../services/MentionService', () => ({
   resolveMentionedUsers: jest.fn().mockResolvedValue([])
 }));
 
-const mockShouldShowReadReceipts = jest.fn();
-jest.mock('../../../services/PrivacyPreferencesService.js', () => ({
-  PrivacyPreferencesService: jest.fn().mockImplementation(() => ({
-    shouldShowReadReceipts: mockShouldShowReadReceipts
-  }))
-}));
-
 import { MessageHandler } from '../../../socketio/handlers/MessageHandler';
 
 interface AutoDeliverAccess {
@@ -48,33 +44,24 @@ interface AutoDeliverAccess {
 const senderParticipantId = 'p_sender';
 const onlineParticipantId = 'p_online';
 const offlineParticipantId = 'p_offline';
+const senderUserId = 'u_sender';
 const onlineUserId = 'u_online';
 const offlineUserId = 'u_offline';
 const conversationId = 'c_test';
 const messageId = 'm_test';
 
-function makeHandler(overrides: { onlineUsers: string[] }) {
+function makeHandler(overrides: { onlineUsers: string[]; showReadReceipts?: boolean }) {
   const emit = jest.fn();
   const to = jest.fn(() => ({ to, emit }));
   const io: any = { to };
 
   const prisma: any = {
     participant: {
-      findMany: jest.fn().mockImplementation(({ where, select }: any) => {
-        // Active recipients except sender
-        if (where?.id?.not === senderParticipantId) {
-          return Promise.resolve([
-            { id: onlineParticipantId, userId: onlineUserId },
-            { id: offlineParticipantId, userId: offlineUserId }
-          ]);
-        }
-        // All active participants for fanout
-        return Promise.resolve([
-          { userId: 'u_sender' },
-          { userId: onlineUserId },
-          { userId: offlineUserId }
-        ]);
-      })
+      findMany: jest.fn().mockResolvedValue([
+        { id: senderParticipantId, userId: senderUserId },
+        { id: onlineParticipantId, userId: onlineUserId },
+        { id: offlineParticipantId, userId: offlineUserId }
+      ])
     }
   };
 
@@ -85,6 +72,14 @@ function makeHandler(overrides: { onlineUsers: string[] }) {
       deliveredCount: 1,
       readCount: 0
     })
+  };
+
+  const showReadReceipts = overrides.showReadReceipts ?? true;
+  const privacyPreferencesService: any = {
+    getPreferencesForUsers: jest.fn().mockImplementation(
+      async (users: Array<{ id: string; isAnonymous: boolean }>) =>
+        new Map(users.map((u) => [u.id, { showReadReceipts }]))
+    )
   };
 
   const connectedUsers = new Map<string, unknown>();
@@ -101,13 +96,15 @@ function makeHandler(overrides: { onlineUsers: string[] }) {
     socketToUser: new Map(),
     stats: { messages_processed: 0, errors: 0 },
     attachmentService: {} as any,
-    readStatusService
+    readStatusService,
+    privacyPreferencesService
   });
 
   return {
     handler: handler as unknown as AutoDeliverAccess,
     prisma,
     readStatusService,
+    privacyPreferencesService,
     io,
     to,
     emit
@@ -117,12 +114,11 @@ function makeHandler(overrides: { onlineUsers: string[] }) {
 describe('MessageHandler — auto-deliver to online recipients', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockShouldShowReadReceipts.mockReset();
-    mockShouldShowReadReceipts.mockResolvedValue(true);
   });
 
   it('marks the online recipient as received and broadcasts read-status:updated', async () => {
-    const { handler, readStatusService, to, emit } = makeHandler({ onlineUsers: [onlineUserId] });
+    const { handler, prisma, readStatusService, privacyPreferencesService, to, emit } =
+      makeHandler({ onlineUsers: [onlineUserId] });
 
     await handler._autoDeliverToOnlineRecipients(
       { id: messageId, senderId: senderParticipantId } as any,
@@ -136,13 +132,22 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
       messageId
     );
 
+    // Single participants query reused for recipients + room fanout.
+    expect(prisma.participant.findMany).toHaveBeenCalledTimes(1);
+
+    // Privacy resolved in one batched call, only for online recipients.
+    expect(privacyPreferencesService.getPreferencesForUsers).toHaveBeenCalledTimes(1);
+    expect(privacyPreferencesService.getPreferencesForUsers).toHaveBeenCalledWith([
+      { id: onlineUserId, isAnonymous: false }
+    ]);
+
     // Conversation room + 3 user rooms (sender, online, offline). Sender's room
     // is included so the sender receives the receipt while in another view.
     expect(to).toHaveBeenCalled();
     const roomTargets = to.mock.calls.map((c) => c[0]);
     expect(roomTargets).toEqual(expect.arrayContaining([
       `conversation:${conversationId}`,
-      'user:u_sender',
+      `user:${senderUserId}`,
       `user:${onlineUserId}`,
       `user:${offlineUserId}`
     ]));
@@ -159,6 +164,55 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
     });
   });
 
+  it('marks all online recipients in parallel and acks with the first of them', async () => {
+    const { handler, readStatusService, emit } = makeHandler({
+      onlineUsers: [onlineUserId, offlineUserId]
+    });
+
+    await handler._autoDeliverToOnlineRecipients(
+      { id: messageId, senderId: senderParticipantId } as any,
+      conversationId
+    );
+
+    expect(readStatusService.markMessagesAsReceived).toHaveBeenCalledTimes(2);
+    expect(readStatusService.markMessagesAsReceived).toHaveBeenCalledWith(
+      onlineParticipantId,
+      conversationId,
+      messageId
+    );
+    expect(readStatusService.markMessagesAsReceived).toHaveBeenCalledWith(
+      offlineParticipantId,
+      conversationId,
+      messageId
+    );
+
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit.mock.calls[0][1]).toMatchObject({
+      participantId: onlineParticipantId,
+      userId: onlineUserId
+    });
+  });
+
+  it('still broadcasts when one mark fails but another succeeds', async () => {
+    const { handler, readStatusService, emit } = makeHandler({
+      onlineUsers: [onlineUserId, offlineUserId]
+    });
+    readStatusService.markMessagesAsReceived
+      .mockRejectedValueOnce(new Error('cursor conflict'))
+      .mockResolvedValueOnce(undefined);
+
+    await handler._autoDeliverToOnlineRecipients(
+      { id: messageId, senderId: senderParticipantId } as any,
+      conversationId
+    );
+
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit.mock.calls[0][1]).toMatchObject({
+      participantId: offlineParticipantId,
+      userId: offlineUserId
+    });
+  });
+
   it('does nothing when no recipient is online', async () => {
     const { handler, readStatusService, emit } = makeHandler({ onlineUsers: [] });
 
@@ -172,8 +226,10 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
   });
 
   it('skips recipients whose privacy preference disables read receipts', async () => {
-    mockShouldShowReadReceipts.mockResolvedValue(false);
-    const { handler, readStatusService, emit } = makeHandler({ onlineUsers: [onlineUserId] });
+    const { handler, readStatusService, emit } = makeHandler({
+      onlineUsers: [onlineUserId],
+      showReadReceipts: false
+    });
 
     await handler._autoDeliverToOnlineRecipients(
       { id: messageId, senderId: senderParticipantId } as any,

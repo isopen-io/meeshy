@@ -14,7 +14,7 @@ struct ShareLinksView: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    private let accentColor = "6366F1"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
         ZStack {
@@ -66,7 +66,7 @@ struct ShareLinksView: View {
             Spacer()
 
             Text(String(localized: "share.links.title", defaultValue: "Liens de partage", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(.headline.weight(.bold))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -79,6 +79,7 @@ struct ShareLinksView: View {
                     .font(.system(size: 22))
                     .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel(String(localized: "share.links.create.a11y", defaultValue: "Créer un lien de partage", bundle: .main))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -98,21 +99,21 @@ struct ShareLinksView: View {
         VStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 20))
-                .foregroundColor(Color(hex: "08D9D6"))
+                .foregroundColor(MeeshyColors.shareAccent)
             Text(value)
-                .font(.system(size: 24, weight: .bold))
+                .font(.title2.weight(.bold))
                 .foregroundColor(theme.textPrimary)
             Text(label)
-                .font(.system(size: 11))
+                .font(.caption2)
                 .foregroundColor(theme.textSecondary)
         }
         .frame(maxWidth: .infinity)
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(theme.surfaceGradient(tint: "08D9D6"))
+                .fill(theme.surfaceGradient(tint: MeeshyColors.shareAccentHex))
                 .overlay(RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color(hex: "08D9D6").opacity(0.2), lineWidth: 1))
+                    .stroke(MeeshyColors.shareAccent.opacity(0.2), lineWidth: 1))
         )
     }
 
@@ -121,7 +122,7 @@ struct ShareLinksView: View {
     private var linksSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(String(localized: "share.links.my_links", defaultValue: "MES LIENS", bundle: .main))
-                .font(.system(size: 12, weight: .semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundColor(theme.textSecondary)
                 .kerning(0.8)
 
@@ -148,12 +149,12 @@ struct ShareLinksView: View {
         VStack(spacing: 12) {
             Image(systemName: "link.badge.plus")
                 .font(.system(size: 40))
-                .foregroundColor(Color(hex: "08D9D6").opacity(0.6))
+                .foregroundColor(MeeshyColors.shareAccent.opacity(0.6))
             Text(String(localized: "share.links.empty.title", defaultValue: "Aucun lien de partage", bundle: .main))
-                .font(.system(size: 15, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
             Text(String(localized: "share.links.empty.subtitle", defaultValue: "Créez un lien pour inviter des personnes dans une conversation", bundle: .main))
-                .font(.system(size: 13))
+                .font(.footnote)
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
         }
@@ -165,25 +166,25 @@ struct ShareLinksView: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(Color(hex: link.isActive ? "08D9D6" : "888888").opacity(0.15))
+                    .fill((link.isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500).opacity(0.15))
                     .frame(width: 40, height: 40)
                 Image(systemName: link.isActive ? "link" : "link.badge.minus")
                     .font(.system(size: 16))
-                    .foregroundColor(Color(hex: link.isActive ? "08D9D6" : "888888"))
+                    .foregroundColor(link.isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500)
             }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(link.displayName)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
                 HStack(spacing: 6) {
                     Text("\(link.currentUses) \(String(localized: "share.links.joined_label", defaultValue: "rejoints", bundle: .main))")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color(hex: "08D9D6"))
+                        .font(.caption)
+                        .foregroundColor(MeeshyColors.shareAccent)
                     if let conv = link.conversationTitle {
                         Text("· \(conv)")
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(theme.textMuted)
                             .lineLimit(1)
                     }
@@ -198,7 +199,7 @@ struct ShareLinksView: View {
             } label: {
                 Image(systemName: "doc.on.doc")
                     .font(.system(size: 16))
-                    .foregroundColor(Color(hex: "08D9D6"))
+                    .foregroundColor(MeeshyColors.shareAccent)
             }
             .padding(.horizontal, 4)
 
@@ -209,9 +210,9 @@ struct ShareLinksView: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(theme.surfaceGradient(tint: "08D9D6"))
+                .fill(theme.surfaceGradient(tint: MeeshyColors.shareAccentHex))
                 .overlay(RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color(hex: "08D9D6").opacity(0.15), lineWidth: 1))
+                    .stroke(MeeshyColors.shareAccent.opacity(0.15), lineWidth: 1))
         )
     }
 }

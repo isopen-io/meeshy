@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import type { UserConversationPreferences, UserConversationCategory } from '@meeshy/shared/types/user-preferences';
-import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
+import {
+  useConversationPreferencesStore,
+  useConversationCategories,
+  useConversationPreferencesActions,
+} from '@/stores/conversation-preferences-store';
 
 interface UseConversationPreferencesReturn {
   preferencesMap: Map<string, UserConversationPreferences>;
@@ -18,9 +22,12 @@ interface UseConversationPreferencesReturn {
 export function useConversationPreferences(
   _conversationsLength: number
 ): UseConversationPreferencesReturn {
-  // Utiliser le store Zustand pour les préférences
-  const store = useConversationPreferencesStore();
-  const { preferencesMap, categories, isLoading, isInitialized, initialize } = store;
+  // Utiliser le store Zustand pour les préférences (selectors étroits)
+  const preferencesMap = useConversationPreferencesStore(state => state.preferencesMap);
+  const categories = useConversationCategories();
+  const isLoading = useConversationPreferencesStore(state => state.isLoading);
+  const isInitialized = useConversationPreferencesStore(state => state.isInitialized);
+  const { initialize } = useConversationPreferencesActions();
 
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => {
     // Charger l'état collapsed depuis localStorage

@@ -831,8 +831,10 @@ public struct MeeshyAudioEditorView: View {
 
         let interval = CMTime(seconds: 0.05, preferredTimescale: 600)
         timeObserver = newPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
-            guard !isScrubbing else { return }
-            currentTime = time.seconds.isFinite ? time.seconds : 0
+            MainActor.assumeIsolated {
+                guard !isScrubbing else { return }
+                currentTime = time.seconds.isFinite ? time.seconds : 0
+            }
         }
         endObserver = NotificationCenter.default.addObserver(
             forName: AVPlayerItem.didPlayToEndTimeNotification,

@@ -135,6 +135,44 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `a reply to a deleted message carries the replyToDeleted flag and no preview text`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(
+                    id = "r1",
+                    content = "secret",
+                    senderDisplayName = "Alice",
+                    deletedAt = "2026-05-18T10:00:00Z",
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.replyToDeleted).isTrue()
+        assertThat(content.replyToText).isNull()
+        assertThat(content.replyToSenderName).isEqualTo("Alice")
+    }
+
+    @Test
+    fun `a reply to a live message keeps its preview text`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(
+                    id = "r1",
+                    content = "original",
+                    senderDisplayName = "Alice",
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.replyToDeleted).isFalse()
+        assertThat(content.replyToText).isEqualTo("original")
+    }
+
+    @Test
     fun `the sender name shows only for incoming messages when requested`() {
         val sender = ApiMessageSender(displayName = "Alice")
 
@@ -360,4 +398,5 @@ class BubbleContentBuilderTest {
         assertThat(content.reactions.single { it.emoji == "❤️" }.includesMe).isTrue()
         assertThat(content.reactions.single { it.emoji == "🔥" }.includesMe).isFalse()
     }
+
 }

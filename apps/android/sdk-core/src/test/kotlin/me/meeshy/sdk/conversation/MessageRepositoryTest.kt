@@ -503,4 +503,127 @@ class MessageRepositoryTest {
         assertThat(row.kindEnum).isEqualTo(OutboxKind.DELETE_MESSAGE)
         assertThat(row.targetId).isEqualTo("m1")
     }
+
+    @Test
+    fun `applyReadReceipt upgrades own messages up to the frontier`() = runTest {
+        val repo = repository(
+            FakeMessageApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(
+                        apiMessage("m1", createdAt = T1).copy(senderId = "me"),
+                        apiMessage("m2", createdAt = T2).copy(senderId = "me"),
+                        apiMessage("m3", createdAt = T4).copy(senderId = "me"),
+                    ),
+                ),
+            ),
+        )
+        repo.refresh("c1")
+
+        repo.applyReadReceipt(
+            conversationId = "c1",
+            ownSenderId = "me",
+            deliveredCount = 2,
+            readCount = 1,
+            frontierIso = T3,
+        )
+
+        assertThat(cachedMessage("m1").readCount).isEqualTo(1)
+        assertThat(cachedMessage("m1").deliveredCount).isEqualTo(2)
+        assertThat(cachedMessage("m2").readCount).isEqualTo(1)
+        assertThat(cachedMessage("m3").readCount).isEqualTo(0)
+        assertThat(cachedMessage("m3").deliveredCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `applyReadReceipt leaves peer messages untouched`() = runTest {
+        val repo = repository(
+            FakeMessageApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(apiMessage("m1", createdAt = T1).copy(senderId = "other")),
+                ),
+            ),
+        )
+        repo.refresh("c1")
+
+        repo.applyReadReceipt(
+            conversationId = "c1",
+            ownSenderId = "me",
+            deliveredCount = 1,
+            readCount = 1,
+            frontierIso = T2,
+        )
+
+        assertThat(cachedMessage("m1").readCount).isEqualTo(0)
+        assertThat(cachedMessage("m1").deliveredCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `applyReadReceipt skips optimistic bubbles the server does not know yet`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "n/a")))
+        val cmid = repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        repo.applyReadReceipt(
+            conversationId = "c1",
+            ownSenderId = "me",
+            deliveredCount = 1,
+            readCount = 1,
+            frontierIso = T4,
+        )
+
+        assertThat(cachedMessage(cmid).readCount).isEqualTo(0)
+        assertThat(cachedMessage(cmid).deliveredCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `applyReadReceipt never downgrades a read message`() = runTest {
+        val repo = repository(
+            FakeMessageApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(
+                        apiMessage("m1", createdAt = T1)
+                            .copy(senderId = "me", deliveredCount = 3, readCount = 2),
+                    ),
+                ),
+            ),
+        )
+        repo.refresh("c1")
+
+        repo.applyReadReceipt(
+            conversationId = "c1",
+            ownSenderId = "me",
+            deliveredCount = 1,
+            readCount = 0,
+            frontierIso = T2,
+        )
+
+        assertThat(cachedMessage("m1").readCount).isEqualTo(2)
+        assertThat(cachedMessage("m1").deliveredCount).isEqualTo(3)
+    }
+
+    @Test
+    fun `applyReadReceipt with no delivery progress is a no-op`() = runTest {
+        val repo = repository(
+            FakeMessageApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(apiMessage("m1", createdAt = T1).copy(senderId = "me")),
+                ),
+            ),
+        )
+        repo.refresh("c1")
+
+        repo.applyReadReceipt(
+            conversationId = "c1",
+            ownSenderId = "me",
+            deliveredCount = 0,
+            readCount = 0,
+            frontierIso = T2,
+        )
+
+        assertThat(cachedMessage("m1").readCount).isEqualTo(0)
+        assertThat(cachedMessage("m1").deliveredCount).isEqualTo(0)
+    }
 }

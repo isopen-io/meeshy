@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversations_title">Meeshy</string>
+    <string name="conversations_logout">Cerrar sesión</string>
+    <string name="conversations_empty">Aún no hay conversaciones</string>
+    <string name="conversations_retry">Reintentar</string>
+    <string name="conversations_no_messages">Aún no hay mensajes</string>
+</resources>

@@ -282,6 +282,7 @@ export class MeeshySocketIOManager {
       agentClient: this.agentClient,
       attachmentService: new AttachmentService(prisma),
       readStatusService,
+      privacyPreferencesService: this.privacyPreferencesService,
     });
 
     this.statusHandler = new StatusHandler({

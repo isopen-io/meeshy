@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from './Dialog';
 import { Button } from './Button';
@@ -28,6 +29,7 @@ const MAX_CONTENT_LENGTH = 140;
 // ============================================================================
 
 function StatusComposer({ open, onClose, onPublish, currentStatus }: StatusComposerProps) {
+  const { t } = useI18n('common');
   const [selectedEmoji, setSelectedEmoji] = useState<string>(currentStatus?.moodEmoji ?? '');
   const [content, setContent] = useState<string>(currentStatus?.content ?? '');
 
@@ -72,7 +74,7 @@ function StatusComposer({ open, onClose, onPublish, currentStatus }: StatusCompo
       {/* Header */}
       <DialogHeader>
         <h2 className="text-lg font-semibold text-[var(--gp-text-primary)] transition-colors duration-300">
-          Quel est ton mood ?
+          {t('statusComposer.title')}
         </h2>
       </DialogHeader>
 
@@ -107,7 +109,7 @@ function StatusComposer({ open, onClose, onPublish, currentStatus }: StatusCompo
             type="text"
             value={content}
             onChange={handleContentChange}
-            placeholder="Qu'est-ce que tu fais ?"
+            placeholder={t('statusComposer.placeholder')}
             maxLength={MAX_CONTENT_LENGTH}
             className={cn(
               'w-full px-4 py-2.5 rounded-xl text-sm',
@@ -136,7 +138,7 @@ function StatusComposer({ open, onClose, onPublish, currentStatus }: StatusCompo
         {selectedEmoji && (
           <div className="space-y-2">
             <p className="text-xs text-[var(--gp-text-muted)] font-medium transition-colors duration-300">
-              Apercu
+              {t('statusComposer.preview')}
             </p>
             <div
               className={cn(
@@ -156,7 +158,7 @@ function StatusComposer({ open, onClose, onPublish, currentStatus }: StatusCompo
               )}
               {!content.trim() && (
                 <span className="text-sm text-[var(--gp-text-muted)] italic transition-colors duration-300">
-                  Ton nom
+                  {t('statusComposer.yourName')}
                 </span>
               )}
             </div>
@@ -172,7 +174,7 @@ function StatusComposer({ open, onClose, onPublish, currentStatus }: StatusCompo
           disabled={!canPublish}
           className="w-full"
         >
-          Publier
+          {t('publish')}
         </Button>
 
         {currentStatus && (
@@ -182,7 +184,7 @@ function StatusComposer({ open, onClose, onPublish, currentStatus }: StatusCompo
             className="w-full text-[var(--gp-text-muted)]"
             size="sm"
           >
-            Effacer mon status
+            {t('statusComposer.clear')}
           </Button>
         )}
       </DialogFooter>

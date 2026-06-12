@@ -62,7 +62,7 @@ interface ConversationLinksSectionProps {
 }
 
 export function ConversationLinksSection({ conversationId }: ConversationLinksSectionProps) {
-  const { t } = useI18n('conversations');
+  const { t, locale } = useI18n('conversations');
   const [links, setLinks] = useState<ShareLink[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -132,7 +132,7 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
   const expiredLinks = links.filter(link => !isLinkActive(link));
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('fr-FR', {
+    return new Date(dateString).toLocaleDateString(locale, {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -143,12 +143,12 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
 
   const getStatusBadge = (link: ShareLink) => {
     if (!link.isActive) {
-      return <Badge variant="destructive" className="text-xs">Désactivé</Badge>;
+      return <Badge variant="destructive" className="text-xs">{t('links.statusDisabled')}</Badge>;
     }
     if (isLinkExpired(link)) {
-      return <Badge variant="secondary" className="text-xs">Expiré</Badge>;
+      return <Badge variant="secondary" className="text-xs">{t('links.statusExpired')}</Badge>;
     }
-    return <Badge variant="default" className="text-xs">Actif</Badge>;
+    return <Badge variant="default" className="text-xs">{t('links.statusActive')}</Badge>;
   };
 
   /**
@@ -169,7 +169,7 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <h4 className="font-medium text-sm">
-                {truncateLinkName(link.name || 'Lien de partage')}
+                {truncateLinkName(link.name || t('links.defaultName'))}
               </h4>
               {getStatusBadge(link)}
             </div>
@@ -201,7 +201,7 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
               className="h-7 px-2 text-xs"
             >
               <Copy className="h-3 w-3 sm:mr-1" />
-              <span className="hidden sm:inline">Copier</span>
+              <span className="hidden sm:inline">{t('links.copy')}</span>
             </Button>
             
             <Popover>
@@ -218,7 +218,7 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
                 <div className="space-y-3">
                   <div>
                     <h4 className="font-medium text-sm mb-1 break-words">
-                      {link.name || 'Lien de partage'}
+                      {link.name || t('links.defaultName')}
                     </h4>
                     <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
                       {link.description || t('links.noDescription')}
@@ -229,7 +229,7 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
 
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <span className="font-medium">Créé par:</span>
+                      <span className="font-medium">{t('links.createdBy')}</span>
                       <div className="flex items-center gap-1 mt-1">
                         <Avatar className="h-4 w-4">
                           <AvatarImage src={link.creator.avatar} />
@@ -243,7 +243,7 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
                       </div>
                     </div>
                     <div>
-                      <span className="font-medium">Créé le:</span>
+                      <span className="font-medium">{t('links.createdAt')}</span>
                       <p className="mt-1">{formatDate(link.createdAt)}</p>
                     </div>
                   </div>
@@ -251,27 +251,27 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
                   <Separator />
 
                   <div>
-                    <h5 className="font-medium text-xs mb-2">Permissions</h5>
+                    <h5 className="font-medium text-xs mb-2">{t('links.permissions')}</h5>
                     <div className="grid grid-cols-2 gap-1 text-xs">
                       <div className="flex items-center gap-1">
                         {link.allowAnonymousMessages ? <CheckCircle className="h-3 w-3 text-green-500" /> : <XCircle className="h-3 w-3 text-red-500" />}
                         <MessageSquare className="h-3 w-3" />
-                        Messages
+                        {t('links.permissionMessages')}
                       </div>
                       <div className="flex items-center gap-1">
                         {link.allowAnonymousImages ? <CheckCircle className="h-3 w-3 text-green-500" /> : <XCircle className="h-3 w-3 text-red-500" />}
                         <Image className="h-3 w-3" />
-                        Images
+                        {t('links.permissionImages')}
                       </div>
                       <div className="flex items-center gap-1">
                         {link.allowAnonymousFiles ? <CheckCircle className="h-3 w-3 text-green-500" /> : <XCircle className="h-3 w-3 text-red-500" />}
                         <FileText className="h-3 w-3" />
-                        Fichiers
+                        {t('links.permissionFiles')}
                       </div>
                       <div className="flex items-center gap-1">
                         {link.allowViewHistory ? <CheckCircle className="h-3 w-3 text-green-500" /> : <XCircle className="h-3 w-3 text-red-500" />}
                         <Eye className="h-3 w-3" />
-                        Historique
+                        {t('links.permissionHistory')}
                       </div>
                     </div>
                   </div>
@@ -280,10 +280,10 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
                     <>
                       <Separator />
                       <div>
-                        <h5 className="font-medium text-xs mb-2">Restrictions</h5>
+                        <h5 className="font-medium text-xs mb-2">{t('links.restrictions')}</h5>
                         {link.allowedLanguages.length > 0 && (
                           <div className="mb-1">
-                            <span className="text-xs font-medium">Langues:</span>
+                            <span className="text-xs font-medium">{t('links.languagesLabel')}</span>
                             <p className="text-xs text-gray-600 dark:text-gray-400">
                               {link.allowedLanguages.join(', ')}
                             </p>
@@ -291,7 +291,7 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
                         )}
                         {link.allowedCountries.length > 0 && (
                           <div>
-                            <span className="text-xs font-medium">Pays:</span>
+                            <span className="text-xs font-medium">{t('links.countriesLabel')}</span>
                             <p className="text-xs text-gray-600 dark:text-gray-400">
                               {link.allowedCountries.join(', ')}
                             </p>
@@ -314,7 +314,7 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium flex items-center">
           <Link2 className="h-4 w-4 mr-2" />
-          Liens de partage
+          {t('links.title')}
         </h3>
         <Badge variant="outline" className="text-xs">
           {links.length}
@@ -339,7 +339,7 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
               <div>
                 <h4 className="text-xs font-medium text-green-700 mb-2 flex items-center">
                   <CheckCircle className="h-3 w-3 mr-1" />
-                  Liens actifs ({activeLinks.length})
+                  {t('links.activeLinks', { count: activeLinks.length })}
                 </h4>
                 {activeLinks.map(renderLinkCard)}
               </div>
@@ -350,7 +350,7 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
               <div>
                 <h4 className="text-xs font-medium text-gray-500 mb-2 flex items-center">
                   <XCircle className="h-3 w-3 mr-1" />
-                  Liens expirés ({expiredLinks.length})
+                  {t('links.expiredLinks', { count: expiredLinks.length })}
                 </h4>
                 {expiredLinks.map(renderLinkCard)}
               </div>

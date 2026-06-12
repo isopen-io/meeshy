@@ -114,6 +114,18 @@ function PostCard({
     setShowReactionPicker(false);
   }, [onReact]);
 
+  const handleCardKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClick?.();
+    }
+  }, [onClick]);
+
+  const clickableProps = onClick
+    ? { role: 'button' as const, tabIndex: 0, onClick, onKeyDown: handleCardKeyDown }
+    : {};
+
   const hasTranslations = translations && translations.length > 0;
   const hasReactions = reactionSummary && Object.keys(reactionSummary).length > 0;
   const hasMedia = media && media.length > 0;
@@ -143,7 +155,7 @@ function PostCard({
           ) : (
             <Avatar name={author.emoji || author.name} size="md" />
           )}
-          <div className="flex-1 cursor-pointer" onClick={onClick}>
+          <div className="flex-1 cursor-pointer" {...clickableProps}>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[var(--gp-text-primary)]">
                 {author.name}
@@ -201,7 +213,7 @@ function PostCard({
         </div>
 
         {/* Content with TranslationToggle */}
-        <div className="cursor-pointer" onClick={onClick}>
+        <div className="cursor-pointer" {...clickableProps}>
           {hasTranslations ? (
             <div className="mb-3">
               <TranslationToggle
@@ -220,9 +232,9 @@ function PostCard({
                 <button
                   onClick={(e) => { e.stopPropagation(); onTranslate(); }}
                   className="mt-1 text-xs text-[var(--gp-terracotta)] hover:underline"
-                  aria-label="Translate post"
+                  aria-label={t('post.translatePost')}
                 >
-                  Translate
+                  {t('post.translate')}
                 </button>
               )}
             </div>

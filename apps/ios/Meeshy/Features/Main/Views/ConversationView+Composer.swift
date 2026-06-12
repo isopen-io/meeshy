@@ -97,7 +97,7 @@ extension ConversationView {
             UniversalComposerBar(
             style: .light,
             mode: .message,
-            accentColor: viewModel.ephemeralDuration != nil ? "FF6B6B" : viewModel.isBlurEnabled ? "A855F7" : viewModel.pendingEffects.hasAnyEffect ? "6366F1" : accentColor,
+            accentColor: viewModel.ephemeralDuration != nil ? MeeshyColors.errorHex : viewModel.isBlurEnabled ? MeeshyColors.trackingAccentHex : viewModel.pendingEffects.hasAnyEffect ? MeeshyColors.brandPrimaryHex : accentColor,
             secondaryColor: secondaryColor,
             selectedLanguage: composerState.selectedLanguage,
             onLanguageChange: { composerState.selectedLanguage = $0 },
@@ -397,17 +397,17 @@ extension ConversationView {
     var composerEditBanner: some View {
         HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 2)
-                .fill(Color(hex: "F8B500"))
+                .fill(MeeshyColors.warning)
                 .frame(width: 3, height: 36)
 
             Image(systemName: "pencil")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(Color(hex: "F8B500"))
+                .foregroundColor(MeeshyColors.warning)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(String(localized: "conversation.view.composer.edit_message", defaultValue: "Modifier le message", bundle: .main))
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color(hex: "F8B500"))
+                    .foregroundColor(MeeshyColors.warning)
 
                 Text(composerState.editingOriginalContent ?? "")
                     .font(.system(size: 12))
@@ -432,10 +432,10 @@ extension ConversationView {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(theme.surfaceGradient(tint: "F8B500"))
+                .fill(theme.surfaceGradient(tint: MeeshyColors.warningHex))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(theme.border(tint: "F8B500", intensity: 0.3), lineWidth: 1)
+                        .stroke(theme.border(tint: MeeshyColors.warningHex, intensity: 0.3), lineWidth: 1)
                 )
         )
         .accessibilityElement(children: .combine)
@@ -560,7 +560,7 @@ extension ConversationView {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: "2ECC71").opacity(0.15), Color(hex: "27AE60").opacity(0.08)],
+                            colors: [MeeshyColors.success.opacity(0.15), MeeshyColors.success.opacity(0.08)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -568,15 +568,15 @@ extension ConversationView {
                     .frame(width: 40, height: 40)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color(hex: "2ECC71").opacity(0.2), lineWidth: 0.5)
+                            .stroke(MeeshyColors.success.opacity(0.2), lineWidth: 0.5)
                     )
 
                 VStack(spacing: 1) {
                     Image(systemName: "mappin.circle.fill")
                         .font(.system(size: 18))
-                        .foregroundStyle(Color(hex: "2ECC71"), Color(hex: "2ECC71").opacity(0.2))
+                        .foregroundStyle(MeeshyColors.success, MeeshyColors.success.opacity(0.2))
                     Circle()
-                        .fill(Color(hex: "2ECC71").opacity(0.3))
+                        .fill(MeeshyColors.success.opacity(0.3))
                         .frame(width: 6, height: 3)
                         .scaleEffect(x: 1.8, y: 1)
                 }
@@ -786,7 +786,7 @@ extension ConversationView {
             RoundedRectangle(cornerRadius: 10)
                 .fill(
                     LinearGradient(
-                        colors: [Color(hex: "2ECC71"), Color(hex: "27AE60")],
+                        colors: [MeeshyColors.success, MeeshyColors.successDeep],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )

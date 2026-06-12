@@ -1,5 +1,5 @@
 import UIKit
-import AVFoundation
+@preconcurrency import AVFoundation
 import MeeshySDK
 import os
 
@@ -824,9 +824,9 @@ extension StoryBackgroundLayer {
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: item,
                 queue: .main
-            ) { [weak self] _ in
-                self?.avPlayer?.seek(to: .zero)
-                self?.avPlayer?.play()
+            ) { [weak player = avPlayer] _ in
+                player?.seek(to: .zero)
+                player?.play()
             }
         }
 

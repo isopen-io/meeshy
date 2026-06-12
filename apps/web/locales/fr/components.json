@@ -207,7 +207,14 @@
       "unlike": "Ne plus aimer le post",
       "repost": "Republier",
       "bookmark": "Enregistrer",
-      "removeBookmark": "Retirer des enregistrements"
+      "removeBookmark": "Retirer des enregistrements",
+      "translate": "Traduire",
+      "translatePost": "Traduire le post"
+    },
+    "videoPlayer": {
+      "play": "Lecture",
+      "pause": "Pause",
+      "seek": "Progression de la vidéo"
     }
   }
 }

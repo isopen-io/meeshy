@@ -2892,61 +2892,71 @@ export class NotificationService {
   }
 
   /**
-   * Marque toutes les notifications d'une conversation comme lues
-   * Note: Filtre simplifié car Prisma MongoDB ne supporte pas les filtres JSON complexes
+   * Marque comme lues toutes les notifications non lues de l'utilisateur dont le
+   * `context` JSON porte la valeur attendue (conversationId, postId, …).
+   *
+   * Un SEUL update Mongo via $runCommandRaw : l'API Prisma ne filtre pas les
+   * chemins JSON sur MongoDB, mais le moteur sait le faire nativement
+   * (`context.<clé>`), en s'appuyant sur l'index [userId, isRead]. Plus de
+   * findMany de toutes les non-lues + filtre en mémoire + updateMany par ids.
+   *
+   * Le filtre est scopé par userId au niveau Mongo (anti-IDOR). Les utilisateurs
+   * anonymes (userId = sessionToken, pas un ObjectId) n'ont pas de notifications :
+   * early-return 0.
+   */
+  private async markContextNotificationsAsRead(
+    userId: string,
+    contextKey: 'conversationId' | 'postId',
+    contextValue: string
+  ): Promise<number> {
+    if (!/^[0-9a-f]{24}$/i.test(userId)) {
+      return 0;
+    }
+
+    try {
+      const result = await (this.prisma as unknown as {
+        $runCommandRaw: (cmd: Record<string, unknown>) => Promise<{ nModified?: number }>;
+      }).$runCommandRaw({
+        update: 'Notification',
+        updates: [{
+          q: {
+            userId: { $oid: userId },
+            isRead: false,
+            [`context.${contextKey}`]: contextValue,
+          },
+          u: { $set: { isRead: true, readAt: { $date: new Date().toISOString() } } },
+          multi: true,
+        }],
+      });
+
+      const count = result?.nModified ?? 0;
+
+      if (count > 0) {
+        // Rafraîchir les compteurs côté client (cloche + badge) en temps réel.
+        this.emitCountsUpdate(userId).catch(() => {});
+      }
+
+      return count;
+    } catch (error) {
+      notificationLogger.error('Failed to mark context notifications as read', {
+        error,
+        userId,
+        contextKey,
+        contextValue,
+      });
+      return 0;
+    }
+  }
+
+  /**
+   * Marque toutes les notifications d'une conversation comme lues.
    *
    * Émet `notification:counts` après marquage (si `io` est branché) afin que la
    * cloche in-app et le badge se mettent à jour en temps réel dès que
    * l'utilisateur ouvre la conversation (contenu consommé → notifications lues).
    */
   async markConversationNotificationsAsRead(userId: string, conversationId: string): Promise<number> {
-    try {
-      // Récupérer toutes les notifications non lues de l'utilisateur
-      const notifications = await this.prisma.notification.findMany({
-        where: {
-          userId,
-          isRead: false,
-        }
-      });
-
-      // Filtrer côté application pour trouver celles liées à cette conversation
-      // Note: Vérifier que context existe et n'est pas null (anciennes données)
-      const relevantIds = notifications
-        .filter((n: any) => {
-          // Ignorer les notifications avec context null ou invalide
-          if (!n.context || typeof n.context !== 'object') {
-            notificationLogger.warn('Notification with invalid context found', {
-              notificationId: n.id,
-              userId: n.userId,
-              contextValue: n.context
-            });
-            return false;
-          }
-          return n.context.conversationId === conversationId;
-        })
-        .map((n: any) => n.id as string);
-
-      if (relevantIds.length === 0) {
-        return 0;
-      }
-
-      const result = await this.prisma.notification.updateMany({
-        where: { id: { in: relevantIds } },
-        data: { isRead: true, readAt: new Date() },
-      });
-
-      // Rafraîchir les compteurs côté client (cloche + badge) en temps réel.
-      this.emitCountsUpdate(userId).catch(() => {});
-
-      return result.count;
-    } catch (error) {
-      notificationLogger.error('Failed to mark conversation notifications as read', {
-        error,
-        userId,
-        conversationId,
-      });
-      return 0;
-    }
+    return this.markContextNotificationsAsRead(userId, 'conversationId', conversationId);
   }
 
   /**
@@ -2955,44 +2965,10 @@ export class NotificationService {
    * viewer de story, vue d'un post dans le feed, ouverture d'un statut) afin
    * que les notifications « X a publié une story / un statut / un post », ainsi
    * que les réactions / commentaires sur ce post, ne restent pas non lues.
-   *
-   * Même contrainte que pour les conversations : MongoDB ne sait pas filtrer sur
-   * `context.postId` (JSON), donc on récupère les non-lues puis on filtre en
-   * mémoire avant un `updateMany` ciblé par ids. Émet `notification:counts`.
+   * Émet `notification:counts`.
    */
   async markPostNotificationsAsRead(userId: string, postId: string): Promise<number> {
-    try {
-      const notifications = await this.prisma.notification.findMany({
-        where: { userId, isRead: false },
-      });
-
-      const relevantIds = notifications
-        .filter((n: any) => {
-          if (!n.context || typeof n.context !== 'object') return false;
-          return n.context.postId === postId;
-        })
-        .map((n: any) => n.id as string);
-
-      if (relevantIds.length === 0) {
-        return 0;
-      }
-
-      const result = await this.prisma.notification.updateMany({
-        where: { id: { in: relevantIds } },
-        data: { isRead: true, readAt: new Date() },
-      });
-
-      this.emitCountsUpdate(userId).catch(() => {});
-
-      return result.count;
-    } catch (error) {
-      notificationLogger.error('Failed to mark post notifications as read', {
-        error,
-        userId,
-        postId,
-      });
-      return 0;
-    }
+    return this.markContextNotificationsAsRead(userId, 'postId', postId);
   }
 
   /**

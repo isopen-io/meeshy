@@ -1,4 +1,7 @@
+'use client';
+
 import { Users, Shield, Eye, Search, X, Check } from 'lucide-react';
+import { useI18n } from '@/hooks/useI18n';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -49,16 +52,18 @@ export function CreateGroupModal({
   toggleUserSelection,
   onCreateGroup,
 }: CreateGroupModalProps) {
+  const { t } = useI18n('dashboard');
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto dark:bg-gray-800 dark:border-gray-700">
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
             <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            <span className="dark:text-gray-100">Créer une nouvelle communauté</span>
+            <span className="dark:text-gray-100">{t('createGroupModal.title')}</span>
           </DialogTitle>
           <DialogDescription className="dark:text-gray-400">
-            Créez une communauté pour organiser vos conversations avec plusieurs personnes
+            {t('createGroupModal.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -66,13 +71,13 @@ export function CreateGroupModal({
           {/* Group name */}
           <div>
             <Label htmlFor="groupName" className="text-sm font-medium dark:text-gray-200">
-              Nom de la communauté *
+              {t('createGroupModal.nameLabel')}
             </Label>
             <Input
               id="groupName"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
-              placeholder="Ex: Équipe Marketing, Famille, Amis..."
+              placeholder={t('createGroupModal.namePlaceholder')}
               className="mt-1 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
             />
           </div>
@@ -80,13 +85,13 @@ export function CreateGroupModal({
           {/* Description */}
           <div>
             <Label htmlFor="groupDescription" className="text-sm font-medium dark:text-gray-200">
-              Description (optionnelle)
+              {t('createGroupModal.descriptionLabel')}
             </Label>
             <Textarea
               id="groupDescription"
               value={groupDescription}
               onChange={(e) => setGroupDescription(e.target.value)}
-              placeholder="Décrivez le but de cette communauté..."
+              placeholder={t('createGroupModal.descriptionPlaceholder')}
               className="mt-1 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
               rows={2}
             />
@@ -95,11 +100,11 @@ export function CreateGroupModal({
           {/* Privacy */}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label className="text-sm font-medium dark:text-gray-200">Communauté privée</Label>
+              <Label className="text-sm font-medium dark:text-gray-200">{t('createGroupModal.privateLabel')}</Label>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {isGroupPrivate
-                  ? 'Seuls les membres invités peuvent rejoindre'
-                  : "La communauté peut être découverte et rejointe par d'autres"}
+                  ? t('createGroupModal.privateHint')
+                  : t('createGroupModal.publicHint')}
               </p>
             </div>
             <div className="flex items-center space-x-2">
@@ -115,7 +120,7 @@ export function CreateGroupModal({
           {/* User search */}
           <div>
             <Label htmlFor="userSearch" className="text-sm font-medium dark:text-gray-200">
-              Rechercher des membres
+              {t('createGroupModal.searchLabel')}
             </Label>
             <div className="relative mt-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
@@ -123,7 +128,7 @@ export function CreateGroupModal({
                 id="userSearch"
                 value={groupSearchQuery}
                 onChange={(e) => setGroupSearchQuery(e.target.value)}
-                placeholder="Rechercher par nom ou username..."
+                placeholder={t('createGroupModal.searchPlaceholder')}
                 className="pl-10 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
               />
             </div>
@@ -133,7 +138,7 @@ export function CreateGroupModal({
           {selectedUsers.length > 0 && (
             <div>
               <Label className="text-sm font-medium dark:text-gray-200">
-                Membres sélectionnés ({selectedUsers.length + 1} au total, vous inclus)
+                {t('createGroupModal.selectedMembers', { count: selectedUsers.length + 1 })}
               </Label>
               <div className="flex flex-wrap gap-2 mt-2">
                 {/* Current user (admin) */}
@@ -149,7 +154,13 @@ export function CreateGroupModal({
                     className="flex items-center gap-1 dark:bg-gray-700 dark:text-gray-300"
                   >
                     {user.displayName || user.username}
-                    <X className="h-3 w-3 cursor-pointer" onClick={() => toggleUserSelection(user)} />
+                    <button
+                      type="button"
+                      aria-label={t('createGroupModal.removeMember', { name: user.displayName || user.username })}
+                      onClick={() => toggleUserSelection(user)}
+                    >
+                      <X className="h-3 w-3 cursor-pointer" />
+                    </button>
                   </Badge>
                 ))}
               </div>
@@ -158,18 +169,18 @@ export function CreateGroupModal({
 
           {/* Users list */}
           <div>
-            <Label className="text-sm font-medium dark:text-gray-200">Utilisateurs disponibles</Label>
+            <Label className="text-sm font-medium dark:text-gray-200">{t('createGroupModal.availableUsers')}</Label>
             <ScrollArea className="h-48 mt-2 border rounded-lg dark:border-gray-600 dark:bg-gray-700/50">
               {isLoadingUsers ? (
                 <div className="p-4 text-center text-gray-500 dark:text-gray-400">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 dark:border-blue-400 mx-auto mb-2"></div>
-                  Chargement des utilisateurs...
+                  {t('createGroupModal.loadingUsers')}
                 </div>
               ) : availableUsers.length === 0 ? (
                 <div className="p-4 text-center text-gray-500 dark:text-gray-400">
                   {groupSearchQuery.trim()
-                    ? 'Aucun utilisateur trouvé pour cette recherche'
-                    : 'Aucun utilisateur disponible'}
+                    ? t('createGroupModal.noUsersFound')
+                    : t('createGroupModal.noUsersAvailable')}
                 </div>
               ) : (
                 <div className="p-2">
@@ -178,12 +189,20 @@ export function CreateGroupModal({
                     return (
                       <div
                         key={user.id}
+                        role="button"
+                        tabIndex={0}
                         className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600/50 ${
                           isSelected
                             ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
                             : ''
                         }`}
                         onClick={() => toggleUserSelection(user)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            toggleUserSelection(user);
+                          }
+                        }}
                       >
                         <Avatar className="h-8 w-8">
                           <AvatarImage src={user.avatar} />
@@ -208,16 +227,20 @@ export function CreateGroupModal({
 
           {/* Actions */}
           <div className="flex space-x-3 pt-4">
-            <Button onClick={onCreateGroup} disabled={!groupName.trim() || isCreatingGroup} className="flex-1">
+            <Button
+              onClick={onCreateGroup}
+              disabled={!groupName.trim() || isCreatingGroup}
+              className="flex-1 dark:bg-blue-700 dark:text-gray-100 dark:hover:bg-blue-800"
+            >
               <Users className="mr-2 h-4 w-4" />
-              {isCreatingGroup ? 'Création...' : 'Créer la communauté'}
+              {isCreatingGroup ? t('createGroupModal.creating') : t('createGroupModal.create')}
             </Button>
             <Button
               onClick={onClose}
               variant="outline"
               className="dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
             >
-              Annuler
+              {t('createGroupModal.cancel')}
             </Button>
           </div>
         </div>

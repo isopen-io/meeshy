@@ -1,0 +1,72 @@
+{
+  "search": {
+    "pageTitle": "Recherche",
+    "hero": {
+      "title": "Recherche",
+      "subtitle": "Découvrez des utilisateurs, conversations et communautés sur Meeshy"
+    },
+    "form": {
+      "inputLabel": "Rechercher",
+      "placeholder": "Rechercher des utilisateurs, conversations, communautés...",
+      "submit": "Rechercher",
+      "searching": "Recherche..."
+    },
+    "tabs": {
+      "users": "Utilisateurs",
+      "conversations": "Conversations",
+      "communities": "Communautés"
+    },
+    "results": {
+      "count": "{count} résultat pour « {query} »",
+      "countPlural": "{count} résultats pour « {query} »",
+      "loading": "Recherche en cours..."
+    },
+    "empty": {
+      "users": "Aucun utilisateur trouvé",
+      "conversations": "Aucune conversation trouvée",
+      "communities": "Aucune communauté trouvée",
+      "hint": "Essayez avec un autre terme de recherche"
+    },
+    "user": {
+      "online": "En ligne",
+      "offline": "Hors ligne",
+      "moreActions": "Plus d'actions",
+      "cancelRequest": "Annuler la demande",
+      "addFriend": "Ajouter en ami",
+      "viewProfile": "Voir le profil",
+      "sendMessage": "Envoyer un message",
+      "cancel": "Annuler",
+      "add": "Ajouter"
+    },
+    "conversation": {
+      "untitled": "Conversation sans titre",
+      "typeDirect": "Direct",
+      "typeGroup": "Groupe",
+      "typePublic": "Public",
+      "typeGlobal": "Global",
+      "unread": "{count} message non lu",
+      "unreadPlural": "{count} messages non lus",
+      "lastActivity": "Dernière activité : {date}"
+    },
+    "community": {
+      "private": "Privé",
+      "public": "Public",
+      "member": "{count} membre",
+      "memberPlural": "{count} membres",
+      "join": "Rejoindre"
+    },
+    "toasts": {
+      "loginRequired": "Vous devez être connecté pour effectuer une recherche",
+      "searchError": "Erreur lors de la recherche",
+      "requestSent": "Demande d'ami envoyée",
+      "requestError": "Erreur lors de l'envoi de la demande",
+      "requestCancelled": "Demande annulée",
+      "cancelError": "Erreur lors de l'annulation",
+      "conversationCreated": "Conversation créée",
+      "conversationError": "Erreur lors de la création de la conversation",
+      "joinedCommunity": "Vous avez rejoint la communauté",
+      "joinError": "Impossible de rejoindre la communauté",
+      "joinAttemptError": "Erreur lors de la tentative de rejoindre la communauté"
+    }
+  }
+}

@@ -265,6 +265,46 @@ class MessageRepository @Inject constructor(
         return true
     }
 
+    /**
+     * Applies a `read-status:updated` receipt to the conversation's cached
+     * messages. Mirrors iOS ConversationSyncEngine.applyReadReceipt: only own,
+     * server-acked messages at or before the frontier move, and only upward —
+     * the gateway summary is an authoritative recount, never a downgrade.
+     */
+    suspend fun applyReadReceipt(
+        conversationId: String,
+        ownSenderId: String,
+        deliveredCount: Int,
+        readCount: Int,
+        frontierIso: String?,
+    ) {
+        val incomingRank = deliveryRank(deliveredCount, readCount, readByAllAt = null)
+        if (incomingRank == RANK_SENT) return
+        val frontier = frontierIso?.let(::isoToEpochMillis) ?: Long.MAX_VALUE
+        database.withTransaction {
+            val upgraded = messageDao.listForConversation(conversationId).mapNotNull { row ->
+                if (row.sendState != null || row.createdAt > frontier) return@mapNotNull null
+                val message = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
+                if (message.senderId != ownSenderId) return@mapNotNull null
+                if (deliveryRank(message.deliveredCount, message.readCount, message.readByAllAt) >= incomingRank) {
+                    return@mapNotNull null
+                }
+                row.copy(
+                    payload = MeeshyApi.json.encodeToString(
+                        message.copy(deliveredCount = deliveredCount, readCount = readCount),
+                    ),
+                )
+            }
+            if (upgraded.isNotEmpty()) messageDao.upsertAll(upgraded)
+        }
+    }
+
+    private fun deliveryRank(deliveredCount: Int, readCount: Int, readByAllAt: String?): Int = when {
+        readByAllAt != null || readCount > 0 -> RANK_READ
+        deliveredCount > 0 -> RANK_DELIVERED
+        else -> RANK_SENT
+    }
+
     private suspend fun updateCachedMessage(
         messageId: String,
         requireSynced: Boolean,
@@ -297,6 +337,9 @@ class MessageRepository @Inject constructor(
 
     private companion object {
         const val OLDER_PAGE_SIZE = 30
+        const val RANK_SENT = 0
+        const val RANK_DELIVERED = 1
+        const val RANK_READ = 2
     }
 
     private fun cacheSource(conversationId: String) = MessageCacheSource(

@@ -13,6 +13,7 @@ import me.meeshy.sdk.user.UserRepository
 import javax.inject.Inject
 
 data class SettingsUiState(
+    val userId: String? = null,
     val username: String? = null,
     val email: String? = null,
     val avatar: String? = null,
@@ -31,7 +32,7 @@ class SettingsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             sessionRepository.currentUser.collect { user ->
-                _state.update { it.copy(username = user?.username, email = user?.email, avatar = user?.avatar) }
+                _state.update { it.copy(userId = user?.id, username = user?.username, email = user?.email, avatar = user?.avatar) }
             }
         }
     }

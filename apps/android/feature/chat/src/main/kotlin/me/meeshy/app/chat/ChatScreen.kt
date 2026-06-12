@@ -59,7 +59,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -426,7 +428,7 @@ private fun MessageActionsSheet(
 private fun QuickReactionButton(emoji: String, isMine: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(44.dp)
+            .size(48.dp)
             .clip(CircleShape)
             .background(
                 if (isMine) MeeshyPalette.Indigo500.copy(alpha = 0.22f) else Color.Transparent,
@@ -454,6 +456,7 @@ private fun SheetAction(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
+            .semantics { role = Role.Button }
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
@@ -467,9 +470,9 @@ private fun SheetAction(
 private fun TypingIndicator(typingUsers: List<String>, modifier: Modifier = Modifier) {
     if (typingUsers.isEmpty()) return
     val text = when (typingUsers.size) {
-        1 -> "${typingUsers[0]} is typing..."
-        2 -> "${typingUsers[0]} and ${typingUsers[1]} are typing..."
-        else -> "${typingUsers.size} people are typing..."
+        1 -> stringResource(R.string.chat_typing_one, typingUsers[0])
+        2 -> stringResource(R.string.chat_typing_two, typingUsers[0], typingUsers[1])
+        else -> stringResource(R.string.chat_typing_many, typingUsers.size)
     }
     Text(
         text = text,
@@ -542,13 +545,13 @@ private fun ChatComposer(
                     Icon(
                         imageVector = Icons.Filled.Edit,
                         contentDescription = null,
-                        tint = MeeshyPalette.Indigo400,
+                        tint = accentColor,
                         modifier = Modifier.size(16.dp),
                     )
                     Text(
                         text = stringResource(R.string.chat_editing_label),
                         style = MaterialTheme.typography.labelMedium,
-                        color = MeeshyPalette.Indigo400,
+                        color = accentColor,
                         modifier = Modifier
                             .weight(1f)
                             .padding(start = MeeshySpacing.xs),

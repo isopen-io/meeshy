@@ -82,6 +82,9 @@ class ChatViewModel @Inject constructor(
     private val showingOriginal = MutableStateFlow<Set<String>>(emptySet())
     private val typingCleanupJobs = mutableMapOf<String, Job>()
     private var latestMessages: List<LocalMessage> = emptyList()
+    private var isEmittingTyping = false
+    private var typingReemitJob: Job? = null
+    private var typingIdleJob: Job? = null
 
     init {
         viewModelScope.launch { markConversationRead() }
@@ -153,6 +156,19 @@ class ChatViewModel @Inject constructor(
                     applyPeerReactionEvent(event, delta = -1)
                 }
             }
+            launch {
+                messageSocketManager.readStatusUpdated.collect { event ->
+                    if (event.conversationId != conversationId) return@collect
+                    val ownId = sessionRepository.currentUser.value?.id ?: return@collect
+                    messageRepository.applyReadReceipt(
+                        conversationId = conversationId,
+                        ownSenderId = ownId,
+                        deliveredCount = event.summary.deliveredCount,
+                        readCount = event.summary.readCount,
+                        frontierIso = event.updatedAt,
+                    )
+                }
+            }
         }
 
         viewModelScope.launch {
@@ -213,11 +229,55 @@ class ChatViewModel @Inject constructor(
 
     fun onDraftChange(value: String) {
         _state.update { it.copy(draft = value) }
+        if (value.isBlank()) {
+            stopTypingEmission()
+        } else {
+            startTypingEmission()
+        }
+    }
+
+    /**
+     * Mirrors iOS ConversationSocketHandler: one `typing:start` on the first
+     * keystroke, re-emitted every 3 s while typing continues (server timeouts),
+     * one `typing:stop` after 3 s of silence, an emptied draft, or a send.
+     */
+    private fun startTypingEmission() {
+        if (!isEmittingTyping) {
+            isEmittingTyping = true
+            messageSocketManager.emitTypingStart(conversationId)
+            typingReemitJob = viewModelScope.launch {
+                while (true) {
+                    delay(TYPING_REEMIT_MS)
+                    messageSocketManager.emitTypingStart(conversationId)
+                }
+            }
+        }
+        typingIdleJob?.cancel()
+        typingIdleJob = viewModelScope.launch {
+            delay(TYPING_IDLE_MS)
+            stopTypingEmission()
+        }
+    }
+
+    private fun stopTypingEmission() {
+        typingReemitJob?.cancel()
+        typingReemitJob = null
+        typingIdleJob?.cancel()
+        typingIdleJob = null
+        if (!isEmittingTyping) return
+        isEmittingTyping = false
+        messageSocketManager.emitTypingStop(conversationId)
+    }
+
+    override fun onCleared() {
+        stopTypingEmission()
+        super.onCleared()
     }
 
     fun send() {
         val text = _state.value.draft.trim()
         if (text.isEmpty()) return
+        stopTypingEmission()
         val editingId = _state.value.editingMessageId
         if (editingId != null) {
             applyEdit(editingId, text)
@@ -405,6 +465,8 @@ class ChatViewModel @Inject constructor(
     companion object {
         const val CONVERSATION_ID_ARG: String = "conversationId"
         private const val TYPING_TIMEOUT_MS = 5_000L
+        private const val TYPING_REEMIT_MS = 3_000L
+        private const val TYPING_IDLE_MS = 3_000L
     }
 }
 
