@@ -2,6 +2,7 @@ package me.meeshy.ui.component.bubble
 
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 
 public object BubbleContentBuilder {
 
@@ -14,6 +15,7 @@ public object BubbleContentBuilder {
         isFailed: Boolean = false,
         ownReactions: Set<String> = emptySet(),
         showOriginal: Boolean = false,
+        mediaBaseUrl: String? = null,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
@@ -35,13 +37,35 @@ public object BubbleContentBuilder {
             ?: emptyList()
         val replyToDeleted = message.replyTo?.deletedAt != null
         val replyToText = message.replyTo?.content?.takeUnless { replyToDeleted }
+        val visibleAttachments = if (isDeleted) emptyList() else message.attachments
+        val images = visibleAttachments
+            .filter { it.isImage && it.fileUrl != null }
+            .map { attachment ->
+                BubbleImage(
+                    attachmentId = attachment.id,
+                    url = resolveMediaUrl(attachment.fileUrl!!, mediaBaseUrl),
+                    thumbnailUrl = attachment.thumbnailUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                    width = attachment.width,
+                    height = attachment.height,
+                )
+            }
+        val files = visibleAttachments
+            .filterNot { it.isImage }
+            .map { attachment ->
+                BubbleFile(
+                    attachmentId = attachment.id,
+                    name = attachment.originalName ?: attachment.fileName ?: "Fichier",
+                    sizeBytes = attachment.fileSize,
+                )
+            }
+        val text = when {
+            isDeleted -> ""
+            isShowingOriginal -> message.content
+            else -> message.displayContent(preferences)
+        }
         return BubbleContent(
             messageId = message.id,
-            text = when {
-                isDeleted -> ""
-                isShowingOriginal -> message.content
-                else -> message.displayContent(preferences)
-            },
+            text = text,
             isOutgoing = isOutgoing,
             isTranslated = isTranslated,
             isShowingOriginal = isShowingOriginal,
@@ -57,9 +81,24 @@ public object BubbleContentBuilder {
             replyToText = replyToText,
             replyToDeleted = replyToDeleted,
             replyToSenderName = message.replyTo?.senderDisplayName,
-            replyToIsDeleted = replyToIsDeleted,
             isPending = isPending,
             clientMessageId = message.clientMessageId,
+            images = images,
+            files = files,
+            emojiOnlyCount = if (visibleAttachments.isEmpty()) {
+                EmojiDetector.emojiOnlyCount(text)
+            } else {
+                0
+            },
         )
+    }
+
+    private val ApiMessageAttachment.isImage: Boolean
+        get() = mimeType?.startsWith("image/") == true
+
+    private fun resolveMediaUrl(url: String, mediaBaseUrl: String?): String = when {
+        url.startsWith("http") -> url
+        mediaBaseUrl == null -> url
+        else -> mediaBaseUrl.trimEnd('/') + (if (url.startsWith("/")) url else "/$url")
     }
 }

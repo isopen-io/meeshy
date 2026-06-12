@@ -17,8 +17,8 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | Field | Value |
 |-------|-------|
 | Last completed iteration | 44 (web : date-format + MessageTimestamp locale-aware, i18n admin debug/archétypes/cache-hit, reconnaissance vocale Prisme ; iOS : Dynamic Type surface liens détail/create + i18n picker/expiration ; Android : expéditeur système i18n, deep links conversations) |
-| Last merged PR | #586 ; iter-44 en cours de merge |
-| Last Merged Base (commit) | aa5dfa6 (merge #586) |
+| Last merged PR | #588 (feat/uiux-iter33) ; iter-44 (PR #589) en cours de merge |
+| Last Merged Base (commit) | 813b7fe (post #588) |
 | Next iteration | **45** |
 | Next branch to create from | `main` (HEAD post-merge iter-44) |
 | Deferred carry-over for 45 | web : user-settings.tsx 17 toasts fr, participants-drawer (5) + links-section (3), 14 fichiers 'fr-FR' restants à migrer vers date-format, FriendRequestCard formateur local dupliqué, vérif aria-label SwipeableRow ; iOS : ConversationInfoSheet (52 fonts), ConversationDashboardView (43), TwoFactorSetupView (42, texte seulement), CallView (34), InviteFriendsSheet (33), ProfileView (32), GlobalSearchView (32), SettingsView (31), VoiceProfileManageView (29), FeedView+Attachments (29), DataExportView (17), NewConversationView (15), ChangePasswordView (14) ; Android : parité stories (UI absente, large) ; réactions par pièce jointe web+Android (wiring gateway) ; audit qualité es/pt web |
@@ -42,6 +42,7 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 30 | claude/dazzling-hawking-b4tdnk | #507 | ✅ |
 | 31 | claude/iter31-type-safety | #509 | ✅ |
 | 32 | feat/uiux-iter32 | #539 | ✅ |
+| 33 | feat/uiux-iter33 | #588 | ✅ |
 | 33–39 | (inline admin-i18n passes, commit-message numbering) | #544, #545, … | ✅ |
 | 40 | claude/friendly-brown-xuzpju | #575 | ✅ |
 | 41 | claude/blissful-ritchie-9vesx9 | #577 | ✅ |

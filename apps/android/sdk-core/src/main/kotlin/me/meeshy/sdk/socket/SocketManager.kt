@@ -3,8 +3,11 @@ package me.meeshy.sdk.socket
 import io.socket.client.IO
 import io.socket.client.Socket
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.TokenStore
 import org.json.JSONObject
@@ -12,6 +15,17 @@ import timber.log.Timber
 import java.net.URI
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** Observable connection lifecycle of the realtime socket. */
+enum class SocketConnectionState {
+    /** No socket, or torn down by an explicit [SocketManager.disconnect]. */
+    DISCONNECTED,
+
+    /** Connecting or auto-reconnecting (socket.io retries forever). */
+    CONNECTING,
+
+    CONNECTED,
+}
 
 /**
  * Manages the Socket.IO connection lifecycle (ARCHITECTURE.md §3).
@@ -30,10 +44,14 @@ class SocketManager @Inject constructor(
     val connected: SharedFlow<Unit> = _connected.asSharedFlow()
     val disconnected: SharedFlow<Unit> = _disconnected.asSharedFlow()
 
+    private val _connectionState = MutableStateFlow(SocketConnectionState.DISCONNECTED)
+    val connectionState: StateFlow<SocketConnectionState> = _connectionState.asStateFlow()
+
     val isConnected: Boolean get() = _socket?.connected() == true
 
     fun connect() {
         val token = tokenStore.jwt ?: tokenStore.sessionToken ?: return
+        _connectionState.value = SocketConnectionState.CONNECTING
         val opts = IO.Options().apply {
             auth = mapOf("token" to token)
             transports = arrayOf("websocket")
@@ -47,15 +65,22 @@ class SocketManager @Inject constructor(
 
         socket.on(Socket.EVENT_CONNECT) {
             Timber.d("Socket connected")
+            _connectionState.value = SocketConnectionState.CONNECTED
             _connected.tryEmit(Unit)
         }
         socket.on(Socket.EVENT_DISCONNECT) { args ->
             val reason = args.firstOrNull()?.toString() ?: "unknown"
             Timber.d("Socket disconnected: $reason")
+            if (_socket === socket) {
+                _connectionState.value = SocketConnectionState.CONNECTING
+            }
             _disconnected.tryEmit(Unit)
         }
         socket.on(Socket.EVENT_CONNECT_ERROR) { args ->
             Timber.e("Socket connect error: ${args.firstOrNull()}")
+            if (_socket === socket) {
+                _connectionState.value = SocketConnectionState.CONNECTING
+            }
         }
         socket.connect()
     }
@@ -63,6 +88,7 @@ class SocketManager @Inject constructor(
     fun disconnect() {
         _socket?.disconnect()
         _socket = null
+        _connectionState.value = SocketConnectionState.DISCONNECTED
     }
 
     fun reconnectWithToken() {

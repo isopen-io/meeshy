@@ -20,7 +20,7 @@ import { Loader2, Save, Key } from 'lucide-react';
 import { InfoIcon } from './InfoIcon';
 import { agentAdminService, type LlmConfigData, type LlmConfigUpdate } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
-import { useI18n } from '@/hooks/useI18n';
+import { useI18n } from '@/hooks/use-i18n';
 
 const PROVIDERS = [
   { value: 'openai', label: 'OpenAI' },
@@ -126,11 +126,11 @@ export function AgentLlmTab() {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-lg">Configuration LLM</CardTitle>
+        <CardTitle className="text-lg">{t('llm.cardTitle')}</CardTitle>
         {config?.hasApiKey && (
           <Badge variant="outline" className="text-green-600 border-green-200">
             <Key className="h-3 w-3 mr-1" />
-            Clé configurée
+            {t('llm.keyConfigured')}
           </Badge>
         )}
       </CardHeader>
@@ -139,7 +139,7 @@ export function AgentLlmTab() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <div className="flex items-center">
-              <Label>Provider</Label>
+              <Label>{t('llm.labelProvider')}</Label>
               <InfoIcon content="Source d'intelligence. OpenAI (GPT) est rapide et polyvalent. Anthropic (Claude) est excellent pour le raisonnement logique et le respect strict des consignes de sécurité." />
             </div>
             <Select
@@ -164,7 +164,7 @@ export function AgentLlmTab() {
           </div>
           <div className="space-y-2">
             <div className="flex items-center">
-              <Label>Modèle</Label>
+              <Label>{t('llm.labelModel')}</Label>
               <InfoIcon content="Version spécifique. Les modèles 'Mini' ou 'Haiku' sont optimisés pour le coût et la vitesse. Les versions complètes (4o, Sonnet) offrent une meilleure personnalité mais coûtent plus cher." />
             </div>
             <Select value={form.model} onValueChange={v => setForm(prev => ({ ...prev, model: v }))}>
@@ -182,7 +182,7 @@ export function AgentLlmTab() {
 
         {/* API Key */}
         <div className="space-y-2">
-          <Label>Clé API {config?.hasApiKey && '(laisser vide pour conserver)'}</Label>
+          <Label>{t('llm.labelApiKey')} {config?.hasApiKey && t('llm.labelApiKeyHint')}</Label>
           <Input
             type="password"
             value={form.apiKeyEncrypted ?? ''}
@@ -199,7 +199,7 @@ export function AgentLlmTab() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <Label>Température</Label>
+                <Label>{t('llm.labelTemperature')}</Label>
                 <InfoIcon content="Contrôle l'audace du modèle. À 0, le modèle est conservateur et répétitif (parfait pour la FAQ). À 0.8+, il devient inventif et fluide (idéal pour l'animation). Attention : au-delà de 1.5, les réponses peuvent perdre leur sens." />
               </div>
               <span className="text-sm text-gray-500 font-mono">{form.temperature?.toFixed(1)}</span>
@@ -214,7 +214,7 @@ export function AgentLlmTab() {
           </div>
           <div className="space-y-2">
             <div className="flex items-center">
-              <Label>Max Tokens</Label>
+              <Label>{t('llm.labelMaxTokens')}</Label>
               <InfoIcon content="Taille maximale de la réponse (incluant la ponctuation). Une valeur de 1024 correspond à environ 750 mots. Limiter cette valeur permet de contrôler directement les coûts et d'éviter les réponses interminables." />
             </div>
             <Input
@@ -235,7 +235,7 @@ export function AgentLlmTab() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <div className="flex items-center">
-                <Label>Budget quotidien (USD)</Label>
+                <Label>{t('llm.labelDailyBudget')}</Label>
                 <InfoIcon content="Arrêt d'urgence financier : si le coût cumulé des appels atteint ce montant, le provider est désactivé jusqu'à minuit. Prévoyez une marge de 20% par rapport à l'usage normal." />
               </div>
               <Input
@@ -248,7 +248,7 @@ export function AgentLlmTab() {
             </div>
             <div className="space-y-2">
               <div className="flex items-center">
-                <Label>Coût max par appel (USD)</Label>
+                <Label>{t('llm.labelMaxCostPerCall')}</Label>
                 <InfoIcon content="Protection contre les contextes explosifs : refuse de générer une réponse si l'historique est si long que le coût unitaire dépasse ce seuil. Évite les factures surprises sur un seul message." />
               </div>
               <Input
@@ -266,7 +266,7 @@ export function AgentLlmTab() {
 
         <Button onClick={handleSave} disabled={saving} className="w-full">
           {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-          Enregistrer
+          {t('llm.saveButton')}
         </Button>
       </CardContent>
     </Card>

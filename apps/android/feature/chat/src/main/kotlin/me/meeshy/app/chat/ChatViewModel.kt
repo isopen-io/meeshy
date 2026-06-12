@@ -22,6 +22,7 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ReactionUpdateEvent
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.session.SessionRepository
@@ -31,6 +32,11 @@ import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.BubbleContentBuilder
 import javax.inject.Inject
+
+data class ImageViewerTarget(
+    val messageId: String,
+    val imageIndex: Int,
+)
 
 data class ChatUiState(
     val messages: List<BubbleContent> = emptyList(),
@@ -47,6 +53,7 @@ data class ChatUiState(
     val ownReactions: Map<String, Set<String>> = emptyMap(),
     val isLoadingOlder: Boolean = false,
     val hasMoreOlder: Boolean = true,
+    val imageViewer: ImageViewerTarget? = null,
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
     val isEditing: Boolean get() = editingMessageId != null
@@ -60,6 +67,7 @@ class ChatViewModel @Inject constructor(
     private val reactionRepository: ReactionRepository,
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
+    private val config: MeeshyConfig,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -109,7 +117,9 @@ class ChatViewModel @Inject constructor(
             ) { result, user, own, originals -> BubbleInputs(result, user, own, originals) }
                 .collect { (result, user, own, originals) ->
                     latestMessages = result.valueOrNull() ?: latestMessages
-                    _state.update { it.applyResult(result, user, own, originals) }
+                    _state.update {
+                        it.applyResult(result, user, own, originals, config.socketUrl)
+                    }
                 }
         }
 
@@ -306,6 +316,14 @@ class ChatViewModel @Inject constructor(
         _state.update { it.copy(actionMessageId = null) }
     }
 
+    fun openImageViewer(messageId: String, imageIndex: Int) {
+        _state.update { it.copy(imageViewer = ImageViewerTarget(messageId, imageIndex)) }
+    }
+
+    fun dismissImageViewer() {
+        _state.update { it.copy(imageViewer = null) }
+    }
+
     fun toggleShowOriginal(messageId: String) {
         showingOriginal.update { if (messageId in it) it - messageId else it + messageId }
         _state.update { it.copy(actionMessageId = null) }
@@ -471,22 +489,24 @@ private fun ChatUiState.applyResult(
     currentUser: MeeshyUser?,
     ownReactions: Map<String, Set<String>>,
     showingOriginal: Set<String>,
+    mediaBaseUrl: String,
 ): ChatUiState = when (result) {
     is CacheResult.Fresh -> copy(
-        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal),
+        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl),
         ownReactions = ownReactions,
         isSyncing = false,
         showSkeleton = false,
         errorMessage = null,
     )
     is CacheResult.Stale -> copy(
-        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal),
+        messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl),
         ownReactions = ownReactions,
         isSyncing = true,
         showSkeleton = false,
     )
     is CacheResult.Syncing -> copy(
-        messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal) ?: messages,
+        messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl)
+            ?: messages,
         ownReactions = ownReactions,
         isSyncing = true,
         showSkeleton = result.value == null && messages.isEmpty() && errorMessage == null,
@@ -503,6 +523,7 @@ private fun List<LocalMessage>.toBubbles(
     currentUser: MeeshyUser?,
     ownReactions: Map<String, Set<String>>,
     showingOriginal: Set<String>,
+    mediaBaseUrl: String,
 ): List<BubbleContent> = map { local ->
     BubbleContentBuilder.build(
         message = local.message,
@@ -513,6 +534,7 @@ private fun List<LocalMessage>.toBubbles(
         isFailed = local.sendState == LocalSendState.FAILED,
         ownReactions = ownReactions[local.message.id] ?: emptySet(),
         showOriginal = local.message.id in showingOriginal,
+        mediaBaseUrl = mediaBaseUrl,
     )
 }
 

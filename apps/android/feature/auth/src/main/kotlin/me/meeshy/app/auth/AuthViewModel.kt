@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.feature.auth.R
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.net.NetworkResult
 import javax.inject.Inject

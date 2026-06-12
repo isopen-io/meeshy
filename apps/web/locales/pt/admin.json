@@ -344,14 +344,45 @@
   },
   "llm": {
     "generationSettings": "Configurações de geração",
-    "budgetManagement": "Gestão de orçamento"
+    "budgetManagement": "Gestão de orçamento",
+    "cardTitle": "Configuração LLM",
+    "keyConfigured": "Chave configurada",
+    "labelProvider": "Provedor",
+    "labelModel": "Modelo",
+    "labelTemperature": "Temperatura",
+    "labelMaxTokens": "Max Tokens",
+    "labelDailyBudget": "Orçamento diário (USD)",
+    "labelMaxCostPerCall": "Custo máx por chamada (USD)",
+    "labelApiKey": "Chave API",
+    "labelApiKeyHint": "(deixar vazio para manter)",
+    "saveButton": "Salvar"
   },
   "globalConfig": {
     "defaultProvider": "Provedor padrão",
     "globalScheduler": "Agendador global",
     "active": "Ativo",
     "disabled": "Desativado",
-    "none": "Nenhum"
+    "none": "Nenhum",
+    "cardTitle": "Configuração Global",
+    "cardSubtitle": "Kill switch global e parâmetros padrão",
+    "systemPromptLabel": "Prompt do Sistema Global",
+    "fallbackSection": "Fallback",
+    "labelFallbackProvider": "Provedor fallback",
+    "labelFallbackModel": "Modelo fallback",
+    "budgetSection": "Orçamento e Concorrência",
+    "labelDailyBudget": "Orçamento diário (USD)",
+    "labelMaxConcurrent": "Máx chamadas simultâneas",
+    "scanSection": "Parâmetros de varredura",
+    "labelEligibleTypes": "Tipos de conversas elegíveis",
+    "labelFreshness": "Atualidade mensagens (horas)",
+    "freshnessHint": "Mensagens mais antigas que este limite são ignoradas",
+    "labelMaxConversations": "Máx conversas/ciclo",
+    "maxConversationsHint": "0 = ilimitado",
+    "labelWeekdayBudget": "Orçamento varredura/dia (semana)",
+    "labelWeekendBudget": "Orçamento varredura/dia (fim de semana)",
+    "labelMinInterval": "Intervalo mín (seg)",
+    "labelMaxInterval": "Intervalo máx (seg)",
+    "saveButton": "Salvar"
   },
   "agentConfig": {
     "titleNew": "Nova configuração de agente",
@@ -1658,5 +1689,22 @@
     "apiResponse": "Resposta API /auth/me",
     "permissionsApi": "Permissões (API)",
     "permissionsDefault": "Permissões (padrão)"
+  },
+  "rankingPage": {
+    "back": "Voltar",
+    "title": "Classificações",
+    "description": "Classifique usuários, conversas, mensagens e links por vários critérios",
+    "podium": "Pódio dos campeões",
+    "top10": "Top 10",
+    "top25": "Top 25",
+    "top50": "Top 50",
+    "top100": "Top 100"
+  },
+  "settingsModal": {
+    "triggerButton": "Configurações",
+    "title": "Configurações de {username}",
+    "description": "Configure suas preferências de idioma e tradução automática",
+    "cancelButton": "Cancelar",
+    "saveButton": "Salvar"
   }
 }

@@ -183,7 +183,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Splash screen with brand animation + minimum display duration
 
 ## B. Conversations list
-- [ ] Cache-first instant load, cursor-based infinite scroll, pull-to-refresh (branded)
+- [~] Cache-first instant load done ; pull-to-refresh done (`PullToRefreshBox`,
+      spinner gated sur le geste utilisateur — les revalidations SWR de fond
+      restent silencieuses) ; cursor-based infinite scroll / branding pending
 - [ ] Sectioned list with collapsible user categories + pinned section + drag-to-category
 - [ ] Filtering (all/unread/personal/private/open/global/channels/favorites/archived) + search overlay
 - [ ] Communities carousel + category filter chips
@@ -191,11 +193,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Swipe actions (pin, mute, lock, archive, mark read/unread, block, hide)
 - [ ] Context menu (pin, mute, mark read, details, invite, favorite, move, lock, archive, block, delete)
 - [ ] Hard-press conversation preview popover
-- [ ] Conversation row: activity-heat background, dynamic tag overflow, rich last-message
-      preview (ephemeral/expired/hidden/view-once/draft/typing), unread badge, presence/story-ring/mood
+- [~] Conversation row: rich last-message preview done (labels type média
+      📷/🎬/🎵/📎/📍 port iOS, caption prioritaire, préfixe expéditeur en groupe,
+      « Vous » pour soi) + unread badge done ; ephemeral/expired/hidden/view-once/
+      draft/typing, activity-heat, tags, presence/story-ring/mood pending
 - [ ] Draft-aware ordering (drafts float to top); bump-to-top on send/receive
 - [ ] Cold-start skeletons + error-with-retry empty state
-- [ ] Connection-health banner (offline / disconnected / syncing / connected)
+- [x] Connection-health banner — `SocketManager.connectionState` (StateFlow
+      DISCONNECTED/CONNECTING/CONNECTED) → mapping pur `bannerFor` (la reconnexion
+      prime sur le sync) → strip animée sous l'app bar (Hors ligne / Reconnexion… /
+      Synchronisation…)
 - [ ] Conversation category create + expand/collapse; client-side tag aggregation for autocomplete
 - [ ] Create direct/group conversation via user search; add participants
 - [ ] Story tray + per-conversation story rings
@@ -204,7 +211,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 ## C. Chat / Messaging
 - [ ] Real-time 1:1 / group chat: send, edit, delete (for-me / for-everyone, 2h window), reply, forward
 - [x] Optimistic send with in-place server-ACK upgrade (no flicker) + `clientMessageId` reconciliation
-- [ ] Inverted message list, date section headers, joined banner, unread separator, E2EE disclaimer
+- [~] Date section headers done — `ChatListItem.DayHeader` interleavé +
+      `MessageDayLabel` (port iOS : Aujourd'hui/Hier/Avant-hier, jour de semaine
+      ≤6j, date complète + année si différente, label recalculé au rendu pour
+      le passage de minuit) ; inverted list / joined banner / unread separator /
+      E2EE disclaimer pending
 - [~] Pagination of older messages — before-cursor done (`MessageRepository.loadOlder`,
       windowed prune keeps paginated history, scroll-top trigger + spinner); around-anchor pending
 - [ ] Reactions: quick-strip (usage-ordered) + full picker; add/remove; reaction detail breakdown
@@ -212,8 +223,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [~] Reply: long-press → Répondre, bannière composer (accent, annulable),
       replyToId optimiste + aperçu cité dans la bulle ; swipe / forward / jump pending
 - [ ] Reply-count pills + reply thread overlay
-- [ ] Message bubbles: text, emoji-only (oversized), image/video grid (1–4+ collage), inline
-      carousel, audio, files, location, shared-contact card
+- [~] Message bubbles: text done ; pièces jointes image (grille 1–4 + overlay « +N »,
+      URL relative résolue contre l'origine gateway, `ApiMessage.attachments` persisté
+      via le payload Room) + repli fichier générique (nom + taille) done ;
+      emoji-only oversized done (`EmojiDetector` port iOS 90/60/45, free-floating
+      sans bulle, dans la bulle centré si reply) ;
+      carousel / audio / location / contact pending
 - [ ] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight)
 - [ ] Quoted-reply previews incl. story-reply previews (counts, thumbnails)
 - [ ] Delivery status (8-state) checkmarks + offline-pending hourglass + failed-message retry
@@ -442,7 +457,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Full-screen image editor (crop + ratio presets, 12 filters, brightness/contrast/saturation/
       sharpness/vignette, 6 effects, rotate)
 - [ ] Image/video preview screens per context (story/post/message/avatar/banner) with Edit + Use
-- [ ] Image viewer (pinch-zoom, pan, double-tap, drag-to-dismiss); save image to gallery
+- [~] Image viewer — `MeeshyImageViewer` plein écran (pager multi-images, pinch-zoom
+      borné 1–4×, pan clampé, double-tap 2.5×, tap-to-dismiss, compteur i/n),
+      ouvert au tap sur la grille d'images d'une bulle ; drag-to-dismiss +
+      save-to-gallery pending
 - [ ] Code attachment viewer (~16 languages, syntax highlight, GitHub light/dark, copy)
 - [ ] Document viewer (PDF/presentation/spreadsheet) with share
 - [ ] Image/video compression before upload (context-aware quality); save media to "Meeshy" album
