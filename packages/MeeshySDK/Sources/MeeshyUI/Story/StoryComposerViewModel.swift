@@ -543,6 +543,18 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         return vm
     }
 
+    /// Teardown du moteur timeline SI créé — sans forcer la création lazy.
+    /// Seul caller production de `StoryTimelineEngine.shutdown()` (contrat
+    /// "owner MUST call shutdown()") : sans lui, l'observer périodique
+    /// AVPlayer n'était jamais retiré avant libération, l'AVAudioEngine du
+    /// mixer jamais stoppé et un preview en cours jamais coupé. L'instance
+    /// est nil-ée : le prochain `onAppear` → `loadCurrentSlideIntoTimeline()`
+    /// recrée un moteur frais.
+    public func shutdownTimelineIfNeeded() {
+        _timelineViewModel?.shutdown()
+        _timelineViewModel = nil
+    }
+
     /// Prefix used for clips that the timeline editor surfaces for context but
     /// that are NOT real `slide.effects.mediaObjects`. The flagship example is
     /// the "background image" lane: a slide that only has a static bg image
@@ -1542,6 +1554,9 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     private var memoryObserver: Any?
 
     func startMemoryObserver() {
+        // Idempotent : un `onAppear` répété écrasait sinon le token précédent
+        // sans le retirer — observers zombies accumulés dans NotificationCenter.
+        stopMemoryObserver()
         memoryObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
             object: nil, queue: .main

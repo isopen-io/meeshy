@@ -1560,10 +1560,18 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Sync Engine Observation
 
+    /// Slot dédié (et non `cancellables`) : `.task` re-fire à chaque
+    /// ré-apparition de l'écran — la ré-assignation remplace l'abonnement
+    /// précédent au lieu d'en accumuler N (chaque signal sync déclenchait
+    /// sinon N reloads cache + reconciliations redondants).
+    private var syncCancellable: AnyCancellable? {
+        willSet { syncCancellable?.cancel() }
+    }
+
     func observeSync() {
         let targetId = conversationId
         let publisher = syncEngine.messagesDidChange
-        publisher
+        syncCancellable = publisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] changedId in
                 guard changedId == targetId else { return }
@@ -1611,7 +1619,6 @@ class ConversationViewModel: ObservableObject {
                     }
                 }
             }
-            .store(in: &cancellables)
     }
 
     // MARK: - Load Older Messages (infinite scroll)

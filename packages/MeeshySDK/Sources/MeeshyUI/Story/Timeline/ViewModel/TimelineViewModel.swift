@@ -30,6 +30,10 @@ public protocol TimelineEngineProviding: AnyObject {
     func stop()
     func toggle()
     func setMode(_ mode: TimelineEngineMode)
+    /// Teardown explicite (AVPlayer, observers, audio mixer). Idempotent.
+    /// L'owner DOIT l'appeler avant de lâcher l'engine — cf. le contrat
+    /// documenté de `StoryTimelineEngine.shutdown()`.
+    func shutdown()
 }
 
 // MARK: - TimelineViewModel
@@ -134,6 +138,19 @@ public final class TimelineViewModel: ObservableObject {
     /// Test helper — awaits the bootstrap configuration Task.
     public func awaitConfigured() async {
         await bootstrapTask?.value
+    }
+
+    // MARK: - Teardown
+
+    /// Teardown explicite, à appeler par l'owner à la fermeture du composer.
+    /// Sans cet appel, l'engine n'était JAMAIS shutdown en production : son
+    /// observer périodique AVPlayer n'était pas retiré avant la libération du
+    /// player (contrat AVFoundation), l'AVAudioEngine du mixer restait actif
+    /// et un preview en cours continuait de jouer.
+    public func shutdown() {
+        bootstrapTask?.cancel()
+        bootstrapTask = nil
+        engine.shutdown()
     }
 
     // MARK: - Wiring

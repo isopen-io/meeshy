@@ -27,6 +27,7 @@ final class MockStoryTimelineEngine: TimelineEngineProviding {
     private(set) var seekCallCount = 0
     private(set) var stopCallCount = 0
     private(set) var setModeCallCount = 0
+    private(set) var shutdownCallCount = 0
 
     // Last params
     private(set) var lastConfiguredProject: TimelineProject?
@@ -57,6 +58,7 @@ final class MockStoryTimelineEngine: TimelineEngineProviding {
     }
     func stop() { stopCallCount += 1; isPlaying = false; currentTime = 0 }
     func toggle() { isPlaying ? pause() : play() }
+    func shutdown() { shutdownCallCount += 1; isPlaying = false }
     func setMode(_ newMode: TimelineEngineMode) {
         setModeCallCount += 1
         lastSetMode = newMode
@@ -66,6 +68,7 @@ final class MockStoryTimelineEngine: TimelineEngineProviding {
     func reset() {
         configureCallCount = 0; playCallCount = 0; pauseCallCount = 0
         seekCallCount = 0; stopCallCount = 0; setModeCallCount = 0
+        shutdownCallCount = 0
         lastConfiguredProject = nil; lastSeekTime = nil; lastSeekPrecise = nil
         seekCallsLog = []
         lastSetMode = nil

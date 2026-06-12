@@ -62,6 +62,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     private final class CleanupHandle {
         nonisolated(unsafe) var timer: Timer?
         nonisolated(unsafe) var loadTask: Task<Void, Never>?
+        nonisolated(unsafe) var sessionRequested = false
     }
     private let cleanupHandle = CleanupHandle()
 
@@ -92,6 +93,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     private func acquireSession() async {
         guard !sessionRequested else { return }
         sessionRequested = true
+        cleanupHandle.sessionRequested = true
         try? await MediaSessionCoordinator.shared.request(role: .playback)
     }
 
@@ -99,6 +101,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     private func releaseSession() {
         guard sessionRequested else { return }
         sessionRequested = false
+        cleanupHandle.sessionRequested = false
         Task { await MediaSessionCoordinator.shared.release() }
     }
 
@@ -351,6 +354,13 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     deinit {
         cleanupHandle.timer?.invalidate()
         cleanupHandle.loadTask?.cancel()
+        // Dealloc avec session encore tenue (chemin sans `stop()` — vue
+        // détruite sans onDisappear) : sans cette libération le refcount du
+        // MediaSessionCoordinator ne retombait jamais à 0 → session audio
+        // active (ducking) pour tout le process et release() sous-compté.
+        if cleanupHandle.sessionRequested {
+            Task { await MediaSessionCoordinator.shared.release() }
+        }
     }
 
     @MainActor public func unregisterFromCoordinator() {

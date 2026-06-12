@@ -358,7 +358,15 @@ final class NotificationListViewModel: ObservableObject {
     private var offset = 0
     private let limit = 30
     private var cancellables = Set<AnyCancellable>()
-    private var refreshTask: Task<Void, Never>?
+    // `nonisolated(unsafe)` pour que le `deinit` (nonisolated) puisse
+    // l'annuler : le task debounce 500 ms capture `self` fortement et
+    // prolongeait sinon la vie du VM d'un sleep + un aller-retour API
+    // après fermeture de l'écran.
+    private nonisolated(unsafe) var refreshTask: Task<Void, Never>?
+
+    deinit {
+        refreshTask?.cancel()
+    }
 
     var filteredNotifications: [APINotification] {
         switch selectedCategory {

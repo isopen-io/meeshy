@@ -1141,7 +1141,16 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         }
     }
 
+    private var hasSubscribedToSocketEvents = false
+
     func subscribeToSocketEvents() {
+        // Garde d'idempotence : un second appel (re-run du `.task` racine)
+        // dupliquerait les 12+ sinks — les handlers à delta ±1
+        // (`applyPostReactionDelta`, `applyStoryReactionDelta`) compteraient
+        // alors double. Garde dédiée : `cancellables` porte aussi le sink de
+        // reconnexion posé à l'init.
+        guard !hasSubscribedToSocketEvents else { return }
+        hasSubscribedToSocketEvents = true
         socialSocket.storyCreated
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiPost in

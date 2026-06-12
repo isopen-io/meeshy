@@ -13,14 +13,55 @@ public class AudioPlayerManager: ObservableObject {
     /// Called when stop() is invoked — hook this to allow external stop coordination.
     public var onDidStop: (() -> Void)?
 
-    private var localPlayer: AVAudioPlayer?
-    private var streamPlayer: AVPlayer?
-    private var timer: Timer?
-    private var loadTask: Task<Void, Never>?
-    private var streamObserver: Any?
+    private var localPlayer: AVAudioPlayer? {
+        didSet { cleanupHandle.localPlayer = localPlayer }
+    }
+    private var streamPlayer: AVPlayer? {
+        didSet { cleanupHandle.streamPlayer = streamPlayer }
+    }
+    private var timer: Timer? {
+        didSet { cleanupHandle.timer = timer }
+    }
+    private var loadTask: Task<Void, Never>? {
+        didSet { cleanupHandle.loadTask = loadTask }
+    }
+    private var streamObserver: Any? {
+        didSet { cleanupHandle.streamObserver = streamObserver }
+    }
     private var streamCancellables = Set<AnyCancellable>()
 
+    /// Handles thread-safe à libérer depuis le `deinit` (potentiellement
+    /// off-main) — pattern `AudioPlaybackManager.CleanupHandle`. Sans ce
+    /// filet, une instance lâchée mid-lecture (vue dismissée sans `stop()`)
+    /// laissait le Timer 10 Hz au run loop pour toujours et l'observer
+    /// périodique jamais retiré de l'AVPlayer (contrat AVFoundation violé).
+    private final class CleanupHandle {
+        nonisolated(unsafe) var timer: Timer?
+        nonisolated(unsafe) var loadTask: Task<Void, Never>?
+        nonisolated(unsafe) var localPlayer: AVAudioPlayer?
+        nonisolated(unsafe) var streamPlayer: AVPlayer?
+        nonisolated(unsafe) var streamObserver: Any?
+    }
+    private let cleanupHandle = CleanupHandle()
+
     public init() {}
+
+    deinit {
+        cleanupHandle.timer?.invalidate()
+        cleanupHandle.loadTask?.cancel()
+        // Player non-nil ⟺ mort sans `stop()` (stop pose nil partout) : on
+        // coupe la lecture et on rend la session (call-aware), sinon elle
+        // restait active pour tout le process.
+        let hadActivePlayback = cleanupHandle.localPlayer != nil || cleanupHandle.streamPlayer != nil
+        cleanupHandle.localPlayer?.stop()
+        if let observer = cleanupHandle.streamObserver, let player = cleanupHandle.streamPlayer {
+            player.removeTimeObserver(observer)
+        }
+        cleanupHandle.streamPlayer?.pause()
+        if hadActivePlayback {
+            MediaSessionCoordinator.shared.deactivatePlaybackSync()
+        }
+    }
 
     // MARK: - Play from URL string
 
