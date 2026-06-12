@@ -13,7 +13,7 @@ const log = enhancedLogger.child({ module: 'ExpiredStoriesCleanupService' });
  * back-paths that didn't include the `expiresAt > now` filter (e.g. bookmarks
  * for an expired story still resolved to its content).
  *
- * Soft-delete (set `isDeleted: true`) is used so any in-flight references
+ * Soft-delete (set `deletedAt`) is used so any in-flight references
  * (cached `StoryItem` on a viewer's device, prefetched media URLs) keep working
  * for their TTL window. Hard-delete happens in a separate sweep below for
  * stories that have been soft-deleted past the retention window.
@@ -73,10 +73,9 @@ export class ExpiredStoriesCleanupService {
         where: {
           type: 'STORY',
           expiresAt: { lt: now },
-          isDeleted: false,
+          deletedAt: null,
         },
         data: {
-          isDeleted: true,
           deletedAt: now,
         },
       });
@@ -90,7 +89,7 @@ export class ExpiredStoriesCleanupService {
       const toDelete = await this.prisma.post.findMany({
         where: {
           type: 'STORY',
-          isDeleted: true,
+          deletedAt: { not: null },
           expiresAt: { lt: hardDeleteCutoff },
         },
         select: { id: true },

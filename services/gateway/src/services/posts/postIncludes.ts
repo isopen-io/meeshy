@@ -74,7 +74,7 @@ export const mediaInclude = Prisma.validator<Prisma.Post$mediaArgs>()({
  */
 export const commentsPreviewInclude = Prisma.validator<Prisma.Post$commentsArgs>()({
   where: {
-    isDeleted: false,
+    deletedAt: null,
     OR: [{ parentId: null }, { parentId: { isSet: false } }],
   },
   select: {

@@ -2822,7 +2822,7 @@ model Post {
   // ============================================
   isPinned  Boolean   @default(false)
   isEdited  Boolean   @default(false)
-  isDeleted Boolean   @default(false)
+  /// null = actif, non-null = supprimé (soft delete) avec horodatage
   deletedAt DateTime?
 
   createdAt DateTime @default(now())
@@ -2979,7 +2979,7 @@ model PostComment {
   effectFlags Int @default(0)
 
   isEdited  Boolean   @default(false)
-  isDeleted Boolean   @default(false)
+  /// null = actif, non-null = supprimé (soft delete) avec horodatage
   deletedAt DateTime?
 
   createdAt DateTime @default(now())

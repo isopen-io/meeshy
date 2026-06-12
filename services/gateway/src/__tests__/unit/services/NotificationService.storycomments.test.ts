@@ -229,7 +229,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             postId: POST_ID,
-            isDeleted: false,
+            deletedAt: null,
             NOT: { authorId: COMMENTER_ID },
           }),
         })

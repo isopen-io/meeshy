@@ -925,11 +925,17 @@ export class NotificationService {
       return null;
     }
 
-    // Récupérer les infos de l'expéditeur
-    const sender = await this.prisma.user.findUnique({
-      where: { id: params.senderId },
-      select: { username: true, displayName: true, avatar: true },
-    });
+    // Expéditeur + conversation : lectures indépendantes, en parallèle
+    const [sender, conversation] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: params.senderId },
+        select: { username: true, displayName: true, avatar: true },
+      }),
+      this.prisma.conversation.findUnique({
+        where: { id: params.conversationId },
+        select: { title: true, type: true },
+      }),
+    ]);
 
     if (!sender) {
       notificationLogger.warn('Sender not found for message notification', {
@@ -937,12 +943,6 @@ export class NotificationService {
       });
       return null;
     }
-
-    // Récupérer les infos de la conversation
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
 
     const content = buildMessageNotificationBody({
       messagePreview: params.messagePreview,
@@ -1016,17 +1016,18 @@ export class NotificationService {
       return null;
     }
 
-    const mentioner = await this.prisma.user.findUnique({
-      where: { id: params.mentionerUserId },
-      select: { username: true, displayName: true, avatar: true },
-    });
+    const [mentioner, conversation] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: params.mentionerUserId },
+        select: { username: true, displayName: true, avatar: true },
+      }),
+      this.prisma.conversation.findUnique({
+        where: { id: params.conversationId },
+        select: { title: true, type: true },
+      }),
+    ]);
 
     if (!mentioner) return null;
-
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
 
     return this.createNotification({
       userId: params.mentionedUserId,
@@ -1271,7 +1272,7 @@ export class NotificationService {
       this.prisma.postComment.findMany({
         where: {
           postId,
-          isDeleted: false,
+          deletedAt: null,
           NOT: { authorId: commenterId },
         },
         distinct: ['authorId'],
@@ -1777,17 +1778,18 @@ export class NotificationService {
     callSessionId: string;
     callType: 'audio' | 'video';
   }): Promise<Notification | null> {
-    const caller = await this.prisma.user.findUnique({
-      where: { id: params.callerId },
-      select: { username: true, displayName: true, avatar: true },
-    });
+    const [caller, conversation] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: params.callerId },
+        select: { username: true, displayName: true, avatar: true },
+      }),
+      this.prisma.conversation.findUnique({
+        where: { id: params.conversationId },
+        select: { title: true, type: true },
+      }),
+    ]);
 
     if (!caller) return null;
-
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
 
     // Phase C — prefix emoji icône d'appel pour rendu visuel rapide dans le banner.
     // L'extension iOS expose en plus l'avatar du caller via INSendMessageIntent
@@ -1910,22 +1912,21 @@ export class NotificationService {
     conversationId: string;
     joinMethod?: 'via_link' | 'invited';
   }): Promise<Notification | null> {
-    const newMember = await this.prisma.user.findUnique({
-      where: { id: params.newMemberUserId },
-      select: { username: true, displayName: true, avatar: true },
-    });
+    const [newMember, conversation, memberCount] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: params.newMemberUserId },
+        select: { username: true, displayName: true, avatar: true },
+      }),
+      this.prisma.conversation.findUnique({
+        where: { id: params.conversationId },
+        select: { title: true, type: true },
+      }),
+      this.prisma.participant.count({
+        where: { conversationId: params.conversationId },
+      }),
+    ]);
 
     if (!newMember) return null;
-
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
-
-    // Compter les membres
-    const memberCount = await this.prisma.participant.count({
-      where: { conversationId: params.conversationId },
-    });
 
     return this.createNotification({
       userId: params.recipientUserId,
@@ -2000,17 +2001,18 @@ export class NotificationService {
     messagePreview: string;
     originalMessageId?: string;
   }): Promise<Notification | null> {
-    const replier = await this.prisma.user.findUnique({
-      where: { id: params.replierUserId },
-      select: { username: true, displayName: true, avatar: true },
-    });
+    const [replier, conversation] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: params.replierUserId },
+        select: { username: true, displayName: true, avatar: true },
+      }),
+      this.prisma.conversation.findUnique({
+        where: { id: params.conversationId },
+        select: { title: true, type: true },
+      }),
+    ]);
 
     if (!replier) return null;
-
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
 
     return this.createNotification({
       userId: params.recipientUserId,

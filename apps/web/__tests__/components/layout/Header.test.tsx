@@ -78,8 +78,8 @@ jest.mock('@/hooks/useI18n', () => ({
 // Mock app store
 const mockSetTheme = jest.fn();
 jest.mock('@/stores/app-store', () => ({
-  useAppStore: () => ({
-    theme: 'light',
+  useTheme: () => 'light',
+  useAppActions: () => ({
     setTheme: mockSetTheme,
   }),
 }));

@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { AuthMode } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { useAppStore } from '@/stores/app-store';
+import { useTheme, useAppActions } from '@/stores/app-store';
 import { useI18n } from '@/hooks/useI18n';
 import { LanguageFlagSelector } from '@/components/translation/language-flag-selector';
 import { LanguageSelector } from '@/components/translation/language-selector';
@@ -58,7 +58,8 @@ export function Header({
   const { isAnonymous, logout, leaveAnonymousSession } = useAuth();
   // Utiliser storeUser comme user définitif (source unique de vérité)
   const user = storeUser;
-  const { theme, setTheme } = useAppStore();
+  const theme = useTheme();
+  const { setTheme } = useAppActions();
   const { t } = useI18n('header');
   
   // Language store pour le sélecteur de langue
