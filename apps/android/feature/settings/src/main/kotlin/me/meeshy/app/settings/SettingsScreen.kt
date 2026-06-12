@@ -35,6 +35,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -42,6 +45,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.settings.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.theme.MeeshySpacing
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,7 +92,7 @@ fun SettingsScreen(
                         name = state.username ?: "?",
                         modifier = Modifier.size(48.dp),
                     )
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(MeeshySpacing.md))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = state.username ?: "",
@@ -105,18 +109,12 @@ fun SettingsScreen(
                             )
                         }
                     }
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowForwardIos,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp),
-                    )
                 }
             }
 
             SettingsSection(title = stringResource(R.string.settings_section_language)) {
                 SettingsRow(label = stringResource(R.string.settings_display_language), detail = null, onClick = {})
-                HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_regional_language), detail = null, onClick = {})
             }
 
@@ -125,7 +123,7 @@ fun SettingsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                        .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
@@ -142,25 +140,25 @@ fun SettingsScreen(
 
             SettingsSection(title = stringResource(R.string.settings_section_privacy)) {
                 SettingsRow(label = stringResource(R.string.settings_two_factor), detail = null, onClick = {})
-                HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_active_sessions), detail = null, onClick = {})
-                HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_blocked_users), detail = null, onClick = {})
             }
 
             SettingsSection(title = stringResource(R.string.settings_section_data)) {
                 SettingsRow(label = stringResource(R.string.settings_export_data), detail = null, onClick = {})
-                HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_clear_media_cache), detail = null, onClick = {})
-                HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_storage_used), detail = null, onClick = {})
             }
 
             SettingsSection(title = stringResource(R.string.settings_section_about)) {
                 SettingsRow(label = stringResource(R.string.settings_version), detail = null, onClick = null)
-                HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_terms_of_service), detail = null, onClick = {})
-                HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_privacy_policy), detail = null, onClick = {})
             }
 
@@ -168,8 +166,8 @@ fun SettingsScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                        .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
                 ) {
                     Button(
                         onClick = onLogout,
@@ -189,7 +187,7 @@ fun SettingsScreen(
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(MeeshySpacing.xl))
         }
     }
 }
@@ -205,10 +203,10 @@ private fun SettingsSection(
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
         )
         content()
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(MeeshySpacing.sm))
     }
 }
 
@@ -223,11 +221,12 @@ private fun SettingsRow(
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .semantics { role = Role.Button }
+            .padding(horizontal = MeeshySpacing.lg, vertical = 14.dp)
     } else {
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .padding(horizontal = MeeshySpacing.lg, vertical = 14.dp)
     }
 
     Row(
@@ -246,7 +245,7 @@ private fun SettingsRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(MeeshySpacing.xs))
         }
         if (onClick != null) {
             Icon(

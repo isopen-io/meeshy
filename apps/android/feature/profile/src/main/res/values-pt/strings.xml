@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_title">Perfil</string>
+    <string name="profile_edit_title">Editar perfil</string>
+    <string name="profile_back">Voltar</string>
+    <string name="profile_edit">Editar</string>
+    <string name="profile_display_name_label">Nome de exibição</string>
+    <string name="profile_bio_label">Bio</string>
+    <string name="profile_cancel">Cancelar</string>
+    <string name="profile_save">Salvar</string>
+    <string name="profile_unknown">Desconhecido</string>
+    <string name="profile_avatar">Avatar</string>
+</resources>

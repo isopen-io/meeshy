@@ -147,10 +147,10 @@ struct OnboardingView: View {
     }
 
     private var ambientOrbs: some View {
-        let orbConfigs: [(color: Color, size: CGFloat, offset: CGPoint)] = [
-            (MeeshyColors.indigo600, 200, CGPoint(x: -80, y: -200)),
-            (MeeshyColors.indigo400, 160, CGPoint(x: 90, y: 180)),
-            (MeeshyColors.indigo300, 120, CGPoint(x: 60, y: -80))
+        let orbConfigs: [(color: String, size: CGFloat, offset: CGPoint)] = [
+            (MeeshyColors.trackingAccentHex, 200, CGPoint(x: -80, y: -200)),
+            (MeeshyColors.shareAccentHex, 160, CGPoint(x: 90, y: 180)),
+            (MeeshyColors.indigo300Hex, 120, CGPoint(x: 60, y: -80))
         ]
 
         return ForEach(Array(orbConfigs.enumerated()), id: \.offset) { _, orb in
@@ -217,6 +217,7 @@ struct OnboardingView: View {
                         Image(systemName: page.icon)
                             .font(.system(size: 80, weight: .light))
                             .foregroundStyle(iconGradient(for: page.id))
+                            .accessibilityHidden(true)
                     }
                 }
                 .scaleEffect(animateIcon && currentPage == page.id ? 1 : 0.3)

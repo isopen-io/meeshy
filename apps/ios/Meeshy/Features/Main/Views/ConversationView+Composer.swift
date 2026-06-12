@@ -97,7 +97,7 @@ extension ConversationView {
             UniversalComposerBar(
             style: .light,
             mode: .message,
-            accentColor: viewModel.ephemeralDuration != nil ? MeeshyColors.errorHex : viewModel.isBlurEnabled ? MeeshyColors.indigo600Hex : viewModel.pendingEffects.hasAnyEffect ? MeeshyColors.brandPrimaryHex : accentColor,
+            accentColor: viewModel.ephemeralDuration != nil ? MeeshyColors.errorHex : viewModel.isBlurEnabled ? MeeshyColors.trackingAccentHex : viewModel.pendingEffects.hasAnyEffect ? MeeshyColors.brandPrimaryHex : accentColor,
             secondaryColor: secondaryColor,
             selectedLanguage: composerState.selectedLanguage,
             onLanguageChange: { composerState.selectedLanguage = $0 },
@@ -560,7 +560,7 @@ extension ConversationView {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(
                         LinearGradient(
-                            colors: [MeeshyColors.success.opacity(0.15), MeeshyColors.successDeep.opacity(0.08)],
+                            colors: [MeeshyColors.success.opacity(0.15), MeeshyColors.success.opacity(0.08)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )

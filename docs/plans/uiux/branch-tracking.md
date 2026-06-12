@@ -16,12 +16,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | 42 (PR #582 mergée) — 42b (cette branche) en cours de merge |
-| Working branch (iteration 42b) | `claude/blissful-ritchie-e672ur` (from main @ 167ef31c, resynced post-#580/#581/#582) |
-| Last Merged Base (commit) | ddcc428 (merge #582) — sera le merge commit de 42b une fois la PR #579 mergée |
+| Last completed iteration | 42 (hex iOS Settings/Notifications/Onboarding/DataExport/Conversation -> tokens, Dynamic Type vues liens list, a11y+i18n surface audio web, locales es/pt Android 10 modules, a11y SettingsScreen) |
+| Last merged PR | #581 ; iter-42 en cours de merge |
+| Last Merged Base (commit) | 1a238dd (merge #581) |
 | Next iteration | **43** |
-| Next branch to create from | `main` (after 42b merge) |
-| Deferred carry-over for 43 | balayage hex iOS restant (hors surfaces 42/42b) ; parité stories Android + tokens MeeshySpacing SettingsScreen ; web dates 'fr-FR'/sans locale hors v2 (~40, admin/groups/contacts) + relecture qualité es/pt ; réactions par pièce jointe web/Android (wiring gateway attachment:reaction-*) ; validation stricte /chat/[id] |
+| Next branch to create from | `main` (HEAD post-merge iter-42) |
+| Deferred carry-over for 43 | polices fixes vues liens détail/create iOS (ShareLinkDetailView 13, TrackingLinkDetailView 25, LinksHubView 8, CreateShareLinkView 24, CreateTrackingLinkView 6) ; hex UniversalComposerBar(+Recording)/ComposerModels/AudioPostComposerView iOS ; parité stories Android (UI absente) ; navigation profil SettingsScreen Android ; réactions par pièce jointe web+Android (wiring gateway) ; audit qualité es/pt web ; validation client ID conversation web |
 
 ---
 

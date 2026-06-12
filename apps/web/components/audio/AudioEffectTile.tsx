@@ -91,6 +91,18 @@ export function AudioEffectTile({
     setIsConfigOpen(true);
   };
 
+  const handleTileKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Enter' && e.key !== ' ') {
+      return;
+    }
+
+    if (e.key === ' ') {
+      e.preventDefault();
+    }
+
+    setIsConfigOpen(true);
+  };
+
   return (
     <>
       <Card
@@ -106,14 +118,11 @@ export function AudioEffectTile({
           enabled && 'ring-2 ring-white/20',
           className
         )}
+        role="button"
+        tabIndex={0}
+        aria-label={effectName}
         onClick={handleTileClick}
-        onKeyDown={(e) => {
-          if (e.target !== e.currentTarget) return;
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            setIsConfigOpen(true);
-          }
-        }}
+        onKeyDown={handleTileKeyDown}
       >
         {/* Indicateur actif - Animation brillante */}
         {enabled && (
@@ -138,7 +147,10 @@ export function AudioEffectTile({
             </div>
 
             {/* Toggle - cliquable indépendamment */}
-            <div onClick={(e) => e.stopPropagation()}>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
               <Switch
                 checked={enabled}
                 onCheckedChange={onToggle}

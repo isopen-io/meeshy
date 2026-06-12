@@ -1,55 +1,44 @@
 # Plan — UI/UX Iteration 42 (2026-06-12)
 
-Base : main @ 0977931 (post-merge PR #580). Branche : `claude/blissful-ritchie-fst8wf`.
-Analyse source : `docs/analyses/uiux/2026-06-12-iteration-42.md`.
+Base : main @ 1a238dd. Branche : `claude/blissful-ritchie-l66h8c`.
+Continuité : solde les reports de l'itération 41 (cf. `branch-tracking.md` carry-over).
 
-## Objectifs
-1. Solder les carry-over iter-41 : hex iOS hors surface liens, polices fixes vues liens,
-   AudioEffectTile, validation client ID conversation.
-2. Corriger les findings des surfaces jamais auditées (profil web, NotificationBell, VideoPlayer,
-   AuthViewModel/SettingsScreen Android).
-3. Assurer la cohérence cross-frontend sur chaque sujet touché (cf. tableau de l'analyse).
+## Scope
 
-## Checklist
+### iOS (fait en direct)
+- [x] SDK `MeeshyColors` : + `errorHex` ("F87171"), + `infoHex` ("60A5FA")
+- [x] `SettingsView` : 36 littéraux hex → constantes MeeshyColors (mapping itération 41 étendu)
+- [x] `NotificationSettingsView` : 38 littéraux → constantes
+- [x] `DataExportView` : accent `3498DB`→`infoHex`, icône media `9B59B6`→`trackingAccent`
+- [x] `ConversationView+Composer` : bandeau édition `F8B500`→`warning`/`warningHex`,
+      panneau traduction `2ECC71`/`27AE60`→`success`, accents éphémère/blur/effets → hex constants
+- [x] `ConversationView+MessageRow` : 4 couleurs de boutons d'action → constantes
+- [x] `ConversationView+AttachmentHandlers` + fallback `secondaryColor` → constantes
+- [x] `OnboardingView` : orbs → famille indigo (règle charte), gradients icône/bouton → tokens,
+      logo light → `indigo950`, icône de page `accessibilityHidden(true)`
+      (exception documentée : gradients d'ambiance par page conservés)
+- [x] `ShareLinksView` + `TrackingLinksView` : textes → styles sémantiques Dynamic Type
 
-### Web (apps/web)
-- [x] PostCard.tsx : "Translate" → i18n ; divs cliquables → role/tabIndex/onKeyDown
-- [x] LanguageOrb.tsx : role="button" + aria-label + clavier (si interactif)
-- [x] u/[username]/page.tsx : "Profil" / erreurs → clés i18n (4 langues)
-- [x] conversation/[conversationId]/page.tsx : validation ObjectId 24-hex avant fetch
-- [x] NotificationBell.tsx : aria-label i18n avec interpolation count
-- [x] ConversationHeader.tsx : clé `unreadInOtherConversations` garantie 4 langues, fallback retiré
-- [x] conversation-details-sidebar.tsx : 3× "Loading..." → common.loading
-- [x] AudioEffectTile.tsx : role/tabIndex/onKeyDown + aria-label (carry-over)
-- [x] VideoPlayer.tsx : overlay + progress bar accessibles
-- [x] MediaImageCard.tsx : aria-label sélecteur de langue
-- [x] Switch.tsx : examiné, conforme — pas de changement
-- [x] tsc --noEmit : aucune nouvelle erreur vs baseline
+### Web (agent)
+- [x] `AudioEffectTile` : role=button + tabIndex + Enter/Espace + aria-label ; isolation clavier
+      du Switch ; tests étendus
+- [x] i18n namespace `audioEffects` (groupes timeline/transcription) sur en/fr/es/pt :
+      `AudioEffectsPanel`, `AudioEffectsGraph`, `AudioControls`, `TranscriptionViewer`
+- [x] SVG `<circle>` interactifs accessibles clavier (`AudioEffectsGraph`, `AudioEffectsOverview`)
+- [x] Locale explicite : `AudioEffectsTimelineView`, `NotificationDropdown`
+- [x] `create-link-button` : "Créer un lien" → t()
 
-### iOS (apps/ios + packages/MeeshySDK)
-- [x] MeeshyColors : + `errorHex`, `infoHex`
-- [x] SettingsView : 37 remplacements hex → tokens
-- [x] NotificationSettingsView : 38 remplacements
-- [x] DataExportView : reliquat (2) ; ShareLinksView accentColor → brandPrimaryHex
-- [x] OnboardingView / MessageComposer : conservés (design intentionnel, documenté)
-- [x] LinksHubView/ShareLinksView/TrackingLinksView : 22 textes → styles Dynamic Type
-- [x] accessibilityLabel boutons "plus" (LinksHub ×3 via param `createLabel`, ShareLinks ×1)
+### Android (agent)
+- [x] `values-es/` + `values-pt/` pour les 10 modules à ressources
+- [x] `SettingsScreen` : retrait du clickable vide du header profil, Role.Button sur rows
+      cliquables, spacing → échelle tokens si disponible
+- [x] Vérifications : `MessageBubble` ReactionChip (conforme), `ChatScreen` SheetAction (conforme)
 
-### Android (apps/android)
-- [x] AuthViewModel/AuthUiState : `errorRes` @StringRes + `login_error_required` en/fr ;
-      LoginScreen résout errorRes ?: errorMessage
-- [x] SettingsScreen : `.clickable { }` mort → `onOpenProfile(userId)` (état + câblage NavHost)
-- [x] Deep link `meeshy://profile/{userId}` : navDeepLink + intent-filter host=profile
-- [ ] Compilation Gradle : impossible localement (pas de SDK Android dans l'environnement) —
-      diff relu intégralement, validation par CI
+## Validation
+- Web : tests jest ciblés (AudioEffectTile) + type-check
+- Android : XML well-formed (pas de SDK Android dans l'env) ; compile Kotlin si gradle dispo
+- iOS : substitutions conservatives (tokens 1:1) ; pas de build possible sur ce runner — CI
 
-## Vérification
-- tsc web : baseline inchangée (validé par l'agent d'implémentation)
-- JSON locales (8 fichiers) : validés
-- Swift : pas de build possible sur Linux — diff relu, syntaxe vérifiée
-- CI de la PR : gate finale avant merge dans main
-
-## Continuité
-- Mettre à jour `branch-tracking.md` après merge (base 43 = main post-merge PR iter-42)
-- Différés listés dans l'analyse §Différés (stories Android, réactions PJ, qualité es/pt,
-  validation stricte /chat/[id])
+## Sortie
+- Analyse : `docs/analyses/uiux/2026-06-12-iteration-42.md`
+- PR vers main après CI verte, merge automatique, mise à jour `branch-tracking.md`

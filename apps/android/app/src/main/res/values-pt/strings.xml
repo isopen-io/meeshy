@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Meeshy</string>
+
+    <!-- Navigation tabs -->
+    <string name="tab_messages">Mensagens</string>
+    <string name="tab_feed">Feed</string>
+    <string name="tab_activity">Atividade</string>
+    <string name="tab_profile">Perfil</string>
+
+    <!-- Login screen -->
+    <string name="login_welcome_back">Bem-vindo de volta</string>
+    <string name="login_username_label">Nome de usuário</string>
+    <string name="login_password_label">Senha</string>
+    <string name="login_button">Entrar</string>
+
+    <!-- Chat screen -->
+    <string name="chat_title">Mensagens</string>
+    <string name="chat_back">Voltar</string>
+    <string name="chat_message_placeholder">Mensagem</string>
+    <string name="chat_send">Enviar</string>
+    <string name="chat_no_messages">Ainda não há mensagens</string>
+    <string name="chat_retry">Tentar novamente</string>
+
+    <!-- Conversation list screen -->
+    <string name="conversations_title">Meeshy</string>
+    <string name="conversations_logout">Sair</string>
+    <string name="conversations_empty">Ainda não há conversas</string>
+    <string name="conversations_retry">Tentar novamente</string>
+    <string name="conversations_no_messages">Ainda não há mensagens</string>
+
+    <!-- Notifications screen -->
+    <string name="notifications_title">Notificações</string>
+    <string name="notifications_mark_all_read">Marcar tudo como lido</string>
+    <string name="notifications_empty">Nenhuma notificação</string>
+
+    <!-- Feed screen -->
+    <string name="feed_title">Feed</string>
+    <string name="feed_empty">Ainda não há publicações</string>
+    <string name="feed_like">Curtir</string>
+
+    <!-- Profile screen -->
+    <string name="profile_title">Perfil</string>
+    <string name="profile_edit_title">Editar perfil</string>
+    <string name="profile_back">Voltar</string>
+    <string name="profile_edit">Editar</string>
+    <string name="profile_display_name_label">Nome de exibição</string>
+    <string name="profile_bio_label">Bio</string>
+    <string name="profile_cancel">Cancelar</string>
+    <string name="profile_save">Salvar</string>
+    <string name="profile_unknown">Desconhecido</string>
+</resources>
