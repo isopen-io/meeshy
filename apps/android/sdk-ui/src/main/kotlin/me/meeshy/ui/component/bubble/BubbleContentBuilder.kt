@@ -54,7 +54,7 @@ public object BubbleContentBuilder {
             .map { attachment ->
                 BubbleFile(
                     attachmentId = attachment.id,
-                    name = attachment.originalName ?: attachment.fileName ?: "Fichier",
+                    name = attachment.originalName ?: attachment.fileName,
                     sizeBytes = attachment.fileSize,
                 )
             }

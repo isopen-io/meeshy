@@ -318,6 +318,26 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `a file attachment without any name carries a null name for the renderer to localize`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "a1",
+                        mimeType = "application/pdf",
+                        fileSize = 2048,
+                        fileUrl = "/files/stored-1234.pdf",
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.files.single().name).isNull()
+    }
+
+    @Test
     fun `an image attachment without a file url is skipped`() {
         val content = BubbleContentBuilder.build(
             message().copy(

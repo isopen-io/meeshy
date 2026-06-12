@@ -28,9 +28,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
@@ -79,7 +81,7 @@ public fun MeeshyImageViewer(
             ) {
                 Icon(
                     imageVector = Icons.Filled.Close,
-                    contentDescription = "Fermer",
+                    contentDescription = stringResource(R.string.image_viewer_close),
                     tint = Color.White,
                 )
             }
@@ -156,7 +158,7 @@ private fun ZoomableImage(
     ) {
         AsyncImage(
             model = url,
-            contentDescription = "Image",
+            contentDescription = stringResource(R.string.bubble_image_description),
             contentScale = ContentScale.Fit,
             modifier = Modifier
                 .fillMaxSize()
