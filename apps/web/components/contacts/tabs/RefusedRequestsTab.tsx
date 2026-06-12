@@ -4,8 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { OnlineIndicator } from '@/components/ui/online-indicator';
-import { getUserStatus } from '@/lib/user-status';
+import { ParticipantPresenceIndicator } from '@/components/conversations/conversation-item/ParticipantPresenceIndicator';
 import { User } from '@/types';
 import { UserX, UserPlus } from 'lucide-react';
 
@@ -78,9 +77,9 @@ const RefusedRequestsTab = React.memo<RefusedRequestsTabProps>(({
                       {getUserDisplayName(otherUser).slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <OnlineIndicator
-                    isOnline={getUserStatus(otherUser) === 'online'}
-                    status={getUserStatus(otherUser)}
+                  <ParticipantPresenceIndicator
+                    userId={otherUserId}
+                    fallbackUser={otherUser}
                     size="md"
                     className="absolute -bottom-0.5 -right-0.5"
                   />
