@@ -298,6 +298,87 @@ export class PostFeedService {
     return { items, nextCursor, hasMore };
   }
 
+  /**
+   * Feed Reels — médias plein écran à scroll vertical continu.
+   *
+   * Fondation : pagination curseur chronologique déterministe, visibilité
+   * PUBLIC + FRIENDS (même filtre que les statuses). Le ranking par
+   * « attention » (watch-time, complétion, engagement) viendra remplacer le
+   * tri chronologique dans la phase monétisation — le contrat de pagination
+   * (cursor opaque encodé createdAt+id) reste identique pour les clients.
+   */
+  async getReels(userId: string, cursor?: string, limit: number = 20) {
+    const cursorData = cursor ? decodeCursor(cursor) : null;
+    const [friendIds, dmContactIds] = await Promise.all([
+      this.getFriendIds(userId),
+      this.getDirectConversationContactIds(userId),
+    ]);
+    const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
+    const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds);
+
+    const whereClause: any = {
+      isDeleted: false,
+      type: PostType.REEL,
+      AND: [visibilityFilter],
+    };
+
+    if (cursorData) {
+      whereClause.AND.push({
+        OR: [
+          { createdAt: { lt: new Date(cursorData.createdAt) } },
+          { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
+        ],
+      });
+    }
+
+    const reels = await this.prisma.post.findMany({
+      where: whereClause,
+      include: feedPostInclude,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+    });
+
+    const hasMore = reels.length > limit;
+    const items = hasMore ? reels.slice(0, limit) : reels;
+    const nextCursor = hasMore && items.length > 0
+      ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
+      : null;
+
+    return {
+      items: await this.enrichPlainPostsForViewer(items, userId),
+      nextCursor,
+      hasMore,
+    };
+  }
+
+  /**
+   * Enrichit une liste de posts « plats » (non scorés) avec l'état viewer :
+   * `currentUserReactions` + like status. Même contrat que les blocs inline
+   * de getUserPosts / getCommunityFeed (candidats à converger ici).
+   */
+  private async enrichPlainPostsForViewer(items: any[], viewerUserId?: string) {
+    if (!viewerUserId || items.length === 0) {
+      return items.map((p) => ({ ...p, currentUserReactions: [] as string[] }));
+    }
+
+    const postIds = items.map((p) => p.id);
+    const userReactions = await this.prisma.postReaction.findMany({
+      where: { userId: viewerUserId, postId: { in: postIds } },
+      select: { postId: true, emoji: true },
+    });
+    const userReactionsMap = new Map<string, string[]>();
+    for (const r of userReactions) {
+      const list = userReactionsMap.get(r.postId) ?? [];
+      list.push(r.emoji);
+      userReactionsMap.set(r.postId, list);
+    }
+
+    return items.map((p) => ({
+      ...this.enrichWithLikeStatus(p, viewerUserId),
+      currentUserReactions: userReactionsMap.get(p.id) ?? [],
+    }));
+  }
+
   async getUserPosts(targetUserId: string, viewerUserId: string | undefined, cursor?: string, limit: number = 20) {
     const cursorData = cursor ? decodeCursor(cursor) : null;
 

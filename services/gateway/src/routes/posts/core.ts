@@ -129,7 +129,7 @@ export function registerCoreRoutes(
       }
 
       // Fan-out to friends: user_mentioned takes priority (dedup via excludeUserIds)
-      const postTypeForNotif = ((post as any).type ?? parsed.data.type ?? 'POST') as 'STORY' | 'POST' | 'MOOD' | 'STATUS';
+      const postTypeForNotif = ((post as any).type ?? parsed.data.type ?? 'POST') as 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
       notificationService.createFriendContentNotificationsBatch({
         postId: (post as any).id as string,
         authorId: authContext.registeredUser.id,

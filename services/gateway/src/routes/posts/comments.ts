@@ -177,7 +177,7 @@ export function registerCommentRoutes(
             postAuthorId: post.authorId,
             commentId: comment.id,
             commentPreview: parsed.data.content,
-            postType: post.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS',
+            postType: post.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
             postPreview: post.content?.slice(0, 80),
           }).catch(() => {});
         }
@@ -218,7 +218,7 @@ export function registerCommentRoutes(
           storyAuthorId: post.authorId,
           commenterId: authContext.registeredUser.id,
           commentExcerpt: parsed.data.content?.slice(0, 100),
-          postType: post.type as 'STORY' | 'POST' | 'MOOD' | 'STATUS',
+          postType: post.type as 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL',
           excludeUserIds: mentionedUserIds,
         }).catch(err => fastify.log.error(`story comment notification fan-out failed: ${err}`));
       }

@@ -410,3 +410,58 @@ describe('PostFeedService.getBookmarks', () => {
     expect(mockPostReactionFindMany).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// PostFeedService.getReels — fondation feed reels (2026-06-12)
+// ---------------------------------------------------------------------------
+
+describe('PostFeedService.getReels', () => {
+  it('filtre strictement type=REEL (jamais mélangé au feed principal)', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getReels('user-1');
+
+    const where = mockPostFindMany.mock.calls[0][0].where;
+    expect(where.type).toBe('REEL');
+    expect(where.isDeleted).toBe(false);
+  });
+
+  it('pagine par curseur : limit+1 candidats → hasMore + nextCursor opaque', async () => {
+    const reels = [
+      makePost('r-1', { type: 'REEL', createdAt: new Date('2025-01-03T00:00:00Z') }),
+      makePost('r-2', { type: 'REEL', createdAt: new Date('2025-01-02T00:00:00Z') }),
+      makePost('r-3', { type: 'REEL', createdAt: new Date('2025-01-01T00:00:00Z') }),
+    ];
+    mockPostFindMany.mockResolvedValue(reels);
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getReels('user-1', undefined, 2);
+
+    expect(mockPostFindMany.mock.calls[0][0].take).toBe(3);
+    expect(result.items).toHaveLength(2);
+    expect(result.hasMore).toBe(true);
+    expect(typeof result.nextCursor).toBe('string');
+  });
+
+  it('enrichit chaque reel avec currentUserReactions du viewer', async () => {
+    const reel = makePost('r-9', { type: 'REEL' });
+    mockPostFindMany.mockResolvedValue([reel]);
+    mockPostReactionFindMany.mockResolvedValue([makeReactionRow('r-9', '🔥')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getReels('user-1');
+
+    expect((result.items[0] as any).currentUserReactions).toEqual(['🔥']);
+  });
+
+  it('demande les médias (include feed complet) — un reel sans média ne se rend pas', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getReels('user-1');
+
+    expect(mockPostFindMany.mock.calls[0][0].include).toHaveProperty('media');
+  });
+});

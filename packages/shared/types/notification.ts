@@ -374,7 +374,7 @@ export interface CommentLikeNotificationMetadata extends BaseNotificationMetadat
  */
 export interface FriendContentNotificationMetadata extends BaseNotificationMetadata {
   readonly postId: string;
-  readonly contentType: 'STORY' | 'POST' | 'MOOD' | 'STATUS';
+  readonly contentType: 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
   readonly excerpt?: string;
   readonly action: 'view_post';
 }

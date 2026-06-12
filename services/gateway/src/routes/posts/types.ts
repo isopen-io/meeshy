@@ -171,7 +171,7 @@ export const StoryEffectsSchema = z.object({
   }, { message: `storyEffects JSON exceeds ${STORY_EFFECTS_MAX_BYTES} bytes` });
 
 export const CreatePostSchema = z.object({
-  type: z.enum(['POST', 'STORY', 'STATUS']).default('POST'),
+  type: z.enum(['POST', 'STORY', 'STATUS', 'REEL']).default('POST'),
   visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).default('PUBLIC'),
   visibilityUserIds: z.array(z.string()).max(500).optional(),
   content: z.string().max(5000).optional(),
@@ -195,7 +195,12 @@ export const CreatePostSchema = z.object({
     return false;
   }
   return true;
-}, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' });
+}, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' }).refine((data) => {
+  if (data.type === 'REEL' && (!data.mediaIds || data.mediaIds.length === 0)) {
+    return false;
+  }
+  return true;
+}, { message: 'REEL posts require at least one media (video or image)' });
 
 export const UpdatePostSchema = z.object({
   content: z.string().max(5000).optional(),
@@ -221,7 +226,7 @@ export const CreateCommentSchema = z.object({
 });
 
 export const RepostSchema = z.object({
-  targetType: z.enum(['POST', 'STORY', 'STATUS']).optional(),
+  targetType: z.enum(['POST', 'STORY', 'STATUS', 'REEL']).optional(),
   content: z.string().max(5000).optional(),
   isQuote: z.boolean().default(false),
 });

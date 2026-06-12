@@ -302,4 +302,65 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       expect(payloadOfType(mockIO, 'story_thread_reply').subtitle).toBe('Statut de Alice Autrice');
     });
   });
+
+  describe('type REEL — wording (fondation reels 2026-06-12)', () => {
+    it('post_comment : subtitle « Votre reel »', async () => {
+      await service.createPostCommentNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        postAuthorId: RECIPIENT_ID,
+        commentId: COMMENT_ID,
+        commentPreview: 'Incroyable !',
+        postType: 'REEL',
+      });
+
+      expect(payloadOfType(mockIO, 'post_comment').subtitle).toBe('Votre reel');
+    });
+
+    it('post_repost : « a partagé votre reel »', async () => {
+      await service.createPostRepostNotification({
+        actorId: ACTOR_ID,
+        originalPostId: POST_ID,
+        postAuthorId: RECIPIENT_ID,
+        repostId: 'cccccccccccccccccccccccc',
+        postType: 'REEL',
+      });
+
+      expect(payloadOfType(mockIO, 'post_repost').content).toBe('a partagé votre reel');
+    });
+
+    it('friend content : subtitle « Nouveau reel » + fallback « a publié un nouveau reel »', async () => {
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: ACTOR_ID, receiverId: FRIEND_ID },
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: ACTOR_ID,
+        contentType: 'REEL',
+      });
+
+      const payload = payloadOfType(mockIO, 'friend_new_post');
+      expect(payload).toBeDefined();
+      expect(payload.subtitle).toBe('Nouveau reel');
+      expect(payload.content).toBe('a publié un nouveau reel');
+    });
+
+    it('fan-out commentaire sur reel : « Reel de X » / « a répondu dans un reel »', async () => {
+      prisma.postComment.findMany.mockResolvedValue([{ authorId: PREV_COMMENTER_ID }]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      await service.createStoryCommentNotificationsBatch({
+        postId: POST_ID,
+        commentId: COMMENT_ID,
+        storyAuthorId: RECIPIENT_ID,
+        commenterId: ACTOR_ID,
+        postType: 'REEL',
+      });
+
+      const thread = payloadOfType(mockIO, 'story_thread_reply');
+      expect(thread.content).toBe('a répondu dans un reel');
+      expect(thread.subtitle).toBe('Reel de Alice Autrice');
+    });
+  });
 });
