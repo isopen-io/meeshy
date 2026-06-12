@@ -10,7 +10,7 @@ import { useSearchUsersQuery } from '@/hooks/queries/use-users-query';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
-import { useI18n } from '@/hooks/useI18n';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface UserPickerProps {
   userIds: string[];
@@ -33,7 +33,7 @@ export function UserPicker({ userIds, onAdd, onRemove, label, placeholder }: Use
 
       <div className="flex flex-wrap gap-2 p-2 min-h-[44px] rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
         {userIds.length === 0 && (
-          <span className="text-sm text-gray-400 italic flex items-center px-2">{t('agent.userPicker.empty')}</span>
+          <span className="text-sm text-gray-400 italic flex items-center px-2">{t('agent.userPicker.noneSelected')}</span>
         )}
         {userIds.map(id => (
           <div key={id} className="flex items-center gap-1 pl-1 pr-1 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800 group transition-all hover:bg-indigo-100 dark:hover:bg-indigo-900/50">
@@ -104,7 +104,7 @@ export function UserPicker({ userIds, onAdd, onRemove, label, placeholder }: Use
                 </div>
               ) : searchTerm.length >= 2 ? (
                 <div className="p-8 text-center text-xs text-gray-400 italic">
-                  {t('agent.userPicker.noneFound')}
+                  {t('agent.userPicker.noResults')}
                 </div>
               ) : (
                 <div className="p-8 text-center text-xs text-gray-400 italic">
