@@ -2,8 +2,8 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { OnlineIndicator } from '@/components/ui/online-indicator';
-import { getUserStatus } from '@/lib/user-status';
+import { ParticipantPresenceIndicator } from '@/components/conversations/conversation-item/ParticipantPresenceIndicator';
+import { UserPresenceLabel } from '@/components/presence/UserPresenceLabel';
 import { User } from '@/types';
 import { Share2, Mail, Link } from 'lucide-react';
 
@@ -68,9 +68,9 @@ const AffiliatesTab = React.memo<AffiliatesTabProps>(({
                       {getUserDisplayName(relation.referredUser).slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <OnlineIndicator
-                    isOnline={getUserStatus(relation.referredUser) === 'online'}
-                    status={getUserStatus(relation.referredUser)}
+                  <ParticipantPresenceIndicator
+                    userId={relation.referredUser.id}
+                    fallbackUser={relation.referredUser}
                     size="md"
                     className="absolute -bottom-0.5 -right-0.5"
                   />
@@ -89,19 +89,11 @@ const AffiliatesTab = React.memo<AffiliatesTabProps>(({
 
                   <div className="space-y-2">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                      {(() => {
-                        const s = getUserStatus(relation.referredUser);
-                        const dotColors = { online: 'bg-green-500', away: 'bg-orange-400', offline: 'bg-gray-400' };
-                        const labels = { online: t('status.online'), away: t('status.away', { defaultValue: 'Absent' }), offline: t('status.offline') };
-                        return (
-                          <div className="flex items-center space-x-2">
-                            <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full ${dotColors[s]}`} />
-                            <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">
-                              {labels[s]}
-                            </span>
-                          </div>
-                        );
-                      })()}
+                      <UserPresenceLabel
+                        userId={relation.referredUser.id}
+                        fallbackUser={relation.referredUser}
+                        t={t}
+                      />
 
                       {relation.referredUser.email && (
                         <div className="flex items-center space-x-2 min-w-0">

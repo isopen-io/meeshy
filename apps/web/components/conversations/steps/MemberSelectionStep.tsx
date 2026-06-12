@@ -5,8 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { OnlineIndicator } from '@/components/ui/online-indicator';
-import { getUserStatus } from '@/lib/user-status';
+import { ParticipantPresenceIndicator } from '@/components/conversations/conversation-item/ParticipantPresenceIndicator';
 import { Check, X, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SmartSearch } from '../smart-search';
@@ -116,9 +115,9 @@ const MemberSelectionStepComponent: React.FC<MemberSelectionStepProps> = ({
                           {getUserDisplayName(user).charAt(0).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <OnlineIndicator
-                        isOnline={getUserStatus(user) === 'online'}
-                        status={getUserStatus(user)}
+                      <ParticipantPresenceIndicator
+                        userId={user.id}
+                        fallbackUser={user}
                         size="sm"
                         className="absolute -bottom-0.5 -right-0.5"
                       />

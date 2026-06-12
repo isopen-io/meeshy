@@ -16,12 +16,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | 43 (i18n recherche web, Dynamic Type Bookmarks/PostTranslationSheet/LinksHub iOS, déflake tests iOS, onglets contacts Android) — PRs #576/#579/#587/#588 toutes mergées |
-| Last merged PR | #588 (commit 7358047) |
-| Last Merged Base (commit) | 7358047 (merge #588) |
-| Current iteration | **44** — iOS exclusivement (directive routine) : Dynamic Type vues liens détail/create + surface composer, hex Recording/AudioPost |
-| Current branch | `claude/keen-dirac-a53ki2` (synchronisée avec main 7358047) |
-| Deferred carry-over for 45 | iOS : polices figées SettingsView (8), NewConversationView (7), DataExportView/DataStorageView (8), ChangePasswordView (2), ConversationView:495,551, ProfileView:65, TwoFactorSetupView textes ; PostDetailView `.textSelection(.enabled)` ; ThemedConversationRow hex vs accentColor ; VoiceProfileWizardView/PrivacySettingsView/TrackingLinksView Color(hex:) ; IncomingCallView .white contraste. Hors iOS (suspendu tant que directive iOS-only) : parité stories Android ; réactions par pièce jointe web+Android ; audit qualité es/pt web ; dates hors v2 web (~40) |
+| Last completed iteration | 44 (iOS exclusif : ThemedConversationRow — i18n 21 clés ×5 locales, Dynamic Type 26 polices, tokens MeeshyColors.text*(isDark:), ShortRelativeTime partagé+testé) |
+| Last merged PR | #591 (sync iter-44, commit 90afe70) |
+| Last Merged Base (commit) | 90afe70 (merge #591) |
+| Current iteration | **44b** — iOS exclusivement : Dynamic Type vues liens détail/create (68 polices) + surface composer (56 polices, hex 08D9D6/FF2E63 → tokens, 10 labels a11y) — PR #590 |
+| Current branch | `claude/keen-dirac-a53ki2` (réintègre main 90afe70) |
+| Deferred carry-over for 45 (iOS only, directive routine) | ConversationListHelpers (19 polices, 28 hex) ; PostDetailView (.textSelection + 21 hex) ; FeedCommentsSheet/FeedPostCard timeAgo dupliqués + i18n ; ConversationInfoSheet (52 polices), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (31), NewConversationView (7), DataExportView/DataStorageView (8), ChangePasswordView (2) ; ancienne palette 08D9D6/FF2E63/4ECDC4 dans ~10 fichiers stories/profil/conversation ; ladder pièces jointes arc-en-ciel (à arbitrer charte) ; VoiceProfileWizardView/PrivacySettingsView/TrackingLinksView Color(hex:) ; IncomingCallView .white contraste ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) |
 
 ---
 
@@ -51,4 +51,5 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 42b | claude/blissful-ritchie-e672ur | #579 | ✅ |
 | 43 | claude/blissful-ritchie-6709o7 | #576 | ✅ |
 | 43b | claude/awesome-albattani-xaqlhj | #587 | ✅ |
-| 44 | claude/keen-dirac-a53ki2 | #590 | ⏳ |
+| 44 | claude/keen-dirac-485vpk | #589, #591 | ✅ |
+| 44b | claude/keen-dirac-a53ki2 | #590 | ⏳ |
