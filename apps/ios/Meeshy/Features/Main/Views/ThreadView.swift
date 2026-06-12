@@ -19,7 +19,7 @@ struct ThreadView: View {
     @State private var sendError: String?
 
     private var accentColor: String {
-        parentMessage.senderColor ?? "4ECDC4"
+        parentMessage.senderColor ?? MeeshyColors.brandPrimaryHex
     }
 
     var body: some View {
@@ -148,7 +148,7 @@ struct ThreadView: View {
             MeeshyAvatar(
                 name: message.senderName ?? "?",
                 context: .postComment,
-                accentColor: message.senderColor ?? "4ECDC4",
+                accentColor: message.senderColor ?? accentColor,
                 moodEmoji: statusViewModel.statusForUser(userId: message.senderId)?.moodEmoji,
                 onMoodTap: statusViewModel.moodTapHandler(for: message.senderId)
             )
@@ -157,7 +157,7 @@ struct ThreadView: View {
                 HStack {
                     Text(message.senderName ?? String(localized: "common.unknown", defaultValue: "Unknown", bundle: .main))
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(Color(hex: message.senderColor ?? "4ECDC4"))
+                        .foregroundColor(Color(hex: message.senderColor ?? accentColor))
 
                     Text(message.createdAt, style: .relative)
                         .font(.caption2)

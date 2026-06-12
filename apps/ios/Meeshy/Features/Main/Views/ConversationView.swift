@@ -709,7 +709,7 @@ struct ConversationView: View {
             .sheet(item: $overlayState.detailSheetMessage) { msg in
                 MessageDetailSheet(
                     message: msg,
-                    contactColor: conversation?.accentColor ?? "#FF2E63",
+                    contactColor: conversation?.accentColor ?? MeeshyColors.brandPrimaryHex,
                     conversationId: viewModel.conversationId,
                     initialTab: overlayState.detailSheetInitialTab,
                     canDelete: msg.isMe || isCurrentUserAdminOrMod,

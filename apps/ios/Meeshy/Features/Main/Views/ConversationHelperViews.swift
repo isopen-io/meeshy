@@ -202,29 +202,3 @@ struct ThemedComposerButton: View {
     }
 }
 
-// MARK: - Legacy Support (Message defined in Models.swift, ChatMessage is alias)
-struct ConversationOptionButton: View {
-    let icon: String
-    let color: String
-    let action: () -> Void
-    var body: some View { ThemedActionButton(icon: icon, color: color, action: action) }
-}
-
-struct AttachOptionButton: View {
-    let icon: String
-    let color: String
-    let action: () -> Void
-    var body: some View { ThemedActionButton(icon: icon, color: color, action: action) }
-}
-
-struct MessageBubble: View {
-    let message: Message
-    var body: some View { ThemedMessageBubble(message: message, contactColor: "4ECDC4") }
-}
-
-struct ColorfulMessageBubble: View {
-    let message: Message
-    let contactColor: String
-    var body: some View { ThemedMessageBubble(message: message, contactColor: contactColor) }
-}
-
