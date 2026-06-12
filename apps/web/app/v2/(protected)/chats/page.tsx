@@ -251,7 +251,7 @@ export default function V2ChatsPage() {
   const searchParams = useSearchParams();
   const { user: currentUser, isAuthenticated } = useAuth();
   const { goBackToList, isMobile, showRightPanel } = useSplitView();
-  const { t } = useI18n('settings');
+  const { t, locale } = useI18n('settings');
 
   // Get selected conversation from URL
   const selectedConversationId = searchParams.get('id');
@@ -541,7 +541,7 @@ export default function V2ChatsPage() {
                     sender={!isSent ? (msg.sender as unknown)?.displayName || (msg.sender as unknown)?.username : undefined}
                     senderUsername={!isSent ? (msg.sender as unknown)?.username : undefined}
                     timestamp={
-                      new Date(msg.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                      new Date(msg.createdAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
                     }
                   />
 
