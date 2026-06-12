@@ -16,12 +16,11 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | 42 (hex iOS Settings/Notifications/Onboarding/DataExport/Conversation -> tokens, Dynamic Type vues liens list, a11y+i18n surface audio web, locales es/pt Android 10 modules, a11y SettingsScreen) |
-| Last merged PR | #581 ; iter-42 en cours de merge |
-| Last Merged Base (commit) | 1a238dd (merge #581) |
-| Next iteration | **43** |
-| Next branch to create from | `main` (HEAD post-merge iter-42) |
-| Deferred carry-over for 43 | polices fixes vues liens détail/create iOS (ShareLinkDetailView 13, TrackingLinkDetailView 25, LinksHubView 8, CreateShareLinkView 24, CreateTrackingLinkView 6) ; hex UniversalComposerBar(+Recording)/ComposerModels/AudioPostComposerView iOS ; parité stories Android (UI absente) ; navigation profil SettingsScreen Android ; réactions par pièce jointe web+Android (wiring gateway) ; audit qualité es/pt web ; validation client ID conversation web |
+| Last completed iteration | 33 (restore iter-32 lost locale keys, user-detail/agent-tab i18n, dark mode, iOS a11y) |
+| Last merged PR | #588 (feat/uiux-iter33) |
+| Last Merged Base (commit) | 7358047a |
+| Next iteration | **44** (full audit from main HEAD — see iter-43 deferred carry-over + fresh scan) |
+| Next branch to create from | `main` (HEAD = 7358047a) |
 
 ---
 
@@ -42,7 +41,7 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 30 | claude/dazzling-hawking-b4tdnk | #507 | ✅ |
 | 31 | claude/iter31-type-safety | #509 | ✅ |
 | 32 | feat/uiux-iter32 | #539 | ✅ |
-| 33 | feat/uiux-iter33 | #588 | ⏳ |
+| 33 | feat/uiux-iter33 | #588 | ✅ |
 | 33–39 | (inline admin-i18n passes, commit-message numbering) | #544, #545, … | ✅ |
 | 40 | claude/friendly-brown-xuzpju | #575 | ✅ |
 | 41 | claude/blissful-ritchie-9vesx9 | #577 | ✅ |
