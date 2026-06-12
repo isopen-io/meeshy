@@ -16,12 +16,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | 42 (hex iOS Settings/Notifications/Onboarding/DataExport/Conversation -> tokens, Dynamic Type vues liens list, a11y+i18n surface audio web, locales es/pt Android 10 modules, a11y SettingsScreen) |
-| Last merged PR | #581 ; iter-42 en cours de merge |
-| Last Merged Base (commit) | 1a238dd (merge #581) |
-| Next iteration | **43** |
-| Next branch to create from | `main` (HEAD post-merge iter-42) |
-| Deferred carry-over for 43 | polices fixes vues liens détail/create iOS (ShareLinkDetailView 13, TrackingLinkDetailView 25, LinksHubView 8, CreateShareLinkView 24, CreateTrackingLinkView 6) ; hex UniversalComposerBar(+Recording)/ComposerModels/AudioPostComposerView iOS ; parité stories Android (UI absente) ; navigation profil SettingsScreen Android ; réactions par pièce jointe web+Android (wiring gateway) ; audit qualité es/pt web ; validation client ID conversation web |
+| Last completed iteration | 43 (i18n recherche web, Dynamic Type Bookmarks/PostTranslationSheet/LinksHub iOS, déflake tests iOS, onglets contacts Android) — PRs #576/#579/#587/#588 toutes mergées |
+| Last merged PR | #588 (commit 7358047) |
+| Last Merged Base (commit) | 7358047 (merge #588) |
+| Current iteration | **44** — iOS exclusivement (directive routine) : Dynamic Type vues liens détail/create + surface composer, hex Recording/AudioPost |
+| Current branch | `claude/keen-dirac-a53ki2` (synchronisée avec main 7358047) |
+| Deferred carry-over for 45 | iOS : polices figées SettingsView (8), NewConversationView (7), DataExportView/DataStorageView (8), ChangePasswordView (2), ConversationView:495,551, ProfileView:65, TwoFactorSetupView textes ; PostDetailView `.textSelection(.enabled)` ; ThemedConversationRow hex vs accentColor ; VoiceProfileWizardView/PrivacySettingsView/TrackingLinksView Color(hex:) ; IncomingCallView .white contraste. Hors iOS (suspendu tant que directive iOS-only) : parité stories Android ; réactions par pièce jointe web+Android ; audit qualité es/pt web ; dates hors v2 web (~40) |
 
 ---
 
@@ -42,11 +42,13 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 30 | claude/dazzling-hawking-b4tdnk | #507 | ✅ |
 | 31 | claude/iter31-type-safety | #509 | ✅ |
 | 32 | feat/uiux-iter32 | #539 | ✅ |
-| 33 | feat/uiux-iter33 | #588 | ⏳ |
+| 33 | feat/uiux-iter33 | #588 | ✅ |
 | 33–39 | (inline admin-i18n passes, commit-message numbering) | #544, #545, … | ✅ |
 | 40 | claude/friendly-brown-xuzpju | #575 | ✅ |
 | 41 | claude/blissful-ritchie-9vesx9 | #577 | ✅ |
 | 41b | claude/blissful-ritchie-68j2oq | #580 | ✅ |
 | 42 | claude/blissful-ritchie-fst8wf | #582 | ✅ |
-| 42b | claude/blissful-ritchie-e672ur | #579 | ⏳ |
-| 43 | claude/blissful-ritchie-6709o7 | #576 | ⏳ |
+| 42b | claude/blissful-ritchie-e672ur | #579 | ✅ |
+| 43 | claude/blissful-ritchie-6709o7 | #576 | ✅ |
+| 43b | claude/awesome-albattani-xaqlhj | #587 | ✅ |
+| 44 | claude/keen-dirac-a53ki2 | — | ⏳ |

@@ -100,23 +100,23 @@ struct CreateShareLinkView: View {
                         conversationTypeIcon(conv.type)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(conv.name)
-                                .font(.system(size: 15, weight: .medium))
+                                .font(.subheadline.weight(.medium))
                                 .foregroundColor(theme.textPrimary)
                             Text(conv.type.displayLabel)
-                                .font(.system(size: 12))
+                                .font(.caption)
                                 .foregroundColor(theme.textSecondary)
                         }
                     } else {
                         Image(systemName: "plus.circle.dashed")
-                            .font(.system(size: 18))
+                            .font(.body)
                             .foregroundColor(accent)
                         Text(String(localized: "share.link.create.choose_group", defaultValue: "Choisir un groupe ou une communauté", bundle: .main))
-                            .font(.system(size: 15))
+                            .font(.subheadline)
                             .foregroundColor(theme.textMuted)
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                 }
                 .padding(14)
@@ -139,7 +139,7 @@ struct CreateShareLinkView: View {
                     formTextField(String(localized: "share.link.create.field.slug", defaultValue: "Slug URL (optionnel)", bundle: .main), placeholder: String(localized: "share.link.create.field.slug.placeholder", defaultValue: "ex: mon-groupe-2025", bundle: .main), text: $customSlug)
                     if !customSlug.isEmpty {
                         Text("meeshy.me/join/\(customSlug.lowercased())")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.caption2.weight(.medium))
                             .foregroundColor(accent.opacity(0.8))
                             .padding(.horizontal, 14)
                             .padding(.bottom, 8)
@@ -249,15 +249,15 @@ struct CreateShareLinkView: View {
                     Toggle(isOn: $maxUsesEnabled) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(String(localized: "share.link.create.limit_uses", defaultValue: "Limiter les utilisations", bundle: .main))
-                                .font(.system(size: 15, weight: .medium))
+                                .font(.subheadline.weight(.medium))
                                 .foregroundColor(theme.textPrimary)
                             if maxUsesEnabled {
                                 Text(String(localized: "share.link.create.max_uses", defaultValue: "\(maxUsesValue) utilisation\(maxUsesValue > 1 ? "s" : "") maximum", bundle: .main))
-                                    .font(.system(size: 12))
+                                    .font(.caption)
                                     .foregroundColor(accent)
                             } else {
                                 Text(String(localized: "share.link.create.unlimited", defaultValue: "Illimité", bundle: .main))
-                                    .font(.system(size: 12))
+                                    .font(.caption)
                                     .foregroundColor(theme.textSecondary)
                             }
                         }
@@ -277,10 +277,10 @@ struct CreateShareLinkView: View {
                         HStack {
                             Spacer()
                             Text("\(maxUsesValue)")
-                                .font(.system(size: 28, weight: .bold, design: .rounded))
+                                .font(.system(.title, design: .rounded).weight(.bold))
                                 .foregroundColor(accent)
                             Text(String(localized: "share.link.create.uses_label", defaultValue: "utilisations", bundle: .main))
-                                .font(.system(size: 14))
+                                .font(.subheadline)
                                 .foregroundColor(theme.textSecondary)
                             Spacer()
                         }
@@ -297,10 +297,10 @@ struct CreateShareLinkView: View {
                     iconBadge("clock.badge.xmark", color: MeeshyColors.warningHex)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(String(localized: "share.link.create.expiration", defaultValue: "Expiration", bundle: .main))
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.subheadline.weight(.medium))
                             .foregroundColor(theme.textPrimary)
                         Text(expirationOption.label)
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(expirationOption == .never ? theme.textSecondary : MeeshyColors.warning)
                     }
                     Spacer()
@@ -327,7 +327,7 @@ struct CreateShareLinkView: View {
                     Image(systemName: "exclamationmark.circle.fill")
                         .foregroundColor(MeeshyColors.error)
                     Text(error)
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundColor(MeeshyColors.error)
                 }
                 .padding(.horizontal, 20)
@@ -339,12 +339,12 @@ struct CreateShareLinkView: View {
                         ProgressView().tint(.white).scaleEffect(0.85)
                     } else {
                         Image(systemName: "link.badge.plus")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.callout.weight(.semibold))
                     }
                     Text(isCreating
                         ? String(localized: "share.link.create.button.creating", defaultValue: "Création en cours…", bundle: .main)
                         : String(localized: "share.link.create.button.create", defaultValue: "Créer le lien de partage", bundle: .main))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.callout.weight(.bold))
                         .foregroundColor(.white)
                 }
                 .frame(maxWidth: .infinity)
@@ -388,10 +388,10 @@ struct CreateShareLinkView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundColor(accent)
                 Text(title.uppercased())
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundColor(theme.textSecondary)
             }
             .padding(.horizontal, 20)
@@ -399,7 +399,7 @@ struct CreateShareLinkView: View {
 
             if let subtitle {
                 Text(subtitle)
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundColor(theme.textMuted)
                     .padding(.horizontal, 20)
             }
@@ -417,10 +417,10 @@ struct CreateShareLinkView: View {
     private func formTextField(_ label: String, placeholder: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(.caption2.weight(.medium))
                 .foregroundColor(theme.textSecondary)
             TextField(placeholder, text: text)
-                .font(.system(size: 15))
+                .font(.subheadline)
                 .foregroundColor(theme.textPrimary)
         }
         .padding(.horizontal, 14)
@@ -440,10 +440,10 @@ struct CreateShareLinkView: View {
             Toggle(isOn: isOn) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .foregroundColor(theme.textPrimary)
                     Text(subtitle)
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(theme.textSecondary)
                 }
             }
@@ -459,7 +459,7 @@ struct CreateShareLinkView: View {
                 .fill(Color(hex: color).opacity(0.15))
                 .frame(width: 34, height: 34)
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(Color(hex: color))
         }
     }
@@ -537,9 +537,9 @@ private struct ConversationPickerSheet: View {
 
     private var grouped: [(label: String, items: [Conversation])] {
         let groups: [(label: String, types: [Conversation.ConversationType])] = [
-            ("Groupes", [.group]),
-            ("Communautés", [.community]),
-            ("Canaux & Public", [.channel, .public, .global]),
+            (String(localized: "share.link.create.picker.section.groups", defaultValue: "Groupes", bundle: .main), [.group]),
+            (String(localized: "share.link.create.picker.section.communities", defaultValue: "Communautés", bundle: .main), [.community]),
+            (String(localized: "share.link.create.picker.section.channels", defaultValue: "Canaux & Public", bundle: .main), [.channel, .public, .global]),
         ]
         return groups.compactMap { g in
             let items = filtered.filter { g.types.contains($0.type) }
@@ -602,11 +602,11 @@ private enum ExpirationOption: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .never: "Jamais"
-        case .h24:   "24 heures"
-        case .d7:    "7 jours"
-        case .d30:   "30 jours"
-        case .m3:    "3 mois"
+        case .never: String(localized: "share.link.create.expiration.never", defaultValue: "Jamais", bundle: .main)
+        case .h24:   String(localized: "share.link.create.expiration.h24", defaultValue: "24 heures", bundle: .main)
+        case .d7:    String(localized: "share.link.create.expiration.d7", defaultValue: "7 jours", bundle: .main)
+        case .d30:   String(localized: "share.link.create.expiration.d30", defaultValue: "30 jours", bundle: .main)
+        case .m3:    String(localized: "share.link.create.expiration.m3", defaultValue: "3 mois", bundle: .main)
         }
     }
 
