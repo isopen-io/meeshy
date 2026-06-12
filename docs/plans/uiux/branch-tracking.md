@@ -16,12 +16,13 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | 41 (deux passes parallèles : PR #577 mergée + PR #580 — tokens liens iOS, Feed Dynamic Type, i18n Settings/Contacts Android, deep link chat, routes app/ web) |
-| Last merged PR | #577 ; #580 en cours de merge |
-| Last Merged Base (commit) | 167ef318 (merge #577) — mettre à jour après merge #580 |
-| Next iteration | **42** |
-| Next branch to create from | `main` (HEAD post-merge #580) |
-| Deferred carry-over for 42 | hex iOS hors surface liens (SettingsView, NotificationSettingsView, OnboardingView, DataExportView reste, ConversationView+Composer) ; polices fixes vues liens iOS ; parité stories Android ; réactions par pièce jointe web+Android (wiring gateway attachment:reaction-*) ; AudioEffectTile role=button web ; audit qualité es/pt ; validation client ID conversation web |
+| Last completed iteration | 41 (PR #577 + PR #580 mergées) |
+| Last merged PR | #580 (mergée 2026-06-12T07:42Z) |
+| Last Merged Base (commit) | 0977931 (merge #580) |
+| Current iteration | **42** — branche `claude/blissful-ritchie-fst8wf` (reset sur 0977931) |
+| Next iteration | 43 |
+| Carry-over traités en 42 | hex iOS hors surface liens ; polices fixes vues liens iOS ; AudioEffectTile role=button web ; validation client ID conversation web (selon findings) |
+| Deferred carry-over for 43 | parité stories Android ; réactions par pièce jointe web+Android (wiring gateway attachment:reaction-*) ; audit qualité es/pt |
 
 ---
 
@@ -45,4 +46,5 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 33–39 | (inline admin-i18n passes, commit-message numbering) | #544, #545, … | ✅ |
 | 40 | claude/friendly-brown-xuzpju | #575 | ✅ |
 | 41 | claude/blissful-ritchie-9vesx9 | #577 | ✅ |
-| 41b | claude/blissful-ritchie-68j2oq | #580 | ⏳ CI |
+| 41b | claude/blissful-ritchie-68j2oq | #580 | ✅ |
+| 42 | claude/blissful-ritchie-fst8wf | TBD | ⏳ |
