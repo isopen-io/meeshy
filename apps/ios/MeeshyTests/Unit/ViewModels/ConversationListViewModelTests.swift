@@ -939,6 +939,22 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertEqual(sut.filteredConversations.count, 2)
     }
 
+    // MARK: - Grouping pipeline wait
+
+    /// Le regroupement passe par debounce(150ms) + Task.detached : un sleep fixe
+    /// est flaky sur un runner CI chargé — on poll jusqu'à l'état attendu.
+    private func waitForGrouping(
+        timeout: TimeInterval = 5.0,
+        until condition: @escaping @MainActor () -> Bool
+    ) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTFail("Grouping pipeline did not settle within \(timeout)s")
+    }
+
     // MARK: - Sorting: most recent first
 
     func test_filterPipeline_sortsMostRecentFirst() async throws {
@@ -953,7 +969,7 @@ final class ConversationListViewModelTests: XCTestCase {
         ]
         sut.selectedFilter = .all
 
-        try await Task.sleep(nanoseconds: 300_000_000)
+        try await waitForGrouping { !sut.groupedConversations.isEmpty }
 
         XCTAssertFalse(sut.groupedConversations.isEmpty)
         let firstSection = sut.groupedConversations[0].conversations
@@ -973,7 +989,7 @@ final class ConversationListViewModelTests: XCTestCase {
         ]
         sut.selectedFilter = .all
 
-        try await Task.sleep(nanoseconds: 300_000_000)
+        try await waitForGrouping { sut.groupedConversations.contains { $0.section.id == "pinned" } }
 
         XCTAssertGreaterThanOrEqual(sut.groupedConversations.count, 1)
         let pinnedSection = sut.groupedConversations.first(where: { $0.section.id == "pinned" })
@@ -998,7 +1014,10 @@ final class ConversationListViewModelTests: XCTestCase {
         ]
         sut.selectedFilter = .all
 
-        try await Task.sleep(nanoseconds: 300_000_000)
+        try await waitForGrouping {
+            sut.groupedConversations.contains { $0.section.id == "cat-work" }
+                && sut.groupedConversations.contains { $0.section.id == "cat-family" }
+        }
 
         let sectionIds = sut.groupedConversations.map(\.section.id)
         XCTAssertTrue(sectionIds.contains("cat-work"))
@@ -1020,7 +1039,7 @@ final class ConversationListViewModelTests: XCTestCase {
         ]
         sut.selectedFilter = .all
 
-        try await Task.sleep(nanoseconds: 300_000_000)
+        try await waitForGrouping { sut.groupedConversations.contains { $0.section.id == "other" } }
 
         let otherSection = sut.groupedConversations.first(where: { $0.section.id == "other" })
         XCTAssertNotNil(otherSection)
@@ -1037,7 +1056,7 @@ final class ConversationListViewModelTests: XCTestCase {
         ]
         sut.selectedFilter = .all
 
-        try await Task.sleep(nanoseconds: 300_000_000)
+        try await waitForGrouping { sut.groupedConversations.contains { $0.section.id == "other" } }
 
         let otherSection = sut.groupedConversations.first(where: { $0.section.id == "other" })
         XCTAssertNotNil(otherSection)
@@ -1272,7 +1291,10 @@ final class ConversationListViewModelTests: XCTestCase {
         ]
         sut.selectedFilter = .all
 
-        try await Task.sleep(nanoseconds: 300_000_000)
+        try await waitForGrouping {
+            sut.groupedConversations.contains { $0.section.id == "cat-dev" }
+                && sut.groupedConversations.contains { $0.section.id == "other" }
+        }
 
         let devSection = sut.groupedConversations.first(where: { $0.section.id == "cat-dev" })
         XCTAssertNotNil(devSection)
