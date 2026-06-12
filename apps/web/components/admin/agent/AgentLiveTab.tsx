@@ -26,6 +26,7 @@ const DeliveryQueuePanel = dynamic(() => import('./DeliveryQueuePanel'), {
 import { UserDisplay } from './UserDisplay';
 import { useDebounce } from 'use-debounce';
 import { useI18n } from '@/hooks/useI18n';
+import { useAgentAdminEvents } from '@/hooks/admin/use-agent-admin-events';
 
 function formatTimeAgo(dateStr: string | null | undefined, t: (key: string) => string): string {
   if (!dateStr) return t('agent.overview.timeAgo.never');
@@ -407,6 +408,14 @@ export function AgentLiveTab() {
     setError(null);
     fetchLiveState(id);
   }, [fetchLiveState]);
+
+  // Push admin : un scan (start/fin) sur la conversation suivie rafraîchit le live state
+  useAgentAdminEvents({
+    kinds: ['scan'],
+    conversationId: selectedId ?? undefined,
+    onChange: fetchLiveState,
+    enabled: selectedId !== null,
+  });
 
   // Auto-refresh
   useEffect(() => {
