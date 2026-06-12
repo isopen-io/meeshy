@@ -340,7 +340,20 @@
     "created": "Configuração criada",
     "updated": "Configuração atualizada",
     "saveError": "Erro ao salvar configuração",
-    "pendingPropagation": "Config salva — propagação ao serviço de agente pendente (cache pode demorar alguns minutos)"
+    "pendingPropagation": "Config salva — propagação ao serviço de agente pendente (cache pode demorar alguns minutos)",
+    "conversationToConfigure": "Conversa a configurar",
+    "searchPlaceholder": "Buscar um grupo, um canal ou uma discussão...",
+    "conversationSection": "Conversa",
+    "createdOn": "Criado em",
+    "creator": "Criador",
+    "lastActivity": "Última atividade",
+    "identifier": "Identificador",
+    "general": "Geral",
+    "behaviorContext": "Comportamento e contexto",
+    "agentEnabled": "Agente ativado",
+    "agentEnabledHelp": "Interruptor principal. Se desativado, o agente não analisará nenhuma mensagem e nunca responderá, liberando recursos do servidor.",
+    "autoPickup": "Auto-pickup",
+    "autoPickupHelp": "Modo dinâmico: o agente detecta usuários que param de responder (ver Limite de inatividade) e assume sua identidade para manter a conversa ativa."
   },
   "security": {
     "enable2FA": "Ativar 2FA",

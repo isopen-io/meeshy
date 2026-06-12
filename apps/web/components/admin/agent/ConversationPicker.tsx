@@ -10,6 +10,7 @@ import { useDebounce } from 'use-debounce';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
+import { useI18n } from '@/hooks/useI18n';
 
 interface ConversationPickerProps {
   selectedId: string | null;
@@ -20,6 +21,7 @@ interface ConversationPickerProps {
 }
 
 export function ConversationPicker({ selectedId, onSelect, onClear, label, placeholder = "Search a conversation..." }: ConversationPickerProps) {
+  const { locale } = useI18n('admin');
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch] = useDebounce(searchTerm, 500);
   const [results, setResults] = useState<Conversation[]>([]);
@@ -110,7 +112,7 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
                       {selectedConversation.createdAt && (
                         <span className="flex items-center gap-0.5">
                           <Calendar className="h-3 w-3" />
-                          {new Date(selectedConversation.createdAt).toLocaleDateString()}
+                          {new Date(selectedConversation.createdAt).toLocaleDateString(locale)}
                         </span>
                       )}
                     </div>
@@ -202,7 +204,7 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
                                 <>
                                   <span className="text-gray-300">•</span>
                                   <span className="text-[10px] text-gray-400">
-                                    {new Date(conv.lastMessageAt).toLocaleDateString()}
+                                    {new Date(conv.lastMessageAt).toLocaleDateString(locale)}
                                   </span>
                                 </>
                               )}

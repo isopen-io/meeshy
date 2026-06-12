@@ -34,10 +34,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.feature.settings.R
 import me.meeshy.ui.component.MeeshyAvatar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,10 +54,13 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text(stringResource(R.string.settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.settings_back),
+                        )
                     }
                 },
             )
@@ -67,7 +72,7 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState()),
         ) {
-            SettingsSection(title = "Profile") {
+            SettingsSection(title = stringResource(R.string.settings_section_profile)) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -103,13 +108,13 @@ fun SettingsScreen(
                 }
             }
 
-            SettingsSection(title = "Language") {
-                SettingsRow(label = "Display language", detail = null, onClick = {})
+            SettingsSection(title = stringResource(R.string.settings_section_language)) {
+                SettingsRow(label = stringResource(R.string.settings_display_language), detail = null, onClick = {})
                 HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
-                SettingsRow(label = "Regional language", detail = null, onClick = {})
+                SettingsRow(label = stringResource(R.string.settings_regional_language), detail = null, onClick = {})
             }
 
-            SettingsSection(title = "Notifications") {
+            SettingsSection(title = stringResource(R.string.settings_section_notifications)) {
                 var pushEnabled by remember { mutableStateOf(true) }
                 Row(
                     modifier = Modifier
@@ -118,7 +123,7 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Push notifications",
+                        text = stringResource(R.string.settings_push_notifications),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
                     )
@@ -129,31 +134,31 @@ fun SettingsScreen(
                 }
             }
 
-            SettingsSection(title = "Privacy & Security") {
-                SettingsRow(label = "Two-factor auth", detail = null, onClick = {})
+            SettingsSection(title = stringResource(R.string.settings_section_privacy)) {
+                SettingsRow(label = stringResource(R.string.settings_two_factor), detail = null, onClick = {})
                 HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
-                SettingsRow(label = "Active sessions", detail = null, onClick = {})
+                SettingsRow(label = stringResource(R.string.settings_active_sessions), detail = null, onClick = {})
                 HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
-                SettingsRow(label = "Blocked users", detail = null, onClick = {})
+                SettingsRow(label = stringResource(R.string.settings_blocked_users), detail = null, onClick = {})
             }
 
-            SettingsSection(title = "Data") {
-                SettingsRow(label = "Export my data", detail = null, onClick = {})
+            SettingsSection(title = stringResource(R.string.settings_section_data)) {
+                SettingsRow(label = stringResource(R.string.settings_export_data), detail = null, onClick = {})
                 HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
-                SettingsRow(label = "Clear media cache", detail = null, onClick = {})
+                SettingsRow(label = stringResource(R.string.settings_clear_media_cache), detail = null, onClick = {})
                 HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
-                SettingsRow(label = "Storage used", detail = null, onClick = {})
+                SettingsRow(label = stringResource(R.string.settings_storage_used), detail = null, onClick = {})
             }
 
-            SettingsSection(title = "About") {
-                SettingsRow(label = "Version 1.0.0", detail = null, onClick = null)
+            SettingsSection(title = stringResource(R.string.settings_section_about)) {
+                SettingsRow(label = stringResource(R.string.settings_version), detail = null, onClick = null)
                 HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
-                SettingsRow(label = "Terms of Service", detail = null, onClick = {})
+                SettingsRow(label = stringResource(R.string.settings_terms_of_service), detail = null, onClick = {})
                 HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
-                SettingsRow(label = "Privacy Policy", detail = null, onClick = {})
+                SettingsRow(label = stringResource(R.string.settings_privacy_policy), detail = null, onClick = {})
             }
 
-            SettingsSection(title = "Danger zone") {
+            SettingsSection(title = stringResource(R.string.settings_section_danger)) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -167,10 +172,10 @@ fun SettingsScreen(
                             containerColor = MaterialTheme.colorScheme.error,
                         ),
                     ) {
-                        Text("Log out")
+                        Text(stringResource(R.string.settings_log_out))
                     }
                     SettingsRow(
-                        label = "Delete account",
+                        label = stringResource(R.string.settings_delete_account),
                         detail = null,
                         onClick = {},
                         labelColor = MaterialTheme.colorScheme.error,

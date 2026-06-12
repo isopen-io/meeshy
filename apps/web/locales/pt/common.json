@@ -260,7 +260,17 @@
       "public": "Público",
       "friends": "Amigos",
       "private": "Privado"
-    }
+    },
+    "statusComposer": {
+      "title": "Qual é o seu mood?",
+      "placeholder": "O que você está fazendo?",
+      "preview": "Pré-visualização",
+      "yourName": "Seu nome",
+      "clear": "Limpar meu status"
+    },
+    "postPlaceholder": "No que você está pensando?",
+    "captionPlaceholder": "Adicione uma legenda (opcional)...",
+    "quotePlaceholder": "Adicione seus pensamentos..."
   },
   "copied": "Copiado",
   "never": "Nunca"

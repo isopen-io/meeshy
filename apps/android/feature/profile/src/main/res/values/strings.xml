@@ -9,4 +9,5 @@
     <string name="profile_cancel">Cancel</string>
     <string name="profile_save">Save</string>
     <string name="profile_unknown">Unknown</string>
+    <string name="profile_avatar">Avatar</string>
 </resources>

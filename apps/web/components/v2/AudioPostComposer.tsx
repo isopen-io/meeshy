@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 import { Button } from './Button';
 import type { MobileTranscription, MobileTranscriptionSegment } from '@/services/posts.service';
@@ -66,6 +67,7 @@ function AudioPostComposer({
   onClose,
   disabled = false,
 }: AudioPostComposerProps) {
+  const { t } = useI18n('common');
   const [phase, setPhase] = useState<Phase>('idle');
   const [duration, setDuration] = useState(0);
   const [waveform, setWaveform] = useState<number[]>([]);
@@ -414,7 +416,7 @@ function AudioPostComposer({
               <textarea
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
-                placeholder="Add a caption (optional)..."
+                placeholder={t('captionPlaceholder')}
                 rows={2}
                 maxLength={5000}
                 className={cn(

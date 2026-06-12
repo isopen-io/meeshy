@@ -46,7 +46,7 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
   const [newTokenName, setNewTokenName] = useState('');
   const [shareMessage, setShareMessage] = useState('');
   const [currentStep, setCurrentStep] = useState<'select' | 'create' | 'share'>('select');
-  const { t } = useI18n('affiliate');
+  const { t, tArray } = useI18n('affiliate');
   const { t: tCommon } = useI18n('common');
 
   // Messages de partage par défaut selon la langue
@@ -58,17 +58,7 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
     pt: "Junte-se a mim no Meeshy! Uma plataforma de mensagens multilíngue onde você pode conversar com pessoas de todo o mundo e aprender idiomas se divertindo. Clique neste link para se inscrever:"
   };
 
-  // Suggestions de noms prédéfinis pour les tokens
-  const tokenNameSuggestions = [
-    'Inviter amis',
-    'Inviter famille', 
-    'Pour mes camarades',
-    'Campagne LinkedIn',
-    'Campagne Facebook',
-    'Partage général',
-    'Invitation communauté',
-    'Partage professionnel'
-  ];
+  const tokenNameSuggestions = tArray('tokenNameSuggestions');
 
   useEffect(() => {
     if (isOpen) {
@@ -293,13 +283,13 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
         return (
           <div className="space-y-4">
             <div className="text-center">
-              <h3 className="text-lg font-semibold mb-2 dark:text-gray-100">Créer un nouveau lien</h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm">Choisissez un nom pour votre lien de partage</p>
+              <h3 className="text-lg font-semibold mb-2 dark:text-gray-100">{t('createNewToken')}</h3>
+              <p className="text-gray-600 dark:text-gray-400 text-sm">{t('chooseName')}</p>
             </div>
 
             {/* Suggestions de noms */}
             <div className="space-y-3">
-              <Label className="text-sm font-medium dark:text-gray-200">Suggestions :</Label>
+              <Label className="text-sm font-medium dark:text-gray-200">{t('suggestions')}</Label>
               <div className="grid grid-cols-3 gap-2">
                 {tokenNameSuggestions.map((suggestion, index) => (
                   <div
@@ -317,12 +307,12 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
 
             {/* Champ nom personnalisé */}
             <div className="space-y-2">
-              <Label htmlFor="tokenName" className="dark:text-gray-200">Ou saisissez un nom personnalisé :</Label>
+              <Label htmlFor="tokenName" className="dark:text-gray-200">{t('customNameLabel')}</Label>
               <Input
                 id="tokenName"
                 value={newTokenName}
                 onChange={(e) => setNewTokenName(e.target.value)}
-                placeholder="Ex: Mon lien spécial..."
+                placeholder={t('tokenNamePlaceholder')}
                 className="mt-1 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 dark:placeholder-gray-500"
               />
             </div>
@@ -368,7 +358,7 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
                           className="flex-1 flex items-center space-x-2 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600 dark:text-gray-200"
                         >
                           <Copy className="h-4 w-4" />
-                          <span>Copier</span>
+                          <span>{t('copy')}</span>
                         </Button>
 
                         <Button
@@ -376,7 +366,7 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
                           className="flex-1 flex items-center space-x-2 dark:bg-blue-700 dark:hover:bg-blue-800"
                         >
                           <Share2 className="h-4 w-4" />
-                          <span>Partager</span>
+                          <span>{t('share')}</span>
                         </Button>
                       </div>
                     </div>
@@ -425,7 +415,7 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
                 className="flex items-center space-x-2 dark:bg-blue-700 dark:hover:bg-blue-800"
               >
                 <Share2 className="h-4 w-4" />
-                <span>{isCreating ? 'Création...' : 'Créer et partager'}</span>
+                <span>{isCreating ? t('actions.creating') : t('createAndShare')}</span>
               </Button>
             </div>
           ) : (
