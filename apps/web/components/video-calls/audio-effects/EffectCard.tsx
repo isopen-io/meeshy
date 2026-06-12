@@ -9,6 +9,7 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { RotateCcw, Mic2, Baby, Skull, Music } from 'lucide-react';
+import { useI18n } from '@/hooks/useI18n';
 import type { AudioEffectType } from '@meeshy/shared/types/video-call';
 
 type EffectTileType = 'reset' | AudioEffectType;
@@ -47,6 +48,8 @@ export const EffectCard = React.memo<EffectCardProps>(({
   isSelected,
   onClick,
 }) => {
+  const { t } = useI18n('audioEffects');
+
   return (
     <Card
       className={cn(
@@ -70,12 +73,12 @@ export const EffectCard = React.memo<EffectCardProps>(({
       {/* Status badge */}
       {id !== 'reset' && (
         <div className={cn(
-          "absolute top-2 left-2 px-1.5 py-0.5 rounded text-[11px] font-bold",
+          "absolute top-2 left-2 px-1.5 py-0.5 rounded text-[11px] font-bold uppercase",
           isActive
             ? "bg-green-500/90 text-white"
             : "bg-gray-700/80 text-gray-300"
         )}>
-          {isActive ? 'ON' : 'OFF'}
+          {isActive ? t('status.on') : t('status.off')}
         </div>
       )}
 

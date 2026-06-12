@@ -330,6 +330,7 @@
       "cancel": "Cancelar",
       "uploading": "Enviando...",
       "processing": "Processando...",
+      "processingError": "Erro ao processar a imagem",
       "save": "Salvar"
     },
     "typingIndicator": {

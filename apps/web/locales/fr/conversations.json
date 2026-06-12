@@ -338,6 +338,7 @@
       "cancel": "Annuler",
       "uploading": "Téléchargement...",
       "processing": "Traitement...",
+      "processingError": "Erreur lors du traitement de l'image",
       "save": "Enregistrer"
     },
     "typingIndicator": {

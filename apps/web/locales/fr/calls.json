@@ -1,6 +1,7 @@
 {
   "calls": {
     "loading": "Chargement de l'appel...",
+    "you": "Vous",
     "banner": {
       "inProgress": "Appel en cours",
       "participant": "{count} participant",

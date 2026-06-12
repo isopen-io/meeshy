@@ -328,6 +328,7 @@
       "cancel": "Cancel",
       "uploading": "Uploading...",
       "processing": "Processing...",
+      "processingError": "Error processing image",
       "save": "Save"
     },
     "typingIndicator": {
