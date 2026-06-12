@@ -10,7 +10,7 @@ struct NotificationSettingsView: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @ObservedObject private var prefs = UserPreferencesManager.shared
 
-    private let accentColor = "6366F1"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
         ZStack {
@@ -77,20 +77,20 @@ struct NotificationSettingsView: View {
     // MARK: - General
 
     private var generalSection: some View {
-        settingsSection(title: String(localized: "settings.notifications.general", defaultValue: "Général", bundle: .main), icon: "bell.fill", color: "FF6B6B") {
-            notifToggle(icon: "bell.badge.fill", title: String(localized: "settings.notifications.push", defaultValue: "Push", bundle: .main), color: "FF6B6B",
+        settingsSection(title: String(localized: "settings.notifications.general", defaultValue: "Général", bundle: .main), icon: "bell.fill", color: MeeshyColors.errorHex) {
+            notifToggle(icon: "bell.badge.fill", title: String(localized: "settings.notifications.push", defaultValue: "Push", bundle: .main), color: MeeshyColors.errorHex,
                         keyPath: \.pushEnabled)
 
-            notifToggle(icon: "envelope.fill", title: String(localized: "settings.notifications.email", defaultValue: "Email", bundle: .main), color: "60A5FA",
+            notifToggle(icon: "envelope.fill", title: String(localized: "settings.notifications.email", defaultValue: "Email", bundle: .main), color: MeeshyColors.infoHex,
                         keyPath: \.emailEnabled)
 
-            notifToggle(icon: "speaker.wave.2.fill", title: String(localized: "settings.notifications.sounds", defaultValue: "Sons", bundle: .main), color: "6366F1",
+            notifToggle(icon: "speaker.wave.2.fill", title: String(localized: "settings.notifications.sounds", defaultValue: "Sons", bundle: .main), color: MeeshyColors.brandPrimaryHex,
                         keyPath: \.soundEnabled)
 
-            notifToggle(icon: "iphone.radiowaves.left.and.right", title: String(localized: "settings.notifications.vibrations", defaultValue: "Vibrations", bundle: .main), color: "9B59B6",
+            notifToggle(icon: "iphone.radiowaves.left.and.right", title: String(localized: "settings.notifications.vibrations", defaultValue: "Vibrations", bundle: .main), color: MeeshyColors.brandDeepHex,
                         keyPath: \.vibrationEnabled)
 
-            notifToggle(icon: "app.badge.fill", title: String(localized: "settings.notifications.badges", defaultValue: "Badges", bundle: .main), color: "F8B500",
+            notifToggle(icon: "app.badge.fill", title: String(localized: "settings.notifications.badges", defaultValue: "Badges", bundle: .main), color: MeeshyColors.warningHex,
                         keyPath: \.notificationBadgeEnabled)
         }
     }
@@ -98,17 +98,17 @@ struct NotificationSettingsView: View {
     // MARK: - Messages
 
     private var messagesSection: some View {
-        settingsSection(title: String(localized: "settings.notifications.messages", defaultValue: "Messages", bundle: .main), icon: "message.fill", color: "6366F1") {
-            notifToggle(icon: "bubble.left.fill", title: String(localized: "settings.notifications.new_messages", defaultValue: "Nouveaux messages", bundle: .main), color: "6366F1",
+        settingsSection(title: String(localized: "settings.notifications.messages", defaultValue: "Messages", bundle: .main), icon: "message.fill", color: MeeshyColors.brandPrimaryHex) {
+            notifToggle(icon: "bubble.left.fill", title: String(localized: "settings.notifications.new_messages", defaultValue: "Nouveaux messages", bundle: .main), color: MeeshyColors.brandPrimaryHex,
                         keyPath: \.newMessageEnabled)
 
-            notifToggle(icon: "phone.arrow.down.left", title: String(localized: "settings.notifications.missed_calls", defaultValue: "Appels manqués", bundle: .main), color: "FF6B6B",
+            notifToggle(icon: "phone.arrow.down.left", title: String(localized: "settings.notifications.missed_calls", defaultValue: "Appels manqués", bundle: .main), color: MeeshyColors.errorHex,
                         keyPath: \.missedCallEnabled)
 
-            notifToggle(icon: "mic.fill", title: String(localized: "settings.notifications.voicemail", defaultValue: "Messages vocaux", bundle: .main), color: "9B59B6",
+            notifToggle(icon: "mic.fill", title: String(localized: "settings.notifications.voicemail", defaultValue: "Messages vocaux", bundle: .main), color: MeeshyColors.brandDeepHex,
                         keyPath: \.voicemailEnabled)
 
-            notifToggle(icon: "gear", title: String(localized: "settings.notifications.system", defaultValue: "Système", bundle: .main), color: "60A5FA",
+            notifToggle(icon: "gear", title: String(localized: "settings.notifications.system", defaultValue: "Système", bundle: .main), color: MeeshyColors.infoHex,
                         keyPath: \.systemEnabled)
         }
     }
@@ -116,17 +116,17 @@ struct NotificationSettingsView: View {
     // MARK: - Conversations
 
     private var conversationsSection: some View {
-        settingsSection(title: String(localized: "settings.notifications.conversations", defaultValue: "Conversations", bundle: .main), icon: "bubble.left.and.bubble.right.fill", color: "9B59B6") {
-            notifToggle(icon: "text.bubble.fill", title: String(localized: "settings.notifications.conversations", defaultValue: "Conversations", bundle: .main), color: "9B59B6",
+        settingsSection(title: String(localized: "settings.notifications.conversations", defaultValue: "Conversations", bundle: .main), icon: "bubble.left.and.bubble.right.fill", color: MeeshyColors.brandDeepHex) {
+            notifToggle(icon: "text.bubble.fill", title: String(localized: "settings.notifications.conversations", defaultValue: "Conversations", bundle: .main), color: MeeshyColors.brandDeepHex,
                         keyPath: \.conversationEnabled)
 
-            notifToggle(icon: "arrowshape.turn.up.left.fill", title: String(localized: "settings.notifications.replies", defaultValue: "Réponses", bundle: .main), color: "6366F1",
+            notifToggle(icon: "arrowshape.turn.up.left.fill", title: String(localized: "settings.notifications.replies", defaultValue: "Réponses", bundle: .main), color: MeeshyColors.brandPrimaryHex,
                         keyPath: \.replyEnabled)
 
-            notifToggle(icon: "at", title: String(localized: "settings.notifications.mentions", defaultValue: "Mentions", bundle: .main), color: "F8B500",
+            notifToggle(icon: "at", title: String(localized: "settings.notifications.mentions", defaultValue: "Mentions", bundle: .main), color: MeeshyColors.warningHex,
                         keyPath: \.mentionEnabled)
 
-            notifToggle(icon: "face.smiling.fill", title: String(localized: "settings.notifications.reactions", defaultValue: "Réactions", bundle: .main), color: "FF6B6B",
+            notifToggle(icon: "face.smiling.fill", title: String(localized: "settings.notifications.reactions", defaultValue: "Réactions", bundle: .main), color: MeeshyColors.errorHex,
                         keyPath: \.reactionEnabled)
         }
     }
@@ -134,17 +134,17 @@ struct NotificationSettingsView: View {
     // MARK: - Contacts & Groups
 
     private var contactsSection: some View {
-        settingsSection(title: String(localized: "settings.notifications.contacts_groups", defaultValue: "Contacts & Groupes", bundle: .main), icon: "person.2.fill", color: "6366F1") {
-            notifToggle(icon: "person.badge.plus", title: String(localized: "settings.notifications.contact_requests", defaultValue: "Demandes de contact", bundle: .main), color: "6366F1",
+        settingsSection(title: String(localized: "settings.notifications.contacts_groups", defaultValue: "Contacts & Groupes", bundle: .main), icon: "person.2.fill", color: MeeshyColors.brandPrimaryHex) {
+            notifToggle(icon: "person.badge.plus", title: String(localized: "settings.notifications.contact_requests", defaultValue: "Demandes de contact", bundle: .main), color: MeeshyColors.brandPrimaryHex,
                         keyPath: \.contactRequestEnabled)
 
-            notifToggle(icon: "person.3.fill", title: String(localized: "settings.notifications.group_invites", defaultValue: "Invitations groupe", bundle: .main), color: "60A5FA",
+            notifToggle(icon: "person.3.fill", title: String(localized: "settings.notifications.group_invites", defaultValue: "Invitations groupe", bundle: .main), color: MeeshyColors.infoHex,
                         keyPath: \.groupInviteEnabled)
 
-            notifToggle(icon: "person.badge.shield.checkmark", title: String(localized: "settings.notifications.member_joined", defaultValue: "Membre rejoint", bundle: .main), color: "4ADE80",
+            notifToggle(icon: "person.badge.shield.checkmark", title: String(localized: "settings.notifications.member_joined", defaultValue: "Membre rejoint", bundle: .main), color: MeeshyColors.successHex,
                         keyPath: \.memberJoinedEnabled)
 
-            notifToggle(icon: "person.fill.xmark", title: String(localized: "settings.notifications.member_left", defaultValue: "Membre parti", bundle: .main), color: "FF6B6B",
+            notifToggle(icon: "person.fill.xmark", title: String(localized: "settings.notifications.member_left", defaultValue: "Membre parti", bundle: .main), color: MeeshyColors.errorHex,
                         keyPath: \.memberLeftEnabled)
         }
     }
@@ -152,23 +152,23 @@ struct NotificationSettingsView: View {
     // MARK: - Feed Social
 
     private var feedSection: some View {
-        settingsSection(title: String(localized: "settings.notifications.feed_social", defaultValue: "Feed Social", bundle: .main), icon: "square.stack.fill", color: "F8B500") {
-            notifToggle(icon: "heart.fill", title: String(localized: "settings.notifications.post_likes", defaultValue: "Likes posts", bundle: .main), color: "FF6B6B",
+        settingsSection(title: String(localized: "settings.notifications.feed_social", defaultValue: "Feed Social", bundle: .main), icon: "square.stack.fill", color: MeeshyColors.warningHex) {
+            notifToggle(icon: "heart.fill", title: String(localized: "settings.notifications.post_likes", defaultValue: "Likes posts", bundle: .main), color: MeeshyColors.errorHex,
                         keyPath: \.postLikeEnabled)
 
-            notifToggle(icon: "text.bubble.fill", title: String(localized: "settings.notifications.post_comments", defaultValue: "Commentaires posts", bundle: .main), color: "6366F1",
+            notifToggle(icon: "text.bubble.fill", title: String(localized: "settings.notifications.post_comments", defaultValue: "Commentaires posts", bundle: .main), color: MeeshyColors.brandPrimaryHex,
                         keyPath: \.postCommentEnabled)
 
-            notifToggle(icon: "arrow.triangle.2.circlepath", title: String(localized: "settings.notifications.reposts", defaultValue: "Reposts", bundle: .main), color: "60A5FA",
+            notifToggle(icon: "arrow.triangle.2.circlepath", title: String(localized: "settings.notifications.reposts", defaultValue: "Reposts", bundle: .main), color: MeeshyColors.infoHex,
                         keyPath: \.postRepostEnabled)
 
-            notifToggle(icon: "sparkles", title: String(localized: "settings.notifications.story_reactions", defaultValue: "Réactions stories", bundle: .main), color: "F8B500",
+            notifToggle(icon: "sparkles", title: String(localized: "settings.notifications.story_reactions", defaultValue: "Réactions stories", bundle: .main), color: MeeshyColors.warningHex,
                         keyPath: \.storyReactionEnabled)
 
-            notifToggle(icon: "arrowshape.turn.up.left.2.fill", title: String(localized: "settings.notifications.comment_replies", defaultValue: "Réponses commentaires", bundle: .main), color: "9B59B6",
+            notifToggle(icon: "arrowshape.turn.up.left.2.fill", title: String(localized: "settings.notifications.comment_replies", defaultValue: "Réponses commentaires", bundle: .main), color: MeeshyColors.brandDeepHex,
                         keyPath: \.commentReplyEnabled)
 
-            notifToggle(icon: "hand.thumbsup.fill", title: String(localized: "settings.notifications.comment_likes", defaultValue: "Likes commentaires", bundle: .main), color: "FF6B6B",
+            notifToggle(icon: "hand.thumbsup.fill", title: String(localized: "settings.notifications.comment_likes", defaultValue: "Likes commentaires", bundle: .main), color: MeeshyColors.errorHex,
                         keyPath: \.commentLikeEnabled)
         }
     }
@@ -176,14 +176,14 @@ struct NotificationSettingsView: View {
     // MARK: - Display
 
     private var displaySection: some View {
-        settingsSection(title: String(localized: "settings.notifications.display", defaultValue: "Display", bundle: .main), icon: "eye.fill", color: "60A5FA") {
-            notifToggle(icon: "text.below.photo.fill", title: String(localized: "settings.notifications.preview", defaultValue: "Preview", bundle: .main), color: "60A5FA",
+        settingsSection(title: String(localized: "settings.notifications.display", defaultValue: "Display", bundle: .main), icon: "eye.fill", color: MeeshyColors.infoHex) {
+            notifToggle(icon: "text.below.photo.fill", title: String(localized: "settings.notifications.preview", defaultValue: "Preview", bundle: .main), color: MeeshyColors.infoHex,
                         keyPath: \.showPreview)
 
-            notifToggle(icon: "person.text.rectangle", title: String(localized: "settings.notifications.sender_name", defaultValue: "Sender name", bundle: .main), color: "9B59B6",
+            notifToggle(icon: "person.text.rectangle", title: String(localized: "settings.notifications.sender_name", defaultValue: "Sender name", bundle: .main), color: MeeshyColors.brandDeepHex,
                         keyPath: \.showSenderName)
 
-            notifToggle(icon: "rectangle.stack.fill", title: String(localized: "settings.notifications.group_notifications", defaultValue: "Group notifications", bundle: .main), color: "6366F1",
+            notifToggle(icon: "rectangle.stack.fill", title: String(localized: "settings.notifications.group_notifications", defaultValue: "Group notifications", bundle: .main), color: MeeshyColors.brandPrimaryHex,
                         keyPath: \.groupNotifications)
         }
     }
@@ -191,11 +191,11 @@ struct NotificationSettingsView: View {
     // MARK: - Do Not Disturb
 
     private var dndSection: some View {
-        settingsSection(title: String(localized: "settings.notifications.dnd", defaultValue: "Ne pas déranger", bundle: .main), icon: "moon.fill", color: "9B59B6") {
-            notifToggle(icon: "moon.zzz.fill", title: String(localized: "settings.notifications.dnd_enable", defaultValue: "Activer DnD", bundle: .main), color: "9B59B6",
+        settingsSection(title: String(localized: "settings.notifications.dnd", defaultValue: "Ne pas déranger", bundle: .main), icon: "moon.fill", color: MeeshyColors.brandDeepHex) {
+            notifToggle(icon: "moon.zzz.fill", title: String(localized: "settings.notifications.dnd_enable", defaultValue: "Activer DnD", bundle: .main), color: MeeshyColors.brandDeepHex,
                         keyPath: \.dndEnabled)
 
-            settingsRow(icon: "clock.fill", title: String(localized: "settings.notifications.dnd_start", defaultValue: "Heure début", bundle: .main), color: "60A5FA") {
+            settingsRow(icon: "clock.fill", title: String(localized: "settings.notifications.dnd_start", defaultValue: "Heure début", bundle: .main), color: MeeshyColors.infoHex) {
                 TextField("", text: Binding(
                     get: { prefs.notification.dndStartTime },
                     set: { val in prefs.updateNotification { $0.dndStartTime = val } }
@@ -206,7 +206,7 @@ struct NotificationSettingsView: View {
                 .frame(width: 60)
             }
 
-            settingsRow(icon: "clock.badge.checkmark", title: String(localized: "settings.notifications.dnd_end", defaultValue: "Heure fin", bundle: .main), color: "6366F1") {
+            settingsRow(icon: "clock.badge.checkmark", title: String(localized: "settings.notifications.dnd_end", defaultValue: "Heure fin", bundle: .main), color: MeeshyColors.brandPrimaryHex) {
                 TextField("", text: Binding(
                     get: { prefs.notification.dndEndTime },
                     set: { val in prefs.updateNotification { $0.dndEndTime = val } }
@@ -217,7 +217,7 @@ struct NotificationSettingsView: View {
                 .frame(width: 60)
             }
 
-            settingsRow(icon: "calendar", title: String(localized: "settings.notifications.dnd_days", defaultValue: "Jours", bundle: .main), color: "F8B500") {
+            settingsRow(icon: "calendar", title: String(localized: "settings.notifications.dnd_days", defaultValue: "Jours", bundle: .main), color: MeeshyColors.warningHex) {
                 dndDaysSelector
             }
         }

@@ -19,7 +19,7 @@ struct DataExportView: View {
     @State private var exportedData: Data?
     @State private var showShareSheet = false
 
-    private let accentColor = "3498DB"
+    private let accentColor = MeeshyColors.infoHex
     private let exportService: DataExportServiceProviding
 
     init(exportService: DataExportServiceProviding = DataExportService.shared) {
@@ -186,7 +186,7 @@ struct DataExportView: View {
 
             VStack(spacing: 0) {
                 toggleRow(title: String(localized: "settings.data.export.content.messages", defaultValue: "Messages", bundle: .main), icon: "bubble.left.fill", color: MeeshyColors.error, isOn: $includeMessages)
-                toggleRow(title: String(localized: "settings.data.export.content.media", defaultValue: "Media", bundle: .main), icon: "photo.fill", color: Color(hex: "9B59B6"), isOn: $includeMedia)
+                toggleRow(title: String(localized: "settings.data.export.content.media", defaultValue: "Media", bundle: .main), icon: "photo.fill", color: MeeshyColors.brandDeep, isOn: $includeMedia)
                 toggleRow(title: String(localized: "settings.data.export.content.contacts", defaultValue: "Contacts", bundle: .main), icon: "person.2.fill", color: MeeshyColors.indigo500, isOn: $includeContacts)
             }
             .background(
