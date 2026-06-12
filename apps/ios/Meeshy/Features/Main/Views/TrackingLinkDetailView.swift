@@ -52,7 +52,7 @@ struct TrackingLinkDetailView: View {
             ZStack {
                 Circle().fill((link.isActive ? MeeshyColors.trackingAccent : MeeshyColors.neutral500).opacity(0.15))
                     .frame(width: 60, height: 60)
-                Image(systemName: "chart.bar.fill").font(.system(size: 26))
+                Image(systemName: "chart.bar.fill").font(.title2)
                     .foregroundColor(link.isActive ? MeeshyColors.trackingAccent : MeeshyColors.neutral500)
             }
             Text(link.displayName).font(.headline.weight(.bold)).foregroundColor(theme.textPrimary)
@@ -108,7 +108,7 @@ struct TrackingLinkDetailView: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
                         .frame(width: 46, height: 46)
-                    Image(systemName: icon).font(.system(size: 18))
+                    Image(systemName: icon).font(.body)
                         .foregroundColor(color)
                 }
                 Text(label).font(.caption2.weight(.medium)).foregroundColor(theme.textSecondary)
@@ -138,7 +138,7 @@ struct TrackingLinkDetailView: View {
 
     private func bigStatCard(_ value: String, label: String, icon: String, color: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).font(.system(size: 24)).foregroundColor(Color(hex: color))
+            Image(systemName: icon).font(.title2).foregroundColor(Color(hex: color))
             VStack(alignment: .leading, spacing: 2) {
                 Text(value).font(.title2.weight(.bold)).foregroundColor(theme.textPrimary)
                 Text(label).font(.caption).foregroundColor(theme.textSecondary)
@@ -233,7 +233,7 @@ struct TrackingLinkDetailView: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle().fill(deviceColor(click.device).opacity(0.12)).frame(width: 36, height: 36)
-                Image(systemName: deviceIcon(click.device)).font(.system(size: 14))
+                Image(systemName: deviceIcon(click.device)).font(.subheadline)
                     .foregroundColor(deviceColor(click.device))
             }
             VStack(alignment: .leading, spacing: 2) {

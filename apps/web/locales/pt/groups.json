@@ -82,6 +82,7 @@
       "about": "Sobre",
       "conversations": "Conversas",
       "noDescription": "Sem descrição",
+      "conversationNoDescription": "Sem descrição",
       "createdOn": "Criada em",
       "lastActivity": "Última atividade",
       "loadingConversations": "Carregando conversas...",

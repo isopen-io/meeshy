@@ -16,11 +16,18 @@ export interface MessageTimestampProps {
   className?: string;
 }
 
+type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
+
+interface SmartTimestampContext {
+  t: TranslateFn;
+  locale: string;
+}
+
 /**
  * Formats a timestamp with smart relative date handling, in the interface
  * language (i18n keys under `conversations.messageTimestamp`).
  *
- * Rules:
+ * Rules (localized through the conversations namespace):
  * - Today: "Today at HH:mm"
  * - Yesterday: "Yesterday at HH:mm"
  * - This week: "Monday at HH:mm"
@@ -45,6 +52,7 @@ function formatSmartTimestamp(
   const timeStr = date.toLocaleTimeString(locale, {
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
   });
 
   // Time only format
@@ -98,6 +106,21 @@ function formatSmartTimestamp(
 }
 
 /**
+ * Formats a month + day (and year when different from the current one)
+ * using the active locale ordering.
+ */
+function formatMonthDay(date: Date, now: Date, locale: string): string {
+  if (date.getFullYear() === now.getFullYear()) {
+    return date.toLocaleDateString(locale, { day: 'numeric', month: 'long' });
+  }
+  return date.toLocaleDateString(locale, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+/**
  * Capitalize the first letter of a string
  */
 function capitalizeFirst(str: string): string {
@@ -118,12 +141,12 @@ function capitalizeFirst(str: string): string {
  * @example
  * // Smart relative datetime
  * <MessageTimestamp timestamp={new Date()} format="datetime" />
- * // Output: "Aujourd'hui a 14:32"
+ * // Output: "Today at 14:32"
  *
  * @example
  * // With separator lines
  * <MessageTimestamp timestamp={yesterday} showSeparators />
- * // Output: "--- Hier a 09:15 ---"
+ * // Output: "--- Yesterday at 09:15 ---"
  */
 export function MessageTimestamp({
   timestamp,

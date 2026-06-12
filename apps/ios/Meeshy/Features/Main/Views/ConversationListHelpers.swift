@@ -515,3 +515,27 @@ struct FilterChip: View {
         ThemedFilterChip(title: title, color: "4ECDC4", isSelected: isSelected) {}
     }
 }
+
+// MARK: - Short Relative Time
+
+/// Libellés compacts « il y a … » partagés par la liste de conversations et
+/// les mini-cartes du feed. Localisés via le catalogue ; `now` est injectable
+/// pour rendre le découpage en tranches testable.
+enum ShortRelativeTime {
+    static func label(for date: Date, now: Date = Date()) -> String {
+        let seconds = Int(now.timeIntervalSince(date))
+        if seconds < 60 {
+            return String(localized: "time.short.now", defaultValue: "maintenant", bundle: .main)
+        }
+        if seconds < 3_600 {
+            return String(localized: "time.short.minutes", defaultValue: "\(seconds / 60) min", bundle: .main)
+        }
+        if seconds < 86_400 {
+            return String(localized: "time.short.hours", defaultValue: "\(seconds / 3_600)h", bundle: .main)
+        }
+        if seconds < 604_800 {
+            return String(localized: "time.short.days", defaultValue: "\(seconds / 86_400)j", bundle: .main)
+        }
+        return String(localized: "time.short.weeks", defaultValue: "\(seconds / 604_800)sem", bundle: .main)
+    }
+}

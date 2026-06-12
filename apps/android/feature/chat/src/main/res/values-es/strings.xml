@@ -19,6 +19,9 @@
     <string name="chat_cancel_edit">Cancelar edición</string>
     <string name="chat_react_with">Reaccionar con %1$s</string>
     <string name="chat_message_actions">Acciones del mensaje</string>
+    <string name="chat_date_today">Hoy</string>
+    <string name="chat_date_yesterday">Ayer</string>
+    <string name="chat_date_day_before_yesterday">Anteayer</string>
     <string name="chat_typing_one">%1$s está escribiendo…</string>
     <string name="chat_typing_two">%1$s y %2$s están escribiendo…</string>
     <string name="chat_typing_many">%1$d personas están escribiendo…</string>

@@ -48,8 +48,8 @@ struct UniversalComposerBar: View {
     // MARK: - Configuration
 
     var placeholder: String = "Message..."
-    var accentColor: String = "08D9D6"
-    var secondaryColor: String = "4ECDC4"
+    var accentColor: String = MeeshyColors.indigo400Hex
+    var secondaryColor: String = MeeshyColors.indigo600Hex
     var maxLength: Int? = nil
     var showVoice: Bool = true
     var showLocation: Bool = true
@@ -352,7 +352,7 @@ struct UniversalComposerBar: View {
                                 .shadow(color: MeeshyColors.error.opacity(0.2), radius: 6, y: 2)
 
                             Image(systemName: "mic.fill")
-                                .font(.system(size: 18, weight: .medium))
+                                .font(.body.weight(.medium))
                                 .foregroundStyle(
                                     LinearGradient(
                                         colors: [MeeshyColors.error, MeeshyColors.errorDark],
@@ -385,7 +385,7 @@ struct UniversalComposerBar: View {
                             .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 3)
 
                         Image(systemName: "square.and.pencil")
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(.title3.weight(.semibold))
                             .foregroundColor(.white)
                     }
                     Text(String(localized: "composer.minimized.write", defaultValue: "\u{00C9}crire", bundle: .main))
@@ -671,7 +671,7 @@ struct UniversalComposerBar: View {
                 HapticFeedback.light()
             } label: {
                 Text(textAnalyzer.sentiment.emoji)
-                    .font(.system(size: 16))
+                    .font(.callout)
                     .frame(width: 30, height: 30)
                     .contentShape(Circle())
             }
@@ -724,7 +724,7 @@ struct UniversalComposerBar: View {
                 Text(currentLangOption.code.uppercased())
                     .font(.caption2).fontWeight(.semibold)
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(.caption2.weight(.bold))
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
@@ -751,7 +751,7 @@ struct UniversalComposerBar: View {
     private func toolbarButton(icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
+                .font(.subheadline.weight(.medium))
                 .foregroundColor(mutedColor)
                 .frame(width: 30, height: 30)
                 .contentShape(Circle())
@@ -814,7 +814,7 @@ struct UniversalComposerBar: View {
                     .shadow(color: colors[0].opacity(0.4), radius: sendBounce ? 12 : 8, x: 0, y: 4)
 
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundColor(.white)
                     .rotationEffect(isEditMode ? .zero : .degrees(sendBounce ? 55 : 45))
                     .offset(
@@ -978,7 +978,7 @@ struct UniversalComposerBar: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: isActive ? "flame.fill" : "timer.circle")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(isActive ? MeeshyColors.error : mutedColor)
 
                 if let duration = ephemeralDuration.wrappedValue {
@@ -1046,7 +1046,7 @@ struct UniversalComposerBar: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "flame.fill")
-                                .font(.system(size: 10))
+                                .font(.caption2)
                             Text(duration.label)
                                 .font(.caption).fontWeight(.semibold)
                         }
@@ -1097,7 +1097,7 @@ struct UniversalComposerBar: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: isActive ? "eye.slash.fill" : "eye.slash")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(isActive ? MeeshyColors.indigo600 : mutedColor)
 
                 if isActive {
@@ -1143,7 +1143,7 @@ extension UniversalComposerBar {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: isActive ? "wand.and.stars" : "wand.and.stars")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(isActive ? Color(hex: accentColor) : mutedColor)
 
                 if isActive {
@@ -1192,7 +1192,7 @@ extension UniversalComposerBar {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: isActive ? "wand.and.stars" : "wand.and.stars")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(isActive ? Color(hex: accentColor) : mutedColor)
 
                 if isActive {
@@ -1249,7 +1249,7 @@ extension UniversalComposerBar {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: item.icon)
-                                .font(.system(size: 11))
+                                .font(.caption2)
                             Text(item.label)
                                 .font(.caption).fontWeight(.semibold)
                         }

@@ -62,7 +62,7 @@ struct ProfileView: View {
                 VStack {
                     Spacer()
                     Text(errorMessage)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.footnote.weight(.medium))
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)

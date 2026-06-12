@@ -269,7 +269,25 @@
     "tabLive": "Live",
     "tabHistory": "Historique",
     "pageTitle": "Agent IA",
-    "pageSubtitle": "Configuration et supervision du service agent conversationnel"
+    "pageSubtitle": "Configuration et supervision du service agent conversationnel",
+    "archetypes": {
+      "title": "Catalogue d'archétypes",
+      "subtitle": "Profils prédéfinis pour la génération de personnalité.",
+      "available": "{count} disponibles",
+      "toneTooltip": "Ton de la communication",
+      "vocabularyTooltip": "Niveau de vocabulaire employé",
+      "emojiTooltip": "Fréquence d'utilisation des emojis",
+      "lengthTooltip": "Longueur typique des messages",
+      "catchphrases": "Phrases fétiches",
+      "triggers": "Déclencheurs",
+      "respondsTo": "Répond à :",
+      "silentOn": "Se tait sur :",
+      "emojiUsage": {
+        "occasionnel": "Occasionnel",
+        "abondant": "Abondant",
+        "jamais": "Jamais"
+      }
+    }
   },
   "agentLive": {
     "selectConversation": "Sélectionnez une conversation pour superviser son état en temps réel",
@@ -1656,6 +1674,21 @@
     "navAgent": "Agent IA",
     "navMonitoring": "Monitoring",
     "accessLevel": "Administration Meeshy - Niveau d'accès : {role}"
+  },
+  "debug": {
+    "loading": "Chargement des informations de debug...",
+    "title": "Debug — Accès Administration",
+    "backToAdmin": "Retour à l'admin",
+    "generalInfo": "Informations générales",
+    "tokenPresent": "Token présent",
+    "role": "Rôle",
+    "canAccessAdmin": "Peut accéder à l'admin",
+    "yes": "Oui",
+    "no": "Non",
+    "userLocalStorage": "Utilisateur (localStorage)",
+    "apiResponse": "Réponse API /auth/me",
+    "permissionsApi": "Permissions (API)",
+    "permissionsDefault": "Permissions (par défaut)"
   },
   "rankingPage": {
     "back": "Retour",

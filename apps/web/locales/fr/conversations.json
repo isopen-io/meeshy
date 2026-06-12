@@ -3,6 +3,14 @@
   "minutesAgo": "il y a {minutes}min",
   "hoursAgo": "il y a {hours}h",
   "yesterday": "Hier {time}",
+  "timestamp": {
+    "today": "Aujourd'hui",
+    "yesterday": "Hier",
+    "todayAt": "Aujourd'hui à {time}",
+    "yesterdayAt": "Hier à {time}",
+    "dayAt": "{day} à {time}",
+    "ariaLabel": "Horodatage du message : {timestamp}"
+  },
   "conversations": {
     "common": {
       "loading": "Chargement..."
@@ -338,6 +346,7 @@
       "cancel": "Annuler",
       "uploading": "Téléchargement...",
       "processing": "Traitement...",
+      "processingError": "Erreur lors du traitement de l'image",
       "save": "Enregistrer"
     },
     "typingIndicator": {

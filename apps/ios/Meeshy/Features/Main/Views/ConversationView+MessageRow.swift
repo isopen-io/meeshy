@@ -240,7 +240,7 @@ extension ConversationView {
             return Self.searchTimeFormatter.string(from: date)
         }
         if calendar.isDateInYesterday(date) {
-            return "Hier"
+            return String(localized: "date.yesterday", defaultValue: "Hier", bundle: .main)
         }
         return Self.searchDateFormatter.string(from: date)
     }

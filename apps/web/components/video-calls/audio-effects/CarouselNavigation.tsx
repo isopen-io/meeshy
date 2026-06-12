@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useI18n } from '@/hooks/useI18n';
 
 interface CarouselNavigationProps {
   containerId: string;
@@ -17,6 +18,8 @@ export const CarouselNavigation = React.memo<CarouselNavigationProps>(({
   containerId,
   scrollAmount = 200,
 }) => {
+  const { t } = useI18n('audioEffects');
+
   const scrollLeft = () => {
     const container = document.getElementById(containerId);
     if (container) {
@@ -36,7 +39,7 @@ export const CarouselNavigation = React.memo<CarouselNavigationProps>(({
       <button
         onClick={scrollLeft}
         className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-black/80 hover:bg-black rounded-full flex items-center justify-center text-white shadow-lg"
-        aria-label="Scroll left"
+        aria-label={t('carousel.scrollLeft')}
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
@@ -44,7 +47,7 @@ export const CarouselNavigation = React.memo<CarouselNavigationProps>(({
       <button
         onClick={scrollRight}
         className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-black/80 hover:bg-black rounded-full flex items-center justify-center text-white shadow-lg"
-        aria-label="Scroll right"
+        aria-label={t('carousel.scrollRight')}
       >
         <ChevronRight className="w-4 h-4" />
       </button>

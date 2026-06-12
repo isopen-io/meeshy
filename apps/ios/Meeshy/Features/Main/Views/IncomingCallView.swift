@@ -32,7 +32,7 @@ struct IncomingCallView: View {
 
             // Caller name
             Text(callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Inconnu", bundle: .main))
-                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .font(.system(.title, design: .rounded).weight(.bold))
                 .foregroundColor(theme.textPrimary)
                 .padding(.bottom, 8)
 

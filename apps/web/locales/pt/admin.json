@@ -269,7 +269,25 @@
     "tabLive": "Ao vivo",
     "tabHistory": "Histórico",
     "pageTitle": "Agente IA",
-    "pageSubtitle": "Configuração e supervisão do serviço de agente conversacional"
+    "pageSubtitle": "Configuração e supervisão do serviço de agente conversacional",
+    "archetypes": {
+      "title": "Catálogo de arquétipos",
+      "subtitle": "Perfis predefinidos para a geração de personalidade.",
+      "available": "{count} disponíveis",
+      "toneTooltip": "Tom da comunicação",
+      "vocabularyTooltip": "Nível de vocabulário empregado",
+      "emojiTooltip": "Frequência de uso de emojis",
+      "lengthTooltip": "Comprimento típico das mensagens",
+      "catchphrases": "Frases marcantes",
+      "triggers": "Gatilhos",
+      "respondsTo": "Responde a:",
+      "silentOn": "Fica em silêncio sobre:",
+      "emojiUsage": {
+        "occasionnel": "Ocasional",
+        "abondant": "Abundante",
+        "jamais": "Nunca"
+      }
+    }
   },
   "agentLive": {
     "selectConversation": "Selecione uma conversa para monitorar seu estado em tempo real",
@@ -1656,6 +1674,21 @@
     "navAgent": "Agente IA",
     "navMonitoring": "Monitoramento",
     "accessLevel": "Administração Meeshy - Nível de acesso: {role}"
+  },
+  "debug": {
+    "loading": "Carregando informações de depuração...",
+    "title": "Depuração — Acesso administração",
+    "backToAdmin": "Voltar ao admin",
+    "generalInfo": "Informações gerais",
+    "tokenPresent": "Token presente",
+    "role": "Função",
+    "canAccessAdmin": "Pode acessar o admin",
+    "yes": "Sim",
+    "no": "Não",
+    "userLocalStorage": "Usuário (localStorage)",
+    "apiResponse": "Resposta API /auth/me",
+    "permissionsApi": "Permissões (API)",
+    "permissionsDefault": "Permissões (padrão)"
   },
   "rankingPage": {
     "back": "Voltar",

@@ -2639,3 +2639,46 @@ final class ConvListTestCategoryWriter: UserCategoryWriting, @unchecked Sendable
         if let e = errorToThrow { throw e }
     }
 }
+
+// MARK: - ShortRelativeTime (helper partagé liste de conversations / feed)
+
+final class ShortRelativeTimeTests: XCTestCase {
+
+    private let now = Date(timeIntervalSince1970: 1_750_000_000)
+
+    private func label(secondsAgo: Int) -> String {
+        ShortRelativeTime.label(for: now.addingTimeInterval(TimeInterval(-secondsAgo)), now: now)
+    }
+
+    func test_label_underOneMinute_containsNoDigits() {
+        XCTAssertNil(label(secondsAgo: 0).rangeOfCharacter(from: .decimalDigits))
+        XCTAssertNil(label(secondsAgo: 59).rangeOfCharacter(from: .decimalDigits))
+    }
+
+    func test_label_minutes_flooredFromSeconds() {
+        XCTAssertTrue(label(secondsAgo: 60).contains("1"))
+        XCTAssertTrue(label(secondsAgo: 330).contains("5"))
+        XCTAssertTrue(label(secondsAgo: 3_599).contains("59"))
+    }
+
+    func test_label_hours_flooredFromSeconds() {
+        XCTAssertTrue(label(secondsAgo: 3_600).contains("1"))
+        XCTAssertTrue(label(secondsAgo: 7_250).contains("2"))
+        XCTAssertTrue(label(secondsAgo: 86_399).contains("23"))
+    }
+
+    func test_label_days_flooredFromSeconds() {
+        XCTAssertTrue(label(secondsAgo: 86_400).contains("1"))
+        XCTAssertTrue(label(secondsAgo: 86_400 * 3 + 60).contains("3"))
+        XCTAssertTrue(label(secondsAgo: 604_799).contains("6"))
+    }
+
+    func test_label_weeks_flooredFromSeconds() {
+        XCTAssertTrue(label(secondsAgo: 604_800).contains("1"))
+        XCTAssertTrue(label(secondsAgo: 604_800 * 12).contains("12"))
+    }
+
+    func test_label_futureDate_treatedAsNow() {
+        XCTAssertNil(label(secondsAgo: -30).rangeOfCharacter(from: .decimalDigits))
+    }
+}

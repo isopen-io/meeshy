@@ -185,5 +185,53 @@ describe('date-format', () => {
 
       expect(result).toContain('12:00');
     });
+
+    it('should format with English month and weekday names for en locale', () => {
+      const date = new Date(2025, 10, 4, 14, 30); // Nov 4, 2025 at 14:30
+      const result = formatFullDate(date, 'en');
+
+      expect(result).toContain('November');
+      expect(result).toContain('Tuesday');
+      expect(result).toContain('14:30');
+    });
+
+    it('should format with Portuguese month names for pt locale', () => {
+      const date = new Date(2025, 10, 4, 14, 30);
+      const result = formatFullDate(date, 'pt');
+
+      expect(result).toContain('novembro');
+      expect(result).toContain('14:30');
+    });
+  });
+
+  describe('locale-aware day and month names', () => {
+    it('formatRelativeDate should use the provided locale for weekday names', () => {
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+      const fr = formatRelativeDate(threeDaysAgo, { t: mockT, locale: 'fr' });
+      const en = formatRelativeDate(threeDaysAgo, { t: mockT, locale: 'en' });
+
+      expect(fr).toMatch(/\d{2}:\d{2}$/);
+      expect(en).toMatch(/\d{2}:\d{2}$/);
+      expect(en).toMatch(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)/);
+    });
+
+    it('formatConversationDate should use the provided locale for older dates', () => {
+      const fixedOldDate = new Date(2024, 0, 15, 10, 0); // Jan 15, 2024
+
+      const en = formatConversationDate(fixedOldDate, { t: mockT, locale: 'en' });
+      const fr = formatConversationDate(fixedOldDate, { t: mockT, locale: 'fr' });
+
+      expect(en).toContain('Jan');
+      expect(fr).toContain('janv');
+    });
+
+    it('should default to French when no locale is provided', () => {
+      const fixedOldDate = new Date(2024, 0, 15, 10, 0);
+      const result = formatConversationDate(fixedOldDate, { t: mockT });
+
+      expect(result).toContain('janv');
+    });
   });
 });

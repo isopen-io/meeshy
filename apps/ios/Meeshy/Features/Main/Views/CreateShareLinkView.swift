@@ -108,7 +108,7 @@ struct CreateShareLinkView: View {
                         }
                     } else {
                         Image(systemName: "plus.circle.dashed")
-                            .font(.system(size: 18))
+                            .font(.headline)
                             .foregroundColor(accent)
                         Text(String(localized: "share.link.create.choose_group", defaultValue: "Choisir un groupe ou une communauté", bundle: .main))
                             .font(.subheadline)
@@ -459,7 +459,7 @@ struct CreateShareLinkView: View {
                 .fill(Color(hex: color).opacity(0.15))
                 .frame(width: 34, height: 34)
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(Color(hex: color))
         }
     }
