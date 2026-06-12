@@ -36,5 +36,67 @@ const envSchema = z.object({
   }
 });
 
-export const env = envSchema.parse(process.env);
 export type Env = z.infer<typeof envSchema>;
+
+export type EnvLoadResult =
+  | { ok: true; env: Env }
+  | { ok: false; message: string };
+
+/**
+ * Formate un message d'erreur d'environnement lisible et actionnable, au lieu
+ * de laisser fuiter la stack trace ZodError brute (qui n'indique pas quoi
+ * corriger ni comment).
+ */
+export function formatEnvError(error: z.ZodError): string {
+  const issues = error.issues
+    .map((issue) => `  - ${issue.path.join('.') || '(racine)'} : ${issue.message}`)
+    .join('\n');
+
+  return [
+    '',
+    '================================================================',
+    '[agent] Configuration invalide — démarrage impossible.',
+    '================================================================',
+    '',
+    'Problème(s) détecté(s) :',
+    issues,
+    '',
+    'Action requise : fournir au moins une clé LLM via les variables',
+    "d'environnement du conteneur (docker-compose / .env) :",
+    '  - OPENAI_API_KEY=sk-...          (si LLM_PROVIDER=openai)',
+    '  - ANTHROPIC_API_KEY=sk-ant-...   (si LLM_PROVIDER=anthropic)',
+    '',
+    "Le service va s'arrêter (exit 1). Renseignez la configuration",
+    'puis redémarrez le conteneur.',
+    '================================================================',
+    '',
+  ].join('\n');
+}
+
+/**
+ * Valide l'environnement sans effet de bord (pas de process.exit) afin de
+ * rester testable. Retourne soit l'env valide, soit un message detaille.
+ */
+export function loadEnv(raw: NodeJS.ProcessEnv): EnvLoadResult {
+  const result = envSchema.safeParse(raw);
+  if (result.success) {
+    return { ok: true, env: result.data };
+  }
+  return { ok: false, message: formatEnvError(result.error) };
+}
+
+/**
+ * Resout l'environnement au demarrage : en cas d'invalidite, affiche les
+ * details puis arrete le process proprement (exit 1) au lieu de crasher sur
+ * une stack ZodError non geree.
+ */
+function resolveEnvOrExit(raw: NodeJS.ProcessEnv): Env {
+  const result = loadEnv(raw);
+  if (!result.ok) {
+    console.error(result.message);
+    process.exit(1);
+  }
+  return result.env;
+}
+
+export const env: Env = resolveEnvOrExit(process.env);
