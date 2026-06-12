@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_message_deleted">Message supprimé</string>
+    <string name="bubble_edited">modifié</string>
+    <string name="bubble_translated">Traduit</string>
+    <string name="bubble_status_pending">En attente</string>
+    <string name="bubble_status_sent">Envoyé</string>
+    <string name="bubble_status_delivered">Distribué</string>
+    <string name="bubble_status_read">Lu</string>
+    <string name="bubble_status_failed">Échec</string>
+</resources>
