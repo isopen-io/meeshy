@@ -55,7 +55,7 @@ struct FriendRequestListView: View {
             VStack {
                 Spacer()
                 ProgressView()
-                    .tint(Color(hex: "4ECDC4"))
+                    .tint(MeeshyColors.brandPrimary)
                 Spacer()
             }
         } else if viewModel.requests.isEmpty {
@@ -159,7 +159,7 @@ struct FriendRequestListView: View {
                             Circle()
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color(hex: "4ECDC4"), Color(hex: "2ECC71")],
+                                        colors: [MeeshyColors.success, MeeshyColors.successDeep],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
