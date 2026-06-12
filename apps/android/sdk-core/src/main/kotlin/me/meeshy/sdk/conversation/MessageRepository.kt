@@ -13,6 +13,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SendMessageRequest
@@ -94,6 +95,7 @@ class MessageRepository @Inject constructor(
         originalLanguage: String,
         sender: MeeshyUser,
         replyToId: String? = null,
+        attachments: List<ApiMessageAttachment> = emptyList(),
     ): String {
         val cmid = OutboxIds.cmid()
         val now = clock.nowMillis()
@@ -112,12 +114,14 @@ class MessageRepository @Inject constructor(
                 avatar = sender.avatar,
             ),
             clientMessageId = cmid,
+            attachments = attachments,
         )
         val request = SendMessageRequest(
             content = content,
             originalLanguage = originalLanguage,
             replyToId = replyToId,
             clientMessageId = cmid,
+            attachmentIds = attachments.map { it.id }.takeIf { it.isNotEmpty() },
         )
         database.withTransaction {
             messageDao.upsertAll(listOf(optimistic.toLocalEntity(now, LocalSendState.SENDING)))

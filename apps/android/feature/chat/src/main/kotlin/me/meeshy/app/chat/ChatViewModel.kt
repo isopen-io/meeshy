@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import android.net.Uri
+import me.meeshy.sdk.attachment.AttachmentRepository
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
@@ -23,6 +25,7 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.session.SessionRepository
@@ -54,6 +57,7 @@ data class ChatUiState(
     val isLoadingOlder: Boolean = false,
     val hasMoreOlder: Boolean = true,
     val imageViewer: ImageViewerTarget? = null,
+    val isUploadingAttachments: Boolean = false,
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
     val isEditing: Boolean get() = editingMessageId != null
@@ -68,6 +72,8 @@ class ChatViewModel @Inject constructor(
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
     private val config: MeeshyConfig,
+    private val attachmentRepository: AttachmentRepository,
+    private val attachmentReader: ImageAttachmentReader,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -301,6 +307,65 @@ class ChatViewModel @Inject constructor(
             } catch (e: Exception) {
                 _state.update { it.copy(errorMessage = e.message) }
             }
+        }
+    }
+
+    /**
+     * Picker → upload → optimistic send. The current draft rides along as the
+     * caption and is consumed upfront so the composer feels instant; it is
+     * restored on failure. Online-only for now — the offline TUS chain is the
+     * tracker's next milestone.
+     */
+    fun sendImages(uris: List<Uri>) {
+        if (uris.isEmpty() || _state.value.isUploadingAttachments) return
+        val user = sessionRepository.currentUser.value ?: return
+        val caption = _state.value.draft.trim()
+        val replyToId = _state.value.replyingToMessageId
+        _state.update {
+            it.copy(isUploadingAttachments = true, draft = "", replyingToMessageId = null)
+        }
+        viewModelScope.launch {
+            try {
+                val files = uris.mapNotNull { attachmentReader.read(it) }
+                if (files.isEmpty()) {
+                    restoreComposer(caption, replyToId)
+                    return@launch
+                }
+                when (val result = attachmentRepository.upload(files)) {
+                    is NetworkResult.Success -> {
+                        messageRepository.sendOptimistic(
+                            conversationId = conversationId,
+                            content = caption,
+                            originalLanguage = user.systemLanguage
+                                ?: LanguageResolver.FALLBACK_LANGUAGE,
+                            sender = user,
+                            replyToId = replyToId,
+                            attachments = result.data,
+                        )
+                        workManager.enqueue(OutboxFlushWorker.buildRequest())
+                        _state.update { it.copy(isUploadingAttachments = false) }
+                    }
+                    is NetworkResult.Failure -> {
+                        restoreComposer(caption, replyToId)
+                        _state.update { it.copy(errorMessage = result.error.message) }
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                restoreComposer(caption, replyToId)
+                _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    private fun restoreComposer(caption: String, replyToId: String?) {
+        _state.update {
+            it.copy(
+                isUploadingAttachments = false,
+                draft = if (it.draft.isBlank()) caption else it.draft,
+                replyingToMessageId = it.replyingToMessageId ?: replyToId,
+            )
         }
     }
 

@@ -34,7 +34,10 @@ import me.meeshy.sdk.model.ReactionSyncResponse
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.model.ReadStatusSummary
 import me.meeshy.sdk.model.ReadStatusUpdatedEvent
+import me.meeshy.sdk.attachment.AttachmentRepository
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.net.ApiError
+import me.meeshy.sdk.net.UploadableFile
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.reaction.ReactionRepository
@@ -89,6 +92,8 @@ class ChatViewModelTest {
         val reactions: ReactionRepository,
         val conversations: ConversationRepository,
         val socket: MessageSocketManager,
+        val attachments: AttachmentRepository,
+        val reader: ImageAttachmentReader,
     )
 
     private fun viewModel(
@@ -116,6 +121,8 @@ class ChatViewModelTest {
         val workManager = mockk<WorkManager>(relaxed = true)
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
         val socket = socketManager()
+        val attachments = mockk<AttachmentRepository>(relaxed = true)
+        val reader = mockk<ImageAttachmentReader>(relaxed = true)
         return Harness(
             ChatViewModel(
                 repo,
@@ -125,6 +132,8 @@ class ChatViewModelTest {
                 socket,
                 workManager,
                 MeeshyConfig(),
+                attachments,
+                reader,
                 handle,
             ),
             repo,
@@ -132,6 +141,8 @@ class ChatViewModelTest {
             reactions,
             conversations,
             socket,
+            attachments,
+            reader,
         )
     }
 
@@ -342,6 +353,54 @@ class ChatViewModelTest {
 
         h.vm.dismissImageViewer()
         assertThat(h.vm.state.value.imageViewer).isNull()
+    }
+
+    @Test
+    fun sendImages_uploads_then_sends_an_optimistic_message_with_the_attachments() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        val uri = mockk<android.net.Uri>()
+        val file = UploadableFile("p.jpg", "image/jpeg", byteArrayOf(1))
+        val uploaded = ApiMessageAttachment(id = "a1", mimeType = "image/jpeg", fileUrl = "/p.jpg")
+        coEvery { h.reader.read(uri) } returns file
+        coEvery { h.attachments.upload(listOf(file)) } returns NetworkResult.Success(listOf(uploaded))
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("légende")
+        h.vm.sendImages(listOf(uri))
+        advanceUntilIdle()
+
+        coVerify {
+            h.repo.sendOptimistic(
+                conversationId = "c1",
+                content = "légende",
+                originalLanguage = any(),
+                sender = me,
+                replyToId = null,
+                attachments = listOf(uploaded),
+            )
+        }
+        assertThat(h.vm.state.value.draft).isEmpty()
+        assertThat(h.vm.state.value.isUploadingAttachments).isFalse()
+    }
+
+    @Test
+    fun sendImages_failure_restores_the_caption_and_surfaces_the_error() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        val uri = mockk<android.net.Uri>()
+        coEvery { h.reader.read(uri) } returns UploadableFile("p.jpg", "image/jpeg", byteArrayOf(1))
+        coEvery { h.attachments.upload(any()) } returns NetworkResult.Failure(ApiError("upload failed"))
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("légende")
+        h.vm.sendImages(listOf(uri))
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.errorMessage).isEqualTo("upload failed")
+        assertThat(h.vm.state.value.draft).isEqualTo("légende")
+        assertThat(h.vm.state.value.isUploadingAttachments).isFalse()
+        coVerify(exactly = 0) {
+            h.repo.sendOptimistic(any(), any(), any(), any(), any(), any())
+        }
     }
 
     @Test

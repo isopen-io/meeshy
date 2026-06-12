@@ -26,4 +26,5 @@
     <string name="chat_typing_one">%1$s is typing…</string>
     <string name="chat_typing_two">%1$s and %2$s are typing…</string>
     <string name="chat_typing_many">%1$d people are typing…</string>
+    <string name="chat_attach_images">Attach photos</string>
 </resources>

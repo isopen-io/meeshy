@@ -9,6 +9,7 @@ import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MeeshyUser
@@ -160,6 +161,28 @@ class MessageRepositoryTest {
         assertThat(row.id).isEqualTo(cmid)
         assertThat(row.sendState).isEqualTo(LocalSendState.SENDING.name)
         assertThat(outbox.deliverable("message:c1").map { it.cmid }).containsExactly(cmid)
+    }
+
+    @Test
+    fun `sendOptimistic carries attachments into the bubble and the queued request`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+        val attachment = ApiMessageAttachment(
+            id = "a1",
+            mimeType = "image/jpeg",
+            fileUrl = "/files/p.jpg",
+        )
+
+        repo.sendOptimistic("c1", "regarde", "fr", sender, attachments = listOf(attachment))
+
+        val optimistic = MeeshyApi.json.decodeFromString<ApiMessage>(
+            streamedMessages(repo).single().payload,
+        )
+        assertThat(optimistic.attachments.map { it.id }).containsExactly("a1")
+
+        val queued = MeeshyApi.json.decodeFromString<SendMessageRequest>(
+            outbox.deliverable("message:c1").single().payload,
+        )
+        assertThat(queued.attachmentIds).containsExactly("a1")
     }
 
     @Test

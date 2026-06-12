@@ -1,5 +1,8 @@
 package me.meeshy.app.chat
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -160,16 +164,27 @@ fun ChatScreen(
             val replyTarget = state.replyingToMessageId?.let { id ->
                 state.messages.firstOrNull { it.messageId == id }
             }
+            val imagePicker = rememberLauncherForActivityResult(
+                ActivityResultContracts.PickMultipleVisualMedia(maxItems = MAX_PICKED_IMAGES),
+            ) { uris -> viewModel.sendImages(uris) }
             ChatComposer(
                 draft = state.draft,
                 canSend = state.canSend,
                 isEditing = state.isEditing,
+                isUploadingAttachments = state.isUploadingAttachments,
                 replyingToLabel = replyTarget?.let { it.senderName ?: it.text.take(40) },
                 accentColor = accentColor,
                 onDraftChange = viewModel::onDraftChange,
                 onSend = viewModel::send,
                 onCancelEdit = viewModel::cancelEdit,
                 onCancelReply = viewModel::cancelReply,
+                onPickImages = {
+                    imagePicker.launch(
+                        PickVisualMediaRequest(
+                            ActivityResultContracts.PickVisualMedia.ImageOnly,
+                        ),
+                    )
+                },
             )
         },
     ) { padding ->
@@ -302,6 +317,7 @@ fun ChatScreen(
 }
 
 private const val LOAD_OLDER_THRESHOLD = 2
+private const val MAX_PICKED_IMAGES = 4
 private const val BOTTOM_TOLERANCE_ITEMS = 2
 
 private fun LazyListState.isNearBottom(lastIndex: Int): Boolean {
@@ -488,12 +504,14 @@ private fun ChatComposer(
     draft: String,
     canSend: Boolean,
     isEditing: Boolean,
+    isUploadingAttachments: Boolean,
     replyingToLabel: String?,
     accentColor: Color,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onCancelEdit: () -> Unit,
     onCancelReply: () -> Unit,
+    onPickImages: () -> Unit,
 ) {
     Surface(color = MeeshyTheme.tokens.backgroundPrimary) {
         Column(
@@ -572,6 +590,28 @@ private fun ChatComposer(
                     .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (!isEditing) {
+                    if (isUploadingAttachments) {
+                        Box(
+                            modifier = Modifier.size(48.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = accentColor,
+                            )
+                        }
+                    } else {
+                        IconButton(onClick = onPickImages) {
+                            Icon(
+                                imageVector = Icons.Filled.AddPhotoAlternate,
+                                contentDescription = stringResource(R.string.chat_attach_images),
+                                tint = MeeshyTheme.tokens.textSecondary,
+                            )
+                        }
+                    }
+                }
                 OutlinedTextField(
                     value = draft,
                     onValueChange = onDraftChange,

@@ -247,7 +247,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Live sentiment + language detection ("smart context zone") with language pill/picker override
 - [ ] @-mention autocomplete (debounced API + local merge)
 - [ ] Draft auto-save/restore (text + reply + language + effects + blur + ephemeral)
-- [ ] Send with attachments (TUS resumable; audio over socket, others over REST) + upload progress
+- [~] Send with attachments — envoi d'images done (photo picker ≤4, upload
+      multipart `POST /attachments/upload` via `AttachmentRepository`, caption =
+      draft consommé et restauré sur échec, bulle optimiste avec images
+      instantanées, `attachmentIds` dans la requête outbox) ; TUS resumable /
+      audio socket / progression / offline queue des uploads pending
 - [ ] In-conversation message search (debounced, translation-match aware) + jump-to-result
 - [ ] Scroll-to-bottom control with rich unread/typing/offline/search states
 - [ ] Typing indicators (header + inline)

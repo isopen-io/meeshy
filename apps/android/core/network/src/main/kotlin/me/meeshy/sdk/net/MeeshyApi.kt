@@ -1,6 +1,7 @@
 package me.meeshy.sdk.net
 
 import kotlinx.serialization.json.Json
+import me.meeshy.sdk.net.api.AttachmentApi
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.net.api.CommunityApi
 import me.meeshy.sdk.net.api.ConversationApi
@@ -32,6 +33,7 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
     val communities: CommunityApi = retrofit.create()
     val stories: StoryApi = retrofit.create()
     val translation: TranslationApi = retrofit.create()
+    val attachments: AttachmentApi = retrofit.create()
 
     companion object {
         val json: Json = Json {
