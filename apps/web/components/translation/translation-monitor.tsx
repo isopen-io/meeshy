@@ -230,7 +230,7 @@ export function TranslationMonitor({
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center justify-center gap-1 text-gray-600 text-sm mb-1">
                       <Database className="h-4 w-4" />
-                      Cache Hit
+                      {t('translationMonitor.cacheHit')}
                     </div>
                     <p className="font-bold text-lg">{metrics.cacheHitRate}%</p>
                   </div>

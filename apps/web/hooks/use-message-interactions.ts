@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import type { Message } from '@meeshy/shared/types/conversation';
 import type { ConversationType } from '@meeshy/shared/types';
 import { formatFullDate } from '@/utils/date-format';
+import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import { getUserDisplayName } from '@/utils/user-display-name';
 import { hasModeratorPrivileges } from '@meeshy/shared/types/role-types';
 import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
@@ -42,6 +43,7 @@ export function useMessageInteractions({
   onDeleteMessage,
   t,
 }: UseMessageInteractionsProps) {
+  const locale = useCurrentInterfaceLanguage();
   // Détermine si c'est le message de l'utilisateur connecté
   // iOS logic: (sender?.resolvedUserId ?? senderId) == currentUserId
   // senderId is a Participant ID; getSenderUserId extracts the real User ID from sender.userId or sender.user.id
@@ -121,8 +123,8 @@ export function useMessageInteractions({
         ? getUserDisplayName(senderUser, t('anonymous'))
         : t('unknownUser');
 
-      const fullDate = formatFullDate(message.createdAt);
-      const contentToCopy = `${fullDate} par ${senderName} :\n${displayContent}\n\n${messageUrl}`;
+      const fullDate = formatFullDate(message.createdAt, locale);
+      const contentToCopy = `${fullDate} ${t('messageCopyBy')} ${senderName} :\n${displayContent}\n\n${messageUrl}`;
 
       await navigator.clipboard.writeText(contentToCopy);
       toast.success(t('messageCopied'));
@@ -130,7 +132,7 @@ export function useMessageInteractions({
       console.error('Failed to copy message:', error);
       toast.error(t('copyFailed'));
     }
-  }, [conversationId, message, t]);
+  }, [conversationId, message, t, locale]);
 
   // Handler pour copier uniquement le lien
   const handleCopyMessageLink = useCallback(async () => {

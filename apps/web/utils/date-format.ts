@@ -2,9 +2,13 @@
  * Utilitaire de formatage de dates relatives avec support i18n
  */
 
+const DEFAULT_LOCALE = 'fr';
+
 export interface DateFormatOptions {
   /** Fonction de traduction i18n */
   t: (key: string, params?: Record<string, any>) => string;
+  /** Locale BCP 47 pour les noms de jours/mois (ex: 'fr', 'en', 'es', 'pt') */
+  locale?: string;
   /** Clé de base pour les traductions (ex: 'conversations' ou 'common') */
   translationKey?: string;
 }
@@ -28,7 +32,7 @@ export function formatRelativeDate(
   date: Date | string,
   options: DateFormatOptions
 ): string {
-  const { t } = options;
+  const { t, locale = DEFAULT_LOCALE } = options;
   const messageDate = typeof date === 'string' ? new Date(date) : date;
   const now = new Date();
 
@@ -64,30 +68,21 @@ export function formatRelativeDate(
 
   // Hier
   if (diffDays === 1) {
-    const time = messageDate.toLocaleTimeString('fr-FR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const time = formatTime(messageDate, locale);
     return t('yesterday', { time });
   }
 
   // Cette semaine (moins de 7 jours)
   if (diffDays < 7) {
-    const dayName = messageDate.toLocaleDateString('fr-FR', { weekday: 'short' });
-    const time = messageDate.toLocaleTimeString('fr-FR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const dayName = messageDate.toLocaleDateString(locale, { weekday: 'short' });
+    const time = formatTime(messageDate, locale);
     // Capitaliser la première lettre du jour
     const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
     return `${capitalizedDay} ${time}`;
   }
 
   // Plus ancien (>= 7 jours) : afficher la date complète simplifiée
-  const day = messageDate.toLocaleDateString('fr-FR', { day: 'numeric' });
-  const month = messageDate.toLocaleDateString('fr-FR', { month: 'short' });
-  const year = messageDate.toLocaleDateString('fr-FR', { year: 'numeric' });
-  return `${day} ${month} ${year}`;
+  return formatShortFullDate(messageDate, locale);
 }
 
 /**
@@ -108,7 +103,7 @@ export function formatConversationDate(
   date: Date | string,
   options: DateFormatOptions
 ): string {
-  const { t } = options;
+  const { t, locale = DEFAULT_LOCALE } = options;
   const messageDate = typeof date === 'string' ? new Date(date) : date;
   const now = new Date();
 
@@ -124,58 +119,64 @@ export function formatConversationDate(
 
   // Si c'est aujourd'hui, afficher seulement l'heure
   if (diffDays === 0) {
-    return messageDate.toLocaleTimeString('fr-FR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return formatTime(messageDate, locale);
   }
 
   // Si c'est hier
   if (diffDays === 1) {
-    const time = messageDate.toLocaleTimeString('fr-FR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const time = formatTime(messageDate, locale);
     return t('yesterday', { time });
   }
 
   // Si c'est dans les 7 derniers jours, afficher le jour de la semaine + heure
   if (diffDays < 7) {
-    const dayName = messageDate.toLocaleDateString('fr-FR', { weekday: 'short' });
-    const time = messageDate.toLocaleTimeString('fr-FR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const dayName = messageDate.toLocaleDateString(locale, { weekday: 'short' });
+    const time = formatTime(messageDate, locale);
     // Capitaliser la première lettre du jour
     const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
     return `${capitalizedDay} ${time}`;
   }
 
   // Si c'est plus ancien, afficher la date complète simplifiée
-  const day = messageDate.toLocaleDateString('fr-FR', { day: 'numeric' });
-  const month = messageDate.toLocaleDateString('fr-FR', { month: 'short' });
-  const year = messageDate.toLocaleDateString('fr-FR', { year: 'numeric' });
-  return `${day} ${month} ${year}`;
+  return formatShortFullDate(messageDate, locale);
 }
 
 /**
  * Formate une date complète pour la copie de message
- * Format : "lundi 4 novembre 2025 à 14:30"
+ * Format : "lundi 4 novembre 2025 à 14:30" (fr) / "Monday, November 4, 2025 at 14:30" (en)
  *
  * @param date - La date à formater
+ * @param locale - Locale BCP 47 (défaut: 'fr')
  * @returns La date formatée en texte complet
  */
-export function formatFullDate(date: Date | string): string {
+export function formatFullDate(
+  date: Date | string,
+  locale: string = DEFAULT_LOCALE
+): string {
   const messageDate = typeof date === 'string' ? new Date(date) : date;
 
-  const weekday = messageDate.toLocaleDateString('fr-FR', { weekday: 'long' });
-  const day = messageDate.toLocaleDateString('fr-FR', { day: 'numeric' });
-  const month = messageDate.toLocaleDateString('fr-FR', { month: 'long' });
-  const year = messageDate.toLocaleDateString('fr-FR', { year: 'numeric' });
-  const time = messageDate.toLocaleTimeString('fr-FR', {
+  return messageDate.toLocaleString(locale, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
   });
+}
 
-  return `${weekday} ${day} ${month} ${year} à ${time}`;
+function formatTime(date: Date, locale: string): string {
+  return date.toLocaleTimeString(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+function formatShortFullDate(date: Date, locale: string): string {
+  const day = date.toLocaleDateString(locale, { day: 'numeric' });
+  const month = date.toLocaleDateString(locale, { month: 'short' });
+  const year = date.toLocaleDateString(locale, { year: 'numeric' });
+  return `${day} ${month} ${year}`;
 }

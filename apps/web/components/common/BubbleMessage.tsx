@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { User, BubbleTranslation, ConversationType, TranslationModel } from '@meeshy/shared/types';
 import type { Message } from '@meeshy/shared/types/conversation';
 import { useI18n } from '@/hooks/useI18n';
+import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import { useMessageView } from '@/hooks/use-message-view-state';
 import { reportService } from '@/services/report.service';
 import type { CallSummaryMetadata } from '@meeshy/shared/utils/call-summary';
@@ -80,6 +81,7 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
 }: BubbleMessageProps) {
   
   const { t } = useI18n();
+  const currentInterfaceLanguage = useCurrentInterfaceLanguage();
   const _contentRef = useRef<HTMLDivElement>(null);
 
   // State local pour la langue d'affichage (permet la mise à jour immédiate du contenu)
@@ -164,8 +166,8 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
 
   // Format de date pour les réponses - utilise la fonction utilitaire factorisée
   const _formatReplyDate = useCallback((date: Date | string) => {
-    return formatRelativeDate(date, { t });
-  }, [t]);
+    return formatRelativeDate(date, { t, locale: currentInterfaceLanguage });
+  }, [t, currentInterfaceLanguage]);
 
   // Actions des vues spécialisées
   const handleReactionSelect = useCallback((_emoji: string) => {
