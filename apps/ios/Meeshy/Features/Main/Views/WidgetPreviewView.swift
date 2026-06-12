@@ -154,14 +154,14 @@ struct WidgetPreviewView: View {
                 .fill(
                     LinearGradient(
                         colors: totalUnread > 0
-                            ? [Color(hex: "FF2E63"), Color(hex: "A855F7")]
-                            : [Color(hex: "08D9D6"), Color(hex: "4ECDC4")],
+                            ? [MeeshyColors.error, MeeshyColors.indigo600]
+                            : [MeeshyColors.indigo400, MeeshyColors.indigo500],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
                 .shadow(
-                    color: (totalUnread > 0 ? Color(hex: "FF2E63") : Color(hex: "08D9D6")).opacity(0.3),
+                    color: (totalUnread > 0 ? MeeshyColors.error : MeeshyColors.indigo400).opacity(0.3),
                     radius: 16,
                     y: 8
                 )
@@ -287,8 +287,8 @@ struct WidgetPreviewView: View {
             ) {
                 quickActionButton(
                     icon: "square.and.pencil",
-                    label: "Nouveau",
-                    gradient: [Color(hex: "08D9D6"), Color(hex: "4ECDC4")]
+                    label: String(localized: "widget.preview.action.new", defaultValue: "Nouveau", bundle: .main),
+                    gradient: [MeeshyColors.indigo500, MeeshyColors.indigo700]
                 ) {
                     dismiss()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -298,15 +298,15 @@ struct WidgetPreviewView: View {
 
                 quickActionButton(
                     icon: "link.badge.plus",
-                    label: "Partager",
-                    gradient: [Color(hex: "08D9D6"), Color(hex: "2ECC71")]
+                    label: String(localized: "widget.preview.action.share", defaultValue: "Partager", bundle: .main),
+                    gradient: [MeeshyColors.shareAccent, MeeshyColors.indigo500]
                 ) {
                     showCreateShareLink = true
                 }
 
                 quickActionButton(
                     icon: "megaphone.fill",
-                    label: "Post",
+                    label: String(localized: "widget.preview.action.post", defaultValue: "Post", bundle: .main),
                     gradient: [Color(hex: "A855F7"), Color(hex: "6366F1")]
                 ) {
                     dismiss()
@@ -317,8 +317,8 @@ struct WidgetPreviewView: View {
 
                 quickActionButton(
                     icon: "gearshape.fill",
-                    label: "R\u{00e9}glages",
-                    gradient: [Color(hex: "FF6B6B"), Color(hex: "FF2E63")]
+                    label: String(localized: "widget.preview.action.settings", defaultValue: "Réglages", bundle: .main),
+                    gradient: [MeeshyColors.indigo600, MeeshyColors.indigo800]
                 ) {
                     dismiss()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -407,7 +407,7 @@ struct WidgetPreviewView: View {
                     linkTypeCard(
                         title: String(localized: "widget.preview.share", defaultValue: "Partage", bundle: .main),
                         icon: "link.badge.plus",
-                        color: "08D9D6",
+                        color: MeeshyColors.shareAccentHex,
                         stat1: String(localized: "widget.preview.linkCountShare", defaultValue: "\(shareStats?.totalLinks ?? 0) lien(s)", bundle: .main),
                         stat2: String(localized: "widget.preview.shareJoined", defaultValue: "\(shareStats?.totalUses ?? 0) rejoints", bundle: .main)
                     ) {

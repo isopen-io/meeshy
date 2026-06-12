@@ -882,7 +882,7 @@ struct ConversationInfoSheet: View {
             actionButton(
                 icon: "link.badge.plus",
                 label: String(localized: "common.share", defaultValue: "Partager", bundle: .main),
-                color: "4ECDC4",
+                color: MeeshyColors.shareAccentHex,
                 isLoading: isCreatingShareLink
             ) {
                 Task { await createShareLink() }

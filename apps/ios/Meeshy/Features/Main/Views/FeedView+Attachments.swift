@@ -29,7 +29,7 @@ extension FeedView {
         let prep = AttachmentPreparationService.shared.prepareImage(
             image,
             context: .feedPost,
-            accentColor: "4ECDC4"
+            accentColor: MeeshyColors.brandPrimaryHex
         )
         trackFeedPreparation(prep)
     }
@@ -306,7 +306,7 @@ extension FeedView {
                     }
                     if isLoadingMedia && preparingAttachments.isEmpty {
                         ProgressView()
-                            .tint(Color(hex: "4ECDC4"))
+                            .tint(MeeshyColors.brandPrimary)
                             .padding(.horizontal, 12)
                     }
                 }
@@ -551,8 +551,8 @@ struct FeedComposerSheet: View {
                     MeeshyAvatar(
                         name: getUserDisplayName(authManager.currentUser, fallback: "M"),
                         context: .feedComposer,
-                        accentColor: "FF6B6B",
-                        secondaryColor: "4ECDC4",
+                        accentColor: MeeshyColors.brandPrimaryHex,
+                        secondaryColor: MeeshyColors.brandDeepHex,
                         avatarURL: authManager.currentUser?.avatar
                     )
                     VStack(alignment: .leading, spacing: 2) {
@@ -651,7 +651,7 @@ struct FeedComposerSheet: View {
 
                 // Upload progress
                 if isUploading, let progress = uploadProgress {
-                    UploadProgressBar(progress: progress, accentColor: "4ECDC4")
+                    UploadProgressBar(progress: progress, accentColor: MeeshyColors.brandPrimaryHex)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 4)
                 }
@@ -663,33 +663,39 @@ struct FeedComposerSheet: View {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "4ECDC4"))
+                            .foregroundColor(MeeshyColors.brandPrimary)
                     }
+                    .accessibilityLabel(String(localized: "Ajouter une photo", defaultValue: "Ajouter une photo"))
                     Button { showCamera = true; HapticFeedback.light() } label: {
                         Image(systemName: "camera.fill")
                             .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.error)
                     }
+                    .accessibilityLabel(String(localized: "Prendre une photo", defaultValue: "Prendre une photo"))
                     Button { showEmojiPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "face.smiling.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "F8B500"))
                     }
+                    .accessibilityLabel(String(localized: "Ajouter un emoji", defaultValue: "Ajouter un emoji"))
                     Button { showFilePicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "doc.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "9B59B6"))
                     }
+                    .accessibilityLabel(String(localized: "Joindre un fichier", defaultValue: "Joindre un fichier"))
                     Button { showLocationPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "location.fill")
                             .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.success)
                     }
+                    .accessibilityLabel(String(localized: "Partager la position", defaultValue: "Partager la position"))
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "FF2E63"))
+                            .foregroundColor(MeeshyColors.errorStrong)
                     }
+                    .accessibilityLabel(String(localized: "Enregistrer un audio", defaultValue: "Enregistrer un audio"))
 
                     Spacer()
 
@@ -755,7 +761,7 @@ struct FeedComposerSheet: View {
             .ignoresSafeArea()
         }
         .sheet(isPresented: $showLocationPicker) {
-            LocationPickerView(accentColor: "4ECDC4") { coordinate, address in
+            LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { coordinate, address in
                 handleLocationSelection(coordinate: coordinate, address: address)
             }
         }
@@ -867,7 +873,7 @@ struct FeedComposerSheet: View {
                 }
                 if isLoadingMedia && preparingAttachments.isEmpty {
                     ProgressView()
-                        .tint(Color(hex: "4ECDC4"))
+                        .tint(MeeshyColors.brandPrimary)
                         .padding(.horizontal, 12)
                 }
             }
@@ -982,7 +988,7 @@ struct FeedComposerSheet: View {
                 }
             } else {
                 let prep = AttachmentPreparationService.shared.preparePhotosPickerItem(
-                    item, context: .feedPost, accentColor: "4ECDC4"
+                    item, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex
                 )
                 trackSheetPreparation(prep)
             }
@@ -991,7 +997,7 @@ struct FeedComposerSheet: View {
 
     private func handleCameraCapture(_ image: UIImage) {
         let prep = AttachmentPreparationService.shared.prepareImage(
-            image, context: .feedPost, accentColor: "4ECDC4"
+            image, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex
         )
         trackSheetPreparation(prep)
     }
