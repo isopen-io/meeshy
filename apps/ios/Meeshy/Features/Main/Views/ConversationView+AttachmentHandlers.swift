@@ -434,7 +434,7 @@ extension ConversationView {
                     mimeType: mimeType,
                     fileSize: fileSize,
                     fileUrl: tempURL.absoluteString,
-                    thumbnailColor: "45B7D1"
+                    thumbnailColor: MeeshyColors.infoHex
                 )
                 composerState.pendingMediaFiles[attachmentId] = tempURL
                 composerState.pendingAttachments.append(attachment)
@@ -467,7 +467,7 @@ extension ConversationView {
         let attachment = MessageAttachment.location(
             latitude: coordinate.latitude,
             longitude: coordinate.longitude,
-            color: "2ECC71"
+            color: MeeshyColors.successHex
         )
         withAnimation {
             composerState.pendingAttachments.append(attachment)
@@ -480,7 +480,7 @@ extension ConversationView {
             sourceURL: url,
             deleteSourceAfterCompression: true,
             context: .message,
-            accentColor: "FF6B6B"
+            accentColor: MeeshyColors.errorHex
         )
         trackPreparation(prep)
     }

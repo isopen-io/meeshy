@@ -60,7 +60,7 @@ struct TrackingLinksView: View {
             Spacer()
 
             Text(String(localized: "tracking.links.title", defaultValue: "Liens de tracking", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(.headline)
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -94,10 +94,10 @@ struct TrackingLinksView: View {
                 .font(.system(size: 16))
                 .foregroundColor(accent)
             Text(value)
-                .font(.system(size: 20, weight: .bold))
+                .font(.title3.weight(.bold))
                 .foregroundColor(theme.textPrimary)
             Text(label)
-                .font(.system(size: 10))
+                .font(.caption2)
                 .foregroundColor(theme.textSecondary)
         }
         .frame(maxWidth: .infinity)
@@ -112,7 +112,7 @@ struct TrackingLinksView: View {
 
     private var linksSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(String(localized: "tracking.links.section.myLinks", defaultValue: "MES LIENS", bundle: .main)).font(.system(size: 12, weight: .semibold))
+            Text(String(localized: "tracking.links.section.myLinks", defaultValue: "MES LIENS", bundle: .main)).font(.caption.weight(.semibold))
                 .foregroundColor(theme.textSecondary).kerning(0.8)
 
             if viewModel.isLoading {
@@ -135,10 +135,10 @@ struct TrackingLinksView: View {
         VStack(spacing: 12) {
             Image(systemName: "chart.bar.fill")
                 .font(.system(size: 40)).foregroundColor(accent.opacity(0.6))
-            Text(String(localized: "tracking.links.empty.title", defaultValue: "Aucun lien de tracking", bundle: .main)).font(.system(size: 15, weight: .semibold))
+            Text(String(localized: "tracking.links.empty.title", defaultValue: "Aucun lien de tracking", bundle: .main)).font(.subheadline.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
             Text(String(localized: "tracking.links.empty.subtitle", defaultValue: "Créez un lien pour suivre vos clics et campagnes", bundle: .main))
-                .font(.system(size: 13)).foregroundColor(theme.textSecondary)
+                .font(.footnote).foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
         }
         .padding(40).frame(maxWidth: .infinity)
@@ -155,15 +155,15 @@ struct TrackingLinksView: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(link.displayName).font(.system(size: 15, weight: .semibold))
+                Text(link.displayName).font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary).lineLimit(1)
                 HStack(spacing: 6) {
                     Text(String(localized: "tracking.links.row.clicks", defaultValue: "\(link.totalClicks) clics", bundle: .main))
-                        .font(.system(size: 12)).foregroundColor(accent)
+                        .font(.caption).foregroundColor(accent)
                     Text(String(localized: "tracking.links.row.uniques", defaultValue: "· \(link.uniqueClicks) uniques", bundle: .main))
-                        .font(.system(size: 12)).foregroundColor(theme.textMuted)
+                        .font(.caption).foregroundColor(theme.textMuted)
                     if let c = link.campaign {
-                        Text("· \(c)").font(.system(size: 12)).foregroundColor(theme.textMuted).lineLimit(1)
+                        Text("· \(c)").font(.caption).foregroundColor(theme.textMuted).lineLimit(1)
                     }
                 }
             }
