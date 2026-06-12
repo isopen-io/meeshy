@@ -144,6 +144,7 @@
     },
     "backSound": {
       "title": "Ambiance de Fond",
+      "subtitle": "Musique de fond",
       "uploadLabel": "Charger un fichier audio",
       "uploadDescription": "Les sons prédéfinis ne sont pas encore disponibles. Chargez votre propre fichier MP3/WAV",
       "uploadButton": "Charger un audio",
@@ -352,6 +353,10 @@
       "off": "Désactivé",
       "active": "Actif",
       "inactive": "Inactif"
+    },
+    "carousel": {
+      "scrollLeft": "Défiler vers la gauche",
+      "scrollRight": "Défiler vers la droite"
     },
     "closePanel": "Fermer le panneau d'effets audio"
   },

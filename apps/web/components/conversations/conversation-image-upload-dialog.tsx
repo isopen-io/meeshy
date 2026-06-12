@@ -132,7 +132,7 @@ export function ConversationImageUploadDialog({
       onImageUploaded(file);
     } catch (error) {
       console.error('Erreur lors du recadrage:', error);
-      toast.error('Erreur lors du traitement de l\'image');
+      toast.error(t('conversationImage.processingError') || 'Erreur lors du traitement de l\'image');
     } finally {
       setIsProcessing(false);
     }

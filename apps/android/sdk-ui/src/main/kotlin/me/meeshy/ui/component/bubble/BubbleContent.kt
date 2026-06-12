@@ -30,7 +30,7 @@ public data class BubbleImage(
 @Immutable
 public data class BubbleFile(
     val attachmentId: String,
-    val name: String,
+    val name: String?,
     val sizeBytes: Int? = null,
 )
 

@@ -1,38 +1,38 @@
 # UI/UX Plan — Iteration 44 (2026-06-12)
 
-## Objective
-1. Make the web date-formatting infrastructure locale-aware (single source of truth fix) and internationalize MessageTimestamp (web)
-2. Close the three admin i18n leftovers deferred since iteration 43 (web)
-3. Speech recognition language follows the Prisme resolution instead of browser locale (web)
-4. Complete the links-surface Dynamic Type pass: ShareLinkDetailView, TrackingLinkDetailView, CreateShareLinkView, CreateTrackingLinkView + icon-button a11y labels (iOS)
-5. Localize the "System" notification sender fallback; wire the `meeshy://conversations` deep link in the NavHost (Android)
+Branch: `claude/blissful-ritchie-jls4lb` (from main `7358047`, post #587/#588)
+Analysis: `docs/analyses/uiux/2026-06-12-iteration-44.md`
 
-## Web Actions
-1. `utils/date-format.ts` — add `locale?: string` to `DateFormatOptions` (fallback `'fr'` preserves legacy behavior); thread through all `toLocale*` calls; `formatFullDate(date, locale?)` uses locale-aware formatting instead of manual French `à` concatenation; update `__tests__/utils/date-format.test.ts`
-2. Callers pass locale from `useI18n`/language store: `BubbleMessage.tsx`, `bubble-message/MessageNameDate.tsx`, `dashboard/ConversationsWidget.tsx`, `dashboard/CommunitiesWidget.tsx`, `hooks/use-message-interactions.ts`
-3. `components/v2/MessageTimestamp.tsx` — `useI18n('conversations')`; new `timestamp.*` keys (today/yesterday/todayAt/yesterdayAt/dayAt) in `locales/{en,fr,es,pt}/conversations.json`; locale-aware `toLocale*`; localized aria-label
-4. `app/admin/debug.tsx` — new `debug.*` section in admin.json (4 locales), wire via `useI18n('admin')`
-5. `components/admin/agent/AgentArchetypesTab.tsx` — new `agent.archetypes.*` keys in admin.json (4 locales), including emoji-usage labels keyed by enum value
-6. `components/translation/translation-monitor.tsx:233` — `t('translationMonitor.cacheHit')` + key in admin.json (4 locales)
-7. `components/v2/AudioPostComposer.tsx` — `recognition.lang` from `resolveUserPreferredLanguage(user)` (auth store) with `navigator.language` fallback
+## Part 1 — Web (apps/web)
+- [ ] video-calls i18n: `LocalVideoTile` "You", `VideoStream` "Unknown", `CarouselNavigation` aria-labels, `EffectCard` ON/OFF → keys in `calls.json` / `audioEffects.json` (en/fr/es/pt)
+- [ ] `BackSoundDetails` French strings → `audioEffects.json`
+- [ ] `ConnectionQualityBadge:95` + `translation-monitor:307` → `toLocaleTimeString(locale)` ; `translation-stats:67` → `toLocaleDateString(locale)`
+- [ ] `groups/ConversationsList:92,99` → t() keys + `toLocaleDateString(locale)`
+- [ ] `conversation-image-upload-dialog:135` error toast → i18n key
+- [ ] Dark mode: `DeleteConfirmationView:347`, `ReactionSelectionMessageView:273,302,407` → add `dark:` variants
+- [ ] Cohérence : nouvelles clés présentes dans les 4 locales, mêmes namespaces que l'existant
 
-## iOS Actions (text → semantic fonts; decorative/hero icons stay fixed per iter-32 precedent)
-8. `ShareLinkDetailView.swift` — convert 13 text fonts (20→`.title3.weight(.bold)`, 13→`.footnote`, 12→`.caption`, 10→`.caption2`, 22→`.title2`); `.accessibilityLabel` on icon-only action buttons
-9. `TrackingLinkDetailView.swift` — convert ~25 text fonts with same size→semantic mapping
-10. `CreateShareLinkView.swift` — convert ~24 text fonts
-11. `CreateTrackingLinkView.swift` — convert 6 text fonts
+## Part 2 — iOS (apps/ios)
+- [ ] `ConversationView+MessageRow:243` "Hier" → `String(localized:defaultValue:)` (vérifier libellés frères Aujourd'hui/etc.)
+- [ ] `ProfileView:65` → semantic font (.footnote)
+- [ ] `TwoFactorSetupView` text fonts → semantic (hero icons fixes conservés)
+- [ ] `CallView:35` / `IncomingCallView:35` caller name → `.title` semantic
+- [ ] `PrivacySettingsView` hex → MeeshyColors tokens
+- [ ] Cohérence : pattern identique aux migrations 32/42/43, xcstrings à jour
 
-## Android Actions
-12. `feature/notifications` strings.xml (en/fr/es/pt) — add `notifications_system_sender`; wire in `NotificationsScreen.kt:133`
-13. `MeeshyApp.kt` / `Routes` — add `meeshy://conversations` deep link on the conversations route (manifest already declares it)
+## Part 3 — Android (apps/android)
+- [ ] sdk-ui strings.xml (en/fr/es/pt) : `bubble_file_size_*` units, `image_viewer_close`, `bubble_image_description`, `bubble_attachment_file_fallback`
+- [ ] `MessageBubble.formatFileSize` → stringResource ; contentDescriptions localisées
+- [ ] `MeeshyImageViewer` "Fermer"/"Image" → stringResource
+- [ ] `BubbleContentBuilder:57` fallback "Fichier" → sortir du value model, résoudre au rendu (pattern replyToDeleted iter-43) ; adapter `BubbleContentBuilderTest`
+- [ ] `feature/conversations` values-es/pt : +9 clés preview/banner ; `feature/chat` values-es/pt : +3 clés date
+- [ ] `ChatScreen:533,564` cancel icons → touch target 48dp (`minimumInteractiveComponentSize`)
+- [ ] Cohérence : libellés preview alignés sur iOS/web (📷 Photo / 🎬 Vídeo / etc.)
 
-## Verification
-- Web: jest `date-format` + related suites, `tsc --noEmit` if runnable; JSON locale validity check
-- iOS: size→semantic mapping consistent with iterations 42-43 (`.caption2`≤11, `.caption`=12, `.footnote`=13, `.subheadline`=14-15, `.callout`=16, `.body`=17, `.headline`=18, `.title3`=20, `.title2`=22, `.title`=28); CI ios-tests on PR
-- Android: no local toolchain — review + CI
-- CI green → merge PR into main; update branch-tracking.md
+## Deferred to iteration 45+
+- Web admin: debug.tsx, AgentArchetypesTab, InfoIcon tooltips LlmTab/GlobalConfigTab, ranking/monitoring/anonymous-users 'fr-FR'
+- iOS: famille composer Color(hex:) (ComposerModels/UniversalComposerBar/AudioPostComposer/VoiceProfileWizard) — design pass identité couleurs requis ; AudioFullscreenView .white audit ; FeedPostCard pluriels
+- Android: MeeshySpacing 2.dp residuals, emoji lineHeight token ; parité stories (UI absente) ; réactions par pièce jointe web+Android (wiring gateway)
 
-## Continuity
-- Base: main @ aa5dfa6 (merge PR #586)
-- Branch: claude/blissful-ritchie-foe2wg
-- Next iteration candidates: web user-settings.tsx toasts (17) + participants-drawer/links-section toasts; migrate remaining 14 `'fr-FR'` files to locale-aware date-format helpers; converge FriendRequestCard local formatter; iOS ConversationInfoSheet (52) + ConversationDashboardView (43) + TwoFactorSetupView (42, text only) font passes; Android stories parity (large)
+## Exit criteria
+- CI verte sur la PR ; merge dans main ; branch-tracking mis à jour (iteration 45 next)

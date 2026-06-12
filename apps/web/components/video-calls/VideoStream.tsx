@@ -92,7 +92,7 @@ export function VideoStream({
               </span>
             </div>
             <VideoOff className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-300">{participantName || 'Unknown'}</p>
+            <p className="text-sm text-gray-300">{participantName || t('calls.stream.participant')}</p>
           </div>
         </div>
       )}

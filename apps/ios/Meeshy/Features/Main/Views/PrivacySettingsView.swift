@@ -10,7 +10,7 @@ struct PrivacySettingsView: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @ObservedObject private var prefs = UserPreferencesManager.shared
 
-    private let accentColor = "6366F1"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
         ZStack {
@@ -81,7 +81,7 @@ struct PrivacySettingsView: View {
             privacyToggle(icon: "circle.fill", title: String(localized: "settings.privacy.online_status", defaultValue: "Statut en ligne", bundle: .main), color: "4ADE80",
                           keyPath: \.showOnlineStatus)
 
-            privacyToggle(icon: "clock.fill", title: String(localized: "settings.privacy.last_seen", defaultValue: "Dernière connexion", bundle: .main), color: "60A5FA",
+            privacyToggle(icon: "clock.fill", title: String(localized: "settings.privacy.last_seen", defaultValue: "Dernière connexion", bundle: .main), color: MeeshyColors.infoHex,
                           keyPath: \.showLastSeen)
 
             privacyToggle(icon: "checkmark.message.fill", title: String(localized: "settings.privacy.read_receipts", defaultValue: "Accusés de lecture", bundle: .main), color: "3498DB",
@@ -98,11 +98,11 @@ struct PrivacySettingsView: View {
     // MARK: - Contacts & Groups
 
     private var contactsSection: some View {
-        settingsSection(title: String(localized: "settings.privacy.contacts_groups", defaultValue: "Contacts & Groupes", bundle: .main), icon: "person.2.fill", color: "6366F1") {
-            privacyToggle(icon: "person.badge.plus", title: String(localized: "settings.privacy.contact_requests", defaultValue: "Demandes de contact", bundle: .main), color: "6366F1",
+        settingsSection(title: String(localized: "settings.privacy.contacts_groups", defaultValue: "Contacts & Groupes", bundle: .main), icon: "person.2.fill", color: MeeshyColors.brandPrimaryHex) {
+            privacyToggle(icon: "person.badge.plus", title: String(localized: "settings.privacy.contact_requests", defaultValue: "Demandes de contact", bundle: .main), color: MeeshyColors.brandPrimaryHex,
                           keyPath: \.allowContactRequests)
 
-            privacyToggle(icon: "person.3.fill", title: String(localized: "settings.privacy.group_invites", defaultValue: "Invitations de groupe", bundle: .main), color: "60A5FA",
+            privacyToggle(icon: "person.3.fill", title: String(localized: "settings.privacy.group_invites", defaultValue: "Invitations de groupe", bundle: .main), color: MeeshyColors.infoHex,
                           keyPath: \.allowGroupInvites)
 
             privacyToggle(icon: "phone.arrow.down.left", title: String(localized: "settings.privacy.calls_non_contacts", defaultValue: "Appels hors contacts", bundle: .main), color: "FF6B6B",
@@ -117,7 +117,7 @@ struct PrivacySettingsView: View {
             privacyToggle(icon: "square.and.arrow.down.fill", title: String(localized: "settings.privacy.save_media", defaultValue: "Sauvegarder média", bundle: .main), color: "4ADE80",
                           keyPath: \.saveMediaToGallery)
 
-            privacyToggle(icon: "chart.bar.fill", title: String(localized: "settings.privacy.analytics", defaultValue: "Analytics", bundle: .main), color: "60A5FA",
+            privacyToggle(icon: "chart.bar.fill", title: String(localized: "settings.privacy.analytics", defaultValue: "Analytics", bundle: .main), color: MeeshyColors.infoHex,
                           keyPath: \.allowAnalytics)
 
             privacyToggle(icon: "arrow.triangle.branch", title: String(localized: "settings.privacy.share_data", defaultValue: "Partage données", bundle: .main), color: "9B59B6",
@@ -148,7 +148,7 @@ struct PrivacySettingsView: View {
             privacyToggle(icon: "lock.rotation", title: String(localized: "settings.privacy.auto_encrypt", defaultValue: "Auto-chiffrer new conv.", bundle: .main), color: "4ADE80",
                           keyPath: \.autoEncryptNewConversations)
 
-            privacyToggle(icon: "lock.badge.clock", title: String(localized: "settings.privacy.show_encryption_status", defaultValue: "Afficher statut chiffr.", bundle: .main), color: "60A5FA",
+            privacyToggle(icon: "lock.badge.clock", title: String(localized: "settings.privacy.show_encryption_status", defaultValue: "Afficher statut chiffr.", bundle: .main), color: MeeshyColors.infoHex,
                           keyPath: \.showEncryptionStatus)
 
             privacyToggle(icon: "exclamationmark.lock.fill", title: String(localized: "settings.privacy.warn_unencrypted", defaultValue: "Alerter non chiffré", bundle: .main), color: "FF6B6B",

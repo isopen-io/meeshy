@@ -270,7 +270,7 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
                       className={cn(
                         "absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm",
                         isOwnMessage 
-                          ? "bg-white text-indigo-600" 
+                          ? "bg-white text-indigo-600 dark:bg-indigo-950 dark:text-indigo-200"
                           : "bg-indigo-600 text-white"
                       )}
                     >
@@ -299,7 +299,7 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
             className={cn(
               "pl-10 pr-4 h-9 text-sm",
               isOwnMessage 
-                ? "bg-white border-indigo-300 text-gray-900 placeholder:text-gray-500 focus:bg-white focus:border-indigo-500" 
+                ? "bg-white border-indigo-300 text-gray-900 placeholder:text-gray-500 focus:bg-white focus:border-indigo-500 dark:bg-gray-900 dark:border-indigo-700 dark:text-gray-100 dark:placeholder:text-gray-400 dark:focus:bg-gray-900 dark:focus:border-indigo-400"
                 : "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
             )}
             autoFocus
@@ -404,7 +404,7 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
                       className={cn(
                         "absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm",
                         isOwnMessage 
-                          ? "bg-white text-indigo-600" 
+                          ? "bg-white text-indigo-600 dark:bg-indigo-950 dark:text-indigo-200"
                           : "bg-indigo-600 text-white"
                       )}
                     >

@@ -31,6 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -214,7 +215,7 @@ private fun BubbleImageGrid(
             val ratio = imageAspectRatio(image)
             AsyncImage(
                 model = image.url,
-                contentDescription = "Image",
+                contentDescription = stringResource(R.string.bubble_image_description),
                 contentScale = ContentScale.Crop,
                 modifier = modifier
                     .width(252.dp)
@@ -252,7 +253,7 @@ private fun BubbleImageGrid(
                             ) {
                                 AsyncImage(
                                     model = image.thumbnailUrl ?: image.url,
-                                    contentDescription = "Image",
+                                    contentDescription = stringResource(R.string.bubble_image_description),
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.size(124.dp),
                                 )
@@ -309,13 +310,13 @@ private fun BubbleFileRow(
         )
         Column {
             Text(
-                text = file.name,
+                text = file.name ?: stringResource(R.string.bubble_attachment_file_fallback),
                 style = MaterialTheme.typography.bodySmall,
                 color = onColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val size = file.sizeBytes?.let(::formatFileSize)
+            val size = file.sizeBytes?.let { formatFileSize(it) }
             if (size != null) {
                 Text(
                     text = size,
@@ -327,10 +328,14 @@ private fun BubbleFileRow(
     }
 }
 
+@Composable
+@ReadOnlyComposable
 internal fun formatFileSize(bytes: Int): String = when {
-    bytes >= 1_048_576 -> "%.1f Mo".format(bytes / 1_048_576f)
-    bytes >= 1_024 -> "%.0f Ko".format(bytes / 1_024f)
-    else -> "$bytes o"
+    bytes >= 1_048_576 ->
+        stringResource(R.string.bubble_file_size_mb, "%.1f".format(bytes / 1_048_576f))
+    bytes >= 1_024 ->
+        stringResource(R.string.bubble_file_size_kb, "%.0f".format(bytes / 1_024f))
+    else -> stringResource(R.string.bubble_file_size_bytes, bytes.toString())
 }
 
 @Composable

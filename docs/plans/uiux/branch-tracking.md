@@ -16,6 +16,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
+| Last completed iteration | 44 (audit post-#587 Android : i18n attachments/viewer/file-size + 12 clés es/pt ; web : i18n video-calls + dates locale-aware + dark mode bubbles ; iOS : 'Hier' localisé, Dynamic Type ProfileView/TwoFactorSetup/Call, tokens PrivacySettingsView) |
+| Last merged PR | #593 ; iter-44 (PR #592) en cours de merge |
+| Last Merged Base (commit) | 6d1375e (merge #593) |
+| Next iteration | **45** |
+| Next branch to create from | `main` (HEAD post-merge iter-44) |
+| Deferred carry-over for 45 | web admin : debug.tsx (~15 strings), AgentArchetypesTab, tooltips InfoIcon LlmTab/GlobalConfigTab, 'fr-FR' ranking/monitoring/anonymous-users ; iOS : famille composer Color(hex:) (ComposerModels/UniversalComposerBar/AudioPostComposer/VoiceProfileWizard — design pass identité couleurs), section colors PrivacySettingsView sans token équivalent, audit .white AudioFullscreenView, pluriels FeedPostCard ; Android : MeeshySpacing 2.dp residuals, emoji lineHeight token, parité stories (UI absente) ; réactions par pièce jointe web+Android (wiring gateway) |
 | Last completed iteration | 44 (web : date-format + MessageTimestamp locale-aware, i18n admin debug/archétypes/cache-hit, reconnaissance vocale Prisme ; iOS : Dynamic Type surface liens détail/create + i18n picker/expiration ; Android : expéditeur système i18n, deep links conversations) |
 | Last merged PR | #588 (feat/uiux-iter33) ; iter-44 (PR #589) en cours de merge |
 | Last Merged Base (commit) | 813b7fe (post #588) |
@@ -56,6 +62,7 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 42 | claude/blissful-ritchie-fst8wf | #582 | ✅ |
 | 42b | claude/blissful-ritchie-e672ur | #579 | ✅ |
 | 43 | claude/blissful-ritchie-6709o7 | #576 | ✅ |
+| 44 | claude/blissful-ritchie-jls4lb | (cette PR) | ⏳ |
 | 43b | claude/awesome-albattani-xaqlhj | #587 | ✅ |
 | 44 | claude/keen-dirac-485vpk | #589, #591 | ✅ |
 | 44b | claude/keen-dirac-a53ki2 | #590 | ⏳ |

@@ -48,7 +48,7 @@ export const BackSoundDetails = React.memo<BackSoundDetailsProps>(({
               {t('backSound.title')}
             </h4>
             <p className="text-gray-400 text-xs mt-1">
-              Musique de fond
+              {t('backSound.subtitle')}
             </p>
           </div>
           <Switch checked={effect.enabled} onCheckedChange={onToggle} />
@@ -92,15 +92,15 @@ export const BackSoundDetails = React.memo<BackSoundDetailsProps>(({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="N_TIMES">Nombre de fois</SelectItem>
-                <SelectItem value="N_MINUTES">Durée (minutes)</SelectItem>
+                <SelectItem value="N_TIMES">{t('backSound.loopMode.nTimes')}</SelectItem>
+                <SelectItem value="N_MINUTES">{t('backSound.loopMode.nMinutes')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div>
             <Label className="text-white text-xs mb-1 block">
-              {effect.params.loopMode === 'N_TIMES' ? 'Répétitions' : 'Minutes'}: {effect.params.loopValue}
+              {effect.params.loopMode === 'N_TIMES' ? t('backSound.loopValue.labelTimes') : t('backSound.loopValue.labelMinutes')}: {effect.params.loopValue}
             </Label>
             <Slider
               value={[effect.params.loopValue]}

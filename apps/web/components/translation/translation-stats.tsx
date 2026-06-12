@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Zap, Globe } from 'lucide-react';
+import { useI18n } from '@/hooks/useI18n';
 
 interface SimpleStats {
   totalTranslations: number;
@@ -11,6 +12,7 @@ interface SimpleStats {
 }
 
 export function TranslationStats() {
+  const { locale } = useI18n('common');
   const [stats, setStats] = useState<SimpleStats>({
     totalTranslations: 0,
     lastUsed: null
@@ -63,8 +65,8 @@ export function TranslationStats() {
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Dernière utilisation</span>
                 <span className="text-sm text-muted-foreground">
-                  {stats.lastUsed 
-                    ? stats.lastUsed.toLocaleDateString('fr-FR')
+                  {stats.lastUsed
+                    ? stats.lastUsed.toLocaleDateString(locale)
                     : 'Jamais'
                   }
                 </span>
