@@ -16,6 +16,7 @@ import {
 } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
+import { useAgentAdminEvents } from '@/hooks/admin/use-agent-admin-events';
 
 type AgentScheduleTimelineProps = {
   conversationId: string;
@@ -67,9 +68,16 @@ export default memo(function AgentScheduleTimeline({ conversationId, compact = f
 
   useEffect(() => {
     fetchSchedule();
-    const interval = setInterval(fetchSchedule, 30_000);
+    // Filet de sécurité long : la fraîcheur vient des events admin push
+    const interval = setInterval(fetchSchedule, 120_000);
     return () => clearInterval(interval);
   }, [fetchSchedule]);
+
+  useAgentAdminEvents({
+    kinds: ['delivery-queue', 'scan', 'config'],
+    conversationId,
+    onChange: fetchSchedule,
+  });
 
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 10_000);

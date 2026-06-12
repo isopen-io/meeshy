@@ -99,7 +99,12 @@ function makeStateManager(messages = [makeMessage()]) {
 }
 
 function makeRedis() {
-  return { set: jest.fn().mockResolvedValue('1'), del: jest.fn().mockResolvedValue(1), get: jest.fn().mockResolvedValue(null) } as any;
+  return {
+    set: jest.fn().mockResolvedValue('1'),
+    del: jest.fn().mockResolvedValue(1),
+    get: jest.fn().mockResolvedValue(null),
+    publish: jest.fn().mockResolvedValue(1),
+  } as any;
 }
 
 function makeDeliveryQueue() {
@@ -272,5 +277,42 @@ describe('ConversationScanner — analytics upsert after cycle', () => {
     await scanner.scanConversation('conv-1');
 
     expect(graph.invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe('ConversationScanner — admin notifications (agent:admin-event)', () => {
+  function adminScanEvents(redis: any): Array<{ kind: string; conversationId?: string }> {
+    return (redis.publish as jest.Mock).mock.calls
+      .filter(([channel]: [string]) => channel === 'agent:admin-event')
+      .map(([, message]: [string, string]) => JSON.parse(message));
+  }
+
+  it('publishes a scan event at start and end of a manual scan', async () => {
+    const graph = {
+      invoke: jest.fn().mockResolvedValue({
+        summary: '', toneProfiles: {},
+        controlledUsers: [makeControlledUser()],
+        pendingActions: [],
+      }),
+    };
+    const redis = makeRedis();
+    const scanner = new ConversationScanner(graph, makePersistence(), makeStateManager(), makeDeliveryQueue(), redis, makeConfigCache(), makeBudgetManager());
+
+    await scanner.scanConversation('conv-1');
+
+    const events = adminScanEvents(redis);
+    expect(events.length).toBeGreaterThanOrEqual(2);
+    expect(events.every((e) => e.kind === 'scan' && e.conversationId === 'conv-1')).toBe(true);
+  });
+
+  it('still publishes the end scan event when the graph throws', async () => {
+    const graph = { invoke: jest.fn().mockRejectedValue(new Error('boom')) };
+    const redis = makeRedis();
+    const scanner = new ConversationScanner(graph as any, makePersistence(), makeStateManager(), makeDeliveryQueue(), redis, makeConfigCache(), makeBudgetManager());
+
+    await scanner.scanConversation('conv-1').catch(() => {});
+
+    const events = adminScanEvents(redis);
+    expect(events.length).toBeGreaterThanOrEqual(2);
   });
 });

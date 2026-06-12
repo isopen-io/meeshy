@@ -18,6 +18,7 @@ import {
 } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
+import { useAgentAdminEvents } from '@/hooks/admin/use-agent-admin-events';
 import dynamic from 'next/dynamic';
 
 const ScanHistoryChart = dynamic(() => import('./ScanHistoryChart'), {
@@ -115,10 +116,18 @@ export default memo(function TriggerSchedulingModal({
   useEffect(() => {
     if (open) {
       fetchSchedule();
-      const interval = setInterval(fetchSchedule, 30_000);
+      // Filet de sécurité long : la fraîcheur vient des events admin push
+      const interval = setInterval(fetchSchedule, 120_000);
       return () => clearInterval(interval);
     }
   }, [open, fetchSchedule]);
+
+  useAgentAdminEvents({
+    kinds: ['delivery-queue', 'scan', 'config'],
+    conversationId,
+    onChange: fetchSchedule,
+    enabled: open,
+  });
 
   useEffect(() => {
     if (!open) return;

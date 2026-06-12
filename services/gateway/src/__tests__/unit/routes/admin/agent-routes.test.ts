@@ -1,6 +1,28 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import { describe, it, expect, beforeAll, afterAll, jest, beforeEach } from '@jest/globals';
+
+jest.mock('../../../../services/CacheStore', () => {
+  const publish = jest.fn<any>().mockResolvedValue(1);
+  const store = {
+    publish,
+    set: jest.fn<any>().mockResolvedValue(undefined),
+    get: jest.fn<any>().mockResolvedValue(null),
+    del: jest.fn<any>().mockResolvedValue(undefined),
+  };
+  return { getCacheStore: () => store, __cacheStoreMock: store };
+});
+
 import { agentAdminRoutes } from '../../../../routes/admin/agent';
+
+const { __cacheStoreMock: cacheStoreMock } = jest.requireMock('../../../../services/CacheStore') as {
+  __cacheStoreMock: { publish: jest.Mock; set: jest.Mock; get: jest.Mock; del: jest.Mock };
+};
+
+function adminEventsPublished(): Array<{ kind: string; conversationId?: string }> {
+  return cacheStoreMock.publish.mock.calls
+    .filter(([channel]) => channel === 'agent:admin-event')
+    .map(([, message]) => JSON.parse(message as string));
+}
 
 const mockPrisma: any = {
   agentConfig: {
@@ -174,6 +196,7 @@ describe('Agent Admin Routes', () => {
 
       expect(res.statusCode).toBe(200);
       expect(body.success).toBe(true);
+      expect(adminEventsPublished()).toContainEqual({ kind: 'config', conversationId: '507f1f77bcf86cd799439099' });
     });
 
     it('returns 400 for invalid data', async () => {
@@ -313,6 +336,21 @@ describe('Agent Admin Routes', () => {
 
       expect(res.statusCode).toBe(200);
       expect(body.data.locked).toBe(false);
+      expect(adminEventsPublished()).toContainEqual({ kind: 'config', conversationId: '507f1f77bcf86cd799439099' });
+    });
+  });
+
+  describe('POST /configs/:conversationId/trigger', () => {
+    it('publishes a scan admin event alongside the trigger', async () => {
+      mockPrisma.agentConfig.findUnique.mockResolvedValue({ id: '1', conversationId: '507f1f77bcf86cd799439099' });
+
+      const res = await app.inject({ method: 'POST', url: '/configs/507f1f77bcf86cd799439099/trigger' });
+      const body = JSON.parse(res.body);
+
+      expect(res.statusCode).toBe(200);
+      expect(body.data.triggered).toBe(true);
+      expect(cacheStoreMock.publish).toHaveBeenCalledWith('agent:trigger-scan', JSON.stringify({ conversationId: '507f1f77bcf86cd799439099' }));
+      expect(adminEventsPublished()).toContainEqual({ kind: 'scan', conversationId: '507f1f77bcf86cd799439099' });
     });
   });
 });
