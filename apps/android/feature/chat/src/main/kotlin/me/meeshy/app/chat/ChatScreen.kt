@@ -356,9 +356,9 @@ private fun SheetAction(
 private fun TypingIndicator(typingUsers: List<String>, modifier: Modifier = Modifier) {
     if (typingUsers.isEmpty()) return
     val text = when (typingUsers.size) {
-        1 -> "${typingUsers[0]} is typing..."
-        2 -> "${typingUsers[0]} and ${typingUsers[1]} are typing..."
-        else -> "${typingUsers.size} people are typing..."
+        1 -> stringResource(R.string.chat_typing_one, typingUsers[0])
+        2 -> stringResource(R.string.chat_typing_two, typingUsers[0], typingUsers[1])
+        else -> stringResource(R.string.chat_typing_many, typingUsers.size)
     }
     Text(
         text = text,

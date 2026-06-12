@@ -4,9 +4,9 @@
 Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Protocol
-1. At the start of each iteration: create `feat/uiux-iter{N}` from the **Last Merged Base** below
-2. Develop, commit, push on `feat/uiux-iter{N}`
-3. Once CI passes: merge `feat/uiux-iter{N}` into main via PR
+1. At the start of each iteration: sync the working branch with `main` (merge origin/main)
+2. Develop, commit, push on the iteration branch
+3. Once CI passes: merge into main via PR
 4. After merge: update this file with the new base
 5. Delete the feature branch after merge
 
@@ -16,11 +16,11 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | 31 (type-safety gateway) |
-| Last merged PR | #509 (refactor(gateway) iter-31 — expand FastifyInstance types, remove as any casts) |
-| Last Merged Base (commit) | 4abd54b3 |
-| Next iteration | **32** (UI/UX review — see analysis 2026-06-09-iteration-32) |
-| Next branch to create from | `main` (HEAD = 4abd54b3) |
+| Last completed iteration | 33 (web search i18n + iOS Dynamic Type + Android i18n) |
+| Last merged PR | pending — iteration 33 PR from claude/blissful-ritchie-6709o7 |
+| Last Merged Base (commit) | 7ab236f (merge PR #574) |
+| Next iteration | **34** — candidates in `2026-06-12-plan-iteration-33.md` § Continuity |
+| Next branch to create from | `main` after iteration-33 PR merges |
 
 ---
 
@@ -50,3 +50,5 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 29 | (inline/iter-29) | — | ✅ |
 | 30 | claude/dazzling-hawking-b4tdnk | #507 | ✅ |
 | 31 | claude/iter31-type-safety | #509 | ✅ |
+| 32 | (uiux iter-32) | merged | ✅ |
+| 33 | claude/blissful-ritchie-6709o7 | (this PR) | ⏳ |

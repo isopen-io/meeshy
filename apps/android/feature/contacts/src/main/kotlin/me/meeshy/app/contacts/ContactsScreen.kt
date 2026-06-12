@@ -19,8 +19,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.feature.contacts.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,10 +37,13 @@ fun ContactsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Contacts") },
+                title = { Text(stringResource(R.string.contacts_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.contacts_back),
+                        )
                     }
                 },
             )
@@ -54,7 +59,7 @@ fun ContactsScreen(
                     Tab(
                         selected = index == selectedIndex,
                         onClick = { viewModel.selectTab(tab) },
-                        text = { Text(tab.name) },
+                        text = { Text(stringResource(tab.labelRes())) },
                     )
                 }
             }
@@ -63,11 +68,18 @@ fun ContactsScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "Coming soon",
+                    text = stringResource(R.string.contacts_coming_soon),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
     }
+}
+
+private fun ContactsTab.labelRes(): Int = when (this) {
+    ContactsTab.Contacts -> R.string.contacts_tab_contacts
+    ContactsTab.Requests -> R.string.contacts_tab_requests
+    ContactsTab.Discover -> R.string.contacts_tab_discover
+    ContactsTab.Blocked -> R.string.contacts_tab_blocked
 }

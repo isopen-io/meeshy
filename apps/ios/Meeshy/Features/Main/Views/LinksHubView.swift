@@ -81,14 +81,15 @@ struct LinksHubView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 Image(systemName: "link.badge.plus")
-                    .font(.system(size: 28, weight: .bold))
+                    .font(.title.weight(.bold))
                     .foregroundColor(Color(hex: "F8B500"))
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(localized: "links.hub.banner.title", defaultValue: "Gérez vos liens", bundle: .main))
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.headline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
                     Text(String(localized: "links.hub.banner.subtitle", defaultValue: "Partagez, suivez et monétisez votre audience", bundle: .main))
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundColor(theme.textSecondary)
                 }
                 Spacer()
@@ -170,17 +171,17 @@ struct LinksHubView: View {
                         .fill(accent.opacity(0.15))
                         .frame(width: 48, height: 48)
                     Image(systemName: icon)
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.title3.weight(.semibold))
                         .foregroundColor(accent)
                 }
 
                 // Texte
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
                     Text(description)
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(2)
                 }
@@ -195,14 +196,15 @@ struct LinksHubView: View {
                             onCreate()
                         } label: {
                             Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 22))
+                                .font(.title2)
                                 .foregroundColor(accent)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(String(localized: "links.hub.create", defaultValue: "Créer", bundle: .main))
                     }
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }

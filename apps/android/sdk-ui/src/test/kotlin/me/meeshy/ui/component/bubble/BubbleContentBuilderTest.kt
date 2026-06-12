@@ -3,6 +3,7 @@ package me.meeshy.ui.component.bubble
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageReplyPreview
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.ApiTextTranslation
 import org.junit.Test
@@ -214,5 +215,33 @@ class BubbleContentBuilderTest {
 
         assertThat(content.reactions.single { it.emoji == "❤️" }.includesMe).isTrue()
         assertThat(content.reactions.single { it.emoji == "🔥" }.includesMe).isFalse()
+    }
+
+    @Test
+    fun `a reply to a live message keeps its preview text`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                replyTo = ApiMessageReplyPreview(id = "r1", content = "Original", senderDisplayName = "Ana"),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.replyToText).isEqualTo("Original")
+        assertThat(content.replyToIsDeleted).isFalse()
+    }
+
+    @Test
+    fun `a reply to a deleted message exposes the deleted flag without baked text`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                replyTo = ApiMessageReplyPreview(id = "r1", content = "Original", deletedAt = "2026-06-12T00:00:00Z"),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.replyToText).isNull()
+        assertThat(content.replyToIsDeleted).isTrue()
     }
 }
