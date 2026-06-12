@@ -13,6 +13,7 @@
     "resetAll": "Restablecer todo",
     "disableAll": "Desactivar todos los efectos",
     "controls": {
+      "loading": "Cargando...",
       "speed": {
         "ariaLabel": "Ajustar velocidad de reproducción"
       },
@@ -308,11 +309,27 @@
       "custom": "Personalizado",
       "customDescription": "Sus propios ajustes"
     },
+    "transcription": {
+      "you": "Tú",
+      "noVoiceProfile": "(sin perfil de voz)",
+      "highConfidence": "Confianza alta",
+      "mediumConfidence": "Confianza media",
+      "veryLowConfidence": "Muy baja",
+      "uncertain": "Incierto"
+    },
     "timeline": {
       "title": "Línea de tiempo de efectos",
       "duration": "Duración",
       "effectsUsed": "Efectos usados",
       "noTimeline": "No hay línea de tiempo de efectos disponible",
+      "noData": "No hay datos de línea de tiempo disponibles",
+      "allParametersEvolution": "Evolución de todos los parámetros",
+      "parametersEvolution": "Evolución de los parámetros",
+      "activationPeriods": "Períodos de activación:",
+      "totalTime": "Tiempo total:",
+      "noConfiguration": "No hay configuración disponible para este efecto",
+      "dataPoint": "{label}: {value} en {time}",
+      "clickToSeek": "Haz clic para ir a este momento",
       "activatedAt": "Activado en",
       "deactivatedAt": "Desactivado en",
       "updatedAt": "Modificado en",

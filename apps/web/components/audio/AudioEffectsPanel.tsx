@@ -15,6 +15,7 @@ import { AudioEffectsTimeline } from './AudioEffectsTimeline';
 import { AudioEffectsOverview } from './AudioEffectsOverview';
 import { getEffectName, EFFECT_TAB_CLASSES } from '@/utils/audio-effects-config';
 import { formatTime } from '@/utils/audio-formatters';
+import { useI18n } from '@/hooks/useI18n';
 
 interface AudioEffectsPanelProps {
   appliedEffects: AudioEffectType[];
@@ -54,6 +55,7 @@ export const AudioEffectsPanel = memo<AudioEffectsPanelProps>(({
   setIsOpen,
   onSeekToTime,
 }) => {
+  const { t } = useI18n('audioEffects');
   const totalDuration = duration || attachmentDuration || 1;
 
   // Handler pour toggle la visibilité d'une courbe
@@ -100,11 +102,11 @@ export const AudioEffectsPanel = memo<AudioEffectsPanelProps>(({
 
             {/* Tab Vue d'ensemble */}
             <TabsContent value="overview" className="mt-4 space-y-3 max-h-72 overflow-x-auto overflow-y-auto">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Timeline des effets</h3>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('timeline.title')}</h3>
 
               {effectsTimeline.length === 0 ? (
                 <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded">
-                  Aucune donnée de timeline disponible
+                  {t('timeline.noData')}
                 </div>
               ) : (
                 <>
@@ -125,7 +127,7 @@ export const AudioEffectsPanel = memo<AudioEffectsPanelProps>(({
                   {/* Graphe fusionné */}
                   {appliedEffects.some(effect => effectsConfigurations[effect]?.length > 0) && (
                     <div className="mt-4 space-y-2">
-                      <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300">Évolution de tous les paramètres</h4>
+                      <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300">{t('timeline.allParametersEvolution')}</h4>
                       <AudioEffectsOverview
                         appliedEffects={appliedEffects}
                         effectsConfigurations={effectsConfigurations}
@@ -155,12 +157,12 @@ export const AudioEffectsPanel = memo<AudioEffectsPanelProps>(({
                   {/* Informations sur l'effet */}
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Périodes d&apos;activation:</span>
+                      <span className="text-gray-600 dark:text-gray-400">{t('timeline.activationPeriods')}</span>
                       <span className="font-medium text-gray-900 dark:text-gray-100">{segments.length}</span>
                     </div>
 
                     <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Temps total:</span>
+                      <span className="text-gray-600 dark:text-gray-400">{t('timeline.totalTime')}</span>
                       <span className="font-medium text-gray-900 dark:text-gray-100">
                         {formatTime(segments.reduce((acc, s) => acc + (s.endTime - s.startTime), 0) / 1000)}
                       </span>
@@ -169,7 +171,7 @@ export const AudioEffectsPanel = memo<AudioEffectsPanelProps>(({
 
                   {/* Graphique des configurations */}
                   <div className="space-y-2">
-                    <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300">Évolution des paramètres</h4>
+                    <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300">{t('timeline.parametersEvolution')}</h4>
                     {configs.length > 0 ? (
                       <AudioEffectsGraph
                         effect={effect}
@@ -181,7 +183,7 @@ export const AudioEffectsPanel = memo<AudioEffectsPanelProps>(({
                       />
                     ) : (
                       <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded">
-                        Aucune configuration disponible pour cet effet
+                        {t('timeline.noConfiguration')}
                       </div>
                     )}
                   </div>

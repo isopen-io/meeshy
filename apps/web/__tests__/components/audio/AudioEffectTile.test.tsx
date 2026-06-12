@@ -345,5 +345,79 @@ describe('AudioEffectTile', () => {
       const configButton = screen.getByRole('button', { name: /configure/i });
       expect(configButton).toBeInTheDocument();
     });
+
+    it('should expose the tile as a focusable button named after the effect', () => {
+      render(<AudioEffectTile {...defaultProps} />);
+
+      const tile = screen.getByRole('button', { name: 'Voice Coder' });
+      expect(tile).toHaveAttribute('tabindex', '0');
+    });
+  });
+
+  describe('Keyboard Interaction', () => {
+    const renderWithConfig = () =>
+      render(
+        <AudioEffectTile
+          {...defaultProps}
+          configurationComponent={<div data-testid="config-content">Config</div>}
+        />
+      );
+
+    it('should open configuration dialog on Enter', () => {
+      renderWithConfig();
+
+      const tile = screen.getByRole('button', { name: 'Voice Coder' });
+      fireEvent.keyDown(tile, { key: 'Enter' });
+
+      expect(screen.getByTestId('dialog')).toBeInTheDocument();
+    });
+
+    it('should open configuration dialog on Space', () => {
+      renderWithConfig();
+
+      const tile = screen.getByRole('button', { name: 'Voice Coder' });
+      fireEvent.keyDown(tile, { key: ' ' });
+
+      expect(screen.getByTestId('dialog')).toBeInTheDocument();
+    });
+
+    it('should prevent default scroll behavior on Space', () => {
+      renderWithConfig();
+
+      const tile = screen.getByRole('button', { name: 'Voice Coder' });
+      const notPrevented = fireEvent.keyDown(tile, { key: ' ' });
+
+      expect(notPrevented).toBe(false);
+    });
+
+    it('should not prevent default on Enter', () => {
+      renderWithConfig();
+
+      const tile = screen.getByRole('button', { name: 'Voice Coder' });
+      const notPrevented = fireEvent.keyDown(tile, { key: 'Enter' });
+
+      expect(notPrevented).toBe(true);
+    });
+
+    it('should not open configuration dialog on other keys', () => {
+      renderWithConfig();
+
+      const tile = screen.getByRole('button', { name: 'Voice Coder' });
+      fireEvent.keyDown(tile, { key: 'a' });
+      fireEvent.keyDown(tile, { key: 'Escape' });
+      fireEvent.keyDown(tile, { key: 'Tab' });
+
+      expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+    });
+
+    it('should not open configuration dialog when key pressed on the switch', () => {
+      renderWithConfig();
+
+      const toggle = screen.getByRole('switch');
+      fireEvent.keyDown(toggle, { key: 'Enter' });
+      fireEvent.keyDown(toggle, { key: ' ' });
+
+      expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+    });
   });
 });

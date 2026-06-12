@@ -5,6 +5,7 @@ import type { AudioEffectType } from '@meeshy/shared/types/video-call';
 import { AudioEffectIcon } from './AudioEffectIcon';
 import { formatTime } from '@/utils/audio-formatters';
 import { CURVE_COLORS, getParameterName, getEffectName } from '@/utils/audio-effects-config';
+import { useI18n } from '@/hooks/useI18n';
 
 interface AudioEffectsOverviewProps {
   appliedEffects: AudioEffectType[];
@@ -27,6 +28,7 @@ export const AudioEffectsOverview = memo<AudioEffectsOverviewProps>(({
   setVisibleOverviewCurves,
   onSeekToTime,
 }) => {
+  const { t } = useI18n('audioEffects');
   const width = 350;
   const height = 200;
   const padding = { top: 10, right: 10, bottom: 40, left: 40 };
@@ -219,22 +221,39 @@ export const AudioEffectsOverview = memo<AudioEffectsOverviewProps>(({
                 strokeLinejoin="round"
                 opacity="0.7"
               />
-              {pointsData.map((p, i) => (
-                <circle
-                  key={i}
-                  cx={p.x}
-                  cy={p.y}
-                  r="3"
-                  fill={curve.color}
-                  className="cursor-pointer transition-[r]"
-                  onClick={() => onSeekToTime(p.timestamp)}
-                  onMouseEnter={(e) => e.currentTarget.setAttribute('r', '5')}
-                  onMouseLeave={(e) => e.currentTarget.setAttribute('r', '3')}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <title>{`${getEffectName(curve.effectType)} - ${curve.key}: ${p.value.toFixed(2)} à ${formatTime(p.timestamp)}`}</title>
-                </circle>
-              ))}
+              {pointsData.map((p, i) => {
+                const pointLabel = `${t('timeline.dataPoint', {
+                  label: `${getEffectName(curve.effectType)} - ${curve.key}`,
+                  value: p.value.toFixed(2),
+                  time: formatTime(p.timestamp),
+                })} - ${t('timeline.clickToSeek')}`;
+
+                return (
+                  <circle
+                    key={i}
+                    cx={p.x}
+                    cy={p.y}
+                    r="3"
+                    fill={curve.color}
+                    className="cursor-pointer transition-[r]"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={pointLabel}
+                    onClick={() => onSeekToTime(p.timestamp)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onSeekToTime(p.timestamp);
+                      }
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.setAttribute('r', '5')}
+                    onMouseLeave={(e) => e.currentTarget.setAttribute('r', '3')}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <title>{pointLabel}</title>
+                  </circle>
+                );
+              })}
             </g>
           );
         })}
