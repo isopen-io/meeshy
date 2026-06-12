@@ -898,6 +898,15 @@ struct ConversationView: View {
                 // (retour d'un fullScreenCover/sheet) — aucune frappe n'est
                 // possible pendant qu'elle est couverte.
                 composerText.onPersistNeeded = nil
+                // Arrêt déterministe des deux players locaux (scroll-button +
+                // preview d'audio en attente) : sans lui, l'audio continuait
+                // jusqu'au dealloc du @StateObject et la session restait
+                // acquise (refcount) le temps de la libération. Idempotent.
+                scrollButtonAudioPlayer.stop()
+                pendingAudioPlayer.stop()
+                if audioRecorder.isRecording {
+                    audioRecorder.cancelRecording()
+                }
             }
     }
 

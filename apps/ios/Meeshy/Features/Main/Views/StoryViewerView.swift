@@ -175,6 +175,11 @@ struct StoryViewerView: View {
     // slide puis ré-arme via `refreshPrefetchWindowAndTimer()`.
     @State private var prefetcher = StoryReaderPrefetcher()
     @State var slideTimer = StoryReaderTimerController() // internal for cross-file extension access
+    /// Handles des tasks de prefetch média (`prefetchAllMedia`, +Content) —
+    /// annulés à l'onDisappear pour ne pas continuer downloads + prerolls
+    /// AVPlayer après la fermeture du viewer. internal for cross-file
+    /// extension access.
+    @State var prefetchTasks: [Task<Void, Never>] = []
     /// Latched once `attach(to:)` has been wired via the host
     /// representable — guards against re-firing every onAppear cycle
     /// (scene phase changes / parent re-renders).
@@ -425,6 +430,8 @@ struct StoryViewerView: View {
             // pipeline est ré-installé au prochain onAppear
             // (`hasInstalledPrefetchPipeline = false` ci-dessous).
             slideTimer.invalidate()
+            prefetchTasks.forEach { $0.cancel() }
+            prefetchTasks.removeAll()
             prefetcher.detach()
             hasInstalledPrefetchPipeline = false
             StoryMediaCoordinator.shared.deactivate()

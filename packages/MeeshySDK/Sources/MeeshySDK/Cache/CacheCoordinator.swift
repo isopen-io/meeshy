@@ -150,6 +150,10 @@ public actor CacheCoordinator {
 
     private static let maxTranslationCacheEntries = 500
 
+    // Le trio translation garde l'idiome dict + order manuel (et non
+    // `BoundedFIFOMap`) : son éviction doit retirer `translationTimestamps`
+    // en lockstep ET la rehydratation disque (`loadTranslationCaches`)
+    // réassigne l'ordre en bulk — deux besoins hors du contrat du helper.
     private var translationCache: [String: [TranslationData]] = [:]
     private var translationTimestamps: [String: Date] = [:]
     private var translationInsertionOrder: [String] = []
@@ -158,10 +162,10 @@ public actor CacheCoordinator {
     /// hasn't reconciled yet, etc.) doesn't linger indefinitely in RAM.
     /// Matches the `messages` cache `staleTTL` window roughly.
     private static let translationMaxAge: TimeInterval = 24 * 3600
-    private var transcriptionCache: [String: TranscriptionReadyEvent] = [:]
-    private var transcriptionInsertionOrder: [String] = []
-    private var audioTranslationCache: [String: [AudioTranslationEvent]] = [:]
-    private var audioTranslationInsertionOrder: [String] = []
+    private var transcriptionCache =
+        BoundedFIFOMap<String, TranscriptionReadyEvent>(capacity: CacheCoordinator.maxTranslationCacheEntries)
+    private var audioTranslationCache =
+        BoundedFIFOMap<String, [AudioTranslationEvent]>(capacity: CacheCoordinator.maxTranslationCacheEntries)
 
 
     public func cachedTranslations(for messageId: String) -> [TranslationData]? {
@@ -347,9 +351,7 @@ public actor CacheCoordinator {
         translationInsertionOrder.removeAll()
         translationTimestamps.removeAll()
         transcriptionCache.removeAll()
-        transcriptionInsertionOrder.removeAll()
         audioTranslationCache.removeAll()
-        audioTranslationInsertionOrder.removeAll()
     }
 
     private func resolveCurrentUserId() {
@@ -390,28 +392,18 @@ public actor CacheCoordinator {
     }
 
     public func cacheTranscription(_ event: TranscriptionReadyEvent) {
-        let isNew = transcriptionCache[event.messageId] == nil
         transcriptionCache[event.messageId] = event
-        if isNew {
-            transcriptionInsertionOrder.append(event.messageId)
-            evictTranscriptionCacheIfNeeded()
-        }
     }
 
     public func cacheAudioTranslation(_ event: AudioTranslationEvent) {
         let msgId = event.messageId
         var existing = audioTranslationCache[msgId] ?? []
-        let isNew = audioTranslationCache[msgId] == nil
         if let idx = existing.firstIndex(where: { $0.translatedAudio.targetLanguage == event.translatedAudio.targetLanguage }) {
             existing[idx] = event
         } else {
             existing.append(event)
         }
         audioTranslationCache[msgId] = existing
-        if isNew {
-            audioTranslationInsertionOrder.append(msgId)
-            evictAudioTranslationCacheIfNeeded()
-        }
     }
 
     private func evictTranslationCacheIfNeeded() {
@@ -419,20 +411,6 @@ public actor CacheCoordinator {
             translationInsertionOrder.removeFirst()
             translationCache.removeValue(forKey: oldest)
             translationTimestamps.removeValue(forKey: oldest)
-        }
-    }
-
-    private func evictTranscriptionCacheIfNeeded() {
-        while transcriptionCache.count > Self.maxTranslationCacheEntries, let oldest = transcriptionInsertionOrder.first {
-            transcriptionInsertionOrder.removeFirst()
-            transcriptionCache.removeValue(forKey: oldest)
-        }
-    }
-
-    private func evictAudioTranslationCacheIfNeeded() {
-        while audioTranslationCache.count > Self.maxTranslationCacheEntries, let oldest = audioTranslationInsertionOrder.first {
-            audioTranslationInsertionOrder.removeFirst()
-            audioTranslationCache.removeValue(forKey: oldest)
         }
     }
 
@@ -556,9 +534,7 @@ public actor CacheCoordinator {
         translationInsertionOrder.removeAll()
         translationTimestamps.removeAll()
         transcriptionCache.removeAll()
-        transcriptionInsertionOrder.removeAll()
         audioTranslationCache.removeAll()
-        audioTranslationInsertionOrder.removeAll()
 
         logger.info("Memory pressure — flushed dirty keys, evicted L1 caches and expired media")
     }
@@ -678,9 +654,7 @@ public actor CacheCoordinator {
         translationInsertionOrder.removeAll()
         translationTimestamps.removeAll()
         transcriptionCache.removeAll()
-        transcriptionInsertionOrder.removeAll()
         audioTranslationCache.removeAll()
-        audioTranslationInsertionOrder.removeAll()
         clearTranslationCacheDB()
     }
 
@@ -702,9 +676,7 @@ public actor CacheCoordinator {
         translationInsertionOrder.removeAll()
         translationTimestamps.removeAll()
         transcriptionCache.removeAll()
-        transcriptionInsertionOrder.removeAll()
         audioTranslationCache.removeAll()
-        audioTranslationInsertionOrder.removeAll()
         clearTranslationCacheDB()
     }
 

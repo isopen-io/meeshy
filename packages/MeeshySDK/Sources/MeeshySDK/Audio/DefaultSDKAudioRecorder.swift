@@ -100,7 +100,10 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
         recorder?.stop()
         isRecording = false
 
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        // Call-aware (L3) : un `setActive(false)` direct pendant un appel VoIP
+        // démontait la session possédée par RTCAudioSession. Le coordinator
+        // no-op dans ce cas.
+        MediaSessionCoordinator.shared.deactivatePlaybackSync()
 
         let url = recordedFileURL
         recorder = nil
@@ -120,6 +123,10 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
         recorder = nil
         duration = 0
         audioLevels = Array(repeating: 0, count: 15)
+        // Symétrique de stopRecording : sans cette désactivation, un cancel
+        // explicite (X, onDisappear) laissait la session `.playAndRecord`
+        // active — micro indiqué, audio des autres apps interrompu.
+        MediaSessionCoordinator.shared.deactivatePlaybackSync()
     }
 
     private func updateMetering() {

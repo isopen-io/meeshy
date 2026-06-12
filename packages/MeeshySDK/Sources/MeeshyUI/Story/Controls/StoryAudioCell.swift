@@ -59,6 +59,13 @@ struct StoryAudioCell: View {
             localVolume = audio.volume
             startWaveformIfNeeded()
         }
+        .onDisappear {
+            // Une preview en cours continuait sinon de jouer après la
+            // fermeture du panel, jusqu'au dealloc du @StateObject
+            // (le mutex PlaybackCoordinator ne couvre que la préemption
+            // par un AUTRE player, pas le close du panel).
+            playback.stop()
+        }
         .adaptiveOnChange(of: url) { _, _ in
             // L'URL peut être résolue après le mount (cache miss → fetch async).
             didStartWaveform = false

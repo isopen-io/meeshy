@@ -69,7 +69,11 @@ class ConversationListViewModel: ObservableObject {
     private var typers: [String: [String: String]] = [:]
     var previewMessages: [String: [Message]] = [:]  // conversationId → recent messages (non-Published — only used in context menu preview)
     private var previewLoadingInFlight: Set<String> = []
-    private var typingTimers: [String: Timer] = [:]
+    // `nonisolated(unsafe)` : muté uniquement sur le MainActor, lu une fois
+    // par le `nonisolated deinit` pour invalider les timers de typing 15 s
+    // encore armés (sinon ils survivaient au VM en no-ops weak-self) —
+    // même pattern que `ConversationSocketHandler.typingSafetyTimers`.
+    nonisolated(unsafe) private var typingTimers: [String: Timer] = [:]
 
     var totalUnreadCount: Int {
         conversations.reduce(0) { $0 + $1.userState.unreadCount }
@@ -1671,6 +1675,7 @@ class ConversationListViewModel: ObservableObject {
     nonisolated deinit {
         storyPrefetchTask?.cancel()
         groupingTask?.cancel()
+        typingTimers.values.forEach { $0.invalidate() }
         if let markAsReadObserver {
             NotificationCenter.default.removeObserver(markAsReadObserver)
         }

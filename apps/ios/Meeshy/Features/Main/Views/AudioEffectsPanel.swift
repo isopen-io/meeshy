@@ -28,6 +28,12 @@ struct AudioEffectsPanel: View {
         .onAppear {
             selectedEffect = callManager.activeAudioEffect?.effectType
         }
+        .onDisappear {
+            // Un debounce 150 ms en vol pouvait encore pousser des paramètres
+            // d'effet au CallManager après la fermeture du panneau.
+            debounceTask?.cancel()
+            debounceTask = nil
+        }
     }
 
     // MARK: - Header

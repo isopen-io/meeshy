@@ -136,7 +136,11 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         recorder?.stop()
         isRecording = false
 
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        // Call-aware (L3) : même garde que `cancelRecording` — un stop
+        // mid-appel VoIP démontait sinon la session possédée par WebRTC.
+        if !CallManager.shared.callState.isActive {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
 
         let url = recordedFileURL
         recorder = nil
