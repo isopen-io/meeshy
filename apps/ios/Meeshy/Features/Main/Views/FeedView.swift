@@ -38,6 +38,14 @@ struct FeedView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var statusViewModel: StatusViewModel
+    // Stories in the iPad feed: the tray reads the shared StoryViewModel (loaded
+    // by `iPadRootView`). FeedView is iPad-only, so these objects are always
+    // injected by `iPadRootView`'s environment.
+    @EnvironmentObject private var storyViewModel: StoryViewModel
+    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    @State private var showStoryViewer = false
+    @State private var selectedStoryUserId: String?
+    @State private var storyViewerSingleGroup = false
     @StateObject var viewModel = FeedViewModel()
     /// When true, use the UIKit-backed FeedListView for high-performance scrolling.
     /// Set to false to keep the existing SwiftUI ScrollView path.
@@ -705,6 +713,14 @@ struct FeedView: View {
                     // au sommet du contenu.
                     Color.clear.frame(height: 0).id("feed-top")
 
+                    // Story tray — same component used by the conversation list
+                    // and the iPhone feed so stories load identically here.
+                    StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
+                        selectedStoryUserId = userId
+                        storyViewerSingleGroup = false
+                        showStoryViewer = true
+                    })
+
                     // Composer placeholder
                     composerPlaceholder
                         .padding(.bottom, 8)
@@ -853,6 +869,9 @@ struct FeedView: View {
             // is stale.
             await hydrateBookmarkSeeding()
             viewModel.subscribeToSocketEvents()
+            // Load stories for the tray (same call as the conversation list /
+            // iPhone feed). Cheap no-op when already loaded by iPadRootView.
+            await storyViewModel.loadStories()
         }
         .adaptiveOnChange(of: viewModel.posts) { _, newPosts in
             // Merge liked / bookmarked / reposted state when new pages
@@ -909,6 +928,26 @@ struct FeedView: View {
                     await publishAudioPost(audioURL: audioURL, mimeType: mimeType, transcription: transcription, originalLanguage: transcription?.language)
                 }
             }
+        }
+        // Story viewer opened from the tray (mirror of the iPhone feed overlay).
+        // fullScreenCover creates a fresh environment, so re-inject the objects
+        // StoryViewerContainer / its inner SharePickerView read.
+        .fullScreenCover(isPresented: $showStoryViewer) {
+            StoryViewerContainer(
+                viewModel: storyViewModel,
+                userId: selectedStoryUserId,
+                isPresented: $showStoryViewer,
+                onReplyToStory: { replyContext in
+                    showStoryViewer = false
+                    router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
+                },
+                singleGroup: storyViewerSingleGroup,
+                startAtFirstUnviewed: true,
+                presentationSource: "iPadFeed"
+            )
+            .environmentObject(router)
+            .environmentObject(statusViewModel)
+            .environmentObject(conversationListViewModel)
         }
         .sheet(isPresented: $showComposerLanguagePicker) {
             AudioLanguagePickerView(

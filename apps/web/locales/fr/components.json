@@ -74,7 +74,10 @@
       "autoTranslate": "Traduction automatique",
       "translateToSystem": "Traduire vers la langue système",
       "translateToRegional": "Traduire vers la langue régionale",
-      "useCustomDestination": "Utiliser une destination personnalisée"
+      "useCustomDestination": "Utiliser une destination personnalisée",
+      "original": "Original",
+      "availableTranslations": "Traductions disponibles",
+      "captionLanguage": "Langue de la légende"
     },
     "layout": {
       "header": {
@@ -215,6 +218,25 @@
       "play": "Lecture",
       "pause": "Pause",
       "seek": "Progression de la vidéo"
+    },
+    "commentComposer": {
+      "replyingTo": "Réponse à",
+      "cancelReply": "Annuler la réponse",
+      "replyPlaceholder": "Écrire une réponse...",
+      "commentPlaceholder": "Écrire un commentaire...",
+      "replyInput": "Champ de réponse",
+      "commentInput": "Champ de commentaire",
+      "send": "Envoyer le commentaire"
+    },
+    "statusBar": {
+      "timeRemaining": "{time} restant"
+    },
+    "theme": {
+      "light": "Clair",
+      "dark": "Sombre",
+      "system": "Système",
+      "switchToLight": "Passer en mode clair",
+      "switchToDark": "Passer en mode sombre"
     }
   }
 }

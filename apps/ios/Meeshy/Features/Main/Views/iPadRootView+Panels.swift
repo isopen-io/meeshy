@@ -254,7 +254,9 @@ struct iPadResizableHandle: View {
         .frame(width: handleWidth)
         .contentShape(Rectangle())
         .gesture(
-            DragGesture(minimumDistance: 1)
+            // minimumDistance > tap-wobble so an accidental tap near the divider
+            // never starts a resize (and never swallows a nearby tap sequence).
+            DragGesture(minimumDistance: 8)
                 .onChanged { value in
                     isDragging = true
                     let currentX = screenWidth * ratio + value.translation.width

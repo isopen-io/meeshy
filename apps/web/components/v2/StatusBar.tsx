@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/use-i18n';
 import { Skeleton } from './Skeleton';
 import { TranslationToggle } from './TranslationToggle';
 import { getLanguageName } from './flags';
@@ -107,6 +108,7 @@ interface StatusPopoverProps {
 }
 
 function StatusPopover({ status, userLanguage, onClose }: StatusPopoverProps) {
+  const { t } = useI18n('components');
   const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -175,7 +177,7 @@ function StatusPopover({ status, userLanguage, onClose }: StatusPopoverProps) {
       {/* Time remaining */}
       <div className="flex items-center justify-center gap-1 text-xs text-[var(--gp-text-muted)] transition-colors duration-300">
         <ClockIcon className="w-3 h-3" />
-        <span>{timeRemaining} restant</span>
+        <span>{t('statusBar.timeRemaining', { time: timeRemaining })}</span>
       </div>
     </div>
   );

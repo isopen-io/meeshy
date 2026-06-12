@@ -194,6 +194,10 @@ export interface NotificationActor {
 export interface NotificationContext {
   readonly conversationId?: string;
   readonly conversationTitle?: string;
+  /** Avatar (image URL) de la conversation/groupe. Sert de repli à la toast
+   *  in-app iOS quand l'expéditeur n'a pas d'avatar personnel (messages de
+   *  groupe). @see schema.prisma Conversation.avatar */
+  readonly conversationAvatar?: string;
   readonly conversationType?: 'direct' | 'group' | 'public' | 'global' | 'broadcast';
   readonly messageId?: string;
   readonly originalMessageId?: string;

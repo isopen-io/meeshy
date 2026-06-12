@@ -58,6 +58,15 @@ struct RootView: View {
     /// legacy `Identifiable?` contract expected by `.fullScreenCover(item:)`.
     @StateObject private var storyViewerCoordinator = StoryViewerCoordinator()
 
+    /// Conversation surfaced by a long-press / pull-down on an in-app
+    /// notification toast — presented as a reusable `ConversationView` preview
+    /// (last messages + simple composer) over the current page.
+    @State private var notificationPreviewConversation: Conversation?
+    /// Suppresses the toast `Button`'s tap action that can fire on release right
+    /// after a long-press / drag opened the preview, preventing a double action
+    /// (preview sheet + underlying navigation).
+    @State private var suppressToastTap = false
+
     // Free-position button coordinates (persisted as "x,y" strings, 0-1 normalized)
     @AppStorage("feedButtonPosition") private var feedButtonPosition: String = "0.0,0.0"  // Top-left default
     @AppStorage("menuButtonPosition") private var menuButtonPosition: String = "1.0,0.0" // Top-right default
@@ -297,9 +306,25 @@ struct RootView: View {
             VStack {
                 if let toast = notificationManager.currentToast {
                     NotificationToastView(event: toast) {
+                        if suppressToastTap { return }
                         notificationManager.dismissToast()
                         handleSocketNotificationTap(toast)
                     }
+                    // Long press OR pull the toast down ("tirer à la main") to
+                    // open a conversation preview overlay instead of navigating.
+                    .simultaneousGesture(
+                        LongPressGesture(minimumDuration: 0.35).onEnded { _ in
+                            openNotificationPreview(for: toast)
+                        }
+                    )
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 24)
+                            .onEnded { value in
+                                if value.translation.height > 36 {
+                                    openNotificationPreview(for: toast)
+                                }
+                            }
+                    )
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .padding(.top, MeeshySpacing.xxl)
                 }
@@ -324,6 +349,30 @@ struct RootView: View {
         .environmentObject(conversationViewModel)
         .environmentObject(storyViewerCoordinator)
         .environmentObject(StatusBubbleController.shared)
+        // In-app notification preview: long-press / pull-down on a toast opens
+        // the conversation (last messages + simple composer) over the current
+        // page. A sheet creates a fresh environment, so the objects the reused
+        // `ConversationView` reads must be re-injected here.
+        .sheet(item: $notificationPreviewConversation) { conv in
+            ConversationView(conversation: conv, previewMode: true, onOpenFullConversation: {
+                // Leave the preview and open the real conversation with a
+                // navigation push so going back returns to the originating
+                // screen. Dismiss first, then push to avoid a present/dismiss
+                // race.
+                notificationPreviewConversation = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    router.navigateToConversation(conv)
+                }
+            })
+                .environmentObject(router)
+                .environmentObject(storyViewModel)
+                .environmentObject(statusViewModel)
+                .environmentObject(conversationViewModel)
+                .environmentObject(storyViewerCoordinator)
+                .environmentObject(StatusBubbleController.shared)
+                .presentationDetents([.large, .medium])
+                .presentationDragIndicator(.visible)
+        }
         // Propagate story viewer presentation state down to chrome (sync
         // pill, etc.) so they can skip rendering while a `fullScreenCover`
         // story is on top. Read by `ConnectionBanner` via
@@ -891,6 +940,57 @@ struct RootView: View {
 
     private func handleSocketNotificationTap(_ event: SocketNotificationEvent) {
         navigateFromNotification(NotificationNavContext(from: event))
+    }
+
+    /// Long-press / pull-down on a notification toast: open the conversation as
+    /// a preview overlay (reuses `ConversationView` with `previewMode`) instead
+    /// of navigating away. Resolves the conversation cache-first (in-memory →
+    /// GRDB → network), falling back to normal navigation when it isn't a
+    /// conversation notification or can't be resolved.
+    private func openNotificationPreview(for event: SocketNotificationEvent) {
+        guard let conversationId = event.conversationId, !conversationId.isEmpty else {
+            handleSocketNotificationTap(event)
+            return
+        }
+        // Swallow the release tap that the toast Button may emit right after the
+        // long-press / drag, then re-arm shortly after.
+        suppressToastTap = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { suppressToastTap = false }
+        HapticFeedback.medium()
+        notificationManager.dismissToast()
+
+        // Fast path: in-memory conversation list.
+        if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
+            notificationPreviewConversation = existing
+            return
+        }
+
+        // @MainActor Task: every suspension resumes on the main actor, so the
+        // @State mutations and `AuthManager.shared.currentUser` access are
+        // isolation-correct without per-call `MainActor.run` wrappers.
+        Task { @MainActor in
+            // Cache-first: GRDB conversations list.
+            let cachedList = await CacheCoordinator.shared.conversations.load(for: "list")
+            let cachedConversations: [MeeshyConversation]? = {
+                switch cachedList {
+                case .fresh(let list, _), .stale(let list, _): return list
+                case .expired, .empty: return nil
+                }
+            }()
+            if let cached = cachedConversations?.first(where: { $0.id == conversationId }) {
+                notificationPreviewConversation = cached
+                return
+            }
+
+            // Network fallback.
+            let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+            if let apiConv = try? await ConversationService.shared.getById(conversationId) {
+                notificationPreviewConversation = apiConv.toConversation(currentUserId: currentUserId)
+            } else {
+                // Could not resolve — fall back to normal navigation.
+                handleSocketNotificationTap(event)
+            }
+        }
     }
 
     func handlePushNotificationTap(_ payload: NotificationPayload) {

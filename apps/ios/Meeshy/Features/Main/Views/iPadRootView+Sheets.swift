@@ -48,6 +48,27 @@ extension iPadRootView {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
+            // Notification preview: long-press / pull-down on a toast opens the
+            // conversation (last messages + simple composer) as a sheet. A tap
+            // anywhere over the messages opens the full conversation in the
+            // right column. A sheet creates a fresh environment, so the objects
+            // the reused `ConversationView` reads must be re-injected.
+            .sheet(item: $notificationPreviewConversation) { conv in
+                ConversationView(conversation: conv, previewMode: true, onOpenFullConversation: {
+                    notificationPreviewConversation = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        openConversation(conv)
+                    }
+                })
+                .environmentObject(router)
+                .environmentObject(storyViewModel)
+                .environmentObject(statusViewModel)
+                .environmentObject(conversationViewModel)
+                .environmentObject(storyViewerCoordinator)
+                .environmentObject(StatusBubbleController.shared)
+                .presentationDetents([.large, .medium])
+                .presentationDragIndicator(.visible)
+            }
             .fullScreenCover(isPresented: $showStoryViewerFromConv) {
                 StoryViewerContainer(
                     viewModel: storyViewModel,

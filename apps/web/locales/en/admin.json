@@ -287,6 +287,16 @@
         "abondant": "Abundant",
         "jamais": "Never"
       }
+    },
+    "userPicker": {
+      "searchPlaceholder": "Search for a user...",
+      "noneSelected": "No user selected",
+      "remove": "Remove",
+      "addUser": "Add user",
+      "searching": "Searching...",
+      "added": "Added",
+      "noResults": "No user found",
+      "minChars": "Enter at least 2 characters"
     }
   },
   "agentLive": {
