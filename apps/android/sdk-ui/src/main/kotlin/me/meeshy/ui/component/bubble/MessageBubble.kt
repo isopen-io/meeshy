@@ -55,6 +55,7 @@ public fun MessageBubble(
     outgoingColor: Color = MeeshyPalette.Indigo500,
     onLongPress: (() -> Unit)? = null,
     onReactionClick: ((String) -> Unit)? = null,
+    onImageClick: ((Int) -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -96,6 +97,7 @@ public fun MessageBubble(
             if (!content.isDeleted && content.images.isNotEmpty()) {
                 BubbleImageGrid(
                     images = content.images,
+                    onImageClick = onImageClick,
                     modifier = Modifier.padding(bottom = MeeshySpacing.xs),
                 )
             }
@@ -176,6 +178,7 @@ private const val MAX_GRID_IMAGES = 4
 @Composable
 private fun BubbleImageGrid(
     images: List<BubbleImage>,
+    onImageClick: ((Int) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(MeeshyRadius.md)
@@ -191,7 +194,11 @@ private fun BubbleImageGrid(
                     .width(252.dp)
                     .aspectRatio(ratio)
                     .clip(shape)
-                    .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f)),
+                    .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
+                    .let { base ->
+                        if (onImageClick == null) base
+                        else base.clickable { onImageClick(0) }
+                    },
             )
         }
         else -> {
@@ -204,14 +211,18 @@ private fun BubbleImageGrid(
                 visible.chunked(2).forEachIndexed { rowIndex, row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
                         row.forEachIndexed { columnIndex, image ->
+                            val imageIndex = rowIndex * 2 + columnIndex
                             val isLastCell =
-                                hiddenCount > 0 &&
-                                    rowIndex * 2 + columnIndex == visible.lastIndex
+                                hiddenCount > 0 && imageIndex == visible.lastIndex
                             Box(
                                 modifier = Modifier
                                     .size(124.dp)
                                     .clip(shape)
-                                    .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f)),
+                                    .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
+                                    .let { base ->
+                                        if (onImageClick == null) base
+                                        else base.clickable { onImageClick(imageIndex) }
+                                    },
                             ) {
                                 AsyncImage(
                                     model = image.thumbnailUrl ?: image.url,

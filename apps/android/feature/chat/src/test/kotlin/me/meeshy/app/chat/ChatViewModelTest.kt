@@ -321,6 +321,18 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun tapping_an_image_opens_the_viewer_and_dismissing_clears_it() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.openImageViewer("m2", 1)
+        assertThat(h.vm.state.value.imageViewer).isEqualTo(ImageViewerTarget("m2", 1))
+
+        h.vm.dismissImageViewer()
+        assertThat(h.vm.state.value.imageViewer).isNull()
+    }
+
+    @Test
     fun toggleReaction_adds_when_the_emoji_is_not_mine_yet() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
         coEvery { h.repo.toggleReactionOptimistic(any(), any(), any()) } returns true

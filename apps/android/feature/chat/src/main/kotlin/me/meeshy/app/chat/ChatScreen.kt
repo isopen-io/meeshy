@@ -68,6 +68,7 @@ import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.DeliveryStatus
 import me.meeshy.ui.component.bubble.MessageBubble
+import me.meeshy.ui.component.viewer.MeeshyImageViewer
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -186,6 +187,9 @@ fun ChatScreen(
                                 onReactionClick = { emoji ->
                                     viewModel.toggleReaction(bubble.messageId, emoji)
                                 },
+                                onImageClick = { index ->
+                                    viewModel.openImageViewer(bubble.messageId, index)
+                                },
                             )
                             if (bubble.deliveryStatus == DeliveryStatus.Failed) {
                                 Text(
@@ -205,6 +209,19 @@ fun ChatScreen(
                 }
             }
         }
+    }
+
+    val viewerTarget = state.imageViewer?.let { target ->
+        state.messages.firstOrNull { it.messageId == target.messageId }
+            ?.takeIf { it.images.isNotEmpty() }
+            ?.let { bubble -> bubble.images.map { it.url } to target.imageIndex }
+    }
+    if (viewerTarget != null) {
+        MeeshyImageViewer(
+            imageUrls = viewerTarget.first,
+            initialIndex = viewerTarget.second,
+            onDismiss = viewModel::dismissImageViewer,
+        )
     }
 
     val actionTarget = state.actionMessageId?.let { id ->

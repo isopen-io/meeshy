@@ -33,6 +33,11 @@ import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.BubbleContentBuilder
 import javax.inject.Inject
 
+data class ImageViewerTarget(
+    val messageId: String,
+    val imageIndex: Int,
+)
+
 data class ChatUiState(
     val messages: List<BubbleContent> = emptyList(),
     val draft: String = "",
@@ -48,6 +53,7 @@ data class ChatUiState(
     val ownReactions: Map<String, Set<String>> = emptyMap(),
     val isLoadingOlder: Boolean = false,
     val hasMoreOlder: Boolean = true,
+    val imageViewer: ImageViewerTarget? = null,
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
     val isEditing: Boolean get() = editingMessageId != null
@@ -248,6 +254,14 @@ class ChatViewModel @Inject constructor(
 
     fun dismissMessageActions() {
         _state.update { it.copy(actionMessageId = null) }
+    }
+
+    fun openImageViewer(messageId: String, imageIndex: Int) {
+        _state.update { it.copy(imageViewer = ImageViewerTarget(messageId, imageIndex)) }
+    }
+
+    fun dismissImageViewer() {
+        _state.update { it.copy(imageViewer = null) }
     }
 
     fun toggleShowOriginal(messageId: String) {

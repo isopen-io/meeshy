@@ -444,7 +444,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Full-screen image editor (crop + ratio presets, 12 filters, brightness/contrast/saturation/
       sharpness/vignette, 6 effects, rotate)
 - [ ] Image/video preview screens per context (story/post/message/avatar/banner) with Edit + Use
-- [ ] Image viewer (pinch-zoom, pan, double-tap, drag-to-dismiss); save image to gallery
+- [~] Image viewer — `MeeshyImageViewer` plein écran (pager multi-images, pinch-zoom
+      borné 1–4×, pan clampé, double-tap 2.5×, tap-to-dismiss, compteur i/n),
+      ouvert au tap sur la grille d'images d'une bulle ; drag-to-dismiss +
+      save-to-gallery pending
 - [ ] Code attachment viewer (~16 languages, syntax highlight, GitHub light/dark, copy)
 - [ ] Document viewer (PDF/presentation/spreadsheet) with share
 - [ ] Image/video compression before upload (context-aware quality); save media to "Meeshy" album
