@@ -833,9 +833,14 @@ extension StoryViewerView {
         }
 
         let uniqueURLs = Array(Set(urls))
-        return Task {
+        let task = Task {
             let imageStore = await CacheCoordinator.shared.images
             for urlString in uniqueURLs {
+                // Annulé par l'onDisappear du viewer : sans ce check, les
+                // téléchargements + prerolls AVPlayer continuaient après la
+                // fermeture (borné par le cache FIFO de 6 players, mais
+                // réseau/CPU gaspillés pour un viewer mort).
+                guard !Task.isCancelled else { return }
                 let mediaType = story.media.first(where: { $0.url == urlString })?.type
                 if mediaType == .video || mediaType == .audio {
                     // Video/Audio: download data to disk cache + preroll player
@@ -848,6 +853,7 @@ extension StoryViewerView {
                     _ = await imageStore.image(for: urlString)
                 }
             }
+            guard !Task.isCancelled else { return }
             // Pre-probe foreground video audio tracks so `storyHasAudibleSound`
             // resolves to its final value before the slide is rendered —
             // without this, the sound button « apparait après quelques 100 ms »
@@ -858,6 +864,8 @@ extension StoryViewerView {
             // private resolveVideoURL helpers directly.
             await self.preProbeVideoAudio(for: story)
         }
+        prefetchTasks.append(task)
+        return task
     }
 
     /// Précharge la story à l'index donné dans le groupe actuel.

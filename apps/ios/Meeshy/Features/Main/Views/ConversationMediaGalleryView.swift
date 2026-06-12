@@ -175,6 +175,12 @@ struct ConversationMediaGalleryView: View {
                 if abs(value.translation.height) > 150 {
                     if videoManager.isPlaying && videoManager.activeURL == attachment.fileUrl {
                         videoManager.startPip()
+                    } else if videoManager.activeURL == attachment.fileUrl {
+                        // Vidéo EN PAUSE : pas de handoff PiP — sans cette
+                        // libération, le player partagé restait attaché
+                        // (`activeURL` posé) et la bulle en dessous rendait la
+                        // frame gelée au lieu de son thumbnail, footer masqué.
+                        videoManager.release(urlString: attachment.fileUrl)
                     }
                     dismiss()
                 } else {

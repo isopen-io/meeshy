@@ -166,17 +166,18 @@ final class EditProfileViewModel: ObservableObject {
     /// Subscribes to `OfflineQueue.outcomeStream(for: cmid)` and rolls back
     /// the optimistic mutation when the stream emits `.exhausted`.
     /// `.applied` is a no-op — the optimistic state is already correct.
-    /// Fire-and-forget Task; the stream completes after one event so the
-    /// for-await terminates and the Task ends.
+    /// ⚠️ Le corps du Task ne retient PAS `self` (capture weak, pas de guard) :
+    /// hors-ligne le stream peut ne jamais émettre, et une capture forte aurait
+    /// retenu un VM dismissé indéfiniment. Même forme que `UserProfileViewModel`.
     private func observeOutcome(cmid: String, snapshot: ProfileSnapshot) {
+        let queue = offlineQueue
         Task { @MainActor [weak self] in
-            guard let self else { return }
-            let stream = await self.offlineQueue.outcomeStream(for: cmid)
+            let stream = await queue.outcomeStream(for: cmid)
             for await event in stream {
                 if case .exhausted = event {
-                    self.authManager.restoreLocalProfileSnapshot(snapshot)
-                    self.toast.showError("Mise a jour du profil echouee")
-                    self.haptics.error()
+                    self?.authManager.restoreLocalProfileSnapshot(snapshot)
+                    self?.toast.showError("Mise a jour du profil echouee")
+                    self?.haptics.error()
                 }
             }
         }

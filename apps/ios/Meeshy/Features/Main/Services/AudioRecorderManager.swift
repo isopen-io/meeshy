@@ -12,11 +12,43 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
 
     private(set) var recordedFileURL: URL?
 
-    private var recorder: AVAudioRecorder?
-    private var timer: Timer?
+    private var recorder: AVAudioRecorder? {
+        didSet { cleanupHandle.recorder = recorder }
+    }
+    private var timer: Timer? {
+        didSet { cleanupHandle.timer = timer }
+    }
     private var levelHistory: [CGFloat] = []
     private var settings: AudioRecordingSettings = .standard
     private var onMaxDurationReached: (() -> Void)?
+
+    /// Handles thread-safe à libérer depuis le `deinit` (potentiellement
+    /// off-main) — pattern `AudioPlaybackManager.CleanupHandle`. Concerne les
+    /// instances NON partagées (ex. `AudioPostComposerView`) lâchées
+    /// mid-recording par un swipe-down de sheet : sans ce filet le Timer
+    /// 20 Hz restait au run loop, le micro actif et la session jamais rendue.
+    private final class CleanupHandle: @unchecked Sendable {
+        nonisolated(unsafe) var timer: Timer?
+        nonisolated(unsafe) var recorder: AVAudioRecorder?
+    }
+    private let cleanupHandle = CleanupHandle()
+
+    deinit {
+        cleanupHandle.timer?.invalidate()
+        // `recorder` non-nil ⟺ mort mid-recording : sémantique cancel
+        // (fichier partiel dérivé de `recorder.url`). Déporté sur une queue
+        // utility : stop/removeItem/setActive sont bloquants et ce dealloc
+        // arrive sur le main thread pendant l'animation de dismiss.
+        // `deactivatePlaybackSync` est call-aware (no-op pendant un appel).
+        guard cleanupHandle.recorder != nil else { return }
+        let handle = cleanupHandle
+        DispatchQueue.global(qos: .utility).async {
+            guard let recorder = handle.recorder else { return }
+            recorder.stop()
+            try? FileManager.default.removeItem(at: recorder.url)
+            MediaSessionCoordinator.shared.deactivatePlaybackSync()
+        }
+    }
 
     func configure(settings: AudioRecordingSettings, onMaxDurationReached: (() -> Void)? = nil) {
         self.settings = settings
@@ -58,19 +90,14 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         // deactivate it to avoid leaking the microphone indicator + battery
         // drain (previously the AVAudioRecorder init failure left the
         // session active indefinitely).
-        let fileName = "voice_\(Int(Date().timeIntervalSince1970)).m4a"
+        let fileName = "voice_\(Int(Date().timeIntervalSince1970)).\(settings.codec.fileExtension)"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
 
-        let recSettings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: settings.sampleRate,
-            AVNumberOfChannelsKey: settings.numberOfChannels,
-            AVEncoderBitRateKey: settings.bitRate,
-            AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
-        ]
-
         do {
-            recorder = try AVAudioRecorder(url: url, settings: recSettings)
+            // Dictionnaire dérivé du codec via la source unique du SDK
+            // (`AudioRecordingSettings.avRecorderSettings`) — le défaut `.aac`
+            // reproduit l'ancien dictionnaire AAC/M4A à l'identique.
+            recorder = try AVAudioRecorder(url: url, settings: settings.avRecorderSettings)
             recorder?.isMeteringEnabled = true
             recorder?.record()
             recordedFileURL = url
@@ -109,7 +136,11 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         recorder?.stop()
         isRecording = false
 
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        // Call-aware (L3) : même garde que `cancelRecording` — un stop
+        // mid-appel VoIP démontait sinon la session possédée par WebRTC.
+        if !CallManager.shared.callState.isActive {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
 
         let url = recordedFileURL
         recorder = nil
@@ -151,7 +182,13 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         recorder.updateMeters()
 
         if let maxDuration = settings.maxDuration, duration >= maxDuration {
-            onMaxDurationReached?()
+            // Sans callback, personne ne stoppe l'enregistrement au cap —
+            // aligné sur `DefaultSDKAudioRecorder` qui se stoppe lui-même.
+            if let onMaxDurationReached {
+                onMaxDurationReached()
+            } else {
+                stopRecording()
+            }
             return
         }
 

@@ -385,4 +385,11 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.conversationViewModel = conversationViewModel
         vc.applyBottomInset(bottomInset)
     }
+
+    // Filet de sécurité au démontage SwiftUI : coupe le CADisplayLink du
+    // slow-scroll (qui retient le VC) même si `viewDidDisappear` n'a pas
+    // été déclenché par le chemin de dismiss emprunté.
+    static func dismantleUIViewController(_ vc: MessageListViewController, coordinator: Coordinator) {
+        vc.stopSlowScroll()
+    }
 }

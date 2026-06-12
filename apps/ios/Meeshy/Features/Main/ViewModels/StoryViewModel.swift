@@ -1141,7 +1141,16 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         }
     }
 
+    /// Set dédié aux sinks socket (le `cancellables` partagé porte aussi le
+    /// sink de reconnexion posé à l'init) — garde d'idempotence resettable,
+    /// même idiome que `FeedViewModel.subscribeToSocketEvents`.
+    private var socketCancellables = Set<AnyCancellable>()
+
     func subscribeToSocketEvents() {
+        // Un second appel (re-run du `.task` racine) dupliquerait les 12+
+        // sinks — les handlers à delta ±1 (`applyPostReactionDelta`,
+        // `applyStoryReactionDelta`) compteraient alors double.
+        guard socketCancellables.isEmpty else { return }
         socialSocket.storyCreated
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiPost in
@@ -1170,7 +1179,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 self.sortStoryGroupsInPlace()
                 self.persistStoryCache()
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         socialSocket.storyViewed
             .receive(on: DispatchQueue.main)
@@ -1194,7 +1203,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     }
                 }
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         socialSocket.storyUpdated
             .receive(on: DispatchQueue.main)
@@ -1223,7 +1232,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 }
                 self.persistStoryCache()
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         // Prisme realtime : traductions de texte de story par text-object.
         // Le gateway diffuse `story:translation-updated` (postId + textObjectIndex
@@ -1247,7 +1256,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     return
                 }
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         socialSocket.storyDeleted
             .receive(on: DispatchQueue.main)
@@ -1269,7 +1278,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     }
                 }
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         // === Real-time counter sync (user spec 2026-05-28) ===
         // When anyone comments / reacts to a story we already have in the
@@ -1284,7 +1293,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             .sink { [weak self] data in
                 self?.applyStoryCommentCountDelta(postId: data.postId, newCount: data.commentCount)
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         socialSocket.commentDeleted
             .receive(on: DispatchQueue.main)
@@ -1294,7 +1303,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 // et asymétrique avec commentAdded (qui utilise déjà data.commentCount).
                 self?.applyStoryCommentCountDelta(postId: data.postId, newCount: data.commentCount)
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         socialSocket.postReactionSync
             .receive(on: DispatchQueue.main)
@@ -1305,7 +1314,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     item.currentUserReactions = sync.userReactions
                 }
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         // Optimistic deltas — the SDK ack already mutates the post, but
         // peers don't get a sync event; the *-added/*-removed broadcast is
@@ -1316,14 +1325,14 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             .sink { [weak self] event in
                 self?.applyPostReactionDelta(event: event, delta: +1)
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         socialSocket.postReactionRemoved
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 self?.applyPostReactionDelta(event: event, delta: -1)
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         // Realtime story reactions : le gateway émet `story:reacted`/`story:unreacted`
         // À LA STORY ROOM (viewers) — fan-out distinct des events POST (cf.
@@ -1336,7 +1345,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 self?.applyStoryReactionDelta(storyId: event.storyId, userId: event.userId,
                                               emoji: event.emoji, delta: +1)
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         socialSocket.storyUnreacted
             .receive(on: DispatchQueue.main)
@@ -1344,7 +1353,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 self?.applyStoryReactionDelta(storyId: event.storyId, userId: event.userId,
                                               emoji: event.emoji, delta: -1)
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
     }
 
     /// Apply an authoritative `commentCount` snapshot to the matching story.

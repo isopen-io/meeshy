@@ -13,12 +13,48 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
 
     public private(set) var recordedFileURL: URL?
 
-    private var recorder: AVAudioRecorder?
-    private var timer: Timer?
+    private var recorder: AVAudioRecorder? {
+        didSet { cleanupHandle.recorder = recorder }
+    }
+    private var timer: Timer? {
+        didSet { cleanupHandle.timer = timer }
+    }
     private var levelHistory: [CGFloat] = []
     internal var settings: AudioRecordingSettings = .standard
 
+    /// Handles thread-safe à libérer depuis le `deinit` (potentiellement
+    /// off-main) — même pattern que `AudioPlaybackManager.CleanupHandle`.
+    /// Synchronisés avec les props @MainActor via leurs `didSet`. Sans ce
+    /// filet, un recorder lâché sans stop/cancel (sheet swipée mid-recording,
+    /// instance `@ObservedObject` remplacée par une ré-évaluation du parent)
+    /// laissait un Timer 20 Hz au run loop pour toujours, le micro actif et
+    /// la session audio jamais rendue. `@unchecked Sendable` : champs mutés
+    /// uniquement depuis MainActor, lus une fois par le deinit/cleanup.
+    private final class CleanupHandle: @unchecked Sendable {
+        nonisolated(unsafe) var timer: Timer?
+        nonisolated(unsafe) var recorder: AVAudioRecorder?
+    }
+    private let cleanupHandle = CleanupHandle()
+
     public init() {}
+
+    deinit {
+        cleanupHandle.timer?.invalidate()
+        // `recorder` non-nil ⟺ mort mid-recording (stop/cancel posent nil) :
+        // sémantique cancel — micro stoppé, fichier partiel jeté (dérivé de
+        // `recorder.url`), session rendue (call-aware). Déporté sur une queue
+        // utility : stop (finalisation fichier) + removeItem + setActive sont
+        // bloquants, et ce dealloc arrive typiquement sur le main thread
+        // pendant l'animation de dismiss de la sheet.
+        guard cleanupHandle.recorder != nil else { return }
+        let handle = cleanupHandle
+        DispatchQueue.global(qos: .utility).async {
+            guard let recorder = handle.recorder else { return }
+            recorder.stop()
+            try? FileManager.default.removeItem(at: recorder.url)
+            MediaSessionCoordinator.shared.deactivatePlaybackSync()
+        }
+    }
 
     public func configure(with settings: AudioRecordingSettings) {
         self.settings = settings
@@ -64,7 +100,10 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
         recorder?.stop()
         isRecording = false
 
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        // Call-aware (L3) : un `setActive(false)` direct pendant un appel VoIP
+        // démontait la session possédée par RTCAudioSession. Le coordinator
+        // no-op dans ce cas.
+        MediaSessionCoordinator.shared.deactivatePlaybackSync()
 
         let url = recordedFileURL
         recorder = nil
@@ -84,6 +123,10 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
         recorder = nil
         duration = 0
         audioLevels = Array(repeating: 0, count: 15)
+        // Symétrique de stopRecording : sans cette désactivation, un cancel
+        // explicite (X, onDisappear) laissait la session `.playAndRecord`
+        // active — micro indiqué, audio des autres apps interrompu.
+        MediaSessionCoordinator.shared.deactivatePlaybackSync()
     }
 
     private func updateMetering() {

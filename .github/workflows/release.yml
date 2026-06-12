@@ -282,7 +282,10 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          # ignore-error=true : l'export du cache GHA est best-effort — un
+          # blob évincé/404 mid-upload ne doit pas faire échouer un build
+          # dont l'image est déjà poussée (cf. docker.yml, incident 2026-06-12).
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }},ignore-error=true
           provenance: true
           sbom: true
           build-args: |

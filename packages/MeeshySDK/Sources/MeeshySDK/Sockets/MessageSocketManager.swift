@@ -2511,6 +2511,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket.on("call:ended") { [weak self] data, _ in
             guard let self else { return }
             self.decode(CallEndData.self, from: data) { [weak self] event in
+                // Le replay (matché par callId) est inerte une fois l'appel
+                // fini ; on libère quand même l'événement bufferisé pour ne
+                // pas retenir le dernier payload participant à vie.
+                self?.lastCallParticipantJoined = nil
                 self?.callEnded.send(event)
             }
         }

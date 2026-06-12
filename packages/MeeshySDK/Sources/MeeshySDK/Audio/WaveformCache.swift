@@ -18,7 +18,11 @@ public actor WaveformCache {
     }
 
     private let cacheDirectory: URL
-    private var memoryCache: [String: [Float]] = [:]
+    // Borné (éviction FIFO) : le dictionnaire nu accumulait une entrée par
+    // clé pour toute la vie du process — petites valeurs (~320 B) mais sans
+    // aucune éviction hors `clearMemoryCache()` manuel. Le disque reste la
+    // couche durable ; une éviction mémoire ne coûte qu'une relecture L2.
+    private var memoryCache = BoundedFIFOMap<String, [Float]>(capacity: 300)
 
     // MARK: - Public API
 

@@ -80,6 +80,11 @@ public struct MeeshyAudioEditorView: View {
         .onDisappear {
             teardownPlayer()
             deactivateAudioSession()
+            // Cover retiré par l'état du parent (pas via Annuler/Confirmer) :
+            // sans cette annulation, une reconnaissance EdgeTranscription ou
+            // un export AudioEditEngine en vol tournait jusqu'au bout pour un
+            // éditeur mort (speech recognizer retenu, travail gaspillé).
+            controller.cancelBackgroundWork()
         }
         .statusBarHidden()
     }

@@ -506,7 +506,15 @@ public actor OfflineQueue {
     /// Per-`cmid` outcome subscribers (AsyncStream continuations). A single
     /// cmid may have multiple observers (e.g. one ViewModel + one banner) ;
     /// each receives the same terminal event before the stream finishes.
-    private var outcomeContinuations: [String: [AsyncStream<OutboxOutcome>.Continuation]] = [:]
+    /// Keyed par token de souscription : un consommateur annulé ne retire
+    /// QUE sa propre continuation — l'ancien `[String: [Continuation]]`
+    /// droppait tout le slot, orphelinant les autres observateurs (await
+    /// éternel + rétention de leur Task/ViewModel).
+    private var outcomeContinuations: [String: [UUID: AsyncStream<OutboxOutcome>.Continuation]] = [:]
+    /// Tombstones des outcomes déjà publiés (cap FIFO) : un abonné tardif
+    /// reçoit l'outcome immédiatement au lieu d'attendre pour toujours un
+    /// `publishOutcome` qui ne reviendra pas.
+    private var outcomeTombstones = BoundedFIFOMap<String, OutboxOutcome>(capacity: 200)
 
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
@@ -549,16 +557,24 @@ public actor OfflineQueue {
     /// the given `cmid` (clientMessageId or clientMutationId) — exactly one
     /// `.applied` or `.exhausted` event, then the stream completes.
     ///
-    /// Callers that subscribe AFTER the outcome has already fired receive an
-    /// empty stream that terminates immediately. The expected lifecycle is :
-    /// subscribe BEFORE issuing the mutation, then `await` the next iterator
-    /// element to observe completion.
+    /// Callers that subscribe AFTER the outcome has already fired receive
+    /// that outcome immediately from the tombstone map (bounded FIFO), then
+    /// the stream completes. The expected lifecycle is : subscribe BEFORE
+    /// issuing the mutation, then `await` the next iterator element to
+    /// observe completion.
     public func outcomeStream(for cmid: String) -> AsyncStream<OutboxOutcome> {
-        AsyncStream { continuation in
-            self.outcomeContinuations[cmid, default: []].append(continuation)
+        if let fired = outcomeTombstones[cmid] {
+            return AsyncStream { continuation in
+                continuation.yield(fired)
+                continuation.finish()
+            }
+        }
+        let token = UUID()
+        return AsyncStream { continuation in
+            self.outcomeContinuations[cmid, default: [:]][token] = continuation
             continuation.onTermination = { [weak self] _ in
                 guard let self else { return }
-                Task { await self.dropContinuation(for: cmid) }
+                Task { await self.dropContinuation(for: cmid, token: token) }
             }
         }
     }
@@ -578,20 +594,28 @@ public actor OfflineQueue {
         // ne se referme jamais une fois la file vidée.
         Task { await self.refreshPendingCount() }
 
+        outcomeTombstones[outcome.cmid] = outcome
         guard let observers = outcomeContinuations.removeValue(forKey: outcome.cmid) else {
             return
         }
-        for continuation in observers {
+        for continuation in observers.values {
             continuation.yield(outcome)
             continuation.finish()
         }
     }
 
-    /// Internal: removes a single continuation that was cancelled by its
-    /// consumer (Task cancellation, scope exit). Idempotent — if the slot was
-    /// already cleared by `publishOutcome`, this is a no-op.
-    private func dropContinuation(for cmid: String) {
-        outcomeContinuations.removeValue(forKey: cmid)
+    /// Internal: removes the single continuation identified by `token` after
+    /// its consumer cancelled (Task cancellation, scope exit). Idempotent —
+    /// if the slot was already cleared by `publishOutcome`, this is a no-op.
+    /// Surtout : ne touche PAS aux autres continuations du même cmid.
+    private func dropContinuation(for cmid: String, token: UUID) {
+        guard var slot = outcomeContinuations[cmid] else { return }
+        slot.removeValue(forKey: token)
+        if slot.isEmpty {
+            outcomeContinuations.removeValue(forKey: cmid)
+        } else {
+            outcomeContinuations[cmid] = slot
+        }
     }
 
     // MARK: - Manual Retry (Phase 4 prereq)
@@ -609,13 +633,17 @@ public actor OfflineQueue {
             throw OfflineQueueError.poolNotConfigured
         }
 
-        let exists = (try? await pool.read { db in
+        let record = (try? await pool.read { db in
             try OutboxRecord.fetchOne(db, key: outboxId)
         }) ?? nil
 
-        guard exists != nil else {
+        guard let record else {
             throw OfflineQueueError.itemNotFound
         }
+        // Le retry ré-arme la ligne avec le MÊME cmid : sans cette purge, un
+        // abonné post-retry (`outcomeStream(for:)`) recevait instantanément
+        // le tombstone `.exhausted` périmé pour une mutation encore en vol.
+        outcomeTombstones.removeValue(forKey: record.clientMessageId)
 
         let now = Date()
         do {
@@ -2217,6 +2245,9 @@ public actor OfflineQueue {
     public func clearAll() async {
         let ids = items.map { $0.id }
         items.removeAll()
+        // Wipe complet (logout, tests) : les tombstones d'une session ne
+        // doivent pas pouvoir rejouer un outcome dans la suivante.
+        outcomeTombstones.removeAll()
         guard let pool = outboxPool else {
             await refreshPendingCount()
             return

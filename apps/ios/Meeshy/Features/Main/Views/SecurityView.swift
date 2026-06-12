@@ -58,6 +58,10 @@ struct SecurityView: View {
                 scrollContent
             }
         }
+        .onDisappear {
+            resendTimer?.invalidate()
+            resendTimer = nil
+        }
         .sheet(isPresented: $showChangePassword) {
             ChangePasswordView()
         }

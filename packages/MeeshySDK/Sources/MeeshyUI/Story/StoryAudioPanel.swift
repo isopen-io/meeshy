@@ -63,7 +63,10 @@ public struct StoryAudioPanel: View {
     @State private var items: [AudioItem] = []
     @State private var isLoading = false
     @State private var previewingId: String?
-    @State private var previewPlayer: AudioPlayerManager = AudioPlayerManager()
+    // `@StateObject` (et non `@State`) : un ObservableObject en @State était
+    // ré-alloué (puis jeté) à chaque init du panel, et ses @Published
+    // (`isPlaying`) n'étaient pas observés.
+    @StateObject private var previewPlayer = AudioPlayerManager()
 
     public init(selectedAudioId: Binding<String?>, selectedAudioTitle: Binding<String?>, audioVolume: Binding<Float>, onRecordingReady: ((URL) -> Void)? = nil) {
         _selectedAudioId = selectedAudioId
@@ -84,7 +87,15 @@ public struct StoryAudioPanel: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, 16)
         .onAppear { fetchLibrary() }
-        .onDisappear { previewPlayer.stop() }
+        .onDisappear {
+            previewPlayer.stop()
+            // Panel fermé mid-preview : sans cet unmute, le canvas du composer
+            // restait muet (seul le toggle manuel le rétablissait).
+            if previewingId != nil {
+                previewingId = nil
+                NotificationCenter.default.post(name: .storyComposerUnmuteCanvas, object: nil)
+            }
+        }
     }
 
     // MARK: - Panel Header

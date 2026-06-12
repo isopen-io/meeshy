@@ -384,6 +384,9 @@ public struct StoryComposerView: View {
             publishTask?.cancel()
             publishTask = nil
             viewModel.stopMemoryObserver()
+            // Contrat StoryTimelineEngine : "owner MUST call shutdown()" —
+            // libère AVPlayer + observer périodique + AVAudioEngine du mixer.
+            viewModel.shutdownTimelineIfNeeded()
             // Do NOT cleanup temp files here — background upload may still need them.
             // Cleanup happens after upload completes in StoryViewModel.launchUploadTask.
         }

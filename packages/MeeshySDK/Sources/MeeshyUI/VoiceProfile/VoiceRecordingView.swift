@@ -9,12 +9,16 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
     let minimumDurationSeconds: Int
     let onSamplesReady: (([Data]) -> Void)?
 
-    @ObservedObject private var recorder: Recorder
+    // `@StateObject` (et non `@ObservedObject`) : tous les call sites passent
+    // par l'init de convenance qui crée le recorder inline — en observed,
+    // chaque ré-évaluation du parent remplaçait l'instance observée et
+    // orphelinait un AVAudioRecorder live (micro chaud, timer leaké).
+    @StateObject private var recorder: Recorder
     @State private var recordedSamples: [RecordedSample] = []
 
-    public init(recorder: Recorder, accentColor: String = "A855F7", minimumSamples: Int = 3,
+    public init(recorder: @autoclosure @escaping () -> Recorder, accentColor: String = "A855F7", minimumSamples: Int = 3,
                 minimumDurationSeconds: Int = 10, onSamplesReady: (([Data]) -> Void)? = nil) {
-        self.recorder = recorder
+        self._recorder = StateObject(wrappedValue: recorder())
         self.accentColor = accentColor
         self.minimumSamples = minimumSamples
         self.minimumDurationSeconds = minimumDurationSeconds
@@ -45,6 +49,13 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
             }
         }
         .padding(.horizontal, 20)
+        .onDisappear {
+            // Dismiss (X du wizard, swipe-down) pendant un enregistrement :
+            // sans ce cancel, le micro et la session audio restaient actifs.
+            if recorder.isRecording {
+                recorder.cancelRecording()
+            }
+        }
     }
 
     // MARK: - Sample Text

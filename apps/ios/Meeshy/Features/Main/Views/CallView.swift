@@ -16,7 +16,11 @@ struct CallView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
-    @StateObject private var transcriptionService = CallTranscriptionService()
+    // Instance du CallManager (et non un `@StateObject` local) : les segments
+    // distants (DataChannel) et `toggleTranscription` opèrent sur CELLE-CI —
+    // l'ancienne instance locale orpheline ne transcrivait jamais rien et
+    // était ré-allouée à chaque présentation du CallView.
+    @ObservedObject private var transcriptionService = CallManager.shared.transcriptionService
     @State private var pulseScale: CGFloat = 1.0
     @State private var showControls = true
     @State private var showTranscript = false

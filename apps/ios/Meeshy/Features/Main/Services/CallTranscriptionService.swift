@@ -245,6 +245,17 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         callsLogger.info("Call transcription stopped")
     }
 
+    /// Teardown de fin d'appel — purge INCONDITIONNELLE. Un device FOLLOWER
+    /// accumule des segments via `receiveRemoteSegment` avec
+    /// `isTranscribing == false` : le guard `if isTranscribing` de
+    /// l'appelant laissait sinon le transcript (et le rôle négocié) de
+    /// l'appel précédent visibles dans l'appel suivant.
+    func resetForCallEnd() {
+        stopTranscribing()
+        role = .undecided
+        isShowingOverlay = false
+    }
+
     // MARK: - Audio Buffer Input
 
     func appendLocalAudioBuffer(_ buffer: AVAudioPCMBuffer) {

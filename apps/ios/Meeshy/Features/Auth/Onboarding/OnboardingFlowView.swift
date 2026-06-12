@@ -74,7 +74,17 @@ struct OnboardingFlowView: View {
             )
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
-        .onAppear { setupKeyboardObserver() }
+        // `.onReceive` (auto-libéré avec l'identité de la vue) au lieu des
+        // observers block-based dont les tokens étaient jetés : ils
+        // survivaient à l'onboarding pour toute la session ET s'empilaient à
+        // chaque onAppear (re-render parent, scene phase).
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
+            guard let height = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect)?.height else { return }
+            withAnimation(.easeOut(duration: 0.25)) { keyboardHeight = height }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeOut(duration: 0.25)) { keyboardHeight = 0 }
+        }
         .adaptiveOnChange(of: authManager.isAuthenticated) { _, authenticated in
             if authenticated {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -210,27 +220,4 @@ struct OnboardingFlowView: View {
         }
     }
 
-    // MARK: - Keyboard
-
-    private func setupKeyboardObserver() {
-        NotificationCenter.default.addObserver(
-            forName: UIResponder.keyboardWillShowNotification,
-            object: nil, queue: .main
-        ) { notification in
-            let height = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect)?.height
-            Task { @MainActor in
-                if let height {
-                    withAnimation(.easeOut(duration: 0.25)) { keyboardHeight = height }
-                }
-            }
-        }
-        NotificationCenter.default.addObserver(
-            forName: UIResponder.keyboardWillHideNotification,
-            object: nil, queue: .main
-        ) { _ in
-            Task { @MainActor in
-                withAnimation(.easeOut(duration: 0.25)) { keyboardHeight = 0 }
-            }
-        }
-    }
 }

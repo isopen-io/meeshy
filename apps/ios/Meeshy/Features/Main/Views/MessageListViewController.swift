@@ -1022,7 +1022,17 @@ final class MessageListViewController: UIViewController {
     /// that the app is actively browsing through message history.
     func startSlowScrollUp() {
         guard slowScrollDisplayLink == nil else { return }
-        let link = CADisplayLink(target: self, selector: #selector(slowScrollTick))
+        // Proxy weak partagé (WeakDisplayLinkTarget) : un link `target: self`
+        // retenait le VC entier (run loop → link → VC, deinit inatteignable)
+        // quand on quittait la conversation pendant une recherche de message
+        // cité — tick 60-120 fps + paginations réseau pour un écran mort.
+        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+            guard let self else {
+                link.invalidate()
+                return
+            }
+            self.slowScrollTick(link)
+        }
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
         link.add(to: .main, forMode: .common)
         slowScrollDisplayLink = link

@@ -164,7 +164,11 @@ public final class UserPreferencesManager: ObservableObject {
 
         syncTasks.values.forEach { $0.cancel() }
         syncTasks.removeAll()
-        cancellables.removeAll()
+        // NE PAS vider `cancellables` : il ne porte QUE les abonnements
+        // process-lifetime posés une seule fois à l'init (`observeAuth` /
+        // `observeForeground`). Les vider au premier logout tuait
+        // définitivement le re-fetch des préférences au login suivant et la
+        // re-sync au retour foreground.
 
         for category in PreferenceCategory.allCases {
             UserDefaults.standard.removeObject(forKey: Self.keyPrefix + category.rawValue)

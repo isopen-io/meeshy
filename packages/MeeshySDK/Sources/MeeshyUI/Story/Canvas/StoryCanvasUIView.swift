@@ -436,13 +436,17 @@ public final class StoryCanvasUIView: UIView {
     // MARK: - Display link
 
     /// Drives `currentTime` advance during `.play` mode (preferred 60 Hz, range 60–120).
-    private var displayLink: CADisplayLink?
+    // `nonisolated(unsafe)` : invalidé par le `nonisolated deinit` (backstop
+    // pour un canvas qui reçoit `setMode` mais n'entre jamais en window —
+    // willMove/didMove ne couvrent pas ce chemin). Le link cible un
+    // `WeakDisplayLinkTarget`, donc le deinit est atteignable.
+    private nonisolated(unsafe) var displayLink: CADisplayLink?
 
     /// Always-on while in `.edit` and the view is in a window — preferred 120 Hz on
     /// ProMotion devices for buttery gesture transforms (active rendering happens
     /// inside the gesture handlers; this link's tick is a no-op for now and exists
     /// so the display server keeps the high-rate clock running while editing).
-    private var editDisplayLink: CADisplayLink?
+    private nonisolated(unsafe) var editDisplayLink: CADisplayLink?
 
     // MARK: - Inline text editing
 
@@ -621,6 +625,8 @@ public final class StoryCanvasUIView: UIView {
     nonisolated deinit {
         NotificationCenter.default.removeObserver(self)
         audioSessionEventsCancellable?.cancel()
+        displayLink?.invalidate()
+        editDisplayLink?.invalidate()
         // `shutdown()` is @MainActor-isolated and deinit is nonisolated —
         // capture the mixer and defer the call to the main actor so it
         // outlives this view's deallocation.
@@ -1920,6 +1926,28 @@ public final class StoryCanvasUIView: UIView {
         super.didMoveToWindow()
         if window != nil {
             startEditDisplayLinkIfNeeded()
+            // Ré-arme le link de lecture invalidé par `willMove(toWindow: nil)`
+            // quand le canvas revient à l'écran sans repasser par `setMode`
+            // (cover/sheet présenté au-dessus du viewer puis dismissé).
+            if mode == .play, displayLink == nil {
+                registerAsActiveAndPreemptOthers()
+                startPlayback()
+                if isPlaybackPaused {
+                    // Le canvas était long-press pausé au détachement : on
+                    // ré-arme l'horloge (sinon le resume `displayLink?.isPaused
+                    // = false` tomberait sur nil → gel définitif) mais on
+                    // préserve l'état pause — pas de vidéo/audio sous une
+                    // slide visuellement gelée.
+                    displayLink?.isPaused = true
+                    backgroundLayer.isPlaybackActive = false
+                } else {
+                    // Miroir de `setMode(.play)` : willMove a stoppé le mixer
+                    // et rendu la session — sans cette restauration le slide
+                    // rejouait en vidéo muette après le dismiss d'un cover.
+                    reconfigureAudioForPlayback()
+                    startAudioPlayback()
+                }
+            }
         } else {
             stopEditDisplayLink()
         }
@@ -2111,7 +2139,14 @@ public final class StoryCanvasUIView: UIView {
         super.willMove(toWindow: newWindow)
         guard newWindow == nil else { return }
         unregisterFromActive()
-        backgroundLayer.isPlaybackActive = false
+        // RC5 — `stopPlayback()` (pas seulement la pause des médias) : le
+        // CADisplayLink de lecture cible `self` et le RETIENT. Détaché de la
+        // fenêtre sans invalidation (swipe-to-dismiss, slide swipée), la
+        // chaîne run loop → link → canvas rendait le canvas entier immortel
+        // (deinit inatteignable : layer tree, bitmaps, ReaderAudioMixer +
+        // AVAudioEngine leakés à chaque fermeture). Ré-armé symétriquement
+        // dans `didMoveToWindow` pour le cas re-attach sans `setMode`.
+        stopPlayback()
         forEachAVPlayer { $0.pause() }
         audioMixer.stop()
         releasePlaybackSessionIfNeeded()
@@ -2143,7 +2178,15 @@ public final class StoryCanvasUIView: UIView {
 
     private func startPlayback() {
         stopPlayback()
-        let link = CADisplayLink(target: self, selector: #selector(displayLinkTick))
+        // Proxy weak partagé : le link ne retient pas le canvas — un canvas
+        // jamais fenêtré (setMode avant attach puis jeté) reste libérable.
+        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+            guard let self else {
+                link.invalidate()
+                return
+            }
+            self.displayLinkTick(link)
+        }
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 60)
         link.add(to: .main, forMode: .common)
         displayLink = link
@@ -2243,7 +2286,13 @@ public final class StoryCanvasUIView: UIView {
 
     private func startEditDisplayLinkIfNeeded() {
         guard mode == .edit, editDisplayLink == nil else { return }
-        let link = CADisplayLink(target: self, selector: #selector(editTick))
+        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+            guard let self else {
+                link.invalidate()
+                return
+            }
+            self.editTick(link)
+        }
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
         link.add(to: .main, forMode: .common)
         editDisplayLink = link

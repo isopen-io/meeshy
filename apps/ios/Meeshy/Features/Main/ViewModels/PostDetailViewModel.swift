@@ -289,16 +289,18 @@ class PostDetailViewModel: ObservableObject {
     /// Subscribes to the injected queue's `outcomeStream(for: cmid)` and runs
     /// `rollback` if the OutboxFlusher escalates the row to `.exhausted` (retry
     /// budget spent — the server permanently rejected it). `.applied` is a no-op
-    /// (the optimistic state is already final). Fire-and-forget Task; the stream
-    /// is single-shot so the for-await ends after one event.
+    /// (the optimistic state is already final).
+    /// ⚠️ Le corps du Task ne capture PAS `self` : hors-ligne le stream peut ne
+    /// jamais émettre, et un `guard let self` fort aurait retenu le VM d'un
+    /// écran fermé indéfiniment. Même forme que `UserProfileViewModel`.
     private func observeOutcome(
         cmid: String,
         rollback: @escaping @MainActor () -> Void,
         toast: String
     ) {
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            let stream = await self.offlineQueue.outcomeStream(for: cmid)
+        let queue = offlineQueue
+        Task { @MainActor in
+            let stream = await queue.outcomeStream(for: cmid)
             for await event in stream {
                 if case .exhausted = event {
                     rollback()
@@ -434,7 +436,22 @@ class PostDetailViewModel: ObservableObject {
 
     // MARK: - Socket
 
+    /// Id du post couvert par les sinks actifs. Keyer la garde sur le postId
+    /// (et non un simple Bool) garde la méthode re-ciblable : une réutilisation
+    /// du VM pour un autre post remplace les sinks au lieu de laisser les
+    /// anciens filtrer à jamais sur le premier id.
+    private var subscribedPostId: String?
+    private var socketCancellables = Set<AnyCancellable>()
+
     func subscribeToSocket(_ postId: String) {
+        // `.task` re-fire à chaque ré-apparition de l'écran alors que le
+        // `@StateObject` persiste : sans cette garde, N sinks dupliqués
+        // s'accumulaient (compteurs de réponses incrémentés N fois par
+        // événement). Set dédié — `cancellables` porte aussi le sink de
+        // préférences de langue posé à l'init.
+        guard subscribedPostId != postId else { return }
+        subscribedPostId = postId
+        socketCancellables.removeAll()
         socialSocket.commentAdded
             .receive(on: DispatchQueue.main)
             .filter { $0.postId == postId }
@@ -467,7 +484,7 @@ class PostDetailViewModel: ObservableObject {
                 }
                 self.post?.commentCount = data.commentCount
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         socialSocket.postTranslationUpdated
             .receive(on: DispatchQueue.main)
@@ -489,7 +506,7 @@ class PostDetailViewModel: ObservableObject {
                     }
                 }
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
     }
 
     // MARK: - Translation Resolution
