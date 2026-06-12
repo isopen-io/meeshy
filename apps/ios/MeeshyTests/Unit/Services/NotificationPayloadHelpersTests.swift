@@ -41,6 +41,7 @@ final class NotificationPayloadHelpersTests: XCTestCase {
         )
 
         let result = NotificationPayloadHelpers.preservedSubtitle(
+            originalSubtitle: "",
             currentSubtitle: "",
             userInfo: userInfo
         )
@@ -55,6 +56,7 @@ final class NotificationPayloadHelpersTests: XCTestCase {
         )
 
         let result = NotificationPayloadHelpers.preservedSubtitle(
+            originalSubtitle: "",
             currentSubtitle: "",
             userInfo: userInfo
         )
@@ -69,6 +71,7 @@ final class NotificationPayloadHelpersTests: XCTestCase {
         )
 
         let result = NotificationPayloadHelpers.preservedSubtitle(
+            originalSubtitle: "",
             currentSubtitle: "   ",
             userInfo: userInfo
         )
@@ -85,6 +88,7 @@ final class NotificationPayloadHelpersTests: XCTestCase {
         )
 
         let result = NotificationPayloadHelpers.preservedSubtitle(
+            originalSubtitle: "",
             currentSubtitle: "",
             userInfo: userInfo
         )
@@ -101,6 +105,7 @@ final class NotificationPayloadHelpersTests: XCTestCase {
         )
 
         let result = NotificationPayloadHelpers.preservedSubtitle(
+            originalSubtitle: "",
             currentSubtitle: "Mon groupe",
             userInfo: userInfo
         )
@@ -112,6 +117,7 @@ final class NotificationPayloadHelpersTests: XCTestCase {
         let userInfo = makeUserInfo(conversationType: "group")
 
         let result = NotificationPayloadHelpers.preservedSubtitle(
+            originalSubtitle: "",
             currentSubtitle: "",
             userInfo: userInfo
         )
@@ -126,6 +132,7 @@ final class NotificationPayloadHelpersTests: XCTestCase {
         )
 
         let result = NotificationPayloadHelpers.preservedSubtitle(
+            originalSubtitle: "",
             currentSubtitle: "",
             userInfo: userInfo
         )
@@ -137,11 +144,70 @@ final class NotificationPayloadHelpersTests: XCTestCase {
         let userInfo = makeUserInfo(conversationTitle: "Mon groupe")
 
         let result = NotificationPayloadHelpers.preservedSubtitle(
+            originalSubtitle: "",
             currentSubtitle: "",
             userInfo: userInfo
         )
 
         XCTAssertNil(result)
+    }
+
+    // MARK: - Bug A bis — original (gateway) subtitle restoration
+
+    func test_preservedSubtitle_originalSocialSubtitle_isRestoredVerbatim() {
+        // Les notifications sociales (story / post / mood / réponse à un
+        // commentaire) portent leur contexte dans le subtitle APN d'origine
+        // ("Votre story", "En réponse à « … »"). `updating(from: intent)` le
+        // détruit — il doit être restauré tel quel, sans dépendre de
+        // conversationTitle (absent pour les pushes sociaux).
+        let result = NotificationPayloadHelpers.preservedSubtitle(
+            originalSubtitle: "Votre story",
+            currentSubtitle: "",
+            userInfo: makeUserInfo()
+        )
+
+        XCTAssertEqual(result, "Votre story")
+    }
+
+    func test_preservedSubtitle_originalSubtitleWins_overConversationTitleFallback() {
+        let userInfo = makeUserInfo(
+            conversationType: "group",
+            conversationTitle: "Mon groupe"
+        )
+
+        let result = NotificationPayloadHelpers.preservedSubtitle(
+            originalSubtitle: "En réponse à « Bonne idée ! »",
+            currentSubtitle: "",
+            userInfo: userInfo
+        )
+
+        XCTAssertEqual(result, "En réponse à « Bonne idée ! »")
+    }
+
+    func test_preservedSubtitle_originalSubtitlePreservedByiOS_returnsNil() {
+        // iOS a gardé le subtitle — ne pas le réécrire.
+        let result = NotificationPayloadHelpers.preservedSubtitle(
+            originalSubtitle: "Votre story",
+            currentSubtitle: "Votre story",
+            userInfo: makeUserInfo()
+        )
+
+        XCTAssertNil(result)
+    }
+
+    func test_preservedSubtitle_whitespaceOriginalSubtitle_fallsBackToConversationTitle() {
+        let userInfo = makeUserInfo(
+            conversationType: "group",
+            conversationTitle: "Equipe Dev"
+        )
+
+        let result = NotificationPayloadHelpers.preservedSubtitle(
+            originalSubtitle: "  ",
+            currentSubtitle: "",
+            userInfo: userInfo
+        )
+
+        XCTAssertEqual(result, "Equipe Dev")
     }
 
     // MARK: - Bug B — audio body fallback

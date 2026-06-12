@@ -558,6 +558,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             // `nil` for direct conversations or when iOS happened to keep
             // the subtitle, so we never clobber a value iOS preserved.
             if let restored = NotificationPayloadHelpers.preservedSubtitle(
+                originalSubtitle: content.subtitle,
                 currentSubtitle: updatedContent.subtitle,
                 userInfo: userInfo
             ),

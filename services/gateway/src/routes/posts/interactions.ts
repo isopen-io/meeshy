@@ -590,6 +590,8 @@ export function registerInteractionRoutes(
             originalPostId: postId,
             postAuthorId: original.authorId,
             repostId: repost.id,
+            postType: (original as { type?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' }).type,
+            postPreview: (original as { content?: string | null }).content?.slice(0, 80) ?? undefined,
           }).catch(() => {});
         }
       }
