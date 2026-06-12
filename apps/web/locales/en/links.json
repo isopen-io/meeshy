@@ -362,6 +362,33 @@
         "urlRequired": "Please enter a URL",
         "invalidUrl": "Please enter a valid URL"
       }
+    },
+    "v2": {
+      "title": "My links",
+      "create": "Create",
+      "totalClicks": "Total clicks",
+      "activeLinks": "Active links",
+      "myLinks": "MY LINKS",
+      "active": "Active",
+      "inactive": "Inactive",
+      "clicksCount": "{count} clicks",
+      "copyUrl": "Copy URL",
+      "toggleOn": "Enable link",
+      "toggleOff": "Disable link",
+      "modalTitle": "Create a new link",
+      "linkName": "Link name",
+      "linkNamePlaceholder": "E.g. My profile page",
+      "generatedUrl": "Generated URL",
+      "regenerateSlug": "Regenerate slug",
+      "cancel": "Cancel",
+      "toasts": {
+        "nameRequired": "Please enter a name for the link",
+        "created": "Link created successfully",
+        "urlCopied": "URL copied to clipboard",
+        "copyError": "Failed to copy the URL",
+        "deactivated": "Link disabled",
+        "activated": "Link enabled"
+      }
     }
   }
 }

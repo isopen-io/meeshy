@@ -81,8 +81,61 @@
       "loadingGroupError": "Error loading community",
       "connectionError": "Connection error while loading community",
       "copyError": "Error copying"
+    },
+    "v2": {
+      "title": "Communities",
+      "create": "Create",
+      "myCommunities": "MY COMMUNITIES",
+      "discover": "DISCOVER",
+      "searchPlaceholder": "Search communities...",
+      "member": "Member",
+      "private": "Private",
+      "membersCount": "{count} members",
+      "conversationsCount": "{count} conversations",
+      "leave": "Leave",
+      "join": "Join",
+      "emptyMine": "You haven't joined any community yet",
+      "searchMinChars": "Type at least 2 characters to search",
+      "noResults": "No community found",
+      "createTitle": "Create a community",
+      "nameLabel": "Community name",
+      "namePlaceholder": "E.g. French Learners",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Describe your community...",
+      "cancel": "Cancel",
+      "creating": "Creating...",
+      "back": "Back",
+      "backToCommunities": "Back to communities",
+      "notFound": "Community not found",
+      "createdOn": "Created on {date}",
+      "leaveCommunity": "Leave the community",
+      "joinCommunity": "Join the community",
+      "preferencesTitle": "PREFERENCES",
+      "membersTitle": "MEMBERS",
+      "conversationsTitle": "CONVERSATIONS",
+      "noMembers": "No members",
+      "moreMembers": "+{count} more members",
+      "noConversations": "No conversations in this community",
+      "untitled": "Untitled",
+      "unknownUser": "Unknown",
+      "toasts": {
+        "nameRequired": "Community name is required",
+        "created": "Community \"{name}\" created successfully",
+        "createError": "Creation failed",
+        "joined": "You joined \"{name}\"",
+        "left": "You left \"{name}\"",
+        "actionError": "Something went wrong"
+      },
+      "preferences": {
+        "pin": "Pin",
+        "mute": "Mute",
+        "archive": "Archive",
+        "notifications": "Notifications",
+        "notifAll": "All",
+        "notifMentions": "Mentions",
+        "notifNone": "None",
+        "updateError": "Update failed"
+      }
     }
   }
 }
-
-

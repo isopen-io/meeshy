@@ -24,6 +24,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.contacts.R
 
+private val ContactsTab.labelRes: Int
+    get() = when (this) {
+        ContactsTab.Contacts -> R.string.contacts_tab_contacts
+        ContactsTab.Requests -> R.string.contacts_tab_requests
+        ContactsTab.Discover -> R.string.contacts_tab_discover
+        ContactsTab.Blocked -> R.string.contacts_tab_blocked
+    }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactsScreen(
@@ -59,7 +67,7 @@ fun ContactsScreen(
                     Tab(
                         selected = index == selectedIndex,
                         onClick = { viewModel.selectTab(tab) },
-                        text = { Text(tab.name) },
+                        text = { Text(stringResource(tab.labelRes)) },
                     )
                 }
             }

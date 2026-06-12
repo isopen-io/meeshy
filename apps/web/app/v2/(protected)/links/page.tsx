@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button, Card, Badge, Input, Tooltip, theme, useToast, PageHeader } from '@/components/v2';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface LinkItem {
   id: number;
@@ -29,6 +30,7 @@ function generateSlug(): string {
 
 export default function V2LinksPage() {
   const { addToast } = useToast();
+  const { t, locale } = useI18n('links');
   const [links, setLinks] = useState<LinkItem[]>(initialLinks);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newLinkName, setNewLinkName] = useState('');
@@ -36,7 +38,7 @@ export default function V2LinksPage() {
 
   const handleCreateLink = () => {
     if (!newLinkName.trim()) {
-      addToast('Veuillez entrer un nom pour le lien', 'error');
+      addToast(t('v2.toasts.nameRequired'), 'error');
       return;
     }
 
@@ -45,7 +47,7 @@ export default function V2LinksPage() {
       name: newLinkName.trim(),
       url: `meeshy.me/l/${generatedSlug}`,
       clicks: 0,
-      created: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }),
+      created: new Date().toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }),
       active: true,
     };
 
@@ -53,15 +55,15 @@ export default function V2LinksPage() {
     setNewLinkName('');
     setGeneratedSlug(generateSlug());
     setIsModalOpen(false);
-    addToast('Lien cree avec succes', 'success');
+    addToast(t('v2.toasts.created'), 'success');
   };
 
   const handleCopyUrl = async (url: string) => {
     try {
       await navigator.clipboard.writeText(`https://${url}`);
-      addToast('URL copiee dans le presse-papier', 'success');
+      addToast(t('v2.toasts.urlCopied'), 'success');
     } catch {
-      addToast('Erreur lors de la copie', 'error');
+      addToast(t('v2.toasts.copyError'), 'error');
     }
   };
 
@@ -73,7 +75,7 @@ export default function V2LinksPage() {
     );
     const link = links.find((l) => l.id === id);
     if (link) {
-      addToast(link.active ? 'Lien desactive' : 'Lien active', 'info');
+      addToast(link.active ? t('v2.toasts.deactivated') : t('v2.toasts.activated'), 'info');
     }
   };
 
@@ -83,13 +85,13 @@ export default function V2LinksPage() {
   return (
     <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors duration-300">
       <PageHeader
-        title="Mes liens"
+        title={t('v2.title')}
         actionButtons={
           <Button variant="primary" size="sm" onClick={() => setIsModalOpen(true)}>
-            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Creer
+            {t('v2.create')}
           </Button>
         }
       />
@@ -99,17 +101,17 @@ export default function V2LinksPage() {
         <div className="grid grid-cols-2 gap-4 mb-8">
           <Card variant="gradient" hover={false} className="p-4 text-center">
             <p className="text-3xl font-bold text-[var(--gp-terracotta)]">{totalClicks}</p>
-            <p className="text-sm text-[var(--gp-text-secondary)]">Clics totaux</p>
+            <p className="text-sm text-[var(--gp-text-secondary)]">{t('v2.totalClicks')}</p>
           </Card>
           <Card variant="gradient" hover={false} className="p-4 text-center">
             <p className="text-3xl font-bold text-[var(--gp-deep-teal)]">{activeLinksCount}</p>
-            <p className="text-sm text-[var(--gp-text-secondary)]">Liens actifs</p>
+            <p className="text-sm text-[var(--gp-text-secondary)]">{t('v2.activeLinks')}</p>
           </Card>
         </div>
 
         {/* Links */}
         <section>
-          <h2 className="text-sm font-semibold mb-4 px-1 text-[var(--gp-text-muted)]">MES LIENS</h2>
+          <h2 className="text-sm font-semibold mb-4 px-1 text-[var(--gp-text-muted)]">{t('v2.myLinks')}</h2>
           <div className="space-y-4">
             {links.map((link) => (
               <Card key={link.id} variant="outlined" hover className="p-4">
@@ -118,9 +120,9 @@ export default function V2LinksPage() {
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-semibold text-[var(--gp-text-primary)]">{link.name}</h3>
                       {link.active ? (
-                        <Badge variant="success" size="sm">Actif</Badge>
+                        <Badge variant="success" size="sm">{t('v2.active')}</Badge>
                       ) : (
-                        <Badge variant="default" size="sm">Inactif</Badge>
+                        <Badge variant="default" size="sm">{t('v2.inactive')}</Badge>
                       )}
                     </div>
                     <p className="text-sm font-mono text-[var(--gp-deep-teal)]">{link.url}</p>
@@ -133,7 +135,7 @@ export default function V2LinksPage() {
                       style={{
                         backgroundColor: link.active ? 'var(--gp-jade-green)' : 'var(--gp-parchment)',
                       }}
-                      aria-label={link.active ? 'Desactiver le lien' : 'Activer le lien'}
+                      aria-label={link.active ? t('v2.toggleOff') : t('v2.toggleOn')}
                     >
                       <span
                         className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
@@ -143,8 +145,8 @@ export default function V2LinksPage() {
                       />
                     </button>
                     {/* Copy button */}
-                    <Button variant="ghost" size="sm" onClick={() => handleCopyUrl(link.url)}>
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <Button variant="ghost" size="sm" onClick={() => handleCopyUrl(link.url)} aria-label={t('v2.copyUrl')}>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                       </svg>
                     </Button>
@@ -152,14 +154,14 @@ export default function V2LinksPage() {
                 </div>
                 <div className="flex items-center gap-6 text-sm text-[var(--gp-text-muted)]">
                   <span className="flex items-center gap-1">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
-                    {link.clicks} clics
+                    {t('v2.clicksCount', { count: link.clicks })}
                   </span>
                   <span className="flex items-center gap-1">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                     {link.created}
@@ -185,18 +187,18 @@ export default function V2LinksPage() {
               className="text-xl font-semibold mb-6 text-[var(--gp-text-primary)]"
               style={{ fontFamily: theme.fonts.display }}
             >
-              Creer un nouveau lien
+              {t('v2.modalTitle')}
             </h2>
 
             <div className="space-y-4">
               {/* Link name input */}
               <div>
                 <label className="block text-sm font-medium mb-2 text-[var(--gp-text-secondary)]">
-                  Nom du lien
+                  {t('v2.linkName')}
                 </label>
                 <Input
                   type="text"
-                  placeholder="Ex: Ma page de profil"
+                  placeholder={t('v2.linkNamePlaceholder')}
                   value={newLinkName}
                   onChange={(e) => setNewLinkName(e.target.value)}
                   autoFocus
@@ -206,18 +208,19 @@ export default function V2LinksPage() {
               {/* Generated URL preview */}
               <div>
                 <label className="block text-sm font-medium mb-2 text-[var(--gp-text-secondary)]">
-                  URL generee
+                  {t('v2.generatedUrl')}
                 </label>
                 <div className="flex items-center gap-2 p-3 rounded-xl border bg-[var(--gp-parchment)] border-[var(--gp-border)]">
                   <span className="text-sm font-mono text-[var(--gp-deep-teal)]">
                     meeshy.me/l/{generatedSlug}
                   </span>
-                  <Tooltip content="Regenerer le slug">
+                  <Tooltip content={t('v2.regenerateSlug')}>
                     <button
                       onClick={() => setGeneratedSlug(generateSlug())}
                       className="ml-auto p-1 rounded hover:bg-[var(--gp-hover)] transition-colors text-[var(--gp-text-muted)]"
+                      aria-label={t('v2.regenerateSlug')}
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
                     </button>
@@ -236,14 +239,14 @@ export default function V2LinksPage() {
                   setNewLinkName('');
                 }}
               >
-                Annuler
+                {t('v2.cancel')}
               </Button>
               <Button
                 variant="primary"
                 className="flex-1"
                 onClick={handleCreateLink}
               >
-                Creer
+                {t('v2.create')}
               </Button>
             </div>
           </div>

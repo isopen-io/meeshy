@@ -362,6 +362,33 @@
         "urlRequired": "Por favor ingrese una URL",
         "invalidUrl": "Por favor ingrese una URL válida"
       }
+    },
+    "v2": {
+      "title": "Mis enlaces",
+      "create": "Crear",
+      "totalClicks": "Clics totales",
+      "activeLinks": "Enlaces activos",
+      "myLinks": "MIS ENLACES",
+      "active": "Activo",
+      "inactive": "Inactivo",
+      "clicksCount": "{count} clics",
+      "copyUrl": "Copiar URL",
+      "toggleOn": "Activar enlace",
+      "toggleOff": "Desactivar enlace",
+      "modalTitle": "Crear un nuevo enlace",
+      "linkName": "Nombre del enlace",
+      "linkNamePlaceholder": "Ej.: Mi página de perfil",
+      "generatedUrl": "URL generada",
+      "regenerateSlug": "Regenerar el slug",
+      "cancel": "Cancelar",
+      "toasts": {
+        "nameRequired": "Introduce un nombre para el enlace",
+        "created": "Enlace creado con éxito",
+        "urlCopied": "URL copiada al portapapeles",
+        "copyError": "Error al copiar la URL",
+        "deactivated": "Enlace desactivado",
+        "activated": "Enlace activado"
+      }
     }
   }
 }

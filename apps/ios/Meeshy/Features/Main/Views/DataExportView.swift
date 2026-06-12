@@ -19,7 +19,7 @@ struct DataExportView: View {
     @State private var exportedData: Data?
     @State private var showShareSheet = false
 
-    private let accentColor = "3498DB"
+    private let accentColor = MeeshyColors.infoHex
     private let exportService: DataExportServiceProviding
 
     init(exportService: DataExportServiceProviding = DataExportService.shared) {
@@ -182,19 +182,19 @@ struct DataExportView: View {
 
     private var optionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(title: String(localized: "settings.data.export.section.content", defaultValue: "CONTENU", bundle: .main), icon: "checklist", color: "F8B500")
+            sectionHeader(title: String(localized: "settings.data.export.section.content", defaultValue: "CONTENU", bundle: .main), icon: "checklist", color: MeeshyColors.warningHex)
 
             VStack(spacing: 0) {
-                toggleRow(title: String(localized: "settings.data.export.content.messages", defaultValue: "Messages", bundle: .main), icon: "bubble.left.fill", color: "FF6B6B", isOn: $includeMessages)
-                toggleRow(title: String(localized: "settings.data.export.content.media", defaultValue: "Media", bundle: .main), icon: "photo.fill", color: "9B59B6", isOn: $includeMedia)
-                toggleRow(title: String(localized: "settings.data.export.content.contacts", defaultValue: "Contacts", bundle: .main), icon: "person.2.fill", color: "4ECDC4", isOn: $includeContacts)
+                toggleRow(title: String(localized: "settings.data.export.content.messages", defaultValue: "Messages", bundle: .main), icon: "bubble.left.fill", color: MeeshyColors.errorHex, isOn: $includeMessages)
+                toggleRow(title: String(localized: "settings.data.export.content.media", defaultValue: "Media", bundle: .main), icon: "photo.fill", color: MeeshyColors.indigo600Hex, isOn: $includeMedia)
+                toggleRow(title: String(localized: "settings.data.export.content.contacts", defaultValue: "Contacts", bundle: .main), icon: "person.2.fill", color: MeeshyColors.indigo300Hex, isOn: $includeContacts)
             }
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(theme.surfaceGradient(tint: "F8B500"))
+                    .fill(theme.surfaceGradient(tint: MeeshyColors.warningHex))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(theme.border(tint: "F8B500"), lineWidth: 1)
+                            .stroke(theme.border(tint: MeeshyColors.warningHex), lineWidth: 1)
                     )
             )
         }
@@ -231,16 +231,16 @@ struct DataExportView: View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 14))
-                .foregroundColor(Color(hex: "FF6B6B"))
+                .foregroundColor(MeeshyColors.error)
             Text(message)
                 .font(.system(size: 13))
-                .foregroundColor(Color(hex: "FF6B6B"))
+                .foregroundColor(MeeshyColors.error)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(hex: "FF6B6B").opacity(0.1))
+                .fill(MeeshyColors.error.opacity(0.1))
         )
     }
 
@@ -271,7 +271,7 @@ struct DataExportView: View {
             .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(exportComplete ? Color(hex: "2ECC71") : Color(hex: accentColor))
+                    .fill(exportComplete ? MeeshyColors.success : Color(hex: accentColor))
             )
         }
         .disabled(isExporting || selectedFormats.isEmpty)

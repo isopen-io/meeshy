@@ -87,6 +87,7 @@ interface ConversationPreviewProps {
 }
 
 function ConversationPreview({ translationLanguageCode }: ConversationPreviewProps) {
+  const { t } = useI18n('settings');
   const [showTranslations, setShowTranslations] = useState(true);
 
   // Filter translations to show only the user's translation language
@@ -94,7 +95,7 @@ function ConversationPreview({ translationLanguageCode }: ConversationPreviewPro
     if (!translationLanguageCode || translationLanguageCode === message.languageCode) {
       return [];
     }
-    return message.translations.filter((t) => t.languageCode === translationLanguageCode);
+    return message.translations.filter((tr) => tr.languageCode === translationLanguageCode);
   };
 
   return (
@@ -102,7 +103,7 @@ function ConversationPreview({ translationLanguageCode }: ConversationPreviewPro
       {/* Preview header */}
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-[var(--gp-text-secondary)]">
-          Apercu avec vos parametres
+          {t('v2settings.previewWithSettings')}
         </p>
         <label className="flex items-center gap-2 text-xs cursor-pointer">
           <input
@@ -111,7 +112,7 @@ function ConversationPreview({ translationLanguageCode }: ConversationPreviewPro
             onChange={(e) => setShowTranslations(e.target.checked)}
             className="w-4 h-4 rounded accent-[var(--gp-terracotta)]"
           />
-          <span className="text-[var(--gp-text-muted)]">Afficher traductions</span>
+          <span className="text-[var(--gp-text-muted)]">{t('v2settings.showTranslations')}</span>
         </label>
       </div>
 
@@ -148,7 +149,7 @@ function ConversationPreview({ translationLanguageCode }: ConversationPreviewPro
         {translationLanguageCode && !['fr', 'en'].includes(translationLanguageCode) && (
           <div className="flex items-center gap-1">
             <LanguageOrb code={translationLanguageCode} size="sm" pulse={false} className="w-4 h-4 text-[8px]" />
-            <span>Votre langue</span>
+            <span>{t('v2settings.yourLanguage')}</span>
           </div>
         )}
       </div>
@@ -245,23 +246,23 @@ export default function V2SettingsPage() {
 
   const handleThemeChange = (mode: 'light' | 'dark' | 'system') => {
     setTheme(mode);
-    const themeNames = { light: 'clair', dark: 'sombre', system: 'systeme' };
-    addToast(`Theme ${themeNames[mode]} active`, 'success');
+    const themeToastKeys = { light: 'v2settings.themeLight', dark: 'v2settings.themeDark', system: 'v2settings.themeSystem' } as const;
+    addToast(t(themeToastKeys[mode]), 'success');
   };
 
   const handleNotificationChange = async (key: keyof typeof notificationSettings, value: boolean) => {
     try {
       await updateNotificationSetting(key, value);
-      addToast(value ? 'Notification activee' : 'Notification desactivee', 'success');
+      addToast(value ? t('v2settings.notificationEnabled') : t('v2settings.notificationDisabled'), 'success');
     } catch {
-      addToast('Erreur lors de la modification des notifications', 'error');
+      addToast(t('v2settings.notificationUpdateError'), 'error');
     }
   };
 
   if (isLoading) {
     return (
       <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors duration-300">
-        <PageHeader title="Mes param&egrave;tres" />
+        <PageHeader title={t('v2settings.pageTitle')} />
         <main className="max-w-2xl mx-auto px-6 py-8">
           <SettingsSkeleton />
         </main>
@@ -271,7 +272,7 @@ export default function V2SettingsPage() {
 
   return (
     <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors duration-300">
-      <PageHeader title="Mes param&egrave;tres" />
+      <PageHeader title={t('v2settings.pageTitle')} />
 
       <main className="max-w-2xl mx-auto px-6 py-8 space-y-6">
         {/* Error */}
@@ -283,7 +284,7 @@ export default function V2SettingsPage() {
 
         {/* Account */}
         <section>
-          <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)]">COMPTE</h2>
+          <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)]">{t('v2settings.accountSection')}</h2>
           <Card variant="outlined" hover={false} className="divide-y divide-[var(--gp-border)]">
             <Link href="/v2/me" className="w-full p-4 flex items-center justify-between text-left">
               <div className="flex items-center gap-3">
@@ -293,8 +294,8 @@ export default function V2SettingsPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="font-medium text-[var(--gp-text-primary)]">Profil</p>
-                  <p className="text-sm text-[var(--gp-text-secondary)]">Photo, nom, bio</p>
+                  <p className="font-medium text-[var(--gp-text-primary)]">{t('v2settings.profile')}</p>
+                  <p className="text-sm text-[var(--gp-text-secondary)]">{t('v2settings.profileSubtitle')}</p>
                 </div>
               </div>
               <svg className="w-5 h-5 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -310,12 +311,12 @@ export default function V2SettingsPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="font-medium text-[var(--gp-text-primary)]">Email</p>
+                  <p className="font-medium text-[var(--gp-text-primary)]">{t('v2settings.email')}</p>
                   <p className="text-sm text-[var(--gp-text-secondary)]">
                     {accountSettings.email}
                     {accountSettings.emailVerified && (
                       <span className="ml-2 text-xs px-2 py-0.5 rounded-full" style={{ background: 'color-mix(in srgb, var(--gp-success) 20%, transparent)', color: 'var(--gp-success)' }}>
-                        Verifie
+                        {t('v2settings.emailVerified')}
                       </span>
                     )}
                   </p>
@@ -334,8 +335,8 @@ export default function V2SettingsPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="font-medium text-[var(--gp-text-primary)]">Mot de passe</p>
-                  <p className="text-sm text-[var(--gp-text-secondary)]">Changer le mot de passe</p>
+                  <p className="font-medium text-[var(--gp-text-primary)]">{t('v2settings.password')}</p>
+                  <p className="text-sm text-[var(--gp-text-secondary)]">{t('v2settings.passwordSubtitle')}</p>
                 </div>
               </div>
               <svg className="w-5 h-5 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -347,12 +348,12 @@ export default function V2SettingsPage() {
 
         {/* Language */}
         <section>
-          <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)]">LANGUE</h2>
+          <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)]">{t('v2settings.languageSection')}</h2>
           <Card variant="outlined" hover={false} className="p-4 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-[var(--gp-text-primary)]">Langue de traduction</p>
-                <p className="text-sm text-[var(--gp-text-secondary)]">Messages traduits dans cette langue</p>
+                <p className="font-medium text-[var(--gp-text-primary)]">{t('v2settings.translationLanguage')}</p>
+                <p className="text-sm text-[var(--gp-text-secondary)]">{t('v2settings.translationLanguageSubtitle')}</p>
               </div>
               <button
                 onClick={() => {
@@ -372,8 +373,8 @@ export default function V2SettingsPage() {
 
             <div className="flex items-center justify-between pt-4 border-t border-[var(--gp-border)]">
               <div>
-                <p className="font-medium text-[var(--gp-text-primary)]">Langue de l&apos;interface</p>
-                <p className="text-sm text-[var(--gp-text-secondary)]">Langue des menus et boutons</p>
+                <p className="font-medium text-[var(--gp-text-primary)]">{t('v2settings.interfaceLanguage')}</p>
+                <p className="text-sm text-[var(--gp-text-secondary)]">{t('v2settings.interfaceLanguageSubtitle')}</p>
               </div>
               <button
                 onClick={() => {
@@ -395,7 +396,7 @@ export default function V2SettingsPage() {
 
         {/* Conversation Preview */}
         <section>
-          <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)]">APERCU DES CONVERSATIONS</h2>
+          <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)]">{t('v2settings.previewSection')}</h2>
           <Card variant="outlined" hover={false} className="p-4">
             <ConversationPreview translationLanguageCode={translationLanguage?.code} />
           </Card>
@@ -403,54 +404,54 @@ export default function V2SettingsPage() {
 
         {/* Notifications */}
         <section>
-          <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)]">NOTIFICATIONS</h2>
+          <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)]">{t('v2settings.notificationsSection')}</h2>
           <Card variant="outlined" hover={false} className="divide-y divide-[var(--gp-border)]">
             <div className="p-4 flex items-center justify-between">
               <div>
-                <p className="font-medium text-[var(--gp-text-primary)]">Messages</p>
-                <p className="text-sm text-[var(--gp-text-secondary)]">Nouveaux messages</p>
+                <p className="font-medium text-[var(--gp-text-primary)]">{t('v2settings.notifMessages')}</p>
+                <p className="text-sm text-[var(--gp-text-secondary)]">{t('v2settings.notifMessagesSubtitle')}</p>
               </div>
               <Switch
                 checked={notificationSettings.messages}
                 onCheckedChange={(v) => handleNotificationChange('messages', v)}
                 disabled={isUpdatingNotifications}
-                aria-label="Notifications messages"
+                aria-label={t('v2settings.notifMessagesAria')}
               />
             </div>
             <div className="p-4 flex items-center justify-between">
               <div>
-                <p className="font-medium text-[var(--gp-text-primary)]">Mentions</p>
-                <p className="text-sm text-[var(--gp-text-secondary)]">Quand quelqu&apos;un vous mentionne</p>
+                <p className="font-medium text-[var(--gp-text-primary)]">{t('v2settings.notifMentions')}</p>
+                <p className="text-sm text-[var(--gp-text-secondary)]">{t('v2settings.notifMentionsSubtitle')}</p>
               </div>
               <Switch
                 checked={notificationSettings.mentions}
                 onCheckedChange={(v) => handleNotificationChange('mentions', v)}
                 disabled={isUpdatingNotifications}
-                aria-label="Notifications mentions"
+                aria-label={t('v2settings.notifMentionsAria')}
               />
             </div>
             <div className="p-4 flex items-center justify-between">
               <div>
-                <p className="font-medium text-[var(--gp-text-primary)]">Communautes</p>
-                <p className="text-sm text-[var(--gp-text-secondary)]">Activite des communautes</p>
+                <p className="font-medium text-[var(--gp-text-primary)]">{t('v2settings.notifCommunities')}</p>
+                <p className="text-sm text-[var(--gp-text-secondary)]">{t('v2settings.notifCommunitiesSubtitle')}</p>
               </div>
               <Switch
                 checked={notificationSettings.communities}
                 onCheckedChange={(v) => handleNotificationChange('communities', v)}
                 disabled={isUpdatingNotifications}
-                aria-label="Notifications communautes"
+                aria-label={t('v2settings.notifCommunitiesAria')}
               />
             </div>
             <div className="p-4 flex items-center justify-between">
               <div>
-                <p className="font-medium text-[var(--gp-text-primary)]">Appels</p>
-                <p className="text-sm text-[var(--gp-text-secondary)]">Appels entrants</p>
+                <p className="font-medium text-[var(--gp-text-primary)]">{t('v2settings.notifCalls')}</p>
+                <p className="text-sm text-[var(--gp-text-secondary)]">{t('v2settings.notifCallsSubtitle')}</p>
               </div>
               <Switch
                 checked={notificationSettings.calls}
                 onCheckedChange={(v) => handleNotificationChange('calls', v)}
                 disabled={isUpdatingNotifications}
-                aria-label="Notifications appels"
+                aria-label={t('v2settings.notifCallsAria')}
               />
             </div>
           </Card>
@@ -458,9 +459,9 @@ export default function V2SettingsPage() {
 
         {/* Appearance */}
         <section>
-          <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)]">APPARENCE</h2>
+          <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)]">{t('v2settings.appearanceSection')}</h2>
           <Card variant="outlined" hover={false} className="p-4">
-            <p className="font-medium mb-3 text-[var(--gp-text-primary)]">Theme</p>
+            <p className="font-medium mb-3 text-[var(--gp-text-primary)]">{t('v2settings.theme')}</p>
             <div className="flex gap-3">
               <button
                 onClick={() => handleThemeChange('light')}
@@ -471,7 +472,7 @@ export default function V2SettingsPage() {
                 }}
               >
                 <span className="text-2xl mb-1 block">☀️</span>
-                <span className="text-sm font-medium text-[var(--gp-text-primary)]">Clair</span>
+                <span className="text-sm font-medium text-[var(--gp-text-primary)]">{t('v2settings.themeLightLabel')}</span>
               </button>
               <button
                 onClick={() => handleThemeChange('dark')}
@@ -482,7 +483,7 @@ export default function V2SettingsPage() {
                 }}
               >
                 <span className="text-2xl mb-1 block">🌙</span>
-                <span className="text-sm font-medium text-[var(--gp-text-primary)]">Sombre</span>
+                <span className="text-sm font-medium text-[var(--gp-text-primary)]">{t('v2settings.themeDarkLabel')}</span>
               </button>
               <button
                 onClick={() => handleThemeChange('system')}
@@ -493,7 +494,7 @@ export default function V2SettingsPage() {
                 }}
               >
                 <span className="text-2xl mb-1 block">💻</span>
-                <span className="text-sm font-medium text-[var(--gp-text-primary)]">Systeme</span>
+                <span className="text-sm font-medium text-[var(--gp-text-primary)]">{t('v2settings.themeSystemLabel')}</span>
               </button>
             </div>
           </Card>
@@ -501,16 +502,16 @@ export default function V2SettingsPage() {
 
         {/* Legal */}
         <section>
-          <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)]">LEGAL</h2>
+          <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)]">{t('v2settings.legalSection')}</h2>
           <Card variant="outlined" hover={false} className="divide-y divide-[var(--gp-border)]">
             <Link href="/v2/terms" className="block p-4 flex items-center justify-between">
-              <span className="font-medium text-[var(--gp-text-primary)]">Conditions d&apos;utilisation</span>
+              <span className="font-medium text-[var(--gp-text-primary)]">{t('v2settings.terms')}</span>
               <svg className="w-5 h-5 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </Link>
             <Link href="/v2/privacy-policy" className="block p-4 flex items-center justify-between">
-              <span className="font-medium text-[var(--gp-text-primary)]">Politique de confidentialite</span>
+              <span className="font-medium text-[var(--gp-text-primary)]">{t('v2settings.privacyPolicy')}</span>
               <svg className="w-5 h-5 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
@@ -534,9 +535,9 @@ export default function V2SettingsPage() {
       <Dialog open={showLanguageModal} onClose={() => setShowLanguageModal(false)} className="max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-[var(--gp-text-primary)]">
-            {languageType === 'translation' ? 'Langue de traduction' : "Langue de l'interface"}
+            {languageType === 'translation' ? t('v2settings.translationLanguage') : t('v2settings.interfaceLanguage')}
           </h2>
-          <button onClick={() => setShowLanguageModal(false)}>
+          <button onClick={() => setShowLanguageModal(false)} aria-label={t('v2settings.close')}>
             <svg className="w-6 h-6 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -561,7 +562,7 @@ export default function V2SettingsPage() {
       <Dialog open={showPasswordModal} onClose={() => setShowPasswordModal(false)}>
         <DialogBody>
           <h2 className="text-lg font-semibold mb-4 text-[var(--gp-text-primary)]">
-            Changer le mot de passe
+            {t('v2settings.passwordModalTitle')}
           </h2>
 
           {passwordError && (
@@ -572,7 +573,7 @@ export default function V2SettingsPage() {
 
           <div className="space-y-4">
             <div>
-              <Label className="mb-1">Mot de passe actuel</Label>
+              <Label className="mb-1">{t('v2settings.currentPassword')}</Label>
               <Input
                 type="password"
                 value={passwordForm.current}
@@ -580,7 +581,7 @@ export default function V2SettingsPage() {
               />
             </div>
             <div>
-              <Label className="mb-1">Nouveau mot de passe</Label>
+              <Label className="mb-1">{t('v2settings.newPassword')}</Label>
               <Input
                 type="password"
                 value={passwordForm.new}
@@ -588,7 +589,7 @@ export default function V2SettingsPage() {
               />
             </div>
             <div>
-              <Label className="mb-1">Confirmer le mot de passe</Label>
+              <Label className="mb-1">{t('v2settings.confirmPassword')}</Label>
               <Input
                 type="password"
                 value={passwordForm.confirm}
@@ -599,7 +600,7 @@ export default function V2SettingsPage() {
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" className="flex-1" onClick={() => setShowPasswordModal(false)}>
-            Annuler
+            {t('v2settings.cancel')}
           </Button>
           <Button
             variant="primary"
@@ -607,7 +608,7 @@ export default function V2SettingsPage() {
             onClick={handlePasswordSubmit}
             isLoading={isUpdating}
           >
-            Enregistrer
+            {t('v2settings.save')}
           </Button>
         </DialogFooter>
       </Dialog>
@@ -627,7 +628,7 @@ export default function V2SettingsPage() {
             {t('v2settings.deleteAccountTitle')}
           </h2>
           <p className="text-sm mb-6 text-[var(--gp-text-secondary)]">
-            Cette action est irreversible. Toutes vos donnees seront supprimees definitivement.
+            {t('v2settings.deleteWarning')}
           </p>
         </DialogBody>
         <DialogFooter>
@@ -637,7 +638,7 @@ export default function V2SettingsPage() {
             onClick={() => setShowDeleteConfirm(false)}
             disabled={isDeletingAccount}
           >
-            Annuler
+            {t('v2settings.cancel')}
           </Button>
           <Button
             variant="primary"

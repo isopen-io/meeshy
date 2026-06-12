@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { Button, Card, Badge, useToast, PageHeader } from '@/components/v2';
+import { useI18n } from '@/hooks/use-i18n';
 import {
   useCommunityQuery,
   useCommunityConversationsQuery,
@@ -16,6 +17,7 @@ export default function CommunityDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { addToast } = useToast();
+  const { t, locale } = useI18n('groups');
   const communityId = params.id as string;
 
   const { data: community, isLoading: isLoadingCommunity } = useCommunityQuery(communityId);
@@ -33,13 +35,13 @@ export default function CommunityDetailPage() {
     try {
       if (isMember) {
         await leaveMutation.mutateAsync(community.id);
-        addToast(`Vous avez quitte "${community.name}"`, 'info');
+        addToast(t('v2.toasts.left', { name: community.name }), 'info');
       } else {
         await joinMutation.mutateAsync(community.id);
-        addToast(`Vous avez rejoint "${community.name}"`, 'success');
+        addToast(t('v2.toasts.joined', { name: community.name }), 'success');
       }
     } catch {
-      addToast('Erreur lors de la tentative', 'error');
+      addToast(t('v2.toasts.actionError'), 'error');
     }
   };
 
@@ -50,10 +52,10 @@ export default function CommunityDetailPage() {
           title=""
           actionButtons={
             <Button variant="ghost" size="sm" onClick={() => router.push('/v2/communities')}>
-              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              Retour
+              {t('v2.back')}
             </Button>
           }
         />
@@ -77,9 +79,9 @@ export default function CommunityDetailPage() {
     return (
       <div className="h-full flex items-center justify-center bg-[var(--gp-background)]">
         <div className="text-center">
-          <p className="text-lg font-semibold text-[var(--gp-text-primary)] mb-2">Communaute introuvable</p>
+          <p className="text-lg font-semibold text-[var(--gp-text-primary)] mb-2">{t('v2.notFound')}</p>
           <Button variant="outline" onClick={() => router.push('/v2/communities')}>
-            Retour aux communautes
+            {t('v2.backToCommunities')}
           </Button>
         </div>
       </div>
@@ -92,10 +94,10 @@ export default function CommunityDetailPage() {
         title={community.name}
         actionButtons={
           <Button variant="ghost" size="sm" onClick={() => router.push('/v2/communities')}>
-            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            Retour
+            {t('v2.back')}
           </Button>
         }
       />
@@ -113,8 +115,8 @@ export default function CommunityDetailPage() {
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <h1 className="text-xl font-bold text-[var(--gp-text-primary)]">{community.name}</h1>
-                {isMember && <Badge variant="teal" size="sm">Membre</Badge>}
-                {community.isPrivate && <Badge variant="default" size="sm">Prive</Badge>}
+                {isMember && <Badge variant="teal" size="sm">{t('v2.member')}</Badge>}
+                {community.isPrivate && <Badge variant="default" size="sm">{t('v2.private')}</Badge>}
               </div>
               {community.identifier && (
                 <p className="text-xs text-[var(--gp-text-muted)] font-mono">
@@ -130,20 +132,20 @@ export default function CommunityDetailPage() {
 
           <div className="flex flex-wrap items-center gap-4 mb-4">
             <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              <span className="text-sm text-[var(--gp-text-muted)]">{memberCount.toLocaleString()} membres</span>
+              <span className="text-sm text-[var(--gp-text-muted)]">{t('v2.membersCount', { count: memberCount.toLocaleString() })}</span>
             </div>
             <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
-              <span className="text-sm text-[var(--gp-text-muted)]">{conversations.length} conversations</span>
+              <span className="text-sm text-[var(--gp-text-muted)]">{t('v2.conversationsCount', { count: conversations.length })}</span>
             </div>
             {community.createdAt && (
               <span className="text-sm text-[var(--gp-text-muted)]">
-                Creee le {new Date(community.createdAt).toLocaleDateString()}
+                {t('v2.createdOn', { date: new Date(community.createdAt).toLocaleDateString(locale) })}
               </span>
             )}
           </div>
@@ -154,29 +156,17 @@ export default function CommunityDetailPage() {
             onClick={handleToggleJoin}
             disabled={joinMutation.isPending || leaveMutation.isPending}
           >
-            {isMember ? 'Quitter la communaute' : 'Rejoindre la communaute'}
+            {isMember ? t('v2.leaveCommunity') : t('v2.joinCommunity')}
           </Button>
         </Card>
 
         {/* Preferences (only for members) */}
         {isMember && (
           <Card variant="default" hover={false} className="p-4 mb-6">
-            <h3 className="text-xs font-semibold text-[var(--gp-text-muted)] mb-3">PREFERENCES</h3>
+            <h3 className="text-xs font-semibold text-[var(--gp-text-muted)] mb-3">{t('v2.preferencesTitle')}</h3>
             <CommunityPreferencesMenu
               communityId={community.id}
-              t={(key) => {
-                const labels: Record<string, string> = {
-                  'preferences.pin': 'Epingler',
-                  'preferences.mute': 'Muet',
-                  'preferences.archive': 'Archiver',
-                  'preferences.notifications': 'Notifications',
-                  'preferences.notifAll': 'Toutes',
-                  'preferences.notifMentions': 'Mentions',
-                  'preferences.notifNone': 'Aucune',
-                  'preferences.updateError': 'Erreur de mise a jour',
-                };
-                return labels[key] ?? key;
-              }}
+              t={(key) => t(`v2.${key}`)}
             />
           </Card>
         )}
@@ -184,11 +174,11 @@ export default function CommunityDetailPage() {
         {/* Members */}
         <section className="mb-6">
           <h2 className="text-sm font-semibold mb-4 px-1 text-[var(--gp-text-muted)]">
-            MEMBRES ({members.length})
+            {t('v2.membersTitle')} ({members.length})
           </h2>
           {members.length === 0 ? (
             <Card variant="default" hover={false} className="p-8 text-center">
-              <p className="text-[var(--gp-text-muted)]">Aucun membre</p>
+              <p className="text-[var(--gp-text-muted)]">{t('v2.noMembers')}</p>
             </Card>
           ) : (
             <div className="space-y-2">
@@ -197,7 +187,7 @@ export default function CommunityDetailPage() {
               ))}
               {members.length > 20 && (
                 <p className="text-center text-sm text-[var(--gp-text-muted)] py-2">
-                  +{members.length - 20} autres membres
+                  {t('v2.moreMembers', { count: members.length - 20 })}
                 </p>
               )}
             </div>
@@ -207,11 +197,11 @@ export default function CommunityDetailPage() {
         {/* Conversations */}
         <section>
           <h2 className="text-sm font-semibold mb-4 px-1 text-[var(--gp-text-muted)]">
-            CONVERSATIONS ({conversations.length})
+            {t('v2.conversationsTitle')} ({conversations.length})
           </h2>
           {conversations.length === 0 ? (
             <Card variant="default" hover={false} className="p-8 text-center">
-              <p className="text-[var(--gp-text-muted)]">Aucune conversation dans cette communaute</p>
+              <p className="text-[var(--gp-text-muted)]">{t('v2.noConversations')}</p>
             </Card>
           ) : (
             <div className="space-y-2">
@@ -229,7 +219,7 @@ export default function CommunityDetailPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <h4 className="font-medium text-[var(--gp-text-primary)] truncate">
-                        {conv.title ?? 'Sans titre'}
+                        {conv.title ?? t('v2.untitled')}
                       </h4>
                       <p className="text-xs text-[var(--gp-text-muted)]">{conv.type}</p>
                     </div>
@@ -245,7 +235,8 @@ export default function CommunityDetailPage() {
 }
 
 function MemberCard({ member }: { member: CommunityMember }) {
-  const displayName = member.user?.displayName ?? member.user?.username ?? 'Unknown';
+  const { t } = useI18n('groups');
+  const displayName = member.user?.displayName ?? member.user?.username ?? t('v2.unknownUser');
   const roleStr = String(member.role);
 
   return (
