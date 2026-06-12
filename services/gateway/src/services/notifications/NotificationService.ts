@@ -1486,16 +1486,9 @@ export class NotificationService {
       );
     }
 
-    const results = await Promise.allSettled(tasks);
-    results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        notificationLogger.error(
-          'Story comment notification failed for one recipient',
-          result.reason,
-          { recipientIndex: index, type: 'story_comment_batch' }
-        );
-      }
-    });
+    // createNotification ne rejette jamais (catch interne + log du userId
+    // exact) : attendre les tasks suffit, pas de gestion rejected ici.
+    await Promise.allSettled(tasks);
   }
 
   // ==============================================
@@ -1573,16 +1566,9 @@ export class NotificationService {
       );
     }
 
-    const mentionResults = await Promise.allSettled(tasks);
-    mentionResults.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        notificationLogger.error(
-          'Comment mention notification failed for one recipient',
-          result.reason,
-          { recipientId: params.mentionedUserIds[index], type: 'user_mentioned' }
-        );
-      }
-    });
+    // createNotification ne rejette jamais (catch interne + log du userId
+    // exact) : attendre les tasks suffit, pas de gestion rejected ici.
+    await Promise.allSettled(tasks);
   }
 
   // ==============================================
@@ -1655,16 +1641,9 @@ export class NotificationService {
       );
     }
 
-    const mentionResults = await Promise.allSettled(tasks);
-    mentionResults.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        notificationLogger.error(
-          'Post mention notification failed for one recipient',
-          result.reason,
-          { recipientId: params.mentionedUserIds[index], type: 'user_mentioned' }
-        );
-      }
-    });
+    // createNotification ne rejette jamais (catch interne + log du userId
+    // exact) : attendre les tasks suffit, pas de gestion rejected ici.
+    await Promise.allSettled(tasks);
   }
 
   // ==============================================
@@ -1782,16 +1761,9 @@ export class NotificationService {
       );
     }
 
-    const results = await Promise.allSettled(tasks);
-    results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        notificationLogger.error(
-          'Friend content notification failed for one recipient',
-          result.reason,
-          { recipientIndex: index, type: notificationType, postId: params.postId }
-        );
-      }
-    });
+    // createNotification ne rejette jamais (catch interne + log du userId
+    // exact) : attendre les tasks suffit, pas de gestion rejected ici.
+    await Promise.allSettled(tasks);
   }
 
   // ==============================================

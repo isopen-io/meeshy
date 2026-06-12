@@ -4,7 +4,6 @@ import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usersService } from '@/services/users.service';
 import { useWebSocket } from '@/hooks/use-websocket';
-import { useI18n } from '@/hooks/useI18n';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import type { User, UserStatusEvent } from '@meeshy/shared/types';
 import type { ContactSortOption } from '@/types/contacts';
@@ -16,7 +15,6 @@ export interface ContactV2 {
   avatar?: string;
   languageCode: string;
   isOnline: boolean;
-  lastSeen?: string;
   lastActiveAt?: string;
   createdAt?: string;
 }
@@ -41,9 +39,7 @@ export interface ContactsV2Return {
   error: string | null;
 }
 
-type LastSeenI18n = { t: (key: string, params?: Record<string, unknown>) => string; locale?: string };
-
-function transformToContact(user: User, isOnline: boolean, i18n: LastSeenI18n): ContactV2 {
+function transformToContact(user: User, isOnline: boolean): ContactV2 {
   const displayName =
     user.displayName ||
     `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
@@ -56,7 +52,6 @@ function transformToContact(user: User, isOnline: boolean, i18n: LastSeenI18n): 
     avatar: user.avatar,
     languageCode: user.systemLanguage || user.regionalLanguage || 'fr',
     isOnline,
-    lastSeen: usersService.getLastSeenFormatted(user, i18n),
     lastActiveAt: user.lastActiveAt ? String(user.lastActiveAt) : undefined,
     createdAt: 'createdAt' in user ? String((user as unknown as Record<string, unknown>).createdAt) : undefined,
   };
@@ -92,7 +87,6 @@ function sortContacts(contacts: ContactV2[], sortBy: ContactSortOption): Contact
 export function useContactsV2(options: UseContactsV2Options = {}): ContactsV2Return {
   const { enabled = true } = options;
   const queryClient = useQueryClient();
-  const { t, locale } = useI18n('contacts');
 
   const [searchQuery, setSearchQueryRaw] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -166,9 +160,9 @@ export function useContactsV2(options: UseContactsV2Options = {}): ContactsV2Ret
 
   const contacts = useMemo(() => {
     if (!users || !Array.isArray(users)) return [];
-    const transformed = users.map((user) => transformToContact(user, onlineUserIds.has(user.id), { t, locale }));
+    const transformed = users.map((user) => transformToContact(user, onlineUserIds.has(user.id)));
     return sortContacts(transformed, sortBy);
-  }, [users, onlineUserIds, sortBy, t, locale]);
+  }, [users, onlineUserIds, sortBy]);
 
   const onlineContacts = useMemo(() => contacts.filter((c) => c.isOnline), [contacts]);
   const offlineContacts = useMemo(() => contacts.filter((c) => !c.isOnline), [contacts]);
@@ -176,10 +170,10 @@ export function useContactsV2(options: UseContactsV2Options = {}): ContactsV2Ret
   const searchResults = useMemo(() => {
     if (!searchData || !Array.isArray(searchData)) return [];
     const transformed = searchData.map((user) =>
-      transformToContact(user, onlineUserIds.has(user.id), { t, locale })
+      transformToContact(user, onlineUserIds.has(user.id))
     );
     return sortContacts(transformed, sortBy);
-  }, [searchData, onlineUserIds, sortBy, t, locale]);
+  }, [searchData, onlineUserIds, sortBy]);
 
   const filteredContacts = useMemo(() => {
     if (!debouncedSearch || debouncedSearch.length < 2) return contacts;
