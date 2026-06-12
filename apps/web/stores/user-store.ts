@@ -135,3 +135,16 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
     });
   }
 }));
+
+/**
+ * Selector hooks — abonnements granulaires pour eviter les re-renders globaux.
+ * useUserById : re-render uniquement quand l'entree de CET utilisateur change.
+ * useUserStatusTick : pour les vues qui recalculent des statuts relatifs (decay).
+ */
+export const useUserById = (userId: string | undefined) => {
+  return useUserStore(state => (userId ? state.usersMap.get(userId) : undefined));
+};
+
+export const useUserStatusTick = () => {
+  return useUserStore(state => state._lastStatusUpdate);
+};

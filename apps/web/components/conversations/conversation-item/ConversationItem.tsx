@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
-import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
+import { useConversationPreference, useConversationPreferencesActions } from '@/stores/conversation-preferences-store';
 import { getTagColor } from '@/utils/tag-colors';
 import { toast } from 'sonner';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
@@ -54,10 +54,10 @@ export const ConversationItem = memo(function ConversationItem({
   tags = [],
   isMobile = false
 }: ConversationItemProps) {
-  // Store global des préférences de conversation (réactif)
+  // Store global des préférences de conversation (réactif, abonné à CETTE conversation uniquement)
   const { t: tCommon } = useI18n('common');
-  const prefsStore = useConversationPreferencesStore();
-  const storePrefs = prefsStore.preferencesMap.get(conversation.id);
+  const storePrefs = useConversationPreference(conversation.id);
+  const { togglePin, toggleMute, toggleArchive, setReaction } = useConversationPreferencesActions();
 
   // Utiliser les valeurs du store si disponibles, sinon les props
   const localIsPinned = storePrefs?.isPinned ?? isPinned;
@@ -65,53 +65,54 @@ export const ConversationItem = memo(function ConversationItem({
   const localIsArchived = storePrefs?.isArchived ?? isArchived;
   const localReaction = storePrefs?.reaction ?? reaction;
 
-  // Store global des utilisateurs (statuts en temps réel)
-  const userStore = useUserStore();
+  // Statuts temps réel : getUserById est stable, le tick ne concerne que les conversations directes
+  const getUserById = useUserStore(state => state.getUserById);
+  const _presenceTick = useUserStore(state => (conversation.type === 'direct' ? state._lastStatusUpdate : 0));
   // Actions du menu - utilisent le store pour la réactivité
   const handleTogglePin = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await prefsStore.togglePin(conversation.id, !localIsPinned);
+      await togglePin(conversation.id, !localIsPinned);
       toast.success(localIsPinned ? t('conversationHeader.unpinned') : t('conversationHeader.pinned'));
     } catch (error) {
       console.error('Error toggling pin:', error);
       toast.error(t('conversationHeader.pinError'));
     }
-  }, [conversation.id, localIsPinned, prefsStore]);
+  }, [conversation.id, localIsPinned, togglePin]);
 
   const handleToggleMute = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await prefsStore.toggleMute(conversation.id, !localIsMuted);
+      await toggleMute(conversation.id, !localIsMuted);
       toast.success(localIsMuted ? t('conversationHeader.unmuted') : t('conversationHeader.muted'));
     } catch (error) {
       console.error('Error toggling mute:', error);
       toast.error(t('conversationHeader.muteError'));
     }
-  }, [conversation.id, localIsMuted, prefsStore]);
+  }, [conversation.id, localIsMuted, toggleMute]);
 
   const handleToggleArchive = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await prefsStore.toggleArchive(conversation.id, !localIsArchived);
+      await toggleArchive(conversation.id, !localIsArchived);
       toast.success(localIsArchived ? t('conversationHeader.unarchived') : t('conversationHeader.archived'));
     } catch (error) {
       console.error('Error toggling archive:', error);
       toast.error(t('conversationHeader.archiveError'));
     }
-  }, [conversation.id, localIsArchived, prefsStore]);
+  }, [conversation.id, localIsArchived, toggleArchive]);
 
   const handleSetReaction = useCallback(async (e: React.MouseEvent, emoji: string) => {
     e.stopPropagation();
     try {
       const newReaction = localReaction === emoji ? null : emoji;
-      await prefsStore.setReaction(conversation.id, newReaction);
+      await setReaction(conversation.id, newReaction);
       toast.success(newReaction ? t('conversationDetails.reactionAdded').replace('{emoji}', emoji) : t('conversationDetails.reactionRemoved'));
     } catch (error) {
       console.error('Error setting reaction:', error);
       toast.error(t('conversationDetails.reactionError'));
     }
-  }, [conversation.id, localReaction, prefsStore]);
+  }, [conversation.id, localReaction, setReaction]);
 
   const handleShowDetails = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -231,7 +232,7 @@ export const ConversationItem = memo(function ConversationItem({
         {conversation.type === 'direct' && (() => {
           const participantUser = getOtherParticipantUser();
           if (participantUser) {
-            const userFromStore = userStore.getUserById(participantUser.id);
+            const userFromStore = getUserById(participantUser.id);
             const effectiveUser = userFromStore || participantUser;
             const status = getUserStatus(effectiveUser);
             return (

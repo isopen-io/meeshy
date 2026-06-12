@@ -12,7 +12,9 @@ export type {
   DataKeyConfig,
   TimeSeriesChartProps,
   DonutDataPoint,
-  DonutChartProps
+  DonutChartProps,
+  SimpleBarChartDataPoint,
+  SimpleBarChartProps
 } from './ChartsImpl';
 
 // ======================
@@ -53,6 +55,16 @@ export const DonutChart = dynamic(
   {
     ssr: false,
     loading: () => <ChartSkeleton height={300} />
+  }
+);
+
+export const SimpleBarChart = dynamic(
+  () => import('./ChartsImpl').then((mod) => mod.SimpleBarChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full bg-gray-100 dark:bg-gray-800 rounded animate-pulse" style={{ height: 300 }} />
+    )
   }
 );
 
