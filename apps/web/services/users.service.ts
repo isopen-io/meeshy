@@ -260,13 +260,24 @@ export const usersService = {
     user: User,
     options: { t: (key: string, params?: Record<string, unknown>) => string; locale?: string }
   ): string {
+    if (user.isOnline) {
+      return options.t('status.online');
+    }
+    return this.formatLastSeenLabel(user.lastActiveAt, options);
+  },
+
+  /**
+   * Formate un horodatage de dernière activité en libellé relatif.
+   * Pur (dépend de Date.now()) — pensé pour un appel au render dans une
+   * feuille abonnée au tick présence, jamais figé dans un objet de données.
+   */
+  formatLastSeenLabel(
+    lastActiveAt: string | Date,
+    options: { t: (key: string, params?: Record<string, unknown>) => string; locale?: string }
+  ): string {
     const { t, locale } = options;
 
-    if (user.isOnline) {
-      return t('status.online');
-    }
-
-    const lastActive = new Date(user.lastActiveAt);
+    const lastActive = new Date(lastActiveAt);
     const now = new Date();
     const diffMs = now.getTime() - lastActive.getTime();
     const diffMinutes = Math.floor(diffMs / (1000 * 60));

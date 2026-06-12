@@ -329,6 +329,7 @@ export default function V2ContactsPage() {
                             isFriend={connectedUserIds.has(contact.id)}
                             onAction={handleContactAction}
                             t={t}
+                            locale={locale}
                           />
                         );
                       })}
@@ -359,6 +360,7 @@ export default function V2ContactsPage() {
                           isFriend={connectedUserIds.has(contact.id)}
                           onAction={handleContactAction}
                           t={t}
+                          locale={locale}
                         />
                       );
                     })}
