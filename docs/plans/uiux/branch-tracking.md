@@ -16,12 +16,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | 41 (web search i18n + iOS Dynamic Type Bookmarks/PostTranslation/LinksHub + Android settings/contacts/typing i18n) |
-| Last merged PR | pending — iteration 41 PR #576 from claude/blissful-ritchie-6709o7 |
-| Last Merged Base (commit) | f313ab2 (post #575) |
-| Next iteration | **42** |
+| Last completed iteration | 42 (web search i18n + iOS Dynamic Type Bookmarks/PostTranslation/LinksHub + Android contacts tabs i18n + déflake tests grouping iOS) |
+| Last merged PR | pending — iteration 42 PR #576 from claude/blissful-ritchie-6709o7 |
+| Last Merged Base (commit) | 167ef31 (post #577/#578) |
+| Next iteration | **43** |
 | Next branch to create from | `main` after PR #576 merges |
-| Deferred carry-over for 42 | iOS hex-color token refactor (TrackingLinks/ShareLink/CommunityLink), FeedPostCard/FeedView fonts, web+Android per-attachment reactions parity, iOS SettingsView/NewConversationView/DataExport fonts + PostDetailView textSelection, web admin debug + AgentArchetypesTab i18n, Android es/pt strings.xml |
+| Deferred carry-over for 43 | hex iOS hors surface liens (SettingsView, NotificationSettingsView, OnboardingView, DataExportView, ConversationView+Composer…), iOS SettingsView/NewConversationView/DataExport fonts + PostDetailView textSelection, FeedPostCard/FeedView fonts restants, parité stories Android, réactions par pièce jointe web/Android, web admin debug + AgentArchetypesTab i18n, Android es/pt strings.xml |
 
 ---
 
@@ -44,4 +44,5 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 32 | feat/uiux-iter32 | #539 | ✅ |
 | 33–39 | (inline admin-i18n passes, commit-message numbering) | #544, #545, … | ✅ |
 | 40 | claude/friendly-brown-xuzpju | #575 | ✅ |
-| 41 | claude/blissful-ritchie-6709o7 | #576 | ⏳ |
+| 41 | claude/blissful-ritchie-9vesx9 | #577 | ✅ |
+| 42 | claude/blissful-ritchie-6709o7 | #576 | ⏳ |

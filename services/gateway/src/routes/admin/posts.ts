@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendPaginatedSuccess, sendForbidden, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
 import { permissionsService } from './services/PermissionsService';
-import { validatePagination, type UserRole } from './types';
+import { type UserRole } from './types';
+import { validatePagination } from '../../utils/pagination';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { authorSelect, mediaSelect } from '../../services/posts/postIncludes';
@@ -272,7 +273,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         isPinned
       } = request.query as PostListQuery;
 
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       // Build filters
       const where: any = {};

@@ -3,7 +3,7 @@
  */
 import { FastifyInstance } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { validatePagination } from './types';
+import { validatePagination } from '../../utils/pagination';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendPaginatedSuccess, sendInternalError, createPaginationMeta } from '../../utils/response.js';
 
@@ -93,7 +93,7 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
         return sendPaginatedSuccess(reply, [], createPaginationMeta(0, 0, 20, 0));
       }
 
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       // Build where clause for public communities
       const whereClause = {

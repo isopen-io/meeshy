@@ -151,14 +151,14 @@ fun SettingsScreen(
             }
 
             SettingsSection(title = stringResource(R.string.settings_section_about)) {
-                SettingsRow(label = stringResource(R.string.settings_version, "1.0.0"), detail = null, onClick = null)
+                SettingsRow(label = stringResource(R.string.settings_version), detail = null, onClick = null)
                 HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
                 SettingsRow(label = stringResource(R.string.settings_terms_of_service), detail = null, onClick = {})
                 HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
                 SettingsRow(label = stringResource(R.string.settings_privacy_policy), detail = null, onClick = {})
             }
 
-            SettingsSection(title = stringResource(R.string.settings_section_danger_zone)) {
+            SettingsSection(title = stringResource(R.string.settings_section_danger)) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()

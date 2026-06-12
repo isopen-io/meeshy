@@ -1,37 +1,53 @@
-# UI/UX Plan — Iteration 41 (2026-06-12)
+# Plan — UI/UX Iteration 41 (2026-06-12)
 
-## Objective
-1. Internationalize the web search page (new `search` namespace, 4 locales) + fix hardcoded fr-FR date locale + a11y labels (web)
-2. Fix chats v2 empty-state hardcoded string via existing conversations key (web)
-3. Convert frozen `.font(.system(size:))` to semantic Dynamic Type fonts in BookmarksView, PostTranslationSheet, LinksHubView + add missing accessibility labels (iOS)
-4. Internationalize Android Settings, Contacts, MessageBubble, TypingIndicator; localize delivery-status contentDescriptions (Android)
+Base : main @ f313ab23. Branche : `claude/blissful-ritchie-9vesx9`.
+Analyse : `docs/analyses/uiux/2026-06-12-iteration-41.md`.
 
-## Web Actions
-1. Create `locales/{en,fr,es,pt}/search.json` — hero, form, tabs, results, empty states, user/conversation/community cards, toasts (~40 keys)
-2. Register `search` in `locales/*/index.ts` (if registration is required — verify; useI18n imports JSON dynamically by namespace so file presence suffices)
-3. `app/search/SearchPageContent.tsx` — import `useI18n('search')`, wire all strings, `toLocaleDateString(currentLanguage)`, add `aria-label` on search input + MoreVertical trigger
-4. `app/search/page.tsx` — replace text fallback with neutral spinner (server component, no hook)
-5. `app/v2/(protected)/chats/page.tsx` — `EmptyConversation` uses `useI18n('conversations')` → `conversationLayout.selectConversation`
+## Objectifs
+1. Solder les 2 reports différés iOS de l'itération 40 (tokens hex liens, polices Feed)
+2. Couvrir les surfaces jamais auditées : Settings/Contacts Android, modales affiliate/dashboard/admin web
+3. Cohérence : toute la surface "liens" iOS (9 fichiers) passe sur les nouveaux tokens, pas seulement les 5 vues différées
 
-## iOS Actions (text → semantic fonts; hero icons stay fixed per iter-32 precedent)
-6. `BookmarksView.swift` — title → `.body.weight(.semibold)`, subtitle → `.subheadline`; hero icon `.accessibilityHidden(true)`
-7. `PostTranslationSheet.swift` — 16 conversions (14→`.subheadline`, 15→`.subheadline`, 12→`.caption`, 11→`.caption2`, 10→`.caption2`, 16→`.callout`, 20→`.title3`); `.accessibilityLabel` on xmark close button
-8. `LinksHubView.swift` — 28→`.title.weight(.bold)`, 18→`.headline`, 13→`.footnote`, 20→`.title3`, 15→`.subheadline`, 12→`.caption`, 22→`.title2`; `.accessibilityLabel` on plus create button
+## Tâches
 
-## Android Actions
-9. Create `feature/settings/src/main/res/{values,values-fr}/strings.xml` (~23 keys, `settings_` prefix); wire SettingsScreen.kt via `stringResource`
-10. Create `feature/contacts/src/main/res/{values,values-fr}/strings.xml` (~7 keys incl. per-tab labels); wire ContactsScreen.kt, map `ContactsTab` → string resources
-11. Create `sdk-ui/src/main/res/{values,values-fr}/strings.xml` (`bubble_message_deleted`, `bubble_translated`, `bubble_edited`, `bubble_status_{pending,sent,delivered,read,failed}`); wire MessageBubble.kt
-12. `BubbleContent.kt` — add `replyToIsDeleted: Boolean = false`; `BubbleContentBuilder.kt` stops baking "Message deleted" into `replyToText` (sets flag instead); `MessageBubble.kt` ReplyPreview renders localized placeholder when flag set; update `BubbleContentBuilderTest`
-13. `feature/chat` strings.xml — add `chat_typing_one/two/many` (en+fr); `ChatScreen.kt` TypingIndicator uses `stringResource` with args
+### SDK iOS (MeeshyUI)
+- [x] `MeeshyColors` : +`trackingAccent/Hex`, `shareAccent/Hex`, `communityAccent/Hex` (alias indigo600/indigo400/warning), +`successHex`, `warningHex`, `neutral500Hex`, `indigo300Hex`
 
-## Verification
-- Web: `pnpm` type-check + jest web tests locally if runnable; JSON locale files valid
-- Android: gradle unit tests if toolchain available locally, else rely on review (no Android CI gate)
-- iOS: ios-tests.yml CI on PR (cannot build locally on linux)
-- CI green → merge PR into main; update branch-tracking.md
+### iOS — surface liens (9 fichiers, 68 occurrences hex → tokens)
+- [x] TrackingLinksView, TrackingLinkDetailView : A855F7→trackingAccent, 888888→neutral500, 08D9D6→indigo300, 2ECC71→success, FF2E63→error, 6366F1→brandPrimary ; helpers `utmTag`/`detailActionButton`/`breakdownCard`/`breakdownRow`/`deviceColor` passent de `String` hex à `Color`
+- [x] ShareLinksView, ShareLinkDetailView, CreateShareLinkView : 08D9D6→shareAccent, FF6B6B→warning, 4ECDC4→indigo300 ; `actionButton` → `Color`
+- [x] CommunityLinksView, CommunityLinkDetailView : F8B500→communityAccent ; `communityActionButton` → `Color`
+- [x] LinksHubView, CreateTrackingLinkView : params accentHex → constantes tokens
+- [x] i18n : statusBadge Actif/Inactif, STATISTIQUES/INFORMATIONS/Identifiant/Créé le/Expire le (ShareLinkDetail), CONFIGURATION UTM/URL destination/Créé le (TrackingLinkDetail), ConversationType.displayLabel (8 libellés)
+- [x] a11y : labels boutons retour/créer/copier (TrackingLinksView, CommunityLinksView)
 
-## Continuity
-- Base: main @ 7ab236f (merge PR #574)
-- Branch: claude/blissful-ritchie-6709o7
-- Next iteration candidates (from analysis deferred lists): iOS SettingsView/NewConversationView fonts + PostDetailView textSelection; web admin debug + AgentArchetypesTab i18n; Android es/pt locale files
+### iOS — Feed (Dynamic Type + a11y + i18n)
+- [x] FeedPostCard : 36 polices fixes → sémantiques ; icône translate (label + trait bouton + cible 32pt) ; drapeaux langue (labels VoiceOver) ; `timeAgo` localisé ; "Voir le profil"/"Feeds"/"Moi" localisés
+- [x] FeedView : 14 polices fixes → sémantiques (13 icônes grandes tailles conservées, justifiées)
+
+### Android
+- [x] feature/settings : création res values + values-fr (23 clés), SettingsScreen entièrement sur stringResource
+- [x] feature/contacts : création res values + values-fr (3 clés), ContactsScreen localisé
+- [x] feature/feed : `feed_unknown_author` (fallbacks Unknown/Author)
+- [x] feature/profile : `profile_avatar` + displayName prioritaire en contentDescription
+- [x] sdk-ui MessageBubble : compteur réactions → typography.labelSmall
+
+### Web
+- [x] share-affiliate-modal : 100 % i18n (namespace affiliate, 4 locales), suggestions via tArray
+- [x] CreateGroupModal : i18n (namespace dashboard) + a11y (bouton X aria-label, row role/tabIndex/onKeyDown) + dark mode bouton primaire
+- [x] StatusComposer, PostComposer, AudioPostComposer, RepostModal : i18n namespace v2 existant
+- [x] AgentConfigDialog + ConversationPicker : i18n namespace admin, accents corrigés, locale dynamique pour toLocaleDateString
+- [x] PhoneField : placeholder localisé
+- [x] Parité clés en/fr/es/pt vérifiée + JSON valides + tsc --noEmit sans nouvelle erreur
+
+## Vérifications
+- [x] Aucun hex hors charte restant sur la surface liens iOS (grep négatif)
+- [x] Parité locales web 4 langues
+- [x] Parité values/values-fr Android (script)
+- [ ] CI verte sur la PR
+- [ ] Merge dans main + mise à jour branch-tracking
+
+## Continuité itération 42
+Reprendre les différés listés en fin d'analyse 41 (hex iOS hors liens par surface : SettingsView,
+NotificationSettingsView, OnboardingView, DataExportView ; ContactsTab enum Android ; parité stories
+Android ; réactions par pièce jointe web/Android).

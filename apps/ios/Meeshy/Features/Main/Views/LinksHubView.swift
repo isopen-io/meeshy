@@ -54,7 +54,7 @@ struct LinksHubView: View {
                     scrollOffset: scrollOffset,
                     onBack: { router.pop() },
                     titleColor: theme.textPrimary,
-                    backArrowColor: Color(hex: "F8B500"),
+                    backArrowColor: MeeshyColors.communityAccent,
                     backgroundColor: theme.backgroundPrimary
                 )
                 Spacer()
@@ -82,7 +82,7 @@ struct LinksHubView: View {
             HStack(spacing: 12) {
                 Image(systemName: "link.badge.plus")
                     .font(.title.weight(.bold))
-                    .foregroundColor(Color(hex: "F8B500"))
+                    .foregroundColor(MeeshyColors.communityAccent)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(localized: "links.hub.banner.title", defaultValue: "Gérez vos liens", bundle: .main))
@@ -101,7 +101,7 @@ struct LinksHubView: View {
                 .fill(Color.white.opacity(0.05))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color(hex: "F8B500").opacity(0.3), lineWidth: 1)
+                        .stroke(MeeshyColors.communityAccent.opacity(0.3), lineWidth: 1)
                 )
         )
     }
@@ -114,7 +114,7 @@ struct LinksHubView: View {
                 icon: "link",
                 title: String(localized: "links.hub.share.title", defaultValue: "Liens de partage", bundle: .main),
                 description: String(localized: "links.hub.share.description", defaultValue: "Invitez des contacts à rejoindre vos conversations", bundle: .main),
-                accentHex: "08D9D6",
+                accentHex: MeeshyColors.shareAccentHex,
                 route: .shareLinks,
                 onCreate: { showCreateShareLink = true }
             )
@@ -123,7 +123,7 @@ struct LinksHubView: View {
                 icon: "chart.line.uptrend.xyaxis",
                 title: String(localized: "links.hub.tracking.title", defaultValue: "Liens de tracking", bundle: .main),
                 description: String(localized: "links.hub.tracking.description", defaultValue: "Suivez les performances de vos liens de référence", bundle: .main),
-                accentHex: "A855F7",
+                accentHex: MeeshyColors.trackingAccentHex,
                 route: .trackingLinks,
                 onCreate: { showCreateTrackingLink = true }
             )
@@ -132,7 +132,7 @@ struct LinksHubView: View {
                 icon: "person.3.fill",
                 title: String(localized: "links.hub.community.title", defaultValue: "Liens communauté", bundle: .main),
                 description: String(localized: "links.hub.community.description", defaultValue: "Gérez les liens d'invitation vers vos communautés", bundle: .main),
-                accentHex: "F8B500",
+                accentHex: MeeshyColors.communityAccentHex,
                 route: .communityLinks,
                 onCreate: nil
             )
@@ -141,7 +141,7 @@ struct LinksHubView: View {
                 icon: "dollarsign.circle.fill",
                 title: String(localized: "links.hub.affiliate.title", defaultValue: "Liens affiliés", bundle: .main),
                 description: String(localized: "links.hub.affiliate.description", defaultValue: "Monétisez votre réseau avec des tokens d'affiliation", bundle: .main),
-                accentHex: "2ECC71",
+                accentHex: MeeshyColors.successHex,
                 route: .affiliate,
                 onCreate: { showCreateAffiliate = true }
             )

@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
-import { validatePagination, type AnonymousUserListQuery } from './types';
+import { type AnonymousUserListQuery } from './types';
+import { validatePagination } from '../../utils/pagination';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery } from '../../validation/helpers.js';
 import { AnonymousUsersQuerySchema } from '../../validation/admin-schemas.js';
@@ -31,7 +32,7 @@ export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { offset = '0', limit = '20', search, status } = request.query as AnonymousUserListQuery;
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       const where: any = { type: 'anonymous' };
 

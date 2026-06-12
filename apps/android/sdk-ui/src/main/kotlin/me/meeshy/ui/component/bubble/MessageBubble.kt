@@ -239,7 +239,7 @@ private fun ReactionChip(entry: ReactionEntry, onClick: (() -> Unit)?) {
         )
         Text(
             text = entry.count.toString(),
-            fontSize = 12.sp,
+            style = MaterialTheme.typography.labelSmall,
             color = if (entry.includesMe) MeeshyPalette.Indigo400 else MeeshyTheme.tokens.textPrimary,
             fontWeight = if (entry.includesMe) FontWeight.SemiBold else null,
         )

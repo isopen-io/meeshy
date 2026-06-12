@@ -102,10 +102,11 @@ fun ProfileScreen(
             // Avatar
             Box(contentAlignment = Alignment.Center) {
                 val user = state.user
+                val avatarDescription = stringResource(R.string.profile_avatar)
                 if (user?.avatar != null) {
                     AsyncImage(
                         model = user.avatar,
-                        contentDescription = "Avatar",
+                        contentDescription = user.displayName ?: avatarDescription,
                         modifier = Modifier
                             .size(96.dp)
                             .clip(CircleShape),

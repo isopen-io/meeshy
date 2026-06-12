@@ -38,25 +38,6 @@ export const UpdateMemberRoleSchema = z.object({
 });
 
 /**
- * Validate and sanitize pagination parameters
- * @param offset - Raw offset string from query
- * @param limit - Raw limit string from query
- * @param defaultLimit - Default limit if not provided (default: 20)
- * @param maxLimit - Maximum allowed limit (default: 100)
- * @returns Validated offset and limit numbers
- */
-export function validatePagination(
-  offset: string = '0',
-  limit: string = '20',
-  defaultLimit: number = 20,
-  maxLimit: number = 100
-): { offsetNum: number; limitNum: number } {
-  const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
-  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || defaultLimit), maxLimit);
-  return { offsetNum, limitNum };
-}
-
-/**
  * Fonction pour generer un identifier a partir du nom
  */
 export function generateIdentifier(name: string, customIdentifier?: string): string {

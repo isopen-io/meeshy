@@ -11,7 +11,8 @@ struct CommunityLinksView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var router: Router
 
-    private let accentColor = "F8B500"
+    private let accent = MeeshyColors.communityAccent
+    private let accentHex = MeeshyColors.communityAccentHex
 
     var body: some View {
         ZStack {
@@ -44,8 +45,9 @@ struct CommunityLinksView: View {
             } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundColor(accent)
             }
+            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
 
             Spacer()
 
@@ -61,8 +63,9 @@ struct CommunityLinksView: View {
             } label: {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 22))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundColor(accent)
             }
+            .accessibilityLabel(String(localized: "community.links.create.a11y", defaultValue: "Créer une communauté", bundle: .main))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -79,16 +82,16 @@ struct CommunityLinksView: View {
     private func communityStatCard(_ value: String, label: String, icon: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon).font(.system(size: 20))
-                .foregroundColor(Color(hex: "F8B500"))
+                .foregroundColor(accent)
             Text(value).font(.system(size: 24, weight: .bold)).foregroundColor(theme.textPrimary)
             Text(label).font(.system(size: 11)).foregroundColor(theme.textSecondary)
         }
         .frame(maxWidth: .infinity).padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(theme.surfaceGradient(tint: "F8B500"))
+                .fill(theme.surfaceGradient(tint: accentHex))
                 .overlay(RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color(hex: "F8B500").opacity(0.2), lineWidth: 1))
+                    .stroke(accent.opacity(0.2), lineWidth: 1))
         )
     }
 
@@ -102,7 +105,7 @@ struct CommunityLinksView: View {
             } else if viewModel.links.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "person.3.fill").font(.system(size: 40))
-                        .foregroundColor(Color(hex: "F8B500").opacity(0.6))
+                        .foregroundColor(accent.opacity(0.6))
                     Text(String(localized: "community.links.empty.title", defaultValue: "Aucune communauté administrée", bundle: .main))
                         .font(.system(size: 15, weight: .semibold)).foregroundColor(theme.textPrimary)
                     Text(String(localized: "community.links.empty.subtitle", defaultValue: "Les communautés que vous gérez apparaîtront ici avec leur lien de partage", bundle: .main))
@@ -124,9 +127,9 @@ struct CommunityLinksView: View {
     private func communityLinkRow(_ link: CommunityLink) -> some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle().fill(Color(hex: "F8B500").opacity(0.15)).frame(width: 40, height: 40)
+                Circle().fill(accent.opacity(0.15)).frame(width: 40, height: 40)
                 Image(systemName: "person.3.fill").font(.system(size: 14))
-                    .foregroundColor(Color(hex: "F8B500"))
+                    .foregroundColor(accent)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(link.name).font(.system(size: 15, weight: .semibold))
@@ -140,16 +143,17 @@ struct CommunityLinksView: View {
                 HapticFeedback.success()
             } label: {
                 Image(systemName: "doc.on.doc").font(.system(size: 16))
-                    .foregroundColor(Color(hex: "F8B500"))
+                    .foregroundColor(accent)
             }.padding(.horizontal, 4)
+            .accessibilityLabel(String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main))
             Image(systemName: "chevron.right").font(.system(size: 12)).foregroundColor(theme.textMuted)
         }
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(theme.surfaceGradient(tint: "F8B500"))
+                .fill(theme.surfaceGradient(tint: accentHex))
                 .overlay(RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color(hex: "F8B500").opacity(0.15), lineWidth: 1))
+                    .stroke(accent.opacity(0.15), lineWidth: 1))
         )
     }
 }

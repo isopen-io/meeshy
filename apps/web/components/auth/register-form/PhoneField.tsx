@@ -46,7 +46,7 @@ export function PhoneField({
       value={value}
       onChange={handleChange}
       onBlur={validate}
-      placeholder="+33612345678 ou 0033612345678"
+      placeholder={t('register.phonePlaceholder')}
       disabled={disabled}
       required
       autoComplete="tel"

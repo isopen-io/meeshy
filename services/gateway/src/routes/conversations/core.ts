@@ -2,7 +2,6 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
-import { conversationStatsService } from '../../services/ConversationStatsService';
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { ConversationSchemas, validateSchema } from '@meeshy/shared/utils/validation';
@@ -71,6 +70,44 @@ export const conversationListParticipantSelect = {
       isOnline: true,
       lastActiveAt: true
     }
+  }
+} as const;
+
+/**
+ * Iter 33 (F1) — GET /conversations/:id DETAIL include. Participants are
+ * capped: a 500-member group used to ship ~500 KB of hydrated participants on
+ * every conversation open. Clients tolerate a partial list (web renders the
+ * first 3, iOS resolves DM titles from the first 2) and load the full roster
+ * through the dedicated paginated GET /conversations/:id/participants
+ * endpoint. The filtered `_count` carries the exact active-member total,
+ * surfaced as `memberCount` in the response (declared in
+ * `conversationSchema`, so it survives fast-json-stringify).
+ */
+export const CONVERSATION_DETAIL_PARTICIPANTS_CAP = 100;
+
+export const conversationDetailInclude = {
+  participants: {
+    where: { isActive: true },
+    orderBy: { joinedAt: 'asc' },
+    take: CONVERSATION_DETAIL_PARTICIPANTS_CAP,
+    include: {
+      user: {
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          isOnline: true,
+          lastActiveAt: true,
+          role: true
+        }
+      }
+    }
+  },
+  _count: {
+    select: { participants: { where: { isActive: true } } }
   }
 } as const;
 
@@ -599,23 +636,7 @@ export function registerCoreRoutes(
       const conversation = await prisma.conversation.findFirst({
         where: { id: conversationId },
         include: {
-          participants: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  firstName: true,
-                  lastName: true,
-                  avatar: true,
-                  isOnline: true,
-                  lastActiveAt: true,
-                  role: true
-                }
-              }
-            }
-          },
+          ...conversationDetailInclude,
           userPreferences: {
             where: { userId: authRequest.authContext.userId },
             take: 1,
@@ -651,13 +672,6 @@ export function registerCoreRoutes(
                 })),
                 userId
               ));
-
-      // Ajouter les statistiques de conversation dans les métadonnées (via cache 1h)
-      const stats = await conversationStatsService.getOrCompute(
-        prisma,
-        id,
-        () => [] // REST ne connaît pas les sockets ici; la partie onlineUsers sera vide si non connue par cache
-      );
 
       // Calculer le unreadCount pour l'utilisateur courant
       let unreadCount = 0;
@@ -703,13 +717,18 @@ export function registerCoreRoutes(
         logger.error('error marking auto notifications for conversation', { conversationId, error: notifError });
       }
 
+      // NOTE : l'ancien bloc `meta.conversationStats` (getOrCompute + payload)
+      // a été retiré — `conversationSchema` ne déclare pas `meta`, donc
+      // fast-json-stringify le strippait du wire : calcul DB coûteux
+      // (message.groupBy plein scan à froid, TTL 1h) pour un résultat jeté.
+      // Les clients consomment les stats via l'event Socket.IO
+      // `conversation:stats`, qui se recompute seul (updateOnNewMessage).
+      const { _count, ...conversationData } = conversation;
       return sendSuccess(reply, {
-        ...conversation,
+        ...conversationData,
         title: displayTitle,
-        unreadCount,
-        meta: {
-          conversationStats: stats
-        }
+        memberCount: _count.participants,
+        unreadCount
       });
 
     } catch (error) {

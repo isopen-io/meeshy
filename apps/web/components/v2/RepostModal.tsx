@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 import { Button } from './Button';
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from './Dialog';
@@ -24,6 +25,7 @@ function RepostModal({
   onClose,
   saving = false,
 }: RepostModalProps) {
+  const { t } = useI18n('common');
   const [mode, setMode] = useState<'repost' | 'quote'>('repost');
   const [quoteContent, setQuoteContent] = useState('');
 
@@ -73,7 +75,7 @@ function RepostModal({
           <textarea
             value={quoteContent}
             onChange={(e) => setQuoteContent(e.target.value)}
-            placeholder="Add your thoughts..."
+            placeholder={t('quotePlaceholder')}
             rows={3}
             maxLength={5000}
             className={cn(

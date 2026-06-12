@@ -104,6 +104,7 @@ private fun PostCard(
     onLike: () -> Unit,
     onClick: () -> Unit,
 ) {
+    val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(MeeshyRadius.xl),
@@ -114,7 +115,7 @@ private fun PostCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AsyncImage(
                     model = post.author?.avatar,
-                    contentDescription = post.author?.displayName ?: post.author?.username ?: "Author",
+                    contentDescription = post.author?.displayName ?: post.author?.username ?: unknownAuthor,
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape),
@@ -122,7 +123,7 @@ private fun PostCard(
                 Spacer(Modifier.width(MeeshySpacing.md))
                 Column {
                     Text(
-                        text = post.author?.displayName ?: post.author?.username ?: "Unknown",
+                        text = post.author?.displayName ?: post.author?.username ?: unknownAuthor,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
