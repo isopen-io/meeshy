@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageSquare, Loader2, ChevronRight, Reply, Globe } from 'lucide-react';
 import { agentAdminService, type AgentMessageEntry } from '@/services/agent-admin.service';
 import { UserDisplay } from './UserDisplay';
+import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 
 type AgentMessagesModalProps = {
   conversationId: string;
@@ -18,11 +19,11 @@ type AgentMessagesModalProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-function formatDateTime(dateStr: string): string {
+function formatDateTime(dateStr: string, locale: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleDateString('fr-FR', {
+  return d.toLocaleDateString(locale, {
     day: '2-digit', month: '2-digit', year: 'numeric',
-  }) + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }) + ' ' + d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 function formatTimeAgo(dateStr: string): string {
@@ -38,6 +39,7 @@ function formatTimeAgo(dateStr: string): string {
 export default memo(function AgentMessagesModal({
   conversationId, conversationTitle, open, onOpenChange,
 }: AgentMessagesModalProps) {
+  const locale = useCurrentInterfaceLanguage();
   const [messages, setMessages] = useState<AgentMessageEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -146,7 +148,7 @@ export default memo(function AgentMessagesModal({
                       </p>
 
                       <div className="flex items-center gap-2 text-[10px] text-gray-400 tabular-nums">
-                        <span>{formatDateTime(msg.createdAt)}</span>
+                        <span>{formatDateTime(msg.createdAt, locale)}</span>
                         <span className="text-gray-300 dark:text-gray-600">·</span>
                         <span>{formatTimeAgo(msg.createdAt)}</span>
                         <span className="text-gray-300 dark:text-gray-600">·</span>

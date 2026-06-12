@@ -144,6 +144,7 @@
     },
     "backSound": {
       "title": "Background Ambiance",
+      "subtitle": "Background music",
       "uploadLabel": "Load audio file",
       "uploadDescription": "Preset sounds are not yet available. Upload your own MP3/WAV file",
       "uploadButton": "Load audio",
@@ -352,6 +353,10 @@
       "off": "Off",
       "active": "Active",
       "inactive": "Inactive"
+    },
+    "carousel": {
+      "scrollLeft": "Scroll left",
+      "scrollRight": "Scroll right"
     },
     "closePanel": "Close audio effects panel"
   },

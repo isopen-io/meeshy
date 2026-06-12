@@ -2,7 +2,6 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -10,10 +9,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { OnlineIndicator } from '@/components/ui/online-indicator';
+import { ParticipantPresenceIndicator } from '@/components/conversations/conversation-item/ParticipantPresenceIndicator';
+import { UserPresenceBadge } from '@/components/presence/UserPresenceBadge';
+import { UserPresenceLabel } from '@/components/presence/UserPresenceLabel';
 import { ConversationDropdown } from './ConversationDropdown';
 import { User } from '@/types';
-import { getUserStatus } from '@/lib/user-status';
 import {
   MoreVertical,
   UserPlus,
@@ -91,9 +91,9 @@ const ContactsList = React.memo<ContactsListProps>(({
                       {getUserDisplayName(contact).slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <OnlineIndicator
-                    isOnline={getUserStatus(contact) === 'online'}
-                    status={getUserStatus(contact)}
+                  <ParticipantPresenceIndicator
+                    userId={contact.id}
+                    fallbackUser={contact}
                     size="md"
                     className="absolute -bottom-0.5 -right-0.5"
                   />
@@ -106,27 +106,12 @@ const ContactsList = React.memo<ContactsListProps>(({
                     </h3>
 
                     <div className="flex flex-row items-center gap-2 flex-shrink-0">
-                      {(() => {
-                        const contactStatus = getUserStatus(contact);
-                        const badgeColors = {
-                          online: 'bg-green-500 hover:bg-green-600',
-                          away: 'bg-orange-400 hover:bg-orange-500',
-                          offline: 'bg-gray-400 hover:bg-gray-500',
-                        };
-                        const badgeLabels = {
-                          online: t('status.online'),
-                          away: t('status.away', { defaultValue: 'Absent' }),
-                          offline: t('status.offline'),
-                        };
-                        return (
-                          <Badge
-                            variant={contactStatus === 'offline' ? 'secondary' : 'default'}
-                            className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-semibold flex-shrink-0 whitespace-nowrap ${badgeColors[contactStatus]}`}
-                          >
-                            {badgeLabels[contactStatus]}
-                          </Badge>
-                        );
-                      })()}
+                      <UserPresenceBadge
+                        userId={contact.id}
+                        fallbackUser={contact}
+                        t={t}
+                        className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-semibold flex-shrink-0 whitespace-nowrap"
+                      />
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="sm" className="h-8 w-8 sm:h-10 sm:w-10 p-0 hover:bg-gray-200 dark:hover:bg-gray-700 flex-shrink-0">
@@ -183,15 +168,9 @@ const ContactsList = React.memo<ContactsListProps>(({
                     @{contact.username}
                   </button>
 
-                  <div className="flex items-center space-x-2 mb-3">
-                    {(() => {
-                      const dotColors = { online: 'bg-green-500 animate-pulse', away: 'bg-orange-400', offline: 'bg-gray-400' };
-                      return <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full ${dotColors[getUserStatus(contact)]}`} />;
-                    })()}
-                    <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">
-                      {formatLastSeen(contact)}
-                    </span>
-                  </div>
+                  <UserPresenceLabel userId={contact.id} fallbackUser={contact} t={t} className="mb-3">
+                    {formatLastSeen(contact)}
+                  </UserPresenceLabel>
 
                   <div className="flex items-center gap-2 flex-wrap">
                     {pendingRequest ? (

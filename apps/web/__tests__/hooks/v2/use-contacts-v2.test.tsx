@@ -35,6 +35,14 @@ jest.mock('@/services/users.service', () => ({
   },
 }));
 
+// Mock i18n hook (avoids pulling the stores/socketio import graph into jest)
+jest.mock('@/hooks/useI18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => key,
+    locale: 'fr',
+  }),
+}));
+
 // Mock WebSocket hook
 const mockWebSocketHandlers: { onUserStatus?: (event: any) => void } = {};
 jest.mock('@/hooks/use-websocket', () => ({

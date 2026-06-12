@@ -24,11 +24,7 @@ const TONE_COLORS: Record<string, string> = {
   amical: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
 };
 
-const EMOJI_LABELS: Record<string, string> = {
-  occasionnel: 'Occasionnel',
-  abondant: 'Abondant',
-  jamais: 'Jamais',
-};
+const EMOJI_USAGE_KEYS = new Set(['occasionnel', 'abondant', 'jamais']);
 
 export function AgentArchetypesTab() {
   const { t } = useI18n('admin');
@@ -71,11 +67,11 @@ export function AgentArchetypesTab() {
       <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 border rounded-lg">
         <div>
           <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-            Catalogue d&apos;archétypes
+            {t('agent.archetypes.title')}
           </h2>
-          <p className="text-sm text-gray-500">Profils prédéfinis pour la génération de personnalité.</p>
+          <p className="text-sm text-gray-500">{t('agent.archetypes.subtitle')}</p>
         </div>
-        <Badge variant="secondary" className="px-3 py-1">{archetypes.length} disponibles</Badge>
+        <Badge variant="secondary" className="px-3 py-1">{t('agent.archetypes.available', { count: archetypes.length })}</Badge>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -99,7 +95,7 @@ export function AgentArchetypesTab() {
                         {archetype.tone}
                       </Badge>
                     </TooltipTrigger>
-                    <TooltipContent>Ton de la communication</TooltipContent>
+                    <TooltipContent>{t('agent.archetypes.toneTooltip')}</TooltipContent>
                   </Tooltip>
 
                   <Tooltip>
@@ -108,16 +104,16 @@ export function AgentArchetypesTab() {
                         {archetype.vocabularyLevel}
                       </Badge>
                     </TooltipTrigger>
-                    <TooltipContent>Niveau de vocabulaire employé</TooltipContent>
+                    <TooltipContent>{t('agent.archetypes.vocabularyTooltip')}</TooltipContent>
                   </Tooltip>
 
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Badge variant="outline" className="cursor-default border-slate-300">
-                        {EMOJI_LABELS[archetype.emojiUsage] ?? archetype.emojiUsage}
+                        {EMOJI_USAGE_KEYS.has(archetype.emojiUsage) ? t(`agent.archetypes.emojiUsage.${archetype.emojiUsage}`) : archetype.emojiUsage}
                       </Badge>
                     </TooltipTrigger>
-                    <TooltipContent>Fréquence d&apos;utilisation des emojis</TooltipContent>
+                    <TooltipContent>{t('agent.archetypes.emojiTooltip')}</TooltipContent>
                   </Tooltip>
 
                   <Tooltip>
@@ -126,7 +122,7 @@ export function AgentArchetypesTab() {
                         {archetype.typicalLength}
                       </Badge>
                     </TooltipTrigger>
-                    <TooltipContent>Longueur typique des messages</TooltipContent>
+                    <TooltipContent>{t('agent.archetypes.lengthTooltip')}</TooltipContent>
                   </Tooltip>
                 </div>
               </TooltipProvider>
@@ -134,7 +130,7 @@ export function AgentArchetypesTab() {
               {/* Catchphrases */}
               {(archetype.catchphrases ?? []).length > 0 && (
                 <div className="space-y-1">
-                  <span className="text-xs font-medium text-gray-500 uppercase">Catchphrases</span>
+                  <span className="text-xs font-medium text-gray-500 uppercase">{t('agent.archetypes.catchphrases')}</span>
                   <div className="flex flex-wrap gap-1">
                     {(archetype.catchphrases ?? []).map((phrase, i) => (
                       <span
@@ -152,12 +148,12 @@ export function AgentArchetypesTab() {
               <Collapsible>
                 <CollapsibleTrigger className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
                   <ChevronDown className="h-3 w-3" />
-                  Triggers
+                  {t('agent.archetypes.triggers')}
                 </CollapsibleTrigger>
                 <CollapsibleContent className="mt-2 space-y-2">
                   {(archetype.responseTriggers ?? []).length > 0 && (
                     <div>
-                      <span className="text-xs font-medium text-green-600">Répond à :</span>
+                      <span className="text-xs font-medium text-green-600">{t('agent.archetypes.respondsTo')}</span>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {(archetype.responseTriggers ?? []).map((t, i) => (
                           <Badge key={i} variant="outline" className="text-xs border-green-200 text-green-700">{t}</Badge>
@@ -167,7 +163,7 @@ export function AgentArchetypesTab() {
                   )}
                   {(archetype.silenceTriggers ?? []).length > 0 && (
                     <div>
-                      <span className="text-xs font-medium text-red-600">Se tait sur :</span>
+                      <span className="text-xs font-medium text-red-600">{t('agent.archetypes.silentOn')}</span>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {(archetype.silenceTriggers ?? []).map((t, i) => (
                           <Badge key={i} variant="outline" className="text-xs border-red-200 text-red-700">{t}</Badge>

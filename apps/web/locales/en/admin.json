@@ -269,7 +269,25 @@
     "tabLive": "Live",
     "tabHistory": "History",
     "pageTitle": "AI Agent",
-    "pageSubtitle": "Configuration and supervision of the conversational agent service"
+    "pageSubtitle": "Configuration and supervision of the conversational agent service",
+    "archetypes": {
+      "title": "Archetype catalog",
+      "subtitle": "Predefined profiles for personality generation.",
+      "available": "{count} available",
+      "toneTooltip": "Communication tone",
+      "vocabularyTooltip": "Vocabulary level used",
+      "emojiTooltip": "Emoji usage frequency",
+      "lengthTooltip": "Typical message length",
+      "catchphrases": "Catchphrases",
+      "triggers": "Triggers",
+      "respondsTo": "Responds to:",
+      "silentOn": "Silent on:",
+      "emojiUsage": {
+        "occasionnel": "Occasional",
+        "abondant": "Abundant",
+        "jamais": "Never"
+      }
+    }
   },
   "agentLive": {
     "selectConversation": "Select a conversation to monitor its real-time state",
@@ -321,18 +339,50 @@
   },
   "translationMonitor": {
     "loadingMetrics": "Loading metrics...",
-    "languageBreakdown": "Language breakdown"
+    "languageBreakdown": "Language breakdown",
+    "cacheHit": "Cache hits"
   },
   "llm": {
     "generationSettings": "Generation Settings",
-    "budgetManagement": "Budget Management"
+    "budgetManagement": "Budget Management",
+    "cardTitle": "LLM Configuration",
+    "keyConfigured": "Key configured",
+    "labelProvider": "Provider",
+    "labelModel": "Model",
+    "labelTemperature": "Temperature",
+    "labelMaxTokens": "Max Tokens",
+    "labelDailyBudget": "Daily budget (USD)",
+    "labelMaxCostPerCall": "Max cost per call (USD)",
+    "labelApiKey": "API Key",
+    "labelApiKeyHint": "(leave empty to keep current)",
+    "saveButton": "Save"
   },
   "globalConfig": {
     "defaultProvider": "Default Provider",
     "globalScheduler": "Global Scheduler",
     "active": "Active",
     "disabled": "Disabled",
-    "none": "None"
+    "none": "None",
+    "cardTitle": "Global Configuration",
+    "cardSubtitle": "Global kill switch and default parameters",
+    "systemPromptLabel": "Global System Prompt",
+    "fallbackSection": "Fallback",
+    "labelFallbackProvider": "Fallback provider",
+    "labelFallbackModel": "Fallback model",
+    "budgetSection": "Budget & Concurrency",
+    "labelDailyBudget": "Daily budget (USD)",
+    "labelMaxConcurrent": "Max concurrent calls",
+    "scanSection": "Scan Settings",
+    "labelEligibleTypes": "Eligible conversation types",
+    "labelFreshness": "Message freshness (hours)",
+    "freshnessHint": "Messages older than this limit are ignored",
+    "labelMaxConversations": "Max conversations/cycle",
+    "maxConversationsHint": "0 = unlimited",
+    "labelWeekdayBudget": "Scan budget/day (weekday)",
+    "labelWeekendBudget": "Scan budget/day (weekend)",
+    "labelMinInterval": "Min interval (sec)",
+    "labelMaxInterval": "Max interval (sec)",
+    "saveButton": "Save"
   },
   "agentConfig": {
     "titleNew": "New agent configuration",
@@ -1624,5 +1674,37 @@
     "navAgent": "AI Agent",
     "navMonitoring": "Monitoring",
     "accessLevel": "Meeshy administration - Access level: {role}"
+  },
+  "debug": {
+    "loading": "Loading debug information...",
+    "title": "Debug — Admin Access",
+    "backToAdmin": "Back to admin",
+    "generalInfo": "General information",
+    "tokenPresent": "Token present",
+    "role": "Role",
+    "canAccessAdmin": "Can access admin",
+    "yes": "Yes",
+    "no": "No",
+    "userLocalStorage": "User (localStorage)",
+    "apiResponse": "API response /auth/me",
+    "permissionsApi": "Permissions (API)",
+    "permissionsDefault": "Permissions (default)"
+  },
+  "rankingPage": {
+    "back": "Back",
+    "title": "Rankings",
+    "description": "Rank users, conversations, messages and links by various criteria",
+    "podium": "Champions podium",
+    "top10": "Top 10",
+    "top25": "Top 25",
+    "top50": "Top 50",
+    "top100": "Top 100"
+  },
+  "settingsModal": {
+    "triggerButton": "Settings",
+    "title": "Settings for {username}",
+    "description": "Configure your language and automatic translation preferences",
+    "cancelButton": "Cancel",
+    "saveButton": "Save"
   }
 }

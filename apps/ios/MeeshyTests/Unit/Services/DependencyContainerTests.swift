@@ -174,4 +174,48 @@ final class DependencyContainerTests: XCTestCase {
         XCTAssertNil(quarantined)
         XCTAssertFalse(FileManager.default.fileExists(atPath: dbPath + "-wal"))
     }
+
+    // MARK: - databasePath (TestFlight crash 2026-06-12 — nil app-group container)
+
+    /// Nominal path: the shared app-group container hosts `Database/`.
+    @MainActor
+    func test_databasePath_withGroupContainer_usesSharedDatabaseDirectory() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("meeshy-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let path = DependencyContainer.databasePath(groupContainer: dir)
+
+        XCTAssertEqual(
+            path,
+            dir.appendingPathComponent("Database")
+                .appendingPathComponent("meeshy_messages.sqlite").path
+        )
+        var isDir: ObjCBool = false
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: dir.appendingPathComponent("Database").path,
+            isDirectory: &isDir
+        ))
+        XCTAssertTrue(isDir.boolValue)
+    }
+
+    /// Regression: distribution-signed builds whose provisioning lost the
+    /// `group.me.meeshy.apps` entitlement get `nil` from
+    /// `containerURL(forSecurityApplicationGroupIdentifier:)`. The container
+    /// must fall back to Application Support instead of trapping — a trap
+    /// here is a launch crash-loop (TestFlight build 1125, 2026-06-12).
+    @MainActor
+    func test_databasePath_withoutGroupContainer_fallsBackToApplicationSupport() {
+        let path = DependencyContainer.databasePath(groupContainer: nil)
+
+        let appSupport = URL.applicationSupportDirectory
+        XCTAssertEqual(
+            path,
+            appSupport.appendingPathComponent("Database")
+                .appendingPathComponent("meeshy_messages.sqlite").path
+        )
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: appSupport.appendingPathComponent("Database").path
+        ))
+    }
 }

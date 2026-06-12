@@ -4,6 +4,7 @@ import { BarChart2, TrendingUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Area, AreaChart, Line } from 'recharts';
 import { RankingItem } from '@/hooks/use-ranking-data';
 import { RANKING_CRITERIA } from './constants';
+import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 
 export interface RankingStatsProps {
   rankings: RankingItem[];
@@ -11,12 +12,13 @@ export interface RankingStatsProps {
   entityType: 'users' | 'conversations' | 'messages' | 'links';
 }
 
-function formatCount(count: unknown) {
+function formatCount(count: unknown, locale: string) {
   if (typeof count !== 'number') return '0';
-  return count.toLocaleString('fr-FR');
+  return count.toLocaleString(locale);
 }
 
 export function RankingStats({ rankings, criterion, entityType }: RankingStatsProps) {
+  const locale = useCurrentInterfaceLanguage();
   const currentCriterion = React.useMemo(() => {
     return RANKING_CRITERIA[entityType].find(c => c.value === criterion);
   }, [entityType, criterion]);
@@ -65,7 +67,7 @@ export function RankingStats({ rankings, criterion, entityType }: RankingStatsPr
                   borderRadius: '8px',
                   color: '#92400e'
                 }}
-                formatter={(value: unknown) => [formatCount(value), currentCriterion?.label]}
+                formatter={(value: unknown) => [formatCount(value, locale), currentCriterion?.label]}
               />
               <Bar dataKey="value" radius={[0, 8, 8, 0]}>
                 {top10Data.map((entry, index) => (
@@ -125,7 +127,7 @@ export function RankingStats({ rankings, criterion, entityType }: RankingStatsPr
                   borderRadius: '8px',
                   color: '#92400e'
                 }}
-                formatter={(value: unknown) => [formatCount(value), currentCriterion?.label]}
+                formatter={(value: unknown) => [formatCount(value, locale), currentCriterion?.label]}
                 labelFormatter={(label) => `Position ${label}`}
               />
               <Area

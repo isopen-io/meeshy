@@ -527,7 +527,7 @@ struct StoryViewerView: View {
         }
         .sheet(isPresented: $showViewersSheet, onDismiss: { resumeTimer() }) {
             if let story = currentStory {
-                StoryViewersSheet(story: story, accentColor: Color(hex: "4ECDC4"))
+                StoryViewersSheet(story: story, accentColor: Color(hex: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex))
             }
         }
         .sheet(isPresented: $showExportShareSheet, onDismiss: {
@@ -1023,7 +1023,7 @@ struct StoryViewerView: View {
             onSelectLanguageOverride: { lang in
                 withAnimation(.easeInOut(duration: 0.2)) { sessionLanguageOverride = lang }
             },
-            composerAccentColor: currentGroup?.avatarColor ?? "6366F1",
+            composerAccentColor: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex,
             storyComments: storyComments,
             storyCommentRepliesMap: storyCommentRepliesMap,
             storyCommentExpandedThreads: storyCommentExpandedThreads,

@@ -45,6 +45,10 @@
       "description": "Informations personnelles",
       "settingsTitle": "Paramètres du profil",
       "settingsDescription": "Paramètres pour {username}",
+      "avatar": {
+        "invalidFile": "Fichier invalide",
+        "uploadError": "Erreur lors de l'upload de l'avatar"
+      },
       "photo": {
         "title": "Photo de profil",
         "description": "Personnalisez votre photo de profil visible par les autres utilisateurs",
@@ -1109,6 +1113,15 @@
       "loadMore": "Charger plus de messages",
       "emptyState": "Aucun message dans cette conversation",
       "emptyStateCta": "Envoyez le premier message !"
+    },
+    "translationStats": {
+      "title": "Statistiques de traduction",
+      "description": "Aperçu de votre activité de traduction",
+      "total": "Total des traductions",
+      "lastUsed": "Dernière utilisation",
+      "never": "Jamais",
+      "serviceActive": "Service de traduction API actif",
+      "serverSide": "Traductions traitées côté serveur"
     }
   }
 }

@@ -35,6 +35,7 @@ import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.model.ReadStatusSummary
 import me.meeshy.sdk.model.ReadStatusUpdatedEvent
 import me.meeshy.sdk.net.ApiError
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.session.SessionRepository
@@ -116,7 +117,16 @@ class ChatViewModelTest {
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
         val socket = socketManager()
         return Harness(
-            ChatViewModel(repo, conversations, session, reactions, socket, workManager, handle),
+            ChatViewModel(
+                repo,
+                conversations,
+                session,
+                reactions,
+                socket,
+                workManager,
+                MeeshyConfig(),
+                handle,
+            ),
             repo,
             workManager,
             reactions,
@@ -320,6 +330,18 @@ class ChatViewModelTest {
         h.vm.dismissMessageActions()
 
         assertThat(h.vm.state.value.actionMessageId).isNull()
+    }
+
+    @Test
+    fun tapping_an_image_opens_the_viewer_and_dismissing_clears_it() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.openImageViewer("m2", 1)
+        assertThat(h.vm.state.value.imageViewer).isEqualTo(ImageViewerTarget("m2", 1))
+
+        h.vm.dismissImageViewer()
+        assertThat(h.vm.state.value.imageViewer).isNull()
     }
 
     @Test

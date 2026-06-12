@@ -37,7 +37,7 @@ export function ConnectionQualityBadge({
   className,
   showAlways = false,
 }: ConnectionQualityBadgeProps) {
-  const { t } = useI18n('calls');
+  const { t, locale } = useI18n('calls');
 
   if (!stats) return null;
   if (!showAlways && stats.level === 'excellent') return null;
@@ -92,7 +92,7 @@ export function ConnectionQualityBadge({
             </div>
 
             <div className="pt-2 mt-2 border-t border-gray-700 text-xs text-gray-400">
-              {t('calls.quality.updated')} {new Date(stats.timestamp).toLocaleTimeString()}
+              {t('calls.quality.updated')} {new Date(stats.timestamp).toLocaleTimeString(locale)}
             </div>
           </div>
         </TooltipContent>

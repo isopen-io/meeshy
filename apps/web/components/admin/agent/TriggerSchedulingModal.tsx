@@ -18,6 +18,7 @@ import {
 } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
+import { useAgentAdminEvents } from '@/hooks/admin/use-agent-admin-events';
 import dynamic from 'next/dynamic';
 
 const ScanHistoryChart = dynamic(() => import('./ScanHistoryChart'), {
@@ -34,8 +35,8 @@ type TriggerSchedulingModalProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+function formatTime(ts: number, locale: string): string {
+  return new Date(ts).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatDuration(ms: number): string {
@@ -62,7 +63,7 @@ function budgetGlow(ratio: number): string {
 export default memo(function TriggerSchedulingModal({
   conversationId, conversationTitle, open, onOpenChange,
 }: TriggerSchedulingModalProps) {
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   const [schedule, setSchedule] = useState<AgentScheduleData | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [currentNode, setCurrentNode] = useState<string | null>(null);
@@ -115,10 +116,18 @@ export default memo(function TriggerSchedulingModal({
   useEffect(() => {
     if (open) {
       fetchSchedule();
-      const interval = setInterval(fetchSchedule, 30_000);
+      // Filet de sécurité long : la fraîcheur vient des events admin push
+      const interval = setInterval(fetchSchedule, 120_000);
       return () => clearInterval(interval);
     }
   }, [open, fetchSchedule]);
+
+  useAgentAdminEvents({
+    kinds: ['delivery-queue', 'scan', 'config'],
+    conversationId,
+    onChange: fetchSchedule,
+    enabled: open,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -173,9 +182,9 @@ export default memo(function TriggerSchedulingModal({
       await handleTriggerNow();
     }, delayMs);
 
-    setScheduledTimer({ target: target.getTime(), label: formatTime(target.getTime()) });
-    toast.success(t('agent.toasts.triggerScheduled').replace('{{time}}', formatTime(target.getTime())));
-  }, [scheduleTime, handleTriggerNow]);
+    setScheduledTimer({ target: target.getTime(), label: formatTime(target.getTime(), locale) });
+    toast.success(t('agent.toasts.triggerScheduled').replace('{{time}}', formatTime(target.getTime(), locale)));
+  }, [scheduleTime, handleTriggerNow, locale]);
 
   const handleScheduleDelay = useCallback(() => {
     const ms = delayUnit === 'h' ? delayValue * 3600_000 : delayValue * 60_000;
@@ -187,9 +196,9 @@ export default memo(function TriggerSchedulingModal({
       await handleTriggerNow();
     }, ms);
 
-    setScheduledTimer({ target, label: formatTime(target) });
+    setScheduledTimer({ target, label: formatTime(target, locale) });
     toast.success(t('agent.toasts.triggerScheduledIn').replace('{{delay}}', `${delayValue}${delayUnit}`));
-  }, [delayValue, delayUnit, handleTriggerNow]);
+  }, [delayValue, delayUnit, handleTriggerNow, locale]);
 
   const handleCancelSchedule = useCallback(() => {
     if (scheduledTimerRef.current) {
@@ -559,8 +568,8 @@ export default memo(function TriggerSchedulingModal({
                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
                                   <div className="bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-[10px] px-2 py-1 rounded shadow-lg whitespace-nowrap font-mono tabular-nums">
                                     {isNext && dragPct !== null
-                                      ? formatTime(now + (dragPct / 100) * timelineData.horizonMs)
-                                      : formatTime(ts)}
+                                      ? formatTime(now + (dragPct / 100) * timelineData.horizonMs, locale)
+                                      : formatTime(ts, locale)}
                                     {isNext && <span className="block text-[8px] text-center text-indigo-300 dark:text-indigo-600">{t('agent.scheduling.dragToMove')}</span>}
                                   </div>
                                 </div>
@@ -663,7 +672,7 @@ export default memo(function TriggerSchedulingModal({
                       {schedule.lastScan > 0 ? (
                         <div className="text-[10px] text-gray-400 flex items-center gap-1.5">
                           <span className="inline-block h-1 w-1 rounded-full bg-gray-400/50" />
-                          Dernier scan : {formatTime(schedule.lastScan)} ({formatDuration(now - schedule.lastScan)} ago)
+                          Dernier scan : {formatTime(schedule.lastScan, locale)} ({formatDuration(now - schedule.lastScan)} ago)
                         </div>
                       ) : null}
                     </>

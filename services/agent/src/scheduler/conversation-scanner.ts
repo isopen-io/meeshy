@@ -1,4 +1,5 @@
 import type Redis from 'ioredis';
+import { AGENT_ADMIN_EVENT_CHANNEL } from '@meeshy/shared/types/socketio-events';
 import type { MongoPersistence } from '../memory/mongo-persistence';
 import type { RedisStateManager } from '../memory/redis-state';
 import type { RedisDeliveryQueue } from '../delivery/redis-delivery-queue';
@@ -317,6 +318,7 @@ export class ConversationScanner {
     }
 
     await this.persistence.updateScanStatus(conversationId, new Date(), 'starting');
+    this.notifyAdminsScan(conversationId);
     const tracer = new ScanTracer(conversationId, trigger);
     this.tracerRef.current = tracer;
 
@@ -330,9 +332,15 @@ export class ConversationScanner {
       await this.persistence.updateScanStatus(conversationId, null, null).catch((err) => {
         console.error(`[Scanner] Failed to clear scan status for conv=${conversationId}:`, err);
       });
+      this.notifyAdminsScan(conversationId);
       this.tracerRef.current = null;
       await this.redis.del(lockKey).catch(() => {});
     }
+  }
+
+  private notifyAdminsScan(conversationId: string): void {
+    this.redis.publish(AGENT_ADMIN_EVENT_CHANNEL, JSON.stringify({ kind: 'scan', conversationId })).catch((err) =>
+      console.error('[Scanner] Admin notify error:', err));
   }
 
   private async runScan(conv: EligibleConversation, tracer: ScanTracer): Promise<boolean> {

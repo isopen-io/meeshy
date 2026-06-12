@@ -281,7 +281,32 @@
       },
       "permissionDeniedInstructions": "Las notificaciones fueron denegadas. Puedes reactivarlas en la configuración de tu navegador.",
       "unsupported": "Las notificaciones no son compatibles con tu navegador.",
-      "resetButton": "Restablecer valores predeterminados"
+      "resetButton": "Restablecer valores predeterminados",
+      "pageTitle": "Preferencias de notificaciones",
+      "pageSubtitle": "Personaliza cómo y cuándo recibes notificaciones",
+      "sections": {
+        "messages": {
+          "title": "Notificaciones de mensajes",
+          "description": "Gestiona las notificaciones de mensajes y conversaciones"
+        },
+        "interactions": {
+          "title": "Interacciones",
+          "description": "Gestiona las notificaciones de menciones y reacciones"
+        },
+        "contacts": {
+          "title": "Contactos y miembros",
+          "description": "Gestiona las notificaciones de contactos y grupos"
+        },
+        "callsSystem": {
+          "title": "Llamadas y sistema",
+          "description": "Gestiona las notificaciones de llamadas y del sistema"
+        }
+      },
+      "cancel": "Cancelar",
+      "saveButton": "Guardar preferencias",
+      "notAuthenticated": "No autenticado",
+      "saveError": "Error al guardar",
+      "networkError": "Error de red"
     },
     "connectionStatus": {
       "connected": "Conectado",

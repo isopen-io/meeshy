@@ -17,7 +17,7 @@ struct ChangePasswordView: View {
     @State private var showSuccess = false
     @FocusState private var focusedField: Field?
 
-    private let accentColor = "6366F1"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     private enum Field {
         case current, newPass, confirm
@@ -58,9 +58,9 @@ struct ChangePasswordView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
@@ -68,7 +68,7 @@ struct ChangePasswordView: View {
             Spacer()
 
             Text(String(localized: "auth.password.change.title", defaultValue: "Mot de passe", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(.headline.weight(.bold))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -100,7 +100,7 @@ struct ChangePasswordView: View {
 
     private var currentPasswordSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "auth.password.change.current.section", defaultValue: "Mot de passe actuel", bundle: .main), icon: "lock.fill", color: "9B59B6")
+            sectionHeader(title: String(localized: "auth.password.change.current.section", defaultValue: "Mot de passe actuel", bundle: .main), icon: "lock.fill", color: MeeshyColors.indigo600Hex)
 
             VStack(spacing: 0) {
                 secureField(
@@ -108,16 +108,16 @@ struct ChangePasswordView: View {
                     title: String(localized: "auth.password.change.current.field", defaultValue: "Mot de passe actuel", bundle: .main),
                     text: $currentPassword,
                     placeholder: String(localized: "auth.password.change.current.placeholder", defaultValue: "Entrez votre mot de passe", bundle: .main),
-                    color: "9B59B6",
+                    color: MeeshyColors.indigo600Hex,
                     field: .current
                 )
             }
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(theme.surfaceGradient(tint: "9B59B6"))
+                    .fill(theme.surfaceGradient(tint: MeeshyColors.indigo600Hex))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(theme.border(tint: "9B59B6"), lineWidth: 1)
+                            .stroke(theme.border(tint: MeeshyColors.indigo600Hex), lineWidth: 1)
                     )
             )
         }
@@ -187,11 +187,11 @@ struct ChangePasswordView: View {
     private func validationRow(text: String, met: Bool) -> some View {
         HStack(spacing: 8) {
             Image(systemName: met ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .foregroundColor(met ? MeeshyColors.success : theme.textMuted)
 
             Text(text)
-                .font(.system(size: 13, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundColor(met ? MeeshyColors.success : theme.textMuted)
 
             Spacer()
@@ -204,7 +204,7 @@ struct ChangePasswordView: View {
         VStack(spacing: 8) {
             if let errorMessage {
                 Text(errorMessage)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundColor(MeeshyColors.error)
                     .multilineTextAlignment(.center)
                     .transition(.opacity)
@@ -221,7 +221,7 @@ struct ChangePasswordView: View {
                             .tint(.white)
                     }
                     Text(String(localized: "auth.password.change.submit", defaultValue: "Changer le mot de passe", bundle: .main))
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.subheadline.weight(.bold))
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -248,7 +248,7 @@ struct ChangePasswordView: View {
                 .foregroundColor(MeeshyColors.success)
 
             Text(String(localized: "auth.password.change.success", defaultValue: "Mot de passe modifie", bundle: .main))
-                .font(.system(size: 16, weight: .semibold))
+                .font(.callout.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
         }
         .padding(32)
@@ -268,10 +268,10 @@ struct ChangePasswordView: View {
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundColor(Color(hex: color))
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(.system(.caption2, design: .rounded).weight(.bold))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
@@ -288,7 +288,7 @@ struct ChangePasswordView: View {
     ) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
+                .font(.subheadline.weight(.medium))
                 .foregroundColor(Color(hex: color))
                 .frame(width: 28, height: 28)
                 .background(
@@ -298,11 +298,11 @@ struct ChangePasswordView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textMuted)
 
                 SecureField(placeholder, text: text)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                     .foregroundColor(theme.textPrimary)
                     .textContentType(.password)
                     .focused($focusedField, equals: field)

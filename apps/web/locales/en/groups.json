@@ -88,12 +88,13 @@
     "details": {
       "about": "About",
       "noDescription": "No description available for this community.",
+      "conversationNoDescription": "No description",
       "createdOn": "Created on",
       "conversations": "Conversations",
       "loadingConversations": "Loading conversations...",
       "noConversations": "No conversations",
       "noConversationsDescription": "This community doesn't have any conversations yet.",
-      "lastActivity": "Last activity:"
+      "lastActivity": "Last activity"
     },
     "success": {
       "groupCreated": "Community created successfully!",

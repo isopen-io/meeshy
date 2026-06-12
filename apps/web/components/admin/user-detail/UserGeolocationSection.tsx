@@ -3,6 +3,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MapPin, Globe, Clock, Wifi } from 'lucide-react';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface UserGeolocationSectionProps {
   user: unknown;
@@ -39,6 +40,7 @@ function DeviceRow({ label, value }: { label: string; value: string | null | und
 }
 
 export function UserGeolocationSection({ user }: UserGeolocationSectionProps) {
+  const { t } = useI18n('admin');
   const hasLastLogin = user.lastLoginIp || user.lastLoginLocation || user.lastLoginDevice;
   const hasRegistration = user.registrationIp || user.registrationLocation || user.registrationDevice || user.registrationCountry;
 
@@ -51,7 +53,7 @@ export function UserGeolocationSection({ user }: UserGeolocationSectionProps) {
       <CardHeader>
         <CardTitle className="flex items-center space-x-2 dark:text-gray-100">
           <MapPin className="h-5 w-5" />
-          <span>Géolocalisation & Appareil</span>
+          <span>{t('usersDetail.geoTitle')}</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -59,7 +61,7 @@ export function UserGeolocationSection({ user }: UserGeolocationSectionProps) {
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
             <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             <span className="text-sm text-blue-800 dark:text-blue-300">
-              Fuseau horaire : <span className="font-medium">{user.timezone}</span>
+              {t('usersDetail.timezoneLabel')} <span className="font-medium">{user.timezone}</span>
             </span>
           </div>
         )}
@@ -68,12 +70,12 @@ export function UserGeolocationSection({ user }: UserGeolocationSectionProps) {
           <div className="p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800">
             <div className="flex items-center gap-2 mb-3">
               <Wifi className="h-4 w-4 text-green-600 dark:text-green-400" />
-              <h4 className="font-semibold text-sm dark:text-gray-100">Derniere connexion</h4>
+              <h4 className="font-semibold text-sm dark:text-gray-100">{t('usersDetail.lastLoginTitle')}</h4>
             </div>
             <div className="space-y-2">
-              <InfoRow label="Localisation" value={user.lastLoginLocation} />
-              <InfoRow label="Adresse IP" value={user.lastLoginIp} mono />
-              <DeviceRow label="Appareil" value={user.lastLoginDevice} />
+              <InfoRow label={t('usersDetail.locationLabel')} value={user.lastLoginLocation} />
+              <InfoRow label={t('usersDetail.ipLabel')} value={user.lastLoginIp} mono />
+              <DeviceRow label={t('usersDetail.deviceLabel')} value={user.lastLoginDevice} />
             </div>
           </div>
         )}
@@ -82,21 +84,21 @@ export function UserGeolocationSection({ user }: UserGeolocationSectionProps) {
           <div className="p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800">
             <div className="flex items-center gap-2 mb-3">
               <Globe className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-              <h4 className="font-semibold text-sm dark:text-gray-100">Contexte d&apos;inscription</h4>
+              <h4 className="font-semibold text-sm dark:text-gray-100">{t('usersDetail.registrationTitle')}</h4>
             </div>
             <div className="space-y-2">
-              <InfoRow label="Localisation" value={user.registrationLocation} />
+              <InfoRow label={t('usersDetail.locationLabel')} value={user.registrationLocation} />
               {user.registrationCountry && (
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600 dark:text-gray-400 text-sm">Pays</span>
+                  <span className="text-gray-600 dark:text-gray-400 text-sm">{t('usersDetail.countryLabel')}</span>
                   <span className="text-sm font-medium dark:text-gray-200">
                     {regFlag && <span className="mr-1.5">{regFlag}</span>}
                     {user.registrationCountry}
                   </span>
                 </div>
               )}
-              <InfoRow label="Adresse IP" value={user.registrationIp} mono />
-              <DeviceRow label="Appareil" value={user.registrationDevice} />
+              <InfoRow label={t('usersDetail.ipLabel')} value={user.registrationIp} mono />
+              <DeviceRow label={t('usersDetail.deviceLabel')} value={user.registrationDevice} />
             </div>
           </div>
         )}

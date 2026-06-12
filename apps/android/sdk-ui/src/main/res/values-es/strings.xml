@@ -8,4 +8,11 @@
     <string name="bubble_status_delivered">Entregado</string>
     <string name="bubble_status_read">Leído</string>
     <string name="bubble_status_failed">Fallido</string>
+    <string name="avatar_fallback">Avatar</string>
+    <string name="bubble_image_description">Imagen</string>
+    <string name="bubble_attachment_file_fallback">Archivo</string>
+    <string name="bubble_file_size_bytes">%1$s B</string>
+    <string name="bubble_file_size_kb">%1$s KB</string>
+    <string name="bubble_file_size_mb">%1$s MB</string>
+    <string name="image_viewer_close">Cerrar</string>
 </resources>

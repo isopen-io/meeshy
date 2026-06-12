@@ -935,7 +935,7 @@ struct ThemedFeedCard: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
-                    Text(timeAgoShort(from: item.timestamp))
+                    Text(ShortRelativeTime.label(for: item.timestamp))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(Color(hex: item.color))
                 }
@@ -1004,13 +1004,6 @@ struct ThemedFeedCard: View {
         )
     }
 
-    private func timeAgoShort(from date: Date) -> String {
-        let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return "maintenant" }
-        if seconds < 3600 { return "\(seconds / 60)m" }
-        if seconds < 86400 { return "\(seconds / 3600)h" }
-        return "\(seconds / 86400)j"
-    }
 }
 
 // MARK: - Feed Action Button

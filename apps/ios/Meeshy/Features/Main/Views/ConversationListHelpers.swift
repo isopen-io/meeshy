@@ -46,19 +46,19 @@ struct SectionHeaderView: View {
                         .scaleEffect(isDropTarget ? 1.15 : (isTapped ? 1.2 : 1.0))
 
                     Image(systemName: section.icon)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundColor(Color(hex: section.color))
                         .scaleEffect(isTapped ? 1.15 : 1.0)
                 }
 
                 // Section name
                 Text(section.name)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(isDropTarget ? Color(hex: section.color) : (isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950))
 
                 // Count badge
                 Text("\(count)")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(Color(hex: section.color))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
@@ -73,14 +73,14 @@ struct SectionHeaderView: View {
                 // Drop indicator when dragging over
                 if isDropTarget {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.title3.weight(.semibold))
                         .foregroundColor(Color(hex: section.color))
                         .transition(.scale.combined(with: .opacity))
                 }
 
                 // Expand/collapse chevron with rotation animation
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundColor(Color(hex: section.color))
                     .opacity(isDropTarget ? 0.5 : 1)
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
@@ -105,6 +105,11 @@ struct SectionHeaderView: View {
             .animation(.easeOut(duration: 0.2), value: isExpanded)
         }
         .buttonStyle(PlainButtonStyle())
+        .accessibilityValue(
+            isExpanded
+                ? String(localized: "accessibility.section_expanded", defaultValue: "Développée", bundle: .main)
+                : String(localized: "accessibility.section_collapsed", defaultValue: "Réduite", bundle: .main)
+        )
     }
 }
 
@@ -136,19 +141,19 @@ struct ConversationPreviewView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(conversation.name)
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.callout.weight(.bold))
                             .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                             .lineLimit(1)
 
                         if conversation.userState.isPinned {
                             Image(systemName: "pin.fill")
-                                .font(.system(size: 9))
+                                .font(.caption2)
                                 .foregroundColor(MeeshyColors.error)
                         }
 
                         if conversation.userState.isMuted {
                             Image(systemName: "bell.slash.fill")
-                                .font(.system(size: 9))
+                                .font(.caption2)
                                 .foregroundColor(isDark ? MeeshyColors.indigo400.opacity(0.5) : MeeshyColors.indigo500.opacity(0.4))
                         }
                     }
@@ -157,9 +162,9 @@ struct ConversationPreviewView: View {
                         if conversation.type != .direct {
                             HStack(spacing: 3) {
                                 Image(systemName: conversation.type == .group ? "person.2.fill" : "person.3.fill")
-                                    .font(.system(size: 9))
+                                    .font(.caption2)
                                 Text("\(conversation.memberCount) " + String(localized: "unit.members", defaultValue: "membres"))
-                                    .font(.system(size: 11, weight: .medium))
+                                    .font(.caption2.weight(.medium))
                             }
                             .foregroundColor(Color(hex: accentColor))
                         } else {
@@ -167,7 +172,7 @@ struct ConversationPreviewView: View {
                                 .fill(MeeshyColors.success)
                                 .frame(width: 8, height: 8)
                             Text(String(localized: "status.online", defaultValue: "En ligne"))
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.caption2.weight(.medium))
                                 .foregroundColor(MeeshyColors.success)
                         }
                     }
@@ -188,7 +193,7 @@ struct ConversationPreviewView: View {
                             .frame(width: 26, height: 26)
 
                         Text("\(min(conversation.userState.unreadCount, 99))")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.caption2.weight(.bold))
                             .foregroundColor(.white)
                     }
                 }
@@ -326,7 +331,7 @@ struct ThemedCommunityCard: View, Equatable {
             // Content
             VStack(alignment: .leading, spacing: 3) {
                 Text(community.name)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.white)
                     .lineLimit(3)
                     .minimumScaleFactor(0.8)
@@ -335,15 +340,15 @@ struct ThemedCommunityCard: View, Equatable {
                 HStack(spacing: 6) {
                     HStack(spacing: 2) {
                         Image(systemName: "person.2.fill")
-                            .font(.system(size: 8))
+                            .font(.caption2)
                         Text(formatCount(community.memberCount))
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.caption2.weight(.semibold))
                     }
                     HStack(spacing: 2) {
                         Image(systemName: "bubble.left.fill")
-                            .font(.system(size: 8))
+                            .font(.caption2)
                         Text(formatCount(community.conversationCount))
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.caption2.weight(.semibold))
                     }
                 }
                 .foregroundColor(.white.opacity(0.9))
@@ -400,7 +405,7 @@ struct ThemedFilterChip: View {
             action()
         }) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.footnote.weight(.semibold))
                 .foregroundColor(isSelected ? .white : Color(hex: color))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 9)
@@ -419,6 +424,7 @@ struct ThemedFilterChip: View {
         }
         .scaleEffect(isSelected ? 1.05 : 1)
         .animation(.easeOut(duration: 0.2), value: isSelected)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -429,7 +435,7 @@ struct TagChip: View {
 
     var body: some View {
         Text(tag.name)
-            .font(.system(size: 10, weight: .semibold))
+            .font(.caption2.weight(.semibold))
             .foregroundColor(Color(hex: tag.color))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
@@ -444,74 +450,26 @@ struct TagChip: View {
     }
 }
 
-// MARK: - Legacy Support
-struct SemanticColors {
-    static let vibrantPalette: [String] = [
-        "FF6B6B", "4ECDC4", "45B7D1", "96CEB4", "FFEAA7",
-        "DDA0DD", "98D8C8", "F7DC6F", "BB8FCE", "85C1E9",
-        "F8B500", "00CED1", "FF7F50", "9B59B6", "1ABC9C",
-        "E74C3C", "3498DB", "2ECC71", "F39C12", "E91E63"
-    ]
+// MARK: - Short Relative Time
 
-    static func colorForName(_ name: String) -> String {
-        DynamicColorGenerator.colorForName(name)
-    }
-}
-
-// Legacy aliases
-struct ColorfulConversationRow: View {
-    let conversation: Conversation
-    var hasUnread: Bool = false
-    var availableWidth: CGFloat = 200
-
-    var body: some View {
-        ThemedConversationRow(conversation: conversation, availableWidth: availableWidth)
-    }
-}
-
-struct CommunityCard: View {
-    let community: Community
-
-    var body: some View {
-        ThemedCommunityCard(community: community)
-            .equatable()
-    }
-}
-
-struct ColorfulFilterChip: View {
-    let title: String
-    let color: String
-    let isSelected: Bool
-
-    var body: some View {
-        ThemedFilterChip(title: title, color: color, isSelected: isSelected) {}
-    }
-}
-
-struct ConversationRow: View {
-    let conversation: Conversation
-    var hasUnread: Bool = false
-
-    var body: some View {
-        ThemedConversationRow(conversation: conversation)
-    }
-}
-
-struct CategoryPill: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        ThemedFilterChip(title: title, color: "4ECDC4", isSelected: isSelected, action: action)
-    }
-}
-
-struct FilterChip: View {
-    let title: String
-    let isSelected: Bool
-
-    var body: some View {
-        ThemedFilterChip(title: title, color: "4ECDC4", isSelected: isSelected) {}
+/// Libellés compacts « il y a … » partagés par la liste de conversations et
+/// les mini-cartes du feed. Localisés via le catalogue ; `now` est injectable
+/// pour rendre le découpage en tranches testable.
+enum ShortRelativeTime {
+    static func label(for date: Date, now: Date = Date()) -> String {
+        let seconds = Int(now.timeIntervalSince(date))
+        if seconds < 60 {
+            return String(localized: "time.short.now", defaultValue: "maintenant", bundle: .main)
+        }
+        if seconds < 3_600 {
+            return String(localized: "time.short.minutes", defaultValue: "\(seconds / 60) min", bundle: .main)
+        }
+        if seconds < 86_400 {
+            return String(localized: "time.short.hours", defaultValue: "\(seconds / 3_600)h", bundle: .main)
+        }
+        if seconds < 604_800 {
+            return String(localized: "time.short.days", defaultValue: "\(seconds / 86_400)j", bundle: .main)
+        }
+        return String(localized: "time.short.weeks", defaultValue: "\(seconds / 604_800)sem", bundle: .main)
     }
 }

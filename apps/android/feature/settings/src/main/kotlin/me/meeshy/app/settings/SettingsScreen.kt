@@ -85,7 +85,7 @@ fun SettingsScreen(
                         .clickable(enabled = state.userId != null) {
                             state.userId?.let(onOpenProfile)
                         }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     MeeshyAvatar(

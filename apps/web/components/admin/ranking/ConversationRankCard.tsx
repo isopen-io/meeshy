@@ -4,16 +4,17 @@ import { RankingItem } from '@/hooks/use-ranking-data';
 import { RANKING_CRITERIA } from './constants';
 import { formatCount, getRankBadge, getTypeIcon, getTypeLabel } from './utils';
 import { Clock } from 'lucide-react';
+import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 
 interface ConversationRankCardProps {
   item: RankingItem;
   criterion: string;
 }
 
-function formatDate(dateString: string | undefined) {
+function formatDate(dateString: string | undefined, locale: string) {
   if (!dateString) return 'N/A';
   const date = new Date(dateString);
-  return new Intl.DateTimeFormat('fr-FR', {
+  return new Intl.DateTimeFormat(locale, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -23,6 +24,7 @@ function formatDate(dateString: string | undefined) {
 }
 
 export const ConversationRankCard = React.memo(({ item, criterion }: ConversationRankCardProps) => {
+  const locale = useCurrentInterfaceLanguage();
   const currentCriterion = RANKING_CRITERIA.conversations.find(c => c.value === criterion);
   const isTopThree = item.rank && item.rank <= 3;
 
@@ -73,7 +75,7 @@ export const ConversationRankCard = React.memo(({ item, criterion }: Conversatio
           <div className="text-right">
             <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
               <Clock className="h-4 w-4" />
-              <span className="text-sm">{formatDate(item.lastActivity)}</span>
+              <span className="text-sm">{formatDate(item.lastActivity, locale)}</span>
             </div>
           </div>
         ) : (
@@ -83,7 +85,7 @@ export const ConversationRankCard = React.memo(({ item, criterion }: Conversatio
                 className: 'h-5 w-5 text-yellow-600'
               })}
               <span className="text-2xl font-bold text-yellow-600">
-                {formatCount(item.value)}
+                {formatCount(item.value, locale)}
               </span>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">

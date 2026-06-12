@@ -3,6 +3,14 @@
   "minutesAgo": "il y a {minutes}min",
   "hoursAgo": "il y a {hours}h",
   "yesterday": "Hier {time}",
+  "timestamp": {
+    "today": "Aujourd'hui",
+    "yesterday": "Hier",
+    "todayAt": "Aujourd'hui à {time}",
+    "yesterdayAt": "Hier à {time}",
+    "dayAt": "{day} à {time}",
+    "ariaLabel": "Horodatage du message : {timestamp}"
+  },
   "conversations": {
     "common": {
       "loading": "Chargement..."
@@ -338,6 +346,7 @@
       "cancel": "Annuler",
       "uploading": "Téléchargement...",
       "processing": "Traitement...",
+      "processingError": "Erreur lors du traitement de l'image",
       "save": "Enregistrer"
     },
     "typingIndicator": {
@@ -476,7 +485,13 @@
         "MEMBER": "Membre",
         "MODERATOR": "Modérateur",
         "ADMIN": "Administrateur"
-      }
+      },
+      "addUserSection": "Ajouter un utilisateur",
+      "addAction": "Ajouter",
+      "noUserFound": "Aucun utilisateur trouvé",
+      "allAlreadyMembersOne": "1 utilisateur trouvé — déjà membre",
+      "allAlreadyMembersOther": "{count} utilisateurs trouvés — tous déjà membres",
+      "loadMoreRemaining": "Charger plus ({count} restants)"
     },
     "createLinkButton": {
       "notAuthenticated": "Impossible de créer le lien : utilisateur non connecté",
@@ -643,6 +658,19 @@
       "selectedUser": "Utilisateur sélectionné",
       "loginAs": "Vous allez vous connecter en tant que {username}",
       "login": "Se connecter"
+    },
+    "messageTimestamp": {
+      "today": "Aujourd'hui",
+      "yesterday": "Hier",
+      "todayAt": "Aujourd'hui à {time}",
+      "yesterdayAt": "Hier à {time}",
+      "dayAt": "{day} à {time}"
+    },
+    "timeCompact": {
+      "now": "maintenant",
+      "minutes": "{count} min",
+      "hours": "{count}h",
+      "days": "{count}j"
     }
   }
 }

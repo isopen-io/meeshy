@@ -14,6 +14,7 @@ import {
   useConversationQuery,
 } from '@/hooks/queries/use-conversations-query';
 import { useWebSocket } from '@/hooks/use-websocket';
+import { useI18n } from '@/hooks/useI18n';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import {
   transformToConversationItem,
@@ -70,6 +71,7 @@ export function useConversationsV2(
 ): ConversationsV2Return {
   const { enabled = true, limit = 20, currentUserId } = options;
   const queryClient = useQueryClient();
+  const { t, locale } = useI18n('conversations');
 
   // Track typing and online users
   const [typingUsers, setTypingUsers] = useState<Map<string, Set<string>>>(new Map());
@@ -183,8 +185,10 @@ export function useConversationsV2(
       currentUserId,
       onlineUserIds: onlineUsers,
       typingUserIds: currentTypingUserIds,
+      t,
+      locale,
     }),
-    [currentUserId, onlineUsers, currentTypingUserIds]
+    [currentUserId, onlineUsers, currentTypingUserIds, t, locale]
   );
 
   // Transform conversations to V2 format

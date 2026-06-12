@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 
 import { apiService } from '@/services/api.service';
+import { useI18n } from '@/hooks/use-i18n';
+import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 
 interface ShareLink {
   id: string;
@@ -86,10 +88,10 @@ interface ActivityData {
   };
 }
 
-function formatDate(date: string | null) {
+function formatDate(date: string | null, locale: string) {
   if (!date) return 'N/A';
   try {
-    return new Date(date).toLocaleDateString('fr-FR', {
+    return new Date(date).toLocaleDateString(locale, {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -100,9 +102,10 @@ function formatDate(date: string | null) {
 }
 
 function StatusBadge({ active, expired }: { active: boolean; expired: boolean }) {
-  if (expired) return <Badge variant="outline" className="text-xs">Expiré</Badge>;
-  if (active) return <Badge variant="default" className="text-xs bg-green-600">Actif</Badge>;
-  return <Badge variant="secondary" className="text-xs">Inactif</Badge>;
+  const { t } = useI18n('admin');
+  if (expired) return <Badge variant="outline" className="text-xs">{t('usersDetail.expiredBadge')}</Badge>;
+  if (active) return <Badge variant="default" className="text-xs bg-green-600">{t('usersDetail.activeBadge')}</Badge>;
+  return <Badge variant="secondary" className="text-xs">{t('usersDetail.inactiveBadge')}</Badge>;
 }
 
 function isExpired(expiresAt: string | null): boolean {
@@ -144,6 +147,7 @@ function CollapsibleSection({
 }
 
 function ShareLinkCard({ link }: { link: ShareLink }) {
+  const { t, locale } = useI18n('admin');
   const expired = isExpired(link.expiresAt);
   return (
     <div className="p-3 border dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 space-y-2">
@@ -159,15 +163,15 @@ function ShareLinkCard({ link }: { link: ShareLink }) {
       <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-400">
         <div className="flex items-center gap-1">
           <Users className="h-3 w-3" />
-          <span>Utilisations : {link.currentUses}{link.maxUses ? `/${link.maxUses}` : ''}</span>
+          <span>{t('usersDetail.usageLabel', { current: String(link.currentUses), max: link.maxUses ? `/${link.maxUses}` : '' })}</span>
         </div>
         <div className="flex items-center gap-1">
           <UserPlus className="h-3 w-3" />
-          <span>Anonymes : {link._count.anonymousParticipants}</span>
+          <span>{t('usersDetail.anonymousLabel', { count: String(link._count.anonymousParticipants) })}</span>
         </div>
         <div className="flex items-center gap-1">
           <Clock className="h-3 w-3" />
-          <span>Créé le {formatDate(link.createdAt)}</span>
+          <span>{t('usersDetail.createdOnLabel', { date: formatDate(link.createdAt, locale) })}</span>
         </div>
         {link.conversation?.identifier && (
           <div className="flex items-center gap-1">
@@ -181,6 +185,7 @@ function ShareLinkCard({ link }: { link: ShareLink }) {
 }
 
 function TrackingLinkCard({ link }: { link: TrackingLink }) {
+  const { t, locale } = useI18n('admin');
   const expired = isExpired(link.expiresAt);
   const conversionRate = link.totalClicks > 0
     ? ((link.uniqueClicks / link.totalClicks) * 100).toFixed(1)
@@ -207,26 +212,27 @@ function TrackingLinkCard({ link }: { link: TrackingLink }) {
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
           <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{link.totalClicks}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">Clics total</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">{t('usersDetail.totalClicksLabel')}</div>
         </div>
         <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
           <div className="text-lg font-bold text-green-600 dark:text-green-400">{link.uniqueClicks}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">Uniques</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">{t('usersDetail.uniqueClicksLabel')}</div>
         </div>
         <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
           <div className="text-lg font-bold text-amber-600 dark:text-amber-400">{conversionRate}%</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">Taux unique</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">{t('usersDetail.uniqueRateLabel')}</div>
         </div>
       </div>
       <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-        <span>Créé le {formatDate(link.createdAt)}</span>
-        {link.lastClickedAt && <span>Dernier clic : {formatDate(link.lastClickedAt)}</span>}
+        <span>{t('usersDetail.createdOnLabel', { date: formatDate(link.createdAt, locale) })}</span>
+        {link.lastClickedAt && <span>{t('usersDetail.lastClickLabel', { date: formatDate(link.lastClickedAt, locale) })}</span>}
       </div>
     </div>
   );
 }
 
 function AffiliateTokenCard({ token }: { token: AffiliateToken }) {
+  const { t, locale } = useI18n('admin');
   const expired = isExpired(token.expiresAt);
   const conversionRate = token.clickCount > 0
     ? ((token._count.affiliations / token.clickCount) * 100).toFixed(1)
@@ -246,26 +252,27 @@ function AffiliateTokenCard({ token }: { token: AffiliateToken }) {
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
           <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{token.clickCount}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">Clics</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">{t('usersDetail.clicksLabel')}</div>
         </div>
         <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
           <div className="text-lg font-bold text-green-600 dark:text-green-400">{token._count.affiliations}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">Inscrits</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">{t('usersDetail.registeredLabel')}</div>
         </div>
         <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
           <div className="text-lg font-bold text-amber-600 dark:text-amber-400">{conversionRate}%</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">Conversion</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">{t('usersDetail.conversionLabel')}</div>
         </div>
       </div>
       <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-        <span>Créé le {formatDate(token.createdAt)}</span>
-        <span>Utilisations : {token.currentUses}{token.maxUses ? `/${token.maxUses}` : ''}</span>
+        <span>{t('usersDetail.createdOnLabel', { date: formatDate(token.createdAt, locale) })}</span>
+        <span>{t('usersDetail.usageLabel', { current: String(token.currentUses), max: token.maxUses ? `/${token.maxUses}` : '' })}</span>
       </div>
     </div>
   );
 }
 
 function ContactCard({ request, direction }: { request: ContactRequest; direction: 'sent' | 'received' }) {
+  const locale = useCurrentInterfaceLanguage();
   const person = direction === 'sent' ? request.receiver : request.sender;
   if (!person) return null;
 
@@ -297,13 +304,14 @@ function ContactCard({ request, direction }: { request: ContactRequest; directio
         <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[request.status] || statusColors.pending}`}>
           {request.status}
         </span>
-        <span className="text-xs text-gray-400">{formatDate(request.createdAt)}</span>
+        <span className="text-xs text-gray-400">{formatDate(request.createdAt, locale)}</span>
       </div>
     </div>
   );
 }
 
 export function UserActivitySection({ userId }: { userId: string }) {
+  const { t } = useI18n('admin');
   const [data, setData] = useState<ActivityData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -320,7 +328,7 @@ export function UserActivitySection({ userId }: { userId: string }) {
         }
       } catch (err) {
         console.error('Error fetching user activity:', err);
-        setError('Erreur lors du chargement des données');
+        setError(t('usersDetail.loadError'));
       } finally {
         setLoading(false);
       }
@@ -334,7 +342,7 @@ export function UserActivitySection({ userId }: { userId: string }) {
       <Card className="dark:bg-gray-900 dark:border-gray-800">
         <CardContent className="flex items-center justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
-          <span className="ml-2 text-sm text-gray-500">Chargement activité...</span>
+          <span className="ml-2 text-sm text-gray-500">{t('usersDetail.loadingActivity')}</span>
         </CardContent>
       </Card>
     );
@@ -355,12 +363,12 @@ export function UserActivitySection({ userId }: { userId: string }) {
       <CardHeader>
         <CardTitle className="flex items-center space-x-2 dark:text-gray-100">
           <Activity className="h-5 w-5" />
-          <span>Activité détaillée</span>
+          <span>{t('usersDetail.activityTitle')}</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <CollapsibleSection
-          title="Liens de partage"
+          title={t('usersDetail.shareLinksSection')}
           icon={Share2}
           count={data.shareLinks.length}
           defaultOpen={data.shareLinks.length > 0 && data.shareLinks.length <= 5}
@@ -371,7 +379,7 @@ export function UserActivitySection({ userId }: { userId: string }) {
         </CollapsibleSection>
 
         <CollapsibleSection
-          title="Liens trackés"
+          title={t('usersDetail.trackedLinksSection')}
           icon={Target}
           count={data.trackingLinks.length}
           defaultOpen={data.trackingLinks.length > 0 && data.trackingLinks.length <= 5}
@@ -382,7 +390,7 @@ export function UserActivitySection({ userId }: { userId: string }) {
         </CollapsibleSection>
 
         <CollapsibleSection
-          title="Tokens d'affiliation"
+          title={t('usersDetail.affiliateTokensSection')}
           icon={Link2}
           count={data.affiliateTokens.length}
           defaultOpen={data.affiliateTokens.length > 0 && data.affiliateTokens.length <= 5}
@@ -393,7 +401,7 @@ export function UserActivitySection({ userId }: { userId: string }) {
         </CollapsibleSection>
 
         <CollapsibleSection
-          title="Contacts"
+          title={t('usersDetail.contactsSection')}
           icon={UserCheck}
           count={totalContacts}
           defaultOpen={totalContacts > 0 && totalContacts <= 10}
@@ -401,7 +409,7 @@ export function UserActivitySection({ userId }: { userId: string }) {
           {data.contacts.sent.length > 0 && (
             <div className="space-y-2">
               <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                Envoyées ({data.contacts.sent.length})
+                {t('usersDetail.sentRequests', { count: String(data.contacts.sent.length) })}
               </div>
               {data.contacts.sent.map(req => (
                 <ContactCard key={req.id} request={req} direction="sent" />
@@ -411,7 +419,7 @@ export function UserActivitySection({ userId }: { userId: string }) {
           {data.contacts.received.length > 0 && (
             <div className="space-y-2">
               <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                Reçues ({data.contacts.received.length})
+                {t('usersDetail.receivedRequests', { count: String(data.contacts.received.length) })}
               </div>
               {data.contacts.received.map(req => (
                 <ContactCard key={req.id} request={req} direction="received" />

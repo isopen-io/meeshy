@@ -38,6 +38,10 @@
       "description": "Personal information",
       "settingsTitle": "Profile Settings",
       "settingsDescription": "Settings for {username}",
+      "avatar": {
+        "invalidFile": "Invalid file",
+        "uploadError": "Error uploading avatar"
+      },
       "photo": {
         "title": "Profile Photo",
         "description": "Customize your profile photo visible to other users",
@@ -1033,6 +1037,15 @@
       "loadMore": "Load more messages",
       "emptyState": "No messages in this conversation",
       "emptyStateCta": "Send the first message!"
+    },
+    "translationStats": {
+      "title": "Translation statistics",
+      "description": "Overview of your translation activity",
+      "total": "Total translations",
+      "lastUsed": "Last used",
+      "never": "Never",
+      "serviceActive": "Translation API service active",
+      "serverSide": "Translations processed server-side"
     }
   },
   "emailChange": {

@@ -10,8 +10,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { OnlineIndicator } from '@/components/ui/online-indicator';
-import { getUserStatus } from '@/lib/user-status';
+import { ParticipantPresenceIndicator } from '@/components/conversations/conversation-item/ParticipantPresenceIndicator';
+import { UserPresenceLabel } from '@/components/presence/UserPresenceLabel';
 import { User } from '@/types';
 import {
   MoreVertical,
@@ -89,9 +89,9 @@ const ConnectedContactsTab = React.memo<ConnectedContactsTabProps>(({
                       {getUserDisplayName(otherUser).slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <OnlineIndicator
-                    isOnline={getUserStatus(otherUser) === 'online'}
-                    status={getUserStatus(otherUser)}
+                  <ParticipantPresenceIndicator
+                    userId={otherUserId}
+                    fallbackUser={otherUser}
                     size="md"
                     className="absolute -bottom-0.5 -right-0.5"
                   />
@@ -137,19 +137,7 @@ const ConnectedContactsTab = React.memo<ConnectedContactsTabProps>(({
 
                   <div className="space-y-2">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                      {(() => {
-                        const s = getUserStatus(otherUser);
-                        const dotColors = { online: 'bg-green-500', away: 'bg-orange-400', offline: 'bg-gray-400' };
-                        const labels = { online: t('status.online'), away: t('status.away', { defaultValue: 'Absent' }), offline: t('status.offline') };
-                        return (
-                          <div className="flex items-center space-x-2">
-                            <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full ${dotColors[s]}`} />
-                            <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">
-                              {labels[s]}
-                            </span>
-                          </div>
-                        );
-                      })()}
+                      <UserPresenceLabel userId={otherUserId} fallbackUser={otherUser} t={t} />
 
                       {otherUser.email && (
                         <div className="flex items-center space-x-2 min-w-0">

@@ -71,7 +71,7 @@ export function QuickLinkConfigModal({
   isCreating = false,
   createdLink = null
 }: QuickLinkConfigModalProps) {
-  const { t } = useI18n('modals');
+  const { t, locale } = useI18n('modals');
   const [currentStep, setCurrentStep] = useState(1);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -125,7 +125,7 @@ export function QuickLinkConfigModal({
   const formatExpirationDate = (days: number) => {
     const date = new Date();
     date.setDate(date.getDate() + days);
-    return date.toLocaleDateString('fr-FR', {
+    return date.toLocaleDateString(locale, {
       year: 'numeric',
       month: 'long',
       day: 'numeric'

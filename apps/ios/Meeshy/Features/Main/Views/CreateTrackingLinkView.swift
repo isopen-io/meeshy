@@ -66,11 +66,11 @@ struct CreateTrackingLinkView: View {
                 }
             } label: {
                 HStack {
-                    Text(String(localized: "tracking.link.create.utm.title", defaultValue: "Paramètres UTM", bundle: .main)).font(.system(size: 14, weight: .medium))
+                    Text(String(localized: "tracking.link.create.utm.title", defaultValue: "Paramètres UTM", bundle: .main)).font(.subheadline.weight(.medium))
                         .foregroundColor(theme.textPrimary)
                     Spacer()
                     Image(systemName: showUtmFields ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 12)).foregroundColor(theme.textMuted)
+                        .font(.caption).foregroundColor(theme.textMuted)
                 }
             }
             .padding(.horizontal, 20)
@@ -90,7 +90,7 @@ struct CreateTrackingLinkView: View {
     private var tokenSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(String(localized: "tracking.link.create.token.title", defaultValue: "Token personnalisé (optionnel)", bundle: .main))
-                .font(.system(size: 13, weight: .medium)).foregroundColor(theme.textSecondary)
+                .font(.footnote.weight(.medium)).foregroundColor(theme.textSecondary)
             TextField(String(localized: "tracking.link.create.token.placeholder", defaultValue: "ex: summer24 (6 chars min)", bundle: .main), text: $customToken)
                 .padding(12)
                 .background(RoundedRectangle(cornerRadius: 10)
@@ -99,7 +99,7 @@ struct CreateTrackingLinkView: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
             Text(String(localized: "tracking.link.create.token.help", defaultValue: "Laissez vide pour un token aléatoire", bundle: .main))
-                .font(.system(size: 11)).foregroundColor(theme.textMuted)
+                .font(.caption2).foregroundColor(theme.textMuted)
         }
         .padding(.horizontal, 20)
     }
@@ -109,7 +109,7 @@ struct CreateTrackingLinkView: View {
             if isCreating {
                 ProgressView().tint(.white)
             } else {
-                Text(String(localized: "tracking.link.create.button", defaultValue: "Créer le lien", bundle: .main)).font(.system(size: 16, weight: .bold)).foregroundColor(.white)
+                Text(String(localized: "tracking.link.create.button", defaultValue: "Créer le lien", bundle: .main)).font(.callout.weight(.bold)).foregroundColor(.white)
             }
         }
         .frame(maxWidth: .infinity).padding(.vertical, 14)
@@ -126,7 +126,7 @@ struct CreateTrackingLinkView: View {
     @ViewBuilder
     private func formField(_ label: String, placeholder: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label).font(.system(size: 12, weight: .medium))
+            Text(label).font(.caption.weight(.medium))
                 .foregroundColor(theme.textSecondary)
             TextField(placeholder, text: text)
                 .padding(12)

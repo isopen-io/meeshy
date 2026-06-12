@@ -3,6 +3,7 @@ package me.meeshy.ui.component.bubble
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.ApiTextTranslation
 import org.junit.Test
@@ -239,6 +240,170 @@ class BubbleContentBuilderTest {
         )
 
         assertThat(content.isEdited).isTrue()
+    }
+
+    @Test
+    fun `an image attachment becomes a bubble image with its url resolved against the media base`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "a1",
+                        mimeType = "image/jpeg",
+                        fileUrl = "/files/photo.jpg",
+                        thumbnailUrl = "/files/photo_thumb.jpg",
+                        width = 800,
+                        height = 600,
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://gate.meeshy.me",
+        )
+
+        val image = content.images.single()
+        assertThat(image.attachmentId).isEqualTo("a1")
+        assertThat(image.url).isEqualTo("https://gate.meeshy.me/files/photo.jpg")
+        assertThat(image.thumbnailUrl).isEqualTo("https://gate.meeshy.me/files/photo_thumb.jpg")
+        assertThat(image.width).isEqualTo(800)
+        assertThat(image.height).isEqualTo(600)
+        assertThat(content.files).isEmpty()
+    }
+
+    @Test
+    fun `an absolute attachment url is kept as-is`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "a1",
+                        mimeType = "image/png",
+                        fileUrl = "https://cdn.meeshy.me/files/photo.png",
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://gate.meeshy.me",
+        )
+
+        assertThat(content.images.single().url).isEqualTo("https://cdn.meeshy.me/files/photo.png")
+    }
+
+    @Test
+    fun `a non-image attachment becomes a bubble file named after its original name`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "a1",
+                        fileName = "stored-1234.pdf",
+                        originalName = "rapport.pdf",
+                        mimeType = "application/pdf",
+                        fileSize = 2048,
+                        fileUrl = "/files/stored-1234.pdf",
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://gate.meeshy.me",
+        )
+
+        val file = content.files.single()
+        assertThat(file.name).isEqualTo("rapport.pdf")
+        assertThat(file.sizeBytes).isEqualTo(2048)
+        assertThat(content.images).isEmpty()
+    }
+
+    @Test
+    fun `a file attachment without any name carries a null name for the renderer to localize`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "a1",
+                        mimeType = "application/pdf",
+                        fileSize = 2048,
+                        fileUrl = "/files/stored-1234.pdf",
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.files.single().name).isNull()
+    }
+
+    @Test
+    fun `an image attachment without a file url is skipped`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(id = "a1", mimeType = "image/jpeg"),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.images).isEmpty()
+        assertThat(content.files).isEmpty()
+    }
+
+    @Test
+    fun `a deleted message hides its attachments`() {
+        val content = BubbleContentBuilder.build(
+            message(deletedAt = "2026-05-18T10:00:00Z").copy(
+                attachments = listOf(
+                    ApiMessageAttachment(id = "a1", mimeType = "image/jpeg", fileUrl = "/files/p.jpg"),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.images).isEmpty()
+        assertThat(content.files).isEmpty()
+    }
+
+    @Test
+    fun `an emoji-only message carries its cluster count`() {
+        val content = BubbleContentBuilder.build(
+            message(content = "😂🔥"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.emojiOnlyCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `attachments disable the emoji-only treatment`() {
+        val content = BubbleContentBuilder.build(
+            message(content = "😂").copy(
+                attachments = listOf(
+                    ApiMessageAttachment(id = "a1", mimeType = "image/jpeg", fileUrl = "/p.jpg"),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.emojiOnlyCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `regular text is not emoji-only`() {
+        val content = BubbleContentBuilder.build(
+            message(content = "Hello"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.emojiOnlyCount).isEqualTo(0)
     }
 
     @Test

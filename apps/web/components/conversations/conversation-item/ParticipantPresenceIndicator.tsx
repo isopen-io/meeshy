@@ -2,13 +2,10 @@
 
 import { memo } from 'react';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
-import { getUserStatus } from '@/lib/user-status';
-import { useUserById, useUserStatusTick } from '@/stores/user-store';
+import { useLiveUserStatus } from '@/hooks/use-live-user-status';
+import type { PresenceSource } from '@/lib/user-status';
 
-type PresenceSource = {
-  isOnline?: boolean;
-  lastActiveAt?: Date | string | number | null;
-};
+export type { PresenceSource } from '@/lib/user-status';
 
 interface ParticipantPresenceIndicatorProps {
   userId?: string;
@@ -21,8 +18,8 @@ interface ParticipantPresenceIndicatorProps {
 /**
  * Feuille de présence abonnée par userId (iter 35 F9).
  *
- * Seul ce composant s'abonne au user store (entrée du user + tick de décroissance) :
- * la row ConversationItem n'est plus re-rendue par les events de présence ni par le
+ * Seul ce composant s'abonne au user store (via useLiveUserStatus) : la row
+ * ConversationItem n'est plus re-rendue par les events de présence ni par le
  * tick périodique — seul le dot recalcule online → away → offline.
  */
 export const ParticipantPresenceIndicator = memo(function ParticipantPresenceIndicator({
@@ -31,11 +28,7 @@ export const ParticipantPresenceIndicator = memo(function ParticipantPresenceInd
   size = 'md',
   className
 }: ParticipantPresenceIndicatorProps) {
-  const userFromStore = useUserById(userId);
-  // Force le recalcul du statut relatif (décroissance temporelle) à chaque tick du store
-  useUserStatusTick();
-
-  const status = getUserStatus(userFromStore ?? fallbackUser);
+  const status = useLiveUserStatus(userId, fallbackUser);
 
   return (
     <OnlineIndicator

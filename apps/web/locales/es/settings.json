@@ -32,6 +32,10 @@
       "description": "Información personal",
       "settingsTitle": "Configuración del perfil",
       "settingsDescription": "Configuración para {username}",
+      "avatar": {
+        "invalidFile": "Archivo inválido",
+        "uploadError": "Error al subir el avatar"
+      },
       "photo": {
         "title": "Foto de perfil",
         "description": "Personalice su foto de perfil visible para otros usuarios",
@@ -861,6 +865,15 @@
       "loadMore": "Cargar más mensajes",
       "emptyState": "No hay mensajes en esta conversación",
       "emptyStateCta": "¡Envía el primer mensaje!"
+    },
+    "translationStats": {
+      "title": "Estadísticas de traducción",
+      "description": "Resumen de tu actividad de traducción",
+      "total": "Traducciones totales",
+      "lastUsed": "Último uso",
+      "never": "Nunca",
+      "serviceActive": "Servicio de traducción API activo",
+      "serverSide": "Traducciones procesadas en el servidor"
     }
   },
   "consentDialog": {

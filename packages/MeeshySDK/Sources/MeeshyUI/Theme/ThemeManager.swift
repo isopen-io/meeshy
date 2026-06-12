@@ -121,7 +121,7 @@ public class ThemeManager: ObservableObject, @unchecked Sendable {
     }
 
     public var backgroundSecondary: Color {
-        mode.isDark ? Color(hex: "13111C") : Color(hex: "F8F7FF")
+        MeeshyColors.backgroundSecondary(isDark: mode.isDark)
     }
 
     public var backgroundTertiary: Color {
@@ -176,15 +176,15 @@ public class ThemeManager: ObservableObject, @unchecked Sendable {
     // MARK: - Text Colors
 
     public var textPrimary: Color {
-        mode.isDark ? Color(hex: "EEF2FF") : Color(hex: "1E1B4B")
+        MeeshyColors.textPrimary(isDark: mode.isDark)
     }
 
     public var textSecondary: Color {
-        mode.isDark ? Color(hex: "A5B4FC") : Color(hex: "4338CA").opacity(0.6)
+        MeeshyColors.textSecondary(isDark: mode.isDark)
     }
 
     public var textMuted: Color {
-        mode.isDark ? Color(hex: "818CF8").opacity(0.5) : Color(hex: "6366F1").opacity(0.4)
+        MeeshyColors.textMuted(isDark: mode.isDark)
     }
 
     // MARK: - Accent Text Color (theme-adapted)

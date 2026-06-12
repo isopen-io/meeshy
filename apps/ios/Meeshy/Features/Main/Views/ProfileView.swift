@@ -62,7 +62,7 @@ struct ProfileView: View {
                 VStack {
                     Spacer()
                     Text(errorMessage)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.footnote.weight(.medium))
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
@@ -263,7 +263,7 @@ struct ProfileView: View {
                     name: user?.displayName ?? user?.username ?? "?",
                     context: .profileBanner,
                     accentColor: accentColor,
-                    secondaryColor: "4ECDC4",
+                    secondaryColor: MeeshyColors.indigo300Hex,
                     avatarURL: user?.avatar
                 )
                 .overlay(
@@ -279,6 +279,7 @@ struct ProfileView: View {
                             .foregroundColor(Color(hex: accentColor))
                             .background(Circle().fill(textPrimary.opacity(0.1)))
                     }
+                    .accessibilityLabel(String(localized: "profile.avatar.edit", defaultValue: "Modifier la photo de profil", bundle: .main))
                     .offset(x: 4, y: 4)
                 }
 
@@ -332,7 +333,7 @@ struct ProfileView: View {
         LinearGradient(
             colors: [
                 Color(hex: accentColor).opacity(0.3),
-                Color(hex: "4ECDC4").opacity(0.2)
+                MeeshyColors.indigo300.opacity(0.2)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -360,7 +361,7 @@ struct ProfileView: View {
 
     private var contactSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(icon: "envelope.fill", title: String(localized: "profile.section.contact", defaultValue: "CONTACT", bundle: .main), color: "4ECDC4")
+            sectionHeader(icon: "envelope.fill", title: String(localized: "profile.section.contact", defaultValue: "CONTACT", bundle: .main), color: MeeshyColors.indigo300Hex)
 
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
@@ -420,7 +421,7 @@ struct ProfileView: View {
 
     private var languagesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(icon: "globe", title: String(localized: "profile.section.languages", defaultValue: "LANGUES", bundle: .main), color: "FF6B6B")
+            sectionHeader(icon: "globe", title: String(localized: "profile.section.languages", defaultValue: "LANGUES", bundle: .main), color: MeeshyColors.errorHex)
 
             VStack(spacing: 0) {
                 languagePickerRow(
@@ -480,16 +481,16 @@ struct ProfileView: View {
 
     private var statsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(icon: "chart.bar.fill", title: String(localized: "profile.section.stats", defaultValue: "STATISTIQUES", bundle: .main), color: "4ECDC4")
+            sectionHeader(icon: "chart.bar.fill", title: String(localized: "profile.section.stats", defaultValue: "STATISTIQUES", bundle: .main), color: MeeshyColors.indigo300Hex)
 
             Button {
                 HapticFeedback.light()
                 showStats = true
             } label: {
                 HStack(spacing: 12) {
-                    statCard(value: "\(stats?.totalMessages ?? 0)", label: String(localized: "profile.stats.messages", defaultValue: "Messages", bundle: .main), color: "FF6B6B")
-                    statCard(value: "\(stats?.totalConversations ?? 0)", label: String(localized: "profile.stats.conversations", defaultValue: "Conversations", bundle: .main), color: "4ECDC4")
-                    statCard(value: "\(stats?.friendRequestsReceived ?? 0)", label: String(localized: "profile.stats.friends", defaultValue: "Amis", bundle: .main), color: "9B59B6")
+                    statCard(value: "\(stats?.totalMessages ?? 0)", label: String(localized: "profile.stats.messages", defaultValue: "Messages", bundle: .main), color: MeeshyColors.errorHex)
+                    statCard(value: "\(stats?.totalConversations ?? 0)", label: String(localized: "profile.stats.conversations", defaultValue: "Conversations", bundle: .main), color: MeeshyColors.indigo300Hex)
+                    statCard(value: "\(stats?.friendRequestsReceived ?? 0)", label: String(localized: "profile.stats.friends", defaultValue: "Amis", bundle: .main), color: MeeshyColors.indigo600Hex)
                 }
             }
             .buttonStyle(.plain)
@@ -500,7 +501,7 @@ struct ProfileView: View {
 
     private var friendRequestsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(icon: "person.badge.plus.fill", title: String(localized: "profile.section.requests", defaultValue: "DEMANDES", bundle: .main), color: "E91E63")
+            sectionHeader(icon: "person.badge.plus.fill", title: String(localized: "profile.section.requests", defaultValue: "DEMANDES", bundle: .main), color: MeeshyColors.brandPrimaryHex)
 
             Button {
                 HapticFeedback.light()
@@ -520,7 +521,7 @@ struct ProfileView: View {
                             .font(.system(size: 12, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .frame(minWidth: 22, minHeight: 22)
-                            .background(Circle().fill(Color(hex: "E91E63")))
+                            .background(Circle().fill(MeeshyColors.indigo500))
                     }
 
                     Image(systemName: "chevron.right")
@@ -539,7 +540,7 @@ struct ProfileView: View {
 
     private var memberSinceSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(icon: "calendar", title: String(localized: "profile.section.member_since", defaultValue: "MEMBRE DEPUIS", bundle: .main), color: "9B59B6")
+            sectionHeader(icon: "calendar", title: String(localized: "profile.section.member_since", defaultValue: "MEMBRE DEPUIS", bundle: .main), color: MeeshyColors.indigo600Hex)
 
             HStack {
                 Text(user?.createdAt.flatMap { parseAndFormatDate($0) } ?? "—")

@@ -3,6 +3,14 @@
   "minutesAgo": "hace {minutes}min",
   "hoursAgo": "hace {hours}h",
   "yesterday": "Ayer {time}",
+  "timestamp": {
+    "today": "Hoy",
+    "yesterday": "Ayer",
+    "todayAt": "Hoy a las {time}",
+    "yesterdayAt": "Ayer a las {time}",
+    "dayAt": "{day} a las {time}",
+    "ariaLabel": "Marca de tiempo del mensaje: {timestamp}"
+  },
   "conversations": {
     "common": {
       "loading": "Cargando..."
@@ -330,6 +338,7 @@
       "cancel": "Cancelar",
       "uploading": "Subiendo...",
       "processing": "Procesando...",
+      "processingError": "Error al procesar la imagen",
       "save": "Guardar"
     },
     "typingIndicator": {
@@ -468,7 +477,13 @@
         "MEMBER": "Miembro",
         "MODERATOR": "Moderador",
         "ADMIN": "Administrador"
-      }
+      },
+      "addUserSection": "Añadir un usuario",
+      "addAction": "Añadir",
+      "noUserFound": "Ningún usuario encontrado",
+      "allAlreadyMembersOne": "1 usuario encontrado — ya es miembro",
+      "allAlreadyMembersOther": "{count} usuarios encontrados — todos ya son miembros",
+      "loadMoreRemaining": "Cargar más ({count} restantes)"
     },
     "createLinkButton": {
       "notAuthenticated": "No se puede crear el enlace: usuario no conectado",
@@ -635,6 +650,19 @@
       "selectedUser": "Usuario seleccionado",
       "loginAs": "Iniciarás sesión como {username}",
       "login": "Iniciar sesión"
+    },
+    "messageTimestamp": {
+      "today": "Hoy",
+      "yesterday": "Ayer",
+      "todayAt": "Hoy a las {time}",
+      "yesterdayAt": "Ayer a las {time}",
+      "dayAt": "{day} a las {time}"
+    },
+    "timeCompact": {
+      "now": "ahora",
+      "minutes": "{count} min",
+      "hours": "{count}h",
+      "days": "{count}d"
     }
   }
 }

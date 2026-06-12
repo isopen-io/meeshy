@@ -17,6 +17,7 @@ import {
   useUpdateUserProfileMutation,
 } from '@/hooks/queries/use-users-query';
 import { usersService, type UpdateUserDto, type UserStats } from '@/services/users.service';
+import { useI18n } from '@/hooks/useI18n';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import type { User } from '@meeshy/shared/types';
 
@@ -105,10 +106,12 @@ function getLanguageName(code: string): string {
   return LANGUAGE_NAMES[code] || code.toUpperCase();
 }
 
+type LastSeenI18n = { t: (key: string, params?: Record<string, unknown>) => string; locale?: string };
+
 /**
  * Transform User to ProfileV2 format
  */
-function transformToProfile(user: User): ProfileV2 {
+function transformToProfile(user: User, i18n: LastSeenI18n): ProfileV2 {
   const displayName =
     user.displayName ||
     `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
@@ -163,7 +166,7 @@ function transformToProfile(user: User): ProfileV2 {
     banner: user.banner,
     languages,
     isOnline: usersService.isUserOnline(user),
-    lastSeen: usersService.getLastSeenFormatted(user),
+    lastSeen: usersService.getLastSeenFormatted(user, i18n),
     isPro: user.role === 'pro' || user.role === 'admin',
   };
 }
@@ -198,6 +201,7 @@ function transformToStats(stats: UserStats | undefined, dashboardStats: any): Pr
 export function useProfileV2(options: UseProfileV2Options = {}): ProfileV2Return {
   const { userId } = options;
   const queryClient = useQueryClient();
+  const { t, locale } = useI18n('contacts');
 
   // Determine if we're viewing current user or another user
   const isCurrentUser = !userId;
@@ -233,13 +237,13 @@ export function useProfileV2(options: UseProfileV2Options = {}): ProfileV2Return
   // Transform to profile
   const profile = useMemo(() => {
     if (!rawUser) return null;
-    const p = transformToProfile(rawUser);
+    const p = transformToProfile(rawUser, { t, locale });
     // L'utilisateur courant est forcément en ligne puisqu'il charge la page
     if (isCurrentUser) {
       p.isOnline = true;
     }
     return p;
-  }, [rawUser, isCurrentUser]);
+  }, [rawUser, isCurrentUser, t, locale]);
 
   // Transform stats
   const stats = useMemo(() => {

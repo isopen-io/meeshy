@@ -18,7 +18,7 @@ import { adminService, AnonymousUser } from '@/services/admin.service';
 
 export default function AdminAnonymousUsersPage() {
   const router = useRouter();
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   const [anonymousUsers, setAnonymousUsers] = useState<AnonymousUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -77,7 +77,7 @@ export default function AdminAnonymousUsersPage() {
   };
 
   const formatDate = (date: Date | string) => {
-    return new Date(date).toLocaleString('fr-FR');
+    return new Date(date).toLocaleString(locale);
   };
 
   const getStatusBadge = (isActive: boolean, isOnline: boolean) => {

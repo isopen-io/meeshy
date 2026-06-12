@@ -5,4 +5,14 @@
     <string name="conversations_empty">No conversations yet</string>
     <string name="conversations_retry">Retry</string>
     <string name="conversations_no_messages">No messages yet</string>
+    <string name="conversations_banner_syncing">Syncing…</string>
+    <string name="conversations_banner_reconnecting">Reconnecting…</string>
+    <string name="conversations_banner_offline">Offline</string>
+    <string name="conversations_preview_photo">📷 Photo</string>
+    <string name="conversations_preview_video">🎬 Video</string>
+    <string name="conversations_preview_voice">🎵 Voice message</string>
+    <string name="conversations_preview_file">📎 File</string>
+    <string name="conversations_preview_location">📍 Location</string>
+    <string name="conversations_preview_you">You</string>
+    <string name="conversations_preview_sender_format">%1$s: %2$s</string>
 </resources>

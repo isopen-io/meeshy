@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type Redis from 'ioredis';
+import { AGENT_ADMIN_EVENT_CHANNEL } from '@meeshy/shared/types/socketio-events';
 import type { PendingAction, PendingMessage, PendingReaction } from '../graph/state';
 import type { AgentResponse, AgentReaction } from '../zmq/types';
 import type { ZmqAgentPublisher } from '../zmq/zmq-publisher';
@@ -68,6 +69,14 @@ export class RedisDeliveryQueue {
     return `${USER_INDEX_PREFIX}${conversationId}:${userId}`;
   }
 
+  private notifyAdmins(conversationId?: string): void {
+    const payload = conversationId
+      ? { kind: 'delivery-queue', conversationId }
+      : { kind: 'delivery-queue' };
+    this.redis.publish(AGENT_ADMIN_EVENT_CHANNEL, JSON.stringify(payload)).catch((err) =>
+      console.error('[RedisDeliveryQueue] Admin notify error:', err));
+  }
+
   private itemKey(id: string): string {
     return `${ITEM_PREFIX}${id}`;
   }
@@ -79,6 +88,7 @@ export class RedisDeliveryQueue {
     const topicConflictId = await this.findTopicConflict(conversationId, action);
     if (topicConflictId) {
       await this.mergeIntoExisting(topicConflictId, action);
+      this.notifyAdmins(conversationId);
       return topicConflictId;
     }
 
@@ -105,6 +115,7 @@ export class RedisDeliveryQueue {
     pipeline.expire(uKey, ITEM_TTL_SECONDS);
     await pipeline.exec();
 
+    this.notifyAdmins(conversationId);
     return id;
   }
 
@@ -216,6 +227,7 @@ export class RedisDeliveryQueue {
       const item: RedisDeliveryItem = JSON.parse(raw);
       await this.deliver(item);
       await this.removeItem(id, item.conversationId, item.action.asUserId);
+      this.notifyAdmins(item.conversationId);
       delivered++;
     }
 
@@ -339,6 +351,7 @@ export class RedisDeliveryQueue {
 
     const item: RedisDeliveryItem = JSON.parse(raw);
     await this.removeItem(id, item.conversationId, item.action.asUserId);
+    this.notifyAdmins(item.conversationId);
     return true;
   }
 
@@ -352,6 +365,7 @@ export class RedisDeliveryQueue {
     (item.action as PendingMessage).content = newContent;
     await this.redis.set(this.itemKey(id), JSON.stringify(item), 'EX', ITEM_TTL_SECONDS);
 
+    this.notifyAdmins(item.conversationId);
     return {
       id: item.id,
       conversationId: item.conversationId,
@@ -400,6 +414,7 @@ export class RedisDeliveryQueue {
     }
     if (items.length > 0) {
       console.log(`[RedisDeliveryQueue] Cancelled ${items.length} pending actions for conv=${conversationId}`);
+      this.notifyAdmins(conversationId);
     }
     return items.length;
   }
@@ -416,6 +431,7 @@ export class RedisDeliveryQueue {
     }
     if (allIds.length > 0) {
       await this.redis.zrem(SORTED_SET_KEY, ...allIds);
+      this.notifyAdmins();
     }
     console.log('[RedisDeliveryQueue] All items cleared');
   }

@@ -18,7 +18,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -28,6 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,8 +40,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -52,6 +58,7 @@ public fun MessageBubble(
     outgoingColor: Color = MeeshyPalette.Indigo500,
     onLongPress: (() -> Unit)? = null,
     onReactionClick: ((String) -> Unit)? = null,
+    onImageClick: ((Int) -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -59,8 +66,18 @@ public fun MessageBubble(
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
         horizontalArrangement = if (content.isOutgoing) Arrangement.End else Arrangement.Start,
     ) {
-        val onColor = if (content.isOutgoing) MeeshyPalette.White else MeeshyTheme.tokens.textPrimary
-        val bubbleBackground = if (content.isOutgoing) outgoingColor else MeeshyTheme.tokens.backgroundTertiary
+        val isFreeEmoji =
+            content.emojiOnlyCount > 0 && content.replyToText == null && !content.isDeleted
+        val onColor = when {
+            isFreeEmoji -> MeeshyTheme.tokens.textPrimary
+            content.isOutgoing -> MeeshyPalette.White
+            else -> MeeshyTheme.tokens.textPrimary
+        }
+        val bubbleBackground = when {
+            isFreeEmoji -> Color.Transparent
+            content.isOutgoing -> outgoingColor
+            else -> MeeshyTheme.tokens.backgroundTertiary
+        }
         Column(
             modifier = Modifier
                 .widthIn(max = 300.dp)
@@ -90,6 +107,25 @@ public fun MessageBubble(
                 )
             }
 
+            if (!content.isDeleted && content.images.isNotEmpty()) {
+                BubbleImageGrid(
+                    images = content.images,
+                    onImageClick = onImageClick,
+                    modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+                )
+            }
+
+            if (!content.isDeleted && content.files.isNotEmpty()) {
+                content.files.forEach { file ->
+                    BubbleFileRow(
+                        file = file,
+                        onColor = onColor,
+                        modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+                    )
+                }
+            }
+
+            val hasAttachments = content.images.isNotEmpty() || content.files.isNotEmpty()
             if (content.isDeleted) {
                 Text(
                     text = stringResource(R.string.bubble_message_deleted),
@@ -97,12 +133,26 @@ public fun MessageBubble(
                     fontStyle = FontStyle.Italic,
                     color = onColor.copy(alpha = 0.6f),
                 )
-            } else {
-                Text(
-                    text = content.text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = onColor,
-                )
+            } else if (content.text.isNotBlank() || !hasAttachments) {
+                val emojiFontSize = EmojiDetector.fontSizeSp(content.emojiOnlyCount)
+                if (emojiFontSize != null) {
+                    Text(
+                        text = content.text,
+                        fontSize = emojiFontSize.sp,
+                        lineHeight = (emojiFontSize + 8).sp,
+                        modifier = if (content.replyToText != null) {
+                            Modifier.align(Alignment.CenterHorizontally)
+                        } else {
+                            Modifier
+                        },
+                    )
+                } else {
+                    Text(
+                        text = content.text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = onColor,
+                    )
+                }
             }
 
             if (content.reactions.isNotEmpty()) {
@@ -148,6 +198,144 @@ public fun MessageBubble(
             }
         }
     }
+}
+
+private const val MAX_GRID_IMAGES = 4
+
+@Composable
+private fun BubbleImageGrid(
+    images: List<BubbleImage>,
+    onImageClick: ((Int) -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(MeeshyRadius.md)
+    when {
+        images.size == 1 -> {
+            val image = images.first()
+            val ratio = imageAspectRatio(image)
+            AsyncImage(
+                model = image.url,
+                contentDescription = stringResource(R.string.bubble_image_description),
+                contentScale = ContentScale.Crop,
+                modifier = modifier
+                    .width(252.dp)
+                    .aspectRatio(ratio)
+                    .clip(shape)
+                    .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
+                    .let { base ->
+                        if (onImageClick == null) base
+                        else base.clickable { onImageClick(0) }
+                    },
+            )
+        }
+        else -> {
+            val visible = images.take(MAX_GRID_IMAGES)
+            val hiddenCount = images.size - visible.size
+            Column(
+                modifier = modifier.width(252.dp),
+                verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            ) {
+                visible.chunked(2).forEachIndexed { rowIndex, row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+                        row.forEachIndexed { columnIndex, image ->
+                            val imageIndex = rowIndex * 2 + columnIndex
+                            val isLastCell =
+                                hiddenCount > 0 && imageIndex == visible.lastIndex
+                            Box(
+                                modifier = Modifier
+                                    .size(124.dp)
+                                    .clip(shape)
+                                    .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
+                                    .let { base ->
+                                        if (onImageClick == null) base
+                                        else base.clickable { onImageClick(imageIndex) }
+                                    },
+                            ) {
+                                AsyncImage(
+                                    model = image.thumbnailUrl ?: image.url,
+                                    contentDescription = stringResource(R.string.bubble_image_description),
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.size(124.dp),
+                                )
+                                if (isLastCell) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(124.dp)
+                                            .background(Color.Black.copy(alpha = 0.45f)),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            text = "+$hiddenCount",
+                                            color = MeeshyPalette.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 20.sp,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun imageAspectRatio(image: BubbleImage): Float {
+    val width = image.width ?: return 1f
+    val height = image.height ?: return 1f
+    if (width <= 0 || height <= 0) return 1f
+    return (width.toFloat() / height.toFloat()).coerceIn(0.6f, 1.8f)
+}
+
+@Composable
+private fun BubbleFileRow(
+    file: BubbleFile,
+    onColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .background(onColor.copy(alpha = 0.1f))
+            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.AttachFile,
+            contentDescription = null,
+            tint = onColor.copy(alpha = 0.8f),
+            modifier = Modifier.size(16.dp),
+        )
+        Column {
+            Text(
+                text = file.name ?: stringResource(R.string.bubble_attachment_file_fallback),
+                style = MaterialTheme.typography.bodySmall,
+                color = onColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val size = file.sizeBytes?.let { formatFileSize(it) }
+            if (size != null) {
+                Text(
+                    text = size,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = onColor.copy(alpha = 0.7f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+@ReadOnlyComposable
+internal fun formatFileSize(bytes: Int): String = when {
+    bytes >= 1_048_576 ->
+        stringResource(R.string.bubble_file_size_mb, "%.1f".format(bytes / 1_048_576f))
+    bytes >= 1_024 ->
+        stringResource(R.string.bubble_file_size_kb, "%.0f".format(bytes / 1_024f))
+    else -> stringResource(R.string.bubble_file_size_bytes, bytes.toString())
 }
 
 @Composable

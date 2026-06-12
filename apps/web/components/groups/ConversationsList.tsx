@@ -6,6 +6,7 @@
 import { memo } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MessageSquare, Lock } from 'lucide-react';
+import { useI18n } from '@/hooks/useI18n';
 import type { Conversation } from '@meeshy/shared/types';
 
 interface ConversationsListProps {
@@ -66,6 +67,8 @@ const ConversationItem = memo(function ConversationItem({
   conversation: Conversation;
   onClick: () => void;
 }) {
+  const { t, locale } = useI18n('groups');
+
   return (
     <div
       className="flex items-center gap-3 p-3 rounded-xl border border-border/20 dark:border-border/40 hover:bg-accent/50 dark:hover:bg-accent/70 transition-colors cursor-pointer"
@@ -89,14 +92,14 @@ const ConversationItem = memo(function ConversationItem({
           )}
         </div>
         <p className="text-sm text-muted-foreground truncate">
-          {conversation.description || 'Aucune description'}
+          {conversation.description || t('details.conversationNoDescription')}
         </p>
         <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
           <span>{(conversation as unknown)._count?.members || 0} membres</span>
           <span>{(conversation as unknown)._count?.messages || 0} messages</span>
           {conversation.lastMessageAt && (
             <span>
-              Dernière activité: {new Date(conversation.lastMessageAt).toLocaleDateString('fr-FR')}
+              {t('details.lastActivity')}: {new Date(conversation.lastMessageAt).toLocaleDateString(locale)}
             </span>
           )}
         </div>

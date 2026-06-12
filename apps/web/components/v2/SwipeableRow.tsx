@@ -128,6 +128,7 @@ export function SwipeableRow({
         {leftActions.map((action) => (
           <button
             key={action.id}
+            type="button"
             onClick={() => handleActionClick(action)}
             className="flex flex-col items-center justify-center gap-1 transition-transform duration-300"
             style={{
@@ -151,6 +152,7 @@ export function SwipeableRow({
         {rightActions.map((action) => (
           <button
             key={action.id}
+            type="button"
             onClick={() => handleActionClick(action)}
             className="flex flex-col items-center justify-center gap-1 transition-transform duration-300"
             style={{
@@ -189,6 +191,7 @@ export function SwipeableRow({
         <div
           className="absolute inset-0 z-10"
           onClick={reset}
+          aria-hidden="true"
           style={{ background: 'transparent' }}
         />
       )}

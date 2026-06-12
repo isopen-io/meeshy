@@ -15,6 +15,7 @@ import { UserDisplay } from './UserDisplay';
 import { useDebounce } from 'use-debounce';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
+import { useAgentAdminEvents } from '@/hooks/admin/use-agent-admin-events';
 import dynamic from 'next/dynamic';
 
 const TriggerSchedulingModal = dynamic(() => import('./TriggerSchedulingModal'), {
@@ -83,9 +84,15 @@ export function AgentConversationsTab() {
 
   useEffect(() => {
     fetchConfigs();
-    const interval = setInterval(() => fetchConfigs(true), 10000);
+    // Filet de sécurité long : la fraîcheur vient des events admin push
+    const interval = setInterval(() => fetchConfigs(true), 60_000);
     return () => clearInterval(interval);
   }, [fetchConfigs]);
+
+  useAgentAdminEvents({
+    kinds: ['config', 'scan'],
+    onChange: () => fetchConfigs(true),
+  });
 
   const handleToggle = async (config: AgentConfigData) => {
     try {

@@ -105,44 +105,6 @@ export function getNotificationBorderColor(notification: Notification): string {
 }
 
 /**
- * Formate le timestamp de la notification (temps relatif)
- */
-export function formatNotificationTimestamp(createdAt: Date | string): string {
-  const date = createdAt instanceof Date ? createdAt : new Date(createdAt);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSeconds = Math.floor(diffMs / 1000);
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  const diffHours = Math.floor(diffMinutes / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffSeconds < 10) return 'à l\'instant';
-  if (diffSeconds < 60) return `il y a ${diffSeconds}s`;
-  if (diffMinutes < 60) return `il y a ${diffMinutes}min`;
-  if (diffHours < 24) return `il y a ${diffHours}h`;
-  if (diffDays < 7) return `il y a ${diffDays}j`;
-
-  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-}
-
-/**
- * Formate le contexte de la notification (conversation + temps)
- */
-export function formatNotificationContext(notification: Notification): string {
-  const parts: string[] = [];
-
-  // Nom de la conversation
-  if (notification.context?.conversationTitle) {
-    parts.push(`💬 ${notification.context.conversationTitle}`);
-  }
-
-  // Timestamp
-  parts.push(formatNotificationTimestamp(notification.state.createdAt));
-
-  return parts.join(' • ');
-}
-
-/**
  * Formate l'aperçu du message avec attachments
  */
 export function formatMessagePreview(content: string, attachments?: any[]): string {

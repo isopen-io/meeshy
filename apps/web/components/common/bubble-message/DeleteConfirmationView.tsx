@@ -344,7 +344,7 @@ export const DeleteConfirmationView = memo(function DeleteConfirmationView({
             className={cn(
               "h-8 px-3 text-xs",
               isOwnMessage 
-                ? "border-red-700 bg-white text-red-900 hover:bg-red-50" 
+                ? "border-red-700 bg-white text-red-900 hover:bg-red-50 dark:border-red-800 dark:bg-red-950 dark:text-red-100 dark:hover:bg-red-900"
                 : "border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700"
             )}
           >

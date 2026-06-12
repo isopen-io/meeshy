@@ -64,7 +64,7 @@ export function LinkSummaryModal({
   linkData
 }: LinkSummaryModalProps) {
   const [copied, setCopied] = useState(false);
-  const { t } = useI18n('modals');
+  const { t, locale } = useI18n('modals');
 
   const handleCopyLink = async () => {
     try {
@@ -81,7 +81,7 @@ export function LinkSummaryModal({
   const formatExpirationDate = (days: number) => {
     const date = new Date();
     date.setDate(date.getDate() + days);
-    return date.toLocaleDateString('fr-FR', {
+    return date.toLocaleDateString(locale, {
       year: 'numeric',
       month: 'long',
       day: 'numeric'

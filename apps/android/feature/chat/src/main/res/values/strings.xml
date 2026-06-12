@@ -19,6 +19,10 @@
     <string name="chat_cancel_edit">Cancel edit</string>
     <string name="chat_react_with">React with %1$s</string>
     <string name="chat_message_actions">Message actions</string>
+    <string name="chat_date_today">Today</string>
+    <string name="chat_date_yesterday">Yesterday</string>
+    <string name="chat_date_day_before_yesterday">Two days ago</string>
+    <string name="chat_scroll_to_bottom">Scroll to latest</string>
     <string name="chat_typing_one">%1$s is typing…</string>
     <string name="chat_typing_two">%1$s and %2$s are typing…</string>
     <string name="chat_typing_many">%1$d people are typing…</string>

@@ -93,7 +93,7 @@ function makeStateManager(messages = [makeMessage()]) {
 }
 
 function makeRedis() {
-  return { set: jest.fn().mockResolvedValue('1'), del: jest.fn().mockResolvedValue(1), get: jest.fn().mockResolvedValue(null) } as any;
+  return { set: jest.fn().mockResolvedValue('1'), del: jest.fn().mockResolvedValue(1), get: jest.fn().mockResolvedValue(null), publish: jest.fn().mockResolvedValue(1) } as any;
 }
 
 describe('ConversationScanner — Dynamic User Pickup', () => {
