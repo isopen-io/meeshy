@@ -12,7 +12,7 @@ import type { Participant } from '@meeshy/shared/types/participant';
 
 export type UserStatus = 'online' | 'away' | 'offline';
 
-type PresenceSource = {
+export type PresenceSource = {
   isOnline?: boolean;
   lastActiveAt?: Date | string | number | null;
 };

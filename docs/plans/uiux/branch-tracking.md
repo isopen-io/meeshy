@@ -22,6 +22,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | Next iteration | **45** |
 | Next branch to create from | `main` (HEAD post-merge iter-44) |
 | Deferred carry-over for 45 | web : user-settings.tsx 17 toasts fr, participants-drawer (5) + links-section (3), 14 fichiers 'fr-FR' restants à migrer vers date-format, FriendRequestCard formateur local dupliqué, vérif aria-label SwipeableRow ; iOS : ConversationInfoSheet (52 fonts), ConversationDashboardView (43), TwoFactorSetupView (42, texte seulement), CallView (34), InviteFriendsSheet (33), ProfileView (32), GlobalSearchView (32), SettingsView (31), VoiceProfileManageView (29), FeedView+Attachments (29), DataExportView (17), NewConversationView (15), ChangePasswordView (14) ; Android : parité stories (UI absente, large) ; réactions par pièce jointe web+Android (wiring gateway) ; audit qualité es/pt web |
+| Last completed iteration | 44 (iOS exclusif : ThemedConversationRow — i18n 21 clés ×5 locales, Dynamic Type 26 polices, tokens MeeshyColors.text*(isDark:), ShortRelativeTime partagé+testé) |
+| Last merged PR | #588 (iter-33) ; iter-44 en cours de merge |
+| Last Merged Base (commit) | 813b7fe3 (main post-#588) |
+| Next iteration | **45** |
+| Next branch to create from | `main` (HEAD post-merge iter-44) |
+| Deferred carry-over for 45 (iOS only, directive routine) | ConversationListHelpers (19 polices, 28 hex) ; PostDetailView (.textSelection + 21 hex) ; FeedCommentsSheet/FeedPostCard timeAgo dupliqués + i18n ; ConversationInfoSheet (52 polices), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (31) ; UniversalComposerBar(+Recording) hex ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) |
 
 ---
 
@@ -51,3 +57,4 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 42b | claude/blissful-ritchie-e672ur | #579 | ✅ |
 | 43 | claude/blissful-ritchie-6709o7 | #576 | ✅ |
 | 44 | claude/blissful-ritchie-foe2wg | (en cours) | ⏳ |
+| 44 | claude/keen-dirac-485vpk | (en cours) | ⏳ |
