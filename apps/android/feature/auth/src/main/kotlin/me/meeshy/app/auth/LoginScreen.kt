@@ -81,7 +81,8 @@ fun LoginScreen(
                     .padding(top = MeeshySpacing.md),
             )
 
-            state.errorMessage?.let { message ->
+            val errorText = state.errorRes?.let { stringResource(it) } ?: state.errorMessage
+            errorText?.let { message ->
                 Text(
                     text = message,
                     color = MeeshyTheme.tokens.error,

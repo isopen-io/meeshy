@@ -113,10 +113,7 @@ export function ConversationHeader({
                   <Badge
                     variant="destructive"
                     className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 text-[10px] leading-none pointer-events-none"
-                    aria-label={`${otherUnreadCount} ${
-                      t('conversationHeader.unreadInOtherConversations') ||
-                      'messages non lus dans les autres conversations'
-                    }`}
+                    aria-label={`${otherUnreadCount} ${t('conversationHeader.unreadInOtherConversations')}`}
                   >
                     {otherUnreadCount > 99 ? '99+' : otherUnreadCount}
                   </Badge>

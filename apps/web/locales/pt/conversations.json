@@ -103,6 +103,7 @@
     "copyShowingContent": "Copiar conteúdo exibido",
     "conversationHeader": {
       "backToList": "Voltar às conversas",
+      "unreadInOtherConversations": "mensagens não lidas em outras conversas",
       "share": "Compartilhar",
       "linkCopied": "Link copiado!",
       "linkCopyError": "Erro ao copiar link",

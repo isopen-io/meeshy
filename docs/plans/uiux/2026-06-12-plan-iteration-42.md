@@ -1,37 +1,55 @@
-# UI/UX Plan — Iteration 42 (2026-06-12)
+# Plan — UI/UX Iteration 42 (2026-06-12)
 
-## Objective
-1. Internationalize the web search page (new `search` namespace, 4 locales) + fix hardcoded fr-FR date locale + a11y labels (web)
-2. Fix chats v2 empty-state hardcoded string via existing conversations key (web)
-3. Convert frozen `.font(.system(size:))` to semantic Dynamic Type fonts in BookmarksView, PostTranslationSheet, LinksHubView + add missing accessibility labels (iOS)
-4. Internationalize Android Settings, Contacts, MessageBubble, TypingIndicator; localize delivery-status contentDescriptions (Android)
+Base : main @ 0977931 (post-merge PR #580). Branche : `claude/blissful-ritchie-fst8wf`.
+Analyse source : `docs/analyses/uiux/2026-06-12-iteration-42.md`.
 
-## Web Actions
-1. Create `locales/{en,fr,es,pt}/search.json` — hero, form, tabs, results, empty states, user/conversation/community cards, toasts (~40 keys)
-2. Register `search` in `locales/*/index.ts` (if registration is required — verify; useI18n imports JSON dynamically by namespace so file presence suffices)
-3. `app/search/SearchPageContent.tsx` — import `useI18n('search')`, wire all strings, `toLocaleDateString(currentLanguage)`, add `aria-label` on search input + MoreVertical trigger
-4. `app/search/page.tsx` — replace text fallback with neutral spinner (server component, no hook)
-5. `app/v2/(protected)/chats/page.tsx` — `EmptyConversation` uses `useI18n('conversations')` → `conversationLayout.selectConversation`
+## Objectifs
+1. Solder les carry-over iter-41 : hex iOS hors surface liens, polices fixes vues liens,
+   AudioEffectTile, validation client ID conversation.
+2. Corriger les findings des surfaces jamais auditées (profil web, NotificationBell, VideoPlayer,
+   AuthViewModel/SettingsScreen Android).
+3. Assurer la cohérence cross-frontend sur chaque sujet touché (cf. tableau de l'analyse).
 
-## iOS Actions (text → semantic fonts; hero icons stay fixed per iter-32 precedent)
-6. `BookmarksView.swift` — title → `.body.weight(.semibold)`, subtitle → `.subheadline`; hero icon `.accessibilityHidden(true)`
-7. `PostTranslationSheet.swift` — 16 conversions (14→`.subheadline`, 15→`.subheadline`, 12→`.caption`, 11→`.caption2`, 10→`.caption2`, 16→`.callout`, 20→`.title3`); `.accessibilityLabel` on xmark close button
-8. `LinksHubView.swift` — 28→`.title.weight(.bold)`, 18→`.headline`, 13→`.footnote`, 20→`.title3`, 15→`.subheadline`, 12→`.caption`, 22→`.title2`; `.accessibilityLabel` on plus create button
+## Checklist
 
-## Android Actions
-9. Create `feature/settings/src/main/res/{values,values-fr}/strings.xml` (~23 keys, `settings_` prefix); wire SettingsScreen.kt via `stringResource`
-10. Create `feature/contacts/src/main/res/{values,values-fr}/strings.xml` (~7 keys incl. per-tab labels); wire ContactsScreen.kt, map `ContactsTab` → string resources
-11. Create `sdk-ui/src/main/res/{values,values-fr}/strings.xml` (`bubble_message_deleted`, `bubble_translated`, `bubble_edited`, `bubble_status_{pending,sent,delivered,read,failed}`); wire MessageBubble.kt
-12. `BubbleContent.kt` — add `replyToIsDeleted: Boolean = false`; `BubbleContentBuilder.kt` stops baking "Message deleted" into `replyToText` (sets flag instead); `MessageBubble.kt` ReplyPreview renders localized placeholder when flag set; update `BubbleContentBuilderTest`
-13. `feature/chat` strings.xml — add `chat_typing_one/two/many` (en+fr); `ChatScreen.kt` TypingIndicator uses `stringResource` with args
+### Web (apps/web)
+- [x] PostCard.tsx : "Translate" → i18n ; divs cliquables → role/tabIndex/onKeyDown
+- [x] LanguageOrb.tsx : role="button" + aria-label + clavier (si interactif)
+- [x] u/[username]/page.tsx : "Profil" / erreurs → clés i18n (4 langues)
+- [x] conversation/[conversationId]/page.tsx : validation ObjectId 24-hex avant fetch
+- [x] NotificationBell.tsx : aria-label i18n avec interpolation count
+- [x] ConversationHeader.tsx : clé `unreadInOtherConversations` garantie 4 langues, fallback retiré
+- [x] conversation-details-sidebar.tsx : 3× "Loading..." → common.loading
+- [x] AudioEffectTile.tsx : role/tabIndex/onKeyDown + aria-label (carry-over)
+- [x] VideoPlayer.tsx : overlay + progress bar accessibles
+- [x] MediaImageCard.tsx : aria-label sélecteur de langue
+- [x] Switch.tsx : examiné, conforme — pas de changement
+- [x] tsc --noEmit : aucune nouvelle erreur vs baseline
 
-## Verification
-- Web: `pnpm` type-check + jest web tests locally if runnable; JSON locale files valid
-- Android: gradle unit tests if toolchain available locally, else rely on review (no Android CI gate)
-- iOS: ios-tests.yml CI on PR (cannot build locally on linux)
-- CI green → merge PR into main; update branch-tracking.md
+### iOS (apps/ios + packages/MeeshySDK)
+- [x] MeeshyColors : + `errorHex`, `infoHex`
+- [x] SettingsView : 37 remplacements hex → tokens
+- [x] NotificationSettingsView : 38 remplacements
+- [x] DataExportView : reliquat (2) ; ShareLinksView accentColor → brandPrimaryHex
+- [x] OnboardingView / MessageComposer : conservés (design intentionnel, documenté)
+- [x] LinksHubView/ShareLinksView/TrackingLinksView : 22 textes → styles Dynamic Type
+- [x] accessibilityLabel boutons "plus" (LinksHub ×3 via param `createLabel`, ShareLinks ×1)
 
-## Continuity
-- Base: main @ 7ab236f (merge PR #574)
-- Branch: claude/blissful-ritchie-6709o7
-- Next iteration candidates (from analysis deferred lists): iOS SettingsView/NewConversationView fonts + PostDetailView textSelection; web admin debug + AgentArchetypesTab i18n; Android es/pt locale files
+### Android (apps/android)
+- [x] AuthViewModel/AuthUiState : `errorRes` @StringRes + `login_error_required` en/fr ;
+      LoginScreen résout errorRes ?: errorMessage
+- [x] SettingsScreen : `.clickable { }` mort → `onOpenProfile(userId)` (état + câblage NavHost)
+- [x] Deep link `meeshy://profile/{userId}` : navDeepLink + intent-filter host=profile
+- [ ] Compilation Gradle : impossible localement (pas de SDK Android dans l'environnement) —
+      diff relu intégralement, validation par CI
+
+## Vérification
+- tsc web : baseline inchangée (validé par l'agent d'implémentation)
+- JSON locales (8 fichiers) : validés
+- Swift : pas de build possible sur Linux — diff relu, syntaxe vérifiée
+- CI de la PR : gate finale avant merge dans main
+
+## Continuité
+- Mettre à jour `branch-tracking.md` après merge (base 43 = main post-merge PR iter-42)
+- Différés listés dans l'analyse §Différés (stories Android, réactions PJ, qualité es/pt,
+  validation stricte /chat/[id])

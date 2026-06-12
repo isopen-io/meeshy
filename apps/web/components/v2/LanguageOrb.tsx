@@ -50,14 +50,30 @@ export function LanguageOrb({
   pulse = true,
   animationDelay = 0,
   className,
+  onClick,
   ...props
 }: LanguageOrbProps) {
   const normalizedCode = code.toLowerCase().slice(0, 2);
   const displayFlag = flag || FLAG_MAP[normalizedCode] || '\u{1F310}';
   const color = getLanguageColor(code);
+  const isInteractive = Boolean(onClick);
 
   return (
     <div
+      role={isInteractive ? 'button' : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
+      aria-label={isInteractive ? name || code : undefined}
+      onClick={onClick}
+      onKeyDown={
+        isInteractive
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.currentTarget.click();
+              }
+            }
+          : undefined
+      }
       className={cn(
         'relative rounded-full flex items-center justify-center cursor-pointer transition-transform duration-300',
         'hover:scale-110',

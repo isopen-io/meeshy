@@ -116,6 +116,7 @@ struct LinksHubView: View {
                 description: String(localized: "links.hub.share.description", defaultValue: "Invitez des contacts à rejoindre vos conversations", bundle: .main),
                 accentHex: MeeshyColors.shareAccentHex,
                 route: .shareLinks,
+                createLabel: String(localized: "links.hub.share.create.a11y", defaultValue: "Créer un lien de partage", bundle: .main),
                 onCreate: { showCreateShareLink = true }
             )
 
@@ -125,6 +126,7 @@ struct LinksHubView: View {
                 description: String(localized: "links.hub.tracking.description", defaultValue: "Suivez les performances de vos liens de référence", bundle: .main),
                 accentHex: MeeshyColors.trackingAccentHex,
                 route: .trackingLinks,
+                createLabel: String(localized: "links.hub.tracking.create.a11y", defaultValue: "Créer un lien de tracking", bundle: .main),
                 onCreate: { showCreateTrackingLink = true }
             )
 
@@ -143,6 +145,7 @@ struct LinksHubView: View {
                 description: String(localized: "links.hub.affiliate.description", defaultValue: "Monétisez votre réseau avec des tokens d'affiliation", bundle: .main),
                 accentHex: MeeshyColors.successHex,
                 route: .affiliate,
+                createLabel: String(localized: "links.hub.affiliate.create.a11y", defaultValue: "Créer un lien affilié", bundle: .main),
                 onCreate: { showCreateAffiliate = true }
             )
         }
@@ -156,6 +159,7 @@ struct LinksHubView: View {
         description: String,
         accentHex: String,
         route: Route,
+        createLabel: String? = nil,
         onCreate: (() -> Void)?
     ) -> some View {
         let accent = Color(hex: accentHex)
@@ -200,7 +204,7 @@ struct LinksHubView: View {
                                 .foregroundColor(accent)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(String(localized: "links.hub.create", defaultValue: "Créer", bundle: .main))
+                        .accessibilityLabel(createLabel ?? title)
                     }
 
                     Image(systemName: "chevron.right")
