@@ -42,6 +42,7 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 30 | claude/dazzling-hawking-b4tdnk | #507 | ✅ |
 | 31 | claude/iter31-type-safety | #509 | ✅ |
 | 32 | feat/uiux-iter32 | #539 | ✅ |
+| 33 | feat/uiux-iter33 | #588 | ⏳ |
 | 33–39 | (inline admin-i18n passes, commit-message numbering) | #544, #545, … | ✅ |
 | 40 | claude/friendly-brown-xuzpju | #575 | ✅ |
 | 41 | claude/blissful-ritchie-9vesx9 | #577 | ✅ |

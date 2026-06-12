@@ -325,14 +325,45 @@
   },
   "llm": {
     "generationSettings": "Paramètres de génération",
-    "budgetManagement": "Gestion du Budget"
+    "budgetManagement": "Gestion du Budget",
+    "cardTitle": "Configuration LLM",
+    "keyConfigured": "Clé configurée",
+    "labelProvider": "Provider",
+    "labelModel": "Modèle",
+    "labelTemperature": "Température",
+    "labelMaxTokens": "Max Tokens",
+    "labelDailyBudget": "Budget quotidien (USD)",
+    "labelMaxCostPerCall": "Coût max par appel (USD)",
+    "labelApiKey": "Clé API",
+    "labelApiKeyHint": "(laisser vide pour conserver)",
+    "saveButton": "Enregistrer"
   },
   "globalConfig": {
     "defaultProvider": "Provider par défaut",
     "globalScheduler": "Planificateur Global",
     "active": "Actif",
     "disabled": "Désactivé",
-    "none": "Aucun"
+    "none": "Aucun",
+    "cardTitle": "Configuration Globale",
+    "cardSubtitle": "Kill switch global et paramètres par défaut",
+    "systemPromptLabel": "Prompt Système Global",
+    "fallbackSection": "Fallback",
+    "labelFallbackProvider": "Provider fallback",
+    "labelFallbackModel": "Modèle fallback",
+    "budgetSection": "Budget & Concurrence",
+    "labelDailyBudget": "Budget quotidien (USD)",
+    "labelMaxConcurrent": "Max appels simultanés",
+    "scanSection": "Paramètres de scan",
+    "labelEligibleTypes": "Types de conversations éligibles",
+    "labelFreshness": "Fraîcheur messages (heures)",
+    "freshnessHint": "Les messages plus anciens que cette limite sont ignorés",
+    "labelMaxConversations": "Max conversations/cycle",
+    "maxConversationsHint": "0 = illimité",
+    "labelWeekdayBudget": "Budget scan/jour (semaine)",
+    "labelWeekendBudget": "Budget scan/jour (weekend)",
+    "labelMinInterval": "Intervalle Min (sec)",
+    "labelMaxInterval": "Intervalle Max (sec)",
+    "saveButton": "Enregistrer"
   },
   "agentConfig": {
     "titleNew": "Nouvelle configuration agent",
@@ -1624,5 +1655,22 @@
     "navAgent": "Agent IA",
     "navMonitoring": "Monitoring",
     "accessLevel": "Administration Meeshy - Niveau d'accès : {role}"
+  },
+  "rankingPage": {
+    "back": "Retour",
+    "title": "Classements",
+    "description": "Classez les utilisateurs, conversations, messages et liens selon différents critères",
+    "podium": "Podium des champions",
+    "top10": "Top 10",
+    "top25": "Top 25",
+    "top50": "Top 50",
+    "top100": "Top 100"
+  },
+  "settingsModal": {
+    "triggerButton": "Paramètres",
+    "title": "Paramètres de {username}",
+    "description": "Configurez vos préférences de langue et de traduction automatique",
+    "cancelButton": "Annuler",
+    "saveButton": "Sauvegarder"
   }
 }

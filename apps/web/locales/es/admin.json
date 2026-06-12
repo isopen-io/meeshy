@@ -325,14 +325,45 @@
   },
   "llm": {
     "generationSettings": "Configuración de generación",
-    "budgetManagement": "Gestión del presupuesto"
+    "budgetManagement": "Gestión del presupuesto",
+    "cardTitle": "Configuración LLM",
+    "keyConfigured": "Clave configurada",
+    "labelProvider": "Proveedor",
+    "labelModel": "Modelo",
+    "labelTemperature": "Temperatura",
+    "labelMaxTokens": "Max Tokens",
+    "labelDailyBudget": "Presupuesto diario (USD)",
+    "labelMaxCostPerCall": "Costo máx por llamada (USD)",
+    "labelApiKey": "Clave API",
+    "labelApiKeyHint": "(dejar vacío para conservar)",
+    "saveButton": "Guardar"
   },
   "globalConfig": {
     "defaultProvider": "Proveedor predeterminado",
     "globalScheduler": "Planificador global",
     "active": "Activo",
     "disabled": "Desactivado",
-    "none": "Ninguno"
+    "none": "Ninguno",
+    "cardTitle": "Configuración Global",
+    "cardSubtitle": "Kill switch global y parámetros predeterminados",
+    "systemPromptLabel": "Prompt del Sistema Global",
+    "fallbackSection": "Fallback",
+    "labelFallbackProvider": "Proveedor fallback",
+    "labelFallbackModel": "Modelo fallback",
+    "budgetSection": "Presupuesto y Concurrencia",
+    "labelDailyBudget": "Presupuesto diario (USD)",
+    "labelMaxConcurrent": "Máx llamadas simultáneas",
+    "scanSection": "Parámetros de escaneo",
+    "labelEligibleTypes": "Tipos de conversaciones elegibles",
+    "labelFreshness": "Frescura mensajes (horas)",
+    "freshnessHint": "Los mensajes más antiguos que este límite se ignoran",
+    "labelMaxConversations": "Máx conversaciones/ciclo",
+    "maxConversationsHint": "0 = ilimitado",
+    "labelWeekdayBudget": "Presupuesto escaneo/día (semana)",
+    "labelWeekendBudget": "Presupuesto escaneo/día (fin de semana)",
+    "labelMinInterval": "Intervalo mín (seg)",
+    "labelMaxInterval": "Intervalo máx (seg)",
+    "saveButton": "Guardar"
   },
   "agentConfig": {
     "titleNew": "Nueva configuración de agente",
@@ -1624,5 +1655,22 @@
     "navAgent": "Agente IA",
     "navMonitoring": "Monitoreo",
     "accessLevel": "Administración de Meeshy - Nivel de acceso: {role}"
+  },
+  "rankingPage": {
+    "back": "Volver",
+    "title": "Clasificaciones",
+    "description": "Clasifique usuarios, conversaciones, mensajes y enlaces por varios criterios",
+    "podium": "Podio de campeones",
+    "top10": "Top 10",
+    "top25": "Top 25",
+    "top50": "Top 50",
+    "top100": "Top 100"
+  },
+  "settingsModal": {
+    "triggerButton": "Configuración",
+    "title": "Configuración de {username}",
+    "description": "Configure sus preferencias de idioma y traducción automática",
+    "cancelButton": "Cancelar",
+    "saveButton": "Guardar"
   }
 }
