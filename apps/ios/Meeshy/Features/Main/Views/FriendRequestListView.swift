@@ -36,7 +36,7 @@ struct FriendRequestListView: View {
             Spacer()
 
             Text(String(localized: "friends.requests.title", defaultValue: "Demandes d'amis", bundle: .main))
-                .font(.system(.headline, design: .rounded).weight(.semibold))
+                .font(.system(.body, design: .rounded, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -83,7 +83,7 @@ struct FriendRequestListView: View {
                 .foregroundColor(theme.textMuted.opacity(0.4))
 
             Text(String(localized: "friends.requests.empty.title", defaultValue: "Aucune demande", bundle: .main))
-                .font(.title3.weight(.semibold))
+                .font(.headline)
                 .foregroundColor(theme.textMuted)
 
             Text(String(localized: "friends.requests.empty.subtitle", defaultValue: "Les demandes d'amis apparaitront ici", bundle: .main))
@@ -142,17 +142,18 @@ struct FriendRequestListView: View {
                     Task { await viewModel.respond(to: request.id, accepted: false) }
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.caption.weight(.bold))
                         .foregroundColor(theme.textMuted)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(theme.textMuted.opacity(0.12)))
                 }
+                .accessibilityLabel(String(localized: "friends.requests.decline", defaultValue: "Refuser la demande", bundle: .main))
 
                 Button {
                     Task { await viewModel.respond(to: request.id, accepted: true) }
                 } label: {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.caption.weight(.bold))
                         .foregroundColor(.white)
                         .frame(width: 36, height: 36)
                         .background(
@@ -166,6 +167,7 @@ struct FriendRequestListView: View {
                                 )
                         )
                 }
+                .accessibilityLabel(String(localized: "friends.requests.accept", defaultValue: "Accepter la demande", bundle: .main))
             }
         }
         .padding(.horizontal, 20)

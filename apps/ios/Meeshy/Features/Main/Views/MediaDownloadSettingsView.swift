@@ -71,7 +71,7 @@ struct MediaDownloadSettingsView: View {
             VStack(spacing: 20) {
                 infoSection
                 policyPicker(
-                    title: String(localized: "settings.media.download.images", defaultValue: "Images", bundle: .main), icon: "photo.fill", color: MeeshyColors.indigo300Hex,
+                    title: String(localized: "settings.media.download.images", defaultValue: "Images", bundle: .main), icon: "photo.fill", color: MeeshyColors.infoHex,
                     binding: $store.preferences.image
                 )
                 policyPicker(

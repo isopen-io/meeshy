@@ -17,10 +17,10 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | Field | Value |
 |-------|-------|
 | Last completed iteration | **45** (PR #597 : web i18n participants-drawer 6 clés ×4 locales, `timeCompact.*` aligné iOS dans transform-conversation, `getLastSeenFormatted` localisé via `contacts.status.*`, suppression code mort notification-helpers, locale sur 2 dates ; iOS : régression FR timeAgo FeedCommentsSheet → `ShortRelativeTime`, ChangePasswordView tokens 6366F1/9B59B6 + 13 polices sémantiques ; Android : dédoublonnage `chat_date_*` es/pt) — co-mergée avec **45w** (#596, web-only) et **45i** (#595, iOS-only) |
-| Last merged PR | #597 (45), #604 ; iter-46 en cours sur `claude/blissful-ritchie-8rma6f` |
-| Last Merged Base (commit) | 945a8d74 (merge #604, inclut #597) — base de l'iter-46 |
+| In progress | **46** (#606, `claude/blissful-ritchie-8rma6f`) **+ 46i** (#607, iOS-only, `claude/wizardly-rubin-a15oib`) — co-mergées dans une branche d'intégration. 46i : éradication FINALE ancienne palette (24 sites vivants), épuration 14 structs mortes RootViewComponents + suppression `MessageComposer.swift`/`SampleData.swift` (pbxproj), Dynamic Type FriendRequestListView, 6 clés i18n ×5 locales, 8 labels a11y |
+| Last Merged Base (commit) | 945a8d74 (merge #604, inclut #597) |
 | Note de réconciliation 45×45w | 45w a remplacé `'fr-FR'` par `getCurrentInterfaceLocale()` dans transform-conversation/users.service/notification-helpers en gardant les libellés FR en dur ; iter-45 i18n-ise complètement ces trois sites (clés `timeCompact.*`/`contacts.status.*` + suppression code mort) — la version iter-45 supersède, imports `getCurrentInterfaceLocale` orphelins retirés. 45i (refonte ConversationListHelpers) ne touche pas `ShortRelativeTime` ni les fichiers iter-45 — merge propre vérifié |
-| Next iteration | **47** — repartir de `main` HEAD post-merge iter-46 |
+| Next iteration | **47** — repartir de `main` HEAD post-merge 46/46i |
 
 ### Deferred carry-over — web (pour 47+)
 - **`AgentConfigDialog`** : ~40-45 strings FR (labels, selects, 20+ tooltips InfoIcon 50-300 chars) — chantier dédié, passe isolée recommandée (vérifié iter-46 : seul gros reste de l'admin ; debug.tsx/AgentArchetypesTab/BackSoundDetails/UserPicker soldés)
@@ -32,8 +32,8 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 - locale maps intentionnelles NON à migrer : share-affiliate-modal, AudioPostComposer (speech), use-voice-recording (SpeechRecognition lang)
 - Universal/App Links `https://meeshy.me/...` — arbitrage produit cross-platform (web assetlinks.json + AASA, voir Android)
 
-### Deferred carry-over — iOS (pour 47+, post-46)
-**Gros fichiers palette legacy (planifié 47)** : RootViewComponents (13), FeedView (9), FeedView+Attachments (11), WidgetPreviewView (8) — gradients décoratifs, arbitrage visuel par surface ; hex hors périmètre des 6 legacy (F8B500, 3498DB, F39C12…) dans AboutView/UserStatsView/MediaDownloadSettingsView à inventorier ; SampleData.swift ×2 (app + SDK) morts confirmés — suppression nécessite pbxproj + build macOS ; BubbleStandardLayout:835 quoted reply sans .textSelection (conflit potentiel tap-to-scroll, à évaluer) ; arbitrage `time.*` (FeedPostCard) vs `time.short.*` (ShortRelativeTime) ; grandes surfaces polices : ConversationInfoSheet (52), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (27), NewConversationView (16), DataExportView (16), DataStorageView (11) ; washes AudioPostComposer (décision design) ; ladder pièces jointes arc-en-ciel (à arbitrer charte) ; VoiceProfileWizardView/TrackingLinksView Color(hex:) ; IncomingCallView .white contraste ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) ; ThemedConversationRow theme-aware (leaf-view). Soldés en 46 : FriendRequestListView polices, PostDetailView (confirmé OK), CameraView a11y, 10 petits fichiers palette (27 occ)
+### Deferred carry-over — iOS (pour 47+, post-46/46i)
+PostDetailView (.textSelection + 21 hex — re-vérifié OK iter-45, retirer si confirmé) ; arbitrage `time.*` (FeedPostCard) vs `time.short.*` (ShortRelativeTime) ; ConversationInfoSheet (52 polices), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (27), NewConversationView (16), DataExportView (16), DataStorageView (11) ; ladder catégoriel arc-en-ciel (FF9F43/45B7D1/2ECC71/F8B500/9B59B6/E74C3C/FF6B6B/E91E63/3498DB/A855F7 — à arbitrer charte : UserStatsView, AboutView sections, MediaDownloadSettingsView, toolbars feed, WidgetPreviewView « Post ») ; `FeedItem`/`ConversationTag` possiblement orphelins post-46i (audit avant suppression) ; washes AudioPostComposer (décision design, OK) ; filtre photo « cool » 08D9D6 StoryViewerView+Content:180 (exception documentée 46i — NE PLUS FLAGGER) ; VoiceProfileWizardView/TrackingLinksView Color(hex:) ; IncomingCallView .white contraste ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) ; ThemedConversationRow theme-aware (leaf-view). **Réglés en 46/46i : ancienne palette (toutes surfaces vivantes), SampleData/MessageComposer supprimés, FriendRequestListView polices+a11y, RootViewComponents épuré, CameraView a11y, PostDetailView confirmé OK**
 
 ### Deferred carry-over — Android (pour 47+)
 parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ; App Links `https://meeshy.me` (assetlinks.json, arbitrage cross-platform) ; exceptions documentées : SettingsScreen 14.dp, emoji 22.sp (acceptées, ne pas re-flagger). Soldés en 46 : 4 sites `Role.Button` (SettingsScreen profil, MeeshyPrimaryButton, ReactionChip, BubbleImageGrid ×2)
@@ -74,4 +74,5 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 45w | claude/elegant-noether-1pen57 | #596 | ✅ |
 | 45i | claude/wizardly-rubin-ux84an | #595 | ✅ |
 | 45 | claude/blissful-ritchie-dp7ibu | #597 | ✅ |
-| 46 | claude/blissful-ritchie-8rma6f | — | ⏳ |
+| 46 | claude/blissful-ritchie-8rma6f | #606 | ⏳ |
+| 46i | claude/wizardly-rubin-a15oib | #607 | ⏳ |

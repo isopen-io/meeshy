@@ -130,7 +130,7 @@ final class AttachmentPreparationService {
 
     func prepareImage(_ image: UIImage,
                              context: MediaContext = .message,
-                             accentColor: String = MeeshyColors.indigo300Hex) -> PreparingAttachment {
+                             accentColor: String = MeeshyColors.brandPrimaryHex) -> PreparingAttachment {
         let prep = PreparingAttachment(kind: .image, initialThumbnail: image, accentColor: accentColor)
         prep.stage = .compressing
         Task { [weak self] in
@@ -144,7 +144,7 @@ final class AttachmentPreparationService {
     func prepareImageData(_ data: Data,
                                  image: UIImage,
                                  context: MediaContext = .message,
-                                 accentColor: String = MeeshyColors.indigo300Hex) -> PreparingAttachment {
+                                 accentColor: String = MeeshyColors.brandPrimaryHex) -> PreparingAttachment {
         let prep = PreparingAttachment(kind: .image, initialThumbnail: image, accentColor: accentColor)
         prep.stage = .compressing
         Task { [weak self] in
@@ -158,7 +158,7 @@ final class AttachmentPreparationService {
     func prepareVideo(sourceURL: URL,
                              deleteSourceAfterCompression: Bool,
                              context: MediaContext = .message,
-                             accentColor: String = MeeshyColors.brandPrimaryHex) -> PreparingAttachment {
+                             accentColor: String = MeeshyColors.brandDeepHex) -> PreparingAttachment {
         let prep = PreparingAttachment(kind: .video, accentColor: accentColor)
         prep.stage = .compressing
         Task { [weak self] in
@@ -199,7 +199,7 @@ final class AttachmentPreparationService {
                                         accentColor: String) -> PreparingAttachment {
         let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
         let resolvedColor = accentColor.isEmpty
-            ? (isVideo ? MeeshyColors.brandPrimaryHex : MeeshyColors.indigo300Hex)
+            ? (isVideo ? MeeshyColors.brandDeepHex : MeeshyColors.brandPrimaryHex)
             : accentColor
         let prep = PreparingAttachment(
             kind: isVideo ? .video : .image,
