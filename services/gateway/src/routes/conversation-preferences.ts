@@ -591,10 +591,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-          return reply.status(401).send({
-            success: false,
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const userId = authContext.userId;
@@ -627,10 +624,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         return sendSuccess(reply, { message: 'Conversations reordered successfully' });
       } catch (error) {
         logError(fastify.log, 'Error reordering conversations:', error);
-        reply.code(500).send({
-          success: false,
-          message: 'Error reordering conversations'
-        });
+        sendInternalError(reply, 'Error reordering conversations');
       }
     }
   );
