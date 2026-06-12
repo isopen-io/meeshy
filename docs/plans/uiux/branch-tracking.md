@@ -17,10 +17,10 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | Field | Value |
 |-------|-------|
 | Last completed iteration | 40 (review pass — iter-24 leftovers + recent iOS/Android surfaces) |
-| Working branch (iteration 40) | `claude/friendly-brown-xuzpju` (from main @ d96afa17) |
-| Last Merged Base (commit) | d96afa17 (will be the merge commit of iter 40 once PR lands) |
+| Last merged PR | #575 (feat/uiux iter-40 — i18n web/iOS/Android, Dynamic Type, a11y) |
+| Last Merged Base (commit) | 18116285 |
 | Next iteration | **41** |
-| Next branch to create from | `main` (after iter-40 merge) |
+| Next branch to create from | `main` (HEAD = 18116285) |
 | Deferred carry-over for 41 | iOS hex-color token refactor (TrackingLinks/ShareLink/CommunityLink), FeedPostCard/FeedView fonts, web+Android per-attachment reactions parity |
 
 ---
@@ -43,4 +43,4 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 31 | claude/iter31-type-safety | #509 | ✅ |
 | 32 | feat/uiux-iter32 | #539 | ✅ |
 | 33–39 | (inline admin-i18n passes, commit-message numbering) | #544, #545, … | ✅ |
-| 40 | claude/friendly-brown-xuzpju | (this iteration) | ⏳ |
+| 40 | claude/friendly-brown-xuzpju | #575 | ✅ |
