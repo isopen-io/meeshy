@@ -234,7 +234,7 @@ struct ConversationEntry: TimelineEntry {
             timestamp: Date().addingTimeInterval(-3600),
             isUnread: false,
             isPinned: false,
-            accentColor: "4ECDC4"
+            accentColor: "818CF8"
         )
     ]
 }
@@ -727,7 +727,7 @@ struct FavoriteContactsEntry: TimelineEntry {
         FavoriteContact(id: "1", name: "Mom", avatar: "person.circle.fill", status: "Online", accentColor: "34D399"),
         FavoriteContact(id: "2", name: "John", avatar: "person.circle.fill", status: "Away", accentColor: "6366F1"),
         FavoriteContact(id: "3", name: "Sarah", avatar: "person.circle.fill", status: "Online", accentColor: "F39C12"),
-        FavoriteContact(id: "4", name: "Team", avatar: "person.3.fill", status: "3 members", accentColor: "4ECDC4")
+        FavoriteContact(id: "4", name: "Team", avatar: "person.3.fill", status: "3 members", accentColor: "818CF8")
     ]
 }
 

@@ -158,7 +158,7 @@ struct BlockedUsersView: View {
                         } label: {
                             Label(String(localized: "blocked.users.unblock.action", defaultValue: "Debloquer", bundle: .main), systemImage: "person.crop.circle.badge.checkmark")
                         }
-                        .tint(Color(hex: "4ECDC4"))
+                        .tint(MeeshyColors.brandPrimary)
                     }
             }
         }
