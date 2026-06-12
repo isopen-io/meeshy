@@ -1,6 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
-import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
+import {
+  useConversationPreferencesStore,
+  useConversationPreference,
+  useConversationCategories,
+  useConversationPreferencesActions,
+} from '@/stores/conversation-preferences-store';
 import { userPreferencesService } from '@/services/user-preferences.service';
 import type { HeaderPreferences } from './types';
 
@@ -13,18 +18,25 @@ function isAnonymousUser(user: unknown): boolean {
  * Utilise le store Zustand pour la synchronisation globale
  */
 export function useHeaderPreferences(conversationId: string, currentUser: unknown, t: (key: string) => string) {
-  const store = useConversationPreferencesStore();
-  const storePrefs = store.preferencesMap.get(conversationId);
-  const categories = store.categories;
+  const storePrefs = useConversationPreference(conversationId);
+  const categories = useConversationCategories();
+  const isStoreLoading = useConversationPreferencesStore(state => state.isLoading);
+  const isInitialized = useConversationPreferencesStore(state => state.isInitialized);
+  const {
+    initialize,
+    togglePin: togglePinAction,
+    toggleMute: toggleMuteAction,
+    toggleArchive: toggleArchiveAction,
+  } = useConversationPreferencesActions();
   const [isLoadingCategory, setIsLoadingCategory] = useState(false);
   const [categoryName, setCategoryName] = useState<string | undefined>();
 
   // Initialiser le store si nécessaire
   useEffect(() => {
-    if (!store.isInitialized && !isAnonymousUser(currentUser)) {
-      store.initialize();
+    if (!isInitialized && !isAnonymousUser(currentUser)) {
+      initialize();
     }
-  }, [store.isInitialized, currentUser]);
+  }, [isInitialized, initialize, currentUser]);
 
   // Charger le nom de la catégorie quand les préférences changent
   useEffect(() => {
@@ -74,42 +86,42 @@ export function useHeaderPreferences(conversationId: string, currentUser: unknow
       customName: storePrefs?.customName,
       tags: [...(storePrefs?.tags ?? [])],
       categoryName,
-      isLoading: store.isLoading || isLoadingCategory,
+      isLoading: isStoreLoading || isLoadingCategory,
     };
-  }, [storePrefs, categoryName, store.isLoading, isLoadingCategory, currentUser]);
+  }, [storePrefs, categoryName, isStoreLoading, isLoadingCategory, currentUser]);
 
   const togglePin = useCallback(async () => {
     try {
       const newPinnedState = !preferences.isPinned;
-      await store.togglePin(conversationId, newPinnedState);
+      await togglePinAction(conversationId, newPinnedState);
       toast.success(t(newPinnedState ? 'conversationHeader.pinned' : 'conversationHeader.unpinned'));
     } catch (error) {
       console.error('Error toggling pin:', error);
       toast.error(t('conversationHeader.pinError'));
     }
-  }, [conversationId, preferences.isPinned, store, t]);
+  }, [conversationId, preferences.isPinned, togglePinAction, t]);
 
   const toggleMute = useCallback(async () => {
     try {
       const newMutedState = !preferences.isMuted;
-      await store.toggleMute(conversationId, newMutedState);
+      await toggleMuteAction(conversationId, newMutedState);
       toast.success(t(newMutedState ? 'conversationHeader.muted' : 'conversationHeader.unmuted'));
     } catch (error) {
       console.error('Error toggling mute:', error);
       toast.error(t('conversationHeader.muteError'));
     }
-  }, [conversationId, preferences.isMuted, store, t]);
+  }, [conversationId, preferences.isMuted, toggleMuteAction, t]);
 
   const toggleArchive = useCallback(async () => {
     try {
       const newArchivedState = !preferences.isArchived;
-      await store.toggleArchive(conversationId, newArchivedState);
+      await toggleArchiveAction(conversationId, newArchivedState);
       toast.success(t(newArchivedState ? 'conversationHeader.archived' : 'conversationHeader.unarchived'));
     } catch (error) {
       console.error('Error toggling archive:', error);
       toast.error(t('conversationHeader.archiveError'));
     }
-  }, [conversationId, preferences.isArchived, store, t]);
+  }, [conversationId, preferences.isArchived, toggleArchiveAction, t]);
 
   return {
     preferences,

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Footer } from '@/components/layout/Footer';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,17 +36,16 @@ import { useI18n } from '@/hooks/useI18n';
 import { getTrackingLinkStats } from '@/services/tracking-links';
 import { copyToClipboard } from '@/lib/clipboard';
 import type { TrackingLink } from '@meeshy/shared/types/tracking-link';
-import {
-  ComposedChart,
-  Bar,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer
-} from 'recharts';
+
+const TrackedLinkClicksChart = dynamic(
+  () => import('./TrackedLinkClicksChart').then(mod => mod.TrackedLinkClicksChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full bg-gray-100 dark:bg-gray-800 rounded animate-pulse" style={{ height: 400 }} />
+    )
+  }
+);
 
 interface TrackingLinkStats {
   trackingLink: TrackingLink;
@@ -734,55 +734,14 @@ export default function TrackingLinkDetailsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-6">
-                    {/* Graphique Recharts */}
-                    <ResponsiveContainer width="100%" height={400}>
-                      <ComposedChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
-                        <XAxis
-                          dataKey="date"
-                          angle={-45}
-                          textAnchor="end"
-                          height={80}
-                          className="text-xs"
-                        />
-                        <YAxis className="text-xs" />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            border: 'none',
-                            borderRadius: '8px',
-                            color: 'white'
-                          }}
-                        />
-                        <Legend />
-                        <Bar
-                          dataKey={t('stats.totalClicks')}
-                          fill="#3b82f6"
-                          radius={[8, 8, 0, 0]}
-                        />
-                        <Bar
-                          dataKey={t('stats.uniqueClicks')}
-                          fill="#10b981"
-                          radius={[8, 8, 0, 0]}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey={t('stats.avgTotal')}
-                          stroke="#ef4444"
-                          strokeWidth={2}
-                          strokeDasharray="5 5"
-                          dot={false}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey={t('stats.avgUnique')}
-                          stroke="#f59e0b"
-                          strokeWidth={2}
-                          strokeDasharray="5 5"
-                          dot={false}
-                        />
-                      </ComposedChart>
-                    </ResponsiveContainer>
+                    {/* Graphique Recharts (différé hors du chunk de la route) */}
+                    <TrackedLinkClicksChart
+                      data={chartData}
+                      totalClicksKey={t('stats.totalClicks')}
+                      uniqueClicksKey={t('stats.uniqueClicks')}
+                      avgTotalKey={t('stats.avgTotal')}
+                      avgUniqueKey={t('stats.avgUnique')}
+                    />
 
                     {/* Tableau récapitulatif */}
                     <div className="mt-6 pt-6 border-t">

@@ -16,12 +16,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | 42 (web search i18n + iOS Dynamic Type Bookmarks/PostTranslation/LinksHub + Android contacts tabs i18n + déflake tests grouping iOS) |
+| Last completed iteration | 42 (web search i18n + iOS Dynamic Type Bookmarks/PostTranslation/LinksHub + déflake tests grouping/loadMore/VideoSurvival iOS) |
 | Last merged PR | pending — iteration 42 PR #576 from claude/blissful-ritchie-6709o7 |
-| Last Merged Base (commit) | 167ef31 (post #577/#578) |
+| Last Merged Base (commit) | 1a238dd (post #580/#581) |
 | Next iteration | **43** |
 | Next branch to create from | `main` after PR #576 merges |
-| Deferred carry-over for 43 | hex iOS hors surface liens (SettingsView, NotificationSettingsView, OnboardingView, DataExportView, ConversationView+Composer…), iOS SettingsView/NewConversationView/DataExport fonts + PostDetailView textSelection, FeedPostCard/FeedView fonts restants, parité stories Android, réactions par pièce jointe web/Android, web admin debug + AgentArchetypesTab i18n, Android es/pt strings.xml |
+| Deferred carry-over for 43 | hex iOS hors surface liens (SettingsView, NotificationSettingsView, OnboardingView, DataExportView reste, ConversationView+Composer) ; polices fixes vues liens iOS ; iOS SettingsView/NewConversationView fonts + PostDetailView textSelection ; parité stories Android ; réactions par pièce jointe web+Android (wiring gateway attachment:reaction-*) ; AudioEffectTile role=button web ; audit qualité es/pt ; validation client ID conversation web ; web admin debug + AgentArchetypesTab i18n ; Android es/pt strings.xml |
 
 ---
 
@@ -45,4 +45,5 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 33–39 | (inline admin-i18n passes, commit-message numbering) | #544, #545, … | ✅ |
 | 40 | claude/friendly-brown-xuzpju | #575 | ✅ |
 | 41 | claude/blissful-ritchie-9vesx9 | #577 | ✅ |
+| 41b | claude/blissful-ritchie-68j2oq | #580 | ✅ |
 | 42 | claude/blissful-ritchie-6709o7 | #576 | ⏳ |

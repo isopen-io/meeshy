@@ -8,6 +8,8 @@ import {
   Line,
   AreaChart,
   Area,
+  BarChart,
+  Bar,
   PieChart,
   Pie,
   Cell,
@@ -284,5 +286,47 @@ export function DonutChart({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ======================
+// SimpleBarChart Component
+// ======================
+
+export interface SimpleBarChartDataPoint {
+  [key: string]: string | number;
+}
+
+export interface SimpleBarChartProps {
+  data: SimpleBarChartDataPoint[];
+  xAxisKey: string;
+  dataKey: string;
+  color?: string;
+  height?: number;
+}
+
+export function SimpleBarChart({
+  data,
+  xAxisKey,
+  dataKey,
+  color = '#10b981',
+  height = 300
+}: SimpleBarChartProps) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+        <XAxis dataKey={xAxisKey} stroke="#6b7280" />
+        <YAxis stroke="#6b7280" />
+        <Tooltip
+          contentStyle={{
+            backgroundColor: 'white',
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px'
+          }}
+        />
+        <Bar dataKey={dataKey} fill={color} radius={[8, 8, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }

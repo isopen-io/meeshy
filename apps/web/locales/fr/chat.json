@@ -1,5 +1,6 @@
 {
   "chat": {
+    "redirecting": "Redirection en cours...",
     "title": "Discussion",
     "anonymousChat": "Discussion anonyme",
     "loading": "Chargement de la discussion...",

@@ -143,6 +143,14 @@ public class ThemeManager: ObservableObject, @unchecked Sendable {
         )
     }
 
+    public func surfaceGradient(tint: Color) -> LinearGradient {
+        let intensity = mode.isDark ? 0.15 : 0.08
+        return LinearGradient(
+            colors: [tint.opacity(intensity), tint.opacity(intensity * 0.3)],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        )
+    }
+
     // MARK: - Border Colors
 
     public func border(tint: String, intensity: Double = 0.4) -> LinearGradient {
@@ -150,6 +158,16 @@ public class ThemeManager: ObservableObject, @unchecked Sendable {
             colors: [
                 Color(hex: tint).opacity(mode.isDark ? intensity : intensity * 0.6),
                 Color(hex: tint).opacity(mode.isDark ? intensity * 0.2 : intensity * 0.1)
+            ],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        )
+    }
+
+    public func border(tint: Color, intensity: Double = 0.4) -> LinearGradient {
+        LinearGradient(
+            colors: [
+                tint.opacity(mode.isDark ? intensity : intensity * 0.6),
+                tint.opacity(mode.isDark ? intensity * 0.2 : intensity * 0.1)
             ],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )

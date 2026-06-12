@@ -1,5 +1,34 @@
 {
   "groups": {
+    "preferences": {
+      "title": "Preferencias",
+      "pin": "Fijar",
+      "mute": "Silenciar",
+      "archive": "Archivar",
+      "notifications": "Notificaciones",
+      "notifAll": "Todas",
+      "notifMentions": "Menciones",
+      "notifNone": "Ninguna",
+      "updateError": "Error de actualización"
+    },
+    "community": {
+      "notFound": "Comunidad no encontrada",
+      "backToCommunities": "Volver a las comunidades",
+      "join": "Unirse a la comunidad",
+      "leave": "Salir de la comunidad",
+      "joinedToast": "Te has unido a \"{name}\"",
+      "leftToast": "Has salido de \"{name}\"",
+      "actionError": "Se produjo un error. Inténtalo de nuevo.",
+      "membersTitle": "Miembros",
+      "conversationsTitle": "Conversaciones",
+      "membersCount": "{count} miembros",
+      "conversationsCount": "{count} conversaciones",
+      "noMembers": "Sin miembros",
+      "moreMembers": "+{count} miembros más",
+      "noConversations": "No hay conversaciones en esta comunidad",
+      "untitled": "Sin título",
+      "unknownMember": "Desconocido"
+    },
     "title": "Comunidades",
     "description": "Descubra y únase a comunidades",
     "createGroup": "Crear una comunidad",

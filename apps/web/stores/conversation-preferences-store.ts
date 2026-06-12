@@ -14,6 +14,7 @@
  */
 
 import { create } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import { userPreferencesService } from '@/services/user-preferences.service';
 import type { UserConversationPreferences, UserConversationCategory } from '@meeshy/shared/types/user-preferences';
 
@@ -304,4 +305,20 @@ export const useConversationPreference = (conversationId: string) => {
 
 export const useConversationCategories = () => {
   return useConversationPreferencesStore(state => state.categories);
+};
+
+export const useConversationPreferencesActions = () => {
+  return useConversationPreferencesStore(
+    useShallow(state => ({
+      initialize: state.initialize,
+      getPreferences: state.getPreferences,
+      togglePin: state.togglePin,
+      toggleMute: state.toggleMute,
+      toggleArchive: state.toggleArchive,
+      setReaction: state.setReaction,
+      updatePreference: state.updatePreference,
+      refreshPreferences: state.refreshPreferences,
+      refreshCategories: state.refreshCategories,
+    }))
+  );
 };
