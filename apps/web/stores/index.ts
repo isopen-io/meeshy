@@ -29,6 +29,7 @@ export {
 // Language Store
 export {
   useLanguageStore,
+  getCurrentInterfaceLocale,
   useCurrentInterfaceLanguage,
   useAvailableLanguages,
   useUserLanguageConfig,

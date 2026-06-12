@@ -1,6 +1,7 @@
 import { apiService } from './api.service';
 import { User } from '@/types';
 import { getDefaultPermissions } from '@/utils/user-adapter';
+import { getCurrentInterfaceLocale } from '@/stores/language-store';
 // Importer les types partagés pour cohérence
 import type { ApiResponse, UpdateUserRequest, UpdateUserResponse } from '@meeshy/shared/types';
 
@@ -276,7 +277,7 @@ export const usersService = {
     } else if (diffDays < 7) {
       return `Il y a ${diffDays} jour${diffDays > 1 ? 's' : ''}`;
     } else {
-      return lastActive.toLocaleDateString('fr-FR');
+      return lastActive.toLocaleDateString(getCurrentInterfaceLocale());
     }
   },
 

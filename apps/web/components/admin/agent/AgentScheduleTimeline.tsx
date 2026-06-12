@@ -22,8 +22,8 @@ type AgentScheduleTimelineProps = {
   compact?: boolean;
 };
 
-function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+function formatTime(ts: number, locale: string): string {
+  return new Date(ts).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatDuration(ms: number): string {
@@ -47,7 +47,7 @@ function budgetGlow(ratio: number): string {
 }
 
 export default memo(function AgentScheduleTimeline({ conversationId, compact = false }: AgentScheduleTimelineProps) {
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   const [schedule, setSchedule] = useState<AgentScheduleData | null>(null);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
@@ -235,7 +235,7 @@ export default memo(function AgentScheduleTimeline({ conversationId, compact = f
                 {/* Tooltip on hover */}
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
                   <div className="bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-[10px] px-2 py-1 rounded shadow-lg whitespace-nowrap font-mono tabular-nums">
-                    {formatTime(ts)}
+                    {formatTime(ts, locale)}
                   </div>
                 </div>
               </div>
@@ -332,7 +332,7 @@ export default memo(function AgentScheduleTimeline({ conversationId, compact = f
       {schedule.lastScan > 0 ? (
         <div className="text-[10px] text-gray-400 flex items-center gap-1.5">
           <span className="inline-block h-1 w-1 rounded-full bg-gray-400/50" />
-          Dernier scan : {formatTime(schedule.lastScan)} ({formatDuration(now - schedule.lastScan)} ago)
+          Dernier scan : {formatTime(schedule.lastScan, locale)} ({formatDuration(now - schedule.lastScan)} ago)
         </div>
       ) : null}
     </div>

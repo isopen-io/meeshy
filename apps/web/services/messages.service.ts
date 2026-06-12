@@ -1,6 +1,7 @@
 import { apiService } from './api.service';
 import type { ApiResponse, PaginationMeta, MessagesListResponse } from '@meeshy/shared/types';
 import { generateClientMessageId } from '@/utils/client-message-id';
+import { getCurrentInterfaceLocale } from '@/stores/language-store';
 
 export interface Message {
   id: string;
@@ -183,7 +184,7 @@ export const messagesService = {
     } else if (diffDays < 7) {
       return `${diffDays} jours`;
     } else {
-      return messageDate.toLocaleDateString('fr-FR', {
+      return messageDate.toLocaleDateString(getCurrentInterfaceLocale(), {
         day: 'numeric',
         month: 'short',
         year: messageDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
@@ -196,7 +197,7 @@ export const messagesService = {
    */
   formatMessageTime(createdAt: string): string {
     const messageDate = new Date(createdAt);
-    return messageDate.toLocaleTimeString('fr-FR', {
+    return messageDate.toLocaleTimeString(getCurrentInterfaceLocale(), {
       hour: '2-digit',
       minute: '2-digit',
     });

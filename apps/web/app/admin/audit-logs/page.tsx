@@ -64,7 +64,7 @@ type AuditAction =
 
 export default function AuditLogsPage() {
   const router = useRouter();
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -292,7 +292,7 @@ export default function AuditLogsPage() {
     if (diffMins < 1) return t('auditLogs.timestampJustNow');
     if (diffMins < 60) return t('auditLogs.timestampMinutes', { min: diffMins });
     if (diffHours < 24) return t('auditLogs.timestampHours', { hours: diffHours });
-    return date.toLocaleString('fr-FR', {
+    return date.toLocaleString(locale, {
       day: '2-digit',
       month: 'short',
       hour: '2-digit',

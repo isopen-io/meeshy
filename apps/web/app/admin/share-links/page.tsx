@@ -71,7 +71,7 @@ interface ShareLink {
 
 export default function AdminShareLinksPage() {
   const router = useRouter();
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   const [shareLinks, setShareLinks] = useState<ShareLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -133,7 +133,7 @@ export default function AdminShareLinksPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('fr-FR', {
+    return new Date(dateString).toLocaleString(locale, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

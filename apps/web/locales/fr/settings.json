@@ -45,6 +45,10 @@
       "description": "Informations personnelles",
       "settingsTitle": "Paramètres du profil",
       "settingsDescription": "Paramètres pour {username}",
+      "avatar": {
+        "invalidFile": "Fichier invalide",
+        "uploadError": "Erreur lors de l'upload de l'avatar"
+      },
       "photo": {
         "title": "Photo de profil",
         "description": "Personnalisez votre photo de profil visible par les autres utilisateurs",
