@@ -32,6 +32,25 @@ audio + flou / vue unique / éphémère, envoi réel).
 - [x] Résolution de la conversation depuis `conversationId` (cache-first :
       in-memory → GRDB → réseau), repli sur navigation normale
 
+## Itération 2 (2026-06-12)
+- [x] Async : `openNotificationPreview` Task `@MainActor` → aucune expression
+      async sans `await`.
+- [x] Tap n'importe où sur l'aperçu (zone messages) → ouvre la vraie
+      conversation avec transition de navigation ; retour = écran d'origine.
+      Composer exclu (réponse rapide préservée). `previewMode` tap-catcher +
+      `onOpenFullConversation`.
+- [x] iPad : aperçu notification câblé (gestes toast + sheet + openConversation).
+- [x] iPad feed : `StoryTrayView` ajouté (il manquait → stories « ne chargeaient
+      pas »), même composant que liste conv / feed iPhone, + cover viewer.
+- [x] iPad divider : `DragGesture` minimumDistance 1 → 8 (anti-resize accidentel).
+
+## À VÉRIFIER sur Mac/simulateur (pas de build possible ici)
+- Boutons « alignés à gauche » iPad : l'hypothèse poignée ne tient pas (colonne
+  séparée). Cause réelle à diagnostiquer sur appareil (hit-testing/overlay/
+  split-view). Pas de fix spéculatif appliqué au-delà du divider.
+- Si le feed iPhone échoue AUSSI à charger les stories : symptôme à préciser
+  (le code `ThemedFeedOverlay` paraît correct, même VM/instance partagée).
+
 ## Suites possibles
 - iPad : le geste/aperçu n'est branché que dans `RootView` (iPhone). À répliquer
   dans `iPadRootView` si besoin.
