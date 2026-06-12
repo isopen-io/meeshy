@@ -208,6 +208,10 @@ struct ConversationView: View {
     /// toggle, while keeping text / voice / effects / blur / ephemeral. Default
     /// `false` leaves the full conversation screen unchanged.
     var previewMode: Bool = false
+    /// In `previewMode`, called when the user taps anywhere over the message
+    /// area (composer excluded) to leave the preview and open the full
+    /// conversation with a navigation transition.
+    var onOpenFullConversation: (() -> Void)? = nil
 
     // NOTE: Properties below are internal (not private) for cross-file extension access.
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
@@ -358,11 +362,12 @@ struct ConversationView: View {
 
     // MARK: - Init
 
-    init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil, previewMode: Bool = false) {
+    init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil, previewMode: Bool = false, onOpenFullConversation: (() -> Void)? = nil) {
         self.conversation = conversation
         self.replyContext = replyContext
         self.anonymousSession = anonymousSession
         self.previewMode = previewMode
+        self.onOpenFullConversation = onOpenFullConversation
         let vm = ConversationViewModel(
             conversationId: conversation?.id ?? "",
             unreadCount: conversation?.userState.unreadCount ?? 0,
@@ -1130,6 +1135,18 @@ struct ConversationView: View {
             // L'indicateur de frappe n'est PAS un overlay : c'est une vraie
             // cellule du flux de messages, rendue en dernier par
             // `MessageListViewController` (voir `MessageListItem.typingIndicator`).
+
+            // Notification preview: a tap anywhere over the message area opens
+            // the full conversation (navigation transition). The composer is
+            // excluded (bottom inset) so the user can still reply in place.
+            if previewMode {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { onOpenFullConversation?() }
+                    .padding(.bottom, composerHeight)
+                    .zIndex(49)
+                    .accessibilityLabel(String(localized: "conversation.preview.open", defaultValue: "Ouvrir la conversation", bundle: .main))
+            }
 
             floatingHeaderSection
 

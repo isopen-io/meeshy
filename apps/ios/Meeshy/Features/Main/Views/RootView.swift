@@ -355,7 +355,16 @@ struct RootView: View {
         // page. A sheet creates a fresh environment, so the objects the reused
         // `ConversationView` reads must be re-injected here.
         .sheet(item: $notificationPreviewConversation) { conv in
-            ConversationView(conversation: conv, previewMode: true)
+            ConversationView(conversation: conv, previewMode: true, onOpenFullConversation: {
+                // Leave the preview and open the real conversation with a
+                // navigation push so going back returns to the originating
+                // screen. Dismiss first, then push to avoid a present/dismiss
+                // race.
+                notificationPreviewConversation = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    router.navigateToConversation(conv)
+                }
+            })
                 .environmentObject(router)
                 .environmentObject(storyViewModel)
                 .environmentObject(statusViewModel)
@@ -957,7 +966,10 @@ struct RootView: View {
             return
         }
 
-        Task {
+        // @MainActor Task: every suspension resumes on the main actor, so the
+        // @State mutations and `AuthManager.shared.currentUser` access are
+        // isolation-correct without per-call `MainActor.run` wrappers.
+        Task { @MainActor in
             // Cache-first: GRDB conversations list.
             let cachedList = await CacheCoordinator.shared.conversations.load(for: "list")
             let cachedConversations: [MeeshyConversation]? = {
@@ -967,18 +979,17 @@ struct RootView: View {
                 }
             }()
             if let cached = cachedConversations?.first(where: { $0.id == conversationId }) {
-                await MainActor.run { notificationPreviewConversation = cached }
+                notificationPreviewConversation = cached
                 return
             }
 
             // Network fallback.
             let currentUserId = AuthManager.shared.currentUser?.id ?? ""
             if let apiConv = try? await ConversationService.shared.getById(conversationId) {
-                let resolved = apiConv.toConversation(currentUserId: currentUserId)
-                await MainActor.run { notificationPreviewConversation = resolved }
+                notificationPreviewConversation = apiConv.toConversation(currentUserId: currentUserId)
             } else {
                 // Could not resolve — fall back to normal navigation.
-                await MainActor.run { handleSocketNotificationTap(event) }
+                handleSocketNotificationTap(event)
             }
         }
     }
