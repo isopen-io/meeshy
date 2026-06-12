@@ -16,13 +16,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | 43 (web search i18n + iOS Dynamic Type Bookmarks/PostTranslation/LinksHub + déflake tests grouping/loadMore/VideoSurvival iOS) |
-| Last merged PR | pending — iteration 43 PR #576 from claude/blissful-ritchie-6709o7 |
-| Last Merged Base (commit) | ddcc428 (merge #582, itération 42) |
-| Next iteration | **44** |
-| Next branch to create from | `main` after PR #576 merges |
-| Carry-over traités en 42 (#582) | hex iOS hors surface liens ; polices fixes vues liens iOS ; AudioEffectTile role=button web ; validation client ID conversation web |
-| Deferred carry-over for 44 | parité stories Android ; réactions par pièce jointe web+Android (wiring gateway attachment:reaction-*) ; audit qualité es/pt ; iOS SettingsView/NewConversationView fonts + PostDetailView textSelection ; web admin debug + AgentArchetypesTab i18n ; Android es/pt strings.xml |
+| Last completed iteration | 42 (PR #582 mergée) — 42b (cette branche) en cours de merge |
+| Working branch (iteration 42b) | `claude/blissful-ritchie-e672ur` (from main @ 167ef31c, resynced post-#580/#581/#582) |
+| Last Merged Base (commit) | ddcc428 (merge #582) — sera le merge commit de 42b une fois la PR #579 mergée |
+| Next iteration | **43** |
+| Next branch to create from | `main` (after 42b merge) |
+| Deferred carry-over for 43 | balayage hex iOS restant (hors surfaces 42/42b) ; parité stories Android + tokens MeeshySpacing SettingsScreen ; web dates 'fr-FR'/sans locale hors v2 (~40, admin/groups/contacts) + relecture qualité es/pt ; réactions par pièce jointe web/Android (wiring gateway attachment:reaction-*) ; validation stricte /chat/[id] |
 
 ---
 
@@ -48,4 +47,5 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 41 | claude/blissful-ritchie-9vesx9 | #577 | ✅ |
 | 41b | claude/blissful-ritchie-68j2oq | #580 | ✅ |
 | 42 | claude/blissful-ritchie-fst8wf | #582 | ✅ |
+| 42b | claude/blissful-ritchie-e672ur | #579 | ⏳ |
 | 43 | claude/blissful-ritchie-6709o7 | #576 | ⏳ |

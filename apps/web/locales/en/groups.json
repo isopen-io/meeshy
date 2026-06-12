@@ -110,8 +110,28 @@
       "loadingGroupError": "Error loading community",
       "connectionError": "Connection error while loading community",
       "copyError": "Error copying"
+    },
+    "v2": {
+      "title": "Communities",
+      "create": "Create",
+      "myCommunities": "MY COMMUNITIES",
+      "discover": "DISCOVER",
+      "searchPlaceholder": "Search communities...",
+      "emptyMine": "You haven't joined any community yet",
+      "searchMinChars": "Type at least 2 characters to search",
+      "noResults": "No community found",
+      "createTitle": "Create a community",
+      "nameLabel": "Community name",
+      "namePlaceholder": "E.g. French Learners",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Describe your community...",
+      "cancel": "Cancel",
+      "creating": "Creating...",
+      "toasts": {
+        "nameRequired": "Community name is required",
+        "created": "Community \"{name}\" created successfully",
+        "createError": "Creation failed"
+      }
     }
   }
 }
-
-

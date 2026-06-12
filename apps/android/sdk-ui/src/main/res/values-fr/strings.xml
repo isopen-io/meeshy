@@ -8,4 +8,5 @@
     <string name="bubble_status_delivered">Distribué</string>
     <string name="bubble_status_read">Lu</string>
     <string name="bubble_status_failed">Échec</string>
+    <string name="avatar_fallback">Avatar</string>
 </resources>
