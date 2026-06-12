@@ -616,6 +616,11 @@ public actor OfflineQueue {
         }
     }
 
+    private func clearTombstone(for cmid: String) {
+        guard outcomeTombstones.removeValue(forKey: cmid) != nil else { return }
+        outcomeTombstoneOrder.removeAll { $0 == cmid }
+    }
+
     /// Internal: removes the single continuation identified by `token` after
     /// its consumer cancelled (Task cancellation, scope exit). Idempotent —
     /// if the slot was already cleared by `publishOutcome`, this is a no-op.
@@ -645,13 +650,17 @@ public actor OfflineQueue {
             throw OfflineQueueError.poolNotConfigured
         }
 
-        let exists = (try? await pool.read { db in
+        let record = (try? await pool.read { db in
             try OutboxRecord.fetchOne(db, key: outboxId)
         }) ?? nil
 
-        guard exists != nil else {
+        guard let record else {
             throw OfflineQueueError.itemNotFound
         }
+        // Le retry ré-arme la ligne avec le MÊME cmid : sans cette purge, un
+        // abonné post-retry (`outcomeStream(for:)`) recevait instantanément
+        // le tombstone `.exhausted` périmé pour une mutation encore en vol.
+        clearTombstone(for: record.clientMessageId)
 
         let now = Date()
         do {
@@ -2253,6 +2262,10 @@ public actor OfflineQueue {
     public func clearAll() async {
         let ids = items.map { $0.id }
         items.removeAll()
+        // Wipe complet (logout, tests) : les tombstones d'une session ne
+        // doivent pas pouvoir rejouer un outcome dans la suivante.
+        outcomeTombstones.removeAll()
+        outcomeTombstoneOrder.removeAll()
         guard let pool = outboxPool else {
             await refreshPendingCount()
             return

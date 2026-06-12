@@ -219,18 +219,25 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
         }
     }
 
+    /// Incrémenté par `reset()` : une complétion de transition encore en vol
+    /// devient orpheline et no-op. Sans ce token, la complétion posait
+    /// `isVideoSuspended = suspend` APRÈS le reset de fin d'appel — un nouvel
+    /// appel démarré entre-temps héritait d'un état « vidéo suspendue »
+    /// fantôme qu'aucun resume ne viendrait lever.
+    private var generation = 0
+
     func reset() {
         state = .initial
         isVideoSuspended = false
-        // A transition already in flight will no-op on completion via the flag,
-        // but a fresh call must start clean.
         isTransitioning = false
+        generation += 1
     }
 
     private func performTransition(suspend: Bool) {
         guard let actuator else { return }
         isTransitioning = true
         let timeoutSeconds = transitionTimeout
+        let generation = self.generation
         Task { [weak self] in
             // Race the (possibly hanging) renegotiation against a timeout. A
             // timeout is treated as a failure: we revert and let a later sustained
@@ -252,7 +259,7 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
                 }
                 return false
             }
-            guard let self else { return }
+            guard let self, generation == self.generation else { return }
             if ok {
                 self.isVideoSuspended = suspend
             } else {

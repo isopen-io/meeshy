@@ -29,7 +29,6 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     @State private var showEditor = false
     @State private var showPreview = false
     @State private var wavePhase: CGFloat = 0
-    @State private var phaseTimer: Timer?
 
     public init(
         recorder: Recorder,
@@ -67,8 +66,6 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
             }
         }
         .onDisappear {
-            phaseTimer?.invalidate()
-            phaseTimer = nil
             // Le composant se documente "Present as fullScreenCover or sheet" :
             // il possède donc l'arrêt du micro sur tout chemin de dismiss.
             if recorder.isRecording {

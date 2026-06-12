@@ -10,9 +10,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
     @Published var duration: TimeInterval = 0
     @Published var audioLevels: [CGFloat] = Array(repeating: 0, count: 15)
 
-    private(set) var recordedFileURL: URL? {
-        didSet { cleanupHandle.recordedFileURL = recordedFileURL }
-    }
+    private(set) var recordedFileURL: URL?
 
     private var recorder: AVAudioRecorder? {
         didSet { cleanupHandle.recorder = recorder }
@@ -29,23 +27,27 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
     /// instances NON partagées (ex. `AudioPostComposerView`) lâchées
     /// mid-recording par un swipe-down de sheet : sans ce filet le Timer
     /// 20 Hz restait au run loop, le micro actif et la session jamais rendue.
-    private final class CleanupHandle {
+    private final class CleanupHandle: @unchecked Sendable {
         nonisolated(unsafe) var timer: Timer?
         nonisolated(unsafe) var recorder: AVAudioRecorder?
-        nonisolated(unsafe) var recordedFileURL: URL?
     }
     private let cleanupHandle = CleanupHandle()
 
     deinit {
         cleanupHandle.timer?.invalidate()
-        // `recorder` non-nil ⟺ mort mid-recording : sémantique cancel.
+        // `recorder` non-nil ⟺ mort mid-recording : sémantique cancel
+        // (fichier partiel dérivé de `recorder.url`). Déporté sur une queue
+        // utility : stop/removeItem/setActive sont bloquants et ce dealloc
+        // arrive sur le main thread pendant l'animation de dismiss.
         // `deactivatePlaybackSync` est call-aware (no-op pendant un appel).
-        guard let recorder = cleanupHandle.recorder else { return }
-        recorder.stop()
-        if let url = cleanupHandle.recordedFileURL {
-            try? FileManager.default.removeItem(at: url)
+        guard cleanupHandle.recorder != nil else { return }
+        let handle = cleanupHandle
+        DispatchQueue.global(qos: .utility).async {
+            guard let recorder = handle.recorder else { return }
+            recorder.stop()
+            try? FileManager.default.removeItem(at: recorder.url)
+            MediaSessionCoordinator.shared.deactivatePlaybackSync()
         }
-        MediaSessionCoordinator.shared.deactivatePlaybackSync()
     }
 
     func configure(settings: AudioRecordingSettings, onMaxDurationReached: (() -> Void)? = nil) {

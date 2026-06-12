@@ -39,12 +39,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     private var localVideoTrack_: RTCVideoTrack?
     private var videoCapturer: RTCCameraVideoCapturer?
     private var videoFilterDelegate: VideoFilterCapturerDelegate?
-    /// `true` entre `disconnect()` et le `configure()` de l'appel suivant.
-    /// Re-checké après l'await non-cancellation-aware de `startCapture` :
-    /// sans ce flag, un appel terminé pendant le warm-up caméra (0,5–3 s)
-    /// laissait la capture démarrer APRÈS le teardown — caméra allumée sans
-    /// aucun chemin d'extinction.
-    private var isClosed = false
+    /// Génération de session : incrémentée par `disconnect()` ET `configure()`.
+    /// Capturée avant l'await non-cancellation-aware de `startCapture` et
+    /// re-comparée après : sans ce token, un appel terminé pendant le warm-up
+    /// caméra (0,5–3 s) laissait la capture démarrer APRÈS le teardown —
+    /// caméra allumée sans aucun chemin d'extinction. Un simple booléen ne
+    /// suffit pas : un raccrocher→recomposer rapide le remettait à false
+    /// avant la reprise de l'await (capture orpheline ressuscitée).
+    private var sessionGeneration = 0
     private var remoteVideoTrack_: RTCVideoTrack?
     private var remoteAudioTrack_: RTCAudioTrack?
     private var usingFrontCamera = true
@@ -137,7 +139,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
 
         peerConnection = pc
-        isClosed = false
+        sessionGeneration += 1
         Logger.webrtc.info("Peer connection created with \(iceServers.count) ICE servers")
     }
 
@@ -258,17 +260,21 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
 
         let fps = targetFrameRate(for: format)
+        let generation = sessionGeneration
         Logger.webrtc.info("[WEBRTC] capturer.startCapture begin fps=\(fps)")
         try await capturer.startCapture(with: camera, format: format, fps: fps)
-        if isClosed {
-            // L'appel s'est terminé pendant le warm-up : `disconnect()` a déjà
-            // stoppé une capture pas encore démarrée et nil-é les propriétés.
-            // On éteint la caméra via la référence locale et on sort.
-            Logger.webrtc.warning("[WEBRTC] call ended during camera warm-up — stopping orphan capture")
+        if generation != sessionGeneration {
+            // L'appel s'est terminé (ou un nouvel appel a été configuré)
+            // pendant le warm-up : on éteint la caméra via la référence
+            // LOCALE et on ne nil-e les propriétés que si elles pointent
+            // encore notre capturer — un nouvel appel a pu poser les siennes.
+            Logger.webrtc.warning("[WEBRTC] session changed during camera warm-up — stopping orphan capture")
             capturer.stopCapture()
-            localVideoTrack_ = nil
-            videoCapturer = nil
-            videoFilterDelegate = nil
+            if videoCapturer === capturer {
+                localVideoTrack_ = nil
+                videoCapturer = nil
+                videoFilterDelegate = nil
+            }
             throw CancellationError()
         }
         // applyVideoEncoding() is deferred — it runs once the video track is
@@ -986,7 +992,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // MARK: - Disconnect
 
     func disconnect() {
-        isClosed = true
+        sessionGeneration += 1
         _audioEffectsService.reset()
         transcriptionDataChannel?.close()
         transcriptionDataChannel = nil

@@ -229,34 +229,18 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
 
     // MARK: - Internals
 
-    /// `CADisplayLink` retient FORTEMENT son target. Cibler `self` rendait le
-    /// `deinit` (seul site d'invalidation historique) inatteignable : chaîne
-    /// run loop → link → controller immortelle, un link 60 Hz leaké par
-    /// présentation du viewer. Le proxy weak casse cette chaîne — le link ne
-    /// retient que le proxy, et un tick orphelin s'auto-invalide.
-    @MainActor
-    private final class WeakLinkTarget: NSObject {
-        weak var owner: StoryReaderTimerController?
-
-        init(owner: StoryReaderTimerController) {
-            self.owner = owner
-        }
-
-        @objc func tick(_ link: CADisplayLink) {
-            guard let owner else {
+    private func startDisplayLinkIfNeeded() {
+        guard useDisplayLink, displayLink == nil else { return }
+        // Proxy weak partagé : le link ne retient jamais le controller —
+        // le `deinit` (backstop) reste atteignable, et un tick orphelin
+        // s'auto-invalide. Cf. WeakDisplayLinkTarget.
+        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+            guard let self else {
                 link.invalidate()
                 return
             }
-            owner.tick(link)
+            self.tick(link)
         }
-    }
-
-    private func startDisplayLinkIfNeeded() {
-        guard useDisplayLink, displayLink == nil else { return }
-        let link = CADisplayLink(
-            target: WeakLinkTarget(owner: self),
-            selector: #selector(WeakLinkTarget.tick(_:))
-        )
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
         link.add(to: .main, forMode: .common)
         displayLink = link

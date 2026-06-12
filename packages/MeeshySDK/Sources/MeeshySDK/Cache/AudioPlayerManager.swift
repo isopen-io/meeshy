@@ -35,7 +35,9 @@ public class AudioPlayerManager: ObservableObject {
     /// filet, une instance lâchée mid-lecture (vue dismissée sans `stop()`)
     /// laissait le Timer 10 Hz au run loop pour toujours et l'observer
     /// périodique jamais retiré de l'AVPlayer (contrat AVFoundation violé).
-    private final class CleanupHandle {
+    /// `@unchecked Sendable` : champs mutés uniquement depuis MainActor,
+    /// lus une fois par le bloc de cleanup.
+    private final class CleanupHandle: @unchecked Sendable {
         nonisolated(unsafe) var timer: Timer?
         nonisolated(unsafe) var loadTask: Task<Void, Never>?
         nonisolated(unsafe) var localPlayer: AVAudioPlayer?
@@ -51,14 +53,17 @@ public class AudioPlayerManager: ObservableObject {
         cleanupHandle.loadTask?.cancel()
         // Player non-nil ⟺ mort sans `stop()` (stop pose nil partout) : on
         // coupe la lecture et on rend la session (call-aware), sinon elle
-        // restait active pour tout le process.
-        let hadActivePlayback = cleanupHandle.localPlayer != nil || cleanupHandle.streamPlayer != nil
-        cleanupHandle.localPlayer?.stop()
-        if let observer = cleanupHandle.streamObserver, let player = cleanupHandle.streamPlayer {
-            player.removeTimeObserver(observer)
-        }
-        cleanupHandle.streamPlayer?.pause()
-        if hadActivePlayback {
+        // restait active pour tout le process. Déporté sur une queue utility :
+        // `setActive(false)` est un appel HAL bloquant et ce dealloc arrive
+        // typiquement sur le main thread pendant un scroll.
+        guard cleanupHandle.localPlayer != nil || cleanupHandle.streamPlayer != nil else { return }
+        let handle = cleanupHandle
+        DispatchQueue.global(qos: .utility).async {
+            handle.localPlayer?.stop()
+            if let observer = handle.streamObserver, let player = handle.streamPlayer {
+                player.removeTimeObserver(observer)
+            }
+            handle.streamPlayer?.pause()
             MediaSessionCoordinator.shared.deactivatePlaybackSync()
         }
     }

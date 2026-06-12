@@ -173,19 +173,6 @@ final class MessageListViewController: UIViewController {
         slowScrollDisplayLink = nil
     }
 
-    // Le CADisplayLink du slow-scroll cible `self` et le retient : sans ce
-    // teardown, quitter la conversation pendant une recherche de message cité
-    // rendait le deinit ci-dessus inatteignable (run loop → link → VC) — le
-    // VC entier leakait avec un tick 60-120 fps et des paginations réseau
-    // pour un écran mort. `dismantleUIViewController` (MessageListView)
-    // double ce filet pour le démontage SwiftUI sans cycle d'apparition.
-    override func viewDidDisappear(_ animated: Bool) {
-        super.viewDidDisappear(animated)
-        stopSlowScroll()
-        reconfigureDebounceTimer?.invalidate()
-        reconfigureDebounceTimer = nil
-    }
-
     func update(isDark: Bool, accentColor: String) {
         var changed = false
         if self.isDark != isDark { self.isDark = isDark; changed = true }
@@ -1035,7 +1022,17 @@ final class MessageListViewController: UIViewController {
     /// that the app is actively browsing through message history.
     func startSlowScrollUp() {
         guard slowScrollDisplayLink == nil else { return }
-        let link = CADisplayLink(target: self, selector: #selector(slowScrollTick))
+        // Proxy weak partagé (WeakDisplayLinkTarget) : un link `target: self`
+        // retenait le VC entier (run loop → link → VC, deinit inatteignable)
+        // quand on quittait la conversation pendant une recherche de message
+        // cité — tick 60-120 fps + paginations réseau pour un écran mort.
+        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+            guard let self else {
+                link.invalidate()
+                return
+            }
+            self.slowScrollTick(link)
+        }
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
         link.add(to: .main, forMode: .common)
         slowScrollDisplayLink = link

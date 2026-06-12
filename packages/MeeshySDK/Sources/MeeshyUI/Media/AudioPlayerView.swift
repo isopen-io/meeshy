@@ -50,7 +50,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// (resetState) puis ré-acquiert (no-op si déjà tenue) → pas de churn ; seul
     /// `stop()` libère. ⚠️ Unifie le ducking : ce moteur posait `options: []`
     /// (PAS de duck) → désormais `[.duckOthers]` comme tous les autres players.
-    private var sessionRequested = false
+    private var sessionRequested = false {
+        didSet { cleanupHandle.sessionRequested = sessionRequested }
+    }
 
     /// Holds thread-safe-to-cancel handles (`Timer.invalidate()` /
     /// `Task.cancel()`) so `deinit` — which may run off the main thread — can
@@ -93,7 +95,6 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     private func acquireSession() async {
         guard !sessionRequested else { return }
         sessionRequested = true
-        cleanupHandle.sessionRequested = true
         try? await MediaSessionCoordinator.shared.request(role: .playback)
     }
 
@@ -101,7 +102,6 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     private func releaseSession() {
         guard sessionRequested else { return }
         sessionRequested = false
-        cleanupHandle.sessionRequested = false
         Task { await MediaSessionCoordinator.shared.release() }
     }
 

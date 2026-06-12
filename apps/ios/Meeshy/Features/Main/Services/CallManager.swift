@@ -728,7 +728,9 @@ final class CallManager: ObservableObject {
                 return
             } catch {
                 Logger.calls.error("startLocalMedia failed: \(error.localizedDescription)")
-                self.endCallInternal(reason: .failed(String(localized: "call.error.media")))
+                if self.currentCallId == callId {
+                    self.endCallInternal(reason: .failed(String(localized: "call.error.media")))
+                }
                 return
             }
             Logger.calls.info("[CALL_SETUP] incoming 4/4 startLocalMedia done")
@@ -916,15 +918,26 @@ final class CallManager: ObservableObject {
             guard let self else { return }
             do {
                 try await self.webRTCService.startLocalMedia(isVideo: isVideo)
+                // Liveness post-await : l'appel a pu se terminer pendant le
+                // warm-up media — ne pas re-poser d'état sur un appel mort.
+                guard self.currentCallId == callId else { return }
                 if isVideo { self.hasLocalVideoTrack = true }
             } catch WebRTCError.simulatorVideoUnsupported {
                 // Phase 1 fix E7/B4: simulator can't run video — degrade to audio-only
                 Logger.calls.warning("Simulator video unsupported — continuing audio-only")
                 self.isVideoEnabled = false
                 try? await self.webRTCService.startLocalMedia(isVideo: false)
+            } catch is CancellationError {
+                // L'appel s'est terminé pendant startCapture (P2PWebRTCClient
+                // a déjà éteint la caméra orpheline) — pas un échec media :
+                // surtout ne pas re-déclencher endCallInternal(.failed) sur
+                // un appel déjà clos (ou écraser un nouvel appel naissant).
+                return
             } catch {
                 Logger.calls.error("startLocalMedia failed: \(error.localizedDescription)")
-                self.endCallInternal(reason: .failed(String(localized: "call.error.media")))
+                if self.currentCallId == callId {
+                    self.endCallInternal(reason: .failed(String(localized: "call.error.media")))
+                }
                 return
             }
             Logger.calls.info("Incoming call — local media ready: \(callId)")
@@ -1838,9 +1851,7 @@ final class CallManager: ObservableObject {
         stopHeartbeat()
         stopScreenCaptureMonitoring()
         stopBackgroundMonitoring()
-        if transcriptionService.isTranscribing {
-            transcriptionService.stopTranscribing()
-        }
+        transcriptionService.resetForCallEnd()
         participantJoinedCancellable?.cancel()
         participantJoinedCancellable = nil
         sdpOfferTimeoutTask?.cancel()
