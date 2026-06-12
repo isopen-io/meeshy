@@ -2,6 +2,7 @@
 
 import { HTMLAttributes, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/use-i18n';
 import { useTheme, ThemeMode } from './ThemeProvider';
 
 export interface ThemeToggleProps extends Omit<HTMLAttributes<HTMLButtonElement>, 'children'> {
@@ -64,6 +65,7 @@ export function ThemeToggle({
   className,
   ...props
 }: ThemeToggleProps) {
+  const { t } = useI18n('components');
   const { isDark, themeMode, toggleTheme, setThemeMode } = useTheme();
   const [showDropdown, setShowDropdown] = useState(false);
 
@@ -81,9 +83,9 @@ export function ThemeToggle({
   };
 
   const modes: { mode: ThemeMode; label: string; icon: typeof SunIcon }[] = [
-    { mode: 'light', label: 'Clair', icon: SunIcon },
-    { mode: 'dark', label: 'Sombre', icon: MoonIcon },
-    { mode: 'system', label: 'Systeme', icon: SystemIcon },
+    { mode: 'light', label: t('theme.light'), icon: SunIcon },
+    { mode: 'dark', label: t('theme.dark'), icon: MoonIcon },
+    { mode: 'system', label: t('theme.system'), icon: SystemIcon },
   ];
 
   return (
@@ -101,7 +103,7 @@ export function ThemeToggle({
           sizeClasses[size],
           className
         )}
-        aria-label={isDark ? 'Passer en mode clair' : 'Passer en mode sombre'}
+        aria-label={isDark ? t('theme.switchToLight') : t('theme.switchToDark')}
         {...props}
       >
         {/* Animated icons */}

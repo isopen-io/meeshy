@@ -395,7 +395,7 @@ export const MessageComposer = forwardRef<
 
               <button
                 onClick={() => removeAttachment(attachment.id)}
-                className="ml-1 p-0.5 rounded-full hover:bg-black/10 transition-colors"
+                className="ml-1 p-0.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors"
                 aria-label={t('composer.removeAttachment')}
               >
                 <CloseIcon className="w-3.5 h-3.5" />
@@ -510,7 +510,7 @@ export const MessageComposer = forwardRef<
                   <button
                     onClick={stopRecording}
                     className="p-2 md:p-1.5 rounded-full transition-colors duration-300 animate-pulse"
-                    style={{ background: '#EF4444', color: 'white' }}
+                    style={{ background: 'var(--gp-error)', color: 'white' }}
                     aria-label={t('composer.stopRecording')}
                   >
                     <StopIcon className="w-5 h-5 md:w-4 md:h-4" />
@@ -546,7 +546,7 @@ export const MessageComposer = forwardRef<
             )}
 
             {isRecording && (
-              <span className="text-xs font-medium tabular-nums ml-1" style={{ color: '#EF4444' }}>
+              <span className="text-xs font-medium tabular-nums ml-1" style={{ color: 'var(--gp-error)' }}>
                 {formatDuration(recordingDuration)}
               </span>
             )}
@@ -593,7 +593,7 @@ export const MessageComposer = forwardRef<
             <div
               className="absolute bottom-1 left-3 text-[10px] transition-colors duration-300"
               style={{
-                color: message.length >= maxLength ? '#EF4444' : 'var(--gp-text-muted)',
+                color: message.length >= maxLength ? 'var(--gp-error)' : 'var(--gp-text-muted)',
               }}
             >
               {message.length}/{maxLength}

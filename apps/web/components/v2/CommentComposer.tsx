@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/use-i18n';
 import { Avatar } from './Avatar';
 import { useMentions } from '@/hooks/composer/useMentions';
 import { MentionAutocomplete } from '@/components/common/MentionAutocomplete';
@@ -27,6 +28,7 @@ function CommentComposer({
   disabled = false,
   className,
 }: CommentComposerProps) {
+  const { t } = useI18n('components');
   const [content, setContent] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -92,12 +94,12 @@ function CommentComposer({
         {parentId && parentAuthor && (
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs text-[var(--gp-text-muted)]">
-              Replying to <span className="font-medium text-[var(--gp-text-secondary)]">{parentAuthor}</span>
+              {t('commentComposer.replyingTo')} <span className="font-medium text-[var(--gp-text-secondary)]">{parentAuthor}</span>
             </span>
             <button
               onClick={onCancelReply}
               className="text-xs text-[var(--gp-text-muted)] hover:text-[var(--gp-text-primary)]"
-              aria-label="Cancel reply"
+              aria-label={t('commentComposer.cancelReply')}
             >
               ✕
             </button>
@@ -110,7 +112,7 @@ function CommentComposer({
             value={content}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
-            placeholder={parentId ? 'Write a reply...' : 'Write a comment...'}
+            placeholder={parentId ? t('commentComposer.replyPlaceholder') : t('commentComposer.commentPlaceholder')}
             rows={1}
             maxLength={2000}
             disabled={disabled}
@@ -121,7 +123,7 @@ function CommentComposer({
               'focus:border-[var(--gp-terracotta)]',
               disabled && 'opacity-50 cursor-not-allowed',
             )}
-            aria-label={parentId ? 'Reply input' : 'Comment input'}
+            aria-label={parentId ? t('commentComposer.replyInput') : t('commentComposer.commentInput')}
           />
 
           <button
@@ -133,7 +135,7 @@ function CommentComposer({
                 ? 'text-[var(--gp-terracotta)] hover:bg-[var(--gp-terracotta)]/10'
                 : 'text-[var(--gp-text-muted)] cursor-not-allowed',
             )}
-            aria-label="Send comment"
+            aria-label={t('commentComposer.send')}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
