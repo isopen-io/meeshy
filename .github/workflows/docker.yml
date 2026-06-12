@@ -300,7 +300,12 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           no-cache: ${{ github.event.inputs.no_cache == 'true' }}
           cache-from: ${{ github.event.inputs.no_cache != 'true' && format('type=gha,scope={0}', matrix.service) || '' }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          # ignore-error=true : l'export du cache GHA est best-effort. Le
+          # backend de cache GitHub peut évincer/404 un blob en cours
+          # d'upload ("error writing layer blob: not_found"), ce qui faisait
+          # échouer le job ENTIER alors que l'image était déjà buildée et
+          # poussée au registry avec succès (incident meeshy-web 2026-06-12).
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }},ignore-error=true
           provenance: true
           sbom: true
           build-args: |
