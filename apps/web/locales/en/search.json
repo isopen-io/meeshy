@@ -1,0 +1,72 @@
+{
+  "search": {
+    "pageTitle": "Search",
+    "hero": {
+      "title": "Search",
+      "subtitle": "Discover users, conversations and communities on Meeshy"
+    },
+    "form": {
+      "inputLabel": "Search",
+      "placeholder": "Search users, conversations, communities...",
+      "submit": "Search",
+      "searching": "Searching..."
+    },
+    "tabs": {
+      "users": "Users",
+      "conversations": "Conversations",
+      "communities": "Communities"
+    },
+    "results": {
+      "count": "{count} result for \"{query}\"",
+      "countPlural": "{count} results for \"{query}\"",
+      "loading": "Searching..."
+    },
+    "empty": {
+      "users": "No users found",
+      "conversations": "No conversations found",
+      "communities": "No communities found",
+      "hint": "Try a different search term"
+    },
+    "user": {
+      "online": "Online",
+      "offline": "Offline",
+      "moreActions": "More actions",
+      "cancelRequest": "Cancel request",
+      "addFriend": "Add friend",
+      "viewProfile": "View profile",
+      "sendMessage": "Send message",
+      "cancel": "Cancel",
+      "add": "Add"
+    },
+    "conversation": {
+      "untitled": "Untitled conversation",
+      "typeDirect": "Direct",
+      "typeGroup": "Group",
+      "typePublic": "Public",
+      "typeGlobal": "Global",
+      "unread": "{count} unread message",
+      "unreadPlural": "{count} unread messages",
+      "lastActivity": "Last activity: {date}"
+    },
+    "community": {
+      "private": "Private",
+      "public": "Public",
+      "member": "{count} member",
+      "memberPlural": "{count} members",
+      "join": "Join"
+    },
+    "toasts": {
+      "loginRequired": "You must be logged in to search",
+      "searchError": "Search failed",
+      "requestSent": "Friend request sent",
+      "requestError": "Failed to send the request",
+      "requestCancelled": "Request cancelled",
+      "cancelError": "Failed to cancel the request",
+      "conversationCreated": "Conversation created",
+      "conversationError": "Failed to create the conversation",
+      "joinedCommunity": "You joined the community",
+      "joinError": "Unable to join the community",
+      "joinAttemptError": "Something went wrong while joining the community"
+    }
+  }
+}

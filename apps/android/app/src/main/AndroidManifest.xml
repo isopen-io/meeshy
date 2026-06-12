@@ -40,6 +40,13 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="meeshy" android:host="chat" />
             </intent-filter>
+            <!-- Deep link: meeshy://profile/{userId} -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="meeshy" android:host="profile" />
+            </intent-filter>
         </activity>
 
         <!-- FCM Push -->

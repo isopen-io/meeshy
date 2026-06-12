@@ -207,7 +207,14 @@
       "unlike": "Descurtir publicação",
       "repost": "Repostar",
       "bookmark": "Salvar",
-      "removeBookmark": "Remover dos salvos"
+      "removeBookmark": "Remover dos salvos",
+      "translate": "Traduzir",
+      "translatePost": "Traduzir a publicação"
+    },
+    "videoPlayer": {
+      "play": "Reproduzir",
+      "pause": "Pausar",
+      "seek": "Progresso do vídeo"
     }
   }
 }

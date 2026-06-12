@@ -81,14 +81,15 @@ struct LinksHubView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 Image(systemName: "link.badge.plus")
-                    .font(.system(size: 28, weight: .bold))
+                    .font(.title.weight(.bold))
                     .foregroundColor(MeeshyColors.communityAccent)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(localized: "links.hub.banner.title", defaultValue: "Gérez vos liens", bundle: .main))
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.headline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
                     Text(String(localized: "links.hub.banner.subtitle", defaultValue: "Partagez, suivez et monétisez votre audience", bundle: .main))
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundColor(theme.textSecondary)
                 }
                 Spacer()
@@ -115,6 +116,7 @@ struct LinksHubView: View {
                 description: String(localized: "links.hub.share.description", defaultValue: "Invitez des contacts à rejoindre vos conversations", bundle: .main),
                 accentHex: MeeshyColors.shareAccentHex,
                 route: .shareLinks,
+                createLabel: String(localized: "links.hub.share.create.a11y", defaultValue: "Créer un lien de partage", bundle: .main),
                 onCreate: { showCreateShareLink = true }
             )
 
@@ -124,6 +126,7 @@ struct LinksHubView: View {
                 description: String(localized: "links.hub.tracking.description", defaultValue: "Suivez les performances de vos liens de référence", bundle: .main),
                 accentHex: MeeshyColors.trackingAccentHex,
                 route: .trackingLinks,
+                createLabel: String(localized: "links.hub.tracking.create.a11y", defaultValue: "Créer un lien de tracking", bundle: .main),
                 onCreate: { showCreateTrackingLink = true }
             )
 
@@ -142,6 +145,7 @@ struct LinksHubView: View {
                 description: String(localized: "links.hub.affiliate.description", defaultValue: "Monétisez votre réseau avec des tokens d'affiliation", bundle: .main),
                 accentHex: MeeshyColors.successHex,
                 route: .affiliate,
+                createLabel: String(localized: "links.hub.affiliate.create.a11y", defaultValue: "Créer un lien affilié", bundle: .main),
                 onCreate: { showCreateAffiliate = true }
             )
         }
@@ -155,6 +159,7 @@ struct LinksHubView: View {
         description: String,
         accentHex: String,
         route: Route,
+        createLabel: String? = nil,
         onCreate: (() -> Void)?
     ) -> some View {
         let accent = Color(hex: accentHex)
@@ -170,17 +175,17 @@ struct LinksHubView: View {
                         .fill(accent.opacity(0.15))
                         .frame(width: 48, height: 48)
                     Image(systemName: icon)
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.title3.weight(.semibold))
                         .foregroundColor(accent)
                 }
 
                 // Texte
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
                     Text(description)
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(2)
                 }
@@ -195,14 +200,15 @@ struct LinksHubView: View {
                             onCreate()
                         } label: {
                             Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 22))
+                                .font(.title2)
                                 .foregroundColor(accent)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(createLabel ?? title)
                     }
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }

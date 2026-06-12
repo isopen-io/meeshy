@@ -106,6 +106,9 @@ export function AudioEffectTile({
   return (
     <>
       <Card
+        role="button"
+        tabIndex={0}
+        aria-label={t('configureEffect', { name: effectName })}
         className={cn(
           'relative overflow-hidden cursor-pointer transition-[transform,box-shadow] duration-300',
           'hover:scale-[1.02] hover:shadow-lg',

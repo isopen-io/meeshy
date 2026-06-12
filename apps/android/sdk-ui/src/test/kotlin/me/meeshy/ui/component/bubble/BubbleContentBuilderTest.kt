@@ -253,4 +253,5 @@ class BubbleContentBuilderTest {
         assertThat(content.reactions.single { it.emoji == "❤️" }.includesMe).isTrue()
         assertThat(content.reactions.single { it.emoji == "🔥" }.includesMe).isFalse()
     }
+
 }

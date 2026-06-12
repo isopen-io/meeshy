@@ -2,6 +2,10 @@
   "notifications": {
     "pageTitle": "Notificaciones",
     "title": "Notificaciones",
+    "bell": {
+      "label": "Notificaciones",
+      "labelWithUnread": "Notificaciones ({count} sin leer)"
+    },
     "empty": {
       "title": "Sin notificaciones",
       "description": "No tienes notificaciones en este momento",

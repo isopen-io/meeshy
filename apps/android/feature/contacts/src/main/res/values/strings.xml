@@ -7,4 +7,8 @@
     <string name="contacts_tab_discover">Discover</string>
     <string name="contacts_tab_blocked">Blocked</string>
     <string name="contacts_coming_soon">Coming soon</string>
+    <string name="contacts_tab_contacts">Contacts</string>
+    <string name="contacts_tab_requests">Requests</string>
+    <string name="contacts_tab_discover">Discover</string>
+    <string name="contacts_tab_blocked">Blocked</string>
 </resources>

@@ -786,7 +786,7 @@ extension ConversationView {
             RoundedRectangle(cornerRadius: 10)
                 .fill(
                     LinearGradient(
-                        colors: [MeeshyColors.success, MeeshyColors.success.opacity(0.8)],
+                        colors: [MeeshyColors.success, MeeshyColors.successDeep],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )

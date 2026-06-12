@@ -155,7 +155,7 @@ struct OnboardingView: View {
 
         return ForEach(Array(orbConfigs.enumerated()), id: \.offset) { _, orb in
             Circle()
-                .fill(Color(hex: orb.color).opacity(isDark ? 0.12 : 0.08))
+                .fill(orb.color.opacity(isDark ? 0.12 : 0.08))
                 .frame(width: orb.size, height: orb.size)
                 .blur(radius: orb.size * 0.3)
                 .offset(x: orb.offset.x, y: orb.offset.y)
@@ -250,7 +250,7 @@ struct OnboardingView: View {
         switch pageId {
         case 0:
             return LinearGradient(
-                colors: [MeeshyColors.error, MeeshyColors.error.opacity(0.7)],
+                colors: [MeeshyColors.error, MeeshyColors.errorSoft],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
         case 1:
@@ -265,7 +265,7 @@ struct OnboardingView: View {
             )
         case 3:
             return LinearGradient(
-                colors: [MeeshyColors.success, MeeshyColors.success.opacity(0.8)],
+                colors: [MeeshyColors.success, MeeshyColors.successDeep],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
         default:
@@ -471,7 +471,7 @@ struct OnboardingView: View {
         switch currentPage {
         case 0:
             return LinearGradient(
-                colors: [MeeshyColors.error, MeeshyColors.errorDark],
+                colors: [MeeshyColors.error, MeeshyColors.errorStrong],
                 startPoint: .leading, endPoint: .trailing
             )
         case 1:
@@ -486,7 +486,7 @@ struct OnboardingView: View {
             )
         default:
             return LinearGradient(
-                colors: [MeeshyColors.success, MeeshyColors.success.opacity(0.8)],
+                colors: [MeeshyColors.success, MeeshyColors.successDeep],
                 startPoint: .leading, endPoint: .trailing
             )
         }

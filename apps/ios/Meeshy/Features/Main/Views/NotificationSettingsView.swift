@@ -165,7 +165,7 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "sparkles", title: String(localized: "settings.notifications.story_reactions", defaultValue: "Réactions stories", bundle: .main), color: MeeshyColors.warningHex,
                         keyPath: \.storyReactionEnabled)
 
-            notifToggle(icon: "arrowshape.turn.up.left.2.fill", title: String(localized: "settings.notifications.comment_replies", defaultValue: "Réponses commentaires", bundle: .main), color: MeeshyColors.trackingAccentHex,
+            notifToggle(icon: "arrowshape.turn.up.left.2.fill", title: String(localized: "settings.notifications.comment_replies", defaultValue: "Réponses commentaires", bundle: .main), color: MeeshyColors.brandDeepHex,
                         keyPath: \.commentReplyEnabled)
 
             notifToggle(icon: "hand.thumbsup.fill", title: String(localized: "settings.notifications.comment_likes", defaultValue: "Likes commentaires", bundle: .main), color: MeeshyColors.errorHex,

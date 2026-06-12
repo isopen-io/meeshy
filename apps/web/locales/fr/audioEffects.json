@@ -7,6 +7,7 @@
     "selectEffectPrompt": "Cliquez sur un effet pour le configurer",
     "toggleEffect": "Activer/Désactiver",
     "configure": "Configurer",
+    "configureEffect": "Configurer l'effet {name}",
     "close": "Fermer",
     "apply": "Appliquer",
     "reset": "Réinitialiser",

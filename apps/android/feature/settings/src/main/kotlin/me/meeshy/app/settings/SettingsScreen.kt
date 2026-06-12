@@ -52,6 +52,7 @@ import me.meeshy.ui.theme.MeeshySpacing
 fun SettingsScreen(
     onBack: () -> Unit,
     onLogout: () -> Unit,
+    onOpenProfile: (String) -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -81,7 +82,10 @@ fun SettingsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
+                        .clickable(enabled = state.userId != null) {
+                            state.userId?.let(onOpenProfile)
+                        }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     MeeshyAvatar(

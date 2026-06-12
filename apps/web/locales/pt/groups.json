@@ -110,6 +110,28 @@
       "identifierTaken": "Este identificador já está em uso",
       "connectionError": "Erro de conexão",
       "copyError": "Erro ao copiar"
+    },
+    "v2": {
+      "title": "Comunidades",
+      "create": "Criar",
+      "myCommunities": "MINHAS COMUNIDADES",
+      "discover": "DESCOBRIR",
+      "searchPlaceholder": "Pesquisar comunidades...",
+      "emptyMine": "Você ainda não entrou em nenhuma comunidade",
+      "searchMinChars": "Digite pelo menos 2 caracteres para pesquisar",
+      "noResults": "Nenhuma comunidade encontrada",
+      "createTitle": "Criar uma comunidade",
+      "nameLabel": "Nome da comunidade",
+      "namePlaceholder": "Ex.: French Learners",
+      "descriptionLabel": "Descrição",
+      "descriptionPlaceholder": "Descreva sua comunidade...",
+      "cancel": "Cancelar",
+      "creating": "Criando...",
+      "toasts": {
+        "nameRequired": "O nome da comunidade é obrigatório",
+        "created": "Comunidade \"{name}\" criada com sucesso",
+        "createError": "Erro ao criar"
+      }
     }
   }
 }

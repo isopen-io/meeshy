@@ -14,7 +14,7 @@ struct ShareLinksView: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    private let accentColor = "6366F1"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
         ZStack {
@@ -66,7 +66,7 @@ struct ShareLinksView: View {
             Spacer()
 
             Text(String(localized: "share.links.title", defaultValue: "Liens de partage", bundle: .main))
-                .font(.headline)
+                .font(.headline.weight(.bold))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -79,6 +79,7 @@ struct ShareLinksView: View {
                     .font(.system(size: 22))
                     .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel(String(localized: "share.links.create.a11y", defaultValue: "Créer un lien de partage", bundle: .main))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

@@ -4,7 +4,7 @@
 Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Protocol
-1. At the start of each iteration: create the working branch from the **Last Merged Base** below
+1. At the start of each iteration: create the working branch from the **Last Merged Base** below (or sync the assigned branch with `main`)
 2. Develop, commit, push on the working branch
 3. Once CI passes: merge into main via PR
 4. After merge: update this file with the new base
@@ -46,4 +46,6 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 40 | claude/friendly-brown-xuzpju | #575 | ✅ |
 | 41 | claude/blissful-ritchie-9vesx9 | #577 | ✅ |
 | 41b | claude/blissful-ritchie-68j2oq | #580 | ✅ |
-| 42 | claude/blissful-ritchie-l66h8c | (this iteration) | ⏳ CI |
+| 42 | claude/blissful-ritchie-fst8wf | #582 | ✅ |
+| 42b | claude/blissful-ritchie-e672ur | #579 | ⏳ |
+| 43 | claude/blissful-ritchie-6709o7 | #576 | ⏳ |
