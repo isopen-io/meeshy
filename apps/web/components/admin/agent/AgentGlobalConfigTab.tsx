@@ -153,7 +153,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('llm.labelProvider')}</Label>
-                <InfoIcon content={t('globalConfig.providerHelp')} />
+                <InfoIcon content={t('globalConfig.defaultProviderHelp')} />
               </div>
               <select
                 className="w-full p-2 border rounded-md bg-white dark:bg-gray-800 text-sm"
@@ -167,7 +167,7 @@ export function AgentGlobalConfigTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('llm.labelModel')}</Label>
-                <InfoIcon content={t('globalConfig.modelHelp')} />
+                <InfoIcon content={t('globalConfig.defaultModelHelp')} />
               </div>
               <Input
                 value={form.defaultModel ?? 'gpt-4o-mini'}

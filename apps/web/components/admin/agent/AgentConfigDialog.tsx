@@ -216,7 +216,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   </button>
                 </div>
                 <div>
-                  <span className="block text-[10px] text-gray-400">{t('agentConfig.type')}</span>
+                  <span className="block text-[10px] text-gray-400">{t('agentConfig.metaType')}</span>
                   <span className="inline-flex items-center gap-1 text-gray-600 dark:text-gray-300">
                     <span className="capitalize">{convMeta.type}</span>
                     <span className="text-gray-300 dark:text-gray-600">·</span>
@@ -224,11 +224,11 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   </span>
                 </div>
                 <div>
-                  <span className="block text-[10px] text-gray-400">{t('agentConfig.participants')}</span>
+                  <span className="block text-[10px] text-gray-400">{t('agentConfig.metaParticipants')}</span>
                   <span className="font-mono text-gray-600 dark:text-gray-300">{convMeta.memberCount}</span>
                 </div>
                 <div>
-                  <span className="block text-[10px] text-gray-400">{t('agentConfig.messages')}</span>
+                  <span className="block text-[10px] text-gray-400">{t('agentConfig.metaMessages')}</span>
                   <span className="font-mono text-gray-600 dark:text-gray-300">{convMeta.messageCount ?? '-'}</span>
                 </div>
                 <div>
@@ -599,7 +599,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   <Label>{t('agentConfig.webSearchEnabled')}</Label>
                   <InfoIcon content={t('agentConfig.webSearchEnabledHelp')} />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">{t('agentConfig.webSearchHint')}</p>
+                <p className="text-xs text-gray-500 mt-1">{t('agentConfig.webSearchSubtitle')}</p>
               </div>
               <Switch checked={form.webSearchEnabled ?? false} onCheckedChange={v => updateField('webSearchEnabled', v)} />
             </div>
@@ -632,8 +632,8 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             </div>
             <div className="space-y-2">
               <div className="flex items-center">
-                <Label>{t('agentConfig.freshTopicCategories')}</Label>
-                <InfoIcon content={t('agentConfig.freshTopicCategoriesHelp')} />
+                <Label>{t('agentConfig.topicCategories')}</Label>
+                <InfoIcon content={t('agentConfig.topicCategoriesHelp')} />
               </div>
               <Input
                 value={(form.freshTopicCategoryHints ?? []).join(', ')}
@@ -645,11 +645,11 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                     .filter(Boolean)
                     .slice(0, 20),
                 )}
-                placeholder={t('agentConfig.freshTopicCategoriesPlaceholder')}
+                placeholder={t('agentConfig.topicCategoriesPlaceholder')}
                 className="bg-white dark:bg-gray-800"
               />
               <p className="text-xs text-gray-500">
-                <strong className="text-amber-600 dark:text-amber-400">@deprecated</strong> — {t('agentConfig.freshTopicCategoriesDeprecated')}
+                <strong className="text-amber-600 dark:text-amber-400">@deprecated</strong> — {t('agentConfig.topicCategoriesDeprecated')}
               </p>
             </div>
             <div className="space-y-2 sm:col-span-2">
@@ -689,7 +689,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               <p className="text-xs text-gray-500">
                 {(form.freshTopicBlockedSlugs ?? []).length === 0
                   ? t('agentConfig.topicsAllEligible', { total: availableTopics.length })
-                  : t('agentConfig.topicsPartial', {
+                  : t('agentConfig.topicsPartialEligible', {
                       active: availableTopics.length - (form.freshTopicBlockedSlugs ?? []).length,
                       total: availableTopics.length,
                       excluded: (form.freshTopicBlockedSlugs ?? []).length,
@@ -735,7 +735,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 <InfoIcon content={t('agentConfig.temperatureHelp')} />
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-400 w-10 text-right">{t('agentConfig.precise')}</span>
+                <span className="text-xs text-gray-400 w-10 text-right">{t('agentConfig.temperaturePrecise')}</span>
                 <input
                   type="range"
                   min={0}
@@ -745,9 +745,9 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   onChange={e => updateField('generationTemperature', parseInt(e.target.value) / 100)}
                   className="flex-1 accent-indigo-600"
                 />
-                <span className="text-xs text-gray-400 w-12">{t('agentConfig.creative')}</span>
+                <span className="text-xs text-gray-400 w-12">{t('agentConfig.temperatureCreative')}</span>
               </div>
-              <p className="text-xs text-gray-500">{t('agentConfig.temperatureHint')}</p>
+              <p className="text-xs text-gray-500">{t('agentConfig.temperatureScaleHint')}</p>
             </div>
           </div>
 
@@ -761,7 +761,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   <InfoIcon content={t('agentConfig.qualityGateEnabledHelp')} />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  {t('agentConfig.qualityGateHint')}
+                  {t('agentConfig.qualityGateSubtitle')}
                 </p>
               </div>
               <Switch
@@ -776,7 +776,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   <InfoIcon content={t('agentConfig.qualityGateMinScoreHelp')} />
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-xs text-gray-400 w-10 text-right">{t('agentConfig.lenient')}</span>
+                  <span className="text-xs text-gray-400 w-10 text-right">{t('agentConfig.qualityGateLenient')}</span>
                   <input
                     type="range"
                     min={0}
@@ -786,7 +786,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                     onChange={e => updateField('qualityGateMinScore', parseInt(e.target.value) / 100)}
                     className="flex-1 accent-indigo-600"
                   />
-                  <span className="text-xs text-gray-400 w-10">{t('agentConfig.strict')}</span>
+                  <span className="text-xs text-gray-400 w-10">{t('agentConfig.qualityGateStrict')}</span>
                 </div>
                 <p className="text-xs text-gray-500">
                   {t('agentConfig.qualityGateScoreHint')}
@@ -860,7 +860,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   <Label>{t('agentConfig.burstMode')}</Label>
                   <InfoIcon content={t('agentConfig.burstModeHelp')} />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">{t('agentConfig.burstModeHint')}</p>
+                <p className="text-xs text-gray-500 mt-1">{t('agentConfig.burstModeSubtitle')}</p>
               </div>
               <Switch checked={form.burstEnabled ?? true} onCheckedChange={v => updateField('burstEnabled', v)} />
             </div>
@@ -920,9 +920,9 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 <span className="font-mono">
                   {Math.max(1, Math.round((form.inactivityThresholdHours ?? 72) / 24))}
                 </span>
-                <span className="text-gray-400">{t('agentConfig.daysUnit')}</span>
+                <span className="text-gray-400">{t('agentConfig.inactivityDaysUnit')}</span>
                 <span className="ml-auto text-[9px] font-bold uppercase tracking-wider text-gray-400">
-                  {t('agentConfig.autoHours', { hours: form.inactivityThresholdHours ?? 72 })}
+                  {t('agentConfig.inactivityDaysAuto', { hours: form.inactivityThresholdHours ?? 72 })}
                 </span>
               </div>
             </div>
@@ -986,7 +986,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {isNew ? t('agentConfig.create') : tCommon('save')}
+            {isNew ? t('agentConfig.createButton') : tCommon('save')}
           </Button>
         </DialogFooter>
       </DialogContent>

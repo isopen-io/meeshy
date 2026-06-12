@@ -140,7 +140,7 @@ export function AgentLlmTab() {
           <div className="space-y-2">
             <div className="flex items-center">
               <Label>{t('llm.labelProvider')}</Label>
-              <InfoIcon content={t('llm.providerHelp')} />
+              <InfoIcon content={t('llm.labelProviderHelp')} />
             </div>
             <Select
               value={form.provider}
@@ -165,7 +165,7 @@ export function AgentLlmTab() {
           <div className="space-y-2">
             <div className="flex items-center">
               <Label>{t('llm.labelModel')}</Label>
-              <InfoIcon content={t('llm.modelHelp')} />
+              <InfoIcon content={t('llm.labelModelHelp')} />
             </div>
             <Select value={form.model} onValueChange={v => setForm(prev => ({ ...prev, model: v }))}>
               <SelectTrigger>
@@ -200,7 +200,7 @@ export function AgentLlmTab() {
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <Label>{t('llm.labelTemperature')}</Label>
-                <InfoIcon content={t('llm.temperatureHelp')} />
+                <InfoIcon content={t('llm.labelTemperatureHelp')} />
               </div>
               <span className="text-sm text-gray-500 font-mono">{form.temperature?.toFixed(1)}</span>
             </div>
@@ -215,7 +215,7 @@ export function AgentLlmTab() {
           <div className="space-y-2">
             <div className="flex items-center">
               <Label>{t('llm.labelMaxTokens')}</Label>
-              <InfoIcon content={t('llm.maxTokensHelp')} />
+              <InfoIcon content={t('llm.labelMaxTokensHelp')} />
             </div>
             <Input
               type="number"
@@ -236,7 +236,7 @@ export function AgentLlmTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('llm.labelDailyBudget')}</Label>
-                <InfoIcon content={t('llm.dailyBudgetHelp')} />
+                <InfoIcon content={t('llm.labelDailyBudgetHelp')} />
               </div>
               <Input
                 type="number"
@@ -249,7 +249,7 @@ export function AgentLlmTab() {
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>{t('llm.labelMaxCostPerCall')}</Label>
-                <InfoIcon content={t('llm.maxCostPerCallHelp')} />
+                <InfoIcon content={t('llm.labelMaxCostPerCallHelp')} />
               </div>
               <Input
                 type="number"

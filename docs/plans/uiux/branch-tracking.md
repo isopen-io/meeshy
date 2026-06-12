@@ -16,13 +16,14 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | **47w** (web only : lot i18n admin agent — `AgentConfigDialog` 122 strings → `agentConfig.*` (labels + tooltips `*Help` + hints + placeholders + options + footer via `tCommon`), `AgentLlmTab` 6 tooltips → `llm.*Help`, `AgentGlobalConfigTab` 15 tooltips + placeholder → `globalConfig.*` ; +143 clés ×4 locales, parité vérifiée par script ; hygiène docs : 46w marquée mergée #605, faux positifs footer 1/3/5/7/8/33 documentés) |
-| Last merged PR | #605 (46w), #608 (iOS notification details) ; iter-47w sur `claude/elegant-noether-0bs5fe` |
-| Last Merged Base (commit) | 61d0122 (merge #608, contient #605) — base de la branche iter-47w |
-| Next iteration | **48w** — repartir de `main` HEAD post-merge iter-47w |
+| Last completed iteration | **47w** (web only : migration i18n admin agent COMPLÈTE — `AgentConfigDialog` ~122 strings FR dures → `agentConfig.*` (sections Comportement/Triggers/Seuils/Planificateur/Instructions/Recherche Web/Sujets neufs/Génération/Quality Gate/Scheduling/Timeline/Rôles + footer `tCommon('cancel')`/`save` + `createButton` + compteurs paramétrés `{percent}`/`{factor}`/`{count}`/topics) ; `AgentLlmTab` 6 tooltips → `llm.*Help` ; `AgentGlobalConfigTab` 15 tooltips + placeholder → `globalConfig.*Help` ; +145 clés × 4 locales fr/en/es/pt, parité vérifiée par script) |
+| Last merged PR | #610 (47w), #608 (iOS notification details), #605 (46w) ; réconciliation 47w (#611) sur `claude/elegant-noether-0bs5fe` |
+| Last Merged Base (commit) | 7659cb0 (merge #610) — base pour 48w |
+| Next iteration | **48w** — repartir de `main` HEAD post-merge #611 (réconciliation) |
+| Note de réconciliation 47w | 47w exécutée EN DOUBLE par deux agents concurrents : `claude/blissful-ritchie-8d57jg` (PR #610, mergée la première → canonique) et `claude/elegant-noether-0bs5fe` (PR #611, périmètre identique, clés quasi identiques `create`/`topicsPartial` vs `createButton`/`topicsPartialEligible`). Conflits résolus en faveur de #610 ; #611 réduite à la réconciliation documentaire. Post-résolution vérifié : 201 clés/locale ×4, refs `t()` toutes résolues, 0 string FR résiduelle. Hygiène docs (#611) : footers 1/3/5/7/8/33 = faux positifs grep (marqueur « ✅ COMPLÉTÉE » présent), ne pas re-flagger |
 
 ### Deferred carry-over — web (pour 48w+)
-- lot agent.config SOLDÉ en 47w (AgentConfigDialog/AgentLlmTab/AgentGlobalConfigTab — ne plus auditer ; clés dans les arbres existants `agentConfig.*`/`llm.*`/`globalConfig.*`, pas de nouvel arbre `agent.config.*`)
+- ~~admin AgentConfigDialog/AgentLlmTab/AgentGlobalConfigTab i18n~~ → **SOLDÉ en 47w** (arbres `agentConfig.*`/`llm.*Help`/`globalConfig.*Help` étendus — ne plus auditer ces 3 fichiers)
 - chart hex sans variante dark : `RankingStatsImpl` (10+ hex recharts), `MermaidDiagramImpl` (thème mermaid fixe `default`, 6 hex), `AgentOverviewTab` (2 hex pie) ; consolidation `notifications/preferences` page vs composant
 - réactions par pièce jointe (wiring gateway, feature commune web+Android)
 - audit qualité es/pt (relecture des traductions existantes)
@@ -73,4 +74,5 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 45i | claude/wizardly-rubin-ux84an | #595 | ✅ |
 | 45 | claude/blissful-ritchie-dp7ibu | #597 | ✅ |
 | 46w | claude/elegant-noether-09t4x2 | #605 | ✅ |
-| 47w | claude/elegant-noether-0bs5fe | ⏳ | ⏳ |
+| 47w | claude/blissful-ritchie-8d57jg | #610 | ✅ |
+| 47w (réconciliation, doublon) | claude/elegant-noether-0bs5fe | #611 | ⏳ |
