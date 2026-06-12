@@ -999,7 +999,7 @@ export interface LinkMessageNewEventData {
   readonly message: Record<string, unknown>;
 }
 
-export const AGENT_ADMIN_EVENT_KINDS = ['delivery-queue', 'scan', 'config'] as const;
+export const AGENT_ADMIN_EVENT_KINDS = ['delivery-queue', 'scan', 'config', 'topics'] as const;
 
 export type AgentAdminEventKind = (typeof AGENT_ADMIN_EVENT_KINDS)[number];
 

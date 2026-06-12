@@ -126,7 +126,7 @@ struct AboutView: View {
 
     private var descriptionSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "about.section.description", defaultValue: "Description", bundle: .main), icon: "text.quote", color: "9B59B6")
+            sectionHeader(title: String(localized: "about.section.description", defaultValue: "Description", bundle: .main), icon: "text.quote", color: MeeshyColors.indigo600Hex)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(String(localized: "about.description.body", defaultValue: "Meeshy est une plateforme de messagerie en temps reel haute performance avec traduction multilingue, clonage vocal et chiffrement de bout en bout.", bundle: .main))
@@ -136,7 +136,7 @@ struct AboutView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
             }
-            .background(sectionBackground(tint: "9B59B6"))
+            .background(sectionBackground(tint: MeeshyColors.indigo600Hex))
         }
     }
 
@@ -161,14 +161,14 @@ struct AboutView: View {
 
     private var liensSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "about.section.links", defaultValue: "Liens", bundle: .main), icon: "link", color: "4ECDC4")
+            sectionHeader(title: String(localized: "about.section.links", defaultValue: "Liens", bundle: .main), icon: "link", color: MeeshyColors.indigo300Hex)
 
             VStack(spacing: 0) {
-                linkRow(icon: "globe", title: String(localized: "about.link.website", defaultValue: "Site web", bundle: .main), url: "https://meeshy.me", color: "4ECDC4")
-                linkRow(icon: "at", title: String(localized: "about.link.twitter", defaultValue: "Twitter / X", bundle: .main), url: "https://twitter.com/meeshy", color: "4ECDC4")
-                linkRow(icon: "chevron.left.forwardslash.chevron.right", title: String(localized: "about.link.github", defaultValue: "GitHub", bundle: .main), url: "https://github.com/meeshy", color: "4ECDC4")
+                linkRow(icon: "globe", title: String(localized: "about.link.website", defaultValue: "Site web", bundle: .main), url: "https://meeshy.me", color: MeeshyColors.indigo300Hex)
+                linkRow(icon: "at", title: String(localized: "about.link.twitter", defaultValue: "Twitter / X", bundle: .main), url: "https://twitter.com/meeshy", color: MeeshyColors.indigo300Hex)
+                linkRow(icon: "chevron.left.forwardslash.chevron.right", title: String(localized: "about.link.github", defaultValue: "GitHub", bundle: .main), url: "https://github.com/meeshy", color: MeeshyColors.indigo300Hex)
             }
-            .background(sectionBackground(tint: "4ECDC4"))
+            .background(sectionBackground(tint: MeeshyColors.indigo300Hex))
         }
     }
 

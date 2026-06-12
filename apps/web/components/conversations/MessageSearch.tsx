@@ -33,7 +33,7 @@ interface MessageSearchProps {
 }
 
 export function MessageSearch({ conversationId, onNavigateToMessage, onClose, isOpen }: MessageSearchProps) {
-  const { t } = useI18n('conversations');
+  const { t, locale } = useI18n('conversations');
   const [inputValue, setInputValue] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -89,7 +89,7 @@ export function MessageSearch({ conversationId, onNavigateToMessage, onClose, is
 
   const formatDate = (iso: string) => {
     const date = new Date(iso);
-    return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    return date.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   const showResults = debouncedQuery.length >= 2;

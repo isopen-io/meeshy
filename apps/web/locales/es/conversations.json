@@ -322,7 +322,8 @@
       "fallbackUser": "Usuario",
       "reactionAdded": "Reacción {emoji} añadida",
       "reactionRemoved": "Reacción eliminada",
-      "inviteSearchPlaceholder": "Buscar usuarios..."
+      "inviteSearchPlaceholder": "Buscar usuarios...",
+      "editPhoto": "Editar"
     },
     "conversationImage": {
       "title": "Cambiar la imagen de la conversación",

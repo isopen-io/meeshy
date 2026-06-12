@@ -44,6 +44,13 @@ describe('parseAgentAdminEvent', () => {
     });
   });
 
+  it('parses topic catalog events', () => {
+    expect(parseAgentAdminEvent('{"kind":"topics"}')).toEqual({
+      kind: 'topics',
+      conversationId: undefined,
+    });
+  });
+
   it('rejects unknown kinds, malformed JSON and bad conversationId types', () => {
     expect(parseAgentAdminEvent('{"kind":"nope"}')).toBeNull();
     expect(parseAgentAdminEvent('not json')).toBeNull();

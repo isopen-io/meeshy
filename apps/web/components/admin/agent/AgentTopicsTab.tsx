@@ -5,6 +5,7 @@ import { Loader2, Plus, RefreshCw, Pencil, EyeOff, Trash2 } from 'lucide-react';
 import { agentAdminService, type TopicCatalogItem } from '@/services/agent-admin.service';
 import { AgentTopicEditModal } from './AgentTopicEditModal';
 import { useI18n } from '@/hooks/use-i18n';
+import { useAgentAdminEvents } from '@/hooks/admin/use-agent-admin-events';
 
 /**
  * Catalogue dynamique des topics utilisés par le strategist agent pour
@@ -42,6 +43,8 @@ export function AgentTopicsTab() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  useAgentAdminEvents({ kinds: ['topics'], onChange: reload });
 
   const handleDelete = async (id: string, hard: boolean) => {
     const msg = hard

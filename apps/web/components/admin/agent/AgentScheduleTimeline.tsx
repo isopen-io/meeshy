@@ -80,8 +80,17 @@ export default memo(function AgentScheduleTimeline({ conversationId, compact = f
   });
 
   useEffect(() => {
-    const tick = setInterval(() => setNow(Date.now()), 10_000);
-    return () => clearInterval(tick);
+    const tick = setInterval(() => {
+      if (!document.hidden) setNow(Date.now());
+    }, 10_000);
+    const handleVisibility = () => {
+      if (!document.hidden) setNow(Date.now());
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(tick);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   const handleTrigger = useCallback(async () => {

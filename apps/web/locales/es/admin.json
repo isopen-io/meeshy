@@ -28,7 +28,14 @@
     "period90d": "Último trimestre (90d)",
     "period180d": "Último semestre (180d)",
     "period365d": "Último año (365d)",
-    "periodAll": "Todo el tiempo"
+    "periodAll": "Todo el tiempo",
+    "charts": {
+      "topTitle": "Visualización - Top {count}",
+      "evolutionTitle": "Evolución y distribución del rendimiento",
+      "position": "Posición {label}",
+      "distributionNote": "Este gráfico muestra la distribución del rendimiento del top {count} clasificado por posición.",
+      "curveNote": "La curva descendente indica cómo disminuyen los valores a lo largo de las posiciones."
+    }
   },
   "scanLog": {
     "title": "Registros de análisis",
@@ -72,7 +79,8 @@
         "messages": "Mensajes",
         "words": "Palabras",
         "avgConfidence": "Conf. media",
-        "archetypes": "Arquetipos"
+        "archetypes": "Arquetipos",
+        "inactive": "Inactivos"
       },
       "distribution": "Distribución",
       "recentActivity": "Actividad reciente",
@@ -287,6 +295,16 @@
         "abondant": "Abundante",
         "jamais": "Nunca"
       }
+    },
+    "userPicker": {
+      "empty": "Ningún usuario seleccionado",
+      "remove": "Quitar",
+      "addUser": "Añadir un usuario",
+      "searchPlaceholder": "Buscar un usuario...",
+      "searching": "Buscando...",
+      "added": "Añadido",
+      "noneFound": "Ningún usuario encontrado",
+      "minChars": "Introduce al menos 2 caracteres"
     }
   },
   "agentLive": {

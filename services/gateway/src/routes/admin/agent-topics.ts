@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError } from '../../utils/response';
 import { getCacheStore } from '../../services/CacheStore';
 import { AgentHttpClient } from '../../services/AgentHttpClient';
+import { AGENT_ADMIN_EVENT_CHANNEL, type AgentAdminEventData } from '@meeshy/shared/types/socketio-events';
 
 /**
  * Routes admin CRUD pour le catalogue de topics dynamiques utilisé par le
@@ -78,6 +79,16 @@ async function broadcastTopicsInvalidation(fastify: FastifyInstance): Promise<vo
   await Promise.allSettled(tasks);
 }
 
+/**
+ * Push temps réel vers les dashboards admin (room `admin:agent` via
+ * AgentAdminRelay) — même canal que les mutations configs/queue/scans.
+ */
+function notifyAdminDashboards(fastify: FastifyInstance): void {
+  const payload: AgentAdminEventData = { kind: 'topics' };
+  getCacheStore().publish(AGENT_ADMIN_EVENT_CHANNEL, JSON.stringify(payload)).catch((err) =>
+    fastify.log.warn({ err }, '[TopicCatalog] admin-event publish failed'));
+}
+
 export async function agentTopicsRoutes(fastify: FastifyInstance) {
   // GET /admin/agent/topics
   fastify.get('/topics', {
@@ -135,6 +146,7 @@ export async function agentTopicsRoutes(fastify: FastifyInstance) {
         data: parsed.data as Required<typeof parsed.data>,
       });
       await broadcastTopicsInvalidation(fastify);
+      notifyAdminDashboards(fastify);
       sendSuccess(reply, created);
     } catch (err: unknown) {
       const e = err as { code?: string };
@@ -166,6 +178,7 @@ export async function agentTopicsRoutes(fastify: FastifyInstance) {
         data: parsed.data,
       });
       await broadcastTopicsInvalidation(fastify);
+      notifyAdminDashboards(fastify);
       sendSuccess(reply, updated);
     } catch (err: unknown) {
       const e = err as { code?: string };
@@ -198,6 +211,7 @@ export async function agentTopicsRoutes(fastify: FastifyInstance) {
         });
       }
       await broadcastTopicsInvalidation(fastify);
+      notifyAdminDashboards(fastify);
       sendSuccess(reply, { id, deleted: hard ? 'hard' : 'soft' });
     } catch (err: unknown) {
       const e = err as { code?: string };

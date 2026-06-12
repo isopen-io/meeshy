@@ -29,14 +29,14 @@ struct FriendRequestListView: View {
                 dismiss()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
             }
 
             Spacer()
 
             Text(String(localized: "friends.requests.title", defaultValue: "Demandes d'amis", bundle: .main))
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .font(.system(.headline, design: .rounded).weight(.semibold))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -83,11 +83,11 @@ struct FriendRequestListView: View {
                 .foregroundColor(theme.textMuted.opacity(0.4))
 
             Text(String(localized: "friends.requests.empty.title", defaultValue: "Aucune demande", bundle: .main))
-                .font(.system(size: 18, weight: .semibold))
+                .font(.title3.weight(.semibold))
                 .foregroundColor(theme.textMuted)
 
             Text(String(localized: "friends.requests.empty.subtitle", defaultValue: "Les demandes d'amis apparaitront ici", bundle: .main))
-                .font(.system(size: 14, weight: .medium))
+                .font(.subheadline.weight(.medium))
                 .foregroundColor(theme.textMuted.opacity(0.7))
 
             Spacer()
@@ -113,25 +113,25 @@ struct FriendRequestListView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(name)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 if let username = sender?.username {
                     Text("@\(username)")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundColor(theme.textMuted)
                 }
 
                 if let message = request.message, !message.isEmpty {
                     Text(message)
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(2)
                 }
 
                 Text(relativeTime(from: request.createdAt))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textMuted)
             }
 

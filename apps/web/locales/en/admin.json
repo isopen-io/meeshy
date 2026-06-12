@@ -28,7 +28,14 @@
     "period90d": "Last quarter (90d)",
     "period180d": "Last semester (180d)",
     "period365d": "Last year (365d)",
-    "periodAll": "All time"
+    "periodAll": "All time",
+    "charts": {
+      "topTitle": "Visualization - Top {count}",
+      "evolutionTitle": "Performance trend and distribution",
+      "position": "Position {label}",
+      "distributionNote": "This chart shows the performance distribution of the top {count} ranked by position.",
+      "curveNote": "The descending curve shows how values decrease across positions."
+    }
   },
   "scanLog": {
     "title": "Scan Logs",
@@ -72,7 +79,8 @@
         "messages": "Messages",
         "words": "Words",
         "avgConfidence": "Avg. confidence",
-        "archetypes": "Archetypes"
+        "archetypes": "Archetypes",
+        "inactive": "Inactive"
       },
       "distribution": "Distribution",
       "recentActivity": "Recent activity",
@@ -287,6 +295,16 @@
         "abondant": "Abundant",
         "jamais": "Never"
       }
+    },
+    "userPicker": {
+      "empty": "No user selected",
+      "remove": "Remove",
+      "addUser": "Add a user",
+      "searchPlaceholder": "Search for a user...",
+      "searching": "Searching...",
+      "added": "Added",
+      "noneFound": "No user found",
+      "minChars": "Enter at least 2 characters"
     }
   },
   "agentLive": {
