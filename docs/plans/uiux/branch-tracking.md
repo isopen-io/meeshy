@@ -16,11 +16,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | 33 (restore iter-32 lost locale keys, user-detail/agent-tab i18n, dark mode, iOS a11y) |
-| Last merged PR | #588 (feat/uiux-iter33) |
-| Last Merged Base (commit) | 7358047a |
-| Next iteration | **44** (full audit from main HEAD — see iter-43 deferred carry-over + fresh scan) |
-| Next branch to create from | `main` (HEAD = 7358047a) |
+| Last completed iteration | 44 (iOS exclusif : ThemedConversationRow — i18n 21 clés ×5 locales, Dynamic Type 26 polices, tokens MeeshyColors.text*(isDark:), ShortRelativeTime partagé+testé) |
+| Last merged PR | #588 (iter-33) ; iter-44 en cours de merge |
+| Last Merged Base (commit) | 813b7fe3 (main post-#588) |
+| Next iteration | **45** |
+| Next branch to create from | `main` (HEAD post-merge iter-44) |
+| Deferred carry-over for 45 (iOS only, directive routine) | ConversationListHelpers (19 polices, 28 hex) ; PostDetailView (.textSelection + 21 hex) ; FeedCommentsSheet/FeedPostCard timeAgo dupliqués + i18n ; ConversationInfoSheet (52 polices), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (31) ; UniversalComposerBar(+Recording) hex ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) |
 
 ---
 
@@ -47,5 +48,6 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 41 | claude/blissful-ritchie-9vesx9 | #577 | ✅ |
 | 41b | claude/blissful-ritchie-68j2oq | #580 | ✅ |
 | 42 | claude/blissful-ritchie-fst8wf | #582 | ✅ |
-| 42b | claude/blissful-ritchie-e672ur | #579 | ⏳ |
-| 43 | claude/blissful-ritchie-6709o7 | #576 | ⏳ |
+| 42b | claude/blissful-ritchie-e672ur | #579 | ✅ |
+| 43 | claude/blissful-ritchie-6709o7 | #576 | ✅ |
+| 44 | claude/keen-dirac-485vpk | (en cours) | ⏳ |
