@@ -40,9 +40,12 @@ Analyse source : `docs/analyses/uiux/2026-06-12-iteration-47.md`.
   déjà effective sur Android et le système xcstrings iOS.
 
 ## Livraison
-- [ ] Commit + push `claude/blissful-ritchie-9jc6xs`
-- [ ] PR vers main, CI verte
+- [x] Commit + push `claude/blissful-ritchie-9jc6xs` (dbd2c1e + 8566f11)
+- [ ] PR #615 vers main, CI verte
 - [ ] Merge dans main + mise à jour branch-tracking.md
 
 ## Review
-(complété après CI)
+Vérifications effectuées : parité des clés i18n par script (4 locales, web + Android),
+JSON/XML valides, tsc 0 erreur sur les fichiers touchés (TS5101 préexistant),
+tous les membres MeeshyColors utilisés vérifiés existants, exclusions charte respectées.
+CI (lint, type-check, tests web/gateway/shared, iOS tests) = validation finale avant merge.

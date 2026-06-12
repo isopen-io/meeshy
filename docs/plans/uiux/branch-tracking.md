@@ -16,25 +16,32 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | **46w** (web only : i18n surface v2 — CommentComposer 7 clés, StatusBar timeRemaining, ThemeToggle 5 clés, TranslationToggle/MediaImageCard `language.original`/`availableTranslations`/`captionLanguage` ; admin UserPicker 8 clés `agent.userPicker.*` ; MessageComposer `#EF4444`×3 → `var(--gp-error)` + hover theme-aware ; overlays click-outside `aria-hidden` MessageBubble/MediaImageCard ; hygiène docs : 36/36 analyses annotées, carry-over purgé de 3 faux restes) |
-| Last merged PR | #597 (45), #596 (45w), #595 (45i), #604 (routine fraîcheur) ; iter-46w sur `claude/elegant-noether-09t4x2` |
-| Last Merged Base (commit) | 945a8d74 (merge #604, contient #597) — base de la branche iter-46w |
-| Next iteration | **47w** — repartir de `main` HEAD post-merge iter-46w |
+| Last completed iteration | **47** (tri-plateforme, PR #615 : web — AgentConfigDialog/AgentLlmTab/AgentGlobalConfigTab i18n complet 145 clés `agentConfig.*` ×4 locales + page chats v2 11 strings → `conversations.v2chat.*` + Mermaid dark theme-aware ; iOS — 46 reliquats palette legacy → tokens MeeshyColors sur 14 fichiers + FriendRequestListView 10 polices Dynamic Type ; Android — TalkBack compteur +N images (`bubble_hidden_images` ×4) + SelectionContainer posts feed) |
+| Last merged PR | #605 (46w), #608 (notifications iPad) ; iter-47 (#615) en cours sur `claude/blissful-ritchie-9jc6xs` |
+| Last Merged Base (commit) | 61d0122 (merge #608) — base de la branche iter-47 |
+| Next iteration | **48** — repartir de `main` HEAD post-merge #615 |
 
-### Deferred carry-over — web (pour 47w+)
-- admin : `AgentConfigDialog` (~58 labels/tooltips FR) + tooltips InfoIcon `AgentLlmTab` (6) / `AgentGlobalConfigTab` (15) — à traiter en un lot sous `agent.config.*` (vérifié 46w : debug.tsx, AgentArchetypesTab, BackSoundDetails, UserPicker DÉJÀ corrigés — ne plus auditer)
-- chart hex sans variante dark : `RankingStatsImpl` (10+ hex recharts), `MermaidDiagramImpl` (thème mermaid fixe `default`, 6 hex), `AgentOverviewTab` (2 hex pie) ; consolidation `notifications/preferences` page vs composant
-- réactions par pièce jointe (wiring gateway, feature commune web+Android)
-- audit qualité es/pt (relecture des traductions existantes)
-- console.error en français (participants-drawer ×5, links-section ×3) — logs dev, non bloquant
-- optimisations 45w toujours ouvertes : deep links `/v2/chats?id=` (parité iOS/Android), swipe-back mobile web, audit dark pages admin
+### Deferred carry-over — web (pour 48+)
+- `RankingStatsImpl` : 22 hex ambre/jaune recharts sans variante dark (strokes/fills/tooltips lignes 54-147) — nécessite hook thème + ternaires, lot dédié (Mermaid et AgentOverviewTab soldés/purgés en 47)
+- `formatFileSize` local page chats v2 : unités FR `o`/`Ko`/`Mo` en dur — unifier avec un util partagé locale-aware
+- chats v2 `languageName={msg.originalLanguage || 'Francais'}` : passe un code langue comme nom — mapper via `languages.json`
+- landing/signup/settings v2 : noms de langues « Français »/« English » en dur (vitrine démo, arbitrage produit)
+- consolidation `notifications/preferences` page vs composant ; réactions par pièce jointe (wiring gateway, commun web+Android) ; audit qualité es/pt (incluant les 145 clés agentConfig ajoutées en 47) ; console.error FR (logs dev, non bloquant) ; swipe-back mobile web ; audit dark pages admin
+- PURGÉS (vérifiés conformes en 47, ne plus auditer) : deep link `/v2/chats?id=` (implémenté), sélection bulles MessageBubble v2 (aucun select-none), AgentOverviewTab (pas de hex)
 - locale maps intentionnelles NON à migrer : share-affiliate-modal, AudioPostComposer (speech), use-voice-recording (SpeechRecognition lang) ; StoryViewer `select-none` text-objects = design (parité stories iOS)
 
-### Deferred carry-over — iOS (pour 46+, post-45i/45)
-SampleData.swift suppression fichier mort (pbxproj + build local) ; FriendRequestListView 11 polices ; PostDetailView (.textSelection + 21 hex — re-vérifié OK iter-45, retirer si confirmé) ; arbitrage `time.*` (FeedPostCard) vs `time.short.*` (ShortRelativeTime) — timeAgo FeedCommentsSheet réglé en 45, ChangePasswordView réglé en 45 ; ConversationInfoSheet (52 polices), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (27), NewConversationView (16), DataExportView (16), DataStorageView (11) ; reliquats ancienne palette : RootViewComponents (11), FeedView (8), FeedView+Attachments (10), WidgetPreviewView (7), AboutView (5), MessageComposer (4), AttachmentPreparationService (3), ConversationAnimatedBackground (2), divers ×1 (ConversationInfoSheet, MemberManagementSection, BlockedUsersView, UserStatsView, StoryViewerView+Content, MediaDownloadSettingsView) ; washes AudioPostComposer (décision design) ; ladder pièces jointes arc-en-ciel (à arbitrer charte) ; VoiceProfileWizardView/TrackingLinksView Color(hex:) ; IncomingCallView .white contraste ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) ; ThemedConversationRow theme-aware (leaf-view)
+### Deferred carry-over — iOS (pour 48+)
+- résidus `FF6B6B` hors périmètre 47 (signalés par la passe palette, majorité → `error`/`errorHex`) : PrivacySettingsView (×4, toggles restrictifs), RootView:~1365 (bell notifications), ComposerModels:37 (thumbnailColor), AddParticipantSheet:~167, ConversationPreferencesTab (×3)
+- SampleData.swift suppression fichier mort (4 entrées pbxproj + build local requis)
+- grandes surfaces polices : ConversationInfoSheet (52), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (27), NewConversationView (16), DataExportView (16), DataStorageView (11)
+- PURGÉS (vérifiés en 47) : PostDetailView (.textSelection présent, 20 Color(hex:) tous dynamiques — retirer définitivement), FriendRequestListView polices (fait), reliquats palette des 14 fichiers listés en 45i (fait)
+- washes AudioPostComposer (décision design) ; ladder pièces jointes arc-en-ciel (à arbitrer charte) ; VoiceProfileWizardView/TrackingLinksView Color(hex:) ; IncomingCallView .white contraste ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) ; ThemedConversationRow theme-aware (leaf-view) ; arbitrage `time.*` vs `time.short.*`
 
-### Deferred carry-over — Android (pour 46+)
-parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ; exceptions documentées : SettingsScreen 14.dp, emoji 22.sp (acceptées, ne pas re-flagger)
+### Deferred carry-over — Android (pour 48+)
+- parité stories (UI absente, large) OU réactions par pièce jointe (avec web)
+- largeurs/grilles d'images en constantes nommées (MessageBubble 252.dp/124.dp) — hygiène
+- SelectionContainer sur Profile (bio) si demande
+- exceptions documentées : SettingsScreen 14.dp, emoji 22.sp (acceptées) ; icônes décoratives `contentDescription=null` avec label adjacent (ChatScreen:464/514, MessageBubble:307) = pratique a11y correcte, ne pas re-flagger ; tailles `sp` suivent fontScale (pas une violation)
 
 ---
 
@@ -73,4 +80,4 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 45i | claude/wizardly-rubin-ux84an | #595 | ✅ |
 | 45 | claude/blissful-ritchie-dp7ibu | #597 | ✅ |
 | 46w | claude/elegant-noether-09t4x2 | #605 | ✅ |
-| 47 | claude/blissful-ritchie-9jc6xs | ⏳ | ⏳ |
+| 47 | claude/blissful-ritchie-9jc6xs | #615 | ⏳ |
