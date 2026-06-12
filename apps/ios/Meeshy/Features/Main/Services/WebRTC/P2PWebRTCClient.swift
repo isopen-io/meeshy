@@ -39,6 +39,12 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     private var localVideoTrack_: RTCVideoTrack?
     private var videoCapturer: RTCCameraVideoCapturer?
     private var videoFilterDelegate: VideoFilterCapturerDelegate?
+    /// `true` entre `disconnect()` et le `configure()` de l'appel suivant.
+    /// Re-checké après l'await non-cancellation-aware de `startCapture` :
+    /// sans ce flag, un appel terminé pendant le warm-up caméra (0,5–3 s)
+    /// laissait la capture démarrer APRÈS le teardown — caméra allumée sans
+    /// aucun chemin d'extinction.
+    private var isClosed = false
     private var remoteVideoTrack_: RTCVideoTrack?
     private var remoteAudioTrack_: RTCAudioTrack?
     private var usingFrontCamera = true
@@ -131,6 +137,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
 
         peerConnection = pc
+        isClosed = false
         Logger.webrtc.info("Peer connection created with \(iceServers.count) ICE servers")
     }
 
@@ -253,6 +260,17 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let fps = targetFrameRate(for: format)
         Logger.webrtc.info("[WEBRTC] capturer.startCapture begin fps=\(fps)")
         try await capturer.startCapture(with: camera, format: format, fps: fps)
+        if isClosed {
+            // L'appel s'est terminé pendant le warm-up : `disconnect()` a déjà
+            // stoppé une capture pas encore démarrée et nil-é les propriétés.
+            // On éteint la caméra via la référence locale et on sort.
+            Logger.webrtc.warning("[WEBRTC] call ended during camera warm-up — stopping orphan capture")
+            capturer.stopCapture()
+            localVideoTrack_ = nil
+            videoCapturer = nil
+            videoFilterDelegate = nil
+            throw CancellationError()
+        }
         // applyVideoEncoding() is deferred — it runs once the video track is
         // attached to its transceiver; a sender does not exist yet at this point.
         Logger.webrtc.info("[WEBRTC] video track prepared (\(camera.position == .front ? "front" : "device") camera, \(fps)fps)")
@@ -968,10 +986,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // MARK: - Disconnect
 
     func disconnect() {
+        isClosed = true
         _audioEffectsService.reset()
         transcriptionDataChannel?.close()
         transcriptionDataChannel = nil
         videoCapturer?.stopCapture()
+        // Sans ce nil, le delegate (qui retient le RTCVideoSource du dernier
+        // appel + DarkFrameDetector) survivait jusqu'au prochain appel vidéo.
+        videoFilterDelegate = nil
         localAudioTrack?.isEnabled = false
         localVideoTrack_?.isEnabled = false
         peerConnection?.close()

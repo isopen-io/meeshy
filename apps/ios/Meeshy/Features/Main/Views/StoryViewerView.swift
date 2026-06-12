@@ -420,7 +420,11 @@ struct StoryViewerView: View {
             await refreshVideoAudioTrackPresence()
         }
         .onDisappear {
-            slideTimer.reset()
+            // `invalidate()` (et non `reset()`) : coupe le CADisplayLink 60 Hz
+            // et libère les callbacks qui capturent l'état du viewer. Le
+            // pipeline est ré-installé au prochain onAppear
+            // (`hasInstalledPrefetchPipeline = false` ci-dessous).
+            slideTimer.invalidate()
             prefetcher.detach()
             hasInstalledPrefetchPipeline = false
             StoryMediaCoordinator.shared.deactivate()

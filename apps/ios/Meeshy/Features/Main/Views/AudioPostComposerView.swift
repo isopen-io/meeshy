@@ -73,6 +73,18 @@ struct AudioPostComposerView: View {
         .adaptiveOnChange(of: colorScheme) { _, newScheme in
             theme.syncWithSystem(newScheme)
         }
+        .onDisappear {
+            // Swipe-down interactif de la sheet : contourne le bouton Annuler
+            // (`cancelAndDismiss`). On coupe micro + transcription — idempotent,
+            // et on ne supprime PAS le fichier : le chemin publish vient de le
+            // remettre au parent pour upload.
+            if audioRecorder.isRecording {
+                audioRecorder.cancelRecording()
+            }
+            if EdgeTranscriptionService.shared.isTranscribing {
+                EdgeTranscriptionService.shared.cancel()
+            }
+        }
     }
 
     // MARK: - Background

@@ -1920,6 +1920,12 @@ public final class StoryCanvasUIView: UIView {
         super.didMoveToWindow()
         if window != nil {
             startEditDisplayLinkIfNeeded()
+            // Ré-arme le link de lecture invalidé par `willMove(toWindow: nil)`
+            // quand le canvas revient à l'écran sans repasser par `setMode`
+            // (cover/sheet présenté au-dessus du viewer puis dismissé).
+            if mode == .play, displayLink == nil {
+                startPlayback()
+            }
         } else {
             stopEditDisplayLink()
         }
@@ -2111,7 +2117,14 @@ public final class StoryCanvasUIView: UIView {
         super.willMove(toWindow: newWindow)
         guard newWindow == nil else { return }
         unregisterFromActive()
-        backgroundLayer.isPlaybackActive = false
+        // RC5 — `stopPlayback()` (pas seulement la pause des médias) : le
+        // CADisplayLink de lecture cible `self` et le RETIENT. Détaché de la
+        // fenêtre sans invalidation (swipe-to-dismiss, slide swipée), la
+        // chaîne run loop → link → canvas rendait le canvas entier immortel
+        // (deinit inatteignable : layer tree, bitmaps, ReaderAudioMixer +
+        // AVAudioEngine leakés à chaque fermeture). Ré-armé symétriquement
+        // dans `didMoveToWindow` pour le cas re-attach sans `setMode`.
+        stopPlayback()
         forEachAVPlayer { $0.pause() }
         audioMixer.stop()
         releasePlaybackSessionIfNeeded()

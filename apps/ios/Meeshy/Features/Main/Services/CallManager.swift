@@ -713,12 +713,19 @@ final class CallManager: ObservableObject {
             Logger.calls.info("[CALL_SETUP] incoming 3/4 startLocalMedia begin (isVideo=\(isVideo))")
             do {
                 try await self.webRTCService.startLocalMedia(isVideo: isVideo)
+                // Liveness post-await : l'appel a pu se terminer pendant le
+                // warm-up media — ne pas re-poser d'état sur un appel mort.
+                guard self.currentCallId == callId else { return }
                 if isVideo { self.hasLocalVideoTrack = true }
             } catch WebRTCError.simulatorVideoUnsupported {
                 // Phase 1 fix E7/B4: simulator can't run video — degrade to audio-only
                 Logger.calls.warning("Simulator video unsupported — continuing audio-only")
                 self.isVideoEnabled = false
                 try? await self.webRTCService.startLocalMedia(isVideo: false)
+            } catch is CancellationError {
+                // L'appel s'est terminé pendant startCapture (P2PWebRTCClient
+                // a déjà éteint la caméra orpheline) — pas un échec media.
+                return
             } catch {
                 Logger.calls.error("startLocalMedia failed: \(error.localizedDescription)")
                 self.endCallInternal(reason: .failed(String(localized: "call.error.media")))
@@ -1846,6 +1853,15 @@ final class CallManager: ObservableObject {
         hasRemoteVideoTrack = false
         callStartDate = nil
         reconnectAttempt = 0
+        // Reset inconditionnel de l'état vidéo per-call. Avant, seul
+        // `resetEndedStateForNewCall` (fenêtre settle 1,5 s) le faisait : un
+        // appel démarré plus tard héritait d'`isRemoteVideoEnabled == false`
+        // (placeholder "Caméra désactivée" fantôme) et d'un FSM de survie
+        // vidéo potentiellement suspendu — violation du contrat documenté de
+        // `VideoSurvivalControlling.reset()`.
+        isRemoteVideoEnabled = true
+        videoSurvivalController.reset()
+        isVideoSuspended = false
         webRTCService.close()
         deactivateAudioSession()
         callState = .ended(reason: reason)
@@ -2005,6 +2021,14 @@ final class CallManager: ObservableObject {
             session.lockForConfiguration()
             session.isAudioEnabled = false
             session.unlockForConfiguration()
+        }
+        // Sans CallKit (appel entrant app au premier plan, iOS-app-on-Mac),
+        // `provider:didDeactivate:` ne viendra JAMAIS : la session
+        // `.playAndRecord` + `.duckOthers` auto-activée restait active après
+        // raccrochage — l'audio des autres apps restait ducké jusqu'à une
+        // reconfiguration fortuite. Désactivation explicite symétrique.
+        if !callUsesCallKit {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         }
     }
 

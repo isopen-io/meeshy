@@ -11,7 +11,11 @@ import MeeshySDK
 public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
     public var onRecordComplete: (URL) -> Void
 
-    @ObservedObject private var recorder: Recorder
+    // `@StateObject` (et non `@ObservedObject`) : le call site (StoryAudioPanel)
+    // crée le recorder inline via l'init de convenance — en observed, chaque
+    // ré-évaluation du panel remplaçait l'instance observée mid-recording et
+    // orphelinait un AVAudioRecorder live (micro chaud, enregistrement perdu).
+    @StateObject private var recorder: Recorder
     @State private var wavePhase: CGFloat = 0
     @State private var phaseTimer: Timer?
     @State private var errorMessage: String?
@@ -21,8 +25,8 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
 
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(recorder: Recorder, onRecordComplete: @escaping (URL) -> Void) {
-        self.recorder = recorder
+    public init(recorder: @autoclosure @escaping () -> Recorder, onRecordComplete: @escaping (URL) -> Void) {
+        self._recorder = StateObject(wrappedValue: recorder())
         self.onRecordComplete = onRecordComplete
     }
 
@@ -103,6 +107,11 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
         .padding(.horizontal, 16)
         .onDisappear {
             stopPhaseTimer()
+            // Panel fermé mid-recording (swipe, changement d'onglet) : sans ce
+            // cancel le micro et la session audio restaient actifs.
+            if recorder.isRecording {
+                recorder.cancelRecording()
+            }
         }
         .onChange(of: recorder.isRecording) { isRecording in
             if !isRecording {

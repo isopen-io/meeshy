@@ -69,6 +69,11 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
         .onDisappear {
             phaseTimer?.invalidate()
             phaseTimer = nil
+            // Le composant se documente "Present as fullScreenCover or sheet" :
+            // il possède donc l'arrêt du micro sur tout chemin de dismiss.
+            if recorder.isRecording {
+                recorder.cancelRecording()
+            }
         }
         .fullScreenCover(isPresented: $showPreview) {
             if let url = recordedURL {
@@ -113,7 +118,12 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
 
     private var header: some View {
         HStack {
-            Button { onCancel() } label: {
+            Button {
+                if recorder.isRecording {
+                    recorder.cancelRecording()
+                }
+                onCancel()
+            } label: {
                 ZStack {
                     Circle().fill(Color.white.opacity(0.07)).frame(width: 38, height: 38)
                     Image(systemName: "xmark")

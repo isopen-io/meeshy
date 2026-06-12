@@ -10,13 +10,43 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
     @Published var duration: TimeInterval = 0
     @Published var audioLevels: [CGFloat] = Array(repeating: 0, count: 15)
 
-    private(set) var recordedFileURL: URL?
+    private(set) var recordedFileURL: URL? {
+        didSet { cleanupHandle.recordedFileURL = recordedFileURL }
+    }
 
-    private var recorder: AVAudioRecorder?
-    private var timer: Timer?
+    private var recorder: AVAudioRecorder? {
+        didSet { cleanupHandle.recorder = recorder }
+    }
+    private var timer: Timer? {
+        didSet { cleanupHandle.timer = timer }
+    }
     private var levelHistory: [CGFloat] = []
     private var settings: AudioRecordingSettings = .standard
     private var onMaxDurationReached: (() -> Void)?
+
+    /// Handles thread-safe à libérer depuis le `deinit` (potentiellement
+    /// off-main) — pattern `AudioPlaybackManager.CleanupHandle`. Concerne les
+    /// instances NON partagées (ex. `AudioPostComposerView`) lâchées
+    /// mid-recording par un swipe-down de sheet : sans ce filet le Timer
+    /// 20 Hz restait au run loop, le micro actif et la session jamais rendue.
+    private final class CleanupHandle {
+        nonisolated(unsafe) var timer: Timer?
+        nonisolated(unsafe) var recorder: AVAudioRecorder?
+        nonisolated(unsafe) var recordedFileURL: URL?
+    }
+    private let cleanupHandle = CleanupHandle()
+
+    deinit {
+        cleanupHandle.timer?.invalidate()
+        // `recorder` non-nil ⟺ mort mid-recording : sémantique cancel.
+        // `deactivatePlaybackSync` est call-aware (no-op pendant un appel).
+        guard let recorder = cleanupHandle.recorder else { return }
+        recorder.stop()
+        if let url = cleanupHandle.recordedFileURL {
+            try? FileManager.default.removeItem(at: url)
+        }
+        MediaSessionCoordinator.shared.deactivatePlaybackSync()
+    }
 
     func configure(settings: AudioRecordingSettings, onMaxDurationReached: (() -> Void)? = nil) {
         self.settings = settings
@@ -151,7 +181,13 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         recorder.updateMeters()
 
         if let maxDuration = settings.maxDuration, duration >= maxDuration {
-            onMaxDurationReached?()
+            // Sans callback, personne ne stoppe l'enregistrement au cap —
+            // aligné sur `DefaultSDKAudioRecorder` qui se stoppe lui-même.
+            if let onMaxDurationReached {
+                onMaxDurationReached()
+            } else {
+                stopRecording()
+            }
             return
         }
 

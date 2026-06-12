@@ -76,9 +76,11 @@ public protocol StoryReaderTimerControlling: AnyObject {
 ///    until the next `setCurrentSlide` or `reset`.
 ///
 /// The internal display link is created lazily on the first
-/// `setCurrentSlide` and torn down on `deinit`. Tests inject a
-/// deterministic clock by skipping the display link and calling
-/// `_advanceClockForTesting(by:)` directly.
+/// `setCurrentSlide` and torn down by `invalidate()` (deterministic,
+/// called by the reader's `onDisappear`) or by `deinit` as a backstop —
+/// reachable because the link targets a weak proxy, never `self`.
+/// Tests inject a deterministic clock by skipping the display link and
+/// calling `_advanceClockForTesting(by:)` directly.
 ///
 /// ### Integration with the reader (`feat/canvas-reader-prefetch`)
 ///
@@ -96,8 +98,9 @@ public protocol StoryReaderTimerControlling: AnyObject {
 /// // resets readiness and fires onContentReady once content lands.
 /// ```
 ///
-/// Inheriting from `NSObject` is required so `CADisplayLink`'s
-/// target-action selector machinery can find `@objc tick(_:)`.
+/// Inherits from `NSObject` for historical target-action compatibility;
+/// the display link now targets the internal `WeakLinkTarget` proxy so the
+/// controller itself is never retained by the run loop.
 @MainActor
 public final class StoryReaderTimerController: NSObject, StoryReaderTimerControlling {
 
@@ -211,11 +214,49 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
         advanceClock(by: seconds)
     }
 
+    /// Teardown déterministe : invalide le display link 60 Hz et coupe les
+    /// callbacks (qui capturent l'état du viewer). À appeler depuis le
+    /// `onDisappear` du reader. Sans cet appel le run loop garderait la
+    /// source active jusqu'au `deinit` ; les callbacks sont re-câblés et le
+    /// link recréé par `setCurrentSlide` au prochain install du pipeline.
+    public func invalidate() {
+        displayLink?.invalidate()
+        displayLink = nil
+        onProgressChange = nil
+        onCompletion = nil
+        reset()
+    }
+
     // MARK: - Internals
+
+    /// `CADisplayLink` retient FORTEMENT son target. Cibler `self` rendait le
+    /// `deinit` (seul site d'invalidation historique) inatteignable : chaîne
+    /// run loop → link → controller immortelle, un link 60 Hz leaké par
+    /// présentation du viewer. Le proxy weak casse cette chaîne — le link ne
+    /// retient que le proxy, et un tick orphelin s'auto-invalide.
+    @MainActor
+    private final class WeakLinkTarget: NSObject {
+        weak var owner: StoryReaderTimerController?
+
+        init(owner: StoryReaderTimerController) {
+            self.owner = owner
+        }
+
+        @objc func tick(_ link: CADisplayLink) {
+            guard let owner else {
+                link.invalidate()
+                return
+            }
+            owner.tick(link)
+        }
+    }
 
     private func startDisplayLinkIfNeeded() {
         guard useDisplayLink, displayLink == nil else { return }
-        let link = CADisplayLink(target: self, selector: #selector(tick(_:)))
+        let link = CADisplayLink(
+            target: WeakLinkTarget(owner: self),
+            selector: #selector(WeakLinkTarget.tick(_:))
+        )
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
         link.add(to: .main, forMode: .common)
         displayLink = link

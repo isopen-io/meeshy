@@ -29,6 +29,7 @@ public struct StoryAudioPlayerView: View {
     #if os(iOS)
     @State private var internalPlayer: AVPlayer?
     @State private var playerObserver: Any?
+    @State private var observedPlayer: AVPlayer?
     @State private var endObserver: NSObjectProtocol?
     #endif
 
@@ -157,6 +158,7 @@ public struct StoryAudioPlayerView: View {
     #if os(iOS)
     private func attachProgressObserver(to target: AVPlayer?) {
         guard let target, playerObserver == nil else { return }
+        observedPlayer = target
         let interval = CMTime(seconds: 0.05, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         playerObserver = target.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak target] time in
             MainActor.assumeIsolated {
@@ -173,10 +175,14 @@ public struct StoryAudioPlayerView: View {
 
     private func teardownPlayer() {
         #if os(iOS)
-        // Remove our progress observer from whichever player it was attached to.
+        // Remove our progress observer from the EXACT player it was attached
+        // to — `activePlayer` peut avoir changé d'identité entre temps
+        // (remplacement du player externe) : retirer le token d'un autre
+        // player est un UB AVFoundation et laissait l'observer sur l'ancien.
         if let obs = playerObserver {
-            activePlayer?.removeTimeObserver(obs)
+            (observedPlayer ?? activePlayer)?.removeTimeObserver(obs)
             playerObserver = nil
+            observedPlayer = nil
         }
         // Only the internal player should be paused/dropped here — the external
         // player is owned by the parent (ReaderState) and has its own lifecycle.

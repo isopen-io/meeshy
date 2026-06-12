@@ -11,14 +11,47 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
     @Published public var duration: TimeInterval = 0
     @Published public var audioLevels: [CGFloat] = Array(repeating: 0, count: 15)
 
-    public private(set) var recordedFileURL: URL?
+    public private(set) var recordedFileURL: URL? {
+        didSet { cleanupHandle.recordedFileURL = recordedFileURL }
+    }
 
-    private var recorder: AVAudioRecorder?
-    private var timer: Timer?
+    private var recorder: AVAudioRecorder? {
+        didSet { cleanupHandle.recorder = recorder }
+    }
+    private var timer: Timer? {
+        didSet { cleanupHandle.timer = timer }
+    }
     private var levelHistory: [CGFloat] = []
     internal var settings: AudioRecordingSettings = .standard
 
+    /// Handles thread-safe à libérer depuis le `deinit` (potentiellement
+    /// off-main) — même pattern que `AudioPlaybackManager.CleanupHandle`.
+    /// Synchronisés avec les props @MainActor via leurs `didSet`. Sans ce
+    /// filet, un recorder lâché sans stop/cancel (sheet swipée mid-recording,
+    /// instance `@ObservedObject` remplacée par une ré-évaluation du parent)
+    /// laissait un Timer 20 Hz au run loop pour toujours, le micro actif et
+    /// la session audio jamais rendue.
+    private final class CleanupHandle {
+        nonisolated(unsafe) var timer: Timer?
+        nonisolated(unsafe) var recorder: AVAudioRecorder?
+        nonisolated(unsafe) var recordedFileURL: URL?
+    }
+    private let cleanupHandle = CleanupHandle()
+
     public init() {}
+
+    deinit {
+        cleanupHandle.timer?.invalidate()
+        // `recorder` non-nil ⟺ mort mid-recording (stop/cancel posent nil) :
+        // sémantique cancel — on stoppe le micro, jette le fichier partiel et
+        // rend la session (call-aware, no-op pendant un appel VoIP).
+        guard let recorder = cleanupHandle.recorder else { return }
+        recorder.stop()
+        if let url = cleanupHandle.recordedFileURL {
+            try? FileManager.default.removeItem(at: url)
+        }
+        MediaSessionCoordinator.shared.deactivatePlaybackSync()
+    }
 
     public func configure(with settings: AudioRecordingSettings) {
         self.settings = settings
