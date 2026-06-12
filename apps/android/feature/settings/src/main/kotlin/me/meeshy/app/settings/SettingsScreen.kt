@@ -85,6 +85,7 @@ fun SettingsScreen(
                         .clickable(enabled = state.userId != null) {
                             state.userId?.let(onOpenProfile)
                         }
+                        .semantics { role = Role.Button }
                         .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

@@ -71,11 +71,11 @@ struct MediaDownloadSettingsView: View {
             VStack(spacing: 20) {
                 infoSection
                 policyPicker(
-                    title: String(localized: "settings.media.download.images", defaultValue: "Images", bundle: .main), icon: "photo.fill", color: "4ECDC4",
+                    title: String(localized: "settings.media.download.images", defaultValue: "Images", bundle: .main), icon: "photo.fill", color: MeeshyColors.indigo300Hex,
                     binding: $store.preferences.image
                 )
                 policyPicker(
-                    title: String(localized: "settings.media.download.audio", defaultValue: "Audio", bundle: .main), icon: "waveform", color: "9B59B6",
+                    title: String(localized: "settings.media.download.audio", defaultValue: "Audio", bundle: .main), icon: "waveform", color: MeeshyColors.indigo600Hex,
                     binding: $store.preferences.audio
                 )
                 policyPicker(

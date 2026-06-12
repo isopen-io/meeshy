@@ -15,7 +15,7 @@ struct MemberManagementSection: View {
 
     @State private var showAddParticipant = false
 
-    private let sectionColor = Color(hex: "9B59B6")
+    private let sectionColor = MeeshyColors.indigo600
 
     // MARK: - Body
 
@@ -220,7 +220,7 @@ struct MemberManagementSection: View {
                     Text(String(localized: "member-management.role.moderator", defaultValue: "Modérateur", bundle: .main))
                         .font(.system(size: 11, weight: .medium))
                 }
-                .foregroundColor(Color(hex: "4ECDC4"))
+                .foregroundColor(MeeshyColors.indigo300)
 
             case .member:
                 EmptyView()
