@@ -1,6 +1,15 @@
 import Foundation
 import UIKit
 
+/// `@unchecked Sendable` box autour de `NSCache`, qui est thread-safe (documenté
+/// Apple) mais ne déclare pas `Sendable`. Permet de capturer le cache dans la
+/// closure `@Sendable` de l'observer de mémoire sans data-race réelle, sans
+/// capturer `self` (la classe est traitée non-Sendable sous `@Sendable` closure).
+private struct SendableGlyphCacheRef: @unchecked Sendable {
+    nonisolated(unsafe) let cache: NSCache<NSString, CGImage>
+    nonisolated init(cache: NSCache<NSString, CGImage>) { self.cache = cache }
+}
+
 /// Caches rasterized emoji glyphs (`emoji|sizePx → CGImage`) so a sticker is
 /// drawn through Core Text at most once per (emoji, integer size) pair.
 ///
@@ -40,12 +49,13 @@ public final class StoryStickerRasterizer: @unchecked Sendable {
         let cache = NSCache<NSString, CGImage>()
         cache.countLimit = countLimit
         self.cache = cache
+        let cacheRef = SendableGlyphCacheRef(cache: cache)
         self.memoryWarningObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
             object: nil,
             queue: nil
-        ) { [cache] _ in
-            cache.removeAllObjects()
+        ) { [cacheRef] _ in
+            cacheRef.cache.removeAllObjects()
         }
     }
 
@@ -55,12 +65,13 @@ public final class StoryStickerRasterizer: @unchecked Sendable {
         let cache = NSCache<NSString, CGImage>()
         cache.countLimit = countLimitForTesting
         self.cache = cache
+        let cacheRef = SendableGlyphCacheRef(cache: cache)
         self.memoryWarningObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
             object: nil,
             queue: nil
-        ) { [cache] _ in
-            cache.removeAllObjects()
+        ) { [cacheRef] _ in
+            cacheRef.cache.removeAllObjects()
         }
     }
 

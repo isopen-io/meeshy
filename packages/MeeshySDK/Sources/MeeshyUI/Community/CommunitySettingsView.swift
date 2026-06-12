@@ -136,7 +136,13 @@ public struct CommunitySettingsView: View {
     // MARK: - Visual Section (Hero Banner + Avatar)
 
     private var visualSection: some View {
-        VStack(spacing: 16) {
+        // Valeurs `@MainActor` (bundle localisé, couleurs theme/viewModel) hissées
+        // hors des closures de label `PhotosPicker` (inférées `@Sendable`) en
+        // constantes Sendable — voir `ConversationSettingsView.visualSection`.
+        let bannerEditLabel = String(localized: "community.settings.banner.edit", defaultValue: "Modifier", bundle: .module)
+        let avatarPencilColor = Color(hex: viewModel.localColor)
+        let avatarPencilBackground = theme.backgroundPrimary
+        return VStack(spacing: 16) {
             VStack(spacing: 0) {
                 ZStack(alignment: .bottomTrailing) {
                     communityBannerView
@@ -144,7 +150,7 @@ public struct CommunitySettingsView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16))
 
                     PhotosPicker(selection: $bannerItem, matching: .images) {
-                        Label(String(localized: "community.settings.banner.edit", defaultValue: "Modifier", bundle: .module), systemImage: "photo.fill")
+                        Label(bannerEditLabel, systemImage: "photo.fill")
                             .font(.system(size: 11, weight: .semibold, design: .rounded))
                             .foregroundColor(.white)
                             .padding(.horizontal, 10)
@@ -178,8 +184,8 @@ public struct CommunitySettingsView: View {
                     PhotosPicker(selection: $avatarItem, matching: .images) {
                         Image(systemName: "pencil.circle.fill")
                             .font(.system(size: 28))
-                            .foregroundColor(Color(hex: viewModel.localColor))
-                            .background(Circle().fill(theme.backgroundPrimary))
+                            .foregroundColor(avatarPencilColor)
+                            .background(Circle().fill(avatarPencilBackground))
                     }
                     .disabled(viewModel.isUploadingAvatar)
                     .offset(x: 4, y: 4)

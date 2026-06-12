@@ -116,13 +116,13 @@ public class TextAnalyzer: ObservableObject, @unchecked Sendable {
         if isLanguageLocked {
             // Still update sentiment even after language is locked
             debounceTimer = Timer.scheduledTimer(withTimeInterval: debounceInterval, repeats: false) { [weak self] _ in
-                self?.updateSentimentOnly(text: trimmed)
+                MainActor.assumeIsolated { self?.updateSentimentOnly(text: trimmed) }
             }
             return
         }
 
         debounceTimer = Timer.scheduledTimer(withTimeInterval: debounceInterval, repeats: false) { [weak self] _ in
-            self?.performAnalysis(text: text)
+            MainActor.assumeIsolated { self?.performAnalysis(text: text) }
         }
     }
 

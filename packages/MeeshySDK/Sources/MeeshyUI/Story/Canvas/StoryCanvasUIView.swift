@@ -2516,8 +2516,8 @@ public final class StoryCanvasUIView: UIView {
 
     // MARK: - Snap guides
 
-    private static let snapTargets: [Double] = [0.18, 0.25, 0.5, 0.75, 0.82]
-    private static let snapTolerance: Double = 0.02
+    private nonisolated static let snapTargets: [Double] = [0.18, 0.25, 0.5, 0.75, 0.82]
+    private nonisolated static let snapTolerance: Double = 0.02
 
     private var snapGuideLayers: [CAShapeLayer] = []
 

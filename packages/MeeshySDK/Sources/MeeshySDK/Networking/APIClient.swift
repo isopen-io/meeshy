@@ -271,16 +271,29 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     private static let decodeQueue = DispatchQueue(label: "me.meeshy.api.decode", qos: .userInitiated)
     private struct DecodeBox<V>: @unchecked Sendable { let value: V }
 
+    /// Encapsule TOUTE l'opération de décodage (décodage générique + reprise de la
+    /// `continuation`, qui matérialisent le métatype `T.Type` non-`Sendable`) dans
+    /// une box `@unchecked Sendable`. `run` est non-`@Sendable` : ses captures ne
+    /// sont pas soumises au contrôle de concurrence, et le `decodeQueue.async` ne
+    /// capture QUE la box (`Sendable`) en appelant `run()` (Void) — aucun métatype
+    /// ne franchit la frontière `@Sendable`.
+    private struct DecodeWork: @unchecked Sendable { let run: () -> Void }
+
     private static func decodeOffMain<T: Decodable>(_ type: T.Type, from data: Data) async throws -> T {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<DecodeBox<T>, Error>) in
-            decodeQueue.async {
+            // Tout le décodage générique ET la reprise de la `continuation`
+            // (qui matérialisent le métatype `T.Type`, non-`Sendable`) sont
+            // enfermés dans `run` — closure non-`@Sendable` stockée dans la box
+            // `@unchecked Sendable`. Le `decodeQueue.async` ne capture donc QUE la
+            // box et appelle `run()` (Void) : aucun `T.Type` ne franchit la frontière.
+            let work = DecodeWork {
                 do {
-                    let decoded = try offMainDecoder.decode(type, from: data)
-                    continuation.resume(returning: DecodeBox(value: decoded))
+                    continuation.resume(returning: DecodeBox(value: try offMainDecoder.decode(type, from: data)))
                 } catch {
                     continuation.resume(throwing: error)
                 }
             }
+            decodeQueue.async { work.run() }
         }.value
     }
 

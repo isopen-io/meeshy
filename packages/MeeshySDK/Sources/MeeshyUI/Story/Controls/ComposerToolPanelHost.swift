@@ -267,12 +267,16 @@ struct ComposerToolPanelHost: View {
     // MARK: - Media Panel
 
     private var mediaPanel: some View {
-        VStack(spacing: 10) {
+        // Bundle localisé hissé hors de la closure de label `PhotosPicker`
+        // (inférée `@Sendable`) en constante Sendable — voir
+        // `ConversationSettingsView.visualSection`.
+        let addMediaLabel = String(localized: "story.composer.addPhotoVideo", defaultValue: "Photo/Video", bundle: .module)
+        return VStack(spacing: 10) {
             // Add buttons
             HStack(spacing: 8) {
                 if viewModel.canAddMedia {
                     PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
-                        MediaPillLabel(icon: "photo.on.rectangle.angled", text: String(localized: "story.composer.addPhotoVideo", defaultValue: "Photo/Video", bundle: .module), destructive: false)
+                        MediaPillLabel(icon: "photo.on.rectangle.angled", text: addMediaLabel, destructive: false)
                     }
                 }
                 Spacer()

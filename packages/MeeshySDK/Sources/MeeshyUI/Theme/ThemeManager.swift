@@ -78,7 +78,7 @@ public class ThemeManager: ObservableObject, @unchecked Sendable {
             forName: UIApplication.didBecomeActiveNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
-            self?.resolveMode()
+            MainActor.assumeIsolated { self?.resolveMode() }
         }
     }
 
