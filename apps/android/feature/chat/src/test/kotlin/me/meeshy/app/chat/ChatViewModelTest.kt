@@ -6,7 +6,9 @@ import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.justRun
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -14,6 +16,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -29,6 +32,8 @@ import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ReactionSyncResponse
 import me.meeshy.sdk.model.ReactionUpdateEvent
+import me.meeshy.sdk.model.ReadStatusSummary
+import me.meeshy.sdk.model.ReadStatusUpdatedEvent
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.reaction.ReactionRepository
@@ -60,6 +65,7 @@ class ChatViewModelTest {
     private val reactionAdded = MutableSharedFlow<ReactionUpdateEvent>()
     private val reactionRemoved = MutableSharedFlow<ReactionUpdateEvent>()
     private val messageReceived = MutableSharedFlow<ApiMessage>()
+    private val readStatusUpdated = MutableSharedFlow<ReadStatusUpdatedEvent>()
 
     private fun socketManager(): MessageSocketManager =
         mockk<MessageSocketManager> {
@@ -70,6 +76,9 @@ class ChatViewModelTest {
             every { typingStopped } returns MutableSharedFlow()
             every { this@mockk.reactionAdded } returns this@ChatViewModelTest.reactionAdded
             every { this@mockk.reactionRemoved } returns this@ChatViewModelTest.reactionRemoved
+            every { this@mockk.readStatusUpdated } returns this@ChatViewModelTest.readStatusUpdated
+            justRun { emitTypingStart(any()) }
+            justRun { emitTypingStop(any()) }
         }
 
     private data class Harness(
@@ -78,6 +87,7 @@ class ChatViewModelTest {
         val workManager: WorkManager,
         val reactions: ReactionRepository,
         val conversations: ConversationRepository,
+        val socket: MessageSocketManager,
     )
 
     private fun viewModel(
@@ -104,12 +114,14 @@ class ChatViewModelTest {
             NetworkResult.Failure(ApiError("offline"))
         val workManager = mockk<WorkManager>(relaxed = true)
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
+        val socket = socketManager()
         return Harness(
-            ChatViewModel(repo, conversations, session, reactions, socketManager(), workManager, handle),
+            ChatViewModel(repo, conversations, session, reactions, socket, workManager, handle),
             repo,
             workManager,
             reactions,
             conversations,
+            socket,
         )
     }
 
@@ -598,5 +610,121 @@ class ChatViewModelTest {
         coVerify { h.repo.deleteOptimistic("m1") }
         assertThat(h.vm.state.value.actionMessageId).isNull()
         coVerify { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun a_read_status_event_for_this_conversation_upgrades_own_bubbles() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        readStatusUpdated.emit(
+            ReadStatusUpdatedEvent(
+                conversationId = "c1",
+                participantId = "p2",
+                type = "read",
+                updatedAt = "2026-06-12T10:00:00Z",
+                summary = ReadStatusSummary(totalMembers = 3, deliveredCount = 2, readCount = 1),
+            ),
+        )
+        advanceUntilIdle()
+
+        coVerify {
+            h.repo.applyReadReceipt(
+                conversationId = "c1",
+                ownSenderId = "me",
+                deliveredCount = 2,
+                readCount = 1,
+                frontierIso = "2026-06-12T10:00:00Z",
+            )
+        }
+    }
+
+    @Test
+    fun a_read_status_event_elsewhere_is_ignored() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        readStatusUpdated.emit(
+            ReadStatusUpdatedEvent(
+                conversationId = "other",
+                participantId = "p2",
+                summary = ReadStatusSummary(deliveredCount = 1, readCount = 1),
+            ),
+        )
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.repo.applyReadReceipt(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun first_keystroke_emits_a_single_typing_start() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("h")
+        h.vm.onDraftChange("he")
+
+        verify(exactly = 1) { h.socket.emitTypingStart("c1") }
+        verify(exactly = 0) { h.socket.emitTypingStop(any()) }
+    }
+
+    @Test
+    fun continuous_typing_reemits_after_the_interval() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("h")
+        advanceTimeBy(2_000)
+        h.vm.onDraftChange("he")
+        advanceTimeBy(1_500)
+
+        verify(exactly = 2) { h.socket.emitTypingStart("c1") }
+        verify(exactly = 0) { h.socket.emitTypingStop(any()) }
+    }
+
+    @Test
+    fun going_idle_emits_a_typing_stop() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("h")
+        advanceTimeBy(3_100)
+
+        verify(exactly = 1) { h.socket.emitTypingStop("c1") }
+    }
+
+    @Test
+    fun clearing_the_draft_stops_typing_immediately() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("h")
+        h.vm.onDraftChange("")
+
+        verify(exactly = 1) { h.socket.emitTypingStop("c1") }
+    }
+
+    @Test
+    fun sending_stops_the_typing_emission() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        coEvery { h.repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("hello")
+        h.vm.send()
+        advanceUntilIdle()
+
+        verify(exactly = 1) { h.socket.emitTypingStop("c1") }
+    }
+
+    @Test
+    fun an_empty_draft_never_emits_a_spurious_stop() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("")
+
+        verify(exactly = 0) { h.socket.emitTypingStop(any()) }
+        verify(exactly = 0) { h.socket.emitTypingStart(any()) }
     }
 }

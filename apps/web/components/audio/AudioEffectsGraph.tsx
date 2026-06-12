@@ -4,6 +4,7 @@ import React, { memo, useMemo } from 'react';
 import type { AudioEffectType } from '@meeshy/shared/types/video-call';
 import { formatTime } from '@/utils/audio-formatters';
 import { CURVE_COLORS, getParameterName } from '@/utils/audio-effects-config';
+import { useI18n } from '@/hooks/useI18n';
 
 interface AudioEffectsGraphProps {
   effect: AudioEffectType;
@@ -26,6 +27,7 @@ export const AudioEffectsGraph = memo<AudioEffectsGraphProps>(({
   onToggleCurve,
   onSeekToTime,
 }) => {
+  const { t } = useI18n('audioEffects');
   const width = 350;
   const height = 150;
   const padding = { top: 10, right: 10, bottom: 40, left: 40 };
@@ -102,7 +104,7 @@ export const AudioEffectsGraph = memo<AudioEffectsGraphProps>(({
   if (configurations.length === 0) {
     return (
       <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded">
-        Aucune configuration disponible pour cet effet
+        {t('timeline.noConfiguration')}
       </div>
     );
   }
@@ -234,22 +236,39 @@ export const AudioEffectsGraph = memo<AudioEffectsGraphProps>(({
               />
               {pointsData
                 .filter(p => isFinite(p.x) && isFinite(p.y) && isFinite(p.value) && isFinite(p.timestamp))
-                .map((p, i) => (
-                  <circle
-                    key={i}
-                    cx={p.x.toFixed(2)}
-                    cy={p.y.toFixed(2)}
-                    r="4"
-                    fill={CURVE_COLORS[idx % CURVE_COLORS.length]}
-                    className="cursor-pointer transition-[r]"
-                    onClick={() => onSeekToTime(p.timestamp)}
-                    onMouseEnter={(e) => e.currentTarget.setAttribute('r', '6')}
-                    onMouseLeave={(e) => e.currentTarget.setAttribute('r', '4')}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <title>{`${key}: ${isFinite(p.value) ? p.value.toFixed(2) : 'N/A'} à ${formatTime(p.timestamp)} - Cliquez pour aller à ce moment`}</title>
-                  </circle>
-                ))}
+                .map((p, i) => {
+                  const pointLabel = `${t('timeline.dataPoint', {
+                    label: key,
+                    value: isFinite(p.value) ? p.value.toFixed(2) : 'N/A',
+                    time: formatTime(p.timestamp),
+                  })} - ${t('timeline.clickToSeek')}`;
+
+                  return (
+                    <circle
+                      key={i}
+                      cx={p.x.toFixed(2)}
+                      cy={p.y.toFixed(2)}
+                      r="4"
+                      fill={CURVE_COLORS[idx % CURVE_COLORS.length]}
+                      className="cursor-pointer transition-[r]"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={pointLabel}
+                      onClick={() => onSeekToTime(p.timestamp)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onSeekToTime(p.timestamp);
+                        }
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.setAttribute('r', '6')}
+                      onMouseLeave={(e) => e.currentTarget.setAttribute('r', '4')}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <title>{pointLabel}</title>
+                    </circle>
+                  );
+                })}
             </g>
           );
         })}

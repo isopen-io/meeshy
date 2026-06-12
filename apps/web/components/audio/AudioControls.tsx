@@ -111,7 +111,7 @@ export const AudioControls = memo<AudioControlsProps>(({
           </span>
         ) : (
           <span className="font-semibold text-gray-400 dark:text-gray-500 text-[11px]">
-            Chargement...
+            {t('controls.loading')}
           </span>
         )}
       </div>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_title">Novedades</string>
+    <string name="feed_empty">Aún no hay publicaciones</string>
+    <string name="feed_like">Me gusta</string>
+    <string name="feed_unknown_author">Desconocido</string>
+</resources>

@@ -89,7 +89,7 @@ struct BubbleReactionsOverlay: View, Equatable {
         // accent color reads at a glance — the previous 0.1/0.06 made
         // the pill almost invisible against the bubble's tail strip.
         Image(systemName: "face.smiling")
-            .font(.system(size: 11, weight: .semibold))
+            .font(.caption2.weight(.semibold))
             .foregroundColor(isDark ? accent.opacity(0.85) : accent.opacity(0.75))
             .frame(width: 24, height: 24)
             .background(
@@ -124,7 +124,7 @@ struct BubbleReactionsOverlay: View, Equatable {
             // reste entierement tappable (l'overlay de bulle n'est pas clippe).
             .frame(height: 22)
             .accessibilityLabel(String(localized: "bubble.reactions.add", defaultValue: "Add reaction", bundle: .main))
-            .accessibilityHint("Appuyer pour reagir rapidement, maintenir pour choisir un emoji")
+            .accessibilityHint(String(localized: "bubble.reactions.add.hint", defaultValue: "Appuyer pour reagir rapidement, maintenir pour choisir un emoji", bundle: .main))
     }
 
     // MARK: - Overflow pill (was: overflowPill)
@@ -135,7 +135,7 @@ struct BubbleReactionsOverlay: View, Equatable {
             onShowReactions?(messageId)
         } label: {
             Text("+\(count)")
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .font(.caption2.weight(.bold).monospaced())
                 .foregroundColor(accent)
         }
         .frame(height: 22)
@@ -149,7 +149,7 @@ struct BubbleReactionsOverlay: View, Equatable {
                 )
         )
         .accessibilityLabel(String(format: String(localized: "bubble.reactions.moreCount", defaultValue: "%d more reactions", bundle: .main), count))
-        .accessibilityHint("Voir toutes les reactions")
+        .accessibilityHint(String(localized: "bubble.reactions.viewAll.hint", defaultValue: "Voir toutes les reactions", bundle: .main))
     }
 
     // MARK: - Reaction pill (was: reactionPill)
@@ -157,10 +157,10 @@ struct BubbleReactionsOverlay: View, Equatable {
     private func pill(reaction: ReactionSummary, accent: Color) -> some View {
         let pillContent = HStack(spacing: 2) {
             Text(reaction.emoji)
-                .font(.system(size: 11))
+                .font(.caption2)
             if reaction.count > 1 {
                 Text("\(reaction.count)")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.caption2.weight(.bold))
                     .foregroundColor(
                         reaction.includesMe
                             ? (isDark ? .white : .white)
@@ -216,7 +216,7 @@ struct BubbleReactionsOverlay: View, Equatable {
                 onShowReactions?(messageId)
             }
             .accessibilityLabel(Self.pillAccessibilityLabel(reaction))
-            .accessibilityHint("Appuyer pour basculer la reaction")
+            .accessibilityHint(String(localized: "bubble.reactions.toggle.hint", defaultValue: "Appuyer pour basculer la reaction", bundle: .main))
     }
 
     // MARK: - Accessibility helper (was: reactionPillAccessibilityLabel)

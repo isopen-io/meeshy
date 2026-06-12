@@ -1,5 +1,34 @@
 {
   "groups": {
+    "preferences": {
+      "title": "Preferences",
+      "pin": "Pin",
+      "mute": "Mute",
+      "archive": "Archive",
+      "notifications": "Notifications",
+      "notifAll": "All",
+      "notifMentions": "Mentions",
+      "notifNone": "None",
+      "updateError": "Update failed"
+    },
+    "community": {
+      "notFound": "Community not found",
+      "backToCommunities": "Back to communities",
+      "join": "Join the community",
+      "leave": "Leave the community",
+      "joinedToast": "You joined \"{name}\"",
+      "leftToast": "You left \"{name}\"",
+      "actionError": "Something went wrong. Please try again.",
+      "membersTitle": "Members",
+      "conversationsTitle": "Conversations",
+      "membersCount": "{count} members",
+      "conversationsCount": "{count} conversations",
+      "noMembers": "No members",
+      "moreMembers": "+{count} more members",
+      "noConversations": "No conversations in this community",
+      "untitled": "Untitled",
+      "unknownMember": "Unknown"
+    },
     "title": "Groups",
     "description": "Manage your groups and communities",
     "authChecking": "Checking authentication...",
@@ -81,8 +110,28 @@
       "loadingGroupError": "Error loading community",
       "connectionError": "Connection error while loading community",
       "copyError": "Error copying"
+    },
+    "v2": {
+      "title": "Communities",
+      "create": "Create",
+      "myCommunities": "MY COMMUNITIES",
+      "discover": "DISCOVER",
+      "searchPlaceholder": "Search communities...",
+      "emptyMine": "You haven't joined any community yet",
+      "searchMinChars": "Type at least 2 characters to search",
+      "noResults": "No community found",
+      "createTitle": "Create a community",
+      "nameLabel": "Community name",
+      "namePlaceholder": "E.g. French Learners",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Describe your community...",
+      "cancel": "Cancel",
+      "creating": "Creating...",
+      "toasts": {
+        "nameRequired": "Community name is required",
+        "created": "Community \"{name}\" created successfully",
+        "createError": "Creation failed"
+      }
     }
   }
 }
-
-

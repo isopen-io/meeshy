@@ -44,6 +44,38 @@ public nonisolated struct MeeshyColors {
     /// Variante sombre du rouge sémantique — fond du badge de non-lus en dark mode.
     public static let errorDark = Color(hex: "991B1B")
 
+    // MARK: - Semantic Tonal Variants (gradient stops; Tailwind scale coherent with the 400-base semantics)
+
+    /// red-300 — stop clair des gradients d'erreur.
+    public static let errorSoft = Color(hex: "FCA5A5")
+    /// red-500 — stop appuyé des gradients d'erreur (boutons).
+    public static let errorStrong = Color(hex: "EF4444")
+    /// emerald-500 — stop appuyé des gradients de succès.
+    public static let successDeep = Color(hex: "10B981")
+
+    // MARK: - Semantic Hex Strings (for tint parameters, e.g. ThemeManager.surfaceGradient)
+
+    public static let successHex = "34D399"
+    public static let errorHex = "F87171"
+    public static let warningHex = "FBBF24"
+    public static let infoHex = "60A5FA"
+    public static let neutral500Hex = "6B7280"
+    public static let indigo300Hex = "A5B4FC"
+    public static let indigo400Hex = "818CF8"
+    public static let indigo600Hex = "4F46E5"
+
+    // MARK: - Feature Accents (link management surfaces: tracking, share, community)
+    //
+    // Each link surface keeps a distinct accent for differentiation, but every
+    // accent resolves to the Indigo scale or a semantic color — no off-brand hex.
+
+    public static let trackingAccent = indigo600
+    public static let trackingAccentHex = "4F46E5"
+    public static let shareAccent = indigo400
+    public static let shareAccentHex = "818CF8"
+    public static let communityAccent = warning
+    public static let communityAccentHex = warningHex
+
     /// Fond du badge de compteur de messages non lus, thématisé.
     /// Light : rouge vif (`error`). Dark : rouge foncé (`errorDark`).
     public static func unreadBadgeBackground(isDark: Bool) -> Color {

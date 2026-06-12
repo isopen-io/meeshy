@@ -12,9 +12,9 @@ import {
   CreateCommunitySchema,
   UpdateCommunitySchema,
   CommunityRole,
-  validatePagination,
   generateIdentifier
 } from './types';
+import { validatePagination } from '../../utils/pagination';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
@@ -155,7 +155,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       const userId = authContext.userId;
       const { search, offset = '0', limit = '20' } = request.query as { search?: string; offset?: string; limit?: string };
 
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       // Build where clause with optional search
       const whereClause: any = {

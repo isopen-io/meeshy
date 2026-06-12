@@ -68,7 +68,7 @@ interface MessageComposerProps {
 /**
  * Fonction pour formater la date en fonction du jour
  */
-function formatReplyDate(date: Date | string, locale: string = 'fr-FR'): string {
+function formatReplyDate(date: Date | string, locale: string): string {
   const messageDate = new Date(date);
   const now = new Date();
 

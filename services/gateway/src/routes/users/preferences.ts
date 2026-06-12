@@ -7,21 +7,9 @@ import {
   userStatsSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import type { AuthenticatedRequest, PaginationParams, UserIdParams, SearchQuery } from './types';
+import type { AuthenticatedRequest, UserIdParams, SearchQuery } from './types';
+import { validatePagination } from '../../utils/pagination';
 
-/**
- * Validate and sanitize pagination parameters
- */
-function validatePagination(
-  offset: string = '0',
-  limit: string = '20',
-  defaultLimit: number = 20,
-  maxLimit: number = 100
-): PaginationParams {
-  const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
-  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || defaultLimit), maxLimit);
-  return { offsetNum, limitNum };
-}
 
 /**
  * Get dashboard statistics for authenticated user
@@ -555,7 +543,7 @@ export async function searchUsers(fastify: FastifyInstance) {
 
       const { q, offset = '0', limit = '20' } = request.query as SearchQuery;
 
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       if (!q || q.trim().length < 2) {
         return sendPaginatedSuccess(reply, [], buildPaginationMeta(0, offsetNum, limitNum, 0));

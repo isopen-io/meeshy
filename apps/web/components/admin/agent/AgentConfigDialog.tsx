@@ -88,7 +88,7 @@ const DEFAULTS: AgentConfigUpsert = {
 
 export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentConfigDialogProps) {
   const isNew = !config;
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   const { t: tCommon } = useI18n('common');
   const [saving, setSaving] = useState(false);
   const [conversationId, setConversationId] = useState('');
@@ -191,11 +191,11 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
           {isNew && (
             <div className="p-4 rounded-lg bg-indigo-50/30 dark:bg-indigo-950/10 border border-indigo-100 dark:border-indigo-900/30">
               <ConversationPicker
-                label="Conversation à configurer"
+                label={t('agentConfig.conversationToConfigure')}
                 selectedId={conversationId || null}
                 onSelect={setConversationId}
                 onClear={() => setConversationId('')}
-                placeholder="Rechercher un groupe, un canal ou une discussion..."
+                placeholder={t('agentConfig.searchPlaceholder')}
               />
             </div>
           )}
@@ -203,13 +203,13 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
           {/* Conversation Metadata */}
           {!isNew && convMeta && (
             <div className="p-4 rounded-lg bg-indigo-50/30 dark:bg-indigo-950/10 border border-indigo-100 dark:border-indigo-900/30 space-y-2">
-              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Conversation</h3>
+              <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('agentConfig.conversationSection')}</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                 <div>
                   <span className="block text-[10px] text-gray-400">ID</span>
                   <button
                     className="font-mono text-gray-600 dark:text-gray-300 hover:text-indigo-600 transition-colors truncate max-w-full text-left"
-                    title="Copier"
+                    title={tCommon('copy')}
                     onClick={() => { navigator.clipboard.writeText(convMeta.id); toast.success(tCommon('copied')); }}
                   >
                     {convMeta.id}
@@ -232,13 +232,13 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   <span className="font-mono text-gray-600 dark:text-gray-300">{convMeta.messageCount ?? '-'}</span>
                 </div>
                 <div>
-                  <span className="block text-[10px] text-gray-400">Cree le</span>
+                  <span className="block text-[10px] text-gray-400">{t('agentConfig.createdOn')}</span>
                   <span className="text-gray-600 dark:text-gray-300">
-                    {new Date(convMeta.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    {new Date(convMeta.createdAt).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' })}
                   </span>
                 </div>
                 <div>
-                  <span className="block text-[10px] text-gray-400">Createur</span>
+                  <span className="block text-[10px] text-gray-400">{t('agentConfig.creator')}</span>
                   {convMeta.createdBy ? (
                     <UserDisplay userId={convMeta.createdBy} size="sm" showUsername />
                   ) : (
@@ -246,16 +246,16 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   )}
                 </div>
                 <div>
-                  <span className="block text-[10px] text-gray-400">Derniere activite</span>
+                  <span className="block text-[10px] text-gray-400">{t('agentConfig.lastActivity')}</span>
                   <span className="text-gray-600 dark:text-gray-300">
                     {convMeta.lastMessageAt
-                      ? new Date(convMeta.lastMessageAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                      ? new Date(convMeta.lastMessageAt).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
                       : '-'}
                   </span>
                 </div>
                 {convMeta.identifier && (
                   <div>
-                    <span className="block text-[10px] text-gray-400">Identifiant</span>
+                    <span className="block text-[10px] text-gray-400">{t('agentConfig.identifier')}</span>
                     <span className="font-mono text-gray-600 dark:text-gray-300">{convMeta.identifier}</span>
                   </div>
                 )}
@@ -265,18 +265,18 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
 
           {/* Général */}
           <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
-            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Général</h3>
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">{t('agentConfig.general')}</h3>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <Label>Agent activé</Label>
-                <InfoIcon content="Interrupteur principal. Si désactivé, l'agent n'analysera aucun message et ne répondra jamais, libérant les ressources serveur." />
+                <Label>{t('agentConfig.agentEnabled')}</Label>
+                <InfoIcon content={t('agentConfig.agentEnabledHelp')} />
               </div>
               <Switch checked={form.enabled} onCheckedChange={v => updateField('enabled', v)} />
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <Label>Auto-pickup</Label>
-                <InfoIcon content="Mode dynamique : l'agent détecte les utilisateurs qui ne répondent plus (voir Seuil d'inactivité) et prend leur identité pour maintenir la conversation active." />
+                <Label>{t('agentConfig.autoPickup')}</Label>
+                <InfoIcon content={t('agentConfig.autoPickupHelp')} />
               </div>
               <Switch checked={form.autoPickupEnabled} onCheckedChange={v => updateField('autoPickupEnabled', v)} />
             </div>
@@ -284,7 +284,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
 
           {/* Comportement */}
           <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
-            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Comportement & Contexte</h3>
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">{t('agentConfig.behaviorContext')}</h3>
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>Type d&apos;agent</Label>

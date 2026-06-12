@@ -7,12 +7,14 @@
     "selectEffectPrompt": "Cliquez sur un effet pour le configurer",
     "toggleEffect": "Activer/Désactiver",
     "configure": "Configurer",
+    "configureEffect": "Configurer l'effet {name}",
     "close": "Fermer",
     "apply": "Appliquer",
     "reset": "Réinitialiser",
     "resetAll": "Tout Réinitialiser",
     "disableAll": "Désactiver tous les effets",
     "controls": {
+      "loading": "Chargement...",
       "speed": {
         "ariaLabel": "Ajuster la vitesse de lecture"
       },
@@ -308,11 +310,27 @@
       "custom": "Personnalisé",
       "customDescription": "Vos propres réglages"
     },
+    "transcription": {
+      "you": "Vous",
+      "noVoiceProfile": "(pas de profil vocal)",
+      "highConfidence": "Haute confiance",
+      "mediumConfidence": "Confiance moyenne",
+      "veryLowConfidence": "Très faible",
+      "uncertain": "Incertain"
+    },
     "timeline": {
       "title": "Timeline des Effets",
       "duration": "Durée",
       "effectsUsed": "Effets utilisés",
       "noTimeline": "Aucune timeline d'effets disponible",
+      "noData": "Aucune donnée de timeline disponible",
+      "allParametersEvolution": "Évolution de tous les paramètres",
+      "parametersEvolution": "Évolution des paramètres",
+      "activationPeriods": "Périodes d'activation:",
+      "totalTime": "Temps total:",
+      "noConfiguration": "Aucune configuration disponible pour cet effet",
+      "dataPoint": "{label}: {value} à {time}",
+      "clickToSeek": "Cliquez pour aller à ce moment",
       "activatedAt": "Activé à",
       "deactivatedAt": "Désactivé à",
       "updatedAt": "Modifié à",

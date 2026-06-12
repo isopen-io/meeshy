@@ -1,8 +1,9 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
-import { sendSuccess, sendPaginatedSuccess, sendForbidden, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
 import { permissionsService } from './services/PermissionsService';
-import { validatePagination, type UserRole } from './types';
+import { type UserRole } from './types';
+import { validatePagination } from '../../utils/pagination';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { authorSelect, mediaSelect } from '../../services/posts/postIncludes';
@@ -11,18 +12,12 @@ import { authorSelect, mediaSelect } from '../../services/posts/postIncludes';
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
   if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return reply.status(401).send({
-      success: false,
-      message: 'Authentification requise'
-    });
+    return sendUnauthorized(reply, 'Authentification requise');
   }
 
   const permissions = permissionsService.getUserPermissions(authContext.registeredUser.role as UserRole);
   if (!permissions.canAccessAdmin) {
-    return reply.status(403).send({
-      success: false,
-      message: 'Acces administrateur requis'
-    });
+    return sendForbidden(reply, 'Acces administrateur requis');
   }
 };
 
@@ -272,7 +267,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         isPinned
       } = request.query as PostListQuery;
 
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       // Build filters
       const where: any = {};
@@ -563,10 +558,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         reason: reason ?? 'No reason provided'
       });
 
-      return reply.send({
-        success: true,
-        message: 'Post supprime avec succes'
-      });
+      return sendSuccess(reply, undefined, { message: 'Post supprime avec succes' });
 
     } catch (error) {
       logError(fastify.log, 'Admin delete post error:', error);

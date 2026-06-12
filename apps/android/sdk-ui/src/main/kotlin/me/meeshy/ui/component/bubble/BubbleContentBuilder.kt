@@ -33,9 +33,8 @@ public object BubbleContentBuilder {
                 ReactionEntry(emoji = emoji, count = count, includesMe = emoji in ownReactions)
             }
             ?: emptyList()
-        val replyToText = message.replyTo?.let { reply ->
-            if (reply.deletedAt != null) "Message deleted" else reply.content
-        }
+        val replyToDeleted = message.replyTo?.deletedAt != null
+        val replyToText = message.replyTo?.content?.takeUnless { replyToDeleted }
         return BubbleContent(
             messageId = message.id,
             text = when {
@@ -56,7 +55,9 @@ public object BubbleContentBuilder {
             deliveryStatus = deliveryStatus,
             reactions = reactions,
             replyToText = replyToText,
+            replyToDeleted = replyToDeleted,
             replyToSenderName = message.replyTo?.senderDisplayName,
+            replyToIsDeleted = replyToIsDeleted,
             isPending = isPending,
             clientMessageId = message.clientMessageId,
         )

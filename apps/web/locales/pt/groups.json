@@ -1,5 +1,34 @@
 {
   "groups": {
+    "preferences": {
+      "title": "Preferências",
+      "pin": "Fixar",
+      "mute": "Silenciar",
+      "archive": "Arquivar",
+      "notifications": "Notificações",
+      "notifAll": "Todas",
+      "notifMentions": "Menções",
+      "notifNone": "Nenhuma",
+      "updateError": "Erro de atualização"
+    },
+    "community": {
+      "notFound": "Comunidade não encontrada",
+      "backToCommunities": "Voltar às comunidades",
+      "join": "Entrar na comunidade",
+      "leave": "Sair da comunidade",
+      "joinedToast": "Você entrou em \"{name}\"",
+      "leftToast": "Você saiu de \"{name}\"",
+      "actionError": "Ocorreu um erro. Tente novamente.",
+      "membersTitle": "Membros",
+      "conversationsTitle": "Conversas",
+      "membersCount": "{count} membros",
+      "conversationsCount": "{count} conversas",
+      "noMembers": "Nenhum membro",
+      "moreMembers": "+{count} outros membros",
+      "noConversations": "Nenhuma conversa nesta comunidade",
+      "untitled": "Sem título",
+      "unknownMember": "Desconhecido"
+    },
     "title": "Comunidades",
     "description": "Descubra e entre em comunidades",
     "createGroup": "Criar uma comunidade",
@@ -81,6 +110,28 @@
       "identifierTaken": "Este identificador já está em uso",
       "connectionError": "Erro de conexão",
       "copyError": "Erro ao copiar"
+    },
+    "v2": {
+      "title": "Comunidades",
+      "create": "Criar",
+      "myCommunities": "MINHAS COMUNIDADES",
+      "discover": "DESCOBRIR",
+      "searchPlaceholder": "Pesquisar comunidades...",
+      "emptyMine": "Você ainda não entrou em nenhuma comunidade",
+      "searchMinChars": "Digite pelo menos 2 caracteres para pesquisar",
+      "noResults": "Nenhuma comunidade encontrada",
+      "createTitle": "Criar uma comunidade",
+      "nameLabel": "Nome da comunidade",
+      "namePlaceholder": "Ex.: French Learners",
+      "descriptionLabel": "Descrição",
+      "descriptionPlaceholder": "Descreva sua comunidade...",
+      "cancel": "Cancelar",
+      "creating": "Criando...",
+      "toasts": {
+        "nameRequired": "O nome da comunidade é obrigatório",
+        "created": "Comunidade \"{name}\" criada com sucesso",
+        "createError": "Erro ao criar"
+      }
     }
   }
 }

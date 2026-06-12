@@ -3,7 +3,6 @@ import { logError } from '../../utils/logger';
 import { sendPaginatedSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
 import { permissionsService } from './services/PermissionsService';
 import {
-  validatePagination,
   type UserRole,
   type MessageListQuery,
   type CommunityListQuery,
@@ -13,6 +12,7 @@ import {
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { validatePagination } from '../../utils/pagination';
 
 // Middleware d'autorisation admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -80,7 +80,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
       }
 
       const { offset = '0', limit = '20', search, type, period } = request.query as MessageListQuery;
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       // Construire les filtres
       const where: any = { deletedAt: null };
@@ -229,7 +229,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
       }
 
       const { offset = '0', limit = '20', search, isPrivate } = request.query as CommunityListQuery;
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       // Construire les filtres
       const where: any = {};
@@ -344,7 +344,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
       }
 
       const { offset = '0', limit = '20', sourceLanguage, targetLanguage, period } = request.query as TranslationListQuery;
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       // Construire les filtres
       const where: any = {};
@@ -542,7 +542,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
       }
 
       const { offset = '0', limit = '20', search, isActive } = request.query as ShareLinkListQuery;
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       // Construire les filtres
       const where: any = {};

@@ -9,23 +9,11 @@ import {
   userMinimalSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import type { AuthenticatedRequest, PaginationParams, IdParams, FriendRequestBody, FriendRequestActionBody, UserIdParams, AffiliateTokenData } from './types';
+import type { AuthenticatedRequest, IdParams, FriendRequestBody, FriendRequestActionBody, UserIdParams, AffiliateTokenData } from './types';
 import type { NotificationService } from '../../services/notifications/NotificationService';
 import type { EmailService } from '../../services/EmailService';
+import { validatePagination } from '../../utils/pagination';
 
-/**
- * Validate and sanitize pagination parameters
- */
-function validatePagination(
-  offset: string = '0',
-  limit: string = '20',
-  defaultLimit: number = 20,
-  maxLimit: number = 100
-): PaginationParams {
-  const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
-  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || defaultLimit), maxLimit);
-  return { offsetNum, limitNum };
-}
 
 /**
  * Get all friend requests for authenticated user
@@ -89,7 +77,7 @@ export async function getFriendRequests(fastify: FastifyInstance) {
       const userId = authContext.userId;
       const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
 
-      const { offsetNum, limitNum } = validatePagination(offset, limit);
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       const whereClause = {
         OR: [

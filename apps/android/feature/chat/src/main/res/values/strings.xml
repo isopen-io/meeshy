@@ -19,4 +19,7 @@
     <string name="chat_cancel_edit">Cancel edit</string>
     <string name="chat_react_with">React with %1$s</string>
     <string name="chat_message_actions">Message actions</string>
+    <string name="chat_typing_one">%1$s is typing…</string>
+    <string name="chat_typing_two">%1$s and %2$s are typing…</string>
+    <string name="chat_typing_many">%1$d people are typing…</string>
 </resources>

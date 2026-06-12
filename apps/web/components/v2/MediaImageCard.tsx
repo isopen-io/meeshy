@@ -2,6 +2,7 @@
 
 import { HTMLAttributes, useState, useCallback, useEffect, useMemo } from 'react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/use-i18n';
 import { getLanguageColor } from './theme';
 
 // ----- Types -----
@@ -124,6 +125,8 @@ export function MediaImageCard({
   className,
   ...props
 }: MediaImageCardProps) {
+  const { t: tComponents } = useI18n('components');
+
   // Find initial translation
   const initialTranslation = useMemo(() => {
     if (defaultLanguage) {
@@ -395,6 +398,7 @@ export function MediaImageCard({
                   }}
                   aria-expanded={showLanguageMenu}
                   aria-haspopup="true"
+                  aria-label={tComponents('language.selectLanguage')}
                 >
                   <span className="text-base">{getFlag(selectedTranslation.languageCode)}</span>
                   <span className="hidden sm:inline">{selectedTranslation.languageName}</span>

@@ -4,11 +4,13 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Button, Card, Badge, LanguageOrb, theme, PageHeader, Avatar, Skeleton } from '@/components/v2';
 import { useProfileV2 } from '@/hooks/v2';
+import { useI18n } from '@/hooks/use-i18n';
 
 function ProfileSkeleton() {
+  const { t } = useI18n('profile');
   return (
     <div className="h-full overflow-auto pb-8 bg-[var(--gp-background)] transition-colors duration-300">
-      <PageHeader title="Profil" />
+      <PageHeader title={t('title')} />
       <Skeleton variant="rectangular" className="h-40 rounded-none" />
       <div className="max-w-2xl mx-auto px-6">
         <div className="relative -mt-16 mb-6">
@@ -40,6 +42,7 @@ function formatNumber(num: number): string {
 }
 
 export default function UserProfilePage() {
+  const { t } = useI18n('profile');
   const params = useParams<{ username: string }>();
   const username = params.username;
 
@@ -57,7 +60,7 @@ export default function UserProfilePage() {
   if (error) {
     return (
       <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors duration-300">
-        <PageHeader title="Profil" />
+        <PageHeader title={t('title')} />
         <div className="flex items-center justify-center py-16">
           <div className="text-center p-4">
             <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center bg-[var(--gp-parchment)]">
@@ -65,7 +68,7 @@ export default function UserProfilePage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
             </div>
-            <p className="text-[var(--gp-text-secondary)]">Utilisateur introuvable</p>
+            <p className="text-[var(--gp-text-secondary)]">{t('userNotFound')}</p>
           </div>
         </div>
       </div>
@@ -75,9 +78,9 @@ export default function UserProfilePage() {
   if (!profile) {
     return (
       <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors duration-300">
-        <PageHeader title="Profil" />
+        <PageHeader title={t('title')} />
         <div className="flex items-center justify-center py-16">
-          <p className="text-[var(--gp-text-secondary)]">Profil non trouve</p>
+          <p className="text-[var(--gp-text-secondary)]">{t('profileNotFound')}</p>
         </div>
       </div>
     );

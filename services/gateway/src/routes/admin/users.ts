@@ -100,7 +100,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         sortOrder: request.query.sortOrder || 'desc'
       };
 
-      const pagination = validatePagination(request.query.offset, request.query.limit, 100);
+      const pagination = validatePagination(request.query.offset, request.query.limit);
 
       // Recuperer les utilisateurs (donnees completes)
       const result = await userManagementService.getUsers(filters, pagination);

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Link2 } from 'lucide-react';
 import { CreateLinkModalV2 as CreateLinkModal } from '@/components/conversations/create-link-modal';
+import { useI18n } from '@/hooks/useI18n';
 
 interface CreateLinkButtonProps {
   onLinkCreated?: () => void;
@@ -20,6 +21,7 @@ export function CreateLinkButton({
   className,
   children
 }: CreateLinkButtonProps) {
+  const { t } = useI18n('links');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleLinkCreated = () => {
@@ -38,7 +40,7 @@ export function CreateLinkButton({
         {children || (
           <>
             <Link2 className="h-4 w-4 mr-2" />
-            Créer un lien
+            {t('createLink')}
           </>
         )}
       </Button>

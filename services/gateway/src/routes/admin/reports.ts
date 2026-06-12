@@ -110,7 +110,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
         filters.createdBefore = new Date(query.createdBefore);
       }
 
-      const pagination = validatePagination(query.offset, query.limit, 100);
+      const pagination = validatePagination(query.offset, query.limit);
 
       const result = await reportService.listReports(filters, pagination);
 

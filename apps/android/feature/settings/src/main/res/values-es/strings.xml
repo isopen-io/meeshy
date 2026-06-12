@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_title">Ajustes</string>
+    <string name="settings_back">Atrás</string>
+    <string name="settings_section_profile">Perfil</string>
+    <string name="settings_section_language">Idioma</string>
+    <string name="settings_section_notifications">Notificaciones</string>
+    <string name="settings_section_privacy">Privacidad y seguridad</string>
+    <string name="settings_section_data">Datos</string>
+    <string name="settings_section_about">Acerca de</string>
+    <string name="settings_section_danger">Zona de peligro</string>
+    <string name="settings_display_language">Idioma de visualización</string>
+    <string name="settings_regional_language">Idioma regional</string>
+    <string name="settings_push_notifications">Notificaciones push</string>
+    <string name="settings_two_factor">Autenticación de dos factores</string>
+    <string name="settings_active_sessions">Sesiones activas</string>
+    <string name="settings_blocked_users">Usuarios bloqueados</string>
+    <string name="settings_export_data">Exportar mis datos</string>
+    <string name="settings_clear_media_cache">Borrar caché multimedia</string>
+    <string name="settings_storage_used">Almacenamiento usado</string>
+    <string name="settings_version">Versión 1.0.0</string>
+    <string name="settings_terms_of_service">Condiciones del servicio</string>
+    <string name="settings_privacy_policy">Política de privacidad</string>
+    <string name="settings_log_out">Cerrar sesión</string>
+    <string name="settings_delete_account">Eliminar cuenta</string>
+</resources>

@@ -148,14 +148,14 @@ struct OnboardingView: View {
 
     private var ambientOrbs: some View {
         let orbConfigs: [(color: String, size: CGFloat, offset: CGPoint)] = [
-            ("A855F7", 200, CGPoint(x: -80, y: -200)),
-            ("08D9D6", 160, CGPoint(x: 90, y: 180)),
-            ("FF2E63", 120, CGPoint(x: 60, y: -80))
+            (MeeshyColors.trackingAccentHex, 200, CGPoint(x: -80, y: -200)),
+            (MeeshyColors.shareAccentHex, 160, CGPoint(x: 90, y: 180)),
+            (MeeshyColors.indigo300Hex, 120, CGPoint(x: 60, y: -80))
         ]
 
         return ForEach(Array(orbConfigs.enumerated()), id: \.offset) { _, orb in
             Circle()
-                .fill(Color(hex: orb.color).opacity(isDark ? 0.12 : 0.08))
+                .fill(orb.color.opacity(isDark ? 0.12 : 0.08))
                 .frame(width: orb.size, height: orb.size)
                 .blur(radius: orb.size * 0.3)
                 .offset(x: orb.offset.x, y: orb.offset.y)
@@ -208,7 +208,7 @@ struct OnboardingView: View {
 
                     if page.id == 0 {
                         AnimatedLogoView(
-                            color: isDark ? .white : Color(hex: "1C1917"),
+                            color: isDark ? .white : MeeshyColors.indigo950,
                             lineWidth: 10,
                             continuous: false
                         )
@@ -217,6 +217,7 @@ struct OnboardingView: View {
                         Image(systemName: page.icon)
                             .font(.system(size: 80, weight: .light))
                             .foregroundStyle(iconGradient(for: page.id))
+                            .accessibilityHidden(true)
                     }
                 }
                 .scaleEffect(animateIcon && currentPage == page.id ? 1 : 0.3)
@@ -249,7 +250,7 @@ struct OnboardingView: View {
         switch pageId {
         case 0:
             return LinearGradient(
-                colors: [MeeshyColors.error, Color(hex: "FF8A80")],
+                colors: [MeeshyColors.error, MeeshyColors.errorSoft],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
         case 1:
@@ -259,12 +260,12 @@ struct OnboardingView: View {
             )
         case 2:
             return LinearGradient(
-                colors: [MeeshyColors.indigo600, Color(hex: "8B5CF6")],
+                colors: [MeeshyColors.indigo600, MeeshyColors.indigo500],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
         case 3:
             return LinearGradient(
-                colors: [MeeshyColors.success, Color(hex: "22C55E")],
+                colors: [MeeshyColors.success, MeeshyColors.successDeep],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
         default:
@@ -470,22 +471,22 @@ struct OnboardingView: View {
         switch currentPage {
         case 0:
             return LinearGradient(
-                colors: [MeeshyColors.error, Color(hex: "E55555")],
+                colors: [MeeshyColors.error, MeeshyColors.errorStrong],
                 startPoint: .leading, endPoint: .trailing
             )
         case 1:
             return LinearGradient(
-                colors: [MeeshyColors.indigo400, Color(hex: "06B6B3")],
+                colors: [MeeshyColors.indigo400, MeeshyColors.indigo300],
                 startPoint: .leading, endPoint: .trailing
             )
         case 2:
             return LinearGradient(
-                colors: [MeeshyColors.indigo600, Color(hex: "8B5CF6")],
+                colors: [MeeshyColors.indigo600, MeeshyColors.indigo500],
                 startPoint: .leading, endPoint: .trailing
             )
         default:
             return LinearGradient(
-                colors: [MeeshyColors.success, Color(hex: "22C55E")],
+                colors: [MeeshyColors.success, MeeshyColors.successDeep],
                 startPoint: .leading, endPoint: .trailing
             )
         }

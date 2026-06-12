@@ -309,7 +309,12 @@ public struct UnifiedPostComposer: View {
     }
 
     private var postComposer: some View {
-        VStack(spacing: 12) {
+        // Valeurs `@MainActor` hissées hors de la closure de label `PhotosPicker`
+        // (inférée `@Sendable`) en constantes Sendable — voir
+        // `ConversationSettingsView.visualSection`.
+        let mediaPickerLabel = String(localized: "story.post.media", defaultValue: "Média", bundle: .module)
+        let mediaPickerColor = theme.textSecondary
+        return VStack(spacing: 12) {
             TextField(String(localized: "story.post.whatOnYourMind", defaultValue: "What's on your mind?", bundle: .module), text: $content, axis: .vertical)
                 .font(.system(size: 16))
                 .foregroundColor(theme.textPrimary)
@@ -345,9 +350,9 @@ public struct UnifiedPostComposer: View {
 
                 HStack(spacing: 16) {
                     PhotosPicker(selection: $selectedPhotoItem, matching: .any(of: [.images, .videos])) {
-                        Label(String(localized: "story.post.media", defaultValue: "Média", bundle: .module), systemImage: "photo.on.rectangle")
+                        Label(mediaPickerLabel, systemImage: "photo.on.rectangle")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundColor(mediaPickerColor)
                     }
 
                     visibilityPicker

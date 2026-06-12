@@ -106,6 +106,15 @@ class MessageSocketManager @Inject constructor(
         listen("read-status:updated", _readStatusUpdated)
     }
 
+    /** Typing emission is fire-and-forget — an offline typing signal has no replay value. */
+    fun emitTypingStart(conversationId: String) {
+        socketManager.emit("typing:start", JSONObject().put("conversationId", conversationId))
+    }
+
+    fun emitTypingStop(conversationId: String) {
+        socketManager.emit("typing:stop", JSONObject().put("conversationId", conversationId))
+    }
+
     private inline fun <reified T> listen(event: String, flow: MutableSharedFlow<T>) {
         socketManager.on(event) { args ->
             runCatching {

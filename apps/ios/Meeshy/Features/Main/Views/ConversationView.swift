@@ -304,7 +304,7 @@ struct ConversationView: View {
     }
 
     var secondaryColor: String {
-        conversation?.colorPalette.secondary ?? "4ECDC4"
+        conversation?.colorPalette.secondary ?? MeeshyColors.indigo300Hex
     }
 
     var isDirect: Bool {

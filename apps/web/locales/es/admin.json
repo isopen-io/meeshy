@@ -185,7 +185,11 @@
       "delete": "Eliminar",
       "deleteConfirmTitle": "¿Eliminar este mensaje?",
       "deleteConfirmDescription": "Este mensaje no se enviará. Esta acción es irreversible.",
-      "empty": "No hay mensajes pendientes"
+      "empty": "No hay mensajes pendientes",
+      "loadError": "Error al cargar la cola",
+      "serviceUnavailable": "Servicio del agente no disponible",
+      "retry": "Reintentar",
+      "pending": "pendientes"
     },
     "scanControl": {
       "title": "Controles",
@@ -296,7 +300,24 @@
     "contactUpdated": "Información de contacto actualizada",
     "contactUpdateError": "Error al actualizar la información de contacto",
     "personalInfoUpdated": "Información personal actualizada",
-    "personalInfoUpdateError": "Error al actualizar la información personal"
+    "personalInfoUpdateError": "Error al actualizar la información personal",
+    "contactTitle": "Contacto y ubicación",
+    "personalInfoTitle": "Información personal",
+    "saving": "Guardando...",
+    "emailLabel": "Correo electrónico",
+    "countryLabel": "País",
+    "phoneLabel": "Teléfono",
+    "timezoneLabel": "Zona horaria",
+    "firstNameLabel": "Nombre",
+    "lastNameLabel": "Apellido",
+    "displayNameLabel": "Nombre para mostrar",
+    "usernameLabel": "Nombre de usuario",
+    "usernamePlaceholder": "nombre-usuario",
+    "usernameHint": "Solo letras, números, guiones y guiones bajos",
+    "bioLabel": "Biografía",
+    "bioCharCount": "{count}/500 caracteres",
+    "fullNameLabel": "Nombre completo",
+    "optionalPlaceholder": "Opcional"
   },
   "translationMonitor": {
     "loadingMetrics": "Cargando métricas...",
@@ -319,7 +340,20 @@
     "created": "Configuración creada",
     "updated": "Configuración actualizada",
     "saveError": "Error al guardar la configuración",
-    "pendingPropagation": "Config guardada — propagación al servicio de agente pendiente (caché puede tardar unos minutos)"
+    "pendingPropagation": "Config guardada — propagación al servicio de agente pendiente (caché puede tardar unos minutos)",
+    "conversationToConfigure": "Conversación a configurar",
+    "searchPlaceholder": "Buscar un grupo, un canal o una discusión...",
+    "conversationSection": "Conversación",
+    "createdOn": "Creado el",
+    "creator": "Creador",
+    "lastActivity": "Última actividad",
+    "identifier": "Identificador",
+    "general": "General",
+    "behaviorContext": "Comportamiento y contexto",
+    "agentEnabled": "Agente activado",
+    "agentEnabledHelp": "Interruptor principal. Si está desactivado, el agente no analizará ningún mensaje y nunca responderá, liberando recursos del servidor.",
+    "autoPickup": "Auto-pickup",
+    "autoPickupHelp": "Modo dinámico: el agente detecta a los usuarios que dejan de responder (ver Umbral de inactividad) y asume su identidad para mantener la conversación activa."
   },
   "security": {
     "enable2FA": "Activar 2FA",
@@ -1573,5 +1607,22 @@
     "paginationInfo": "Página {page} de {total} • {shown} mostradas • {totalCount} en total",
     "prev": "Anterior",
     "next": "Siguiente"
+  },
+  "layout": {
+    "collapseMenu": "Contraer el menú",
+    "openMenu": "Abrir el menú",
+    "closeMenu": "Cerrar el menú",
+    "navDashboard": "Panel de control",
+    "navUsers": "Gestión de usuarios",
+    "navModeration": "Moderación",
+    "navAuditLogs": "Registros de auditoría",
+    "navAnalytics": "Analíticas",
+    "navTrackingLinks": "Enlaces de seguimiento",
+    "navRanking": "Clasificaciones",
+    "navBroadcasts": "Difusiones",
+    "navSettings": "Configuración del sistema",
+    "navAgent": "Agente IA",
+    "navMonitoring": "Monitoreo",
+    "accessLevel": "Administración de Meeshy - Nivel de acceso: {role}"
   }
 }

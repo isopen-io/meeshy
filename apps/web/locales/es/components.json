@@ -207,7 +207,14 @@
       "unlike": "Ya no me gusta",
       "repost": "Repostear",
       "bookmark": "Guardar",
-      "removeBookmark": "Quitar de guardados"
+      "removeBookmark": "Quitar de guardados",
+      "translate": "Traducir",
+      "translatePost": "Traducir la publicación"
+    },
+    "videoPlayer": {
+      "play": "Reproducir",
+      "pause": "Pausa",
+      "seek": "Progreso del vídeo"
     }
   }
 }

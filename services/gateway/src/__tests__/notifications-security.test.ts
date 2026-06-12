@@ -28,7 +28,8 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     },
     notificationPreference: {
       findUnique: jest.fn()
-    }
+    },
+    $runCommandRaw: jest.fn()
   };
 
   return {
@@ -326,60 +327,72 @@ describe('Notifications - Tests de Sécurité', () => {
       expect(result).toBe(true); // Ne révèle pas l'échec
     });
 
-    it('Vérifie userId dans markConversationNotificationsAsRead', async () => {
-      // MongoDB ne sait pas filtrer sur context.conversationId (JSON) : le service
-      // récupère les non-lues de l'utilisateur (scopées par userId) puis filtre en
-      // mémoire avant un updateMany ciblé par ids.
-      prisma.notification.findMany.mockResolvedValue([
-        { id: 'n1', userId: 'user123', context: { conversationId: 'conv456' } },
-        { id: 'n2', userId: 'user123', context: { conversationId: 'other-conv' } },
-        { id: 'n3', userId: 'user123', context: null },
-      ]);
-      prisma.notification.updateMany.mockResolvedValue({ count: 1 });
+    it('Vérifie userId dans markConversationNotificationsAsRead (un seul update Mongo, filtre serveur)', async () => {
+      // Prisma MongoDB ne filtre pas les chemins JSON, mais $runCommandRaw oui :
+      // le marquage est UN update multi filtré { userId, isRead, context.conversationId }
+      // — aucun fetch des non-lues, aucun filtre en mémoire.
+      const userId = '64a000000000000000000001';
+      const conversationId = '64b000000000000000000002';
+      prisma.$runCommandRaw.mockResolvedValue({ ok: 1, n: 1, nModified: 1 });
 
-      const count = await service.markConversationNotificationsAsRead('user123', 'conv456');
+      const count = await service.markConversationNotificationsAsRead(userId, conversationId);
 
-      // IDOR: la lecture initiale est scopée par userId
-      expect(prisma.notification.findMany).toHaveBeenCalledWith({
-        where: { userId: 'user123', isRead: false },
+      expect(prisma.notification.findMany).not.toHaveBeenCalled();
+      expect(prisma.$runCommandRaw).toHaveBeenCalledTimes(1);
+      // IDOR: le filtre est scopé par userId au niveau Mongo
+      expect(prisma.$runCommandRaw).toHaveBeenCalledWith({
+        update: 'Notification',
+        updates: [{
+          q: {
+            userId: { $oid: userId },
+            isRead: false,
+            'context.conversationId': conversationId,
+          },
+          u: { $set: { isRead: true, readAt: { $date: expect.any(String) } } },
+          multi: true,
+        }],
       });
-
-      // Seule la notification de conv456 est marquée lue
-      expect(prisma.notification.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: ['n1'] } },
-        data: { isRead: true, readAt: expect.any(Date) },
-      });
-
       expect(count).toBe(1);
     });
 
-    it('markConversationNotificationsAsRead ne marque rien si aucune notification ne matche', async () => {
-      prisma.notification.findMany.mockResolvedValue([
-        { id: 'n2', userId: 'user123', context: { conversationId: 'other-conv' } },
-      ]);
+    it('markConversationNotificationsAsRead retourne 0 sans toucher la DB pour un userId non-ObjectId (anonyme)', async () => {
+      const count = await service.markConversationNotificationsAsRead('session-token-abc', '64b000000000000000000002');
 
-      const count = await service.markConversationNotificationsAsRead('user123', 'conv456');
-
-      expect(prisma.notification.updateMany).not.toHaveBeenCalled();
+      expect(prisma.$runCommandRaw).not.toHaveBeenCalled();
       expect(count).toBe(0);
     });
 
-    it('markPostNotificationsAsRead ne marque que les notifs du post (filtre context.postId)', async () => {
-      prisma.notification.findMany.mockResolvedValue([
-        { id: 'p1', userId: 'user123', context: { postId: 'post1' } },
-        { id: 'p2', userId: 'user123', context: { postId: 'other-post' } },
-        { id: 'p3', userId: 'user123', context: null },
-      ]);
-      prisma.notification.updateMany.mockResolvedValue({ count: 1 });
+    it('markConversationNotificationsAsRead n\'émet pas notification:counts si rien n\'a été marqué', async () => {
+      prisma.$runCommandRaw.mockResolvedValue({ ok: 1, n: 0, nModified: 0 });
 
-      const count = await service.markPostNotificationsAsRead('user123', 'post1');
+      const count = await service.markConversationNotificationsAsRead(
+        '64a000000000000000000001',
+        '64b000000000000000000002'
+      );
 
-      expect(prisma.notification.findMany).toHaveBeenCalledWith({
-        where: { userId: 'user123', isRead: false },
-      });
-      expect(prisma.notification.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: ['p1'] } },
-        data: { isRead: true, readAt: expect.any(Date) },
+      expect(count).toBe(0);
+      expect(mockIO.emit).not.toHaveBeenCalled();
+    });
+
+    it('markPostNotificationsAsRead ne marque que les notifs du post (filtre context.postId serveur)', async () => {
+      const userId = '64a000000000000000000001';
+      const postId = '64c000000000000000000003';
+      prisma.$runCommandRaw.mockResolvedValue({ ok: 1, n: 1, nModified: 1 });
+
+      const count = await service.markPostNotificationsAsRead(userId, postId);
+
+      expect(prisma.notification.findMany).not.toHaveBeenCalled();
+      expect(prisma.$runCommandRaw).toHaveBeenCalledWith({
+        update: 'Notification',
+        updates: [{
+          q: {
+            userId: { $oid: userId },
+            isRead: false,
+            'context.postId': postId,
+          },
+          u: { $set: { isRead: true, readAt: { $date: expect.any(String) } } },
+          multi: true,
+        }],
       });
       expect(count).toBe(1);
     });
