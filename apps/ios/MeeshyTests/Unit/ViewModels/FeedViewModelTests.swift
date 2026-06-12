@@ -207,7 +207,9 @@ final class FeedViewModelTests: XCTestCase {
         let post = Self.makeAPIPost(id: "paginated-1")
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [post], hasMore: true, nextCursor: "abc123"))
 
-        await sut.loadFeed()
+        // forceRefresh bypasses the cache read — a prior test's late .utility save
+        // can repopulate "main-feed" after setUp's invalidate (see setUp note).
+        await sut.loadFeed(forceRefresh: true)
 
         XCTAssertTrue(sut.hasMore)
         XCTAssertEqual(sut.posts.count, 1)
