@@ -8,8 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { User, SUPPORTED_LANGUAGES } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
 import { getUserInitials } from '@/lib/avatar-utils';
-import { OnlineIndicator } from '@/components/ui/online-indicator';
-import { getUserStatus } from '@/lib/user-status';
+import { ParticipantPresenceIndicator } from '@/components/conversations/conversation-item/ParticipantPresenceIndicator';
 
 interface UserSelectorProps {
   users: User[];
@@ -84,9 +83,9 @@ export function UserSelector({ users, onUserSelect, isLoading = false }: UserSel
                     </AvatarFallback>
                   </Avatar>
                   {/* Badge de présence */}
-                  <OnlineIndicator
-                    isOnline={getUserStatus(user) === 'online'}
-                    status={getUserStatus(user)}
+                  <ParticipantPresenceIndicator
+                    userId={user.id}
+                    fallbackUser={user}
                     size="lg"
                     className="absolute -bottom-1 -right-1"
                   />

@@ -17,8 +17,8 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | Field | Value |
 |-------|-------|
 | Last completed iteration | 44 (audit post-#587 Android : i18n attachments/viewer/file-size + 12 clés es/pt ; web : i18n video-calls + dates locale-aware + dark mode bubbles ; iOS : 'Hier' localisé, Dynamic Type ProfileView/TwoFactorSetup/Call, tokens PrivacySettingsView) |
-| Last merged PR | #588 (iter-33 flux parallèle) ; iter-44 en cours de merge |
-| Last Merged Base (commit) | 7358047 (merge #588) |
+| Last merged PR | #593 ; iter-44 (PR #592) en cours de merge |
+| Last Merged Base (commit) | 6d1375e (merge #593) |
 | Next iteration | **45** |
 | Next branch to create from | `main` (HEAD post-merge iter-44) |
 | Deferred carry-over for 45 | web admin : debug.tsx (~15 strings), AgentArchetypesTab, tooltips InfoIcon LlmTab/GlobalConfigTab, 'fr-FR' ranking/monitoring/anonymous-users ; iOS : famille composer Color(hex:) (ComposerModels/UniversalComposerBar/AudioPostComposer/VoiceProfileWizard — design pass identité couleurs), section colors PrivacySettingsView sans token équivalent, audit .white AudioFullscreenView, pluriels FeedPostCard ; Android : MeeshySpacing 2.dp residuals, emoji lineHeight token, parité stories (UI absente) ; réactions par pièce jointe web+Android (wiring gateway) |
@@ -42,7 +42,7 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 30 | claude/dazzling-hawking-b4tdnk | #507 | ✅ |
 | 31 | claude/iter31-type-safety | #509 | ✅ |
 | 32 | feat/uiux-iter32 | #539 | ✅ |
-| 33 | feat/uiux-iter33 | #588 | ⏳ |
+| 33 | feat/uiux-iter33 | #588 | ✅ |
 | 33–39 | (inline admin-i18n passes, commit-message numbering) | #544, #545, … | ✅ |
 | 40 | claude/friendly-brown-xuzpju | #575 | ✅ |
 | 41 | claude/blissful-ritchie-9vesx9 | #577 | ✅ |
