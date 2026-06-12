@@ -1327,12 +1327,15 @@ struct BubbleBodyFooterLayout: Layout {
         // cache only affects the *reported* size, never placement.
         guard let ctx = cacheContext,
               let proposedWidth = proposal.width,
-              proposedWidth.isFinite else {
+              Self.cacheUsable(proposedWidth: proposedWidth, isMainThread: Thread.isMainThread) else {
             return measuredSize(proposal: proposal, subviews: subviews)
         }
-        // `Layout.sizeThatFits` is a nonisolated protocol requirement, but
-        // SwiftUI always runs layout on the main thread — so `assumeIsolated`
-        // safely bridges to the @MainActor cache (and `BubbleContent ==`).
+        // `Layout.sizeThatFits` is a nonisolated protocol requirement and iOS 26
+        // can invoke it on com.apple.SwiftUI.AsyncRenderer, NOT only on the main
+        // thread (5 device crashes 2026-06-10..12: dispatch_assert_queue_fail in
+        // this exact `assumeIsolated`). The cache is therefore a main-thread-only
+        // fast path: off-main passes fall through to a direct measure above, and
+        // `assumeIsolated` below is only reached when the main thread is proven.
         return MainActor.assumeIsolated {
             let cache = BubbleHeightCache.shared
             if let cached = cache.size(messageId: ctx.messageId, content: ctx.content, width: proposedWidth) {
@@ -1342,6 +1345,14 @@ struct BubbleBodyFooterLayout: Layout {
             cache.store(messageId: ctx.messageId, content: ctx.content, width: proposedWidth, size: size)
             return size
         }
+    }
+
+    /// Whether the height cache may be consulted for this layout pass. Pure +
+    /// testable. The main-thread requirement is a hard correctness gate, not an
+    /// optimization: `BubbleHeightCache` (and `BubbleContent ==`) are @MainActor,
+    /// bridged via `assumeIsolated`, which traps on any other thread.
+    static func cacheUsable(proposedWidth: CGFloat, isMainThread: Bool) -> Bool {
+        proposedWidth.isFinite && isMainThread
     }
 
     private func measuredSize(proposal: ProposedViewSize, subviews: Subviews) -> CGSize {
@@ -1426,11 +1437,13 @@ struct BubbleBodyFooterLayout: Layout {
 /// the truncation limit, whose height depends on per-cell `isExpanded` @State)
 /// opt out at the call site rather than caching a state this key cannot see.
 ///
-/// `@MainActor`: the SwiftUI layout pass (and thus every `sizeThatFits` call)
-/// runs on the main thread, and `BubbleContent`'s equality is main-actor
-/// isolated — so the cache shares that isolation and needs no lock. The system
-/// observers fire on the main queue; the flush closure re-enters via
-/// `assumeIsolated`.
+/// `@MainActor`: `BubbleContent`'s equality is main-actor isolated, so the
+/// cache shares that isolation and needs no lock. The layout pass is NOT
+/// guaranteed to run on the main thread (iOS 26 measures cells on
+/// com.apple.SwiftUI.AsyncRenderer) — `sizeThatFits` therefore only consults
+/// this cache after proving `Thread.isMainThread` (see `cacheUsable`); off-main
+/// passes measure directly without touching it. The system observers fire on
+/// the main queue; the flush closure re-enters via `assumeIsolated`.
 @MainActor
 final class BubbleHeightCache {
     static let shared = BubbleHeightCache(observeSystemEvents: true)

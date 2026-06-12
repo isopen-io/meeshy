@@ -42,12 +42,16 @@ final class BackgroundTaskManager {
     }
 
     func registerTasks() {
+        // `using: .main` is load-bearing: these launch-handler closures are
+        // inferred @MainActor (class isolation + SWIFT_DEFAULT_ACTOR_ISOLATION),
+        // so the Swift 6 runtime asserts the main queue when they run. With
+        // `using: nil` BGTaskScheduler invoked them on its own serial queue —
+        // dispatch_assert_queue_fail, 4 device crashes 2026-06-10 (builds
+        // 471/474, queues me.meeshy.app.conversation-sync/message-prefetch).
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.conversationSyncTaskId,
-            using: nil
+            using: .main
         ) { task in
-            // BGTaskScheduler delivers on an arbitrary background queue.
-            // We must NOT access @MainActor state directly here.
             guard let refreshTask = task as? BGAppRefreshTask else {
                 task.setTaskCompleted(success: false)
                 return
@@ -59,7 +63,7 @@ final class BackgroundTaskManager {
 
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.messagePrefetchTaskId,
-            using: nil
+            using: .main
         ) { task in
             guard let processingTask = task as? BGProcessingTask else {
                 task.setTaskCompleted(success: false)
@@ -125,7 +129,10 @@ final class BackgroundTaskManager {
         }
         activeSyncTask = Task { _ = await syncTask.value }
 
-        task.expirationHandler = {
+        // @Sendable: the system may invoke the expiration handler off the
+        // registration queue; a @Sendable closure carries no actor isolation,
+        // so there is no runtime queue assertion to trip.
+        task.expirationHandler = { @Sendable in
             syncTask.cancel()
         }
 
@@ -160,7 +167,7 @@ final class BackgroundTaskManager {
         }
         activePrefetchTask = prefetchTask
 
-        task.expirationHandler = {
+        task.expirationHandler = { @Sendable in
             prefetchTask.cancel()
         }
 
