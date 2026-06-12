@@ -87,7 +87,7 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "speaker.wave.2.fill", title: String(localized: "settings.notifications.sounds", defaultValue: "Sons", bundle: .main), color: MeeshyColors.brandPrimaryHex,
                         keyPath: \.soundEnabled)
 
-            notifToggle(icon: "iphone.radiowaves.left.and.right", title: String(localized: "settings.notifications.vibrations", defaultValue: "Vibrations", bundle: .main), color: MeeshyColors.indigo600Hex,
+            notifToggle(icon: "iphone.radiowaves.left.and.right", title: String(localized: "settings.notifications.vibrations", defaultValue: "Vibrations", bundle: .main), color: MeeshyColors.brandDeepHex,
                         keyPath: \.vibrationEnabled)
 
             notifToggle(icon: "app.badge.fill", title: String(localized: "settings.notifications.badges", defaultValue: "Badges", bundle: .main), color: MeeshyColors.warningHex,
@@ -105,7 +105,7 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "phone.arrow.down.left", title: String(localized: "settings.notifications.missed_calls", defaultValue: "Appels manqués", bundle: .main), color: MeeshyColors.errorHex,
                         keyPath: \.missedCallEnabled)
 
-            notifToggle(icon: "mic.fill", title: String(localized: "settings.notifications.voicemail", defaultValue: "Messages vocaux", bundle: .main), color: MeeshyColors.indigo600Hex,
+            notifToggle(icon: "mic.fill", title: String(localized: "settings.notifications.voicemail", defaultValue: "Messages vocaux", bundle: .main), color: MeeshyColors.brandDeepHex,
                         keyPath: \.voicemailEnabled)
 
             notifToggle(icon: "gear", title: String(localized: "settings.notifications.system", defaultValue: "Système", bundle: .main), color: MeeshyColors.infoHex,
@@ -116,8 +116,8 @@ struct NotificationSettingsView: View {
     // MARK: - Conversations
 
     private var conversationsSection: some View {
-        settingsSection(title: String(localized: "settings.notifications.conversations", defaultValue: "Conversations", bundle: .main), icon: "bubble.left.and.bubble.right.fill", color: MeeshyColors.indigo600Hex) {
-            notifToggle(icon: "text.bubble.fill", title: String(localized: "settings.notifications.conversations", defaultValue: "Conversations", bundle: .main), color: MeeshyColors.indigo600Hex,
+        settingsSection(title: String(localized: "settings.notifications.conversations", defaultValue: "Conversations", bundle: .main), icon: "bubble.left.and.bubble.right.fill", color: MeeshyColors.brandDeepHex) {
+            notifToggle(icon: "text.bubble.fill", title: String(localized: "settings.notifications.conversations", defaultValue: "Conversations", bundle: .main), color: MeeshyColors.brandDeepHex,
                         keyPath: \.conversationEnabled)
 
             notifToggle(icon: "arrowshape.turn.up.left.fill", title: String(localized: "settings.notifications.replies", defaultValue: "Réponses", bundle: .main), color: MeeshyColors.brandPrimaryHex,
@@ -165,7 +165,7 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "sparkles", title: String(localized: "settings.notifications.story_reactions", defaultValue: "Réactions stories", bundle: .main), color: MeeshyColors.warningHex,
                         keyPath: \.storyReactionEnabled)
 
-            notifToggle(icon: "arrowshape.turn.up.left.2.fill", title: String(localized: "settings.notifications.comment_replies", defaultValue: "Réponses commentaires", bundle: .main), color: MeeshyColors.indigo600Hex,
+            notifToggle(icon: "arrowshape.turn.up.left.2.fill", title: String(localized: "settings.notifications.comment_replies", defaultValue: "Réponses commentaires", bundle: .main), color: MeeshyColors.brandDeepHex,
                         keyPath: \.commentReplyEnabled)
 
             notifToggle(icon: "hand.thumbsup.fill", title: String(localized: "settings.notifications.comment_likes", defaultValue: "Likes commentaires", bundle: .main), color: MeeshyColors.errorHex,
@@ -180,7 +180,7 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "text.below.photo.fill", title: String(localized: "settings.notifications.preview", defaultValue: "Preview", bundle: .main), color: MeeshyColors.infoHex,
                         keyPath: \.showPreview)
 
-            notifToggle(icon: "person.text.rectangle", title: String(localized: "settings.notifications.sender_name", defaultValue: "Sender name", bundle: .main), color: MeeshyColors.indigo600Hex,
+            notifToggle(icon: "person.text.rectangle", title: String(localized: "settings.notifications.sender_name", defaultValue: "Sender name", bundle: .main), color: MeeshyColors.brandDeepHex,
                         keyPath: \.showSenderName)
 
             notifToggle(icon: "rectangle.stack.fill", title: String(localized: "settings.notifications.group_notifications", defaultValue: "Group notifications", bundle: .main), color: MeeshyColors.brandPrimaryHex,
@@ -191,8 +191,8 @@ struct NotificationSettingsView: View {
     // MARK: - Do Not Disturb
 
     private var dndSection: some View {
-        settingsSection(title: String(localized: "settings.notifications.dnd", defaultValue: "Ne pas déranger", bundle: .main), icon: "moon.fill", color: MeeshyColors.indigo600Hex) {
-            notifToggle(icon: "moon.zzz.fill", title: String(localized: "settings.notifications.dnd_enable", defaultValue: "Activer DnD", bundle: .main), color: MeeshyColors.indigo600Hex,
+        settingsSection(title: String(localized: "settings.notifications.dnd", defaultValue: "Ne pas déranger", bundle: .main), icon: "moon.fill", color: MeeshyColors.brandDeepHex) {
+            notifToggle(icon: "moon.zzz.fill", title: String(localized: "settings.notifications.dnd_enable", defaultValue: "Activer DnD", bundle: .main), color: MeeshyColors.brandDeepHex,
                         keyPath: \.dndEnabled)
 
             settingsRow(icon: "clock.fill", title: String(localized: "settings.notifications.dnd_start", defaultValue: "Heure début", bundle: .main), color: MeeshyColors.infoHex) {

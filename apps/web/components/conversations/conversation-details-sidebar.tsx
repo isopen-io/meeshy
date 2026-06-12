@@ -269,7 +269,7 @@ export function ConversationDetailsSidebar({
               )}
 
               {/* User Preferences - Lazy loaded */}
-              <Suspense fallback={<div className="text-xs text-muted-foreground italic">Loading...</div>}>
+              <Suspense fallback={<div className="text-xs text-muted-foreground italic">{t('common.loading')}</div>}>
                 <div className="space-y-4">
                   {/* Tags Section */}
                   <div className="space-y-2">
@@ -336,7 +336,7 @@ export function ConversationDetailsSidebar({
               </FoldableSection>
 
               {/* Active Users - Lazy loaded */}
-              <Suspense fallback={<div className="text-xs text-muted-foreground italic">Loading...</div>}>
+              <Suspense fallback={<div className="text-xs text-muted-foreground italic">{t('common.loading')}</div>}>
                 <FoldableSection
                   title={`${t('conversationDetails.activeUsers')} (${activeUsers.length})`}
                   icon={<Users className="h-4 w-4 mr-2" />}
@@ -348,7 +348,7 @@ export function ConversationDetailsSidebar({
 
               {/* Share Links - Lazy loaded, group conversations only */}
               {conversation.type !== 'direct' && (
-                <Suspense fallback={<div className="text-xs text-muted-foreground italic">Loading...</div>}>
+                <Suspense fallback={<div className="text-xs text-muted-foreground italic">{t('common.loading')}</div>}>
                   <FoldableSection
                     title={t('conversationDetails.shareLinks')}
                     icon={<Link2 className="h-4 w-4 mr-2" />}

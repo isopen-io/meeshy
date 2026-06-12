@@ -56,8 +56,8 @@ public nonisolated struct MeeshyColors {
     // MARK: - Semantic Hex Strings (for tint parameters, e.g. ThemeManager.surfaceGradient)
 
     public static let successHex = "34D399"
-    public static let warningHex = "FBBF24"
     public static let errorHex = "F87171"
+    public static let warningHex = "FBBF24"
     public static let infoHex = "60A5FA"
     public static let neutral500Hex = "6B7280"
     public static let indigo300Hex = "A5B4FC"

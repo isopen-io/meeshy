@@ -1,56 +1,55 @@
 # Plan — UI/UX Iteration 42 (2026-06-12)
 
-Base : main @ 167ef31c. Analyse : `docs/analyses/uiux/2026-06-12-iteration-42.md`.
-Branche : `claude/blissful-ritchie-e672ur`.
+Base : main @ 0977931 (post-merge PR #580). Branche : `claude/blissful-ritchie-fst8wf`.
+Analyse source : `docs/analyses/uiux/2026-06-12-iteration-42.md`.
 
-## 1. Web — pages v2 communities/links/settings
+## Objectifs
+1. Solder les carry-over iter-41 : hex iOS hors surface liens, polices fixes vues liens,
+   AudioEffectTile, validation client ID conversation.
+2. Corriger les findings des surfaces jamais auditées (profil web, NotificationBell, VideoPlayer,
+   AuthViewModel/SettingsScreen Android).
+3. Assurer la cohérence cross-frontend sur chaque sujet touché (cf. tableau de l'analyse).
 
-- [x] `locales/{en,fr,es,pt}/links.json` : sous-arbre `v2` (titre, stats, badges, toasts, modale, a11y)
-- [x] `locales/{en,fr,es,pt}/groups.json` : sous-arbre `v2` (pages communautés liste + détail + labels préférences)
-- [x] `locales/{en,fr,es,pt}/settings.json` : clés `v2settings.theme*`, `notification*`, `notifAria*`
-- [x] `app/v2/(protected)/links/page.tsx` : `useI18n('links')`, toutes chaînes → `t()`, date locale
-  dynamique, aria-labels copier/régénérer/toggle
-- [x] `app/v2/(protected)/communities/page.tsx` : `useI18n('groups')`, toutes chaînes → `t()`
-- [x] `app/v2/(protected)/communities/[id]/page.tsx` : idem + map préférences → `t()`,
-  `toLocaleDateString(locale)` dynamique
-- [x] `app/v2/(protected)/settings/page.tsx` : toasts thème/notifications + 4 aria-labels → `t()`
-- [x] Vérif : JSON parsés, parité 4 locales sur les namespaces touchés, `tsc --noEmit` inchangé
+## Checklist
 
-## 2. iOS — migration hex → tokens charte (différé iter-41)
+### Web (apps/web)
+- [x] PostCard.tsx : "Translate" → i18n ; divs cliquables → role/tabIndex/onKeyDown
+- [x] LanguageOrb.tsx : role="button" + aria-label + clavier (si interactif)
+- [x] u/[username]/page.tsx : "Profil" / erreurs → clés i18n (4 langues)
+- [x] conversation/[conversationId]/page.tsx : validation ObjectId 24-hex avant fetch
+- [x] NotificationBell.tsx : aria-label i18n avec interpolation count
+- [x] ConversationHeader.tsx : clé `unreadInOtherConversations` garantie 4 langues, fallback retiré
+- [x] conversation-details-sidebar.tsx : 3× "Loading..." → common.loading
+- [x] AudioEffectTile.tsx : role/tabIndex/onKeyDown + aria-label (carry-over)
+- [x] VideoPlayer.tsx : overlay + progress bar accessibles
+- [x] MediaImageCard.tsx : aria-label sélecteur de langue
+- [x] Switch.tsx : examiné, conforme — pas de changement
+- [x] tsc --noEmit : aucune nouvelle erreur vs baseline
 
-- [x] SDK `MeeshyColors.swift` : + `errorSoft`, `errorStrong`, `successDeep` ;
-  + `errorHex`, `infoHex`, `indigo400Hex`, `indigo600Hex`
-- [x] `SettingsView.swift` : 38 littéraux hex → `MeeshyColors.*Hex`
-- [x] `NotificationSettingsView.swift` : 40 littéraux → tokens
-- [x] `DataExportView.swift` : accent `3498DB`→`infoHex` ; `FF6B6B`→error ; `2ECC71`→success ;
-  tints → tokens
-- [x] `ConversationView+Composer.swift` : accents dynamiques L100, bannière édition warning,
-  états envoyés success/successDeep
-- [x] `OnboardingView.swift` : stops sémantiques (errorSoft/errorStrong/successDeep/indigo500/
-  indigo300/indigo950) ; washes de fond par page conservés (décision documentée)
-- [x] Vérif : grep négatif — plus aucun hex hors charte sur les 6 surfaces (hors washes onboarding)
+### iOS (apps/ios + packages/MeeshySDK)
+- [x] MeeshyColors : + `errorHex`, `infoHex`
+- [x] SettingsView : 37 remplacements hex → tokens
+- [x] NotificationSettingsView : 38 remplacements
+- [x] DataExportView : reliquat (2) ; ShareLinksView accentColor → brandPrimaryHex
+- [x] OnboardingView / MessageComposer : conservés (design intentionnel, documenté)
+- [x] LinksHubView/ShareLinksView/TrackingLinksView : 22 textes → styles Dynamic Type
+- [x] accessibilityLabel boutons "plus" (LinksHub ×3 via param `createLabel`, ShareLinks ×1)
 
-## 3. Android
+### Android (apps/android)
+- [x] AuthViewModel/AuthUiState : `errorRes` @StringRes + `login_error_required` en/fr ;
+      LoginScreen résout errorRes ?: errorMessage
+- [x] SettingsScreen : `.clickable { }` mort → `onOpenProfile(userId)` (état + câblage NavHost)
+- [x] Deep link `meeshy://profile/{userId}` : navDeepLink + intent-filter host=profile
+- [ ] Compilation Gradle : impossible localement (pas de SDK Android dans l'environnement) —
+      diff relu intégralement, validation par CI
 
-- [x] `feature/contacts` strings.xml en+fr : `contacts_tab_{contacts,requests,discover,blocked}`
-- [x] `ContactsScreen.kt` : mapping `ContactsTab` → `stringResource`
-- [x] `sdk-ui` strings.xml en+fr : `avatar_fallback` ; `MeeshyAvatar.kt` l'utilise
-- [x] Vérif : strings.xml parsés, parité values/values-fr
+## Vérification
+- tsc web : baseline inchangée (validé par l'agent d'implémentation)
+- JSON locales (8 fichiers) : validés
+- Swift : pas de build possible sur Linux — diff relu, syntaxe vérifiée
+- CI de la PR : gate finale avant merge dans main
 
-## 4. Livraison
-
-- [x] Commit + push `claude/blissful-ritchie-e672ur`
-- [ ] PR vers main, CI verte, merge (numéro tracé dans `branch-tracking.md` au merge)
-- [x] Mise à jour `branch-tracking.md` (itération 42 en cours, prochaine itération 43)
-
-## Review
-
-- Web : 3 pages v2 (links, communities, communities/[id]) + toasts/aria settings page localisés
-  en 4 locales ; parité validée par script récursif ; `tsc --noEmit` strictement identique
-  avant/après (seule l'erreur TS5101 préexistante du tsconfig).
-- iOS : 6 surfaces migrées vers la charte ; 3 tokens tonals + 4 constantes hex ajoutés au SDK
-  (échelle Tailwind cohérente : red-300/red-500/emerald-500). Grep négatif vérifié — les seuls
-  hex restants sur ces fichiers sont les washes d'ambiance onboarding (décision documentée).
-- Android : onglets contacts localisés (différé 41 soldé), fallback avatar TalkBack localisé.
-- Cohérence cross-frontend : surface liens désormais localisée web + iOS ; settings dans la
-  charte sur les 3 fronts.
+## Continuité
+- Mettre à jour `branch-tracking.md` après merge (base 43 = main post-merge PR iter-42)
+- Différés listés dans l'analyse §Différés (stories Android, réactions PJ, qualité es/pt,
+  validation stricte /chat/[id])

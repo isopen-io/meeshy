@@ -94,6 +94,9 @@ export function AudioEffectTile({
   return (
     <>
       <Card
+        role="button"
+        tabIndex={0}
+        aria-label={t('configureEffect', { name: effectName })}
         className={cn(
           'relative overflow-hidden cursor-pointer transition-[transform,box-shadow] duration-300',
           'hover:scale-[1.02] hover:shadow-lg',
@@ -104,6 +107,13 @@ export function AudioEffectTile({
           className
         )}
         onClick={handleTileClick}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsConfigOpen(true);
+          }
+        }}
       >
         {/* Indicateur actif - Animation brillante */}
         {enabled && (

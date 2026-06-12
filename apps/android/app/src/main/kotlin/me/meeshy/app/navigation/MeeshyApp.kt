@@ -54,6 +54,7 @@ object Routes {
     const val NOTIFICATIONS = "notifications"
     const val SETTINGS = "settings"
     const val PROFILE_USER = "profile/{userId}"
+    const val PROFILE_DEEP_LINK = "meeshy://$PROFILE_USER"
 
     fun chat(conversationId: String): String = "chat/$conversationId"
     fun profile(userId: String): String = "profile/$userId"
@@ -202,11 +203,15 @@ fun MeeshyApp() {
                             popUpTo(Routes.CONVERSATIONS) { inclusive = true }
                         }
                     },
+                    onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
                 )
             }
             composable(
                 route = Routes.PROFILE_USER,
                 arguments = listOf(navArgument("userId") { type = NavType.StringType }),
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = Routes.PROFILE_DEEP_LINK },
+                ),
             ) {
                 ProfileScreen(onBack = { navController.popBackStack() })
             }

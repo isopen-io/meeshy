@@ -208,12 +208,12 @@ struct SettingsView: View {
     }
 
     private var accountSection: some View {
-        settingsSection(title: String(localized: "settings.section.account", defaultValue: "Compte", bundle: .main), icon: "person.circle.fill", color: MeeshyColors.indigo600Hex) {
+        settingsSection(title: String(localized: "settings.section.account", defaultValue: "Compte", bundle: .main), icon: "person.circle.fill", color: MeeshyColors.brandDeepHex) {
             Button {
                 HapticFeedback.light()
                 showPrivacySettings = true
             } label: {
-                settingsRow(icon: "lock.fill", title: String(localized: "settings.privacy.title", defaultValue: "Confidentialité", bundle: .main), color: MeeshyColors.brandPrimaryHex) {
+                settingsRow(icon: "lock.fill", title: String(localized: "settings.privacy.title", defaultValue: "Confidentialité", bundle: .main), color: MeeshyColors.errorHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -344,7 +344,7 @@ struct SettingsView: View {
                 .accessibilityValue(prefs.notification.soundEnabled ? String(localized: "settings.value.active", defaultValue: "active", bundle: .main) : String(localized: "settings.value.disabled", defaultValue: "desactive", bundle: .main))
             }
 
-            settingsRow(icon: "iphone.radiowaves.left.and.right", title: String(localized: "settings.notif.vibrations", defaultValue: "Vibrations", bundle: .main), color: MeeshyColors.indigo600Hex) {
+            settingsRow(icon: "iphone.radiowaves.left.and.right", title: String(localized: "settings.notif.vibrations", defaultValue: "Vibrations", bundle: .main), color: MeeshyColors.brandDeepHex) {
                 Toggle("", isOn: Binding(
                     get: { prefs.notification.vibrationEnabled },
                     set: { val in prefs.updateNotification { $0.vibrationEnabled = val } }
@@ -418,12 +418,12 @@ struct SettingsView: View {
     // MARK: - Voice Profile Section
 
     private var voiceProfileSection: some View {
-        settingsSection(title: String(localized: "settings.section.voice", defaultValue: "Profil vocal", bundle: .main), icon: "waveform.and.mic", color: MeeshyColors.indigo600Hex) {
+        settingsSection(title: String(localized: "settings.section.voice", defaultValue: "Profil vocal", bundle: .main), icon: "waveform.and.mic", color: MeeshyColors.brandDeepHex) {
             Button {
                 HapticFeedback.light()
                 showVoiceProfileManage = true
             } label: {
-                settingsRow(icon: "waveform.circle.fill", title: String(localized: "settings.voice.manage", defaultValue: "Gerer le profil vocal", bundle: .main), color: MeeshyColors.indigo600Hex) {
+                settingsRow(icon: "waveform.circle.fill", title: String(localized: "settings.voice.manage", defaultValue: "Gerer le profil vocal", bundle: .main), color: MeeshyColors.brandDeepHex) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -446,10 +446,10 @@ struct SettingsView: View {
             .accessibilityHint(String(localized: "settings.voice.create.hint", defaultValue: "Lance l'assistant de creation de profil vocal", bundle: .main))
         }
         .sheet(isPresented: $showVoiceProfileWizard) {
-            VoiceProfileWizardView(accentColor: MeeshyColors.indigo600Hex)
+            VoiceProfileWizardView(accentColor: MeeshyColors.brandDeepHex)
         }
         .sheet(isPresented: $showVoiceProfileManage) {
-            VoiceProfileManageView(accentColor: MeeshyColors.indigo600Hex)
+            VoiceProfileManageView(accentColor: MeeshyColors.brandDeepHex)
         }
     }
 
