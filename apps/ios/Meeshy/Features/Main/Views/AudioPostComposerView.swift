@@ -25,6 +25,10 @@ struct AudioPostComposerView: View {
         case idle, recording, transcribing, preview
     }
 
+    // Washes sombres intentionnels — pas de token MeeshyColors equivalent
+    private let darkCanvasTop = Color(hex: "0F0D19")
+    private let darkCanvasBase = Color(hex: "13111C")
+
     private var isDark: Bool { colorScheme == .dark }
 
     // MARK: - Body
@@ -78,14 +82,14 @@ struct AudioPostComposerView: View {
     // MARK: - Background
 
     private var backgroundBaseColor: Color {
-        isDark ? Color(hex: "13111C") : Color(hex: "EEF2FF")
+        isDark ? darkCanvasBase : MeeshyColors.indigo50
     }
 
     private var background: some View {
         LinearGradient(
             colors: isDark
-                ? [Color(hex: "0F0D19"), Color(hex: "13111C"), Color(hex: "1E1B4B").opacity(0.85)]
-                : [Color(hex: "EEF2FF"), Color(hex: "E0E7FF"), Color(hex: "C7D2FE").opacity(0.55)],
+                ? [darkCanvasTop, darkCanvasBase, MeeshyColors.indigo950.opacity(0.85)]
+                : [MeeshyColors.indigo50, MeeshyColors.indigo100, MeeshyColors.indigo200.opacity(0.55)],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
@@ -159,20 +163,20 @@ struct AudioPostComposerView: View {
     private var durationLabel: some View {
         if audioRecorder.isRecording || phase == .preview {
             Text(formattedDuration)
-                .font(.system(size: 36, weight: .light, design: .monospaced))
+                .font(.system(.largeTitle, design: .monospaced).weight(.light))
                 .foregroundColor(theme.textPrimary)
         } else if phase == .transcribing {
             VStack(spacing: 4) {
                 Text(String(localized: "Transcription en cours...", defaultValue: "Transcription en cours..."))
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                     .foregroundColor(theme.textSecondary)
                 Text(formattedDuration)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(.caption, design: .monospaced))
                     .foregroundColor(theme.textMuted)
             }
         } else {
             Text(String(localized: "Appuyez pour enregistrer", defaultValue: "Appuyez pour enregistrer"))
-                .font(.system(size: 14, weight: .medium))
+                .font(.subheadline.weight(.medium))
                 .foregroundColor(theme.textSecondary)
         }
     }
@@ -183,10 +187,10 @@ struct AudioPostComposerView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "globe")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                 Text(String(localized: "Langue de transcription",
                             defaultValue: "Langue de transcription"))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                 Spacer()
             }
             .foregroundColor(theme.textSecondary)
@@ -215,7 +219,7 @@ struct AudioPostComposerView: View {
             HapticFeedback.light()
         } label: {
             Text(Self.shortDisplayName(for: loc))
-                .font(.system(size: 13, weight: .semibold))
+                .font(.footnote.weight(.semibold))
                 .foregroundColor(isSelected ? .white : theme.textPrimary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
@@ -240,9 +244,9 @@ struct AudioPostComposerView: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                    .font(.system(size: 13))
+                    .font(.footnote)
                 Text(String(localized: "Plus", defaultValue: "Plus"))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
             }
             .foregroundColor(MeeshyColors.indigo500)
             .padding(.horizontal, 14)
@@ -295,14 +299,14 @@ struct AudioPostComposerView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Image(systemName: "text.bubble.fill")
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundColor(MeeshyColors.indigo400)
                 Text(String(localized: "Transcription", defaultValue: "Transcription"))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundColor(MeeshyColors.indigo400)
                 Spacer()
                 Text(t.language.uppercased())
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundColor(theme.textMuted)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
@@ -313,7 +317,7 @@ struct AudioPostComposerView: View {
                  ? String(localized: "Aucune transcription disponible.",
                           defaultValue: "Aucune transcription disponible.")
                  : t.text)
-                .font(.system(size: 15))
+                .font(.subheadline)
                 .foregroundColor(theme.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .lineSpacing(4)
@@ -335,15 +339,15 @@ struct AudioPostComposerView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 16))
+                    .font(.callout)
                     .foregroundColor(MeeshyColors.error)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(localized: "Transcription indisponible",
                                 defaultValue: "Transcription indisponible"))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
                     Text(error)
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(4)
                 }
@@ -357,7 +361,7 @@ struct AudioPostComposerView: View {
                         Text(String(localized: "Reessayer",
                                     defaultValue: "R\u{00E9}essayer"))
                     }
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
@@ -389,7 +393,7 @@ struct AudioPostComposerView: View {
                         String(localized: "Refaire", defaultValue: "Refaire"),
                         systemImage: "arrow.counterclockwise"
                     )
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 14)
@@ -405,7 +409,7 @@ struct AudioPostComposerView: View {
 
                 Button(action: publish) {
                     Text(String(localized: "Publier", defaultValue: "Publier"))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.callout.weight(.bold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
@@ -423,7 +427,7 @@ struct AudioPostComposerView: View {
                            defaultValue: "Annuler la transcription"),
                     systemImage: "xmark.circle.fill"
                 )
-                .font(.system(size: 15, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(MeeshyColors.error)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
@@ -459,7 +463,7 @@ struct AudioPostComposerView: View {
                                 .frame(width: 26, height: 26)
                         } else {
                             Image(systemName: "mic.fill")
-                                .font(.system(size: 30))
+                                .font(.title)
                                 .foregroundColor(.white)
                         }
                     }
@@ -666,7 +670,7 @@ struct AudioLanguagePickerView: View {
                     Toggle(isOn: $showAllLanguages) {
                         Text(String(localized: "Afficher toutes les langues",
                                     defaultValue: "Afficher toutes les langues"))
-                            .font(.system(size: 14))
+                            .font(.subheadline)
                             .foregroundColor(theme.textPrimary)
                     }
                     .tint(MeeshyColors.indigo500)
@@ -675,7 +679,7 @@ struct AudioLanguagePickerView: View {
                         localized: "Par defaut, seules les langues disponibles sur cet appareil sont listees.",
                         defaultValue: "Par d\u{00E9}faut, seules les langues disponibles sur cet appareil sont list\u{00E9}es."
                     ))
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundColor(theme.textMuted)
                 }
 
@@ -689,20 +693,19 @@ struct AudioLanguagePickerView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(item.name)
-                                        .font(.system(
-                                            size: 16,
-                                            weight: selectedLocale.identifier == item.locale.identifier
+                                        .font(.callout.weight(
+                                            selectedLocale.identifier == item.locale.identifier
                                                 ? .semibold : .regular
                                         ))
                                         .foregroundColor(theme.textPrimary)
                                     Text(item.locale.identifier)
-                                        .font(.system(size: 12))
+                                        .font(.caption)
                                         .foregroundColor(theme.textMuted)
                                 }
                                 Spacer()
                                 if selectedLocale.identifier == item.locale.identifier {
                                     Image(systemName: "checkmark")
-                                        .font(.system(size: 14, weight: .bold))
+                                        .font(.subheadline.weight(.bold))
                                         .foregroundColor(MeeshyColors.indigo500)
                                 }
                             }
