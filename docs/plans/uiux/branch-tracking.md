@@ -16,13 +16,13 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | **46w** (web only : i18n surface v2 — CommentComposer 7 clés, StatusBar timeRemaining, ThemeToggle 5 clés, TranslationToggle/MediaImageCard `language.original`/`availableTranslations`/`captionLanguage` ; admin UserPicker 8 clés `agent.userPicker.*` ; MessageComposer `#EF4444`×3 → `var(--gp-error)` + hover theme-aware ; overlays click-outside `aria-hidden` MessageBubble/MediaImageCard ; hygiène docs : 36/36 analyses annotées, carry-over purgé de 3 faux restes) |
-| Last merged PR | #597 (45), #596 (45w), #595 (45i), #604 (routine fraîcheur) ; iter-46w sur `claude/elegant-noether-09t4x2` |
-| Last Merged Base (commit) | 945a8d74 (merge #604, contient #597) — base de la branche iter-46w |
-| Next iteration | **47w** — repartir de `main` HEAD post-merge iter-46w |
+| Last completed iteration | **47w** (web only : lot i18n admin agent — `AgentConfigDialog` 122 strings → `agentConfig.*` (labels + tooltips `*Help` + hints + placeholders + options + footer via `tCommon`), `AgentLlmTab` 6 tooltips → `llm.*Help`, `AgentGlobalConfigTab` 15 tooltips + placeholder → `globalConfig.*` ; +143 clés ×4 locales, parité vérifiée par script ; hygiène docs : 46w marquée mergée #605, faux positifs footer 1/3/5/7/8/33 documentés) |
+| Last merged PR | #605 (46w), #608 (iOS notification details) ; iter-47w sur `claude/elegant-noether-0bs5fe` |
+| Last Merged Base (commit) | 61d0122 (merge #608, contient #605) — base de la branche iter-47w |
+| Next iteration | **48w** — repartir de `main` HEAD post-merge iter-47w |
 
-### Deferred carry-over — web (pour 47w+)
-- admin : `AgentConfigDialog` (~58 labels/tooltips FR) + tooltips InfoIcon `AgentLlmTab` (6) / `AgentGlobalConfigTab` (15) — à traiter en un lot sous `agent.config.*` (vérifié 46w : debug.tsx, AgentArchetypesTab, BackSoundDetails, UserPicker DÉJÀ corrigés — ne plus auditer)
+### Deferred carry-over — web (pour 48w+)
+- lot agent.config SOLDÉ en 47w (AgentConfigDialog/AgentLlmTab/AgentGlobalConfigTab — ne plus auditer ; clés dans les arbres existants `agentConfig.*`/`llm.*`/`globalConfig.*`, pas de nouvel arbre `agent.config.*`)
 - chart hex sans variante dark : `RankingStatsImpl` (10+ hex recharts), `MermaidDiagramImpl` (thème mermaid fixe `default`, 6 hex), `AgentOverviewTab` (2 hex pie) ; consolidation `notifications/preferences` page vs composant
 - réactions par pièce jointe (wiring gateway, feature commune web+Android)
 - audit qualité es/pt (relecture des traductions existantes)
@@ -72,4 +72,5 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 45w | claude/elegant-noether-1pen57 | #596 | ✅ |
 | 45i | claude/wizardly-rubin-ux84an | #595 | ✅ |
 | 45 | claude/blissful-ritchie-dp7ibu | #597 | ✅ |
-| 46w | claude/elegant-noether-09t4x2 | ⏳ | ⏳ |
+| 46w | claude/elegant-noether-09t4x2 | #605 | ✅ |
+| 47w | claude/elegant-noether-0bs5fe | ⏳ | ⏳ |
