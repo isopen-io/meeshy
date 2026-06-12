@@ -297,13 +297,13 @@
       }
     },
     "userPicker": {
-      "empty": "Aucun utilisateur sélectionné",
+      "searchPlaceholder": "Rechercher un utilisateur...",
+      "noneSelected": "Aucun utilisateur sélectionné",
       "remove": "Retirer",
       "addUser": "Ajouter un utilisateur",
-      "searchPlaceholder": "Rechercher un utilisateur...",
       "searching": "Recherche...",
       "added": "Ajouté",
-      "noneFound": "Aucun utilisateur trouvé",
+      "noResults": "Aucun utilisateur trouvé",
       "minChars": "Entrez au moins 2 caractères"
     }
   },

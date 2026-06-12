@@ -297,13 +297,13 @@
       }
     },
     "userPicker": {
-      "empty": "Ningún usuario seleccionado",
-      "remove": "Quitar",
-      "addUser": "Añadir un usuario",
       "searchPlaceholder": "Buscar un usuario...",
+      "noneSelected": "Ningún usuario seleccionado",
+      "remove": "Quitar",
+      "addUser": "Añadir usuario",
       "searching": "Buscando...",
       "added": "Añadido",
-      "noneFound": "Ningún usuario encontrado",
+      "noResults": "Ningún usuario encontrado",
       "minChars": "Introduce al menos 2 caracteres"
     }
   },

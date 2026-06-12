@@ -16,21 +16,21 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | **45** (PR #597 : web i18n participants-drawer 6 clés ×4 locales, `timeCompact.*` aligné iOS dans transform-conversation, `getLastSeenFormatted` localisé via `contacts.status.*`, suppression code mort notification-helpers, locale sur 2 dates ; iOS : régression FR timeAgo FeedCommentsSheet → `ShortRelativeTime`, ChangePasswordView tokens 6366F1/9B59B6 + 13 polices sémantiques ; Android : dédoublonnage `chat_date_*` es/pt) — co-mergée avec **45w** (#596, web-only) et **45i** (#595, iOS-only) |
-| Last merged PR | #597 (45), #604 ; iter-46 en cours sur `claude/blissful-ritchie-8rma6f` |
-| Last Merged Base (commit) | 945a8d74 (merge #604, inclut #597) — base de l'iter-46 |
-| Note de réconciliation 45×45w | 45w a remplacé `'fr-FR'` par `getCurrentInterfaceLocale()` dans transform-conversation/users.service/notification-helpers en gardant les libellés FR en dur ; iter-45 i18n-ise complètement ces trois sites (clés `timeCompact.*`/`contacts.status.*` + suppression code mort) — la version iter-45 supersède, imports `getCurrentInterfaceLocale` orphelins retirés. 45i (refonte ConversationListHelpers) ne touche pas `ShortRelativeTime` ni les fichiers iter-45 — merge propre vérifié |
-| Next iteration | **47** — repartir de `main` HEAD post-merge iter-46 |
+| Last completed iteration | **46** (PR #606, cette branche) × **46w** (#605, web-only) — 46 : web admin i18n (UserPicker repris par 46w, AgentOverviewTab `kpi.inactive` + pie dark-aware, RankingStatsImpl 5 clés `ranking.charts.*` + palette charts dark-aware, InfoIcon aria-label, ConversationSettingsModal `editPhoto`, MessageSearch locale interface) ; iOS : palette legacy 10 fichiers/27 occ → tokens, FriendRequestListView 8 polices sémantiques, CameraView 3 accessibilityLabel + 5 clés xcstrings ; Android : Role.Button ×5 (SettingsScreen profil, MeeshyPrimaryButton, ReactionChip, BubbleImageGrid ×2). 46w : i18n surface v2 (CommentComposer, StatusBar, ThemeToggle, TranslationToggle/MediaImageCard), admin UserPicker 8 clés, MessageComposer web tokens erreur, aria-hidden overlays, hygiène docs |
+| Last merged PR | #605 (46w) ; iter-46 (#606) mergée juste après |
+| Last Merged Base (commit) | merge #606 (voir History) — réconciliation 46×46w faite dans #606 |
+| Note de réconciliation 46×46w | Collision sur UserPicker : 46w (mergée la première) et 46 l'ont i18n-isé en parallèle avec des noms de clés différents — la version 46w (`noneSelected`/`noResults`, hook `use-i18n`) est conservée, les clés dupliquées de 46 (`empty`/`noneFound`) retirées des 4 locales ; les ajouts 46 (`ranking.charts.*`, `agent.overview.kpi.inactive`) sont réinjectés par-dessus. Le différé 46w « chart hex sans variante dark (RankingStatsImpl/AgentOverviewTab) » est soldé par 46 (même PR) |
+| Next iteration | **47** — repartir de `main` HEAD post-merge #606 |
 
 ### Deferred carry-over — web (pour 47+)
-- **`AgentConfigDialog`** : ~40-45 strings FR (labels, selects, 20+ tooltips InfoIcon 50-300 chars) — chantier dédié, passe isolée recommandée (vérifié iter-46 : seul gros reste de l'admin ; debug.tsx/AgentArchetypesTab/BackSoundDetails/UserPicker soldés)
-- `MermaidDiagramImpl` : themeVariables fixes (init global Mermaid, pas d'API mode-aware) — architectural
-- consolidation `notifications/preferences` page vs composant
+- admin : `AgentConfigDialog` (~58 labels/tooltips FR) + tooltips InfoIcon `AgentLlmTab` (6) / `AgentGlobalConfigTab` (15) — à traiter en un lot sous `agent.config.*` (vérifié 46/46w : debug.tsx, AgentArchetypesTab, BackSoundDetails, UserPicker DÉJÀ corrigés — ne plus auditer)
+- `MermaidDiagramImpl` : thème mermaid fixe `default` (6 hex, init global, pas d'API mode-aware) — architectural ; consolidation `notifications/preferences` page vs composant
 - réactions par pièce jointe (wiring gateway, feature commune web+Android)
 - audit qualité es/pt (relecture des traductions existantes)
 - console.error en français (participants-drawer ×5, links-section ×3) — logs dev, non bloquant
-- locale maps intentionnelles NON à migrer : share-affiliate-modal, AudioPostComposer (speech), use-voice-recording (SpeechRecognition lang)
+- optimisations 45w toujours ouvertes : deep links `/v2/chats?id=` (parité iOS/Android), swipe-back mobile web, audit dark pages admin
 - Universal/App Links `https://meeshy.me/...` — arbitrage produit cross-platform (web assetlinks.json + AASA, voir Android)
+- locale maps intentionnelles NON à migrer : share-affiliate-modal, AudioPostComposer (speech), use-voice-recording (SpeechRecognition lang) ; StoryViewer `select-none` text-objects = design (parité stories iOS)
 
 ### Deferred carry-over — iOS (pour 47+, post-46)
 **Gros fichiers palette legacy (planifié 47)** : RootViewComponents (13), FeedView (9), FeedView+Attachments (11), WidgetPreviewView (8) — gradients décoratifs, arbitrage visuel par surface ; hex hors périmètre des 6 legacy (F8B500, 3498DB, F39C12…) dans AboutView/UserStatsView/MediaDownloadSettingsView à inventorier ; SampleData.swift ×2 (app + SDK) morts confirmés — suppression nécessite pbxproj + build macOS ; BubbleStandardLayout:835 quoted reply sans .textSelection (conflit potentiel tap-to-scroll, à évaluer) ; arbitrage `time.*` (FeedPostCard) vs `time.short.*` (ShortRelativeTime) ; grandes surfaces polices : ConversationInfoSheet (52), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (27), NewConversationView (16), DataExportView (16), DataStorageView (11) ; washes AudioPostComposer (décision design) ; ladder pièces jointes arc-en-ciel (à arbitrer charte) ; VoiceProfileWizardView/TrackingLinksView Color(hex:) ; IncomingCallView .white contraste ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) ; ThemedConversationRow theme-aware (leaf-view). Soldés en 46 : FriendRequestListView polices, PostDetailView (confirmé OK), CameraView a11y, 10 petits fichiers palette (27 occ)
@@ -74,4 +74,5 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 45w | claude/elegant-noether-1pen57 | #596 | ✅ |
 | 45i | claude/wizardly-rubin-ux84an | #595 | ✅ |
 | 45 | claude/blissful-ritchie-dp7ibu | #597 | ✅ |
-| 46 | claude/blissful-ritchie-8rma6f | — | ⏳ |
+| 46w | claude/elegant-noether-09t4x2 | #605 | ✅ |
+| 46 | claude/blissful-ritchie-8rma6f | #606 | ⏳ |
