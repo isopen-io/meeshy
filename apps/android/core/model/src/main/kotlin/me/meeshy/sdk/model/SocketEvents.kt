@@ -124,12 +124,20 @@ data class ConversationDeletedSocketEvent(
 )
 
 @Serializable
+data class ReadStatusSummary(
+    val totalMembers: Int = 0,
+    val deliveredCount: Int = 0,
+    val readCount: Int = 0,
+)
+
+@Serializable
 data class ReadStatusUpdatedEvent(
     val conversationId: String,
     val participantId: String,
     val userId: String? = null,
     val type: String = "read",
     val updatedAt: String? = null,
+    val summary: ReadStatusSummary = ReadStatusSummary(),
 )
 
 /** Social socket events — mirrors iOS SocialSocketManager payloads. */
