@@ -19,4 +19,7 @@
     <string name="chat_cancel_edit">Annuler la modification</string>
     <string name="chat_react_with">Réagir avec %1$s</string>
     <string name="chat_message_actions">Actions du message</string>
+    <string name="chat_date_today">Aujourd\'hui</string>
+    <string name="chat_date_yesterday">Hier</string>
+    <string name="chat_date_day_before_yesterday">Avant-hier</string>
 </resources>

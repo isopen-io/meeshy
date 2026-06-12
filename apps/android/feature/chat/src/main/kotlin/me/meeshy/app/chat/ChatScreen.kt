@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
@@ -44,6 +45,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +64,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.ZoneId
+import java.util.Locale
 import kotlinx.coroutines.flow.distinctUntilChanged
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.MeeshySkeletonBox
@@ -70,6 +74,7 @@ import me.meeshy.ui.component.bubble.DeliveryStatus
 import me.meeshy.ui.component.bubble.MessageBubble
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
@@ -82,10 +87,13 @@ fun ChatScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+    val listItems = remember(state.messages) {
+        buildChatListItems(state.messages, ZoneId.systemDefault())
+    }
 
     LaunchedEffect(state.messages.lastOrNull()?.messageId) {
-        if (state.messages.isNotEmpty()) {
-            listState.animateScrollToItem(state.messages.lastIndex)
+        if (listItems.isNotEmpty()) {
+            listState.animateScrollToItem(listItems.lastIndex)
         }
     }
 
@@ -179,29 +187,40 @@ fun ChatScreen(
                                 }
                             }
                         }
-                        items(state.messages, key = { it.messageId }) { bubble ->
-                            MessageBubble(
-                                content = bubble,
-                                outgoingColor = accentColor,
-                                onLongPress = { viewModel.onMessageLongPress(bubble.messageId) },
-                                onReactionClick = { emoji ->
-                                    viewModel.toggleReaction(bubble.messageId, emoji)
-                                },
-                                onImageClick = { index ->
-                                    viewModel.openImageViewer(bubble.messageId, index)
-                                },
-                            )
-                            if (bubble.deliveryStatus == DeliveryStatus.Failed) {
-                                Text(
-                                    text = stringResource(R.string.chat_send_failed_retry),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                    textAlign = TextAlign.End,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { viewModel.retryMessage(bubble.messageId) }
-                                        .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
-                                )
+                        items(listItems, key = { it.key }) { item ->
+                            when (item) {
+                                is ChatListItem.DayHeader -> DaySeparator(item.dayMillis)
+                                is ChatListItem.Message -> {
+                                    val bubble = item.bubble
+                                    MessageBubble(
+                                        content = bubble,
+                                        outgoingColor = accentColor,
+                                        onLongPress = {
+                                            viewModel.onMessageLongPress(bubble.messageId)
+                                        },
+                                        onReactionClick = { emoji ->
+                                            viewModel.toggleReaction(bubble.messageId, emoji)
+                                        },
+                                        onImageClick = { index ->
+                                            viewModel.openImageViewer(bubble.messageId, index)
+                                        },
+                                    )
+                                    if (bubble.deliveryStatus == DeliveryStatus.Failed) {
+                                        Text(
+                                            text = stringResource(R.string.chat_send_failed_retry),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.error,
+                                            textAlign = TextAlign.End,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { viewModel.retryMessage(bubble.messageId) }
+                                                .padding(
+                                                    horizontal = MeeshySpacing.lg,
+                                                    vertical = MeeshySpacing.xs,
+                                                ),
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -242,6 +261,35 @@ fun ChatScreen(
 }
 
 private const val LOAD_OLDER_THRESHOLD = 2
+
+@Composable
+private fun DaySeparator(dayMillis: Long, modifier: Modifier = Modifier) {
+    val label = MessageDayLabel.label(
+        dayMillis = dayMillis,
+        nowMillis = System.currentTimeMillis(),
+        zone = ZoneId.systemDefault(),
+        locale = Locale.getDefault(),
+        today = stringResource(R.string.chat_date_today),
+        yesterday = stringResource(R.string.chat_date_yesterday),
+        dayBeforeYesterday = stringResource(R.string.chat_date_day_before_yesterday),
+    )
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = MeeshySpacing.sm),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier
+                .clip(RoundedCornerShape(MeeshyRadius.pill))
+                .background(MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.7f))
+                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+        )
+    }
+}
 
 private val QuickReactions = listOf("❤️", "😂", "🔥", "👏", "😮", "😢", "🥰", "👍")
 

@@ -19,4 +19,7 @@
     <string name="chat_cancel_edit">Cancel edit</string>
     <string name="chat_react_with">React with %1$s</string>
     <string name="chat_message_actions">Message actions</string>
+    <string name="chat_date_today">Today</string>
+    <string name="chat_date_yesterday">Yesterday</string>
+    <string name="chat_date_day_before_yesterday">Two days ago</string>
 </resources>
