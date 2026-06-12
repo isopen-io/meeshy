@@ -19,11 +19,6 @@ export interface PaginationParams {
   limit: string;
 }
 
-export interface ValidatedPagination {
-  offsetNum: number;
-  limitNum: number;
-}
-
 // Types pour les queries
 export interface UserListQuery extends PaginationParams {
   search?: string;
@@ -69,14 +64,3 @@ export interface RankingQuery {
   limit?: string;
 }
 
-// Helper pour valider la pagination
-export function validatePagination(
-  offset: string = '0',
-  limit: string = '20',
-  defaultLimit: number = 20,
-  maxLimit: number = 100
-): ValidatedPagination {
-  const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
-  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || defaultLimit), maxLimit);
-  return { offsetNum, limitNum };
-}
