@@ -51,4 +51,4 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 42b | claude/blissful-ritchie-e672ur | #579 | ✅ |
 | 43 | claude/blissful-ritchie-6709o7 | #576 | ✅ |
 | 43b | claude/awesome-albattani-xaqlhj | #587 | ✅ |
-| 44 | claude/keen-dirac-a53ki2 | — | ⏳ |
+| 44 | claude/keen-dirac-a53ki2 | #590 | ⏳ |
