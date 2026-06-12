@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="login_welcome_back">Bem-vindo de volta</string>
+    <string name="login_username_label">Nome de usuário</string>
+    <string name="login_password_label">Senha</string>
+    <string name="login_button">Entrar</string>
+</resources>

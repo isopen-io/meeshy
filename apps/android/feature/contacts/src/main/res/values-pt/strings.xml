@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="contacts_title">Contatos</string>
+    <string name="contacts_back">Voltar</string>
+    <string name="contacts_tab_contacts">Contatos</string>
+    <string name="contacts_tab_requests">Solicitações</string>
+    <string name="contacts_tab_discover">Descobrir</string>
+    <string name="contacts_tab_blocked">Bloqueados</string>
+    <string name="contacts_coming_soon">Em breve</string>
+</resources>
