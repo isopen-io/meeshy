@@ -15,4 +15,5 @@
     <string name="bubble_file_size_kb">%1$s KB</string>
     <string name="bubble_file_size_mb">%1$s MB</string>
     <string name="image_viewer_close">Fechar</string>
+    <string name="bubble_hidden_images">mais %1$d imagens</string>
 </resources>
