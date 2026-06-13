@@ -663,8 +663,21 @@ struct FeedView: View {
                 viewModel.setTranslationOverride(postId: postId, language: language)
             },
             onTapPost: { post in
-                router.push(.postDetail(post.id, post))
-                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+                if post.isReel {
+                    // Reels open straight into the immersive full-screen pager,
+                    // seeded with the feed's reels, never the detail page.
+                    HapticFeedback.medium()
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                        ReelsPresenter.shared.present(
+                            posts: viewModel.posts,
+                            startId: post.id
+                        )
+                    }
+                    Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+                } else {
+                    router.push(.postDetail(post.id, post))
+                    Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+                }
             },
             onTapRepost: { repostId in
                 router.push(.postDetail(repostId))

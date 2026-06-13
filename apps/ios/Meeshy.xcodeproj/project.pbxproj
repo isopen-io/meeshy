@@ -126,6 +126,8 @@
 		AA00BB11CC22DD33EE44002A /* PostModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE44001A /* PostModels.swift */; };
 		AA00BB11CC22DD33EE44002B /* StoryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE44001B /* StoryModels.swift */; };
 		AA00BB11CC22DD33EE440070 /* PostDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440080 /* PostDetailView.swift */; };
+		AA00BB11CC22DD33EE4400A1 /* ReelsPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE4400B1 /* ReelsPlayerView.swift */; };
+		AA00BB11CC22DD33EE4400A2 /* ReelsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE4400B2 /* ReelsViewModel.swift */; };
 		AA00BB11CC22DD33EE440071 /* BookmarksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440081 /* BookmarksView.swift */; };
 		AA00BB11CC22DD33EE440072 /* PostTranslationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440082 /* PostTranslationSheet.swift */; };
 		AA00BB11CC22DD33EE440073 /* PostDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440083 /* PostDetailViewModel.swift */; };
@@ -710,6 +712,8 @@
 		AA00BB11CC22DD33EE440032 /* FeedPostCard+Media.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FeedPostCard+Media.swift"; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440033 /* FeedCommentsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedCommentsSheet.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440080 /* PostDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostDetailView.swift; sourceTree = "<group>"; };
+		AA00BB11CC22DD33EE4400B1 /* ReelsPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelsPlayerView.swift; sourceTree = "<group>"; };
+		AA00BB11CC22DD33EE4400B2 /* ReelsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelsViewModel.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440081 /* BookmarksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarksView.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440082 /* PostTranslationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostTranslationSheet.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440083 /* PostDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostDetailViewModel.swift; sourceTree = "<group>"; };
@@ -1385,6 +1389,7 @@
 				EE88FF99AA00BB11CC220002 /* EmojiPickerSheet.swift */,
 				AA00BB11CC22DD33EE440033 /* FeedCommentsSheet.swift */,
 				AA00BB11CC22DD33EE440080 /* PostDetailView.swift */,
+				AA00BB11CC22DD33EE4400B1 /* ReelsPlayerView.swift */,
 				AA00BB11CC22DD33EE440081 /* BookmarksView.swift */,
 				EDIT001A001A001A001A0001 /* EditProfileView.swift */,
 				FRRL001A001A001A001A0001 /* FriendRequestListView.swift */,
@@ -1628,6 +1633,7 @@
 				CSHDR001A001A001A001A0001 /* ConversationSocketHandler.swift */,
 				F6A7B8C9D0E1F2A3B4C5D6E7 /* FeedViewModel.swift */,
 				AA00BB11CC22DD33EE440083 /* PostDetailViewModel.swift */,
+				AA00BB11CC22DD33EE4400B2 /* ReelsViewModel.swift */,
 				AA00BB11CC22DD33EE440084 /* BookmarksViewModel.swift */,
 				BB22CC33DD44EE55FF660022 /* StoryViewModel.swift */,
 				SESVM00000000001F28 /* StoryExportShareViewModel.swift */,
@@ -2357,6 +2363,8 @@
 				NEWCONV002A3B4C5D6E7F8901 /* NewConversationView.swift in Sources */,
 				AA00BB11CC22DD33EE440023 /* FeedCommentsSheet.swift in Sources */,
 				AA00BB11CC22DD33EE440070 /* PostDetailView.swift in Sources */,
+				AA00BB11CC22DD33EE4400A1 /* ReelsPlayerView.swift in Sources */,
+				AA00BB11CC22DD33EE4400A2 /* ReelsViewModel.swift in Sources */,
 				AA00BB11CC22DD33EE440072 /* PostTranslationSheet.swift in Sources */,
 				AA00BB11CC22DD33EE440071 /* BookmarksView.swift in Sources */,
 				AA00BB11CC22DD33EE440021 /* FeedPostCard.swift in Sources */,

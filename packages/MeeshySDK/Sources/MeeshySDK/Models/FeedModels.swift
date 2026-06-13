@@ -472,3 +472,44 @@ extension FeedPost: Equatable {
 extension FeedPost: Hashable {
     public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
+
+// MARK: - Reel Classification
+public extension FeedPost {
+    /// A *reel* is a standard feed post surfaced as an immersive, full-screen
+    /// vertical experience instead of a detail page. It is derived purely from
+    /// the post's media composition — there is no server-side reel type, so the
+    /// feed contract stays unchanged: a post becomes a reel as soon as it
+    /// carries playable or visual media (a video, one or more images, or audio
+    /// alone or alongside images). Text-only posts, stories, statuses and
+    /// reposts are never reels.
+    var isReel: Bool {
+        guard isReelEligible else { return false }
+        return media.contains { $0.type == .image || $0.type == .video || $0.type == .audio }
+    }
+
+    /// Eligible types: a standard `POST` (or an untyped post, which the API
+    /// treats as `POST`). Stories/statuses have their own full-screen viewer;
+    /// reposts render as quote blocks in the feed and must keep their detail
+    /// page so the quoted context stays visible.
+    private var isReelEligible: Bool {
+        guard repost == nil else { return false }
+        let normalized = (type ?? "POST").uppercased()
+        return normalized.isEmpty || normalized == "POST"
+    }
+
+    /// Media surfaced first when the reel opens full-screen: the first video,
+    /// else the first audio, else the first image. `nil` when the post is not a
+    /// reel.
+    var primaryReelMedia: FeedMedia? {
+        guard isReel else { return nil }
+        if let video = media.first(where: { $0.type == .video }) { return video }
+        if let audio = media.first(where: { $0.type == .audio }) { return audio }
+        return media.first(where: { $0.type == .image })
+    }
+
+    /// Filters a feed page down to the posts that should open as reels,
+    /// preserving order. Seeds the reel pager from the already-loaded feed.
+    static func reels(from posts: [FeedPost]) -> [FeedPost] {
+        posts.filter(\.isReel)
+    }
+}
