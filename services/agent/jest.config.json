@@ -6,7 +6,8 @@
   "moduleNameMapper": {
     "^@meeshy/shared/prisma/client$": "<rootDir>/src/__mocks__/prisma-client.ts",
     "^@meeshy/shared/(.*)$": "<rootDir>/../../packages/shared/$1",
-    "^@meeshy/shared$": "<rootDir>/../../packages/shared/types/index"
+    "^@meeshy/shared$": "<rootDir>/../../packages/shared/types/index",
+    "^(\\.{1,2}/.*)\\.js$": "$1"
   },
   "transform": {
     "^.+\\.tsx?$": ["ts-jest", {

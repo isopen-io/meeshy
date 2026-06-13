@@ -29,7 +29,7 @@ export function ConversationEncryptionSection({
   conversationId,
   canEnable,
 }: ConversationEncryptionSectionProps) {
-  const { t } = useI18n('conversations');
+  const { t, locale } = useI18n('conversations');
   const [status, setStatus] = useState<EncryptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [enabling, setEnabling] = useState(false);
@@ -132,7 +132,7 @@ export function ConversationEncryptionSection({
                 {status.enabledAt && (
                   <p className="text-[11px] text-muted-foreground">
                     {t('conversationDetails.encryption.enabledOn', {
-                      date: new Date(status.enabledAt).toLocaleDateString(),
+                      date: new Date(status.enabledAt).toLocaleDateString(locale),
                     })}
                   </p>
                 )}

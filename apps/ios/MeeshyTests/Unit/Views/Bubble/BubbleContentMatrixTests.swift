@@ -610,4 +610,25 @@ final class BubbleBodyFooterLayoutHeightTests: XCTestCase {
         XCTAssertEqual(height, 40, "the re-measured height is reported, not the stale probe height")
         XCTAssertEqual(remeasuredWidth, 96, "re-measure happens at the resolved (widened) width")
     }
+
+    // MARK: cacheUsable (off-main layout pass must skip the @MainActor cache)
+
+    func test_cacheUsable_finiteWidthOnMainThread_isTrue() {
+        XCTAssertTrue(BubbleBodyFooterLayout.cacheUsable(proposedWidth: 320, isMainThread: true))
+    }
+
+    func test_cacheUsable_offMainThread_isFalse() {
+        // iOS 26 measures cells on com.apple.SwiftUI.AsyncRenderer; consulting
+        // the @MainActor cache there traps (`assumeIsolated`) — 5 device crashes
+        // 2026-06-10..12. Off-main passes must measure directly instead.
+        XCTAssertFalse(BubbleBodyFooterLayout.cacheUsable(proposedWidth: 320, isMainThread: false))
+    }
+
+    func test_cacheUsable_infiniteWidth_isFalse() {
+        XCTAssertFalse(BubbleBodyFooterLayout.cacheUsable(proposedWidth: .infinity, isMainThread: true))
+    }
+
+    func test_cacheUsable_nanWidth_isFalse() {
+        XCTAssertFalse(BubbleBodyFooterLayout.cacheUsable(proposedWidth: .nan, isMainThread: true))
+    }
 }

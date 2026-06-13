@@ -60,6 +60,7 @@ struct CameraView: View {
                     .frame(width: 44, height: 44)
                     .background(Circle().fill(.black.opacity(0.3)))
             }
+            .accessibilityLabel(String(localized: "camera.close", defaultValue: "Fermer", bundle: .main))
 
             Spacer()
 
@@ -70,6 +71,7 @@ struct CameraView: View {
                     .frame(width: 44, height: 44)
                     .background(Circle().fill(.black.opacity(0.3)))
             }
+            .accessibilityLabel(flashAccessibilityLabel)
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
@@ -80,6 +82,14 @@ struct CameraView: View {
         case .on: return "bolt.fill"
         case .auto: return "bolt.badge.automatic.fill"
         default: return "bolt.slash.fill"
+        }
+    }
+
+    private var flashAccessibilityLabel: String {
+        switch flashMode {
+        case .on: return String(localized: "camera.flash.on", defaultValue: "Flash active", bundle: .main)
+        case .auto: return String(localized: "camera.flash.auto", defaultValue: "Flash automatique", bundle: .main)
+        default: return String(localized: "camera.flash.off", defaultValue: "Flash desactive", bundle: .main)
         }
     }
 
@@ -114,6 +124,7 @@ struct CameraView: View {
                         .frame(width: 50, height: 50)
                         .background(Circle().fill(.white.opacity(0.15)))
                 }
+                .accessibilityLabel(String(localized: "camera.switch", defaultValue: "Changer de camera", bundle: .main))
 
                 Spacer()
             }

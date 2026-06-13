@@ -1,10 +1,11 @@
 import React from 'react';
 import { Medal } from 'lucide-react';
 import { MEDAL_COLORS } from './constants';
+import { getCurrentInterfaceLocale } from '@/stores/language-store';
 
-export function formatCount(count: number | undefined): string {
+export function formatCount(count: number | undefined, locale: string = getCurrentInterfaceLocale()): string {
   if (count === undefined) return '0';
-  return count.toLocaleString('fr-FR');
+  return count.toLocaleString(locale);
 }
 
 export function getRankBadge(rank: number) {

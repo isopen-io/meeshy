@@ -38,6 +38,14 @@ struct FeedView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var statusViewModel: StatusViewModel
+    // Stories in the iPad feed: the tray reads the shared StoryViewModel (loaded
+    // by `iPadRootView`). FeedView is iPad-only, so these objects are always
+    // injected by `iPadRootView`'s environment.
+    @EnvironmentObject private var storyViewModel: StoryViewModel
+    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    @State private var showStoryViewer = false
+    @State private var selectedStoryUserId: String?
+    @State private var storyViewerSingleGroup = false
     @StateObject var viewModel = FeedViewModel()
     /// When true, use the UIKit-backed FeedListView for high-performance scrolling.
     /// Set to false to keep the existing SwiftUI ScrollView path.
@@ -49,6 +57,9 @@ struct FeedView: View {
     @State var composerText = ""
     @State private var expandedComments: Set<String> = []
     @State var postVisibility: String = "PUBLIC"
+    /// Media posts default to a REEL; the author can force a plain POST via the
+    /// composer's Réel⇄Post toggle, keeping it out of the reels surface.
+    @State var composerForcePlainPost = false
     @State private var showAudioComposer = false
     @State var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State var showComposerLanguagePicker = false
@@ -593,10 +604,10 @@ struct FeedView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 20)
-                .fill(theme.surfaceGradient(tint: "4ECDC4"))
+                .fill(theme.surfaceGradient(tint: MeeshyColors.brandPrimaryHex))
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(theme.border(tint: "4ECDC4", intensity: 0.25), lineWidth: 1)
+                        .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.25), lineWidth: 1)
                 )
         )
         .padding(.horizontal, 16)
@@ -655,8 +666,21 @@ struct FeedView: View {
                 viewModel.setTranslationOverride(postId: postId, language: language)
             },
             onTapPost: { post in
-                router.push(.postDetail(post.id, post))
-                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+                if post.isReel {
+                    // Reels open straight into the immersive full-screen pager,
+                    // seeded with the feed's reels, never the detail page.
+                    HapticFeedback.medium()
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                        ReelsPresenter.shared.present(
+                            posts: viewModel.posts,
+                            startId: post.id
+                        )
+                    }
+                    Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+                } else {
+                    router.push(.postDetail(post.id, post))
+                    Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+                }
             },
             onTapRepost: { repostId in
                 router.push(.postDetail(repostId))
@@ -704,6 +728,14 @@ struct FeedView: View {
                     // le haut. L'id est attache a un Color.clear de hauteur 0
                     // au sommet du contenu.
                     Color.clear.frame(height: 0).id("feed-top")
+
+                    // Story tray — same component used by the conversation list
+                    // and the iPhone feed so stories load identically here.
+                    StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
+                        selectedStoryUserId = userId
+                        storyViewerSingleGroup = false
+                        showStoryViewer = true
+                    })
 
                     // Composer placeholder
                     composerPlaceholder
@@ -853,6 +885,9 @@ struct FeedView: View {
             // is stale.
             await hydrateBookmarkSeeding()
             viewModel.subscribeToSocketEvents()
+            // Load stories for the tray (same call as the conversation list /
+            // iPhone feed). Cheap no-op when already loaded by iPadRootView.
+            await storyViewModel.loadStories()
         }
         .adaptiveOnChange(of: viewModel.posts) { _, newPosts in
             // Merge liked / bookmarked / reposted state when new pages
@@ -909,6 +944,26 @@ struct FeedView: View {
                     await publishAudioPost(audioURL: audioURL, mimeType: mimeType, transcription: transcription, originalLanguage: transcription?.language)
                 }
             }
+        }
+        // Story viewer opened from the tray (mirror of the iPhone feed overlay).
+        // fullScreenCover creates a fresh environment, so re-inject the objects
+        // StoryViewerContainer / its inner SharePickerView read.
+        .fullScreenCover(isPresented: $showStoryViewer) {
+            StoryViewerContainer(
+                viewModel: storyViewModel,
+                userId: selectedStoryUserId,
+                isPresented: $showStoryViewer,
+                onReplyToStory: { replyContext in
+                    showStoryViewer = false
+                    router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
+                },
+                singleGroup: storyViewerSingleGroup,
+                startAtFirstUnviewed: true,
+                presentationSource: "iPadFeed"
+            )
+            .environmentObject(router)
+            .environmentObject(statusViewModel)
+            .environmentObject(conversationListViewModel)
         }
         .sheet(isPresented: $showComposerLanguagePicker) {
             AudioLanguagePickerView(
@@ -985,8 +1040,6 @@ struct FeedView: View {
                     MeeshyAvatar(
                         name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
                         context: .feedComposer,
-                        accentColor: "FF6B6B",
-                        secondaryColor: "4ECDC4",
                         avatarURL: AuthManager.shared.currentUser?.avatar
                     )
 
@@ -1014,6 +1067,27 @@ struct FeedView: View {
                             }
                             .foregroundColor(theme.textMuted)
                         }
+                    }
+
+                    // Réel ⇄ Post toggle — media posts default to a reel; the
+                    // author can force a plain post to keep it out of reels.
+                    if !pendingAttachments.isEmpty || pendingAudioURL != nil {
+                        Button {
+                            composerForcePlainPost.toggle()
+                            HapticFeedback.light()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: composerForcePlainPost ? "doc.text" : "play.rectangle.on.rectangle.fill")
+                                    .font(.caption2)
+                                Text(composerForcePlainPost
+                                    ? String(localized: "feed.composer.type.post", defaultValue: "Post", bundle: .main)
+                                    : String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main))
+                                    .font(.caption)
+                            }
+                            .foregroundColor(composerForcePlainPost ? theme.textMuted : MeeshyColors.indigo300)
+                        }
+                        .padding(.leading, 12)
+                        .accessibilityHint(String(localized: "feed.composer.type.hint", defaultValue: "Bascule entre réel et post", bundle: .main))
                     }
 
                     Spacer()
@@ -1054,7 +1128,7 @@ struct FeedView: View {
 
                 // Upload progress
                 if isUploading, let progress = uploadProgress {
-                    UploadProgressBar(progress: progress, accentColor: "4ECDC4")
+                    UploadProgressBar(progress: progress, accentColor: MeeshyColors.brandPrimaryHex)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 4)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -1067,7 +1141,7 @@ struct FeedView: View {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "4ECDC4"))
+                            .foregroundColor(MeeshyColors.brandPrimary)
                     }
                     .accessibilityLabel(String(localized: "Ajouter une photo", defaultValue: "Ajouter une photo"))
                     Button { showCamera = true; HapticFeedback.light() } label: {
@@ -1097,7 +1171,7 @@ struct FeedView: View {
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "FF2E63"))
+                            .foregroundColor(MeeshyColors.errorStrong)
                     }
                     .accessibilityLabel(String(localized: "Enregistrer un audio", defaultValue: "Enregistrer un audio"))
 
@@ -1134,7 +1208,7 @@ struct FeedView: View {
             .clipShape(RoundedRectangle(cornerRadius: 24))
             .overlay(
                 RoundedRectangle(cornerRadius: 24)
-                    .stroke(theme.border(tint: "4ECDC4", intensity: 0.3), lineWidth: 1)
+                    .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.3), lineWidth: 1)
             )
             .padding(.horizontal, 16)
             .padding(.vertical, 80)
@@ -1158,7 +1232,7 @@ struct FeedView: View {
             .ignoresSafeArea()
         }
         .sheet(isPresented: $showLocationPicker) {
-            LocationPickerView(accentColor: "4ECDC4") { coordinate, address in
+            LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { coordinate, address in
                 handleFeedLocationSelection(coordinate: coordinate, address: address)
             }
         }

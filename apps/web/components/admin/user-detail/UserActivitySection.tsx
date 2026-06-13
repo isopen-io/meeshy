@@ -20,6 +20,7 @@ import {
 
 import { apiService } from '@/services/api.service';
 import { useI18n } from '@/hooks/use-i18n';
+import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 
 interface ShareLink {
   id: string;
@@ -87,10 +88,10 @@ interface ActivityData {
   };
 }
 
-function formatDate(date: string | null) {
+function formatDate(date: string | null, locale: string) {
   if (!date) return 'N/A';
   try {
-    return new Date(date).toLocaleDateString('fr-FR', {
+    return new Date(date).toLocaleDateString(locale, {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -146,7 +147,7 @@ function CollapsibleSection({
 }
 
 function ShareLinkCard({ link }: { link: ShareLink }) {
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   const expired = isExpired(link.expiresAt);
   return (
     <div className="p-3 border dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 space-y-2">
@@ -170,7 +171,7 @@ function ShareLinkCard({ link }: { link: ShareLink }) {
         </div>
         <div className="flex items-center gap-1">
           <Clock className="h-3 w-3" />
-          <span>{t('usersDetail.createdOnLabel', { date: formatDate(link.createdAt) })}</span>
+          <span>{t('usersDetail.createdOnLabel', { date: formatDate(link.createdAt, locale) })}</span>
         </div>
         {link.conversation?.identifier && (
           <div className="flex items-center gap-1">
@@ -184,7 +185,7 @@ function ShareLinkCard({ link }: { link: ShareLink }) {
 }
 
 function TrackingLinkCard({ link }: { link: TrackingLink }) {
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   const expired = isExpired(link.expiresAt);
   const conversionRate = link.totalClicks > 0
     ? ((link.uniqueClicks / link.totalClicks) * 100).toFixed(1)
@@ -223,15 +224,15 @@ function TrackingLinkCard({ link }: { link: TrackingLink }) {
         </div>
       </div>
       <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-        <span>{t('usersDetail.createdOnLabel', { date: formatDate(link.createdAt) })}</span>
-        {link.lastClickedAt && <span>{t('usersDetail.lastClickLabel', { date: formatDate(link.lastClickedAt) })}</span>}
+        <span>{t('usersDetail.createdOnLabel', { date: formatDate(link.createdAt, locale) })}</span>
+        {link.lastClickedAt && <span>{t('usersDetail.lastClickLabel', { date: formatDate(link.lastClickedAt, locale) })}</span>}
       </div>
     </div>
   );
 }
 
 function AffiliateTokenCard({ token }: { token: AffiliateToken }) {
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   const expired = isExpired(token.expiresAt);
   const conversionRate = token.clickCount > 0
     ? ((token._count.affiliations / token.clickCount) * 100).toFixed(1)
@@ -263,7 +264,7 @@ function AffiliateTokenCard({ token }: { token: AffiliateToken }) {
         </div>
       </div>
       <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-        <span>{t('usersDetail.createdOnLabel', { date: formatDate(token.createdAt) })}</span>
+        <span>{t('usersDetail.createdOnLabel', { date: formatDate(token.createdAt, locale) })}</span>
         <span>{t('usersDetail.usageLabel', { current: String(token.currentUses), max: token.maxUses ? `/${token.maxUses}` : '' })}</span>
       </div>
     </div>
@@ -271,6 +272,7 @@ function AffiliateTokenCard({ token }: { token: AffiliateToken }) {
 }
 
 function ContactCard({ request, direction }: { request: ContactRequest; direction: 'sent' | 'received' }) {
+  const locale = useCurrentInterfaceLanguage();
   const person = direction === 'sent' ? request.receiver : request.sender;
   if (!person) return null;
 
@@ -302,7 +304,7 @@ function ContactCard({ request, direction }: { request: ContactRequest; directio
         <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[request.status] || statusColors.pending}`}>
           {request.status}
         </span>
-        <span className="text-xs text-gray-400">{formatDate(request.createdAt)}</span>
+        <span className="text-xs text-gray-400">{formatDate(request.createdAt, locale)}</span>
       </div>
     </div>
   );

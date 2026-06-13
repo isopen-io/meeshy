@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { listArchetypes, getArchetype } from '@meeshy/shared/agent/archetypes';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { isScanActive } from '@meeshy/shared/types/agent';
+import { AGENT_ADMIN_EVENT_CHANNEL, type AgentAdminEventData, type AgentAdminEventKind } from '@meeshy/shared/types/socketio-events';
 import { logError } from '../../utils/logger';
 import { getCacheStore } from '../../services/CacheStore';
 import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError, sendPaginatedSuccess } from '../../utils/response';
@@ -222,6 +223,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   // the route still succeeds, but the caller gets a status object so the
   // admin UI can surface partial failures.
   async function broadcastInvalidation(payload: { conversationId?: string; global?: boolean }): Promise<InvalidationStatus> {
+    notifyAdminDashboards('config', payload.conversationId);
     const status: InvalidationStatus = {
       redisPublishOk: false,
       redisSubscribersNotified: 0,
@@ -255,6 +257,14 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     // as success would make the toast lie to the admin.
     status.anyChannelSucceeded = status.redisSubscribersNotified > 0 || status.httpInvalidateOk;
     return status;
+  }
+
+  // Push temps réel vers les dashboards admin (room Socket.IO admin:agent via
+  // AgentAdminRelay). Best-effort : un échec de publish ne fait pas échouer la route.
+  function notifyAdminDashboards(kind: AgentAdminEventKind, conversationId?: string): void {
+    const payload: AgentAdminEventData = conversationId ? { kind, conversationId } : { kind };
+    getCacheStore().publish(AGENT_ADMIN_EVENT_CHANNEL, JSON.stringify(payload)).catch((err) =>
+      fastify.log.warn({ err }, '[AgentAdmin] admin-event publish failed'));
   }
 
   // GET /stats
@@ -718,6 +728,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         },
       });
 
+      notifyAdminDashboards('config', conversationId);
       return sendSuccess(reply, role);
     } catch (error) {
       logError(fastify.log, 'Error assigning archetype:', error);
@@ -745,6 +756,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         where: { userId_conversationId: { userId, conversationId } },
         data: { locked: false, confidence: 0 },
       });
+      notifyAdminDashboards('config', conversationId);
       return sendSuccess(reply, role);
     } catch (error) {
       logError(fastify.log, 'Error unlocking role:', error);
@@ -1370,6 +1382,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         where: { conversationId },
         data: { scanStartedAt: null, currentNode: null },
       });
+      notifyAdminDashboards('scan', conversationId);
 
       if (!agentClient) {
         return sendSuccess(reply, { conversationId, stopped: true, agentUnavailable: true });
@@ -1412,6 +1425,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       const cache = getCacheStore();
       await cache.set(`agent:last-scan:${conversationId}`, '0', 86400);
       await cache.publish('agent:trigger-scan', JSON.stringify({ conversationId }));
+      notifyAdminDashboards('scan', conversationId);
 
       return sendSuccess(reply, {
         conversationId,

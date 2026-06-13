@@ -258,7 +258,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
       // Validation du fichier
       const validation = validateAvatarFile(file);
       if (!validation.valid) {
-        toast.error(validation.error || 'Fichier invalide');
+        toast.error(validation.error || t('profile.avatar.invalidFile', 'Fichier invalide'));
         return;
       }
 
@@ -278,7 +278,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
       // Validation du fichier
       const validation = validateAvatarFile(file);
       if (!validation.valid) {
-        toast.error(validation.error || 'Fichier invalide');
+        toast.error(validation.error || t('profile.avatar.invalidFile', 'Fichier invalide'));
         return;
       }
 
@@ -350,7 +350,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
       setAvatarPreview(null);
     } catch (error) {
       console.error('Erreur lors de l\'upload:', error);
-      toast.error(error instanceof Error ? error.message : 'Erreur lors de l\'upload de l\'avatar');
+      toast.error(error instanceof Error ? error.message : t('profile.avatar.uploadError', 'Erreur lors de l\'upload de l\'avatar'));
     } finally {
       setIsUploadingAvatar(false);
     }

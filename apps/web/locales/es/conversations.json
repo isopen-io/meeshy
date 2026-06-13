@@ -322,7 +322,8 @@
       "fallbackUser": "Usuario",
       "reactionAdded": "Reacción {emoji} añadida",
       "reactionRemoved": "Reacción eliminada",
-      "inviteSearchPlaceholder": "Buscar usuarios..."
+      "inviteSearchPlaceholder": "Buscar usuarios...",
+      "editPhoto": "Editar"
     },
     "conversationImage": {
       "title": "Cambiar la imagen de la conversación",
@@ -477,7 +478,13 @@
         "MEMBER": "Miembro",
         "MODERATOR": "Moderador",
         "ADMIN": "Administrador"
-      }
+      },
+      "addUserSection": "Añadir un usuario",
+      "addAction": "Añadir",
+      "noUserFound": "Ningún usuario encontrado",
+      "allAlreadyMembersOne": "1 usuario encontrado — ya es miembro",
+      "allAlreadyMembersOther": "{count} usuarios encontrados — todos ya son miembros",
+      "loadMoreRemaining": "Cargar más ({count} restantes)"
     },
     "createLinkButton": {
       "notAuthenticated": "No se puede crear el enlace: usuario no conectado",
@@ -651,6 +658,25 @@
       "todayAt": "Hoy a las {time}",
       "yesterdayAt": "Ayer a las {time}",
       "dayAt": "{day} a las {time}"
+    },
+    "timeCompact": {
+      "now": "ahora",
+      "minutes": "{count} min",
+      "hours": "{count}h",
+      "days": "{count}d"
+    },
+    "v2chat": {
+      "someoneTyping": "Alguien está escribiendo…",
+      "online": "En línea",
+      "participants": "{count} participantes",
+      "audioCall": "Llamada de audio",
+      "options": "Opciones",
+      "reply": "Responder",
+      "react": "Reaccionar",
+      "replyPlaceholder": "Responder…",
+      "writeMessage": "Escribe tu mensaje…",
+      "file": "Archivo",
+      "document": "Documento"
     }
   }
 }

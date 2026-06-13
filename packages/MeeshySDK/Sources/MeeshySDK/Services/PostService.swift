@@ -202,6 +202,8 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
             return try await create(content: content, type: "STATUS", visibility: visibility, moodEmoji: moodEmoji)
         case .post:
             return try await create(content: content, type: "POST", visibility: visibility)
+        case .reel:
+            return try await create(content: content, type: "REEL", visibility: visibility)
         }
     }
 

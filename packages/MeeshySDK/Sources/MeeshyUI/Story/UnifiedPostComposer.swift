@@ -299,7 +299,7 @@ public struct UnifiedPostComposer: View {
     @ViewBuilder
     private var contentArea: some View {
         switch selectedType {
-        case .post:
+        case .post, .reel:
             postComposer
         case .status:
             statusComposer
@@ -577,7 +577,7 @@ public struct UnifiedPostComposer: View {
 
     private var canPublish: Bool {
         switch selectedType {
-        case .post: return !content.isEmpty
+        case .post, .reel: return !content.isEmpty
         case .status: return moodEmoji != nil
         case .story: return true
         }

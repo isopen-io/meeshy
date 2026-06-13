@@ -1464,12 +1464,14 @@ public struct StoryEffects: Codable, Sendable {
 
 public enum PostType: String, CaseIterable, Sendable {
     case post = "POST"
+    case reel = "REEL"
     case story = "STORY"
     case status = "STATUS"
 
     public var displayName: String {
         switch self {
         case .post: return "Post"
+        case .reel: return "Réel"
         case .story: return "Story"
         case .status: return "Status"
         }
@@ -1478,6 +1480,7 @@ public enum PostType: String, CaseIterable, Sendable {
     public var icon: String {
         switch self {
         case .post: return "square.and.pencil"
+        case .reel: return "play.rectangle.on.rectangle.fill"
         case .story: return "camera.fill"
         case .status: return "face.smiling"
         }

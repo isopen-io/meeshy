@@ -99,7 +99,7 @@ describe('posts/postIncludes — canonical shared selects', () => {
       // PostAudioService used to drop the OR clause, silently filtering them
       // out of the `post:updated` broadcast. The shared shape MUST keep both.
       expect(commentsPreviewInclude.where).toEqual({
-        isDeleted: false,
+        deletedAt: null,
         OR: [{ parentId: null }, { parentId: { isSet: false } }],
       });
     });

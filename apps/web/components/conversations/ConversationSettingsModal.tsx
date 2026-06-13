@@ -1046,7 +1046,7 @@ export function ConversationSettingsModal({
                               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-full flex items-center justify-center">
                                 <div className="flex flex-col items-center gap-1 text-white">
                                   <ImagePlus className="h-5 w-5 sm:h-6 sm:w-6" />
-                                  <p className="text-xs font-medium">Modifier</p>
+                                  <p className="text-xs font-medium">{t('conversationDetails.editPhoto')}</p>
                                 </div>
                               </div>
                             </div>

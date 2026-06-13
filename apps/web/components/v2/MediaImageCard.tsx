@@ -404,7 +404,7 @@ export function MediaImageCard({
                   <span className="hidden sm:inline">{selectedTranslation.languageName}</span>
                   {selectedTranslation.isOriginal && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full hidden sm:inline bg-[var(--gp-parchment)] text-[var(--gp-text-muted)] transition-colors duration-300">
-                      Original
+                      {tComponents('language.original')}
                     </span>
                   )}
                   {otherTranslations.length > 0 && (
@@ -418,7 +418,7 @@ export function MediaImageCard({
                     {/* Current selection indicator */}
                     <div className="px-3 py-2 text-xs font-medium border-b border-[var(--gp-border)] text-[var(--gp-text-muted)] bg-[var(--gp-parchment)] transition-colors duration-300">
                       <GlobeIcon className="w-3.5 h-3.5 inline mr-1.5" />
-                      Caption Language
+                      {tComponents('language.captionLanguage')}
                     </div>
 
                     {/* All translation options */}
@@ -441,7 +441,7 @@ export function MediaImageCard({
                           <span className="flex-1 font-medium">{translation.languageName}</span>
                           {translation.isOriginal && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--gp-parchment)] text-[var(--gp-text-muted)] transition-colors duration-300">
-                              Original
+                              {tComponents('language.original')}
                             </span>
                           )}
                           {isSelected && (

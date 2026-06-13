@@ -10,6 +10,7 @@ import {
 } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
+import { useAgentAdminEvents } from '@/hooks/admin/use-agent-admin-events';
 import DeliveryQueueItemCard from './DeliveryQueueItemCard';
 
 type DeliveryQueuePanelProps = {
@@ -41,9 +42,16 @@ export default memo(function DeliveryQueuePanel({ conversationId }: DeliveryQueu
   useEffect(() => {
     setLoading(true);
     fetchQueue();
-    const interval = setInterval(fetchQueue, 10_000);
+    // Filet de sécurité long : la fraîcheur vient des events admin push
+    const interval = setInterval(fetchQueue, 60_000);
     return () => clearInterval(interval);
   }, [fetchQueue]);
+
+  useAgentAdminEvents({
+    kinds: ['delivery-queue', 'scan'],
+    conversationId,
+    onChange: fetchQueue,
+  });
 
   const handleDelete = useCallback(async (id: string) => {
     try {

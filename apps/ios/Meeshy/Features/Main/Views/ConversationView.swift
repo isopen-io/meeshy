@@ -203,6 +203,15 @@ struct ConversationView: View {
     let conversation: Conversation?
     var replyContext: ReplyContext? = nil
     var anonymousSession: AnonymousSessionContext? = nil
+    /// Lightweight preview presentation (notification long-press overlay):
+    /// the composer hides file/photo attachments and exposes a view-once
+    /// toggle, while keeping text / voice / effects / blur / ephemeral. Default
+    /// `false` leaves the full conversation screen unchanged.
+    var previewMode: Bool = false
+    /// In `previewMode`, called when the user taps anywhere over the message
+    /// area (composer excluded) to leave the preview and open the full
+    /// conversation with a navigation transition.
+    var onOpenFullConversation: (() -> Void)? = nil
 
     // NOTE: Properties below are internal (not private) for cross-file extension access.
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
@@ -353,10 +362,12 @@ struct ConversationView: View {
 
     // MARK: - Init
 
-    init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil) {
+    init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil, previewMode: Bool = false, onOpenFullConversation: (() -> Void)? = nil) {
         self.conversation = conversation
         self.replyContext = replyContext
         self.anonymousSession = anonymousSession
+        self.previewMode = previewMode
+        self.onOpenFullConversation = onOpenFullConversation
         let vm = ConversationViewModel(
             conversationId: conversation?.id ?? "",
             unreadCount: conversation?.userState.unreadCount ?? 0,
@@ -709,7 +720,7 @@ struct ConversationView: View {
             .sheet(item: $overlayState.detailSheetMessage) { msg in
                 MessageDetailSheet(
                     message: msg,
-                    contactColor: conversation?.accentColor ?? "#FF2E63",
+                    contactColor: conversation?.accentColor ?? MeeshyColors.brandPrimaryHex,
                     conversationId: viewModel.conversationId,
                     initialTab: overlayState.detailSheetInitialTab,
                     canDelete: msg.isMe || isCurrentUserAdminOrMod,
@@ -898,6 +909,15 @@ struct ConversationView: View {
                 // (retour d'un fullScreenCover/sheet) — aucune frappe n'est
                 // possible pendant qu'elle est couverte.
                 composerText.onPersistNeeded = nil
+                // Arrêt déterministe des deux players locaux (scroll-button +
+                // preview d'audio en attente) : sans lui, l'audio continuait
+                // jusqu'au dealloc du @StateObject et la session restait
+                // acquise (refcount) le temps de la libération. Idempotent.
+                scrollButtonAudioPlayer.stop()
+                pendingAudioPlayer.stop()
+                if audioRecorder.isRecording {
+                    audioRecorder.cancelRecording()
+                }
             }
     }
 
@@ -1115,6 +1135,18 @@ struct ConversationView: View {
             // L'indicateur de frappe n'est PAS un overlay : c'est une vraie
             // cellule du flux de messages, rendue en dernier par
             // `MessageListViewController` (voir `MessageListItem.typingIndicator`).
+
+            // Notification preview: a tap anywhere over the message area opens
+            // the full conversation (navigation transition). The composer is
+            // excluded (bottom inset) so the user can still reply in place.
+            if previewMode {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { onOpenFullConversation?() }
+                    .padding(.bottom, composerHeight)
+                    .zIndex(49)
+                    .accessibilityLabel(String(localized: "conversation.preview.open", defaultValue: "Ouvrir la conversation", bundle: .main))
+            }
 
             floatingHeaderSection
 

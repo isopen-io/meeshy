@@ -15,14 +15,14 @@ export class PostCommentService {
   ) {
     // Verify post exists
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, isDeleted: false },
+      where: { id: postId, deletedAt: null },
     });
     if (!post) return null;
 
     // If parentId, verify parent exists
     if (parentId) {
       const parent = await this.prisma.postComment.findFirst({
-        where: { id: parentId, postId, isDeleted: false },
+        where: { id: parentId, postId, deletedAt: null },
       });
       if (!parent) throw new Error('PARENT_NOT_FOUND');
     }
@@ -71,7 +71,7 @@ export class PostCommentService {
 
     const where: any = {
       postId,
-      isDeleted: false,
+      deletedAt: null,
       OR: [{ parentId: null }, { parentId: { isSet: false } }],
     };
 
@@ -130,7 +130,7 @@ export class PostCommentService {
 
     const where: any = {
       parentId: commentId,
-      isDeleted: false,
+      deletedAt: null,
     };
 
     if (cursorData) {
@@ -185,14 +185,14 @@ export class PostCommentService {
 
   async deleteComment(commentId: string, userId: string) {
     const comment = await this.prisma.postComment.findFirst({
-      where: { id: commentId, isDeleted: false },
+      where: { id: commentId, deletedAt: null },
     });
     if (!comment) return null;
     if (comment.authorId !== userId) throw new Error('FORBIDDEN');
 
     await this.prisma.postComment.update({
       where: { id: commentId },
-      data: { isDeleted: true, deletedAt: new Date() },
+      data: { deletedAt: new Date() },
     });
 
     await this.prisma.post.update({
@@ -212,7 +212,7 @@ export class PostCommentService {
 
   async likeComment(commentId: string, userId: string, emoji: string = '❤️') {
     const comment = await this.prisma.postComment.findFirst({
-      where: { id: commentId, isDeleted: false },
+      where: { id: commentId, deletedAt: null },
     });
     if (!comment) return null;
 
@@ -238,7 +238,7 @@ export class PostCommentService {
 
   async unlikeComment(commentId: string, userId: string, emoji: string = '❤️') {
     const comment = await this.prisma.postComment.findFirst({
-      where: { id: commentId, isDeleted: false },
+      where: { id: commentId, deletedAt: null },
     });
     if (!comment) return null;
 

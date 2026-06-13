@@ -175,7 +175,7 @@ struct ThemedConversationRow: View {
                     }
 
                     // Timestamp — layoutPriority(1) pour ne jamais être écrasé
-                    Text(ShortRelativeTime.label(for: conversation.lastMessageAt))
+                    Text(RelativeTimeFormatter.shortString(for: conversation.lastMessageAt))
                         .font(.caption2.weight(.medium))
                         .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent))
                         .layoutPriority(1)
@@ -261,7 +261,7 @@ struct ThemedConversationRow: View {
                 parts.append(String(localized: "accessibility.last_message_preview", defaultValue: "dernier message : \(preview)", bundle: .main))
             }
         }
-        parts.append(ShortRelativeTime.label(for: conversation.lastMessageAt))
+        parts.append(RelativeTimeFormatter.shortString(for: conversation.lastMessageAt))
         if conversation.userState.unreadCount > 0 {
             parts.append(String(localized: "accessibility.unread_count", defaultValue: "\(conversation.userState.unreadCount) non lus", bundle: .main))
         }

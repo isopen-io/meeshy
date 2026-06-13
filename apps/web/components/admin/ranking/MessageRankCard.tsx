@@ -3,16 +3,17 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { RankingItem } from '@/hooks/use-ranking-data';
 import { RANKING_CRITERIA } from './constants';
 import { formatCount, getRankBadge, getMessageTypeIcon } from './utils';
+import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 
 interface MessageRankCardProps {
   item: RankingItem;
   criterion: string;
 }
 
-function formatDate(dateString: string | undefined) {
+function formatDate(dateString: string | undefined, locale: string) {
   if (!dateString) return 'N/A';
   const date = new Date(dateString);
-  return new Intl.DateTimeFormat('fr-FR', {
+  return new Intl.DateTimeFormat(locale, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -22,6 +23,7 @@ function formatDate(dateString: string | undefined) {
 }
 
 export const MessageRankCard = React.memo(({ item, criterion }: MessageRankCardProps) => {
+  const locale = useCurrentInterfaceLanguage();
   const currentCriterion = RANKING_CRITERIA.messages.find(c => c.value === criterion);
   const isTopThree = item.rank && item.rank <= 3;
 
@@ -65,7 +67,7 @@ export const MessageRankCard = React.memo(({ item, criterion }: MessageRankCardP
             {item.name}
           </p>
           <p className="text-xs text-gray-400 mt-1">
-            {formatDate(item.metadata?.createdAt)}
+            {formatDate(item.metadata?.createdAt, locale)}
           </p>
         </div>
       </div>
@@ -76,7 +78,7 @@ export const MessageRankCard = React.memo(({ item, criterion }: MessageRankCardP
             className: 'h-5 w-5 text-yellow-600'
           })}
           <span className="text-2xl font-bold text-yellow-600">
-            {formatCount(item.value)}
+            {formatCount(item.value, locale)}
           </span>
         </div>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">

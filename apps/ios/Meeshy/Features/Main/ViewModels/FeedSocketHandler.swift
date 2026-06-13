@@ -24,7 +24,11 @@ final class FeedSocketHandler {
 
     // MARK: - Lifecycle
 
+    /// Idempotent : appelé à CHAQUE apparition du feed (le `disarm()` de
+    /// l'`onDisappear` doit être ré-armé au retour, pas seulement au premier
+    /// setup) — sans la garde, des sinks dupliqués s'accumuleraient.
     func arm() {
+        guard cancellables.isEmpty else { return }
         // Post events
         socialSocket.postCreated
             .sink { [weak self] payload in

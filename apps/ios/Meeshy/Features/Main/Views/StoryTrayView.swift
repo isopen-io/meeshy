@@ -94,8 +94,8 @@ struct StoryTrayView: View {
                 let items = assets.slides.map { $0.toPreviewStoryItem() }
                 let group = StoryGroup(
                     id: "preview",
-                    username: "Aperçu",
-                    avatarColor: "FF2E63",
+                    username: String(localized: "story.preview.username", defaultValue: "Aperçu", bundle: .main),
+                    avatarColor: MeeshyColors.brandPrimaryHex,
                     stories: items
                 )
                 StoryViewerView(

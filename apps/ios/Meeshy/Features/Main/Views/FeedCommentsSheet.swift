@@ -497,7 +497,7 @@ struct CommentsSheetView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
-                    Text(timeAgo(from: post.timestamp))
+                    Text(RelativeTimeFormatter.shortString(for: post.timestamp))
                         .font(.system(size: 12))
                         .foregroundColor(theme.textMuted)
                 }
@@ -646,10 +646,6 @@ struct CommentsSheetView: View {
             focusTrigger: $composerFocusTrigger
         )
     }
-
-    private func timeAgo(from date: Date) -> String {
-        RelativeTimeFormatter.shortString(for: date)
-    }
 }
 
 // MARK: - Comment Row View
@@ -776,7 +772,7 @@ struct CommentRowView: View, Equatable {
 
                     Text("\u{00B7}").font(.system(size: 12)).foregroundColor(theme.textMuted)
 
-                    Text(timeAgo(from: comment.timestamp))
+                    Text(RelativeTimeFormatter.shortString(for: comment.timestamp))
                         .font(.system(size: 12))
                         .foregroundColor(theme.textMuted)
                 }
@@ -865,10 +861,6 @@ struct CommentRowView: View, Equatable {
             .presentationDragIndicator(.visible)
         }
         .withStatusBubble()
-    }
-
-    private func timeAgo(from date: Date) -> String {
-        RelativeTimeFormatter.shortString(for: date)
     }
 }
 

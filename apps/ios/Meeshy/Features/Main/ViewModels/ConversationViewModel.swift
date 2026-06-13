@@ -313,6 +313,10 @@ class ConversationViewModel: ObservableObject {
     /// When true, next message will be sent with blur (recipient must tap to reveal)
     @Published var isBlurEnabled: Bool = false
 
+    /// When true, next message will be sent as view-once (revealed once, then
+    /// burned). Surfaced by the notification preview composer.
+    @Published var isViewOnceEnabled: Bool = false
+
     /// Pending message effects selected via the effects picker
     @Published var pendingEffects: MessageEffects = .none
 
@@ -1560,10 +1564,18 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Sync Engine Observation
 
+    /// Slot dédié (et non `cancellables`) : `.task` re-fire à chaque
+    /// ré-apparition de l'écran — la ré-assignation remplace l'abonnement
+    /// précédent au lieu d'en accumuler N (chaque signal sync déclenchait
+    /// sinon N reloads cache + reconciliations redondants).
+    private var syncCancellable: AnyCancellable? {
+        willSet { syncCancellable?.cancel() }
+    }
+
     func observeSync() {
         let targetId = conversationId
         let publisher = syncEngine.messagesDidChange
-        publisher
+        syncCancellable = publisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] changedId in
                 guard changedId == targetId else { return }
@@ -1611,7 +1623,6 @@ class ConversationViewModel: ObservableObject {
                     }
                 }
             }
-            .store(in: &cancellables)
     }
 
     // MARK: - Load Older Messages (infinite scroll)
@@ -1992,6 +2003,7 @@ class ConversationViewModel: ObservableObject {
 
         if ephemeralDuration != nil { ephemeralDuration = nil }
         if isBlurEnabled { isBlurEnabled = false }
+        if isViewOnceEnabled { isViewOnceEnabled = false }
         if pendingEffects.hasAnyEffect { pendingEffects = .none }
         mentionController.clearDraft()
     }
@@ -2210,8 +2222,9 @@ class ConversationViewModel: ObservableObject {
         let resolvedExpiresAt = expiresAt ?? ephemeralDuration?.expiresAt
         let resolvedEphemeralDuration = ephemeralDuration?.rawValue
 
-        // Resolve view-once: explicit param or derive from ephemeralDuration
-        let resolvedIsViewOnce = isViewOnce ?? false
+        // Resolve view-once: explicit param, else the ViewModel toggle state
+        // (surfaced by the notification preview composer).
+        let resolvedIsViewOnce = isViewOnce ?? isViewOnceEnabled
         let resolvedMaxViewOnceCount = maxViewOnceCount
 
         // Resolve blur: use explicit param or ViewModel state

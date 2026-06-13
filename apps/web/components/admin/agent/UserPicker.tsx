@@ -10,6 +10,7 @@ import { useSearchUsersQuery } from '@/hooks/queries/use-users-query';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface UserPickerProps {
   userIds: string[];
@@ -19,7 +20,8 @@ interface UserPickerProps {
   placeholder?: string;
 }
 
-export function UserPicker({ userIds, onAdd, onRemove, label, placeholder = "Rechercher un utilisateur..." }: UserPickerProps) {
+export function UserPicker({ userIds, onAdd, onRemove, label, placeholder }: UserPickerProps) {
+  const { t } = useI18n('admin');
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch] = useDebounce(searchTerm, 500);
   const [open, setOpen] = useState(false);
@@ -31,7 +33,7 @@ export function UserPicker({ userIds, onAdd, onRemove, label, placeholder = "Rec
 
       <div className="flex flex-wrap gap-2 p-2 min-h-[44px] rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
         {userIds.length === 0 && (
-          <span className="text-sm text-gray-400 italic flex items-center px-2">Aucun utilisateur sélectionné</span>
+          <span className="text-sm text-gray-400 italic flex items-center px-2">{t('agent.userPicker.noneSelected')}</span>
         )}
         {userIds.map(id => (
           <div key={id} className="flex items-center gap-1 pl-1 pr-1 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800 group transition-all hover:bg-indigo-100 dark:hover:bg-indigo-900/50">
@@ -39,7 +41,7 @@ export function UserPicker({ userIds, onAdd, onRemove, label, placeholder = "Rec
             <button
               onClick={() => onRemove(id)}
               className="p-1 rounded-full text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-200 transition-colors"
-              title="Retirer"
+              title={t('agent.userPicker.remove')}
             >
               <X className="h-3 w-3" />
             </button>
@@ -48,7 +50,7 @@ export function UserPicker({ userIds, onAdd, onRemove, label, placeholder = "Rec
 
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full border border-dashed border-indigo-300 text-indigo-500 hover:bg-indigo-50" aria-label="Add user">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full border border-dashed border-indigo-300 text-indigo-500 hover:bg-indigo-50" aria-label={t('agent.userPicker.addUser')}>
               <Plus className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
@@ -58,7 +60,7 @@ export function UserPicker({ userIds, onAdd, onRemove, label, placeholder = "Rec
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
                   autoFocus
-                  placeholder={placeholder}
+                  placeholder={placeholder ?? t('agent.userPicker.searchPlaceholder')}
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                   className="pl-9 h-9 text-sm focus-visible:ring-indigo-500"
@@ -69,7 +71,7 @@ export function UserPicker({ userIds, onAdd, onRemove, label, placeholder = "Rec
               {loading ? (
                 <div className="flex flex-col items-center justify-center h-full p-4 gap-2">
                   <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />
-                  <span className="text-xs text-gray-400">Recherche...</span>
+                  <span className="text-xs text-gray-400">{t('agent.userPicker.searching')}</span>
                 </div>
               ) : results.length > 0 ? (
                 <div className="p-1">
@@ -93,7 +95,7 @@ export function UserPicker({ userIds, onAdd, onRemove, label, placeholder = "Rec
                         </div>
                       </div>
                       {userIds.includes(user.id) ? (
-                        <Badge variant="secondary" className="text-[10px] uppercase font-bold">Ajouté</Badge>
+                        <Badge variant="secondary" className="text-[10px] uppercase font-bold">{t('agent.userPicker.added')}</Badge>
                       ) : (
                         <Plus className="h-4 w-4 text-gray-300 group-hover:text-indigo-500 transition-all" />
                       )}
@@ -102,11 +104,11 @@ export function UserPicker({ userIds, onAdd, onRemove, label, placeholder = "Rec
                 </div>
               ) : searchTerm.length >= 2 ? (
                 <div className="p-8 text-center text-xs text-gray-400 italic">
-                  Aucun utilisateur trouvé
+                  {t('agent.userPicker.noResults')}
                 </div>
               ) : (
                 <div className="p-8 text-center text-xs text-gray-400 italic">
-                  Entrez au moins 2 caractères
+                  {t('agent.userPicker.minChars')}
                 </div>
               )}
             </ScrollArea>

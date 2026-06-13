@@ -73,6 +73,26 @@ struct FeedPostCard: View {
     var accentColor: String { post.authorColor }
     private var topComments: [FeedComment] { Array(post.comments.sorted { $0.likes > $1.likes }.prefix(3)) }
 
+    /// Distinguishes a reel from an ordinary media post in the feed: a small
+    /// glass pill on the preview that signals tapping opens the immersive
+    /// full-screen player rather than the detail page.
+    private var reelBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "play.rectangle.on.rectangle.fill")
+                .font(.system(size: 11, weight: .bold))
+            Text(String(localized: "feed.reel.badge", defaultValue: "Réel", bundle: .main))
+                .font(.system(size: 11, weight: .bold))
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(.ultraThinMaterial))
+        .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 1))
+        .padding(10)
+        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+        .accessibilityLabel(String(localized: "feed.reel.badge.a11y", defaultValue: "Réel — ouvre en plein écran", bundle: .main))
+    }
+
     /// True when the post is a feed POST that reposts a STORY — the cell then
     /// renders the embedded story canvas via `StoryRepostEmbedCell` instead of
     /// the standard media preview + quote-style repost block. Phase C.3.
@@ -269,6 +289,9 @@ struct FeedPostCard: View {
                     // Media preview (outside nav tap target — has its own fullscreen gesture)
                     if post.hasMedia {
                         mediaPreview
+                            .overlay(alignment: .topTrailing) {
+                                if post.isReel { reelBadge }
+                            }
                     }
 
                     // Reposted content (outside parent tap target so its own Button works)

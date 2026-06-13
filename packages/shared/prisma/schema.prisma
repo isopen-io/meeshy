@@ -2692,6 +2692,7 @@ model PushToken {
 /// Type de contenu social
 enum PostType {
   POST   // Permanent — feed classique (texte, media, reposts, commentaires)
+  REEL   // Permanent — feed immersif plein écran (vidéo / images / audio). Type choisi au front à la création (média → REEL par défaut) ; l'auteur peut forcer POST.
   STORY  // Éphémère 21h — image/texte/vidéo/lien avec effets et audio
   STATUS // Éphémère 1h  — mood textuel avec audio optionnel
 }
@@ -2822,7 +2823,7 @@ model Post {
   // ============================================
   isPinned  Boolean   @default(false)
   isEdited  Boolean   @default(false)
-  isDeleted Boolean   @default(false)
+  /// null = actif, non-null = supprimé (soft delete) avec horodatage
   deletedAt DateTime?
 
   createdAt DateTime @default(now())
@@ -2979,7 +2980,7 @@ model PostComment {
   effectFlags Int @default(0)
 
   isEdited  Boolean   @default(false)
-  isDeleted Boolean   @default(false)
+  /// null = actif, non-null = supprimé (soft delete) avec horodatage
   deletedAt DateTime?
 
   createdAt DateTime @default(now())

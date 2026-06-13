@@ -2640,14 +2640,14 @@ final class ConvListTestCategoryWriter: UserCategoryWriting, @unchecked Sendable
     }
 }
 
-// MARK: - ShortRelativeTime (helper partagé liste de conversations / feed)
+// MARK: - RelativeTimeFormatter.shortString (conversation list / feed timestamps)
 
-final class ShortRelativeTimeTests: XCTestCase {
+final class RelativeTimeFormatterShortTests: XCTestCase {
 
     private let now = Date(timeIntervalSince1970: 1_750_000_000)
 
     private func label(secondsAgo: Int) -> String {
-        ShortRelativeTime.label(for: now.addingTimeInterval(TimeInterval(-secondsAgo)), now: now)
+        RelativeTimeFormatter.shortString(for: now.addingTimeInterval(TimeInterval(-secondsAgo)), now: now)
     }
 
     func test_label_underOneMinute_containsNoDigits() {

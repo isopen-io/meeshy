@@ -43,13 +43,18 @@ public enum RelativeTimeFormatter {
 
     // MARK: - Short — "À l'instant" / "5m" / "2h" / "3j" / "1sem"
 
+    /// Built on the SDK's `RelativeTime` classification primitive (the single
+    /// source of truth for the ladder thresholds). Beyond a week the short
+    /// ladder keeps counting in weeks rather than switching to an absolute date
+    /// (product choice 2026-06-13).
     public static func shortString(for date: Date, now: Date = Date()) -> String {
-        let seconds = Int(now.timeIntervalSince(date))
-        if seconds < 60 { return justNow }
-        if seconds < 3_600 { return "\(seconds / 60)m" }
-        if seconds < 86_400 { return "\(seconds / 3_600)h" }
-        if seconds < 604_800 { return "\(seconds / 86_400)j" }
-        return "\(seconds / 604_800)sem"
+        switch RelativeTime.classify(date, reference: now) {
+        case .now: return justNow
+        case .minutes(let m): return "\(m)m"
+        case .hours(let h): return "\(h)h"
+        case .days(let d): return "\(d)j"
+        case .date: return "\(Int(now.timeIntervalSince(date)) / 604_800)sem"
+        }
     }
 
     // MARK: - Long — "À l'instant" / "il y a 5 min" / "hier" / "4 nov."

@@ -69,7 +69,11 @@ class ConversationListViewModel: ObservableObject {
     private var typers: [String: [String: String]] = [:]
     var previewMessages: [String: [Message]] = [:]  // conversationId → recent messages (non-Published — only used in context menu preview)
     private var previewLoadingInFlight: Set<String> = []
-    private var typingTimers: [String: Timer] = [:]
+    // `nonisolated(unsafe)` : muté uniquement sur le MainActor, lu une fois
+    // par le `nonisolated deinit` pour invalider les timers de typing 15 s
+    // encore armés (sinon ils survivaient au VM en no-ops weak-self) —
+    // même pattern que `ConversationSocketHandler.typingSafetyTimers`.
+    nonisolated(unsafe) private var typingTimers: [String: Timer] = [:]
 
     var totalUnreadCount: Int {
         conversations.reduce(0) { $0 + $1.userState.unreadCount }
@@ -545,9 +549,18 @@ class ConversationListViewModel: ObservableObject {
 
     // MARK: - Sync Engine Observation
 
+    /// Slot dédié remplacé à chaque appel : `observeSync()` est invoqué par
+    /// l'init ET par RootView/iPadRootView (`.task`) sur la même instance
+    /// partagée — avec `.store(in: &cancellables)` chaque signal sync
+    /// déclenchait deux pipelines debounce → deux `reloadFromCache()` (double
+    /// lecture GRDB + double regroupement) dès le boot.
+    private var syncCancellable: AnyCancellable? {
+        willSet { syncCancellable?.cancel() }
+    }
+
     func observeSync() {
         let publisher = syncEngine.conversationsDidChange
-        publisher
+        syncCancellable = publisher
             .receive(on: DispatchQueue.main)
             .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main)
             .sink { [weak self] in
@@ -555,7 +568,6 @@ class ConversationListViewModel: ObservableObject {
                     await self?.reloadFromCache()
                 }
             }
-            .store(in: &cancellables)
         // (Removed) ConversationPreferencesBroadcaster subscription: the options
         // sheet now mutates via ConversationStore (increment 2), so a pref change
         // reflects on the row through `observeStore` (the store merge sink) in the
@@ -1663,6 +1675,7 @@ class ConversationListViewModel: ObservableObject {
     nonisolated deinit {
         storyPrefetchTask?.cancel()
         groupingTask?.cancel()
+        typingTimers.values.forEach { $0.invalidate() }
         if let markAsReadObserver {
             NotificationCenter.default.removeObserver(markAsReadObserver)
         }

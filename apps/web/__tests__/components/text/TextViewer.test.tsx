@@ -8,12 +8,9 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 
-// Mock next-themes
-jest.mock('next-themes', () => ({
-  useTheme: jest.fn(() => ({
-    theme: 'light',
-    resolvedTheme: 'light',
-  })),
+// Mock the resolved-theme hook (single source of programmatic theming)
+jest.mock('@/hooks/use-resolved-theme', () => ({
+  useResolvedTheme: jest.fn(() => 'light'),
 }));
 
 // Mock react-syntax-highlighter
@@ -82,7 +79,7 @@ global.fetch = mockFetch;
 
 // Import after mocks
 import { TextViewer } from '../../../components/text/TextViewer';
-import { useTheme } from 'next-themes';
+import { useResolvedTheme } from '@/hooks/use-resolved-theme';
 
 // Create mock attachment
 const createMockAttachment = (overrides: Partial<UploadedAttachmentResponse> = {}): UploadedAttachmentResponse => ({
@@ -104,10 +101,7 @@ describe('TextViewer', () => {
       text: () => Promise.resolve('Hello, this is text content.\nLine 2\nLine 3'),
     });
     mockWriteText.mockResolvedValue(undefined);
-    (useTheme as jest.Mock).mockReturnValue({
-      theme: 'light',
-      resolvedTheme: 'light',
-    });
+    (useResolvedTheme as jest.Mock).mockReturnValue('light');
   });
 
   describe('Basic Rendering', () => {
@@ -350,10 +344,7 @@ describe('TextViewer', () => {
 
   describe('Theme Support', () => {
     it('should use light theme when theme is light', async () => {
-      (useTheme as jest.Mock).mockReturnValue({
-        theme: 'light',
-        resolvedTheme: 'light',
-      });
+      (useResolvedTheme as jest.Mock).mockReturnValue('light');
 
       const attachment = createMockAttachment();
 
@@ -367,10 +358,7 @@ describe('TextViewer', () => {
     });
 
     it('should use dark theme when theme is dark', async () => {
-      (useTheme as jest.Mock).mockReturnValue({
-        theme: 'dark',
-        resolvedTheme: 'dark',
-      });
+      (useResolvedTheme as jest.Mock).mockReturnValue('dark');
 
       const attachment = createMockAttachment();
 
@@ -383,11 +371,8 @@ describe('TextViewer', () => {
       });
     });
 
-    it('should use resolvedTheme when theme is system', async () => {
-      (useTheme as jest.Mock).mockReturnValue({
-        theme: 'system',
-        resolvedTheme: 'dark',
-      });
+    it('should use resolvedTheme when theme is auto resolved to dark', async () => {
+      (useResolvedTheme as jest.Mock).mockReturnValue('dark');
 
       const attachment = createMockAttachment();
 

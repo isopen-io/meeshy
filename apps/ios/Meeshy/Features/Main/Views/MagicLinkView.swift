@@ -19,6 +19,7 @@ struct MagicLinkView: View {
     @State private var isLoading = false
     @State private var countdownRemaining = 0
     @State private var linkExpired = false
+    @State private var countdownTask: Task<Void, Never>?
     @FocusState private var isEmailFocused: Bool
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "magic-link")
@@ -48,6 +49,10 @@ struct MagicLinkView: View {
                     }
                 }
                 .padding(.horizontal, MeeshySpacing.xxxl)
+            }
+            .onDisappear {
+                countdownTask?.cancel()
+                countdownTask = nil
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -306,7 +311,11 @@ struct MagicLinkView: View {
     private func startCountdown(_ seconds: Int) {
         countdownRemaining = seconds
         linkExpired = false
-        Task {
+        // Stocké + annulé avant relance : un resend pendant un countdown
+        // actif lançait sinon une 2e boucle (décompte à 2×), et la boucle
+        // survivait au dismiss de l'écran pour toute la durée d'expiration.
+        countdownTask?.cancel()
+        countdownTask = Task {
             while countdownRemaining > 0 {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard !Task.isCancelled else { return }

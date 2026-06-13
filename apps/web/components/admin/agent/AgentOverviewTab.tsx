@@ -24,6 +24,7 @@ import { agentAdminService, type AgentStatsData } from '@/services/agent-admin.s
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
 
 import { toast } from 'sonner';
+import { useResolvedTheme } from '@/hooks/use-resolved-theme';
 import { useI18n } from '@/hooks/useI18n';
 
 function formatTimeAgo(dateStr: string | null, t: (key: string) => string): string {
@@ -52,6 +53,7 @@ function getTypeLabel(type: string, t: (key: string) => string): string {
 
 export function AgentOverviewTab() {
   const { t } = useI18n('admin');
+  const isDark = useResolvedTheme() === 'dark';
   const [stats, setStats] = useState<AgentStatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -236,8 +238,8 @@ export function AgentOverviewTab() {
   ];
 
   const pieData = [
-    { name: t('agent.overview.kpi.active'), value: stats?.activeConfigs ?? 0, color: '#10b981' },
-    { name: 'Inactifs', value: (stats?.totalConfigs ?? 0) - (stats?.activeConfigs ?? 0), color: '#94a3b8' },
+    { name: t('agent.overview.kpi.active'), value: stats?.activeConfigs ?? 0, color: isDark ? '#34d399' : '#10b981' },
+    { name: t('agent.overview.kpi.inactive'), value: (stats?.totalConfigs ?? 0) - (stats?.activeConfigs ?? 0), color: isDark ? '#475569' : '#94a3b8' },
   ];
 
   const recentActivity = stats?.recentActivity ?? [];

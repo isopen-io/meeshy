@@ -26,6 +26,7 @@ const DeliveryQueuePanel = dynamic(() => import('./DeliveryQueuePanel'), {
 import { UserDisplay } from './UserDisplay';
 import { useDebounce } from 'use-debounce';
 import { useI18n } from '@/hooks/useI18n';
+import { useAgentAdminEvents } from '@/hooks/admin/use-agent-admin-events';
 
 function formatTimeAgo(dateStr: string | null | undefined, t: (key: string) => string): string {
   if (!dateStr) return t('agent.overview.timeAgo.never');
@@ -315,7 +316,7 @@ function SummaryCard({ data }: { data: LiveStateData }) {
 }
 
 function MetricsCard({ data }: { data: LiveStateData }) {
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -333,7 +334,7 @@ function MetricsCard({ data }: { data: LiveStateData }) {
             {data.analytics?.lastResponseAt && (
               <span className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />
-                {new Date(data.analytics.lastResponseAt).toLocaleString('fr-FR', {
+                {new Date(data.analytics.lastResponseAt).toLocaleString(locale, {
                   day: '2-digit',
                   month: '2-digit',
                   hour: '2-digit',
@@ -407,6 +408,14 @@ export function AgentLiveTab() {
     setError(null);
     fetchLiveState(id);
   }, [fetchLiveState]);
+
+  // Push admin : un scan (start/fin) sur la conversation suivie rafraîchit le live state
+  useAgentAdminEvents({
+    kinds: ['scan'],
+    conversationId: selectedId ?? undefined,
+    onChange: fetchLiveState,
+    enabled: selectedId !== null,
+  });
 
   // Auto-refresh
   useEffect(() => {

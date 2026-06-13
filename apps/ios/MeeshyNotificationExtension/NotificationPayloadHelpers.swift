@@ -27,17 +27,21 @@ nonisolated enum NotificationPayloadHelpers {
     /// strips the APN-native `subtitle` field on iOS Communication Notifications.
     ///
     /// - Parameters:
+    ///   - originalSubtitle: subtitle of the ORIGINAL (pre-`updating`) content,
+    ///     i.e. whatever the gateway actually sent in the APN alert. Covers the
+    ///     social context subtitles ("Votre story", "En réponse à « … »",
+    ///     "Nouvelle humeur"…) as well as group conversation names.
     ///   - currentSubtitle: subtitle currently set on the (post-`updating`)
     ///     content. Pass `bestAttemptContent.subtitle` (which is `""` when iOS
     ///     dropped it).
     ///   - userInfo: the original `request.content.userInfo` carrying the
-    ///     server-provided `conversationTitle` + `conversationType`.
+    ///     server-provided `conversationTitle` + `conversationType`, used as a
+    ///     legacy fallback when the alert subtitle itself was empty.
     /// - Returns: the subtitle to write back, or `nil` to leave the content
-    ///   unchanged. We only restore when the gateway-intended subtitle is a
-    ///   non-empty conversation name for a group / global conversation, and
-    ///   the post-`updating` subtitle is empty (so we never clobber a
-    ///   subtitle iOS actually preserved).
+    ///   unchanged. We only restore when the post-`updating` subtitle is empty
+    ///   (so we never clobber a subtitle iOS actually preserved).
     nonisolated static func preservedSubtitle(
+        originalSubtitle: String,
         currentSubtitle: String,
         userInfo: [AnyHashable: Any]
     ) -> String? {
@@ -48,6 +52,17 @@ nonisolated enum NotificationPayloadHelpers {
             return nil
         }
 
+        // 1. Whatever the gateway sent in the alert wins — it already encodes
+        //    the right context for the notification type (group name, story /
+        //    post / mood context, parent comment…).
+        let trimmedOriginal = originalSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedOriginal.isEmpty {
+            return trimmedOriginal
+        }
+
+        // 2. Legacy fallback: rebuild the group/global conversation name from
+        //    userInfo for pushes whose alert subtitle never made it through
+        //    (e.g. E2EE payloads where only `data` survives).
         let conversationType = (userInfo["conversationType"] as? String) ?? ""
         let isGroupOrGlobal = !conversationType.isEmpty && conversationType != "direct"
         guard isGroupOrGlobal else { return nil }

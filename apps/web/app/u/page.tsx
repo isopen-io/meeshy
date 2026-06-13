@@ -28,7 +28,7 @@ import { authManager } from '@/services/auth-manager.service';
 import { useI18n } from '@/hooks/useI18n';
 
 function ProfilePageContent() {
-  const { t } = useI18n('profile');
+  const { t, locale } = useI18n('profile');
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -82,7 +82,7 @@ function ProfilePageContent() {
 
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('fr-FR', {
+    return new Date(dateString).toLocaleDateString(locale, {
       year: 'numeric',
       month: 'long',
       day: 'numeric'

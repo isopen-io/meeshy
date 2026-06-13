@@ -13,7 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { useTheme } from 'next-themes';
+import { useResolvedTheme } from '@/hooks/use-resolved-theme';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
@@ -45,10 +45,8 @@ export const TextViewer: React.FC<TextViewerProps> = ({
   const [errorMessage, setErrorMessage] = useState('');
   const [isCopied, setIsCopied] = useState(false);
   const [wordWrap, setWordWrap] = useState(true);
-  const { theme, resolvedTheme } = useTheme();
-
   const attachmentFileUrl = attachment.fileUrl;
-  const isDark = theme === 'dark' || resolvedTheme === 'dark';
+  const isDark = useResolvedTheme() === 'dark';
 
   useEffect(() => {
     const fetchContent = async () => {

@@ -688,6 +688,7 @@ public struct SocketNotificationEvent: Decodable, Sendable {
     public var postType: String? { metadata?.postType }
     public var messagePreview: String? { metadata?.commentPreview }
     public var conversationTitle: String? { context?.conversationTitle }
+    public var conversationAvatar: String? { context?.conversationAvatar }
     public var conversationType: String? { context?.conversationType }
     public var isDirect: Bool { context?.conversationType == "direct" }
     public var attachments: SocketNotificationAttachments? { metadata?.attachments }
@@ -719,6 +720,9 @@ public struct SocketNotificationActor: Decodable, Sendable {
 public struct SocketNotificationContext: Decodable, Sendable {
     public let conversationId: String?
     public let conversationTitle: String?
+    /// Avatar (image URL) of the conversation/group. Used by the in-app toast
+    /// as a fallback when the sender has no personal avatar (group messages).
+    public let conversationAvatar: String?
     public let conversationType: String?
     public let messageId: String?
     public let postId: String?
@@ -2511,6 +2515,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket.on("call:ended") { [weak self] data, _ in
             guard let self else { return }
             self.decode(CallEndData.self, from: data) { [weak self] event in
+                // Le replay (matché par callId) est inerte une fois l'appel
+                // fini ; on libère quand même l'événement bufferisé pour ne
+                // pas retenir le dernier payload participant à vie.
+                self?.lastCallParticipantJoined = nil
                 self?.callEnded.send(event)
             }
         }

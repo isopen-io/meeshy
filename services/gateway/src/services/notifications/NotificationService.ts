@@ -59,12 +59,19 @@ function resolveActorName(actor: NotificationActor | undefined): string {
  * carried in a separate `subtitle` field — APN-native, displayed by iOS
  * between title and body and untouched by Communication Intent donation.
  *
- * Only `new_message` notifications get a subtitle (only kind iOS surfaces
- * the conversation context for); reactions / mentions / system events keep
- * the title-only layout where the actor name is the natural focus.
+ * Conversation-scoped notifications (messages, mentions, reactions) get the
+ * conversation name as subtitle when the conversation is a group/global chat
+ * — the recipient must know WHICH group the activity happened in. System
+ * events keep the title-only layout where the actor name is the natural focus.
  *
  * Exported for unit testing — the helper is pure and side-effect free.
  */
+const CONVERSATION_SUBTITLE_TYPES = new Set([
+  'new_message',
+  'user_mentioned',
+  'message_reaction',
+]);
+
 export function buildPushHeader(input: {
   type: string;
   customTitle?: string;
@@ -74,7 +81,7 @@ export function buildPushHeader(input: {
     conversationTitle?: string | null;
   };
 }): { title: string; subtitle: string | undefined } {
-  const isMessage = input.type === 'new_message';
+  const isMessage = CONVERSATION_SUBTITLE_TYPES.has(input.type);
   const conversationType = input.context.conversationType?.trim() || '';
   const conversationTitle = input.context.conversationTitle?.trim() || '';
   const isGroupMessage = isMessage
@@ -918,11 +925,17 @@ export class NotificationService {
       return null;
     }
 
-    // Récupérer les infos de l'expéditeur
-    const sender = await this.prisma.user.findUnique({
-      where: { id: params.senderId },
-      select: { username: true, displayName: true, avatar: true },
-    });
+    // Expéditeur + conversation : lectures indépendantes, en parallèle
+    const [sender, conversation] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: params.senderId },
+        select: { username: true, displayName: true, avatar: true },
+      }),
+      this.prisma.conversation.findUnique({
+        where: { id: params.conversationId },
+        select: { title: true, type: true, avatar: true },
+      }),
+    ]);
 
     if (!sender) {
       notificationLogger.warn('Sender not found for message notification', {
@@ -930,12 +943,6 @@ export class NotificationService {
       });
       return null;
     }
-
-    // Récupérer les infos de la conversation
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
 
     const content = buildMessageNotificationBody({
       messagePreview: params.messagePreview,
@@ -963,6 +970,9 @@ export class NotificationService {
       context: {
         conversationId: params.conversationId,
         conversationTitle: conversation?.title,
+        // Group avatar — used by the iOS in-app toast as a fallback when the
+        // sender has no personal avatar (group messages).
+        conversationAvatar: conversation?.avatar ?? undefined,
         conversationType: conversation?.type as any,
         messageId: params.messageId,
         // Phase A — propagation au payload APN pour rendu media inline iOS.
@@ -1009,17 +1019,18 @@ export class NotificationService {
       return null;
     }
 
-    const mentioner = await this.prisma.user.findUnique({
-      where: { id: params.mentionerUserId },
-      select: { username: true, displayName: true, avatar: true },
-    });
+    const [mentioner, conversation] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: params.mentionerUserId },
+        select: { username: true, displayName: true, avatar: true },
+      }),
+      this.prisma.conversation.findUnique({
+        where: { id: params.conversationId },
+        select: { title: true, type: true, avatar: true },
+      }),
+    ]);
 
     if (!mentioner) return null;
-
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
 
     return this.createNotification({
       userId: params.mentionedUserId,
@@ -1038,6 +1049,9 @@ export class NotificationService {
       context: {
         conversationId: params.conversationId,
         conversationTitle: conversation?.title,
+        // Group avatar — fallback for the iOS in-app toast when the sender
+        // has no personal avatar (group messages).
+        conversationAvatar: conversation?.avatar ?? undefined,
         conversationType: conversation?.type as any,
         messageId: params.messageId,
       },
@@ -1264,7 +1278,7 @@ export class NotificationService {
       this.prisma.postComment.findMany({
         where: {
           postId,
-          isDeleted: false,
+          deletedAt: null,
           NOT: { authorId: commenterId },
         },
         distinct: ['authorId'],
@@ -1342,6 +1356,14 @@ export class NotificationService {
     commenterId: string;
     commentExcerpt?: string;
     /**
+     * Type du post commenté. Pilote le wording (« story » vs « publication »
+     * vs « humeur ») et le bucket auteur : pour un post non-story, l'auteur
+     * est déjà notifié via `createPostCommentNotification` (route), donc le
+     * bucket 1 est sauté pour éviter la double notification.
+     * Défaut STORY (compat avec les appels existants).
+     */
+    postType?: 'STORY' | 'POST' | 'MOOD' | 'STATUS';
+    /**
      * User IDs to exclude from fan-out buckets (story_thread_reply, friend_story_comment).
      * Use to pass mentionedUserIds so users who received user_mentioned don't also get
      * a lower-priority story thread/friend notification.
@@ -1349,10 +1371,16 @@ export class NotificationService {
      */
     excludeUserIds?: string[];
   }): Promise<void> {
-    const actor = await this.prisma.user.findUnique({
-      where: { id: params.commenterId },
-      select: { username: true, displayName: true, avatar: true },
-    });
+    const [actor, postAuthor] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: params.commenterId },
+        select: { username: true, displayName: true, avatar: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: params.storyAuthorId },
+        select: { username: true, displayName: true },
+      }),
+    ]);
 
     if (!actor) return;
 
@@ -1366,6 +1394,34 @@ export class NotificationService {
     const excerpt = params.commentExcerpt
       ? this.truncateMessage(params.commentExcerpt)
       : '';
+
+    // Wording typé : le destinataire doit savoir SUR QUOI porte le commentaire
+    // (story / publication / humeur / statut) et, pour les buckets fan-out, la
+    // story/publication DE QUI. Le contexte voyage en `subtitle` (APN-natif,
+    // restauré côté NSE après la donation d'intent), le body reste le contenu
+    // du commentaire.
+    const postType = params.postType ?? 'STORY';
+    const NOUN: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS', string> = {
+      STORY: 'story',
+      POST: 'publication',
+      MOOD: 'humeur',
+      STATUS: 'statut',
+    };
+    const noun = NOUN[postType];
+    const ARTICLE: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS', string> = {
+      STORY: 'une',
+      POST: 'une',
+      MOOD: 'une',
+      STATUS: 'un',
+    };
+    const article = ARTICLE[postType];
+    const authorName = postAuthor?.displayName?.trim()
+      || postAuthor?.username?.trim()
+      || '';
+    const ownerSubtitle = `Votre ${noun}`;
+    const contextSubtitle = authorName
+      ? `${noun.charAt(0).toUpperCase()}${noun.slice(1)} de ${authorName}`
+      : `${noun.charAt(0).toUpperCase()}${noun.slice(1)}`;
 
     const commonContext = { postId: params.postId, commentId: params.commentId };
     const commonMetadata = {
@@ -1385,14 +1441,17 @@ export class NotificationService {
     const tasks: Array<Promise<unknown>> = [];
 
     // 1. Story author notification — always sent regardless of excludeUserIds
-    //    (STORY_NEW_COMMENT has priority over all fan-out notifications)
-    if (authorId !== params.commenterId) {
+    //    (STORY_NEW_COMMENT has priority over all fan-out notifications).
+    //    Pour un post non-story, l'auteur est déjà notifié via post_comment
+    //    (route) — bucket sauté pour ne pas le notifier deux fois.
+    if (authorId !== params.commenterId && postType === 'STORY') {
       tasks.push(
         this.createNotification({
           userId: authorId,
           type: 'story_new_comment',
           priority: 'normal',
-          content: excerpt || 'a commenté votre story',
+          content: excerpt || `a commenté votre ${noun}`,
+          subtitle: ownerSubtitle,
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
@@ -1408,7 +1467,8 @@ export class NotificationService {
           userId: recipientId,
           type: 'story_thread_reply',
           priority: 'low',
-          content: excerpt || 'a répondu dans une story',
+          content: excerpt || `a répondu dans ${article} ${noun}`,
+          subtitle: contextSubtitle,
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
@@ -1424,7 +1484,8 @@ export class NotificationService {
           userId: recipientId,
           type: 'friend_story_comment',
           priority: 'low',
-          content: excerpt || 'a commenté une story',
+          content: excerpt || `a commenté ${article} ${noun}`,
+          subtitle: contextSubtitle,
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
@@ -1432,16 +1493,9 @@ export class NotificationService {
       );
     }
 
-    const results = await Promise.allSettled(tasks);
-    results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        notificationLogger.error(
-          'Story comment notification failed for one recipient',
-          result.reason,
-          { recipientIndex: index, type: 'story_comment_batch' }
-        );
-      }
-    });
+    // createNotification ne rejette jamais (catch interne + log du userId
+    // exact) : attendre les tasks suffit, pas de gestion rejected ici.
+    await Promise.allSettled(tasks);
   }
 
   // ==============================================
@@ -1519,16 +1573,9 @@ export class NotificationService {
       );
     }
 
-    const mentionResults = await Promise.allSettled(tasks);
-    mentionResults.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        notificationLogger.error(
-          'Comment mention notification failed for one recipient',
-          result.reason,
-          { recipientId: params.mentionedUserIds[index], type: 'user_mentioned' }
-        );
-      }
-    });
+    // createNotification ne rejette jamais (catch interne + log du userId
+    // exact) : attendre les tasks suffit, pas de gestion rejected ici.
+    await Promise.allSettled(tasks);
   }
 
   // ==============================================
@@ -1601,16 +1648,9 @@ export class NotificationService {
       );
     }
 
-    const mentionResults = await Promise.allSettled(tasks);
-    mentionResults.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        notificationLogger.error(
-          'Post mention notification failed for one recipient',
-          result.reason,
-          { recipientId: params.mentionedUserIds[index], type: 'user_mentioned' }
-        );
-      }
-    });
+    // createNotification ne rejette jamais (catch interne + log du userId
+    // exact) : attendre les tasks suffit, pas de gestion rejected ici.
+    await Promise.allSettled(tasks);
   }
 
   // ==============================================
@@ -1680,6 +1720,17 @@ export class NotificationService {
     };
     const content = excerpt || fallbackContent[notificationType];
 
+    // Subtitle typé : quand le body est l'extrait du contenu, le destinataire
+    // doit quand même savoir s'il s'agit d'une story, d'une publication ou
+    // d'une humeur — le type voyage en subtitle (APN-natif, restauré par le NSE).
+    const subtitleByContentType: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS', string> = {
+      STORY: 'Nouvelle story',
+      POST: 'Nouvelle publication',
+      MOOD: 'Nouvelle humeur',
+      STATUS: 'Nouveau statut',
+    };
+    const subtitle = subtitleByContentType[params.contentType];
+
     const actorInfo = {
       id: params.authorId,
       username: author.username,
@@ -1704,6 +1755,7 @@ export class NotificationService {
           type: notificationType,
           priority: 'normal',
           content,
+          subtitle,
           actor: actorInfo,
           context: { postId: params.postId },
           metadata: {
@@ -1716,16 +1768,9 @@ export class NotificationService {
       );
     }
 
-    const results = await Promise.allSettled(tasks);
-    results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        notificationLogger.error(
-          'Friend content notification failed for one recipient',
-          result.reason,
-          { recipientIndex: index, type: notificationType, postId: params.postId }
-        );
-      }
-    });
+    // createNotification ne rejette jamais (catch interne + log du userId
+    // exact) : attendre les tasks suffit, pas de gestion rejected ici.
+    await Promise.allSettled(tasks);
   }
 
   // ==============================================
@@ -1739,17 +1784,18 @@ export class NotificationService {
     callSessionId: string;
     callType: 'audio' | 'video';
   }): Promise<Notification | null> {
-    const caller = await this.prisma.user.findUnique({
-      where: { id: params.callerId },
-      select: { username: true, displayName: true, avatar: true },
-    });
+    const [caller, conversation] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: params.callerId },
+        select: { username: true, displayName: true, avatar: true },
+      }),
+      this.prisma.conversation.findUnique({
+        where: { id: params.conversationId },
+        select: { title: true, type: true },
+      }),
+    ]);
 
     if (!caller) return null;
-
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
 
     // Phase C — prefix emoji icône d'appel pour rendu visuel rapide dans le banner.
     // L'extension iOS expose en plus l'avatar du caller via INSendMessageIntent
@@ -1872,22 +1918,21 @@ export class NotificationService {
     conversationId: string;
     joinMethod?: 'via_link' | 'invited';
   }): Promise<Notification | null> {
-    const newMember = await this.prisma.user.findUnique({
-      where: { id: params.newMemberUserId },
-      select: { username: true, displayName: true, avatar: true },
-    });
+    const [newMember, conversation, memberCount] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: params.newMemberUserId },
+        select: { username: true, displayName: true, avatar: true },
+      }),
+      this.prisma.conversation.findUnique({
+        where: { id: params.conversationId },
+        select: { title: true, type: true },
+      }),
+      this.prisma.participant.count({
+        where: { conversationId: params.conversationId },
+      }),
+    ]);
 
     if (!newMember) return null;
-
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
-
-    // Compter les membres
-    const memberCount = await this.prisma.participant.count({
-      where: { conversationId: params.conversationId },
-    });
 
     return this.createNotification({
       userId: params.recipientUserId,
@@ -1962,17 +2007,18 @@ export class NotificationService {
     messagePreview: string;
     originalMessageId?: string;
   }): Promise<Notification | null> {
-    const replier = await this.prisma.user.findUnique({
-      where: { id: params.replierUserId },
-      select: { username: true, displayName: true, avatar: true },
-    });
+    const [replier, conversation] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: params.replierUserId },
+        select: { username: true, displayName: true, avatar: true },
+      }),
+      this.prisma.conversation.findUnique({
+        where: { id: params.conversationId },
+        select: { title: true, type: true },
+      }),
+    ]);
 
     if (!replier) return null;
-
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
 
     return this.createNotification({
       userId: params.recipientUserId,
@@ -2096,6 +2142,10 @@ export class NotificationService {
     postAuthorId: string;
     commentId: string;
     commentPreview: string;
+    /** Type du post commenté — pilote le wording du subtitle. Défaut POST. */
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS';
+    /** Extrait du post commenté (≤ ~80 chars) pour identifier LE post visé. */
+    postPreview?: string;
   }): Promise<Notification | null> {
     if (params.actorId === params.postAuthorId) return null;
 
@@ -2105,11 +2155,27 @@ export class NotificationService {
     });
     if (!actor) return null;
 
+    // Subtitle = la cible du commentaire (« Votre humeur : « … » ») ; body =
+    // le texte du commentaire. Le destinataire sait QUOI a été commenté sans
+    // ouvrir l'app.
+    const ownerLabel: Record<'POST' | 'STORY' | 'MOOD' | 'STATUS', string> = {
+      POST: 'Votre publication',
+      STORY: 'Votre story',
+      MOOD: 'Votre humeur',
+      STATUS: 'Votre statut',
+    };
+    const label = ownerLabel[params.postType ?? 'POST'];
+    const trimmedPostPreview = params.postPreview?.trim() ?? '';
+    const subtitle = trimmedPostPreview !== ''
+      ? `${label} : « ${this.truncateMessage(trimmedPostPreview)} »`
+      : label;
+
     return this.createNotification({
       userId: params.postAuthorId,
       type: 'post_comment',
       priority: 'normal',
       content: this.truncateMessage(params.commentPreview),
+      subtitle,
 
       actor: {
         id: params.actorId,
@@ -2140,6 +2206,10 @@ export class NotificationService {
     originalPostId: string;
     postAuthorId: string;
     repostId: string;
+    /** Type du post partagé — pilote le wording. Défaut POST. */
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS';
+    /** Extrait du post partagé pour identifier LE contenu repris. */
+    postPreview?: string;
   }): Promise<Notification | null> {
     if (params.actorId === params.postAuthorId) return null;
 
@@ -2149,11 +2219,23 @@ export class NotificationService {
     });
     if (!actor) return null;
 
+    const repostNoun: Record<'POST' | 'STORY' | 'MOOD' | 'STATUS', string> = {
+      POST: 'votre publication',
+      STORY: 'votre story',
+      MOOD: 'votre humeur',
+      STATUS: 'votre statut',
+    };
+    const trimmedPostPreview = params.postPreview?.trim() ?? '';
+    const subtitle = trimmedPostPreview !== ''
+      ? `« ${this.truncateMessage(trimmedPostPreview)} »`
+      : undefined;
+
     return this.createNotification({
       userId: params.postAuthorId,
       type: 'post_repost',
       priority: 'normal',
-      content: 'A reposté ton post',
+      content: `a partagé ${repostNoun[params.postType ?? 'POST']}`,
+      ...(subtitle ? { subtitle } : {}),
 
       actor: {
         id: params.actorId,
@@ -2184,6 +2266,8 @@ export class NotificationService {
     commentAuthorId: string;
     commentId: string;
     replyPreview: string;
+    /** Extrait du commentaire parent — identifie À QUOI on répond. */
+    parentCommentPreview?: string;
   }): Promise<Notification | null> {
     if (params.actorId === params.commentAuthorId) return null;
 
@@ -2193,11 +2277,18 @@ export class NotificationService {
     });
     if (!actor) return null;
 
+    // Subtitle = le commentaire auquel on répond ; body = la réponse.
+    const trimmedParent = params.parentCommentPreview?.trim() ?? '';
+    const subtitle = trimmedParent !== ''
+      ? `En réponse à « ${this.truncateMessage(trimmedParent)} »`
+      : 'En réponse à votre commentaire';
+
     return this.createNotification({
       userId: params.commentAuthorId,
       type: 'comment_reply',
       priority: 'normal',
       content: this.truncateMessage(params.replyPreview),
+      subtitle,
 
       actor: {
         id: params.actorId,
@@ -2229,6 +2320,8 @@ export class NotificationService {
     commentId: string;
     commentAuthorId: string;
     emoji: string;
+    /** Extrait du commentaire liké — identifie QUEL commentaire reçoit la réaction. */
+    commentPreview?: string;
   }): Promise<Notification | null> {
     if (params.actorId === params.commentAuthorId) return null;
 
@@ -2238,11 +2331,17 @@ export class NotificationService {
     });
     if (!actor) return null;
 
+    const trimmedPreview = params.commentPreview?.trim() ?? '';
+    const subtitle = trimmedPreview !== ''
+      ? `« ${this.truncateMessage(trimmedPreview)} »`
+      : undefined;
+
     return this.createNotification({
       userId: params.commentAuthorId,
       type: 'comment_like',
       priority: 'low',
-      content: `A réagi ${params.emoji} à ton commentaire`,
+      content: `a réagi ${params.emoji} à votre commentaire`,
+      ...(subtitle ? { subtitle } : {}),
 
       actor: {
         id: params.actorId,

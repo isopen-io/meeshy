@@ -29,7 +29,7 @@ extension FeedView {
         let prep = AttachmentPreparationService.shared.prepareImage(
             image,
             context: .feedPost,
-            accentColor: "4ECDC4"
+            accentColor: MeeshyColors.brandPrimaryHex
         )
         trackFeedPreparation(prep)
     }
@@ -38,8 +38,7 @@ extension FeedView {
         let prep = AttachmentPreparationService.shared.prepareVideo(
             sourceURL: url,
             deleteSourceAfterCompression: true,
-            context: .feedPost,
-            accentColor: "FF6B6B"
+            context: .feedPost
         )
         trackFeedPreparation(prep)
     }
@@ -220,6 +219,10 @@ extension FeedView {
 
                 await viewModel.createPost(
                     content: text,
+                    type: ReelComposition.defaultType(
+                        mimeTypes: attachments.map(\.mimeType) + (audioURL != nil ? ["audio/mp4"] : []),
+                        forcePlainPost: composerForcePlainPost
+                    ).rawValue,
                     mediaIds: uploadedIds.isEmpty ? nil : uploadedIds,
                     originalLanguage: composerLanguage
                 )
@@ -263,6 +266,7 @@ extension FeedView {
             try? FileManager.default.removeItem(at: audioURL)
 
             await viewModel.createPost(
+                type: composerForcePlainPost ? "POST" : "REEL",
                 mediaIds: [result.id],
                 originalLanguage: originalLanguage ?? transcription?.language,
                 mobileTranscription: transcription
@@ -306,7 +310,7 @@ extension FeedView {
                     }
                     if isLoadingMedia && preparingAttachments.isEmpty {
                         ProgressView()
-                            .tint(Color(hex: "4ECDC4"))
+                            .tint(MeeshyColors.brandPrimary)
                             .padding(.horizontal, 12)
                     }
                 }
@@ -489,6 +493,9 @@ struct FeedComposerSheet: View {
     @State private var uploadProgress: UploadQueueProgress?
     @State private var isLoadingMedia = false
     @State private var postVisibility: String = "PUBLIC"
+    /// When the composer carries media, the post defaults to a REEL; the author
+    /// can flip this to keep it a plain POST (out of the reels surface).
+    @State private var forcePlainPost = false
     @State private var showEmojiPicker = false
     @State private var showAudioComposer = false
     @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
@@ -501,6 +508,28 @@ struct FeedComposerSheet: View {
 
     private var hasContent: Bool {
         !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
+    }
+
+    /// Reel ⇄ Post chip shown when the composer holds media. A media post is a
+    /// reel by default; tapping flips it to a plain post so it stays out of the
+    /// reels surface.
+    private var reelTypeToggle: some View {
+        Button {
+            forcePlainPost.toggle()
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: forcePlainPost ? "doc.text" : "play.rectangle.on.rectangle.fill")
+                    .font(.system(size: 10))
+                Text(forcePlainPost
+                    ? String(localized: "feed.composer.type.post", defaultValue: "Post", bundle: .main)
+                    : String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main))
+                    .font(.system(size: 12))
+            }
+            .foregroundColor(forcePlainPost ? theme.textMuted : MeeshyColors.indigo300)
+        }
+        .accessibilityHint(String(localized: "feed.composer.type.hint", defaultValue: "Bascule entre réel et post", bundle: .main))
+        .padding(.leading, 12)
     }
 
     var body: some View {
@@ -551,13 +580,11 @@ struct FeedComposerSheet: View {
                     MeeshyAvatar(
                         name: getUserDisplayName(authManager.currentUser, fallback: "M"),
                         context: .feedComposer,
-                        accentColor: "FF6B6B",
-                        secondaryColor: "4ECDC4",
                         avatarURL: authManager.currentUser?.avatar
                     )
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(getUserDisplayName(authManager.currentUser, fallback: "Moi"))
-                            .font(.system(size: 14, weight: .semibold))
+                        Text(getUserDisplayName(authManager.currentUser, fallback: String(localized: "feed.composer.me", defaultValue: "Moi", bundle: .main)))
+                            .font(.subheadline.weight(.semibold))
                             .foregroundColor(theme.textPrimary)
 
                         Menu {
@@ -583,6 +610,9 @@ struct FeedComposerSheet: View {
                             }
                             .foregroundColor(theme.textMuted)
                         }
+                    }
+                    if !pendingAttachments.isEmpty || pendingAudioURL != nil {
+                        reelTypeToggle
                     }
                     Spacer()
                 }
@@ -651,7 +681,7 @@ struct FeedComposerSheet: View {
 
                 // Upload progress
                 if isUploading, let progress = uploadProgress {
-                    UploadProgressBar(progress: progress, accentColor: "4ECDC4")
+                    UploadProgressBar(progress: progress, accentColor: MeeshyColors.brandPrimaryHex)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 4)
                 }
@@ -663,33 +693,39 @@ struct FeedComposerSheet: View {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "4ECDC4"))
+                            .foregroundColor(MeeshyColors.brandPrimary)
                     }
+                    .accessibilityLabel(String(localized: "Ajouter une photo", defaultValue: "Ajouter une photo"))
                     Button { showCamera = true; HapticFeedback.light() } label: {
                         Image(systemName: "camera.fill")
                             .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.error)
                     }
+                    .accessibilityLabel(String(localized: "Prendre une photo", defaultValue: "Prendre une photo"))
                     Button { showEmojiPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "face.smiling.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "F8B500"))
                     }
+                    .accessibilityLabel(String(localized: "Ajouter un emoji", defaultValue: "Ajouter un emoji"))
                     Button { showFilePicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "doc.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "9B59B6"))
                     }
+                    .accessibilityLabel(String(localized: "Joindre un fichier", defaultValue: "Joindre un fichier"))
                     Button { showLocationPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "location.fill")
                             .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.success)
                     }
+                    .accessibilityLabel(String(localized: "Partager la position", defaultValue: "Partager la position"))
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "FF2E63"))
+                            .foregroundColor(MeeshyColors.errorStrong)
                     }
+                    .accessibilityLabel(String(localized: "Enregistrer un audio", defaultValue: "Enregistrer un audio"))
 
                     Spacer()
 
@@ -755,7 +791,7 @@ struct FeedComposerSheet: View {
             .ignoresSafeArea()
         }
         .sheet(isPresented: $showLocationPicker) {
-            LocationPickerView(accentColor: "4ECDC4") { coordinate, address in
+            LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { coordinate, address in
                 handleLocationSelection(coordinate: coordinate, address: address)
             }
         }
@@ -867,7 +903,7 @@ struct FeedComposerSheet: View {
                 }
                 if isLoadingMedia && preparingAttachments.isEmpty {
                     ProgressView()
-                        .tint(Color(hex: "4ECDC4"))
+                        .tint(MeeshyColors.brandPrimary)
                         .padding(.horizontal, 12)
                 }
             }
@@ -982,7 +1018,7 @@ struct FeedComposerSheet: View {
                 }
             } else {
                 let prep = AttachmentPreparationService.shared.preparePhotosPickerItem(
-                    item, context: .feedPost, accentColor: "4ECDC4"
+                    item, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex
                 )
                 trackSheetPreparation(prep)
             }
@@ -991,7 +1027,7 @@ struct FeedComposerSheet: View {
 
     private func handleCameraCapture(_ image: UIImage) {
         let prep = AttachmentPreparationService.shared.prepareImage(
-            image, context: .feedPost, accentColor: "4ECDC4"
+            image, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex
         )
         trackSheetPreparation(prep)
     }
@@ -1000,8 +1036,7 @@ struct FeedComposerSheet: View {
         let prep = AttachmentPreparationService.shared.prepareVideo(
             sourceURL: url,
             deleteSourceAfterCompression: true,
-            context: .feedPost,
-            accentColor: "FF6B6B"
+            context: .feedPost
         )
         trackSheetPreparation(prep)
     }
@@ -1136,7 +1171,7 @@ struct FeedComposerSheet: View {
                 }
                 progressCancellable?.cancel()
 
-                await viewModel.createPost(content: text, visibility: postVisibility, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds, originalLanguage: composerLanguage)
+                await viewModel.createPost(content: text, type: ReelComposition.defaultType(mimeTypes: attachments.map(\.mimeType), forcePlainPost: forcePlainPost).rawValue, visibility: postVisibility, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds, originalLanguage: composerLanguage)
 
                 await MainActor.run {
                     isUploading = false
@@ -1166,6 +1201,7 @@ struct FeedComposerSheet: View {
             let result = try await uploader.uploadFile(fileURL: audioURL, mimeType: mimeType, token: token, uploadContext: "post")
             try? FileManager.default.removeItem(at: audioURL)
             await viewModel.createPost(
+                type: forcePlainPost ? "POST" : "REEL",
                 mediaIds: [result.id],
                 originalLanguage: transcription?.language ?? composerLanguage,
                 mobileTranscription: transcription

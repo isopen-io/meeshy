@@ -229,7 +229,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             postId: POST_ID,
-            isDeleted: false,
+            deletedAt: null,
             NOT: { authorId: COMMENTER_ID },
           }),
         })
@@ -661,6 +661,29 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       expect(aliceCall).toBeDefined();
     });
 
+    it('a failing recipient does not abort the batch and the failure is logged with the right userId', async () => {
+      const { notificationLogger } = jest.requireMock('../../../utils/logger-enhanced') as {
+        notificationLogger: { error: jest.Mock };
+      };
+      prisma.notification.create
+        .mockRejectedValueOnce(new Error('db down'))
+        .mockImplementation(({ data }: { data: { type: string } }) =>
+          Promise.resolve(makeNotif(data.type))
+        );
+
+      await service.createCommentMentionNotificationsBatch({
+        ...baseCommentMentionParams,
+        mentionedUserIds: [COMMENTER_ID, ALICE_ID, BOB_ID],
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string } }]>;
+      expect(calls.find((c) => c[0].data.userId === BOB_ID)).toBeDefined();
+      expect(notificationLogger.error).toHaveBeenCalledWith(
+        'Failed to create notification',
+        expect.objectContaining({ userId: ALICE_ID, type: 'user_mentioned' })
+      );
+    });
+
     it('user_mentioned notifications have priority high', async () => {
       prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
         Promise.resolve(makeNotif(data.type))
@@ -938,6 +961,31 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       expect(aliceCall![0].data.type).toBe('user_mentioned');
       expect(bobCall).toBeDefined();
       expect(bobCall![0].data.type).toBe('user_mentioned');
+    });
+
+    it('test_createPostMentionNotificationsBatch_failingRecipient_batchContinues_failureLoggedWithRightUserId', async () => {
+      const { notificationLogger } = jest.requireMock('../../../utils/logger-enhanced') as {
+        notificationLogger: { error: jest.Mock };
+      };
+      prisma.notification.create
+        .mockRejectedValueOnce(new Error('db down'))
+        .mockImplementation(({ data }: { data: { type: string } }) =>
+          Promise.resolve(makeNotif(data.type))
+        );
+
+      await service.createPostMentionNotificationsBatch({
+        postId: P2_POST_ID,
+        posterId: POSTER_ID,
+        mentionedUserIds: [POSTER_ID, ALICE_ID, BOB_ID],
+        postExcerpt: 'Check this out @alice @bob',
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string } }]>;
+      expect(calls.find((c) => c[0].data.userId === BOB_ID)).toBeDefined();
+      expect(notificationLogger.error).toHaveBeenCalledWith(
+        'Failed to create notification',
+        expect.objectContaining({ userId: ALICE_ID, type: 'user_mentioned' })
+      );
     });
 
     it('test_createPostMentionNotificationsBatch_withExcerpt_usesExcerptAsContent', async () => {

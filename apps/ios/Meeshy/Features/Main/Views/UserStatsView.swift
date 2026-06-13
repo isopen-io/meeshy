@@ -11,7 +11,7 @@ struct UserStatsView: View {
     private var isDark: Bool { colorScheme == .dark }
     @StateObject private var viewModel = UserStatsViewModel()
 
-    private let accentColor = "6366F1"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
         ZStack {
@@ -74,11 +74,11 @@ struct UserStatsView: View {
     private var statsCards: some View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
-                statCard(value: "\(viewModel.stats?.totalMessages ?? 0)", label: String(localized: "user.stats.messages", defaultValue: "Messages", bundle: .main), color: "FF6B6B", icon: "bubble.left.fill")
-                statCard(value: "\(viewModel.stats?.totalConversations ?? 0)", label: String(localized: "user.stats.conversations", defaultValue: "Conversations", bundle: .main), color: "4ECDC4", icon: "person.2.fill")
+                statCard(value: "\(viewModel.stats?.totalMessages ?? 0)", label: String(localized: "user.stats.messages", defaultValue: "Messages", bundle: .main), color: MeeshyColors.brandPrimaryHex, icon: "bubble.left.fill")
+                statCard(value: "\(viewModel.stats?.totalConversations ?? 0)", label: String(localized: "user.stats.conversations", defaultValue: "Conversations", bundle: .main), color: MeeshyColors.indigo300Hex, icon: "person.2.fill")
             }
             HStack(spacing: 12) {
-                statCard(value: "\(viewModel.stats?.totalTranslations ?? 0)", label: String(localized: "user.stats.translations", defaultValue: "Traductions", bundle: .main), color: "9B59B6", icon: "globe")
+                statCard(value: "\(viewModel.stats?.totalTranslations ?? 0)", label: String(localized: "user.stats.translations", defaultValue: "Traductions", bundle: .main), color: MeeshyColors.indigo600Hex, icon: "globe")
                 statCard(value: "\(viewModel.stats?.languagesUsed ?? 0)", label: String(localized: "user.stats.languages", defaultValue: "Langues", bundle: .main), color: "3498DB", icon: "character.book.closed.fill")
             }
             HStack(spacing: 12) {

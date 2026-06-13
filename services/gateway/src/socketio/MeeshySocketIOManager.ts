@@ -25,6 +25,8 @@ import { AttachmentReactionService } from '../services/AttachmentReactionService
 import { CommentReactionHandler } from './handlers/CommentReactionHandler';
 import { PostReactionHandler } from './handlers/PostReactionHandler';
 import { ConversationHandler } from './handlers/ConversationHandler';
+import { AdminAgentHandler } from './handlers/AdminAgentHandler';
+import { AgentAdminRelay } from './AgentAdminRelay';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
 import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
@@ -120,6 +122,8 @@ export class MeeshySocketIOManager {
   private commentReactionHandler!: CommentReactionHandler;
   private postReactionHandler!: PostReactionHandler;
   private conversationHandler!: ConversationHandler;
+  private adminAgentHandler!: AdminAgentHandler;
+  private agentAdminRelay: AgentAdminRelay | null = null;
 
   // Mapping des utilisateurs connectés
   private connectedUsers: Map<string, SocketUser> = new Map();
@@ -264,6 +268,11 @@ export class MeeshySocketIOManager {
       userSockets: this.userSockets,
       emitPresenceSnapshot: (socket, userId, isAnonymous) =>
         this._emitPresenceSnapshot(socket, userId, isAnonymous),
+    });
+
+    this.adminAgentHandler = new AdminAgentHandler({
+      prisma: this.prisma,
+      socketToUser: this.socketToUser,
     });
 
     const reactionService = new ReactionService(prisma);
@@ -564,6 +573,12 @@ export class MeeshySocketIOManager {
 
       // Configurer les événements Socket.IO
       this._setupSocketEvents();
+
+      // Relais Redis → room admin:agent (events des dashboards admin agent)
+      this.agentAdminRelay = new AgentAdminRelay(this.io);
+      this.agentAdminRelay.start().catch((error) => {
+        logger.error('❌ Erreur démarrage AgentAdminRelay', error);
+      });
       // ✅ FIX BUG #3: SUPPRIMER le polling périodique
       // Le système utilise maintenant uniquement les événements Socket.IO (connect/disconnect)
       // et le broadcast de statut lors de ces événements
@@ -678,6 +693,14 @@ export class MeeshySocketIOManager {
 
       socket.on(CLIENT_EVENTS.HEARTBEAT, () => {
         this.authHandler.handleHeartbeat(socket).catch((error) => logger.error('[HEARTBEAT] Error:', error));
+      });
+
+      socket.on(CLIENT_EVENTS.ADMIN_AGENT_SUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
+        this.adminAgentHandler.handleSubscribe(socket, callback).catch((error) => logger.error('[ADMIN_AGENT_SUBSCRIBE] Error:', error));
+      });
+
+      socket.on(CLIENT_EVENTS.ADMIN_AGENT_UNSUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
+        this.adminAgentHandler.handleUnsubscribe(socket, callback);
       });
 
       socket.on(CLIENT_EVENTS.REACTION_ADD, async (data, callback) => {
@@ -1780,6 +1803,7 @@ export class MeeshySocketIOManager {
       // ✅ FIX BUG #3: Ticker supprimé, plus besoin de le nettoyer
       // Le système n'utilise plus de polling périodique
 
+      await this.agentAdminRelay?.stop();
       await this.translationService.close();
       this.io.close();
     } catch (error) {

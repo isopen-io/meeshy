@@ -414,16 +414,19 @@ class FeedViewModel: ObservableObject {
     /// Subscribes to the injected queue's `outcomeStream(for: cmid)` and runs
     /// `rollback` if the OutboxFlusher escalates the row to `.exhausted` (retry
     /// budget spent — the server permanently rejected it). `.applied` is a no-op
-    /// (the optimistic state is already final). Fire-and-forget Task; the stream
-    /// is single-shot so the for-await ends after one event.
+    /// (the optimistic state is already final).
+    /// ⚠️ Le corps du Task ne capture PAS `self` : hors-ligne le stream peut ne
+    /// jamais émettre, et un `guard let self` fort aurait retenu un VM fermé
+    /// indéfiniment (un Task fantôme par like/post). Même forme que
+    /// `UserProfileViewModel.observeOutcome`.
     private func observeOutcome(
         cmid: String,
         rollback: @escaping @MainActor () -> Void,
         toast: String
     ) {
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            let stream = await self.offlineQueue.outcomeStream(for: cmid)
+        let queue = offlineQueue
+        Task { @MainActor in
+            let stream = await queue.outcomeStream(for: cmid)
             for await event in stream {
                 if case .exhausted = event {
                     rollback()
@@ -876,6 +879,12 @@ class FeedViewModel: ObservableObject {
     // MARK: - Socket.IO Real-Time Updates
 
     func subscribeToSocketEvents() {
+        // Ré-arme le bridge de persistance GRDB désarmé par
+        // `unsubscribeFromSocketEvents` à l'onDisappear : il restait sinon
+        // désarmé en permanence après le premier aller-retour sur le feed
+        // (le `arm()` initial n'était fait que dans le bloc one-shot
+        // `feedStore == nil` du setup). `arm()` est idempotent.
+        feedSocketHandler?.arm()
         guard socketCancellables.isEmpty else { return }
         socialSocket.connect()
 

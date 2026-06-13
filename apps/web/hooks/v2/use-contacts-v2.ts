@@ -15,7 +15,6 @@ export interface ContactV2 {
   avatar?: string;
   languageCode: string;
   isOnline: boolean;
-  lastSeen?: string;
   lastActiveAt?: string;
   createdAt?: string;
 }
@@ -53,7 +52,6 @@ function transformToContact(user: User, isOnline: boolean): ContactV2 {
     avatar: user.avatar,
     languageCode: user.systemLanguage || user.regionalLanguage || 'fr',
     isOnline,
-    lastSeen: usersService.getLastSeenFormatted(user),
     lastActiveAt: user.lastActiveAt ? String(user.lastActiveAt) : undefined,
     createdAt: 'createdAt' in user ? String((user as unknown as Record<string, unknown>).createdAt) : undefined,
   };

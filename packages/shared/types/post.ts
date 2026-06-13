@@ -7,7 +7,7 @@
 // ENUMS
 // =====================================================
 
-export type PostType = 'POST' | 'STORY' | 'STATUS';
+export type PostType = 'POST' | 'REEL' | 'STORY' | 'STATUS';
 export type PostVisibility = 'PUBLIC' | 'FRIENDS' | 'COMMUNITY' | 'PRIVATE' | 'EXCEPT' | 'ONLY';
 
 // =====================================================
@@ -51,7 +51,7 @@ export interface PostComment {
   readonly currentUserReactions?: readonly string[];
   readonly isLikedByMe?: boolean;
   readonly isEdited?: boolean;
-  readonly isDeleted?: boolean;
+  readonly deletedAt?: string | Date | null;
   readonly createdAt: string | Date;
   readonly author?: PostAuthor;
 }
@@ -84,7 +84,7 @@ export interface Post {
   readonly shareCount: number;
   readonly isPinned: boolean;
   readonly isEdited: boolean;
-  readonly isDeleted?: boolean;
+  readonly deletedAt?: string | Date | null;
   readonly isQuote?: boolean;
   readonly repostOfId?: string | null;
   readonly expiresAt?: string | Date | null;

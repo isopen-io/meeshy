@@ -45,6 +45,7 @@ final class StoryExportShareViewModel: ObservableObject {
 
     private let exporter: StoryVideoExportServiceProviding
     private let logger = Logger(subsystem: "me.meeshy.app", category: "story-export-share")
+    private var exportTask: Task<Void, Never>?
 
     init(exporter: StoryVideoExportServiceProviding? = nil) {
         // `StoryVideoExportService.shared` is `@MainActor`-isolated so it
@@ -93,25 +94,40 @@ final class StoryExportShareViewModel: ObservableObject {
         progress = 0
         errorMessage = nil
 
-        let url = await exporter.prepareExport(
-            slide: slide,
-            languages: langs,
-            onProgress: { [weak self] fraction in
-                self?.progress = fraction
-            },
-            onPhaseChange: nil
-        )
-
-        if let url {
-            sharedURL = url
-            phase = .ready
-        } else {
-            errorMessage = String(
-                localized: "story.export.share.failed",
-                defaultValue: "L'export de la story a échoué. Réessayez."
+        // Le bake est wrappé dans un Task annulable : avant, dismisser le
+        // sheet mid-export laissait l'AVAssetWriter tourner jusqu'au bout en
+        // retenant le VM, puis posait `.ready` sur un sheet mort et orphelinait
+        // le MP4 temporaire. Le bake lui-même n'observe pas l'annulation
+        // (AVAssetWriter), mais le résultat tardif est nettoyé ici.
+        exportTask?.cancel()
+        let exporter = self.exporter
+        let task = Task { [weak self] in
+            let url = await exporter.prepareExport(
+                slide: slide,
+                languages: langs,
+                onProgress: { [weak self] fraction in
+                    self?.progress = fraction
+                },
+                onPhaseChange: nil
             )
-            phase = .failed("exporterReturnedNil")
+
+            guard let self, !Task.isCancelled else {
+                if let url { exporter.cleanupExport(at: url) }
+                return
+            }
+            if let url {
+                self.sharedURL = url
+                self.phase = .ready
+            } else {
+                self.errorMessage = String(
+                    localized: "story.export.share.failed",
+                    defaultValue: "L'export de la story a échoué. Réessayez."
+                )
+                self.phase = .failed("exporterReturnedNil")
+            }
         }
+        exportTask = task
+        await task.value
     }
 
     /// Called by the view when the `UIActivityViewController` is actually
@@ -139,6 +155,8 @@ final class StoryExportShareViewModel: ObservableObject {
     /// Resets all state. Used when the sheet is dismissed before the bake
     /// completes (user cancels the export itself).
     func cancel() {
+        exportTask?.cancel()
+        exportTask = nil
         if let url = sharedURL {
             exporter.cleanupExport(at: url)
         }

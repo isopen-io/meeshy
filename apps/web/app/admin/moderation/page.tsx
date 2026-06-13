@@ -65,7 +65,7 @@ interface ModerationStats {
 
 export default function AdminModerationPage() {
   const router = useRouter();
-  const { t } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   const [actions, setActions] = useState<ModerationAction[]>([]);
   const [stats, setStats] = useState<ModerationStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -452,7 +452,7 @@ export default function AdminModerationPage() {
                           </Badge>
                         </div>
                         <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap ml-2">
-                          {new Date(action.createdAt).toLocaleString('fr-FR', {
+                          {new Date(action.createdAt).toLocaleString(locale, {
                             day: '2-digit',
                             month: 'short',
                             hour: '2-digit',

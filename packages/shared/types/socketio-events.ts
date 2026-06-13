@@ -82,7 +82,12 @@ export const ROOMS = {
   feed: (id: string) => `feed:${id}`,
   call: (id: string) => `call:${id}`,
   post: (id: string) => `post:${id}`,
+  adminAgent: () => 'admin:agent',
 } as const;
+
+// Canal Redis pub/sub partagé service agent / gateway pour notifier les
+// dashboards admin (relayé vers la room Socket.IO `admin:agent`)
+export const AGENT_ADMIN_EVENT_CHANNEL = 'agent:admin-event';
 
 // ===== CONSTANTES D'ÉVÉNEMENTS =====
 // Convention: entity:action-word (colons + hyphens, jamais underscores)
@@ -278,6 +283,9 @@ export const SERVER_EVENTS = {
   CATEGORY_UPDATED: 'category:updated',
   CATEGORY_DELETED: 'category:deleted',
   CATEGORIES_REORDERED: 'categories:reordered',
+
+  // --- Agent admin dashboard (room admin:agent) ---
+  AGENT_ADMIN_EVENT: 'agent:admin-event',
 } as const;
 
 // Événements du client vers le serveur
@@ -346,6 +354,10 @@ export const CLIENT_EVENTS = {
 
   // --- Presence ---
   HEARTBEAT: 'heartbeat',
+
+  // --- Agent admin dashboard (souscription room admin:agent) ---
+  ADMIN_AGENT_SUBSCRIBE: 'admin:agent-subscribe',
+  ADMIN_AGENT_UNSUBSCRIBE: 'admin:agent-unsubscribe',
 } as const;
 
 // ===== ÉVÉNEMENTS SOCKET.IO =====
@@ -987,6 +999,15 @@ export interface LinkMessageNewEventData {
   readonly message: Record<string, unknown>;
 }
 
+export const AGENT_ADMIN_EVENT_KINDS = ['delivery-queue', 'scan', 'config', 'topics'] as const;
+
+export type AgentAdminEventKind = (typeof AGENT_ADMIN_EVENT_KINDS)[number];
+
+export interface AgentAdminEventData {
+  readonly kind: AgentAdminEventKind;
+  readonly conversationId?: string;
+}
+
 // Événements du serveur vers le client
 export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_NEW]: (message: SocketIOMessage) => void;
@@ -1101,6 +1122,9 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CATEGORY_UPDATED]: (data: CategoryUpdatedEventData) => void;
   [SERVER_EVENTS.CATEGORY_DELETED]: (data: CategoryDeletedEventData) => void;
   [SERVER_EVENTS.CATEGORIES_REORDERED]: (data: CategoriesReorderedEventData) => void;
+
+  // Agent admin dashboard
+  [SERVER_EVENTS.AGENT_ADMIN_EVENT]: (data: AgentAdminEventData) => void;
 
   // Notifications
   [SERVER_EVENTS.NOTIFICATION_NEW]: (data: NotificationEventData) => void;
@@ -1327,6 +1351,10 @@ export interface ClientToServerEvents {
 
   // Presence
   [CLIENT_EVENTS.HEARTBEAT]: () => void;
+
+  // Agent admin dashboard
+  [CLIENT_EVENTS.ADMIN_AGENT_SUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;
+  [CLIENT_EVENTS.ADMIN_AGENT_UNSUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;
 }
 
 // ===== TYPES DE BASE =====

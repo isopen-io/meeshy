@@ -7,6 +7,7 @@ import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
 import { Badge } from './Badge';
 import { Button } from './Button';
+import { ContactLastSeenLabel } from './ContactLastSeenLabel';
 import {
   MoreVertical,
   UserPlus,
@@ -33,6 +34,7 @@ export interface ContactCardProps {
   isFriend?: boolean;
   onAction: (action: ContactAction, contactId: string, requestId?: string) => void;
   t: (key: string, params?: Record<string, unknown>) => string;
+  locale?: string;
   className?: string;
 }
 
@@ -43,6 +45,7 @@ export const ContactCard = memo(function ContactCard({
   isFriend = false,
   onAction,
   t,
+  locale,
   className,
 }: ContactCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -80,8 +83,13 @@ export const ContactCard = memo(function ContactCard({
         <p className="text-sm truncate text-[var(--gp-text-muted)]">
           {contact.username}
         </p>
-        {!contact.isOnline && contact.lastSeen && (
-          <p className="text-xs text-[var(--gp-text-muted)]">{contact.lastSeen}</p>
+        {!contact.isOnline && (
+          <ContactLastSeenLabel
+            lastActiveAt={contact.lastActiveAt}
+            t={t}
+            locale={locale}
+            className="text-xs text-[var(--gp-text-muted)]"
+          />
         )}
       </div>
 

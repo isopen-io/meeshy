@@ -73,7 +73,7 @@ describe('PostReactionService', () => {
   const createMockPost = (overrides: any = {}) => ({
     id: testPostId,
     authorId: testUserId,
-    isDeleted: false,
+    deletedAt: null,
     reactionSummary: null,
     reactionCount: 0,
     ...overrides
@@ -218,7 +218,7 @@ describe('PostReactionService', () => {
 
     it('should throw error when post is deleted', async () => {
       mockPrisma.post.findUnique.mockResolvedValue(
-        createMockPost({ isDeleted: true })
+        createMockPost({ deletedAt: new Date() })
       );
 
       await expect(

@@ -123,6 +123,15 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
     nonisolated(unsafe) var avPlayerLooper: AVPlayerLooper?
     private nonisolated(unsafe) var backgroundLoopObserver: NSObjectProtocol?
 
+    // Même pattern que `StoryMediaLayer.deinit` : sans ce retrait, une layer
+    // vidéo-loop libérée sans reconfigure laissait un observer zombie
+    // enregistré dans NotificationCenter pour toujours.
+    nonisolated deinit {
+        if let token = backgroundLoopObserver {
+            NotificationCenter.default.removeObserver(token)
+        }
+    }
+
     /// `true` quand `configure(kind:)` a stampé `contentLayer.contents` avec
     /// une image FINALE (warm L1 cache hit OU bytes téléchargés via HTTP),
     /// pas juste un placeholder ThumbHash. Lu par
