@@ -46,15 +46,7 @@ enum RequestFilter: String, CaseIterable {
 
 extension Date {
     var relativeTimeString: String {
-        let interval = Date().timeIntervalSince(self)
-        if interval < 60 { return "A l'instant" }
-        if interval < 3600 { return "Il y a \(Int(interval / 60))min" }
-        if interval < 86400 { return "Il y a \(Int(interval / 3600))h" }
-        if interval < 604800 { return "Il y a \(Int(interval / 86400))j" }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "dd MMM"
-        return formatter.string(from: self)
+        RelativeTimeFormatter.longString(for: self)
     }
 }
 

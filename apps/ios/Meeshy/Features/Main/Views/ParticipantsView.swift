@@ -516,13 +516,7 @@ struct ParticipantsView: View {
     }()
 
     private func relativeTime(from date: Date) -> String {
-        let interval = Date().timeIntervalSince(date)
-        if interval < 60 { return String(localized: "participants.relative.now", defaultValue: "A l'instant", bundle: .main) }
-        let agoPrefix = String(localized: "participants.relative.ago", defaultValue: "Il y a", bundle: .main)
-        if interval < 3600 { return "\(agoPrefix) \(Int(interval / 60))min" }
-        if interval < 86400 { return "\(agoPrefix) \(Int(interval / 3600))h" }
-        if interval < 604800 { return "\(agoPrefix) \(Int(interval / 86400))j" }
-        return Self.shortDateFormatter.string(from: date)
+        RelativeTimeFormatter.longString(for: date)
     }
 
     private func shortDate(_ date: Date) -> String {

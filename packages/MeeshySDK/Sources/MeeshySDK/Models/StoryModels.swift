@@ -1527,11 +1527,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     public var currentUserHasReacted: Bool { !(currentUserReactions ?? []).isEmpty }
 
     public var timeAgo: String {
-        let seconds = Int(-createdAt.timeIntervalSinceNow)
-        if seconds < 60 { return "now" }
-        if seconds < 3600 { return "\(seconds / 60)m" }
-        if seconds < 86400 { return "\(seconds / 3600)h" }
-        return "\(seconds / 86400)d"
+        RelativeTimeFormatter.shortString(for: createdAt)
     }
 
     /// Computed convenience used by C.1 / C.2 to gate the Partager button and kebab items.

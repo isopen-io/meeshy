@@ -90,7 +90,7 @@ final class TextPostCell: UICollectionViewCell {
         nameLabel.text = record.authorDisplayName ?? record.authorUsername
         usernameLabel.text = record.authorUsername.map { "@\($0)" }
         contentLabel.text = record.content
-        timestampLabel.text = Self.relativeFormatter.localizedString(for: record.createdAt, relativeTo: Date())
+        timestampLabel.text = RelativeTimeFormatter.shortString(for: record.createdAt)
         likeButton.setTitle("  \(record.likeCount)", for: .normal)
         likeButton.setImage(UIImage(systemName: record.isLikedByMe ? "heart.fill" : "heart"), for: .normal)
         likeButton.tintColor = record.isLikedByMe ? .systemRed : .secondaryLabel
@@ -106,10 +106,4 @@ final class TextPostCell: UICollectionViewCell {
         nameLabel.text = nil
         avatarView.image = nil
     }
-
-    private static let relativeFormatter: RelativeDateTimeFormatter = {
-        let f = RelativeDateTimeFormatter()
-        f.unitsStyle = .short
-        return f
-    }()
 }

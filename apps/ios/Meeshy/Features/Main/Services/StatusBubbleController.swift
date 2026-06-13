@@ -127,14 +127,8 @@ private struct MoodReplyConfirmationOverlay: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @State private var appear = false
 
-    private static let relativeFormatter: RelativeDateTimeFormatter = {
-        let f = RelativeDateTimeFormatter()
-        f.unitsStyle = .short
-        return f
-    }()
-
     private var moodSummary: String {
-        let date = Self.relativeFormatter.localizedString(for: entry.createdAt, relativeTo: Date())
+        let date = RelativeTimeFormatter.shortString(for: entry.createdAt)
         let content = (entry.content?.isEmpty == false) ? " \(entry.content!)" : ""
         return "\(entry.moodEmoji)\(content) \u{00B7} \(date)"
     }

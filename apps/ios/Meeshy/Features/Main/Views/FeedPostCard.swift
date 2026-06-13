@@ -898,11 +898,7 @@ struct FeedPostCard: View {
     }
 
     func timeAgo(from date: Date) -> String {
-        let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return String(localized: "time.justNow", defaultValue: "À l'instant", bundle: .main) }
-        if seconds < 3600 { return String(localized: "time.minutesShort", defaultValue: "\(seconds / 60)m", bundle: .main) }
-        if seconds < 86400 { return String(localized: "time.hoursShort", defaultValue: "\(seconds / 3600)h", bundle: .main) }
-        return String(localized: "time.daysShort", defaultValue: "\(seconds / 86400)j", bundle: .main)
+        RelativeTimeFormatter.shortString(for: date)
     }
 }
 

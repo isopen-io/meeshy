@@ -6,6 +6,7 @@ final class MediaPostCell: UICollectionViewCell {
     private let avatarView = UIImageView()
     private let nameLabel = UILabel()
     private let contentLabel = UILabel()
+    private let timestampLabel = UILabel()
     private let mediaImageView = UIImageView()
     private let statsStack = UIStackView()
     private let likeButton = UIButton(type: .system)
@@ -60,6 +61,10 @@ final class MediaPostCell: UICollectionViewCell {
             mediaImageView.heightAnchor.constraint(equalToConstant: 200)
         ])
 
+        timestampLabel.font = .systemFont(ofSize: 12)
+        timestampLabel.textColor = .tertiaryLabel
+        mainStack.addArrangedSubview(timestampLabel)
+
         likeButton.titleLabel?.font = .systemFont(ofSize: 13)
         commentButton.titleLabel?.font = .systemFont(ofSize: 13)
         statsStack.addArrangedSubview(likeButton)
@@ -73,6 +78,7 @@ final class MediaPostCell: UICollectionViewCell {
         nameLabel.text = record.authorDisplayName ?? record.authorUsername
         contentLabel.text = record.content
         contentLabel.isHidden = record.content == nil
+        timestampLabel.text = RelativeTimeFormatter.shortString(for: record.createdAt)
         likeButton.setTitle("  \(record.likeCount)", for: .normal)
         likeButton.setImage(UIImage(systemName: record.isLikedByMe ? "heart.fill" : "heart"), for: .normal)
         likeButton.tintColor = record.isLikedByMe ? .systemRed : .secondaryLabel
@@ -83,6 +89,7 @@ final class MediaPostCell: UICollectionViewCell {
     override func prepareForReuse() {
         super.prepareForReuse()
         contentLabel.text = nil
+        timestampLabel.text = nil
         mediaImageView.image = nil
     }
 }

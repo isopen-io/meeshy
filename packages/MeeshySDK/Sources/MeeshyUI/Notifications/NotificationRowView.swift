@@ -255,16 +255,8 @@ public struct NotificationRowView: View {
     }
 
     private var relativeTime: String {
-        Self.parseISODate(notification.createdAt).map(formatRelative) ?? ""
-    }
-
-    private func formatRelative(_ date: Date) -> String {
-        let interval = Date().timeIntervalSince(date)
-        if interval < 60 { return "maintenant" }
-        if interval < 3600 { return "\(Int(interval / 60))min" }
-        if interval < 86400 { return "\(Int(interval / 3600))h" }
-        if interval < 604800 { return "\(Int(interval / 86400))j" }
-        return "\(Int(interval / 604800))sem"
+        Self.parseISODate(notification.createdAt)
+            .map { RelativeTimeFormatter.shortString(for: $0) } ?? ""
     }
 
     private var accessibilityDescription: String {

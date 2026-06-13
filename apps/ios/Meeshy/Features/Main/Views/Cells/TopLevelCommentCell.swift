@@ -72,7 +72,7 @@ final class TopLevelCommentCell: UICollectionViewCell {
     func configure(with record: CommentRecord) {
         nameLabel.text = record.authorDisplayName ?? record.authorUsername
         contentLabel.text = record.content
-        timestampLabel.text = Self.formatter.localizedString(for: record.createdAt, relativeTo: Date())
+        timestampLabel.text = RelativeTimeFormatter.shortString(for: record.createdAt)
     }
 
     override func prepareForReuse() {
@@ -80,10 +80,4 @@ final class TopLevelCommentCell: UICollectionViewCell {
         contentLabel.text = nil
         nameLabel.text = nil
     }
-
-    private static let formatter: RelativeDateTimeFormatter = {
-        let f = RelativeDateTimeFormatter()
-        f.unitsStyle = .abbreviated
-        return f
-    }()
 }

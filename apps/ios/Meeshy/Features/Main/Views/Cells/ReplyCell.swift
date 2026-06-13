@@ -49,7 +49,7 @@ final class ReplyCell: UICollectionViewCell {
     func configure(with record: CommentRecord, depth: Int = 1) {
         nameLabel.text = record.authorDisplayName ?? record.authorUsername
         contentLabel.text = record.content
-        timestampLabel.text = Self.formatter.localizedString(for: record.createdAt, relativeTo: Date())
+        timestampLabel.text = RelativeTimeFormatter.shortString(for: record.createdAt)
         leadingConstraint?.constant = Self.baseIndent + CGFloat(depth) * Self.indentPerDepth
     }
 
@@ -58,10 +58,4 @@ final class ReplyCell: UICollectionViewCell {
         contentLabel.text = nil
         nameLabel.text = nil
     }
-
-    private static let formatter: RelativeDateTimeFormatter = {
-        let f = RelativeDateTimeFormatter()
-        f.unitsStyle = .abbreviated
-        return f
-    }()
 }

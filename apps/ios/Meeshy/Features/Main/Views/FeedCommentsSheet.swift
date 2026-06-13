@@ -648,11 +648,7 @@ struct CommentsSheetView: View {
     }
 
     private func timeAgo(from date: Date) -> String {
-        let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return "\u{00C0} l'instant" }
-        if seconds < 3600 { return "\(seconds / 60)m" }
-        if seconds < 86400 { return "\(seconds / 3600)h" }
-        return "\(seconds / 86400)j"
+        RelativeTimeFormatter.shortString(for: date)
     }
 }
 
@@ -872,11 +868,7 @@ struct CommentRowView: View, Equatable {
     }
 
     private func timeAgo(from date: Date) -> String {
-        let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return "\u{00C0} l'instant" }
-        if seconds < 3600 { return "\(seconds / 60)m" }
-        if seconds < 86400 { return "\(seconds / 3600)h" }
-        return "\(seconds / 86400)j"
+        RelativeTimeFormatter.shortString(for: date)
     }
 }
 

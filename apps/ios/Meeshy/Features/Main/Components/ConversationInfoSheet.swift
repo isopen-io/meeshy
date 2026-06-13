@@ -1170,15 +1170,7 @@ struct ConversationInfoSheet: View {
     }
 
     private func relativeTime(from date: Date) -> String {
-        let interval = Date().timeIntervalSince(date)
-        if interval < 60 { return String(localized: "time.just-now", defaultValue: "A l'instant", bundle: .main) }
-        if interval < 3600 { return String(format: String(localized: "time.minutes-ago", defaultValue: "Il y a %dmin", bundle: .main), Int(interval / 60)) }
-        if interval < 86400 { return String(format: String(localized: "time.hours-ago", defaultValue: "Il y a %dh", bundle: .main), Int(interval / 3600)) }
-        if interval < 604800 { return String(format: String(localized: "time.days-ago", defaultValue: "Il y a %dj", bundle: .main), Int(interval / 86400)) }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "dd MMM"
-        return formatter.string(from: date)
+        RelativeTimeFormatter.longString(for: date)
     }
 
     private func shortDate(_ date: Date) -> String {
