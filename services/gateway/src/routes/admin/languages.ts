@@ -1,9 +1,92 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { Prisma } from '@meeshy/shared/prisma/client';
 import { logError } from '../../utils/logger';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
 import { validateQuery } from '../../validation/helpers.js';
 import { LanguageStatsQuerySchema, LanguageTimelineQuerySchema, TranslationAccuracyQuerySchema } from '../../validation/admin-schemas.js';
+
+// Les agrégations lourdes (utilisateurs distincts, paires de traduction, timeline)
+// sont exécutées côté MongoDB via aggregateRaw : seuls les agrégats traversent le
+// réseau, jamais les collections de messages (iter 40).
+
+type TranslationPairRow = {
+  _id: { from: string; to: string };
+  count: number;
+  totalScore: number;
+  scoreCount: number;
+};
+
+type UserCountRow = { _id: string; userCount: number };
+
+type TimelineRow = { _id: { date: string; lang: string }; count: number };
+
+const NON_EMPTY_LANGUAGE = { $nin: [null, ''] };
+
+function extendedJsonDate(date: Date) {
+  return { $date: date.toISOString() };
+}
+
+function translationPairsPipeline(options: { since?: Date; limit: number }): Prisma.InputJsonValue[] {
+  const match: Record<string, unknown> = { translations: { $ne: null } };
+  if (options.since) {
+    match.createdAt = { $gte: extendedJsonDate(options.since) };
+  }
+  return [
+    { $match: match },
+    { $project: { originalLanguage: 1, pair: { $objectToArray: '$translations' } } },
+    { $unwind: '$pair' },
+    {
+      $group: {
+        _id: { from: { $ifNull: ['$originalLanguage', 'unknown'] }, to: '$pair.k' },
+        count: { $sum: 1 },
+        totalScore: { $sum: { $ifNull: ['$pair.v.confidenceScore', 0] } },
+        scoreCount: { $sum: { $cond: [{ $ne: ['$pair.v.confidenceScore', null] }, 1, 0] } },
+      },
+    },
+    { $sort: { count: -1 } },
+    { $limit: options.limit },
+  ] as unknown as Prisma.InputJsonValue[];
+}
+
+function distinctUsersByLanguagePipeline(options: { since: Date; languages: string[] }): Prisma.InputJsonValue[] {
+  return [
+    {
+      $match: {
+        createdAt: { $gte: extendedJsonDate(options.since) },
+        deletedAt: null,
+        originalLanguage: { $in: options.languages },
+        senderId: { $ne: null },
+      },
+    },
+    { $lookup: { from: 'Participant', localField: 'senderId', foreignField: '_id', as: 'sender' } },
+    { $unwind: '$sender' },
+    { $match: { 'sender.userId': { $ne: null } } },
+    { $group: { _id: { lang: '$originalLanguage', userId: '$sender.userId' } } },
+    { $group: { _id: '$_id.lang', userCount: { $sum: 1 } } },
+  ] as unknown as Prisma.InputJsonValue[];
+}
+
+function dailyLanguageCountsPipeline(options: { since: Date; language?: string }): Prisma.InputJsonValue[] {
+  return [
+    {
+      $match: {
+        createdAt: { $gte: extendedJsonDate(options.since) },
+        deletedAt: null,
+        originalLanguage: options.language ?? NON_EMPTY_LANGUAGE,
+      },
+    },
+    {
+      $group: {
+        _id: {
+          date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+          lang: { $ifNull: ['$originalLanguage', 'unknown'] },
+        },
+        count: { $sum: 1 },
+      },
+    },
+  ] as unknown as Prisma.InputJsonValue[];
+}
 
 // Middleware pour vérifier les permissions admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -77,95 +160,38 @@ export async function languagesRoutes(fastify: FastifyInstance) {
         0
       );
 
-      // Enrichir avec pourcentages et nombre d'utilisateurs par langue
-      // iter-11: 1 query pour toutes les langues au lieu de N queries parallèles
+      // Utilisateurs distincts par langue — agrégé côté MongoDB ($lookup Participant)
       const topLangCodes = topLanguagesByMessages.map(l => l.originalLanguage).filter(Boolean) as string[];
-      const allLangMessages = topLangCodes.length > 0
-        ? await fastify.prisma.message.findMany({
-            where: {
-              originalLanguage: { in: topLangCodes },
-              createdAt: { gte: startDate },
-              deletedAt: null,
-              senderId: { not: null }
-            },
-            select: {
-              originalLanguage: true,
-              sender: { select: { userId: true } }
-            }
-          })
+      const userCountRows = topLangCodes.length > 0
+        ? (await fastify.prisma.message.aggregateRaw({
+            pipeline: distinctUsersByLanguagePipeline({ since: startDate, languages: topLangCodes }),
+          }) as unknown as UserCountRow[])
         : [];
 
-      const usersByLang = new Map<string, Set<string>>();
-      for (const msg of allLangMessages) {
-        const lang = msg.originalLanguage;
-        const uid = msg.sender?.userId;
-        if (lang && uid) {
-          if (!usersByLang.has(lang)) usersByLang.set(lang, new Set());
-          usersByLang.get(lang)!.add(uid);
-        }
-      }
+      const usersByLang = new Map(userCountRows.map((row) => [row._id, row.userCount]));
 
       const topLanguages = topLanguagesByMessages.map((lang) => ({
         language: lang.originalLanguage || 'Unknown',
         messageCount: lang._count.id,
-        userCount: usersByLang.get(lang.originalLanguage ?? '') ?.size ?? 0,
+        userCount: usersByLang.get(lang.originalLanguage ?? '') ?? 0,
         percentage: totalMessages > 0
           ? Math.round((lang._count.id / totalMessages) * 100)
           : 0
       }));
 
-      // Paires de langues les plus traduites (source -> target)
-      // Récupérer messages avec translations (JSON)
-      const messagesWithTranslations = await fastify.prisma.message.findMany({
-        where: {
-          createdAt: { gte: startDate },
-          translations: {
-            not: null
-          }
-        },
-        select: {
-          originalLanguage: true,
-          translations: true
-        }
-      });
+      // Paires de langues les plus traduites (source -> target) — agrégé côté MongoDB
+      const pairRows = await fastify.prisma.message.aggregateRaw({
+        pipeline: translationPairsPipeline({ since: startDate, limit: 10 }),
+      }) as unknown as TranslationPairRow[];
 
-      // Aggregate language pairs manually depuis JSON
-      const pairCounts: Record<string, { count: number; totalScore: number; scoreCount: number }> = {};
-
-      messagesWithTranslations.forEach(msg => {
-        const sourceLanguage = msg.originalLanguage || 'unknown';
-        const translations = msg.translations as unknown as Record<string, any>;
-
-        if (translations) {
-          Object.entries(translations).forEach(([targetLang, transData]: [string, any]) => {
-            const key = `${sourceLanguage}|${targetLang}`;
-
-            if (!pairCounts[key]) {
-              pairCounts[key] = { count: 0, totalScore: 0, scoreCount: 0 };
-            }
-            pairCounts[key].count++;
-            if (transData.confidenceScore != null) {
-              pairCounts[key].totalScore += transData.confidenceScore;
-              pairCounts[key].scoreCount++;
-            }
-          });
-        }
-      });
-
-      const formattedPairs = Object.entries(pairCounts)
-        .map(([key, data]) => {
-          const [from, to] = key.split('|');
-          return {
-            from,
-            to,
-            translationCount: data.count,
-            avgConfidence: data.scoreCount > 0
-              ? Math.round((data.totalScore / data.scoreCount) * 100) / 100
-              : 0
-          };
-        })
-        .sort((a, b) => b.translationCount - a.translationCount)
-        .slice(0, 10);
+      const formattedPairs = pairRows.map((row) => ({
+        from: row._id.from,
+        to: row._id.to,
+        translationCount: row.count,
+        avgConfidence: row.scoreCount > 0
+          ? Math.round((row.totalScore / row.scoreCount) * 100) / 100
+          : 0
+      }));
 
       // Utilisateurs par langue préférée (langue système)
       const usersByLanguage = await fastify.prisma.user.groupBy({
@@ -276,26 +302,11 @@ export async function languagesRoutes(fastify: FastifyInstance) {
       startDate.setDate(startDate.getDate() - days);
       startDate.setHours(0, 0, 0, 0);
 
-      // Récupérer tous les messages de la période
-      const where: any = {
-        createdAt: { gte: startDate },
-        deletedAt: null,
-        originalLanguage: { not: '' } // Prisma+Mongo rejects `not: null`; exclude empties with a concrete value
-      };
+      // Comptage par jour et par langue — agrégé côté MongoDB ($dateToString)
+      const timelineRows = await fastify.prisma.message.aggregateRaw({
+        pipeline: dailyLanguageCountsPipeline({ since: startDate, language }),
+      }) as unknown as TimelineRow[];
 
-      if (language) {
-        where.originalLanguage = language;
-      }
-
-      const messages = await fastify.prisma.message.findMany({
-        where,
-        select: {
-          createdAt: true,
-          originalLanguage: true
-        }
-      });
-
-      // Grouper par jour
       const dailyData: Record<string, Record<string, number>> = {};
 
       for (let i = days - 1; i >= 0; i--) {
@@ -305,12 +316,9 @@ export async function languagesRoutes(fastify: FastifyInstance) {
         dailyData[dateKey] = {};
       }
 
-      messages.forEach(msg => {
-        const dateKey = msg.createdAt.toISOString().split('T')[0];
-        const lang = msg.originalLanguage || 'unknown';
-
-        if (dailyData[dateKey]) {
-          dailyData[dateKey][lang] = (dailyData[dateKey][lang] || 0) + 1;
+      timelineRows.forEach((row) => {
+        if (dailyData[row._id.date]) {
+          dailyData[row._id.date][row._id.lang] = row.count;
         }
       });
 
@@ -338,65 +346,30 @@ export async function languagesRoutes(fastify: FastifyInstance) {
       const query = request.query as any;
       const limit = parseInt(query.limit) || 10;
 
-      // Fetch messages avec translations (JSON)
-      const messagesWithTranslations = await fastify.prisma.message.findMany({
-        where: {
-          translations: {
-            not: null
-          }
-        },
-        select: {
-          originalLanguage: true,
-          translations: true
-        }
+      // Précision par paire de langues — agrégé côté MongoDB
+      const pairRows = await fastify.prisma.message.aggregateRaw({
+        pipeline: translationPairsPipeline({ limit }),
+      }) as unknown as TranslationPairRow[];
+
+      const accuracy = pairRows.map((row) => {
+        const avgConfidence = row.scoreCount > 0
+          ? row.totalScore / row.scoreCount
+          : 0;
+
+        return {
+          from: row._id.from,
+          to: row._id.to,
+          avgConfidence: Math.round(avgConfidence * 100),
+          translationCount: row.count,
+          quality: avgConfidence > 0.9
+            ? 'excellent'
+            : avgConfidence > 0.7
+              ? 'good'
+              : avgConfidence > 0.5
+                ? 'fair'
+                : 'poor'
+        };
       });
-
-      // Aggregate by language pair manually depuis JSON
-      const pairStats: Record<string, { count: number; totalScore: number; scoreCount: number }> = {};
-
-      messagesWithTranslations.forEach(msg => {
-        const sourceLanguage = msg.originalLanguage || 'unknown';
-        const translations = msg.translations as unknown as Record<string, any>;
-
-        if (translations) {
-          Object.entries(translations).forEach(([targetLang, transData]: [string, any]) => {
-            const key = `${sourceLanguage}|${targetLang}`;
-
-            if (!pairStats[key]) {
-              pairStats[key] = { count: 0, totalScore: 0, scoreCount: 0 };
-            }
-            pairStats[key].count++;
-            if (transData.confidenceScore != null) {
-              pairStats[key].totalScore += transData.confidenceScore;
-              pairStats[key].scoreCount++;
-            }
-          });
-        }
-      });
-
-      const accuracy = Object.entries(pairStats)
-        .map(([key, data]) => {
-          const [from, to] = key.split('|');
-          const avgConfidence = data.scoreCount > 0
-            ? data.totalScore / data.scoreCount
-            : 0;
-
-          return {
-            from,
-            to,
-            avgConfidence: Math.round(avgConfidence * 100),
-            translationCount: data.count,
-            quality: avgConfidence > 0.9
-              ? 'excellent'
-              : avgConfidence > 0.7
-                ? 'good'
-                : avgConfidence > 0.5
-                  ? 'fair'
-                  : 'poor'
-          };
-        })
-        .sort((a, b) => b.translationCount - a.translationCount)
-        .slice(0, limit);
 
       return sendSuccess(reply, accuracy);
     } catch (error) {

@@ -198,7 +198,6 @@ describe('PostReactionHandler', () => {
       visibility: 'PUBLIC',
       visibilityUserIds: [],
       deletedAt: null,
-      isDeleted: false,
     });
 
     handler = new PostReactionHandler({
@@ -341,7 +340,6 @@ describe('PostReactionHandler', () => {
         visibility: 'PUBLIC',
         visibilityUserIds: [],
         deletedAt: null,
-        isDeleted: false,
       });
 
       mockValidate.mockReturnValue({ success: true, data });
@@ -375,7 +373,6 @@ describe('PostReactionHandler', () => {
         visibility: 'PUBLIC',
         visibilityUserIds: [],
         deletedAt: null,
-        isDeleted: false,
       });
 
       const crossUserHandler = new PostReactionHandler({

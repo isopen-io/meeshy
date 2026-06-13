@@ -50,7 +50,7 @@ export class PostFeedService {
 
     // Phase 1 — Fetch candidates
     const where: any = {
-      isDeleted: false,
+      deletedAt: null,
       type: PostType.POST,
       visibility: { in: ['PUBLIC', 'FRIENDS'] },
       // Exclude expired (isSet: false matches MongoDB docs where field is absent)
@@ -133,7 +133,7 @@ export class PostFeedService {
           // set AND whose author is the viewer. Drives the "I've already
           // reposted this" green icon on the feed.
           this.prisma.post.findMany({
-            where: { authorId: userId, repostOfId: { in: postIds }, isDeleted: false },
+            where: { authorId: userId, repostOfId: { in: postIds }, deletedAt: null },
             select: { repostOfId: true },
           }),
         ])
@@ -169,7 +169,7 @@ export class PostFeedService {
     const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds);
 
     const where: any = {
-      isDeleted: false,
+      deletedAt: null,
       type: PostType.STORY,
       AND: [
         visibilityFilter,
@@ -223,7 +223,7 @@ export class PostFeedService {
     const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds);
 
     const whereClause: any = {
-      isDeleted: false,
+      deletedAt: null,
       type: PostType.STATUS,
       AND: [
         visibilityFilter,
@@ -263,7 +263,7 @@ export class PostFeedService {
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
     const where: any = {
-      isDeleted: false,
+      deletedAt: null,
       type: PostType.STATUS,
       visibility: PostVisibility.PUBLIC,
       AND: [
@@ -303,7 +303,7 @@ export class PostFeedService {
 
     const where: any = {
       authorId: targetUserId,
-      isDeleted: false,
+      deletedAt: null,
       type: PostType.POST,
     };
 
@@ -367,7 +367,7 @@ export class PostFeedService {
 
     const where: any = {
       communityId,
-      isDeleted: false,
+      deletedAt: null,
       type: PostType.POST,
       visibility: { in: ['PUBLIC', 'COMMUNITY'] },
     };
@@ -451,7 +451,7 @@ export class PostFeedService {
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
 
-    const posts = items.map((b) => b.post).filter((p) => p && !p.isDeleted);
+    const posts = items.map((b) => b.post).filter((p) => p && !p.deletedAt);
     const bookmarkPostIds = posts.map((p) => p.id);
     const bookmarkUserReactions = bookmarkPostIds.length > 0
       ? await this.prisma.postReaction.findMany({

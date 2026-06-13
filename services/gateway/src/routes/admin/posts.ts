@@ -117,25 +117,25 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       ] = await Promise.all([
         // Total posts (non-deleted)
         fastify.prisma.post.count({
-          where: { isDeleted: false, ...dateFilter }
+          where: { deletedAt: null, ...dateFilter }
         }),
 
         // Count by type
         fastify.prisma.post.groupBy({
           by: ['type'],
-          where: { isDeleted: false, ...dateFilter },
+          where: { deletedAt: null, ...dateFilter },
           _count: { id: true }
         }),
 
         // Deleted posts
         fastify.prisma.post.count({
-          where: { isDeleted: true, ...dateFilter }
+          where: { deletedAt: { not: null }, ...dateFilter }
         }),
 
         // Top 10 authors by post count
         fastify.prisma.post.groupBy({
           by: ['authorId'],
-          where: { isDeleted: false, ...dateFilter },
+          where: { deletedAt: null, ...dateFilter },
           _count: { id: true },
           orderBy: { _count: { id: 'desc' } },
           take: 10
@@ -143,7 +143,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
 
         // Top 10 trending posts by engagement (likes + comments + reposts)
         fastify.prisma.post.findMany({
-          where: { isDeleted: false, ...dateFilter },
+          where: { deletedAt: null, ...dateFilter },
           select: {
             id: true,
             type: true,
@@ -274,9 +274,9 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
 
       // Default to non-deleted posts unless explicitly requested
       if (isDeleted === 'true') {
-        where.isDeleted = true;
+        where.deletedAt = { not: null };
       } else if (isDeleted === 'false' || isDeleted === undefined) {
-        where.isDeleted = false;
+        where.deletedAt = null;
       }
 
       if (search) {
@@ -316,7 +316,6 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
             moodEmoji: true,
             isPinned: true,
             isEdited: true,
-            isDeleted: true,
             deletedAt: true,
             expiresAt: true,
             likeCount: true,
@@ -413,7 +412,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
             orderBy: { order: 'asc' }
           },
           comments: {
-            where: { isDeleted: false },
+            where: { deletedAt: null },
             select: {
               id: true,
               content: true,
@@ -421,7 +420,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
               likeCount: true,
               replyCount: true,
               isEdited: true,
-              isDeleted: true,
+              deletedAt: true,
               createdAt: true,
               author: { select: authorSelect },
             },
@@ -532,21 +531,20 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
 
       const post = await fastify.prisma.post.findUnique({
         where: { id: postId },
-        select: { id: true, isDeleted: true, authorId: true }
+        select: { id: true, deletedAt: true, authorId: true }
       });
 
       if (!post) {
         return sendNotFound(reply, 'Post non trouve');
       }
 
-      if (post.isDeleted) {
+      if (post.deletedAt) {
         return sendBadRequest(reply, 'Le post est deja supprime');
       }
 
       await fastify.prisma.post.update({
         where: { id: postId },
         data: {
-          isDeleted: true,
           deletedAt: new Date()
         }
       });

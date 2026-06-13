@@ -85,14 +85,14 @@ export class PostReactionService {
 
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      select: { id: true, isDeleted: true }
+      select: { id: true, deletedAt: true }
     });
 
     if (!post) {
       throw new Error('Post not found');
     }
 
-    if (post.isDeleted) {
+    if (post.deletedAt) {
       throw new Error('Post has been deleted');
     }
 

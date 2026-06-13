@@ -543,7 +543,6 @@ export class MentionService {
       select: {
         id: true,
         authorId: true,
-        isDeleted: true,
         deletedAt: true,
         author: {
           select: {
@@ -558,7 +557,7 @@ export class MentionService {
       }
     });
 
-    if (!post || post.isDeleted || post.deletedAt) {
+    if (!post || post.deletedAt) {
       throw new Error('Post non trouvé ou accès refusé');
     }
 
@@ -607,7 +606,6 @@ export class MentionService {
     const comments = await this.prisma.postComment.findMany({
       where: {
         postId,
-        isDeleted: false,
         deletedAt: null,
         authorId: { not: currentUserId }
       },

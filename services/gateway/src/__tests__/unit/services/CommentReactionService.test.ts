@@ -75,7 +75,7 @@ describe('CommentReactionService', () => {
     id: testCommentId,
     postId: testPostId,
     authorId: testUserId,
-    isDeleted: false,
+    deletedAt: null,
     reactionSummary: null,
     reactionCount: 0,
     ...overrides
@@ -223,7 +223,7 @@ describe('CommentReactionService', () => {
 
     it('should throw error when comment is deleted', async () => {
       mockPrisma.postComment.findUnique.mockResolvedValue(
-        createMockPostComment({ isDeleted: true })
+        createMockPostComment({ deletedAt: new Date() })
       );
 
       await expect(
