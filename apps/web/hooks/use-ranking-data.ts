@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { adminService } from '@/services/admin.service';
+import { logger } from '@/utils/logger';
 
 interface RankingMetadata {
   username?: string;
@@ -98,9 +99,9 @@ export function useRankingData({ entityType, criterion, period, limit }: UseRank
     setError(null);
 
     try {
-      console.log('[Ranking] Fetching with params:', { entityType, criterion, period, limit });
+      logger.debug('[Ranking] Fetching with params:', { entityType, criterion, period, limit });
       const response = await adminService.getRankings(entityType, criterion, period, limit);
-      console.log('[Ranking] Response received:', response);
+      logger.debug('[Ranking] Response received:', response);
 
       if (response.success && response.data) {
         const rawData = response.data as Record<string, unknown>;
@@ -116,16 +117,16 @@ export function useRankingData({ entityType, criterion, period, limit }: UseRank
             rank: index + 1,
             metadata: item
           }));
-          console.log('[Ranking] Processed rankings:', rankedData.length, 'items');
+          logger.debug('[Ranking] Processed rankings:', rankedData.length, 'items');
           setRankings(rankedData);
         } else {
           const errorMsg = 'Format de réponse invalide: rankings n\'est pas un tableau';
-          console.error('[Ranking] Invalid format:', response.data);
+          logger.error('[Ranking] Invalid format:', response.data);
           setError(errorMsg);
         }
       } else {
         const errorMsg = response.message || 'Erreur lors du chargement des classements';
-        console.error('[Ranking] Response error:', errorMsg, response);
+        logger.error('[Ranking] Response error:', errorMsg, response);
         setError(errorMsg);
       }
     } catch (err: any) {
@@ -135,7 +136,7 @@ export function useRankingData({ entityType, criterion, period, limit }: UseRank
         errorMessage = 'Impossible de se connecter au serveur backend. Vérifiez que le gateway est démarré.';
       }
 
-      console.error('[Ranking] Fetch error:', errorMessage, err);
+      logger.error('[Ranking] Fetch error:', errorMessage, err);
       setError(errorMessage);
     } finally {
       setLoading(false);

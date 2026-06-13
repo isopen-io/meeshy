@@ -5,7 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { RankingItem } from '@/hooks/use-ranking-data';
 import { RANKING_CRITERIA } from './constants';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
-import { useTheme } from 'next-themes';
+import { useResolvedTheme } from '@/hooks/use-resolved-theme';
 import { useI18n } from '@/hooks/useI18n';
 
 export interface RankingStatsProps {
@@ -22,8 +22,7 @@ function formatCount(count: unknown, locale: string) {
 export function RankingStats({ rankings, criterion, entityType }: RankingStatsProps) {
   const locale = useCurrentInterfaceLanguage();
   const { t } = useI18n('admin');
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === 'dark';
+  const isDark = useResolvedTheme() === 'dark';
   const chartColors = isDark
     ? { grid: '#78350f', axis: '#fbbf24', tooltipBg: '#1c1917', tooltipBorder: '#d97706', tooltipText: '#fde68a', gold: '#fbbf24', silver: '#9ca3af', bronze: '#d97706', rest: '#b45309' }
     : { grid: '#fef3c7', axis: '#d97706', tooltipBg: '#fffbeb', tooltipBorder: '#fbbf24', tooltipText: '#92400e', gold: '#fbbf24', silver: '#d1d5db', bronze: '#d97706', rest: '#fcd34d' };

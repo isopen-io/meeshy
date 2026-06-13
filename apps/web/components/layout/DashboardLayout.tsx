@@ -38,7 +38,7 @@ import {
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { useUser, useIsAuthChecking } from '@/stores';
 import { useAuth } from '@/hooks/use-auth';
-import { useAppStore } from '@/stores/app-store';
+import { useTheme, useAppActions } from '@/stores/app-store';
 import { authManager } from '@/services/auth-manager.service';
 
 interface DashboardLayoutProps {
@@ -63,7 +63,8 @@ export function DashboardLayout({
   const { t } = useI18n('common');
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobile, setIsMobile] = useState(false);
-  const { theme, setTheme } = useAppStore();
+  const theme = useTheme();
+  const { setTheme } = useAppActions();
 
   // Détection mobile optimisée avec useCallback pour éviter les re-renders
   const checkMobile = useCallback(() => {

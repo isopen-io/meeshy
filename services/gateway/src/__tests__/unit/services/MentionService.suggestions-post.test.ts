@@ -96,7 +96,6 @@ function buildPost(overrides: Record<string, unknown> = {}) {
   return {
     id: POST_ID,
     authorId: AUTHOR_ID,
-    isDeleted: false,
     deletedAt: null,
     visibility: 'PUBLIC',
     author: buildUser(),
@@ -109,7 +108,7 @@ function buildComment(authorId: string, overrides: Record<string, unknown> = {})
     id: `comment-${authorId}`,
     postId: POST_ID,
     authorId,
-    isDeleted: false,
+    deletedAt: null,
     author: buildUser({ id: authorId, username: `commenter_${authorId.slice(-4)}` }),
     ...overrides,
   };
@@ -165,7 +164,7 @@ describe('MentionService.getUserSuggestionsForPost', () => {
 
     it('should throw PermissionDeniedError when post is soft-deleted', async () => {
       (prisma.post as { findUnique: jest.Mock }).findUnique.mockResolvedValue(
-        buildPost({ isDeleted: true, deletedAt: new Date() })
+        buildPost({ deletedAt: new Date() })
       );
 
       await expect(
@@ -349,7 +348,7 @@ describe('MentionService.getUserSuggestionsForPost', () => {
           id: `comment-${u.id}`,
           postId: POST_ID,
           authorId: u.id,
-          isDeleted: false,
+          deletedAt: null,
           author: u,
         }))
       );

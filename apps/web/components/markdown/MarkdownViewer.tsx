@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import dynamic from 'next/dynamic';
-import { useTheme } from 'next-themes';
+import { useResolvedTheme } from '@/hooks/use-resolved-theme';
 import {
   Download,
   AlertTriangle,
@@ -67,11 +67,9 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
-  const { theme, resolvedTheme } = useTheme();
-
   // Utiliser directement l'URL depuis l'attachement qui contient déjà le bon chemin
   const attachmentFileUrl = attachment.fileUrl;
-  const isDark = theme === 'dark' || resolvedTheme === 'dark';
+  const isDark = useResolvedTheme() === 'dark';
 
   useEffect(() => {
     const fetchContent = async () => {

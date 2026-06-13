@@ -32,7 +32,7 @@ function makePost(id: string, overrides: Record<string, unknown> = {}) {
     viewCount: 0,
     bookmarkCount: 0,
     isPinned: false,
-    isDeleted: false,
+    deletedAt: null,
     createdAt: new Date('2025-01-01T00:00:00Z'),
     expiresAt: null,
     author: { id: 'author-1', username: 'alice', displayName: 'Alice', avatar: null },

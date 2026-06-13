@@ -86,7 +86,7 @@ function makePost(overrides: Record<string, unknown> = {}) {
     shareCount: 0,
     repostCount: 0,
     isPinned: false,
-    isDeleted: false,
+    deletedAt: null,
     ...overrides,
   };
 }
@@ -108,7 +108,7 @@ function makeComment(overrides: Record<string, unknown> = {}) {
     likeCount: 3,
     replyCount: 0,
     reactionSummary: {},
-    isDeleted: false,
+    deletedAt: null,
     ...overrides,
   };
 }
@@ -980,9 +980,9 @@ describe('PostService', () => {
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
 
-    it('soft-deletes the post by setting isDeleted and deletedAt', async () => {
+    it('soft-deletes the post by setting deletedAt', async () => {
       prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1' }));
-      const deletedPost = makePost({ isDeleted: true });
+      const deletedPost = makePost({ deletedAt: new Date() });
       prisma.post.update.mockResolvedValue(deletedPost);
 
       const result = await service.deletePost('post-1', 'user-1');
@@ -991,7 +991,6 @@ describe('PostService', () => {
         expect.objectContaining({
           where: { id: 'post-1' },
           data: {
-            isDeleted: true,
             deletedAt: expect.any(Date),
           },
         }),
@@ -1131,7 +1130,7 @@ describe('PostCommentService', () => {
       expect(prisma.postComment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'comment-1' },
-          data: { isDeleted: true, deletedAt: expect.any(Date) },
+          data: { deletedAt: expect.any(Date) },
         }),
       );
       expect(prisma.post.update).toHaveBeenCalledWith(
@@ -1156,7 +1155,7 @@ describe('PostCommentService', () => {
       expect(prisma.postComment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'comment-1' },
-          data: { isDeleted: true, deletedAt: expect.any(Date) },
+          data: { deletedAt: expect.any(Date) },
         }),
       );
       // Second update call: decrement parent replyCount

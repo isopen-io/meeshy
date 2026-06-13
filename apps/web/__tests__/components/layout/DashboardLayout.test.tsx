@@ -67,8 +67,8 @@ jest.mock('@/hooks/useI18n', () => ({
 // Mock app store
 const mockSetTheme = jest.fn();
 jest.mock('@/stores/app-store', () => ({
-  useAppStore: () => ({
-    theme: 'light',
+  useTheme: () => 'light',
+  useAppActions: () => ({
     setTheme: mockSetTheme,
   }),
 }));
@@ -359,11 +359,10 @@ describe('DashboardLayout', () => {
     });
 
     it('should use app store theme', () => {
-      const { useAppStore } = require('@/stores/app-store');
-      const store = useAppStore();
+      const { useTheme, useAppActions } = require('@/stores/app-store');
 
-      expect(store.theme).toBe('light');
-      expect(store.setTheme).toBeDefined();
+      expect(useTheme()).toBe('light');
+      expect(useAppActions().setTheme).toBeDefined();
     });
   });
 

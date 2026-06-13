@@ -40,7 +40,7 @@ struct ConversationBackgroundConfig {
         memberCount: Int = 2,
         topLanguages: [String] = [],
         accentHex: String = MeeshyColors.brandPrimaryHex,
-        secondaryHex: String = MeeshyColors.brandDeepHex,
+        secondaryHex: String = MeeshyColors.indigo400Hex,
         isDarkMode: Bool = ThemeManager.shared.mode.isDark,
         groupEndHex: String? = nil,
         groupColorFadeDuration: Double = 10.0

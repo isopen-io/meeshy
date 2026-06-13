@@ -21,12 +21,9 @@ jest.mock('next/dynamic', () => {
   };
 });
 
-// Mock next-themes
-jest.mock('next-themes', () => ({
-  useTheme: jest.fn(() => ({
-    theme: 'light',
-    resolvedTheme: 'light',
-  })),
+// Mock the resolved-theme hook (single source of programmatic theming)
+jest.mock('@/hooks/use-resolved-theme', () => ({
+  useResolvedTheme: jest.fn(() => 'light'),
 }));
 
 // react-markdown is mocked via moduleNameMapper -> __mocks__/react-markdown.js
@@ -67,7 +64,7 @@ global.fetch = mockFetch;
 
 // Import after mocks
 import { MarkdownViewer } from '../../../components/markdown/MarkdownViewer';
-import { useTheme } from 'next-themes';
+import { useResolvedTheme } from '@/hooks/use-resolved-theme';
 
 // Create mock attachment
 const createMockAttachment = (overrides: Partial<UploadedAttachmentResponse> = {}): UploadedAttachmentResponse => ({
@@ -88,10 +85,7 @@ describe('MarkdownViewer', () => {
       ok: true,
       text: () => Promise.resolve('# Hello World\n\nThis is markdown content.'),
     });
-    (useTheme as jest.Mock).mockReturnValue({
-      theme: 'light',
-      resolvedTheme: 'light',
-    });
+    (useResolvedTheme as jest.Mock).mockReturnValue('light');
   });
 
   describe('Basic Rendering', () => {
@@ -491,10 +485,7 @@ describe('MarkdownViewer', () => {
 
   describe('Theme Support', () => {
     it('should pass dark theme to CodeHighlighter when theme is dark', async () => {
-      (useTheme as jest.Mock).mockReturnValue({
-        theme: 'dark',
-        resolvedTheme: 'dark',
-      });
+      (useResolvedTheme as jest.Mock).mockReturnValue('dark');
 
       const attachment = createMockAttachment();
 
@@ -508,10 +499,7 @@ describe('MarkdownViewer', () => {
     });
 
     it('should pass light theme to CodeHighlighter when theme is light', async () => {
-      (useTheme as jest.Mock).mockReturnValue({
-        theme: 'light',
-        resolvedTheme: 'light',
-      });
+      (useResolvedTheme as jest.Mock).mockReturnValue('light');
 
       const attachment = createMockAttachment();
 

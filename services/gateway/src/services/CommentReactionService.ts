@@ -94,7 +94,7 @@ export class CommentReactionService {
       throw new Error('Comment not found');
     }
 
-    if (comment.isDeleted) {
+    if (comment.deletedAt) {
       throw new Error('Comment has been deleted');
     }
 

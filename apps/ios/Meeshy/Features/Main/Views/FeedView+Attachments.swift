@@ -28,7 +28,8 @@ extension FeedView {
     func handleFeedCameraCapture(_ image: UIImage) {
         let prep = AttachmentPreparationService.shared.prepareImage(
             image,
-            context: .feedPost
+            context: .feedPost,
+            accentColor: MeeshyColors.brandPrimaryHex
         )
         trackFeedPreparation(prep)
     }
@@ -659,7 +660,7 @@ struct FeedComposerSheet: View {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(MeeshyColors.info)
+                            .foregroundColor(MeeshyColors.brandPrimary)
                     }
                     .accessibilityLabel(String(localized: "Ajouter une photo", defaultValue: "Ajouter une photo"))
                     Button { showCamera = true; HapticFeedback.light() } label: {
@@ -689,7 +690,7 @@ struct FeedComposerSheet: View {
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(MeeshyColors.brandPrimary)
+                            .foregroundColor(MeeshyColors.errorStrong)
                     }
                     .accessibilityLabel(String(localized: "Enregistrer un audio", defaultValue: "Enregistrer un audio"))
 
@@ -984,7 +985,7 @@ struct FeedComposerSheet: View {
                 }
             } else {
                 let prep = AttachmentPreparationService.shared.preparePhotosPickerItem(
-                    item, context: .feedPost, accentColor: ""
+                    item, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex
                 )
                 trackSheetPreparation(prep)
             }
@@ -993,7 +994,7 @@ struct FeedComposerSheet: View {
 
     private func handleCameraCapture(_ image: UIImage) {
         let prep = AttachmentPreparationService.shared.prepareImage(
-            image, context: .feedPost
+            image, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex
         )
         trackSheetPreparation(prep)
     }

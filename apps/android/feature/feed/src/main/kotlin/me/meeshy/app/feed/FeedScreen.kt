@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -133,7 +134,9 @@ private fun PostCard(
                 }
             }
             Spacer(Modifier.height(MeeshySpacing.md))
-            Text(text = post.content ?: "", style = MaterialTheme.typography.bodyMedium)
+            SelectionContainer {
+                Text(text = post.content ?: "", style = MaterialTheme.typography.bodyMedium)
+            }
             Spacer(Modifier.height(MeeshySpacing.sm))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onLike) {
