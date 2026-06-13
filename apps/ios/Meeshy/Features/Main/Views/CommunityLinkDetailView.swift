@@ -59,7 +59,15 @@ struct CommunityLinkDetailView: View {
                 guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                       let window = scene.windows.first,
                       let root = window.rootViewController else { return }
-                root.present(av, animated: true)
+                var topVC = root
+                while let presented = topVC.presentedViewController { topVC = presented }
+                // iPad: UIActivityViewController needs a popover anchor or -present crashes.
+                if let popover = av.popoverPresentationController {
+                    popover.sourceView = topVC.view
+                    popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
+                    popover.permittedArrowDirections = []
+                }
+                topVC.present(av, animated: true)
             }
             communityActionButton(String(localized: "communityLink.identify", defaultValue: "Identify", bundle: .main), icon: "doc.plaintext", color: MeeshyColors.brandPrimary) {
                 UIPasteboard.general.string = link.identifier
