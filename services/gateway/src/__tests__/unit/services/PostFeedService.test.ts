@@ -57,6 +57,7 @@ let mockFriendRequestFindMany: jest.Mock;
 let mockParticipantFindMany: jest.Mock;
 let mockPostViewFindMany: jest.Mock;
 let mockPostBookmarkFindMany: jest.Mock;
+let mockPostImpressionGroupBy: jest.Mock;
 let mockPrisma: PrismaClient;
 
 beforeEach(() => {
@@ -66,6 +67,7 @@ beforeEach(() => {
   mockParticipantFindMany = jest.fn().mockResolvedValue([]);
   mockPostViewFindMany = jest.fn().mockResolvedValue([]);
   mockPostBookmarkFindMany = jest.fn().mockResolvedValue([]);
+  mockPostImpressionGroupBy = jest.fn().mockResolvedValue([]);
 
   mockPrisma = {
     post: {
@@ -176,6 +178,15 @@ beforeEach(() => {
       updateManyAndReturn: jest.fn(),
       fields: {} as any,
     } as unknown as PrismaClient['postBookmark'],
+    postImpression: {
+      groupBy: mockPostImpressionGroupBy,
+      findMany: jest.fn().mockResolvedValue([]),
+      create: jest.fn(),
+      createMany: jest.fn(),
+      count: jest.fn(),
+      aggregate: jest.fn(),
+      fields: {} as any,
+    } as unknown as PrismaClient['postImpression'],
   } as unknown as PrismaClient;
 });
 
@@ -408,5 +419,76 @@ describe('PostFeedService.getBookmarks', () => {
     await service.getBookmarks('user-1');
 
     expect(mockPostReactionFindMany).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PostFeedService.getFeed — intent/interest ranking
+//
+// The affinity query (getInterestAffinity) and the enrichment query both hit
+// postReaction.findMany. We disambiguate by the query shape: the affinity query
+// selects the related post's authorId, the enrichment query selects postId/emoji.
+// ---------------------------------------------------------------------------
+
+function rankById(items: unknown[]): string[] {
+  return items.map((i: any) => i.id);
+}
+
+function routeReactionQuery(args: any, affinityRows: unknown[], enrichmentRows: unknown[]) {
+  return args?.select?.post ? Promise.resolve(affinityRows) : Promise.resolve(enrichmentRows);
+}
+
+describe('PostFeedService.getFeed — intent/interest ranking', () => {
+  const recent = () => new Date(Date.now() - 60_000); // 1 min ago → recency ~equal across posts
+
+  it('ranks a reel above an otherwise-identical text post via the watch-signal boost', async () => {
+    const textPost = makePost('text-1', { type: 'POST', createdAt: recent(), viewCount: 200 });
+    const reel = makePost('reel-1', { type: 'REEL', createdAt: recent(), viewCount: 200 });
+    mockPostFindMany.mockResolvedValue([textPost, reel]);
+    mockPostReactionFindMany.mockImplementation((args: any) => routeReactionQuery(args, [], []));
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getFeed('user-1');
+
+    expect(rankById(result.items)[0]).toBe('reel-1');
+  });
+
+  it('demotes a post the viewer has already seen (impression fatigue)', async () => {
+    const seen = makePost('seen-1', { authorId: 'a-seen', createdAt: recent() });
+    const fresh = makePost('fresh-1', { authorId: 'a-fresh', createdAt: recent() });
+    mockPostFindMany.mockResolvedValue([seen, fresh]);
+    mockPostReactionFindMany.mockImplementation((args: any) => routeReactionQuery(args, [], []));
+    mockPostImpressionGroupBy.mockResolvedValue([{ postId: 'seen-1', _count: { postId: 3 } }]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getFeed('user-1');
+
+    expect(rankById(result.items)[0]).toBe('fresh-1');
+  });
+
+  it('boosts posts from a creator the viewer actively engages with (interest affinity)', async () => {
+    const fromLoved = makePost('loved-1', { authorId: 'creator-loved', createdAt: recent() });
+    const fromOther = makePost('other-1', { authorId: 'creator-other', createdAt: recent() });
+    mockPostFindMany.mockResolvedValue([fromOther, fromLoved]);
+    // Viewer has reacted to creator-loved's content repeatedly → strong interest.
+    const affinityRows = Array.from({ length: 10 }, () => ({ post: { authorId: 'creator-loved' } }));
+    mockPostReactionFindMany.mockImplementation((args: any) => routeReactionQuery(args, affinityRows, []));
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getFeed('user-1');
+
+    expect(rankById(result.items)[0]).toBe('loved-1');
+  });
+
+  it('degrades gracefully when impression grouping throws (no penalty applied)', async () => {
+    const post = makePost('p-graceful', { createdAt: recent() });
+    mockPostFindMany.mockResolvedValue([post]);
+    mockPostReactionFindMany.mockImplementation((args: any) => routeReactionQuery(args, [], []));
+    mockPostImpressionGroupBy.mockRejectedValue(new Error('db down'));
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getFeed('user-1');
+
+    expect(result.items).toHaveLength(1);
   });
 });
