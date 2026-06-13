@@ -242,6 +242,16 @@ export class AuthHandler {
       user: { id: user.id, language: socketUser.language, isAnonymous: false },
       version: process.env.APP_VERSION || '1.1.0'
     });
+
+    // Snapshot de présence: même traitement que l'auth manuelle (l.170) et
+    // anonyme (l.307). Sans ça, un utilisateur enregistré authentifié via le
+    // handshake automatique ne reçoit jamais le seed initial et voit ses
+    // contacts hors ligne jusqu'au premier changement d'état. Best-effort.
+    if (this.emitPresenceSnapshot) {
+      this.emitPresenceSnapshot(socket, user.id, false).catch(error => {
+        logger.error('failed to emit presence snapshot (JWT auth)', { userId: user.id, error });
+      });
+    }
   }
 
   private async _authenticateAnonymousUser(
