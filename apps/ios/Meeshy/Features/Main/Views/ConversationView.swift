@@ -232,6 +232,12 @@ struct ConversationView: View {
     /// `internal` (not `private`): accessed by the `ConversationView+ScrollIndicators`
     /// extension, which lives in a separate file (private is file-scoped).
     @ObservedObject var typingObserver: ConversationStateStore
+    /// Observe le blocage pour réafficher la zone composer « débloquer » dès
+    /// qu'un block/unblock change. Événement rare (action explicite), hors hot
+    /// path — safe (même pattern que ConversationListView). Seuls les blocages
+    /// SORTANTS sont connus du client ; un blocage entrant remonte en erreur
+    /// d'envoi côté gateway.
+    @ObservedObject var blockService = BlockService.shared
     /// Texte du composer, ISOLÉ de l'arbre racine : tenu via `@State` (stockage
     /// stable) mais JAMAIS lu dans ce body ni observé ici — seul
     /// `ComposerTextHost` (+Composer) s'y abonne, donc la frappe ne ré-évalue
@@ -318,6 +324,16 @@ struct ConversationView: View {
 
     var isDirect: Bool {
         conversation?.type == .direct
+    }
+
+    /// DM participant the current user has (outgoing) blocked — drives the
+    /// composer "unblock to chat" zone. `nil` when not a DM, no participant, or
+    /// not blocked. Only outgoing blocks are known client-side (product
+    /// decision); incoming blocks surface as a gateway send error.
+    var blockedDirectParticipantId: String? {
+        guard isDirect, let uid = conversation?.participantUserId,
+              blockService.isBlocked(userId: uid) else { return nil }
+        return uid
     }
 
     var cachedLastReceivedIndex: Int? {
@@ -532,6 +548,46 @@ struct ConversationView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
+        .background(.ultraThinMaterial)
+    }
+
+    // MARK: - Blocked Conversation Composer Zone
+
+    /// Replaces the composer for a DM the user has blocked: explains they must
+    /// unblock to write to and receive messages from the user, with a one-tap
+    /// unblock CTA. Mirrors `closedConversationBanner`'s static-zone pattern.
+    private func blockedComposerZone(userId: String) -> some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "hand.raised.fill")
+                    .foregroundColor(.secondary)
+                Text(String(localized: "conversation.composer.blocked.title", defaultValue: "Vous avez bloqué cet utilisateur", bundle: .main))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.secondary)
+            }
+            Text(String(localized: "conversation.composer.blocked.subtitle", defaultValue: "Débloquez-le pour lui écrire et recevoir ses messages.", bundle: .main))
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+            Button {
+                HapticFeedback.medium()
+                Task {
+                    try? await blockService.unblockUser(userId: userId)
+                    await MainActor.run { HapticFeedback.success() }
+                }
+            } label: {
+                Text(String(localized: "conversation.composer.blocked.unblock", defaultValue: "Débloquer", bundle: .main))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Color(hex: accentColor)))
+            }
+            .accessibilityLabel(String(localized: "conversation.composer.blocked.unblock", defaultValue: "Débloquer", bundle: .main))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+        .padding(.horizontal, 24)
         .background(.ultraThinMaterial)
     }
 
@@ -1243,7 +1299,9 @@ struct ConversationView: View {
                         .frame(height: 260)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
-                    if viewModel.isConversationClosed {
+                    if let blockedId = blockedDirectParticipantId {
+                        blockedComposerZone(userId: blockedId)
+                    } else if viewModel.isConversationClosed {
                         closedConversationBanner
                     } else {
                         themedComposer

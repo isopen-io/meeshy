@@ -29,6 +29,7 @@ export enum ErrorCode {
   CANNOT_MODIFY_MESSAGE = 'CANNOT_MODIFY_MESSAGE',
   CANNOT_DELETE_MESSAGE = 'CANNOT_DELETE_MESSAGE',
   CANNOT_ACCESS_CONVERSATION = 'CANNOT_ACCESS_CONVERSATION',
+  USER_BLOCKED = 'USER_BLOCKED',
   
   // Business Logic (5xxx)
   ALREADY_EXISTS = 'ALREADY_EXISTS',
@@ -114,6 +115,10 @@ export const ErrorMessages: Record<ErrorCode, { fr: string; en: string }> = {
     fr: 'Accès à la conversation refusé',
     en: 'Cannot access conversation',
   },
+  [ErrorCode.USER_BLOCKED]: {
+    fr: 'Vous ne pouvez pas écrire à cet utilisateur.',
+    en: "You can't message this user.",
+  },
   
   // Business Logic
   [ErrorCode.ALREADY_EXISTS]: {
@@ -189,6 +194,7 @@ export const ErrorStatusMap: Record<ErrorCode, number> = {
   [ErrorCode.CANNOT_MODIFY_MESSAGE]: 403,
   [ErrorCode.CANNOT_DELETE_MESSAGE]: 403,
   [ErrorCode.CANNOT_ACCESS_CONVERSATION]: 403,
+  [ErrorCode.USER_BLOCKED]: 403,
   
   // Business Logic (409, 422)
   [ErrorCode.ALREADY_EXISTS]: 409,

@@ -491,6 +491,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         APIClient.shared.authToken = token
         isAuthenticated = true
+        warmSessionScopedCaches()
 
         // Proactive refresh: if the JWT is expired or near-expiry AND we have
         // a long-lived sessionToken, mint a new JWT BEFORE other API calls
@@ -587,12 +588,24 @@ public final class AuthManager: ObservableObject, AuthManaging {
         currentUser = resolved.user
         if resolved.clearedPending { pendingOptimisticProfile = nil }
         isAuthenticated = true
+        // Hydrate session-scoped caches not carried by the auth payload (block
+        // list). Skip on token rotation — already warm.
+        if !isTokenRotation { warmSessionScopedCaches() }
 
         if isTokenRotation {
             MessageSocketManager.shared.forceReconnect()
             SocialSocketManager.shared.forceReconnect()
             tokenDidRotate.send(())
         }
+    }
+
+    /// Warm session-scoped caches that aren't hydrated by the auth payload.
+    /// Mirror of the teardown in `logout()`. Currently the block list, fetched
+    /// via `GET /users/me/blocked-users` so the composer block zone and the
+    /// new-conversation graying reflect reality from launch instead of staying
+    /// empty until the Blocked Users screen is first opened.
+    private func warmSessionScopedCaches() {
+        Task { await BlockService.shared.refreshCache() }
     }
 
     /// Soft re-auth signal: the server told us the session is genuinely

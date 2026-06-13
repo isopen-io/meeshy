@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createError, MeeshyError, handleAsync, logError, sendErrorResponse } from '../utils/errors.js';
-import { ErrorCode } from '../types/errors.js';
+import { ErrorCode, ErrorMessages, ErrorStatusMap } from '../types/errors.js';
 
 describe('MeeshyError', () => {
   it('should identify client/server errors', () => {
@@ -17,6 +17,28 @@ describe('MeeshyError', () => {
     const json = err.toJSON();
     expect(json.code).toBe(ErrorCode.NOT_FOUND);
     expect(json.message).toBe('Custom');
+  });
+});
+
+describe('USER_BLOCKED error code', () => {
+  it('is registered in the enum', () => {
+    expect(ErrorCode.USER_BLOCKED).toBe('USER_BLOCKED');
+  });
+
+  it('maps to HTTP 403', () => {
+    expect(ErrorStatusMap[ErrorCode.USER_BLOCKED]).toBe(403);
+    expect(createError(ErrorCode.USER_BLOCKED).status).toBe(403);
+  });
+
+  it('has FR and EN messages', () => {
+    expect(ErrorMessages[ErrorCode.USER_BLOCKED].fr).toBe(
+      'Vous ne pouvez pas écrire à cet utilisateur.'
+    );
+    expect(ErrorMessages[ErrorCode.USER_BLOCKED].en).toBe("You can't message this user.");
+  });
+
+  it('is a client error', () => {
+    expect(createError(ErrorCode.USER_BLOCKED).isClientError()).toBe(true);
   });
 });
 

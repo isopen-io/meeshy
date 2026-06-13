@@ -2,6 +2,22 @@ import Foundation
 import Combine
 import MeeshySDK
 
+/// Gateway block-rejection detection. A 403 carrying the `USER_BLOCKED` code
+/// (a block in either direction) is forwarded by `MeeshySDK`'s `APIClient` as
+/// `MeeshyError.forbidden(reason:body:)` with the raw JSON in `body`.
+/// `ErrorBody` doesn't surface `code`, so we decode it from the body here.
+/// App-side helper (product-specific code string), visible across the module.
+private struct BlockedErrorCodeBody: Decodable { let code: String? }
+
+extension Error {
+    var isUserBlockedError: Bool {
+        guard let meeshy = self as? MeeshyError,
+              case let .forbidden(_, body) = meeshy,
+              let body else { return false }
+        return (try? JSONDecoder().decode(BlockedErrorCodeBody.self, from: body))?.code == "USER_BLOCKED"
+    }
+}
+
 /// MVVM extraction for ``NewConversationView``.
 ///
 /// Before this extraction the view called `APIClient.shared.request` /
@@ -120,10 +136,18 @@ final class NewConversationViewModel: ObservableObject {
             isCreating = false
         } catch {
             isCreating = false
-            errorMessage = String(
-                localized: "Impossible de creer la conversation",
-                defaultValue: "Impossible de cr\u{00E9}er la conversation"
-            )
+            if error.isUserBlockedError {
+                errorMessage = String(
+                    localized: "new_conversation.error.blocked",
+                    defaultValue: "Vous ne pouvez pas démarrer de conversation avec cet utilisateur.",
+                    bundle: .main
+                )
+            } else {
+                errorMessage = String(
+                    localized: "Impossible de creer la conversation",
+                    defaultValue: "Impossible de cr\u{00E9}er la conversation"
+                )
+            }
         }
     }
 

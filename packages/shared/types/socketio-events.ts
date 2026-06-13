@@ -1507,6 +1507,8 @@ export interface SocketIOResponse<T = unknown> {
   readonly success: boolean;
   readonly data?: T;
   readonly error?: string;
+  /** Machine-readable error code (e.g. ErrorCode.USER_BLOCKED) when success === false. */
+  readonly code?: string;
 }
 
 export interface TranslationEvent {

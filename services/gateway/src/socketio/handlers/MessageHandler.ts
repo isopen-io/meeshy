@@ -11,6 +11,7 @@ import type { Socket } from 'socket.io';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../../services/CacheStore';
+import { isBlockedBetween } from '../../utils/blocking';
 import { MessagingService } from '../../services/MessagingService';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
@@ -36,6 +37,7 @@ import type {
 } from '@meeshy/shared/types/messaging';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
 import type { Message } from '@meeshy/shared/types/index';
+import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
@@ -155,40 +157,15 @@ export class MessageHandler {
       }
 
       if (!isAnonymous && userId) {
-        const conversation = await this.prisma.conversation.findUnique({
-          where: { id: validated.conversationId },
-          select: {
-            type: true,
-            participants: {
-              where: { isActive: true },
-              select: { userId: true }
-            }
-          }
-        });
-        if (conversation && (conversation.type === 'direct' || conversation.type === 'dm')) {
-          const otherMemberIds = conversation.participants
-            .map(p => p.userId)
-            .filter((id): id is string => id !== null && id !== userId);
-          if (otherMemberIds.length > 0) {
-            const cacheStore = getCacheStore();
-            const cacheKey = `blocks:${userId}:${otherMemberIds.sort().join(',')}`;
-            const cached = await cacheStore.get(cacheKey);
-            let isBlocked: boolean;
-            if (cached !== null) {
-              isBlocked = cached === '1';
-            } else {
-              const blockers = await this.prisma.user.findMany({
-                where: { id: { in: otherMemberIds }, blockedUserIds: { has: userId } },
-                select: { id: true }
-              });
-              isBlocked = blockers.length > 0;
-              await cacheStore.set(cacheKey, isBlocked ? '1' : '0', 300);
-            }
-            if (isBlocked) {
-              this._sendError(callback, 'You are blocked by this user', socket);
-              return;
-            }
-          }
+        const blocked = await this._isDirectMessageBlocked(validated.conversationId, userId);
+        if (blocked) {
+          this._sendError(
+            callback,
+            ErrorMessages[ErrorCode.USER_BLOCKED].en,
+            socket,
+            ErrorCode.USER_BLOCKED
+          );
+          return;
         }
       }
 
@@ -356,6 +333,19 @@ export class MessageHandler {
         const validation = validateMessageLength(validated.content);
         if (!validation.isValid) {
           this._sendError(callback, validation.error || 'Message invalide', socket);
+          return;
+        }
+      }
+
+      if (!isAnonymous && userId) {
+        const blocked = await this._isDirectMessageBlocked(validated.conversationId, userId);
+        if (blocked) {
+          this._sendError(
+            callback,
+            ErrorMessages[ErrorCode.USER_BLOCKED].en,
+            socket,
+            ErrorCode.USER_BLOCKED
+          );
           return;
         }
       }
@@ -1038,14 +1028,68 @@ export class MessageHandler {
   private _sendError(
     callback: ((response: SocketIOResponse<{ messageId: string }>) => void) | undefined,
     error: string,
-    socket: Socket
+    socket: Socket,
+    code?: string
   ): void {
     const errorResponse: SocketIOResponse<{ messageId: string }> = {
       success: false,
-      error
+      error,
+      ...(code ? { code } : {})
     };
     if (callback) callback(errorResponse);
-    socket.emit(SERVER_EVENTS.ERROR, { message: error });
+    socket.emit(SERVER_EVENTS.ERROR, { message: error, ...(code ? { code } : {}) });
+  }
+
+  /**
+   * DM-only bidirectional block gate shared by `message:send` and
+   * `message:send-with-attachments`. Returns true when the conversation is a
+   * direct/dm and the sender is blocked by — or has blocked — any other active
+   * participant. Non-direct conversations are never block-enforced.
+   *
+   * The result is cached per ordered pair of participants for 5 minutes. The
+   * cache key is symmetric (the user ids are sorted) so it reflects the
+   * bidirectional semantics: blocking in either direction yields the same key.
+   */
+  private async _isDirectMessageBlocked(
+    conversationId: string,
+    userId: string
+  ): Promise<boolean> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: {
+        type: true,
+        participants: {
+          where: { isActive: true },
+          select: { userId: true }
+        }
+      }
+    });
+    if (!conversation || (conversation.type !== 'direct' && conversation.type !== 'dm')) {
+      return false;
+    }
+    const otherMemberIds = conversation.participants
+      .map(p => p.userId)
+      .filter((id): id is string => id !== null && id !== userId);
+    if (otherMemberIds.length === 0) {
+      return false;
+    }
+    const cacheStore = getCacheStore();
+    for (const otherId of otherMemberIds) {
+      const [a, b] = [userId, otherId].sort();
+      const cacheKey = `blocks:${a}:${b}`;
+      const cached = await cacheStore.get(cacheKey);
+      let blocked: boolean;
+      if (cached !== null) {
+        blocked = cached === '1';
+      } else {
+        blocked = await isBlockedBetween(this.prisma, userId, otherId);
+        await cacheStore.set(cacheKey, blocked ? '1' : '0', 300);
+      }
+      if (blocked) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

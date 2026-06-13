@@ -8,7 +8,7 @@ import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
 import { conversationStatsService } from '../../services/ConversationStatsService';
-import { ErrorCode } from '@meeshy/shared/types';
+import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
@@ -21,6 +21,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
+import { isBlockedBetween } from '../../utils/blocking';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import type {
   ConversationParams,
@@ -1465,6 +1466,34 @@ export function registerMessagesRoutes(
 
       if (!participantId) {
         return sendForbidden(reply, 'Participant identification failed');
+      }
+
+      // Block enforcement applies to DIRECT conversations only. Bidirectional:
+      // reject if the sender blocked the other party OR the other party blocked
+      // the sender. Anonymous senders (no userId) are not block-enforced.
+      if (!authRequest.authContext.isAnonymous && userId) {
+        const conversation = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: {
+            type: true,
+            participants: {
+              where: { isActive: true },
+              select: { userId: true }
+            }
+          }
+        });
+        if (conversation && (conversation.type === 'direct' || conversation.type === 'dm')) {
+          const otherMemberIds = conversation.participants
+            .map(p => p.userId)
+            .filter((memberId): memberId is string => memberId !== null && memberId !== userId);
+          for (const otherId of otherMemberIds) {
+            if (await isBlockedBetween(prisma, userId, otherId)) {
+              return sendForbidden(reply, ErrorMessages[ErrorCode.USER_BLOCKED].en, {
+                code: ErrorCode.USER_BLOCKED
+              });
+            }
+          }
+        }
       }
 
       const corr: Record<string, any> = {

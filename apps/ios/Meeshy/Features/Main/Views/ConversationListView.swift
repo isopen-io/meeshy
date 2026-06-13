@@ -409,7 +409,11 @@ struct ConversationListView: View {
     }
 
     private func trailingSwipeActions(for conversation: Conversation) -> [SwipeAction] {
-        let isArchived = !conversation.isActive
+        // Per-user archive state (same source as the list filter + `.setArchived`
+        // mutation). NOT `conversation.isActive` (server lifecycle flag, never
+        // toggled by archiving) — reading it froze this swipe on "Archiver" so
+        // archived conversations could never be unarchived from the swipe.
+        let isArchived = conversation.userState.isArchived
         let isRead = conversation.userState.unreadCount == 0
         var actions: [SwipeAction] = [
             SwipeAction(

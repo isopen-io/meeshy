@@ -2436,6 +2436,19 @@ class ConversationViewModel: ObservableObject {
             )
             return true
         } catch {
+            // Permanent rejection: the other party blocked us (or we blocked
+            // them from another device). Retrying never succeeds, so skip the
+            // ~10s socket fallback + outbox retry — mark the row failed and tell
+            // the user. Outgoing blocks are already gated by the composer zone;
+            // this catches incoming blocks the client can't see ahead of time.
+            if error.isUserBlockedError {
+                Logger.messages.warning("perf:ios.send.fail.blocked clientMessageId=\(tempId, privacy: .public)")
+                _ = try? await messagePersistence.applyEvent(localId: tempId, event: .sendFailed(error))
+                FeedbackToastManager.shared.showError(
+                    String(localized: "conversation.send.blocked", defaultValue: "Vous ne pouvez pas écrire à cet utilisateur.", bundle: .main)
+                )
+                return false
+            }
             let failElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
             Logger.messages.warning("perf:ios.send.fail clientMessageId=\(tempId, privacy: .public) durationMs=\(failElapsedMs, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
 

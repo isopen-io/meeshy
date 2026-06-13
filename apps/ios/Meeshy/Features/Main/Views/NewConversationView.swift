@@ -11,6 +11,9 @@ struct NewConversationView: View {
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @StateObject private var router = Router()
     @StateObject private var viewModel: NewConversationViewModel
+    /// Outgoing-block awareness for graying out / disabling blocked users in
+    /// the picker. Observed so rows update live on block/unblock.
+    @ObservedObject private var blockService = BlockService.shared
 
     @State private var searchQuery = ""
     @State private var selectedUsers: [SearchedUser] = []
@@ -307,6 +310,7 @@ struct NewConversationView: View {
 
     private func userRow(_ user: SearchedUser) -> some View {
         let isSelected = selectedUsers.contains { $0.id == user.id }
+        let isBlocked = blockService.isBlocked(userId: user.id)
         let userColor = DynamicColorGenerator.colorForName(user.username)
 
         return Button {
@@ -341,16 +345,26 @@ struct NewConversationView: View {
 
                 Spacer()
 
-                if user.isOnline == true {
-                    Circle()
-                        .fill(MeeshyColors.success)
-                        .frame(width: 8, height: 8)
-                }
+                if isBlocked {
+                    Text(String(localized: "new_conversation.user.blocked", defaultValue: "Bloqué", bundle: .main))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(MeeshyColors.error.opacity(0.8))
+                    Image(systemName: "hand.raised.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(MeeshyColors.error.opacity(0.7))
+                } else {
+                    if user.isOnline == true {
+                        Circle()
+                            .fill(MeeshyColors.success)
+                            .frame(width: 8, height: 8)
+                    }
 
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20))
-                    .foregroundColor(isSelected ? MeeshyColors.indigo400 : theme.textMuted.opacity(0.4))
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 20))
+                        .foregroundColor(isSelected ? MeeshyColors.indigo400 : theme.textMuted.opacity(0.4))
+                }
             }
+            .opacity(isBlocked ? 0.5 : 1)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
@@ -368,6 +382,7 @@ struct NewConversationView: View {
                     )
             )
         }
+        .disabled(isBlocked)
     }
 
     // Networking is delegated to `NewConversationViewModel`. The view no

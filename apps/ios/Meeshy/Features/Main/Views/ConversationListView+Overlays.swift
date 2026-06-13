@@ -156,32 +156,29 @@ extension ConversationListView {
             )
         }
 
-        // Archive / Unarchive (masqué si bloqué et archivé)
-        let isBlockedConv = conversation.type == .direct
-            && (conversation.participantUserId.map { BlockService.shared.isBlocked(userId: $0) } ?? false)
+        // Archive / Unarchive — always offered so an archived conversation can
+        // always be unarchived (including blocked DMs, which previously hid this
+        // button and left them stuck in the Archived filter).
         // Per-user archive state — same source the list filter (`.archived`) and
         // the `.setArchived` mutation read. NOT `conversation.isActive`, which is
         // the server-side conversation lifecycle flag and is never toggled by
-        // archiving, so reading it froze the label on "Archiver" for archived
-        // conversations. `userState.isArchived` is folded into `renderFingerprint`,
+        // archiving. `userState.isArchived` is folded into `renderFingerprint`,
         // so the row re-evaluates and this closure stays fresh.
         let isArchivedConv = conversation.userState.isArchived
-        if !(isArchivedConv && isBlockedConv) {
-            Button {
-                HapticFeedback.medium()
-                if isArchivedConv {
-                    Task { await conversationViewModel.unarchiveConversation(conversationId: conversation.id) }
-                } else {
-                    Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
-                }
-            } label: {
-                Label(
-                    isArchivedConv
-                        ? String(localized: "context.unarchive", defaultValue: "Désarchiver")
-                        : String(localized: "context.archive", defaultValue: "Archiver"),
-                    systemImage: isArchivedConv ? "tray.and.arrow.up.fill" : "archivebox.fill"
-                )
+        Button {
+            HapticFeedback.medium()
+            if isArchivedConv {
+                Task { await conversationViewModel.unarchiveConversation(conversationId: conversation.id) }
+            } else {
+                Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
             }
+        } label: {
+            Label(
+                isArchivedConv
+                    ? String(localized: "context.unarchive", defaultValue: "Désarchiver")
+                    : String(localized: "context.archive", defaultValue: "Archiver"),
+                systemImage: isArchivedConv ? "tray.and.arrow.up.fill" : "archivebox.fill"
+            )
         }
 
         Divider()

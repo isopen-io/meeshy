@@ -192,6 +192,45 @@ final class NewConversationViewModelTests: XCTestCase {
         XCTAssertNil(sut.createdConversation)
     }
 
+    func test_createConversation_userBlocked_setsBlockSpecificError() async {
+        let (sut, api) = makeSUT()
+        // Gateway rejects a DM with a blocked user (either direction) with a
+        // 403 carrying `code: USER_BLOCKED`, surfaced as MeeshyError.forbidden.
+        api.errorToThrow = MeeshyError.forbidden(
+            reason: "blocked",
+            body: Data(#"{"success":false,"error":"USER_BLOCKED","code":"USER_BLOCKED"}"#.utf8)
+        )
+
+        await sut.createConversation(
+            selectedUsers: [Self.makeUser(id: "u-1", username: "alice")],
+            groupTitle: ""
+        )
+
+        XCTAssertFalse(sut.isCreating)
+        XCTAssertNil(sut.createdConversation)
+        let blocked = String(
+            localized: "new_conversation.error.blocked",
+            defaultValue: "Vous ne pouvez pas démarrer de conversation avec cet utilisateur.",
+            bundle: .main
+        )
+        XCTAssertEqual(sut.errorMessage, blocked,
+                       "A USER_BLOCKED 403 must surface the block-specific message, not the generic create failure")
+    }
+
+    func test_isUserBlockedError_detectsCodeInForbiddenBodyOnly() {
+        let blocked = MeeshyError.forbidden(reason: nil, body: Data(#"{"code":"USER_BLOCKED"}"#.utf8))
+        XCTAssertTrue(blocked.isUserBlockedError)
+
+        let otherForbidden = MeeshyError.forbidden(reason: "nope", body: Data(#"{"code":"FORBIDDEN"}"#.utf8))
+        XCTAssertFalse(otherForbidden.isUserBlockedError)
+
+        let noBody = MeeshyError.forbidden(reason: nil, body: nil)
+        XCTAssertFalse(noBody.isUserBlockedError)
+
+        let nonForbidden: Error = NSError(domain: "x", code: 1)
+        XCTAssertFalse(nonForbidden.isUserBlockedError)
+    }
+
     func test_consumeCreatedConversation_clearsState() async {
         let (sut, api) = makeSUT()
         api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-1"))

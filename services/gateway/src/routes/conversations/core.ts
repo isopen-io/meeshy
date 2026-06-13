@@ -18,6 +18,7 @@ import {
   updateConversationRequestSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
+import { isBlockedBetween } from '../../utils/blocking';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import {
   generateConversationIdentifier,
@@ -821,6 +822,16 @@ export function registerCoreRoutes(
       // et ne contient pas de valeurs null/undefined/empty
       const uniqueParticipantIds = [...new Set(participantIds)]
         .filter((id: any) => id && id !== userId && typeof id === 'string' && id.trim().length > 0);
+
+      // Block enforcement applies to DIRECT conversations only (group / community /
+      // public / global / broadcast are never block-enforced). Bidirectional: reject
+      // if the creator blocked the other party OR the other party blocked the creator.
+      if (type === 'direct' && uniqueParticipantIds.length === 1) {
+        const blocked = await isBlockedBetween(prisma, userId, uniqueParticipantIds[0]);
+        if (blocked) {
+          throw createError(ErrorCode.USER_BLOCKED);
+        }
+      }
 
       const allUserIds = [userId, ...uniqueParticipantIds];
       const allUsers = await prisma.user.findMany({
