@@ -24,7 +24,7 @@ struct RelativeTimeFormatterTests {
 
     @Test func short_minutes() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        #expect(RelativeTimeFormatter.shortString(for: now.addingTimeInterval(-5 * 60), now: now) == "5m")
+        #expect(RelativeTimeFormatter.shortString(for: now.addingTimeInterval(-5 * 60), now: now) == "5min")
     }
 
     @Test func short_hours() {

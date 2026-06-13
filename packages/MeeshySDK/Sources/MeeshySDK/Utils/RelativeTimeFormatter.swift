@@ -7,7 +7,8 @@ import Foundation
 ///
 /// Two registered styles (product decision 2026-06-13):
 /// - `.short` — dense lists (feed, comments, stories, notifications):
-///   `À l'instant` / `5m` / `2h` / `3j` / `1sem`
+///   `À l'instant` / `5min` / `2h` / `3j` / `1sem` (`min` not `m`, which would
+///   be ambiguous with months)
 /// - `.long` — detail surfaces (contacts, participants, friend requests,
 ///   message detail): `À l'instant` / `il y a 5 min` / `il y a 2 h` / `hier` /
 ///   `il y a 3 j` / `4 nov.`
@@ -50,7 +51,7 @@ public enum RelativeTimeFormatter {
     public static func shortString(for date: Date, now: Date = Date()) -> String {
         switch RelativeTime.classify(date, reference: now) {
         case .now: return justNow
-        case .minutes(let m): return "\(m)m"
+        case .minutes(let m): return "\(m)min"
         case .hours(let h): return "\(h)h"
         case .days(let d): return "\(d)j"
         case .date: return "\(Int(now.timeIntervalSince(date)) / 604_800)sem"
