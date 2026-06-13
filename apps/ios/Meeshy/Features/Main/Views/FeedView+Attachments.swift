@@ -219,6 +219,10 @@ extension FeedView {
 
                 await viewModel.createPost(
                     content: text,
+                    type: ReelComposition.defaultType(
+                        mimeTypes: attachments.map(\.mimeType) + (audioURL != nil ? ["audio/mp4"] : []),
+                        forcePlainPost: composerForcePlainPost
+                    ).rawValue,
                     mediaIds: uploadedIds.isEmpty ? nil : uploadedIds,
                     originalLanguage: composerLanguage
                 )
@@ -262,6 +266,7 @@ extension FeedView {
             try? FileManager.default.removeItem(at: audioURL)
 
             await viewModel.createPost(
+                type: composerForcePlainPost ? "POST" : "REEL",
                 mediaIds: [result.id],
                 originalLanguage: originalLanguage ?? transcription?.language,
                 mobileTranscription: transcription
@@ -488,6 +493,9 @@ struct FeedComposerSheet: View {
     @State private var uploadProgress: UploadQueueProgress?
     @State private var isLoadingMedia = false
     @State private var postVisibility: String = "PUBLIC"
+    /// When the composer carries media, the post defaults to a REEL; the author
+    /// can flip this to keep it a plain POST (out of the reels surface).
+    @State private var forcePlainPost = false
     @State private var showEmojiPicker = false
     @State private var showAudioComposer = false
     @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
@@ -500,6 +508,28 @@ struct FeedComposerSheet: View {
 
     private var hasContent: Bool {
         !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
+    }
+
+    /// Reel ⇄ Post chip shown when the composer holds media. A media post is a
+    /// reel by default; tapping flips it to a plain post so it stays out of the
+    /// reels surface.
+    private var reelTypeToggle: some View {
+        Button {
+            forcePlainPost.toggle()
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: forcePlainPost ? "doc.text" : "play.rectangle.on.rectangle.fill")
+                    .font(.system(size: 10))
+                Text(forcePlainPost
+                    ? String(localized: "feed.composer.type.post", defaultValue: "Post", bundle: .main)
+                    : String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main))
+                    .font(.system(size: 12))
+            }
+            .foregroundColor(forcePlainPost ? theme.textMuted : MeeshyColors.indigo300)
+        }
+        .accessibilityHint(String(localized: "feed.composer.type.hint", defaultValue: "Bascule entre réel et post", bundle: .main))
+        .padding(.leading, 12)
     }
 
     var body: some View {
@@ -580,6 +610,9 @@ struct FeedComposerSheet: View {
                             }
                             .foregroundColor(theme.textMuted)
                         }
+                    }
+                    if !pendingAttachments.isEmpty || pendingAudioURL != nil {
+                        reelTypeToggle
                     }
                     Spacer()
                 }
@@ -1138,7 +1171,7 @@ struct FeedComposerSheet: View {
                 }
                 progressCancellable?.cancel()
 
-                await viewModel.createPost(content: text, visibility: postVisibility, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds, originalLanguage: composerLanguage)
+                await viewModel.createPost(content: text, type: ReelComposition.defaultType(mimeTypes: attachments.map(\.mimeType), forcePlainPost: forcePlainPost).rawValue, visibility: postVisibility, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds, originalLanguage: composerLanguage)
 
                 await MainActor.run {
                     isUploading = false
@@ -1168,6 +1201,7 @@ struct FeedComposerSheet: View {
             let result = try await uploader.uploadFile(fileURL: audioURL, mimeType: mimeType, token: token, uploadContext: "post")
             try? FileManager.default.removeItem(at: audioURL)
             await viewModel.createPost(
+                type: forcePlainPost ? "POST" : "REEL",
                 mediaIds: [result.id],
                 originalLanguage: transcription?.language ?? composerLanguage,
                 mobileTranscription: transcription

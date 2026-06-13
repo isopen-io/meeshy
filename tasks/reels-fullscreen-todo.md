@@ -14,16 +14,31 @@
   pour passer d'un réel à l'autre.
 - Retour : flèche haut-gauche (Liquid Glass via helpers compat) + gesture bord gauche.
 
-## Décision d'architecture structurante
-**Pas de type `REEL` en base.** Le schéma reste `POST | STORY | STATUS`. La nature
-« réel » est **dérivée** de la composition média (`FeedPost.isReel`), donc :
-- contrat serveur / pagination inchangé (conforme à « les clients n'auront pas à
-  être mis à jour » — quand le ranking par attention arrivera, seul le tri serveur
-  bouge) ;
-- « automatique à la création » est gratuit : tout post créé avec média est rendu
-  comme un réel, aucune logique composer à modifier.
-- Un réel = POST (ou post sans type) **non-repost** portant ≥1 média image/vidéo/audio.
-  Stories, statuses, reposts et posts texte ne sont jamais des réels.
+## Décision d'architecture structurante (révisée 2026-06-13)
+**`REEL` est un vrai type serveur** : `PostType = POST | REEL | STORY | STATUS`.
+- Le **front choisit le type à la création** : un post avec média (vidéo / images /
+  audio, seul ou combiné) passe en `REEL` par défaut ; l'auteur peut **forcer POST**
+  via un toggle Réel⇄Post dans le composer (pour ne pas sortir dans les réels).
+- Le **feed remonte POST + REEL** (`where type ∈ {POST, REEL}`) — simplement.
+- Rendu **autoritaire** : `FeedPost.isReel == (type == "REEL")`, jamais re-dérivé du
+  média. La classification média ne sert qu'à la création (`ReelComposition`).
+- Le contrat de pagination (curseur opaque) reste inchangé — un futur ranking par
+  attention ne change que le tri serveur.
+
+### Implémentation backend du type
+- `schema.prisma` : `enum PostType { POST REEL STORY STATUS }` (client régénéré au build).
+- `shared/types/post.ts` : `PostType = 'POST' | 'REEL' | 'STORY' | 'STATUS'`.
+- Gateway `CreatePostSchema.type` + `RepostSchema.targetType` acceptent `REEL`.
+- `PostFeedService` : feed / user-posts / community-feed filtrent `type ∈ {POST, REEL}`.
+- REEL diffusé en temps réel comme un POST (`broadcastPostCreated`, branche else).
+- `computeExpiresAt(REEL)` → `undefined` (permanent, comme POST).
+
+### Implémentation création (front)
+- SDK `ReelComposition.suggestsReel/defaultType(mediaKinds:forcePlainPost:)` (pur).
+- `FeedViewModel.createPost(...forcePlainPost:)` : `type=="POST" && média && !force → "REEL"`.
+- Toggle Réel⇄Post dans les deux composers (FeedView inline + `FeedComposerSheet`),
+  visible dès qu'un média est attaché.
+- Les anciens posts média (type POST) restent des posts (pas de rétro-classification).
 
 ## Moteur vidéo
 Le pager réutilise **le moteur unique call-safe** `SharedAVPlayerManager.shared` :
