@@ -9,6 +9,7 @@
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { PostFeedService } from '../../../services/PostFeedService';
+import { decodeCursor } from '../../../routes/posts/types';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 // ---------------------------------------------------------------------------
@@ -490,5 +491,28 @@ describe('PostFeedService.getFeed — intent/interest ranking', () => {
     const result = await service.getFeed('user-1');
 
     expect(result.items).toHaveLength(1);
+  });
+
+  it('advances nextCursor by chronological order, never by score order (lossless infinite scroll)', async () => {
+    // The older post outscores the newer one (reel watch-signal boost), but the
+    // cursor must still track the chronological boundary so the next page does
+    // not skip or duplicate. With limit=1 the window is the single newest post;
+    // the higher-scoring older reel must surface on the *next* page, not vanish.
+    const newer = makePost('newer-1', { type: 'POST', createdAt: new Date('2026-06-02T00:00:00Z') });
+    const olderReel = makePost('older-reel', {
+      type: 'REEL',
+      viewCount: 9999,
+      createdAt: new Date('2026-06-01T00:00:00Z'),
+    });
+    mockPostFindMany.mockResolvedValue([newer, olderReel]); // DB order: createdAt desc
+    mockPostReactionFindMany.mockImplementation((args: any) => routeReactionQuery(args, [], []));
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getFeed('user-1', undefined, 1);
+
+    expect(rankById(result.items)).toEqual(['newer-1']);
+    expect(result.hasMore).toBe(true);
+    const decoded = decodeCursor(result.nextCursor as string);
+    expect(decoded?.id).toBe('newer-1');
   });
 });

@@ -71,7 +71,12 @@ export class PostFeedService {
    * Phase 2: Score & rank in-app
    */
   async getFeed(userId: string, cursor?: string, limit: number = 20) {
-    const candidateLimit = limit * 3;
+    // Chronological window + 1 probe row to detect `hasMore`. We deliberately
+    // do NOT over-fetch then drop: the cursor advances by `createdAt`, so any
+    // candidate we fetch-but-drop would be silently skipped (or re-served as a
+    // duplicate) on the next page. Ranking reorders *within* the window only,
+    // which keeps infinite scroll lossless: every post appears exactly once.
+    const candidateLimit = limit + 1;
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
     // Phase 1 — Fetch candidates
@@ -110,7 +115,18 @@ export class PostFeedService {
       return { items: [], nextCursor: null, hasMore: false };
     }
 
-    const candidateIds = candidates.map((c) => c.id);
+    // The page is the chronological window (candidates already arrive
+    // createdAt desc). The cursor is the OLDEST post of this window, captured
+    // before any score reordering, so the next page is strictly older — no
+    // skips, no duplicates under infinite scroll.
+    const hasMore = candidates.length > limit;
+    const page = hasMore ? candidates.slice(0, limit) : candidates;
+    const oldest = page[page.length - 1];
+    const nextCursor = hasMore && oldest
+      ? encodeCursor(oldest.createdAt, oldest.id)
+      : null;
+
+    const candidateIds = page.map((c) => c.id);
 
     // Fetch affinity & intent signals in parallel:
     // - friendIds       : graphe social (affinité binaire)
@@ -122,9 +138,9 @@ export class PostFeedService {
       this.getSeenCounts(userId, candidateIds),
     ]);
 
-    // Phase 2 — Score candidates
+    // Phase 2 — Score the window (display order only; cursor is fixed above)
     const authorCounts = new Map<string, number>();
-    const scored = candidates.map((post) => {
+    const scored = page.map((post) => {
       const affinity = this.affinityScore(post.authorId, userId, friendIds);
       const diversity = diversityScore(post.authorId, authorCounts);
       const interest = interestAffinity.get(post.authorId) ?? 0;
@@ -145,18 +161,9 @@ export class PostFeedService {
       return { post, score };
     });
 
-    // Sort by score descending
+    // Sort by score descending — display order within the window
     scored.sort((a, b) => b.score - a.score);
-
-    // Take top `limit` + check hasMore
-    const topItems = scored.slice(0, limit + 1);
-    const hasMore = topItems.length > limit;
-    const items = hasMore ? topItems.slice(0, limit) : topItems;
-
-    const lastItem = items[items.length - 1];
-    const nextCursor = hasMore && lastItem
-      ? encodeCursor(lastItem.post.createdAt, lastItem.post.id)
-      : null;
+    const items = scored;
 
     const postIds = items.map((s) => s.post.id);
     const [userReactions, userBookmarks, userReposts] = postIds.length > 0
