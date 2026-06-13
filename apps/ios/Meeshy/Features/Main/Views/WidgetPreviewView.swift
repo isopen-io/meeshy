@@ -154,14 +154,14 @@ struct WidgetPreviewView: View {
                 .fill(
                     LinearGradient(
                         colors: totalUnread > 0
-                            ? [MeeshyColors.error, MeeshyColors.errorStrong]
-                            : [MeeshyColors.success, MeeshyColors.successDeep],
+                            ? [MeeshyColors.error, MeeshyColors.indigo600]
+                            : [MeeshyColors.indigo400, MeeshyColors.indigo500],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
                 .shadow(
-                    color: (totalUnread > 0 ? MeeshyColors.error : MeeshyColors.success).opacity(0.3),
+                    color: (totalUnread > 0 ? MeeshyColors.error : MeeshyColors.indigo400).opacity(0.3),
                     radius: 16,
                     y: 8
                 )
@@ -299,7 +299,7 @@ struct WidgetPreviewView: View {
                 quickActionButton(
                     icon: "link.badge.plus",
                     label: String(localized: "widget.preview.action.share", defaultValue: "Partager", bundle: .main),
-                    gradient: [MeeshyColors.success, MeeshyColors.successDeep]
+                    gradient: [MeeshyColors.shareAccent, MeeshyColors.indigo500]
                 ) {
                     showCreateShareLink = true
                 }
@@ -307,7 +307,7 @@ struct WidgetPreviewView: View {
                 quickActionButton(
                     icon: "megaphone.fill",
                     label: String(localized: "widget.preview.action.post", defaultValue: "Post", bundle: .main),
-                    gradient: [Color(hex: "A855F7"), MeeshyColors.indigo500]
+                    gradient: [Color(hex: "A855F7"), Color(hex: "6366F1")]
                 ) {
                     dismiss()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -318,7 +318,7 @@ struct WidgetPreviewView: View {
                 quickActionButton(
                     icon: "gearshape.fill",
                     label: String(localized: "widget.preview.action.settings", defaultValue: "Réglages", bundle: .main),
-                    gradient: [MeeshyColors.error, MeeshyColors.errorStrong]
+                    gradient: [MeeshyColors.indigo600, MeeshyColors.indigo800]
                 ) {
                     dismiss()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
