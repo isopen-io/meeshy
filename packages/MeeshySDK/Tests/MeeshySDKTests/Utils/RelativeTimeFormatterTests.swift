@@ -19,7 +19,7 @@ struct RelativeTimeFormatterTests {
 
     @Test func short_underThirtySeconds_isJustNow() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        #expect(RelativeTimeFormatter.shortString(for: now.addingTimeInterval(-20), now: now) == "À l'instant")
+        #expect(RelativeTimeFormatter.shortString(for: now.addingTimeInterval(-20), now: now) == "maintenant")
     }
 
     @Test func short_seconds() {
@@ -29,7 +29,7 @@ struct RelativeTimeFormatterTests {
 
     @Test func short_minutes() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        #expect(RelativeTimeFormatter.shortString(for: now.addingTimeInterval(-5 * 60), now: now) == "5min")
+        #expect(RelativeTimeFormatter.shortString(for: now.addingTimeInterval(-5 * 60), now: now) == "5 min")
     }
 
     @Test func short_hours() {
@@ -59,13 +59,13 @@ struct RelativeTimeFormatterTests {
     @Test func long_underThirtySeconds_isJustNow() {
         let cal = utc()
         let now = at(2026, 6, 13, cal: cal)
-        #expect(RelativeTimeFormatter.longString(for: now.addingTimeInterval(-20), now: now, calendar: cal) == "À l'instant")
+        #expect(RelativeTimeFormatter.longString(for: now.addingTimeInterval(-20), now: now, calendar: cal) == "maintenant")
     }
 
     @Test func long_seconds() {
         let cal = utc()
         let now = at(2026, 6, 13, cal: cal)
-        #expect(RelativeTimeFormatter.longString(for: now.addingTimeInterval(-45), now: now, calendar: cal) == "il y a 45 s")
+        #expect(RelativeTimeFormatter.longString(for: now.addingTimeInterval(-45), now: now, calendar: cal) == "il y a 45s")
     }
 
     @Test func long_minutes() {
@@ -78,7 +78,7 @@ struct RelativeTimeFormatterTests {
         let cal = utc()
         let now = at(2026, 6, 13, 12, cal: cal)
         let earlier = at(2026, 6, 13, 9, cal: cal)
-        #expect(RelativeTimeFormatter.longString(for: earlier, now: now, calendar: cal) == "il y a 3 h")
+        #expect(RelativeTimeFormatter.longString(for: earlier, now: now, calendar: cal) == "il y a 3h")
     }
 
     @Test func long_yesterday_acrossMidnight() {
@@ -92,19 +92,19 @@ struct RelativeTimeFormatterTests {
         let cal = utc()
         let now = at(2026, 6, 13, cal: cal)
         let threeDaysAgo = at(2026, 6, 10, cal: cal)
-        #expect(RelativeTimeFormatter.longString(for: threeDaysAgo, now: now, calendar: cal) == "il y a 3 j")
+        #expect(RelativeTimeFormatter.longString(for: threeDaysAgo, now: now, calendar: cal) == "il y a 3j")
     }
 
     @Test func long_weeks() {
         let cal = utc()
         let now = at(2026, 6, 13, cal: cal)
-        #expect(RelativeTimeFormatter.longString(for: at(2026, 5, 28, cal: cal), now: now, calendar: cal) == "il y a 2 sem")
+        #expect(RelativeTimeFormatter.longString(for: at(2026, 5, 28, cal: cal), now: now, calendar: cal) == "il y a 2sem")
     }
 
     @Test func long_months() {
         let cal = utc()
         let now = at(2026, 6, 13, cal: cal)
-        #expect(RelativeTimeFormatter.longString(for: at(2026, 4, 5, cal: cal), now: now, calendar: cal) == "il y a 2 mois")
+        #expect(RelativeTimeFormatter.longString(for: at(2026, 4, 5, cal: cal), now: now, calendar: cal) == "il y a 2mois")
     }
 
     @Test func long_absolute_sameYear_omitsYear() {
@@ -129,7 +129,7 @@ struct RelativeTimeFormatterTests {
         let cal = utc()
         let now = at(2026, 6, 13, cal: cal)
         let future = now.addingTimeInterval(120)
-        #expect(RelativeTimeFormatter.shortString(for: future, now: now) == "À l'instant")
-        #expect(RelativeTimeFormatter.longString(for: future, now: now, calendar: cal) == "À l'instant")
+        #expect(RelativeTimeFormatter.shortString(for: future, now: now) == "maintenant")
+        #expect(RelativeTimeFormatter.longString(for: future, now: now, calendar: cal) == "maintenant")
     }
 }

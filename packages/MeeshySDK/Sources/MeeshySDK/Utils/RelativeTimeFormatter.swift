@@ -7,18 +7,19 @@ import Foundation
 ///
 /// Two registered styles (product decision 2026-06-13):
 /// - `.short` — dense lists (feed, comments, stories, notifications):
-///   `À l'instant` / `5min` / `2h` / `3j` / `2sem` / `2mois`, then the
-///   localized absolute date past three months (`min` not `m`, ambiguous with
-///   months).
+///   `maintenant` / `45s` / `5 min` / `2h` / `3j` / `2sem` / `2mois`, then the
+///   localized absolute date past three months.
 /// - `.long` — detail surfaces (contacts, participants, friend requests,
-///   message detail): `À l'instant` / `il y a 5 min` / `il y a 2 h` / `hier` /
-///   `il y a 3 j` / `il y a 2 sem` / `il y a 2 mois`, then the localized
-///   absolute date past three months.
+///   message detail): `maintenant` / `il y a 45s` / `il y a 5 min` / `hier` /
+///   `il y a 3j` / `il y a 2sem` / `il y a 2mois`, then the localized absolute
+///   date past three months.
 ///
-/// The relative labels are French (the SDK's `defaultLocalization` and the
-/// app's content fallback; the old `time.*` keys were never translated, so this
-/// is no regression). The absolute date past three months follows
-/// `Locale.current` — regional format and translated month name.
+/// Fully localized: every label resolves through the app catalog
+/// (`time.short.*` / `time.long.*` keys, `Bundle.main`), translated into the
+/// five app languages (de/en/es/fr/pt-BR). The French `defaultValue` matches the
+/// catalog so SDK tests — which run without the app bundle — resolve to it. The
+/// absolute date past three months follows `Locale.current` (regional format +
+/// translated month name).
 ///
 /// Pure and deterministic: `now` and `calendar` are injectable for testing.
 /// Not a localized cousin of the absolute `HH:mm` message clock
@@ -26,9 +27,9 @@ import Foundation
 /// distinct by design.
 public enum RelativeTimeFormatter {
     public enum Style: Sendable {
-        /// Dense lists: `5min` / `2h` / `3j` / `2sem` / `2mois` / date.
+        /// Dense lists: `5 min` / `2h` / `3j` / `2sem` / `2mois` / date.
         case short
-        /// Detail surfaces: `il y a 5 min` / `hier` / `il y a 2 mois` / date.
+        /// Detail surfaces: `il y a 5 min` / `hier` / `il y a 2mois` / date.
         case long
     }
 
@@ -44,36 +45,39 @@ public enum RelativeTimeFormatter {
         }
     }
 
-    // MARK: - Short — "À l'instant" / "5m" / "2h" / "3j" / "1sem"
+    // MARK: - Short — "maintenant" / "45s" / "5 min" / "2h" / "3j" / "2sem" / "2mois"
 
     /// Built on the SDK's `RelativeTime` classification primitive (the single
-    /// source of truth for the ladder thresholds). Beyond a week the short
-    /// ladder keeps counting in weeks rather than switching to an absolute date
-    /// (product choice 2026-06-13).
+    /// source of truth for the ladder thresholds). Past three months it switches
+    /// to the localized absolute date.
     public static func shortString(for date: Date, now: Date = Date()) -> String {
         switch RelativeTime.classify(date, reference: now) {
-        case .now: return justNow
-        case .seconds(let s): return "\(s)s"
-        case .minutes(let m): return "\(m)min"
-        case .hours(let h): return "\(h)h"
-        case .days(let d): return "\(d)j"
-        case .weeks(let w): return "\(w)sem"
-        case .months(let mo): return "\(mo)mois"
+        case .now: return nowLabel
+        case .seconds(let s): return secondsLabel(s)
+        case .minutes(let m): return minutesLabel(m)
+        case .hours(let h): return hoursLabel(h)
+        case .days(let d): return daysLabel(d)
+        case .weeks(let w): return weeksLabel(w)
+        case .months(let mo): return monthsLabel(mo)
         case .date(let d): return absoluteDate(d, now: now, calendar: .current)
         }
     }
 
-    // MARK: - Long — "À l'instant" / "il y a 5 min" / "hier" / "4 nov."
+    // MARK: - Long — "maintenant" / "il y a 5 min" / "hier" / "4 nov."
 
+    /// Wraps the short unit label in the localized "ago" frame (`il y a %@` fr,
+    /// `%@ ago` en, …), with `maintenant` and `hier` special-cased. Uses the
+    /// calendar for day-level boundaries so "hier" tracks the previous calendar
+    /// day rather than a 24-hour window.
     public static func longString(
         for date: Date,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> String {
         let seconds = Int(now.timeIntervalSince(date))
-        if seconds < 30 { return justNow }
-        if seconds < 60 { return "il y a \(seconds) s" }
-        if seconds < 3_600 { return "il y a \(seconds / 60) min" }
+        if seconds < 30 { return nowLabel }
+        if seconds < 60 { return ago(secondsLabel(seconds)) }
+        if seconds < 3_600 { return ago(minutesLabel(seconds / 60)) }
 
         let dayDelta = calendar.dateComponents(
             [.day],
@@ -81,15 +85,38 @@ public enum RelativeTimeFormatter {
             to: calendar.startOfDay(for: now)
         ).day ?? 0
 
-        if dayDelta <= 0 { return "il y a \(seconds / 3_600) h" }
-        if dayDelta == 1 { return "hier" }
-        if dayDelta < 7 { return "il y a \(dayDelta) j" }
-        if dayDelta < 30 { return "il y a \(dayDelta / 7) sem" }
-        if dayDelta < 90 { return "il y a \(dayDelta / 30) mois" }
+        if dayDelta <= 0 { return ago(hoursLabel(seconds / 3_600)) }
+        if dayDelta == 1 { return yesterdayLabel }
+        if dayDelta < 7 { return ago(daysLabel(dayDelta)) }
+        if dayDelta < 30 { return ago(weeksLabel(dayDelta / 7)) }
+        if dayDelta < 90 { return ago(monthsLabel(dayDelta / 30)) }
         return absoluteDate(date, now: now, calendar: calendar)
     }
 
-    // MARK: - Absolute fallback — "4 nov." / "4 nov. 2024"
+    // MARK: - Localized unit labels (app catalog, Bundle.main)
+
+    private static var nowLabel: String {
+        String(localized: "time.short.now", defaultValue: "maintenant", bundle: .main)
+    }
+    private static func secondsLabel(_ s: Int) -> String { unit("time.short.seconds", "%llds", s) }
+    private static func minutesLabel(_ m: Int) -> String { unit("time.short.minutes", "%lld min", m) }
+    private static func hoursLabel(_ h: Int) -> String { unit("time.short.hours", "%lldh", h) }
+    private static func daysLabel(_ d: Int) -> String { unit("time.short.days", "%lldj", d) }
+    private static func weeksLabel(_ w: Int) -> String { unit("time.short.weeks", "%lldsem", w) }
+    private static func monthsLabel(_ mo: Int) -> String { unit("time.short.months", "%lldmois", mo) }
+
+    private static func unit(_ key: StaticString, _ def: String.LocalizationValue, _ value: Int) -> String {
+        String(format: String(localized: key, defaultValue: def, bundle: .main), value)
+    }
+
+    private static var yesterdayLabel: String {
+        String(localized: "time.long.yesterday", defaultValue: "hier", bundle: .main)
+    }
+    private static func ago(_ label: String) -> String {
+        String(format: String(localized: "time.long.ago", defaultValue: "il y a %@", bundle: .main), label)
+    }
+
+    // MARK: - Absolute fallback — "4 nov." / "4 nov. 2024" (Locale.current)
 
     private static func absoluteDate(_ date: Date, now: Date, calendar: Calendar) -> String {
         let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
@@ -100,7 +127,6 @@ public enum RelativeTimeFormatter {
         )
     }
 
-    private static let justNow = "À l'instant"
     private static let absoluteFormatters = AbsoluteDateFormatterBox()
 }
 
