@@ -11,10 +11,16 @@ struct RelativeTimeTests {
         reference.addingTimeInterval(-seconds)
     }
 
-    @Test("under a minute is now")
+    @Test("under thirty seconds is now")
     func now() {
         #expect(RelativeTime.classify(ago(0), reference: reference) == .now)
-        #expect(RelativeTime.classify(ago(59), reference: reference) == .now)
+        #expect(RelativeTime.classify(ago(29), reference: reference) == .now)
+    }
+
+    @Test("seconds between thirty seconds and a minute")
+    func seconds() {
+        #expect(RelativeTime.classify(ago(30), reference: reference) == .seconds(30))
+        #expect(RelativeTime.classify(ago(59), reference: reference) == .seconds(59))
     }
 
     @Test("future / clock-skewed timestamps collapse to now")
@@ -41,9 +47,21 @@ struct RelativeTimeTests {
         #expect(RelativeTime.classify(ago(6 * 86_400), reference: reference) == .days(6))
     }
 
-    @Test("a week or older falls back to the absolute date")
+    @Test("weeks between one week and one month")
+    func weeks() {
+        #expect(RelativeTime.classify(ago(7 * 86_400), reference: reference) == .weeks(1))
+        #expect(RelativeTime.classify(ago(29 * 86_400), reference: reference) == .weeks(4))
+    }
+
+    @Test("months between one month and three months")
+    func months() {
+        #expect(RelativeTime.classify(ago(30 * 86_400), reference: reference) == .months(1))
+        #expect(RelativeTime.classify(ago(89 * 86_400), reference: reference) == .months(2))
+    }
+
+    @Test("three months or older falls back to the absolute date")
     func absoluteDate() {
-        let old = ago(7 * 86_400)
+        let old = ago(90 * 86_400)
         #expect(RelativeTime.classify(old, reference: reference) == .date(old))
         let veryOld = ago(400 * 86_400)
         #expect(RelativeTime.classify(veryOld, reference: reference) == .date(veryOld))

@@ -2650,9 +2650,13 @@ final class RelativeTimeFormatterShortTests: XCTestCase {
         RelativeTimeFormatter.shortString(for: now.addingTimeInterval(TimeInterval(-secondsAgo)), now: now)
     }
 
-    func test_label_underOneMinute_containsNoDigits() {
+    func test_label_underThirtySeconds_containsNoDigits() {
         XCTAssertNil(label(secondsAgo: 0).rangeOfCharacter(from: .decimalDigits))
-        XCTAssertNil(label(secondsAgo: 59).rangeOfCharacter(from: .decimalDigits))
+        XCTAssertNil(label(secondsAgo: 29).rangeOfCharacter(from: .decimalDigits))
+    }
+
+    func test_label_seconds_betweenThirtyAndSixty() {
+        XCTAssertTrue(label(secondsAgo: 45).contains("45"))
     }
 
     func test_label_minutes_flooredFromSeconds() {
