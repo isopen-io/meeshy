@@ -51,7 +51,7 @@ export class PostFeedService {
     // Phase 1 — Fetch candidates
     const where: any = {
       deletedAt: null,
-      type: PostType.POST,
+      type: { in: [PostType.POST, PostType.REEL] },
       visibility: { in: ['PUBLIC', 'FRIENDS'] },
       // Exclude expired (isSet: false matches MongoDB docs where field is absent)
       OR: [
@@ -304,7 +304,7 @@ export class PostFeedService {
     const where: any = {
       authorId: targetUserId,
       deletedAt: null,
-      type: PostType.POST,
+      type: { in: [PostType.POST, PostType.REEL] },
     };
 
     // Visibility filter
@@ -368,7 +368,7 @@ export class PostFeedService {
     const where: any = {
       communityId,
       deletedAt: null,
-      type: PostType.POST,
+      type: { in: [PostType.POST, PostType.REEL] },
       visibility: { in: ['PUBLIC', 'COMMUNITY'] },
     };
 

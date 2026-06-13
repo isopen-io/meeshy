@@ -57,6 +57,9 @@ struct FeedView: View {
     @State var composerText = ""
     @State private var expandedComments: Set<String> = []
     @State var postVisibility: String = "PUBLIC"
+    /// Media posts default to a REEL; the author can force a plain POST via the
+    /// composer's Réel⇄Post toggle, keeping it out of the reels surface.
+    @State var composerForcePlainPost = false
     @State private var showAudioComposer = false
     @State var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State var showComposerLanguagePicker = false
@@ -663,8 +666,21 @@ struct FeedView: View {
                 viewModel.setTranslationOverride(postId: postId, language: language)
             },
             onTapPost: { post in
-                router.push(.postDetail(post.id, post))
-                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+                if post.isReel {
+                    // Reels open straight into the immersive full-screen pager,
+                    // seeded with the feed's reels, never the detail page.
+                    HapticFeedback.medium()
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                        ReelsPresenter.shared.present(
+                            posts: viewModel.posts,
+                            startId: post.id
+                        )
+                    }
+                    Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+                } else {
+                    router.push(.postDetail(post.id, post))
+                    Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+                }
             },
             onTapRepost: { repostId in
                 router.push(.postDetail(repostId))
@@ -1051,6 +1067,27 @@ struct FeedView: View {
                             }
                             .foregroundColor(theme.textMuted)
                         }
+                    }
+
+                    // Réel ⇄ Post toggle — media posts default to a reel; the
+                    // author can force a plain post to keep it out of reels.
+                    if !pendingAttachments.isEmpty || pendingAudioURL != nil {
+                        Button {
+                            composerForcePlainPost.toggle()
+                            HapticFeedback.light()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: composerForcePlainPost ? "doc.text" : "play.rectangle.on.rectangle.fill")
+                                    .font(.caption2)
+                                Text(composerForcePlainPost
+                                    ? String(localized: "feed.composer.type.post", defaultValue: "Post", bundle: .main)
+                                    : String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main))
+                                    .font(.caption)
+                            }
+                            .foregroundColor(composerForcePlainPost ? theme.textMuted : MeeshyColors.indigo300)
+                        }
+                        .padding(.leading, 12)
+                        .accessibilityHint(String(localized: "feed.composer.type.hint", defaultValue: "Bascule entre réel et post", bundle: .main))
                     }
 
                     Spacer()

@@ -472,3 +472,75 @@ extension FeedPost: Equatable {
 extension FeedPost: Hashable {
     public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
+
+// MARK: - Reel Classification
+public extension FeedPost {
+    /// A *reel* is a post stored with the server-side `REEL` type — an immersive,
+    /// full-screen vertical experience instead of a detail page. The type is the
+    /// single source of truth: it is chosen at creation time (a media post
+    /// defaults to `REEL`, the author may force `POST`), so rendering is a plain
+    /// authoritative check, never re-derived from media here.
+    var isReel: Bool {
+        (type ?? "").uppercased() == "REEL"
+    }
+
+    /// Media surfaced first when the reel opens full-screen: the first video,
+    /// else the first audio, else the first image. `nil` when the post is not a
+    /// reel or carries no playable/visual media.
+    var primaryReelMedia: FeedMedia? {
+        guard isReel else { return nil }
+        if let video = media.first(where: { $0.type == .video }) { return video }
+        if let audio = media.first(where: { $0.type == .audio }) { return audio }
+        return media.first(where: { $0.type == .image })
+    }
+
+    /// Filters a feed page down to the reels, preserving order. Seeds the reel
+    /// pager from the already-loaded feed.
+    static func reels(from posts: [FeedPost]) -> [FeedPost] {
+        posts.filter(\.isReel)
+    }
+}
+
+// MARK: - Reel Composition (creation-time classification)
+
+/// Decides, at creation time, whether a new post should default to a `REEL`.
+/// This is the front-end rule the product asks for: any post carrying media
+/// (a video, one or more images, audio alone or with images) becomes a reel by
+/// default; the author can override to a plain `POST` to keep it out of the
+/// reels surface. Pure and stateless so it is testable and shared by every
+/// composer path.
+public enum ReelComposition {
+    /// `true` when a post with these media kinds should default to a reel.
+    /// Documents and locations never qualify.
+    public static func suggestsReel(mediaKinds: [FeedMediaType]) -> Bool {
+        mediaKinds.contains { $0 == .image || $0 == .video || $0 == .audio }
+    }
+
+    /// MIME-type convenience for the composer, which holds attachments as MIME
+    /// strings rather than `FeedMediaType`. Only image/video/audio qualify —
+    /// a document-only or location-only post stays a plain POST.
+    public static func suggestsReel(mimeTypes: [String]) -> Bool {
+        mediaKinds(forMimeTypes: mimeTypes).contains { $0 == .image || $0 == .video || $0 == .audio }
+    }
+
+    private static func mediaKinds(forMimeTypes mimeTypes: [String]) -> [FeedMediaType] {
+        mimeTypes.compactMap { mime in
+            let m = mime.lowercased()
+            if m.hasPrefix("image/") { return .image }
+            if m.hasPrefix("video/") { return .video }
+            if m.hasPrefix("audio/") { return .audio }
+            return nil
+        }
+    }
+
+    /// The default `PostType` for a new post: `REEL` when it carries reel media
+    /// and the author hasn't forced a plain post, otherwise `POST`.
+    public static func defaultType(mediaKinds: [FeedMediaType], forcePlainPost: Bool = false) -> PostType {
+        (!forcePlainPost && suggestsReel(mediaKinds: mediaKinds)) ? .reel : .post
+    }
+
+    /// MIME-type convenience overload of `defaultType`.
+    public static func defaultType(mimeTypes: [String], forcePlainPost: Bool = false) -> PostType {
+        (!forcePlainPost && suggestsReel(mimeTypes: mimeTypes)) ? .reel : .post
+    }
+}

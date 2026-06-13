@@ -7,7 +7,7 @@
 // ENUMS
 // =====================================================
 
-export type PostType = 'POST' | 'STORY' | 'STATUS';
+export type PostType = 'POST' | 'REEL' | 'STORY' | 'STATUS';
 export type PostVisibility = 'PUBLIC' | 'FRIENDS' | 'COMMUNITY' | 'PRIVATE' | 'EXCEPT' | 'ONLY';
 
 // =====================================================

@@ -51,6 +51,9 @@ struct RootView: View {
     @State private var showFeed = false
     @State private var feedWasVisibleBeforeNav = false
     @State private var showMenu = false
+    /// Drives the immersive reels overlay. A long-press on the feed button (or a
+    /// tap on a reel card in the feed) sets `reelsPresenter.launch`.
+    @ObservedObject private var reelsPresenter = ReelsPresenter.shared
     /// Hoisted out of `@State` (Phase H) so deep-stack screens such as
     /// `StoryNotificationTargetScreen` can present the viewer through
     /// `.environmentObject` injection without threading a binding through
@@ -271,8 +274,32 @@ struct RootView: View {
                     .zIndex(50)
             }
 
-            // 4. Draggable Floating buttons
-            if !router.isDeepRoute {
+            // 3b. Reels overlay — full-screen immersive pager. Enters with an
+            // "agrandissement" (scale + opacity) so it reads as the feed button
+            // expanding into the reel rather than a sheet sliding up.
+            if let launch = reelsPresenter.launch {
+                ReelsPlayerView(
+                    seedPosts: launch.seedPosts,
+                    startId: launch.startId,
+                    onClose: {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                            reelsPresenter.dismiss()
+                        }
+                    }
+                )
+                .id(launch.id)
+                .transition(
+                    .asymmetric(
+                        insertion: .scale(scale: 0.82).combined(with: .opacity),
+                        removal: .scale(scale: 0.9).combined(with: .opacity)
+                    )
+                )
+                .zIndex(60)
+            }
+
+            // 4. Draggable Floating buttons (hidden while a reel is open so they
+            // don't float over the immersive player)
+            if !router.isDeepRoute && reelsPresenter.launch == nil {
                 draggableFloatingButtons
             }
 
@@ -288,7 +315,7 @@ struct RootView: View {
             }
 
             // 6. Menu ladder
-            if !router.isDeepRoute {
+            if !router.isDeepRoute && reelsPresenter.launch == nil {
                 menuLadder
             }
 
@@ -1271,7 +1298,12 @@ struct RootView: View {
                     }
                 }
             },
-            onLeftLongPress: nil,
+            onLeftLongPress: {
+                HapticFeedback.medium()
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                    reelsPresenter.presentFresh()
+                }
+            },
             onRightLongPress: {
                 router.push(.settings)
             },
