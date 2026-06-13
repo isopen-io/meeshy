@@ -343,7 +343,16 @@ struct TrackingLinkDetailView: View {
         guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let window = scene.windows.first,
               let root = window.rootViewController else { return }
-        root.present(vc, animated: true)
+        var topVC = root
+        while let presented = topVC.presentedViewController { topVC = presented }
+        // iPad requires a popover anchor for UIActivityViewController or
+        // -present crashes. Anchor to the presenter's view, centered, no arrow.
+        if let popover = vc.popoverPresentationController {
+            popover.sourceView = topVC.view
+            popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+        topVC.present(vc, animated: true)
     }
 
     private func deleteLink() {
