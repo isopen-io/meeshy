@@ -97,26 +97,30 @@ final class StoryModelsTests: XCTestCase {
 
     func testPostTypeAllCases() {
         let cases = PostType.allCases
-        XCTAssertEqual(cases.count, 3)
+        XCTAssertEqual(cases.count, 4)
         XCTAssertTrue(cases.contains(.post))
+        XCTAssertTrue(cases.contains(.reel))
         XCTAssertTrue(cases.contains(.story))
         XCTAssertTrue(cases.contains(.status))
     }
 
     func testPostTypeRawValues() {
         XCTAssertEqual(PostType.post.rawValue, "POST")
+        XCTAssertEqual(PostType.reel.rawValue, "REEL")
         XCTAssertEqual(PostType.story.rawValue, "STORY")
         XCTAssertEqual(PostType.status.rawValue, "STATUS")
     }
 
     func testPostTypeDisplayNames() {
         XCTAssertEqual(PostType.post.displayName, "Post")
+        XCTAssertEqual(PostType.reel.displayName, "Réel")
         XCTAssertEqual(PostType.story.displayName, "Story")
         XCTAssertEqual(PostType.status.displayName, "Status")
     }
 
     func testPostTypeIcons() {
         XCTAssertEqual(PostType.post.icon, "square.and.pencil")
+        XCTAssertEqual(PostType.reel.icon, "play.rectangle.on.rectangle.fill")
         XCTAssertEqual(PostType.story.icon, "camera.fill")
         XCTAssertEqual(PostType.status.icon, "face.smiling")
     }
