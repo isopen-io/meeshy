@@ -2,6 +2,28 @@ import Foundation
 import MeeshySDK
 import MeeshyUI
 
+// MARK: - Feed Cache Seam
+
+/// Reads the persisted feed so the reel pager can cold-start instantly and stay
+/// populated offline. App-side (not SDK): it reaches into the named Meeshy
+/// `CacheCoordinator.feed` store and encodes the product rule "open reels from
+/// whatever feed page is cached". `.fresh`/`.stale` yield their snapshot;
+/// `.expired`/`.empty` yield an empty list.
+protocol ReelFeedCacheReading: Sendable {
+    func cachedFeed(forKey key: String) async -> [FeedPost]
+}
+
+struct CacheCoordinatorReelFeedCache: ReelFeedCacheReading {
+    func cachedFeed(forKey key: String) async -> [FeedPost] {
+        switch await CacheCoordinator.shared.feed.load(for: key) {
+        case .fresh(let posts, _), .stale(let posts, _):
+            return posts
+        case .expired, .empty:
+            return []
+        }
+    }
+}
+
 /// Drives the immersive reel pager: holds the ordered list of reel posts,
 /// the cursor for chronological pagination, the currently-visible reel, and the
 /// optimistic like / bookmark state.
@@ -28,10 +50,20 @@ final class ReelsViewModel: ObservableObject {
     private var nextCursor: String?
     private var hasMore = true
     private var isFetching = false
+    private var coldStartTask: Task<Void, Never>?
     private let service: PostServiceProviding
+    private let cache: ReelFeedCacheReading
 
-    init(service: PostServiceProviding = PostService.shared) {
+    /// Same key `FeedViewModel` writes the main feed under — the reel pager
+    /// reuses that cache so a cold-start launch shares the feed's offline data.
+    private static let feedCacheKey = "main-feed"
+
+    init(
+        service: PostServiceProviding = PostService.shared,
+        cache: ReelFeedCacheReading = CacheCoordinatorReelFeedCache()
+    ) {
         self.service = service
+        self.cache = cache
     }
 
     var currentIndex: Int? {
@@ -47,19 +79,42 @@ final class ReelsViewModel: ObservableObject {
     // MARK: - Loading
 
     /// Seeds the pager from posts already loaded in the feed so it opens
-    /// instantly (cache-first), then fetches a fresh page only when the seed is
-    /// empty (long-press launch with no feed context).
+    /// instantly (cache-first), then cold-starts only when the seed is empty
+    /// (long-press launch with no feed context).
     func seed(posts: [FeedPost], startId: String?) {
         let seeded = FeedPost.reels(from: posts)
         if !seeded.isEmpty {
-            reels = seeded
-            absorbServerFlags(seeded)
-            currentId = startId.flatMap { id in seeded.contains { $0.id == id } ? id : nil } ?? seeded.first?.id
-            hasLoadedOnce = true
+            apply(reels: seeded, startId: startId)
         }
         if reels.isEmpty {
-            Task { await fetch(reset: true) }
+            coldStartTask = Task { [weak self] in await self?.coldStart(startId: startId) }
         }
+    }
+
+    /// Awaits the in-flight cold-start (cache seed + network revalidation). Used
+    /// by tests to observe the terminal state deterministically; a no-op when no
+    /// cold-start was launched (the pager was seeded from feed context).
+    func awaitColdStart() async {
+        await coldStartTask?.value
+    }
+
+    /// Cold-start launch (long-press feed button with no on-screen feed context).
+    /// Hydrates cache-first from the persisted feed so the pager opens instantly
+    /// and works offline, then revalidates from the network. A network failure
+    /// leaves the cached reels in place instead of dropping to an empty screen.
+    private func coldStart(startId: String?) async {
+        let cached = FeedPost.reels(from: await cache.cachedFeed(forKey: Self.feedCacheKey))
+        if !cached.isEmpty, reels.isEmpty {
+            apply(reels: cached, startId: startId)
+        }
+        await fetch(reset: true)
+    }
+
+    private func apply(reels newReels: [FeedPost], startId: String?) {
+        reels = newReels
+        absorbServerFlags(newReels)
+        currentId = startId.flatMap { id in newReels.contains { $0.id == id } ? id : nil } ?? newReels.first?.id
+        hasLoadedOnce = true
     }
 
     func loadMoreIfNeeded(currentReel: FeedPost) async {
@@ -92,7 +147,12 @@ final class ReelsViewModel: ObservableObject {
             absorbServerFlags(newReels)
             nextCursor = response.pagination?.nextCursor
             hasMore = response.pagination?.hasMore ?? (nextCursor != nil)
-            if currentId == nil { currentId = reels.first?.id }
+            // A reset replaces the list, so a `currentId` seeded from the cache
+            // may now point at a reel the fresh feed dropped — fall back to the
+            // first reel in that case (and on first load when it was nil).
+            if currentId == nil || !reels.contains(where: { $0.id == currentId }) {
+                currentId = reels.first?.id
+            }
         } catch {
             hasMore = false
         }
