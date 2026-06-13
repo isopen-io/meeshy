@@ -33,6 +33,32 @@ function diversityScore(authorId: string, authorCounts: Map<string, number>): nu
   return 1 / (1 + count * 0.5);
 }
 
+// Réels : ils ne vivent pas du texte mais du watch-signal. Un réel vu/sauvegardé
+// porte une intention de consommation bien plus forte qu'un like sur un post texte.
+// On boost donc explicitement les réels sur leur signal de visionnage (viewCount)
+// + l'intention profonde (bookmarks, reposts) pour les remonter correctement.
+// Retourne 0 pour tout post non-REEL → neutre dans le score combiné.
+function reelScore(post: any): number {
+  if (post.type !== PostType.REEL) return 0;
+  const views = post.viewCount ?? 0;
+  const deepIntent = (post.bookmarkCount ?? 0) * 2 + (post.repostCount ?? 0) * 3;
+  return Math.log10(1 + views + deepIntent) / 5;
+}
+
+// Fatigue d'impression : un post déjà remonté dans le feed du viewer (PostImpression)
+// mais qu'il a laissé passer doit céder la place à du contenu frais. Pénalité bornée
+// pour ne jamais enterrer définitivement un contenu (le viewer peut y revenir).
+function seenPenalty(postId: string, seenCounts: Map<string, number>): number {
+  const seen = seenCounts.get(postId) ?? 0;
+  if (seen <= 0) return 0;
+  return Math.min(0.5, seen * 0.15);
+}
+
+const FEED_INTEREST_CACHE_TTL = 300; // 5 min — l'historique d'engagement bouge lentement
+const INTEREST_REACTION_SAMPLE = 100; // dernières réactions analysées pour l'intérêt
+const INTEREST_BOOKMARK_SAMPLE = 50;  // derniers bookmarks analysés
+const INTEREST_NORMALIZER = Math.log10(1 + 20); // sature l'affinité d'intérêt à ~20 engagements
+
 export class PostFeedService {
   constructor(
     private readonly prisma: PrismaClient,
@@ -45,7 +71,12 @@ export class PostFeedService {
    * Phase 2: Score & rank in-app
    */
   async getFeed(userId: string, cursor?: string, limit: number = 20) {
-    const candidateLimit = limit * 3;
+    // Chronological window + 1 probe row to detect `hasMore`. We deliberately
+    // do NOT over-fetch then drop: the cursor advances by `createdAt`, so any
+    // candidate we fetch-but-drop would be silently skipped (or re-served as a
+    // duplicate) on the next page. Ranking reorders *within* the window only,
+    // which keeps infinite scroll lossless: every post appears exactly once.
+    const candidateLimit = limit + 1;
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
     // Phase 1 — Fetch candidates
@@ -84,20 +115,45 @@ export class PostFeedService {
       return { items: [], nextCursor: null, hasMore: false };
     }
 
-    // Fetch affinity data: friends list
-    const friendIds = await this.getFriendIds(userId);
+    // The page is the chronological window (candidates already arrive
+    // createdAt desc). The cursor is the OLDEST post of this window, captured
+    // before any score reordering, so the next page is strictly older — no
+    // skips, no duplicates under infinite scroll.
+    const hasMore = candidates.length > limit;
+    const page = hasMore ? candidates.slice(0, limit) : candidates;
+    const oldest = page[page.length - 1];
+    const nextCursor = hasMore && oldest
+      ? encodeCursor(oldest.createdAt, oldest.id)
+      : null;
 
-    // Phase 2 — Score candidates
+    const candidateIds = page.map((c) => c.id);
+
+    // Fetch affinity & intent signals in parallel:
+    // - friendIds       : graphe social (affinité binaire)
+    // - interestAffinity : intérêt personnalisé dérivé de l'engagement passé du viewer
+    // - seenCounts       : combien de fois chaque candidat est déjà remonté (fatigue)
+    const [friendIds, interestAffinity, seenCounts] = await Promise.all([
+      this.getFriendIds(userId),
+      this.getInterestAffinity(userId),
+      this.getSeenCounts(userId, candidateIds),
+    ]);
+
+    // Phase 2 — Score the window (display order only; cursor is fixed above)
     const authorCounts = new Map<string, number>();
-    const scored = candidates.map((post) => {
+    const scored = page.map((post) => {
       const affinity = this.affinityScore(post.authorId, userId, friendIds);
       const diversity = diversityScore(post.authorId, authorCounts);
+      const interest = interestAffinity.get(post.authorId) ?? 0;
+      const reel = reelScore(post);
 
       const score =
-        recencyScore(post.createdAt) * 0.35 +
-        engagementScore(post) * 0.25 +
-        affinity * 0.25 +
-        diversity * 0.15;
+        recencyScore(post.createdAt) * 0.30 +
+        engagementScore(post) * 0.20 +
+        affinity * 0.15 +
+        interest * 0.15 +
+        diversity * 0.10 +
+        reel * 0.10 -
+        seenPenalty(post.id, seenCounts);
 
       // Track author counts for diversity penalty
       authorCounts.set(post.authorId, (authorCounts.get(post.authorId) ?? 0) + 1);
@@ -105,18 +161,9 @@ export class PostFeedService {
       return { post, score };
     });
 
-    // Sort by score descending
+    // Sort by score descending — display order within the window
     scored.sort((a, b) => b.score - a.score);
-
-    // Take top `limit` + check hasMore
-    const topItems = scored.slice(0, limit + 1);
-    const hasMore = topItems.length > limit;
-    const items = hasMore ? topItems.slice(0, limit) : topItems;
-
-    const lastItem = items[items.length - 1];
-    const nextCursor = hasMore && lastItem
-      ? encodeCursor(lastItem.post.createdAt, lastItem.post.id)
-      : null;
+    const items = scored;
 
     const postIds = items.map((s) => s.post.id);
     const [userReactions, userBookmarks, userReposts] = postIds.length > 0
@@ -559,5 +606,96 @@ export class PostFeedService {
     if (authorId === viewerId) return 0.8;
     if (friendIds.includes(authorId)) return 0.5;
     return 0;
+  }
+
+  /**
+   * Profil d'intérêt du viewer → Map<authorId, affinité 0..1>.
+   *
+   * Capte l'intention réelle : quels créateurs le viewer consomme activement.
+   * Les réactions et bookmarks récents révèlent l'intérêt bien mieux que le seul
+   * graphe d'amis. Les bookmarks (intention de revenir) pèsent plus que les
+   * réactions. L'affinité est saturée par échelle log pour qu'un créateur
+   * ultra-engagé ne monopolise pas le feed.
+   *
+   * Dégradation gracieuse : toute erreur renvoie une Map vide (intérêt neutre).
+   */
+  private async getInterestAffinity(userId: string): Promise<Map<string, number>> {
+    const cacheKey = `feed:interest:${userId}`;
+    if (this.cache) {
+      const cached = await this.cache.get(cacheKey).catch(() => null);
+      if (cached) {
+        try {
+          return new Map(JSON.parse(cached) as [string, number][]);
+        } catch {
+          // cache corrompu — on recalcule
+        }
+      }
+    }
+
+    try {
+      const [reactions, bookmarks] = await Promise.all([
+        this.prisma.postReaction.findMany({
+          where: { userId },
+          select: { post: { select: { authorId: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: INTEREST_REACTION_SAMPLE,
+        }),
+        this.prisma.postBookmark.findMany({
+          where: { userId },
+          select: { post: { select: { authorId: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: INTEREST_BOOKMARK_SAMPLE,
+        }),
+      ]);
+
+      const weights = new Map<string, number>();
+      const tally = (rows: Array<{ post?: { authorId?: string | null } | null }>, weight: number) => {
+        for (const row of rows) {
+          const authorId = row.post?.authorId;
+          if (!authorId || authorId === userId) continue;
+          weights.set(authorId, (weights.get(authorId) ?? 0) + weight);
+        }
+      };
+      tally(reactions as any[], 1);
+      tally(bookmarks as any[], 2);
+
+      const affinity = new Map<string, number>();
+      for (const [authorId, weight] of weights) {
+        affinity.set(authorId, Math.min(1, Math.log10(1 + weight) / INTEREST_NORMALIZER));
+      }
+
+      if (this.cache) {
+        await this.cache
+          .set(cacheKey, JSON.stringify([...affinity]), FEED_INTEREST_CACHE_TTL)
+          .catch(() => undefined);
+      }
+      return affinity;
+    } catch {
+      return new Map();
+    }
+  }
+
+  /**
+   * Combien de fois chaque candidat est déjà remonté dans le feed du viewer.
+   * Sert la fatigue d'impression : on dégrade ce qui a déjà été montré pour
+   * renouveler le feed. Non caché (dépend du jeu de candidats courant et bouge
+   * vite). Dégradation gracieuse : erreur → Map vide (aucune pénalité).
+   */
+  private async getSeenCounts(userId: string, postIds: string[]): Promise<Map<string, number>> {
+    if (postIds.length === 0) return new Map();
+    try {
+      const grouped = await this.prisma.postImpression.groupBy({
+        by: ['postId'],
+        where: { userId, postId: { in: postIds } },
+        _count: { postId: true },
+      });
+      const counts = new Map<string, number>();
+      for (const row of grouped as Array<{ postId: string; _count?: { postId?: number } }>) {
+        counts.set(row.postId, row._count?.postId ?? 0);
+      }
+      return counts;
+    } catch {
+      return new Map();
+    }
   }
 }

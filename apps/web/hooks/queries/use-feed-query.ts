@@ -44,5 +44,18 @@ export function usePrefetchPost() {
 
 export function useFeedPosts(feedQuery: ReturnType<typeof useFeedQuery>): Post[] {
   if (!feedQuery.data) return [];
-  return feedQuery.data.pages.flatMap((page) => page.data);
+  // Dédup défensive par id (aligné sur iOS FeedViewModel). Le curseur serveur
+  // chronologique garantit déjà des pages disjointes, mais un post poussé en
+  // temps réel puis re-fetché dans une page peut se chevaucher : on garde la
+  // première occurrence pour éviter doublons d'affichage et collisions de key.
+  const seen = new Set<string>();
+  const posts: Post[] = [];
+  for (const page of feedQuery.data.pages) {
+    for (const post of page.data) {
+      if (seen.has(post.id)) continue;
+      seen.add(post.id);
+      posts.push(post);
+    }
+  }
+  return posts;
 }

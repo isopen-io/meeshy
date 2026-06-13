@@ -133,6 +133,40 @@ describe('useFeedPosts', () => {
     expect(result.current.posts).toEqual([mockPost]);
   });
 
+  it('deduplicates posts that appear in more than one page (keeps first occurrence)', async () => {
+    const dup = { ...mockPost, id: 'post-1', likeCount: 5 };
+    const dupLater = { ...mockPost, id: 'post-1', likeCount: 99 };
+    const other = { ...mockPost, id: 'post-2' };
+    const page1 = {
+      success: true,
+      data: [dup, other],
+      meta: { pagination: { total: 4, offset: 0, limit: 2, hasMore: true }, nextCursor: 'cursor-abc' },
+    };
+    const page2 = {
+      success: true,
+      data: [dupLater, { ...mockPost, id: 'post-3' }],
+      meta: { pagination: { total: 4, offset: 2, limit: 2, hasMore: false }, nextCursor: null },
+    };
+    mockGetFeed.mockResolvedValueOnce(page1).mockResolvedValueOnce(page2);
+
+    const { result } = renderHook(
+      () => {
+        const query = useFeedQuery({ limit: 2 });
+        const posts = useFeedPosts(query);
+        return { query, posts };
+      },
+      { wrapper: createWrapper() },
+    );
+
+    await waitFor(() => expect(result.current.query.isSuccess).toBe(true));
+    await result.current.query.fetchNextPage();
+    await waitFor(() => expect(result.current.query.isFetchingNextPage).toBe(false));
+
+    const ids = result.current.posts.map((p) => p.id);
+    expect(ids).toEqual(['post-1', 'post-2', 'post-3']);
+    expect(result.current.posts.find((p) => p.id === 'post-1')?.likeCount).toBe(5);
+  });
+
   it('returns empty array when no data', () => {
     const { result } = renderHook(
       () => {
