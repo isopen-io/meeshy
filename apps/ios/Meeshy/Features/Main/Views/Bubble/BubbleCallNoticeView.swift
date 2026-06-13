@@ -33,8 +33,12 @@ struct BubbleCallNoticeView: View, Equatable {
     private var isOutgoing: Bool { notice.isOutgoing }
 
     var body: some View {
+        // Aligned like a chat bubble (WhatsApp call-log treatment): outgoing
+        // calls hug the trailing edge, incoming/missed/declined hug the leading
+        // edge. The side itself encodes the direction, so the detail line below
+        // no longer repeats "Sortant"/"Entrant" — only stats remain.
         HStack(spacing: 0) {
-            Spacer(minLength: 16)
+            if isOutgoing { Spacer(minLength: 48) }
             Button {
                 onCallBack?(summary)
             } label: {
@@ -45,7 +49,7 @@ struct BubbleCallNoticeView: View, Equatable {
             .accessibilityLabel(accessibilityLabel)
             .accessibilityHint(Text(String(localized: "bubble.call.callback.hint", defaultValue: "Double-tapez pour rappeler", bundle: .main)))
             .accessibilityAddTraits(.isButton)
-            Spacer(minLength: 16)
+            if !isOutgoing { Spacer(minLength: 48) }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 4)
@@ -59,7 +63,9 @@ struct BubbleCallNoticeView: View, Equatable {
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(ThemeManager.shared.textPrimary)
                     .lineLimit(2)
-                detailLine
+                if hasDetailContent {
+                    detailLine
+                }
             }
             Spacer(minLength: 8)
             callBackBadge
@@ -85,21 +91,22 @@ struct BubbleCallNoticeView: View, Equatable {
         .accessibilityHidden(true)
     }
 
-    // MARK: - Detail line (direction · duration · data · quality)
+    // MARK: - Detail line (duration · data · quality)
 
+    /// True when at least one stat segment is present. Drives whether the
+    /// detail line is rendered at all — a missed/declined call with no duration,
+    /// data, or quality shows just its title (no empty stats row).
+    private var hasDetailContent: Bool {
+        durationLabel != nil
+            || summary.dataSpentLabel != nil
+            || summary.networkQuality != nil
+    }
+
+    /// Stats only — direction is conveyed by the bubble side + the leading
+    /// glyph + the title, so it is never repeated here.
     private var detailLine: some View {
         HStack(spacing: 5) {
-            // Direction (emitted vs received) — always shown so the user knows
-            // whether they placed or received the call.
-            Image(systemName: isOutgoing ? "arrow.up.right" : "arrow.down.left")
-                .font(.caption2.weight(.bold))
-                .foregroundColor(ThemeManager.shared.textMuted)
-            Text(directionWord)
-                .font(.caption.weight(.medium))
-                .foregroundColor(ThemeManager.shared.textMuted)
-
             if let duration = durationLabel {
-                dot
                 Image(systemName: "clock")
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(ThemeManager.shared.textMuted)
@@ -109,7 +116,7 @@ struct BubbleCallNoticeView: View, Equatable {
             }
 
             if let data = summary.dataSpentLabel {
-                dot
+                if durationLabel != nil { dot }
                 Image(systemName: "arrow.up.arrow.down")
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(ThemeManager.shared.textMuted)
@@ -119,7 +126,7 @@ struct BubbleCallNoticeView: View, Equatable {
             }
 
             if let quality = summary.networkQuality {
-                dot
+                if durationLabel != nil || summary.dataSpentLabel != nil { dot }
                 Circle()
                     .fill(qualityColor(quality))
                     .frame(width: 6, height: 6)
