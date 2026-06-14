@@ -1,9 +1,10 @@
 import React from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { RankingItem } from '@/hooks/use-ranking-data';
-import { RANKING_CRITERIA } from './constants';
+import { RANKING_CRITERIA, criterionLabelKey } from './constants';
 import { formatCount, getRankBadge, getMessageTypeIcon } from './utils';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
+import { useI18n } from '@/hooks/useI18n';
 
 interface MessageRankCardProps {
   item: RankingItem;
@@ -24,6 +25,7 @@ function formatDate(dateString: string | undefined, locale: string) {
 
 export const MessageRankCard = React.memo(({ item, criterion }: MessageRankCardProps) => {
   const locale = useCurrentInterfaceLanguage();
+  const { t } = useI18n('admin');
   const currentCriterion = RANKING_CRITERIA.messages.find(c => c.value === criterion);
   const isTopThree = item.rank && item.rank <= 3;
 
@@ -82,7 +84,7 @@ export const MessageRankCard = React.memo(({ item, criterion }: MessageRankCardP
           </span>
         </div>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          {currentCriterion?.label}
+          {t(criterionLabelKey(criterion))}
         </p>
       </div>
     </div>

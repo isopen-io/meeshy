@@ -11,6 +11,7 @@ import { LinkRankCard } from '../LinkRankCard';
 import { RankingTable } from '../RankingTable';
 import { formatCount, getRankBadge } from '../utils';
 import type { RankingItem } from '@/hooks/use-ranking-data';
+import { adminService } from '@/services/admin.service';
 
 // Mock du service admin
 jest.mock('@/services/admin.service', () => ({
@@ -19,15 +20,39 @@ jest.mock('@/services/admin.service', () => ({
   }
 }));
 
+// Mock useI18n with the real French admin locale so components render localized
+// strings (and to avoid pulling the stores → socketio → encryption import chain).
+jest.mock('@/hooks/useI18n', () => {
+  const fr = require('@/locales/fr/admin.json');
+  const resolve = (key: string) =>
+    key.split('.').reduce<unknown>((acc, k) => (acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[k] : undefined), fr);
+  return {
+    useI18n: () => ({
+      t: (key: string, paramsOrFallback?: Record<string, unknown> | string) => {
+        const value = resolve(key);
+        if (typeof value !== 'string') {
+          return typeof paramsOrFallback === 'string' ? paramsOrFallback : key;
+        }
+        if (paramsOrFallback && typeof paramsOrFallback === 'object') {
+          return value.replace(/\{(\w+)\}/g, (m, p) => String(paramsOrFallback[p] ?? m));
+        }
+        return value;
+      },
+      tArray: () => [],
+      isLoading: false
+    })
+  };
+});
+
 describe('Ranking Utils', () => {
   describe('formatCount', () => {
     it('should format numbers in French locale', () => {
       // toLocaleString separator may be NBSP or regular space depending on runtime
-      const result1234 = formatCount(1234);
+      const result1234 = formatCount(1234, 'fr-FR');
       expect(result1234.replace(/\s/g, ' ')).toBe('1 234');
-      const result1234567 = formatCount(1234567);
+      const result1234567 = formatCount(1234567, 'fr-FR');
       expect(result1234567.replace(/\s/g, ' ')).toBe('1 234 567');
-      expect(formatCount(0)).toBe('0');
+      expect(formatCount(0, 'fr-FR')).toBe('0');
     });
 
     it('should handle undefined', () => {
@@ -280,7 +305,8 @@ describe('LinkRankCard Component', () => {
   it('should display click statistics', () => {
     render(<LinkRankCard item={mockLinkItem} criterion="tracking_links_most_visited" />);
 
-    expect(screen.getByText(/1 500 visites/)).toBeInTheDocument();
+    // Thousands separator is locale-dependent (comma, space or NBSP) — match any non-digit.
+    expect(screen.getByText(/1\D?500 visites/)).toBeInTheDocument();
     expect(screen.getByText(/850 uniques/)).toBeInTheDocument();
   });
 
@@ -418,8 +444,7 @@ describe('Integration: Full Ranking Flow', () => {
       }
     };
 
-    import { adminService } from '@/services/admin.service';
-    adminService.getRankings.mockResolvedValue(mockApiResponse);
+    (adminService.getRankings as jest.Mock).mockResolvedValue(mockApiResponse);
 
     const { result } = renderHook(() =>
       useRankingData({
