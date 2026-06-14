@@ -75,7 +75,7 @@ extension ConversationView {
                 if !headerState.searchQuery.isEmpty {
                     Button {
                         headerState.searchQuery = ""
-                        viewModel.searchResults = []
+                        Task { await viewModel.endSearch() }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 16))
@@ -117,132 +117,40 @@ extension ConversationView {
         .padding(.top, 4)
     }
 
-    // MARK: - Search Results Overlay (blurred background)
+    // MARK: - Search Results Banner (filtered-conversation mode)
 
-    var searchResultsOverlay: some View {
-        VStack(spacing: 0) {
-            if viewModel.searchResults.isEmpty && !viewModel.isSearching && headerState.searchQuery.count >= 2 {
-                VStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 36, weight: .light))
-                        .foregroundColor(theme.textMuted.opacity(0.5))
-                    Text(String(localized: "conversation.view.search.no_results", defaultValue: "Aucun résultat", bundle: .main))
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if !viewModel.searchResults.isEmpty {
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 2) {
-                        ForEach(viewModel.searchResults) { result in
-                            searchResultRow(result)
-                                .onTapGesture {
-                                    Task { await jumpToSearchResult(result) }
-                                }
-                                .onAppear {
-                                    if result.id == viewModel.searchResults.last?.id && viewModel.searchHasMore {
-                                        Task { await viewModel.loadMoreSearchResults(query: headerState.searchQuery) }
-                                    }
-                                }
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.top, 8)
-                }
-            }
+    /// In filtered-conversation search the real conversation behind the bar
+    /// already shows ONLY the matching bubbles (term highlighted, via the
+    /// MessageStore `.search` window). We no longer blur the conversation nor
+    /// list mini-cards — just a slim, non-interactive banner announcing the
+    /// match count (or the empty / searching state).
+    @ViewBuilder
+    var searchResultsBanner: some View {
+        let count = viewModel.searchResults.count
+        HStack(spacing: 6) {
+            Image(systemName: (count == 0 && !viewModel.isSearching) ? "magnifyingglass" : "text.magnifyingglass")
+                .font(.system(size: 12, weight: .semibold))
+            Text(searchBannerLabel(count: count, searching: viewModel.isSearching))
+                .font(.system(size: 12, weight: .medium))
+                .lineLimit(1)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            Color.black.opacity(0.001)
-                .onTapGesture { dismissSearch() }
-        )
-    }
-
-    private func searchResultRow(_ result: SearchResultItem) -> some View {
-        HStack(spacing: 10) {
-            // Avatar
-            MeeshyAvatar(
-                name: result.senderName,
-                context: .messageBubble,
-                accentColor: DynamicColorGenerator.colorForName(result.senderName),
-                avatarURL: result.senderAvatar
-            )
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text(result.senderName)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(1)
-
-                    Spacer()
-
-                    Text(formatSearchDate(result.createdAt))
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-
-                HStack(spacing: 4) {
-                    if result.matchType == "translation" {
-                        Image(systemName: "globe")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(Color(hex: accentColor).opacity(0.7))
-                    }
-
-                    Text(highlightedText(result.matchedText, query: headerState.searchQuery))
-                        .font(.system(size: 13))
-                        .foregroundColor(theme.textSecondary)
-                        .lineLimit(2)
-                }
-            }
-        }
+        .foregroundColor(theme.textSecondary)
         .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(isDark ? Color.white.opacity(0.06) : Color.white.opacity(0.8))
-        )
-        .contentShape(Rectangle())
+        .padding(.vertical, 6)
+        .background(Capsule().fill(.ultraThinMaterial))
+        .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+        .padding(.top, 6)
     }
 
-    private func highlightedText(_ text: String, query: String) -> AttributedString {
-        var attributed = AttributedString(text.prefix(120) + (text.count > 120 ? "..." : ""))
-        let queryLower = query.lowercased()
-        let textLower = String(text.prefix(120)).lowercased()
-        if let range = textLower.range(of: queryLower) {
-            let start = text.distance(from: text.startIndex, to: range.lowerBound)
-            let end = text.distance(from: text.startIndex, to: range.upperBound)
-            let attrStart = attributed.index(attributed.startIndex, offsetByCharacters: start)
-            let attrEnd = attributed.index(attributed.startIndex, offsetByCharacters: min(end, text.prefix(120).count))
-            if attrStart < attributed.endIndex && attrEnd <= attributed.endIndex {
-                attributed[attrStart..<attrEnd].foregroundColor = Color(hex: accentColor)
-                attributed[attrStart..<attrEnd].font = .system(size: 13, weight: .bold)
-            }
+    private func searchBannerLabel(count: Int, searching: Bool) -> String {
+        if searching && count == 0 {
+            return String(localized: "conversation.view.search.searching", defaultValue: "Recherche…", bundle: .main)
         }
-        return attributed
-    }
-
-    private static let searchTimeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f
-    }()
-
-    private static let searchDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "dd/MM/yy"
-        return f
-    }()
-
-    private func formatSearchDate(_ date: Date) -> String {
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) {
-            return Self.searchTimeFormatter.string(from: date)
+        if count == 0 {
+            return String(localized: "conversation.view.search.no_results", defaultValue: "Aucun résultat", bundle: .main)
         }
-        if calendar.isDateInYesterday(date) {
-            return String(localized: "date.yesterday", defaultValue: "Hier", bundle: .main)
-        }
-        return Self.searchDateFormatter.string(from: date)
+        let fmt = String(localized: "conversation.view.search.results_count", defaultValue: "%lld résultat(s)", bundle: .main)
+        return String(format: fmt, count)
     }
 
     // MARK: - Search Actions
@@ -261,22 +169,15 @@ extension ConversationView {
         let query = headerState.searchQuery
         searchDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 400_000_000)
-            guard !Task.isCancelled, query.count >= 2 else { return }
-            await viewModel.searchMessages(query: query)
+            guard !Task.isCancelled else { return }
+            if query.count >= 2 {
+                await viewModel.searchMessages(query: query)
+            } else {
+                // Query dropped below the threshold — exit the filter so the
+                // full conversation comes back.
+                await viewModel.endSearch()
+            }
         }
-    }
-
-    func jumpToSearchResult(_ result: SearchResultItem) async {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            headerState.showSearch = false
-        }
-        isSearchFocused = false
-        HapticFeedback.medium()
-
-        await viewModel.loadMessagesAround(messageId: result.id)
-
-        try? await Task.sleep(nanoseconds: 100_000_000)
-        scrollState.scrollToMessageId = result.id
     }
 
     func dismissSearch() {
@@ -285,10 +186,10 @@ extension ConversationView {
             headerState.searchQuery = ""
             scrollState.highlightedMessageId = nil
         }
-        viewModel.searchResults = [SearchResultItem]()
-        viewModel.searchHasMore = false
         viewModel.searchNextCursor = nil as String?
         isSearchFocused = false
+        // Restore the full conversation window + clear search state.
+        Task { await viewModel.endSearch() }
     }
 
     // MARK: - Search Overlay (combines bar + blur + results)
@@ -305,17 +206,17 @@ extension ConversationView {
     @ViewBuilder
     var searchResultsBlurOverlay: some View {
         if headerState.showSearch && headerState.searchQuery.count >= 2 {
-            Color.black.opacity(0.001)
-                .background(.ultraThinMaterial)
-                .ignoresSafeArea()
-                .zIndex(80)
-                .transition(.opacity)
-
+            // No full-screen blur: the conversation itself is filtered in-situ
+            // (MessageStore `.search` window) and MUST stay visible. We only
+            // float a slim results banner; taps fall through to the filtered
+            // bubbles so the user keeps interacting with the conversation.
             VStack(spacing: 0) {
                 Color.clear.frame(height: composerState.showOptions ? 140 : 100)
-                searchResultsOverlay
+                searchResultsBanner
+                Spacer()
             }
             .zIndex(81)
+            .allowsHitTesting(false)
             .transition(.opacity)
         }
     }

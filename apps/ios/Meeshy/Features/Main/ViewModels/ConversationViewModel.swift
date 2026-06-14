@@ -3286,6 +3286,7 @@ class ConversationViewModel: ObservableObject {
         searchHasMore = stateStore.searchHasMore
         isSearching = stateStore.isSearching
         searchNextCursor = nil
+        await applySearchFilterWindow()
     }
 
     func loadMoreSearchResults(query: String) async {
@@ -3293,6 +3294,33 @@ class ConversationViewModel: ObservableObject {
         searchResults = stateStore.searchResults
         searchHasMore = stateStore.searchHasMore
         isSearching = stateStore.isSearching
+        await applySearchFilterWindow()
+    }
+
+    /// In-situ filtered-conversation search: when a query is active with
+    /// matches, the conversation window is filtered to ONLY those messages
+    /// (rendered as real bubbles, term highlighted). When the query is empty or
+    /// yields nothing, the full window is restored. Idempotent — safe to call
+    /// after every search / pagination.
+    private func applySearchFilterWindow() async {
+        if currentSearchQuery != nil, !searchResults.isEmpty {
+            await messageStore.enterSearchMode(ids: searchResults.map(\.id))
+        } else if case .search = messageStore.windowMode {
+            await messageStore.restoreLatestWindow()
+        }
+    }
+
+    /// Exits in-conversation search: restores the full conversation window and
+    /// clears the search state. Called when the user closes / clears the search.
+    func endSearch() async {
+        if case .search = messageStore.windowMode {
+            await messageStore.restoreLatestWindow()
+        }
+        currentSearchQuery = nil
+        stateStore.currentSearchQuery = nil
+        searchResults = []
+        stateStore.searchResults = []
+        searchHasMore = false
     }
 
     // MARK: - Jump to Message (load messages around a specific message)
