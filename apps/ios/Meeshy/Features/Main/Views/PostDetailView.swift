@@ -25,6 +25,8 @@ struct PostDetailView: View {
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false
     @State private var isTextExpanded = false
+    @State private var headerScrollOffset: CGFloat = 0
+    private static let scrollSpace = "postDetailScroll"
     /// Set once `PostService.share(... generateLink: true)` returns — the
     /// `.sheet(item:)` further down presents the system share UI as soon
     /// as this becomes non-nil and clears it on dismiss.
@@ -411,30 +413,49 @@ struct PostDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            navBar
-
             // Connection status banner (banner manages its own socket observation)
             ConnectionBanner()
 
             if let post = displayPost {
-                ScrollViewReader { scrollProxy in
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 0) {
-                        postDetailContent(post)
-                    }
-                    .padding(.bottom, 80)
-                }
-                .onAppear {
-                    if showComments {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            withAnimation {
-                                scrollProxy.scrollTo("commentsSection", anchor: .top)
+                ZStack(alignment: .top) {
+                    ScrollViewReader { scrollProxy in
+                        ScrollView(showsIndicators: false) {
+                            // Sentinel: publishes the scroll offset so the floating
+                            // header collapses + reveals the author. Sentinel sits at
+                            // the top of the content (before the LazyVStack's top
+                            // padding) → minY≈0 at rest, goes negative on scroll.
+                            GeometryReader { geo in
+                                Color.clear.preference(
+                                    key: ScrollOffsetPreferenceKey.self,
+                                    value: geo.frame(in: .named(Self.scrollSpace)).minY
+                                )
                             }
-                            composerFocusTrigger.toggle()
+                            .frame(height: 0)
+
+                            LazyVStack(spacing: 0) {
+                                postDetailContent(post)
+                            }
+                            .padding(.top, CollapsibleHeaderMetrics.expandedHeight)
+                            .padding(.bottom, 80)
                         }
-                    }
-                }
-                } // ScrollViewReader
+                        .coordinateSpace(name: Self.scrollSpace)
+                        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
+                            headerScrollOffset = offset
+                        }
+                        .onAppear {
+                            if showComments {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    withAnimation {
+                                        scrollProxy.scrollTo("commentsSection", anchor: .top)
+                                    }
+                                    composerFocusTrigger.toggle()
+                                }
+                            }
+                        }
+                    } // ScrollViewReader
+
+                    postDetailHeader(post)
+                } // ZStack
             } else if viewModel.isLoading {
                 Spacer()
                 ProgressView()
@@ -589,58 +610,85 @@ struct PostDetailView: View {
         }
     }
 
-    // MARK: - Nav Bar (minimal: < and ...)
+    // MARK: - Floating Header (CollapsibleHeader)
 
-    private var navBar: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                router.pop()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.callout.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(theme.inputBackground))
-            }
-
-            Spacer()
-
-            Menu {
-                Button {
-                    Task { await mintShareLink(action: .copyToPasteboard) }
-                } label: {
-                    Label(String(localized: "feed.post.detail.copy_link", defaultValue: "Copier le lien", bundle: .main), systemImage: "link")
+    /// Centered author chip revealed in the floating header as the inline
+    /// author block scrolls away. Tapping opens the profile sheet (mirrors the
+    /// inline name tap).
+    @ViewBuilder
+    private func authorRevealView(_ post: FeedPost) -> some View {
+        Button {
+            selectedProfileUser = .from(feedPost: post)
+        } label: {
+            HStack(spacing: 8) {
+                MeeshyAvatar(
+                    name: post.author,
+                    context: .custom(26),
+                    accentColor: post.authorColor,
+                    avatarURL: post.authorAvatarURL
+                )
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(post.author)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(theme.textPrimary)
+                        .lineLimit(1)
+                    Text(RelativeTimeFormatter.shortString(for: post.timestamp))
+                        .font(.caption2)
+                        .foregroundColor(theme.textMuted)
                 }
-                Button {
-                    Task { await mintShareLink(action: .presentShareSheet) }
-                } label: {
-                    Label(String(localized: "feed.post.detail.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
-                }
-                if displayPost?.authorId == AuthManager.shared.currentUser?.id {
-                    Button {
-                        isEditing = true
-                        HapticFeedback.light()
-                    } label: {
-                        Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
-                    }
-                }
-                Button(role: .destructive) {
-                    HapticFeedback.light()
-                    Task { await viewModel.reportPost(postId) }
-                } label: {
-                    Label(String(localized: "feed.post.detail.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.callout.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(theme.inputBackground))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .buttonStyle(.plain)
+    }
+
+    /// The `…` menu, lifted out of the old navBar into the header's trailing slot.
+    private var postMenu: some View {
+        Menu {
+            Button {
+                Task { await mintShareLink(action: .copyToPasteboard) }
+            } label: {
+                Label(String(localized: "feed.post.detail.copy_link", defaultValue: "Copier le lien", bundle: .main), systemImage: "link")
+            }
+            Button {
+                Task { await mintShareLink(action: .presentShareSheet) }
+            } label: {
+                Label(String(localized: "feed.post.detail.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
+            }
+            if displayPost?.authorId == AuthManager.shared.currentUser?.id {
+                Button {
+                    isEditing = true
+                    HapticFeedback.light()
+                } label: {
+                    Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
+                }
+            }
+            Button(role: .destructive) {
+                HapticFeedback.light()
+                Task { await viewModel.reportPost(postId) }
+            } label: {
+                Label(String(localized: "feed.post.detail.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.callout.weight(.semibold))
+                .foregroundColor(theme.textPrimary)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(theme.inputBackground.opacity(0.6)))
+        }
+    }
+
+    private func postDetailHeader(_ post: FeedPost) -> some View {
+        CollapsibleHeader(
+            title: "",
+            scrollOffset: headerScrollOffset,
+            showBackButton: true,
+            onBack: { HapticFeedback.light(); router.pop() },
+            titleColor: theme.textPrimary,
+            backArrowColor: theme.textPrimary,
+            backgroundColor: theme.backgroundPrimary,
+            centerReveal: { authorRevealView(post) },
+            trailing: { postMenu }
+        )
     }
 
     // MARK: - Text Zone

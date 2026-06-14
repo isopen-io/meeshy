@@ -106,5 +106,15 @@ final class CompatibilityLayerTests: XCTestCase {
             backArrowColor: .blue,
             backgroundColor: .black
         )
+        _ = CollapsibleHeader(
+            title: "",
+            scrollOffset: 0,
+            showBackButton: true,
+            titleColor: .primary,
+            backArrowColor: .blue,
+            backgroundColor: .black,
+            centerReveal: { Text("author") },
+            trailing: { Image(systemName: "ellipsis") }
+        )
     }
 }
