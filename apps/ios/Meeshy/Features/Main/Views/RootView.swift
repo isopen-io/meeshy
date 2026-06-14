@@ -57,12 +57,16 @@ struct RootView: View {
     @ObservedObject private var reelsPresenter = ReelsPresenter.shared
     /// Liquid "water wave" reveal of the reels overlay. `reelsRevealProgress`
     /// drives the `LiquidRevealShape` mask 0→1 (open) / 1→0 (close) from the
-    /// feed button's on-screen position; `reelsRevealCompleted` flips true only
-    /// once the disc reaches full screen — the first reel video stays on its
-    /// poster (PAUSED) until then. `reelsRevealClosing` routes the reverse wave
-    /// before `reelsPresenter.dismiss()`.
+    /// feed button's on-screen position. `reelsRevealCompleted` gates the first
+    /// reel's playback (flips true 0.2s BEFORE the disc is full so the reel is
+    /// already running when revealed). `reelsRevealMasked` keeps the mask on ONLY
+    /// while the disc is animating — once full screen it drops to `false` so the
+    /// `AVPlayerViewController` surface renders live video (a persistent SwiftUI
+    /// `.mask()` over an AVPlayer layer freezes it on the poster). `reelsRevealClosing`
+    /// routes the reverse wave before `reelsPresenter.dismiss()`.
     @State private var reelsRevealProgress: Double = 0
     @State private var reelsRevealCompleted = false
+    @State private var reelsRevealMasked = false
     @State private var reelsRevealClosing = false
     /// Hoisted out of `@State` (Phase H) so deep-stack screens such as
     /// `StoryNotificationTargetScreen` can present the viewer through
@@ -293,14 +297,16 @@ struct RootView: View {
             if let launch = reelsPresenter.launch {
                 ReelsRevealContainer(
                     revealProgress: reelsRevealProgress,
+                    applyMask: reelsRevealMasked,
                     feedButtonPositionRaw: feedButtonPosition,
                     isSearchBarVisible: !isScrollingDown,
                     reduceMotion: reduceMotionEnabled,
-                    content: {
+                    content: { safeArea in
                         ReelsPlayerView(
                             seedPosts: launch.seedPosts,
                             startId: launch.startId,
                             revealCompleted: reelsRevealCompleted,
+                            safeArea: safeArea,
                             onClose: { closeReels() }
                         )
                     }
@@ -1291,34 +1297,46 @@ struct RootView: View {
 
     // MARK: - Reels Liquid Reveal Orchestration
 
-    /// Opens the reels overlay: animate the wavy disc 0→1 from the feed button,
-    /// then flip `reelsRevealCompleted` (the signal that gates the first reel's
-    /// playback to full screen). Reduce Motion uses a quick cross-fade but still
-    /// gates play to completion.
+    /// Opens the reels overlay: animate the wavy disc 0→1 from the feed button.
+    /// Two timers fire off the animation: playback starts 0.2s BEFORE the disc is
+    /// full (so the reel is already running when revealed), and the mask drops at
+    /// full screen (so the live `AVPlayer` surface renders instead of staying
+    /// frozen under a persistent `.mask()`). Reduce Motion uses a quick cross-fade.
     private func openReels() {
         reelsRevealCompleted = false
         reelsRevealClosing = false
+        reelsRevealMasked = true
         reelsRevealProgress = 0
-        let duration: Double = reduceMotionEnabled ? 0.22 : 0.55
+        let duration: Double = reduceMotionEnabled ? 0.18 : 0.35
+        // Start the reel ~0.2s before the wave finishes (clamped so it never
+        // precedes the disc actually leaving the button).
+        let playLead = min(0.2, duration * 0.6)
         withAnimation(.easeOut(duration: duration)) {
             reelsRevealProgress = 1
         }
-        // Gate playback on the disc reaching full screen. A timer mirrors the
-        // animation duration since `LiquidRevealShape` has no completion handler.
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, duration - playLead)) {
             guard reelsPresenter.launch != nil, !reelsRevealClosing else { return }
             reelsRevealCompleted = true
         }
+        // Drop the mask once the disc reaches full screen — a persistent mask over
+        // the AVPlayer layer freezes it on the poster.
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+            guard reelsPresenter.launch != nil, !reelsRevealClosing else { return }
+            reelsRevealMasked = false
+        }
     }
 
-    /// Closes the reels overlay with the reverse wave: shrink the disc back
-    /// toward the feed button (1→0), THEN dismiss. Reduce Motion cross-fades.
+    /// Closes the reels overlay with the reverse wave: pause the reel, re-apply
+    /// the mask, shrink the disc back toward the feed button (1→0), THEN dismiss.
+    /// Reduce Motion cross-fades.
     private func closeReels() {
         guard !reelsRevealClosing else { return }
         reelsRevealClosing = true
         reelsRevealCompleted = false
+        reelsRevealMasked = true
+        SharedAVPlayerManager.shared.pause()
         HapticFeedback.light()
-        let duration: Double = reduceMotionEnabled ? 0.2 : 0.42
+        let duration: Double = reduceMotionEnabled ? 0.18 : 0.3
         withAnimation(.easeIn(duration: duration)) {
             reelsRevealProgress = 0
         }
@@ -1504,13 +1522,20 @@ extension View {
 /// project.pbxproj entry for a separate component file).
 private struct ReelsRevealContainer<Content: View>: View {
     let revealProgress: Double
+    /// When `false`, the mask is dropped entirely so the live `AVPlayer` surface
+    /// renders (a persistent mask over an AVPlayer layer freezes it on the poster).
+    /// RootView flips it off once the disc reaches full screen.
+    let applyMask: Bool
     /// Raw "x,y" (0-1 normalized) feed button position as persisted by RootView.
     let feedButtonPositionRaw: String
     /// Mirrors the floating-button container's search-bar flag — it selects the
     /// bottom safe-zone used to place the button (and thus the reveal focus).
     let isSearchBarVisible: Bool
     let reduceMotion: Bool
-    @ViewBuilder let content: () -> Content
+    /// Receives the REAL safe-area insets (read before `.ignoresSafeArea()`) so
+    /// the reels chrome (back button, scrub bar) can clear the Dynamic Island /
+    /// home indicator while the media stays full-bleed.
+    @ViewBuilder let content: (EdgeInsets) -> Content
 
     /// A continuously flowing phase so the liquid edge "ripples" while expanding.
     @State private var wavePhase: Double = 0
@@ -1524,11 +1549,12 @@ private struct ReelsRevealContainer<Content: View>: View {
                 isSearchBarVisible: isSearchBarVisible
             )
 
-            content()
+            content(geo.safeAreaInsets)
                 .ignoresSafeArea()
                 .modifier(
                     ReelsRevealMaskModifier(
                         revealProgress: revealProgress,
+                        applyMask: applyMask,
                         center: center,
                         wavePhase: wavePhase,
                         reduceMotion: reduceMotion
@@ -1546,14 +1572,19 @@ private struct ReelsRevealContainer<Content: View>: View {
 }
 
 /// Applies the reveal mask. Split out so the wavy-vs-fade branch reads cleanly.
+/// Once `applyMask` is false (disc full screen) the content renders untouched so
+/// the AVPlayer surface is live.
 private struct ReelsRevealMaskModifier: ViewModifier {
     let revealProgress: Double
+    let applyMask: Bool
     let center: UnitPoint
     let wavePhase: Double
     let reduceMotion: Bool
 
     func body(content: Content) -> some View {
-        if reduceMotion {
+        if !applyMask {
+            content
+        } else if reduceMotion {
             // Plain cross-fade honoring the origin loosely (no wavy edge).
             content.opacity(revealProgress)
         } else {

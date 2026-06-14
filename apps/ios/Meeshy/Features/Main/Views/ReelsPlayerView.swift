@@ -52,6 +52,9 @@ struct ReelsPlayerView: View {
     /// first reel's playback: the video stays on its poster (PAUSED) during the
     /// reveal and only starts when this flips true (driven by RootView).
     var revealCompleted: Bool
+    /// Real safe-area insets (the media is full-bleed via `.ignoresSafeArea()`,
+    /// so the chrome reads them explicitly to clear the Dynamic Island / home bar).
+    var safeArea: EdgeInsets = EdgeInsets()
     var onClose: () -> Void
 
     @StateObject private var viewModel = ReelsViewModel()
@@ -158,7 +161,9 @@ struct ReelsPlayerView: View {
                     .adaptiveGlass(in: Circle(), tint: .black.opacity(0.35))
             }
             .padding(.leading, 12)
-            .padding(.top, 8)
+            // Sit clearly below the Dynamic Island. `safeArea.top` fluctuates
+            // once the status bar hides, so floor it to clear the island reliably.
+            .padding(.top, max(safeArea.top, 50) + 28)
             .accessibilityLabel(String(localized: "reels.back", defaultValue: "Retour", bundle: .main))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -416,14 +421,21 @@ private struct ReelScrubBar: View {
         isSeeking ? seekFraction * manager.duration : manager.currentTime
     }
 
+    /// Time left in the clip (shown on the right as `-MM:SS`).
+    private var remainingTime: Double {
+        max(0, manager.duration - displayedTime)
+    }
+
     var body: some View {
         VStack(spacing: 6) {
             HStack {
+                // Élapsé (début) à gauche…
                 Text(formatMediaDuration(displayedTime))
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
                     .foregroundColor(.white.opacity(0.85))
                 Spacer()
-                Text(formatMediaDuration(manager.duration))
+                // …durée restante à droite.
+                Text("-\(formatMediaDuration(remainingTime))")
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
                     .foregroundColor(.white.opacity(0.7))
             }
@@ -514,6 +526,10 @@ private struct ReelVideoView: View {
             // so this surface stays gesture-free to avoid swallowing scrub/rail
             // touches.
             if isActive, ready, isShowingThis, let player = manager.player {
+                // `ReelVideoSurface.sizeThatFits` pins the surface to the proposed
+                // (screen) size so it never reports the video's aspect-fill
+                // intrinsic width (e.g. 1561pt for 16:9), which would inflate the
+                // ZStack and push the info overlay / action rail / scrub off-screen.
                 ReelVideoSurface(player: player)
                     .ignoresSafeArea()
             } else if isActive, !ready {
@@ -547,27 +563,42 @@ private struct ReelVideoView: View {
     }
 }
 
-/// Hidden-chrome AVKit surface filling the screen. The player itself is owned by
-/// `SharedAVPlayerManager`; this only renders it.
-private struct ReelVideoSurface: UIViewControllerRepresentable {
+/// Full-bleed video surface backed DIRECTLY by an `AVPlayerLayer` (not
+/// `AVPlayerViewController`). A plain layer-backed `UIView` composites correctly
+/// BENEATH the SwiftUI overlays in the ZStack; `AVPlayerViewController` instead
+/// renders its video ABOVE same-level SwiftUI siblings, which was hiding the
+/// action rail / info / scrub bar. The player is owned by `SharedAVPlayerManager`;
+/// this only renders it. Mirrors the SDK's `_AVPlayerLayerView` (Story player).
+private struct ReelVideoSurface: UIViewRepresentable {
     let player: AVPlayer
 
-    func makeUIViewController(context: Context) -> AVPlayerViewController {
-        let controller = AVPlayerViewController()
-        controller.player = player
-        controller.showsPlaybackControls = false
-        controller.videoGravity = .resizeAspectFill
-        controller.view.backgroundColor = .black
-        controller.allowsPictureInPicturePlayback = false
-        controller.updatesNowPlayingInfoCenter = false
-        return controller
+    func makeUIView(context: Context) -> ReelPlayerLayerView {
+        let view = ReelPlayerLayerView()
+        view.backgroundColor = .black
+        view.playerLayer.player = player
+        view.playerLayer.videoGravity = .resizeAspectFill
+        return view
     }
 
-    func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
-        if controller.player !== player {
-            controller.player = player
+    func updateUIView(_ view: ReelPlayerLayerView, context: Context) {
+        if view.playerLayer.player !== player {
+            view.playerLayer.player = player
         }
     }
+
+    /// Pin the surface to the proposed size. Without this a layer-backed
+    /// `UIViewRepresentable` reports the video's aspect-fill intrinsic size,
+    /// inflating the enclosing ZStack and pushing the SwiftUI overlays off-screen.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: ReelPlayerLayerView, context: Context) -> CGSize? {
+        proposal.replacingUnspecifiedDimensions()
+    }
+}
+
+/// Layer-backed `UIView` whose backing layer IS an `AVPlayerLayer` — GPU-composited
+/// video that respects SwiftUI ZStack z-ordering (overlays stay on top).
+private final class ReelPlayerLayerView: UIView {
+    override static var layerClass: AnyClass { AVPlayerLayer.self }
+    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
 }
 
 // MARK: - Reel Image
