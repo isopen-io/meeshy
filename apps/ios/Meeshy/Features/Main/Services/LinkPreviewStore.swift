@@ -90,6 +90,31 @@ final class LinkPreviewStore: ObservableObject {
         }
     }
 
+    /// Awaitable resolution driving `LinkPreviewCard`'s LOCAL `@State` so the
+    /// card does NOT observe the global `@Published cache` — otherwise EVERY
+    /// link card in the conversation re-evaluates its body each time ANY URL's
+    /// metadata lands (the "recompute every time" the user reported; the
+    /// network fetch itself is already cached + deduped here). Returns the
+    /// cached metadata immediately, a known-failed `nil` without re-hitting the
+    /// network (30-min negative window), else fetches ONCE (the SDK fetcher
+    /// dedupes concurrent in-flight requests for the same URL) and records the
+    /// success on disk or the failure in the negative cache.
+    func resolvedMetadata(for urlString: String) async -> LinkMetadata? {
+        if let cached = cache[urlString] { return cached }
+        if let failedAt = negativeCache[urlString],
+           Date().timeIntervalSince(failedAt) < negativeCacheDuration {
+            return nil
+        }
+        let metadata = await fetcher.metadata(for: urlString)
+        if let metadata {
+            cache[urlString] = metadata
+            persist()
+        } else {
+            negativeCache[urlString] = Date()
+        }
+        return metadata
+    }
+
     func clearAll() {
         cache.removeAll()
         negativeCache.removeAll()
