@@ -903,7 +903,8 @@ class ConversationViewModel: ObservableObject {
         self.searchHandler = ConversationSearchHandler(
             state: stateStore,
             conversationId: conversationId,
-            messageService: messageService
+            messageService: messageService,
+            persistence: dependencies.persistence
         )
         self.translationResolver = TranslationResolver(state: stateStore, authManager: authManager)
         let store = MessageStore(
