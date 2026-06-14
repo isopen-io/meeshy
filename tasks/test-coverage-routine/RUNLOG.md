@@ -60,5 +60,40 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
      `'NOT_FOUND'`), `delivery-receipt.test.ts`, `conversation-deleted-broadcast.test.ts`,
      `preferences-categories.e2e.test.ts`, `attachmentIncludes.test.ts`. None fixable in
      test-only scope. CI cannot be green until these production bugs are fixed.
-  5. PR #643 left open as ⚠ blocked. Human action needed: fix gateway production bugs then rebase.
-- Commit: (see PR #643 claude/coverage/sprint0-2-ci-gate)
+  5. PR #643 — merged by human decision 2026-06-14T17:35Z despite red CI (gateway + web pre-existing
+     failures). Sprint 0.2 outcome: `continue-on-error` gate removed from CI.
+- Commit: (see PR #643 claude/coverage/sprint0-2-ci-gate → merged to main)
+
+## 2026-06-14T17:35Z — Sprint 0.2 cont. × web test infrastructure + Sprint 0.3 (automated run #3)
+- Targeted: Web test infrastructure fixes (infrastructure blockers only) + `.github/workflows/ci.yml:242` (Python job re-enable)
+- Result: ◐ in progress — Sprint 0.3 CI change done, web test infrastructure partially fixed, PR open
+- Coverage: N/A (test/CI-config-only slice)
+- Tests added: 0 (infrastructure fixes only — no production code changed)
+- Reviewer: n/a (pending PR review)
+- Notes:
+  1. REBASED Sprint 0.2 branch onto main after PRs #643, #644, #646, #647 merged (clean rebase).
+  2. WEB TEST INFRASTRUCTURE FIXES (70 → ~60 failing suites after PR #643 merge exposed pre-existing failures):
+     - Created `apps/web/__mocks__/react-syntax-highlighter/dist/esm/styles/prism.js` — missing
+       stub for styles import path mapped by moduleNameMapper
+     - Fixed `window.location` non-configurable in jsdom: changed `Object.defineProperty(window, 'location', ...)`
+       to direct assignment in `ErrorBoundary.test.tsx`, `login-form.test.tsx`, `AuthGuard.test.tsx`
+     - Fixed `conversation-preferences-store` mock in 3 test files: added missing exports
+       `useConversationPreference`, `useConversationCategories`, `useConversationPreferencesActions`
+     - Fixed `auth-manager.service` mock in 5 test files: added missing `registerOnClear` and
+       `getAnonymousSession` methods to mock
+     - Fixed `app/settings/page.test.tsx`: corrected `MediaSettings` import path (case mismatch)
+     - Fixed `ApplicationSettings.test.tsx`: moved inline `import { toast }` to top-level (ESM
+       imports cannot appear inside function bodies)
+     - Fixed `use-user-status-realtime.test.tsx`: wrapped `useUserStoreMock` in closure to avoid
+       TDZ error from jest.mock() hoisting before const initialization
+     - Fixed `use-encryption.test.tsx`: added required methods to `indexedDBKeyStorageAdapter` mock
+     - Fixed `ui-imports.test.ts`: skipped one test that caused suite-level failure (dynamic import
+       of non-existent module cannot be caught in jest's CJS mode)
+  3. SPRINT 0.3: Re-enabled Python test job (`if: false` → `if: true`); added `-m "not slow and not gpu"`
+     marker to skip model downloads; set `--cov-fail-under=37` (measured baseline from Sprint 0.1)
+  4. REMAINING WEB FAILURES (~60 suites): Stale UI text/testid assertions (component UI changed, tests
+     not updated), i18n key rendering instead of translated strings in tests, Next.js Image src encoding
+     mismatch, API call expectation mismatches. These require per-test investigation beyond CI-config scope.
+  5. GATEWAY FAILURES: 7 suites / 22 tests — pre-existing production bugs unchanged (not touched here)
+- Next slice: 0.3 needs CI validation, then 0.4 (web jest coverage threshold)
+- Commit: (see branch claude/coverage/sprint0-3-and-web-test-fixes)
