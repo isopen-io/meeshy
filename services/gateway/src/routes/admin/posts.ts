@@ -6,7 +6,7 @@ import { type UserRole } from './types';
 import { validatePagination } from '../../utils/pagination';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { authorSelect, mediaSelect } from '../../services/posts/postIncludes';
+import { authorSelect, mediaSelect, NOT_DELETED } from '../../services/posts/postIncludes';
 
 // Middleware d'autorisation admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -117,13 +117,13 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       ] = await Promise.all([
         // Total posts (non-deleted)
         fastify.prisma.post.count({
-          where: { deletedAt: null, ...dateFilter }
+          where: { deletedAt: NOT_DELETED, ...dateFilter }
         }),
 
         // Count by type
         fastify.prisma.post.groupBy({
           by: ['type'],
-          where: { deletedAt: null, ...dateFilter },
+          where: { deletedAt: NOT_DELETED, ...dateFilter },
           _count: { id: true }
         }),
 
@@ -135,7 +135,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         // Top 10 authors by post count
         fastify.prisma.post.groupBy({
           by: ['authorId'],
-          where: { deletedAt: null, ...dateFilter },
+          where: { deletedAt: NOT_DELETED, ...dateFilter },
           _count: { id: true },
           orderBy: { _count: { id: 'desc' } },
           take: 10
@@ -143,7 +143,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
 
         // Top 10 trending posts by engagement (likes + comments + reposts)
         fastify.prisma.post.findMany({
-          where: { deletedAt: null, ...dateFilter },
+          where: { deletedAt: NOT_DELETED, ...dateFilter },
           select: {
             id: true,
             type: true,
@@ -412,7 +412,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
             orderBy: { order: 'asc' }
           },
           comments: {
-            where: { deletedAt: null },
+            where: { deletedAt: NOT_DELETED },
             select: {
               id: true,
               content: true,

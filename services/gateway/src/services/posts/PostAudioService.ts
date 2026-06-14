@@ -15,7 +15,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ZMQSingleton } from '../ZmqSingleton';
 import type { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
 import { getLanguagesWithTranslation } from '../../utils/languages';
-import { postInclude } from './postIncludes';
+import { postInclude, NOT_DELETED } from './postIncludes';
 
 const log = enhancedLogger.child({ module: 'PostAudioService' });
 
@@ -249,7 +249,7 @@ export class PostAudioService {
    */
   private async broadcastPostUpdate(postId: string): Promise<void> {
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: null },
+      where: { id: postId, deletedAt: NOT_DELETED },
       include: postInclude,
     });
 

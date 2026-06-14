@@ -4,6 +4,7 @@ import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { PostReactionService } from './PostReactionService';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
+import { NOT_DELETED } from './posts/postIncludes';
 import { MediaService } from './MediaService';
 import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
 import type { OrphanMediaCleanupService } from './storage/OrphanMediaCleanupService';
@@ -106,7 +107,7 @@ export class PostService {
 
     if (data.repostOfId) {
       const sourcePost = await this.prisma.post.findFirst({
-        where: { id: data.repostOfId, deletedAt: null },
+        where: { id: data.repostOfId, deletedAt: NOT_DELETED },
         select: { id: true, repostOfId: true, originalRepostOfId: true },
       });
       if (!sourcePost) {
@@ -393,7 +394,7 @@ export class PostService {
   async getPostById(postId: string, viewerUserId?: string) {
     const visibilityFilter = await this.buildVisibilityFilter(viewerUserId);
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: null, ...visibilityFilter },
+      where: { id: postId, deletedAt: NOT_DELETED, ...visibilityFilter },
       include: postInclude,
     });
     if (!post) return null;
@@ -452,7 +453,7 @@ export class PostService {
     moodEmoji?: string;
   }) {
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: null },
+      where: { id: postId, deletedAt: NOT_DELETED },
     });
 
     if (!post) return null;
@@ -479,7 +480,7 @@ export class PostService {
 
   async deletePost(postId: string, userId: string) {
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: null },
+      where: { id: postId, deletedAt: NOT_DELETED },
     });
 
     if (!post) return null;
@@ -505,7 +506,7 @@ export class PostService {
     }
 
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: null },
+      where: { id: postId, deletedAt: NOT_DELETED },
       include: postInclude,
     });
     if (!post) return null;
@@ -531,14 +532,14 @@ export class PostService {
     });
 
     return this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: null },
+      where: { id: postId, deletedAt: NOT_DELETED },
       include: postInclude,
     });
   }
 
   async unlikePost(postId: string, userId: string) {
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: null },
+      where: { id: postId, deletedAt: NOT_DELETED },
       include: postInclude,
     });
     if (!post) return null;
@@ -574,14 +575,14 @@ export class PostService {
     });
 
     return this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: null },
+      where: { id: postId, deletedAt: NOT_DELETED },
       include: postInclude,
     });
   }
 
   async bookmarkPost(postId: string, userId: string) {
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: null },
+      where: { id: postId, deletedAt: NOT_DELETED },
     });
     if (!post) return null;
 
@@ -631,7 +632,7 @@ export class PostService {
       // (information disclosure + view inflation).
       const visibilityFilter = await this.buildVisibilityFilter(userId);
       const post = await this.prisma.post.findFirst({
-        where: { id: postId, deletedAt: null, ...visibilityFilter },
+        where: { id: postId, deletedAt: NOT_DELETED, ...visibilityFilter },
         select: { id: true, authorId: true },
       });
       if (!post) return false;
@@ -677,7 +678,7 @@ export class PostService {
 
   async sharePost(postId: string, userId: string, platform?: string) {
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: null },
+      where: { id: postId, deletedAt: NOT_DELETED },
     });
     if (!post) return null;
 
@@ -690,7 +691,7 @@ export class PostService {
 
   async pinPost(postId: string, userId: string) {
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: null },
+      where: { id: postId, deletedAt: NOT_DELETED },
     });
     if (!post) return null;
     if (post.authorId !== userId) throw new Error('FORBIDDEN');
@@ -704,7 +705,7 @@ export class PostService {
 
   async unpinPost(postId: string, userId: string) {
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: null },
+      where: { id: postId, deletedAt: NOT_DELETED },
     });
     if (!post) return null;
     if (post.authorId !== userId) throw new Error('FORBIDDEN');
@@ -718,7 +719,7 @@ export class PostService {
 
   async getPostViews(postId: string, userId: string, limit: number = 50, offset: number = 0) {
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: null },
+      where: { id: postId, deletedAt: NOT_DELETED },
     });
     if (!post) return null;
     if (post.authorId !== userId) throw new Error('FORBIDDEN');
@@ -740,7 +741,7 @@ export class PostService {
 
   async getPostInteractions(postId: string, userId: string, limit: number = 50, offset: number = 0) {
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: null },
+      where: { id: postId, deletedAt: NOT_DELETED },
       select: { id: true, authorId: true, reactions: true },
     });
     if (!post) return null;
@@ -785,7 +786,7 @@ export class PostService {
     } = {},
   ) {
     const original = await this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: null },
+      where: { id: postId, deletedAt: NOT_DELETED },
       include: { media: mediaInclude },
     });
     if (!original) return null;

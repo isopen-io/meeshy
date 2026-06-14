@@ -1,6 +1,6 @@
 import type { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
-import { authorSelect } from './posts/postIncludes';
+import { authorSelect, NOT_DELETED } from './posts/postIncludes';
 
 export class PostCommentService {
   constructor(private readonly prisma: PrismaClient) {}
@@ -15,14 +15,14 @@ export class PostCommentService {
   ) {
     // Verify post exists
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: null },
+      where: { id: postId, deletedAt: NOT_DELETED },
     });
     if (!post) return null;
 
     // If parentId, verify parent exists
     if (parentId) {
       const parent = await this.prisma.postComment.findFirst({
-        where: { id: parentId, postId, deletedAt: null },
+        where: { id: parentId, postId, deletedAt: NOT_DELETED },
       });
       if (!parent) throw new Error('PARENT_NOT_FOUND');
     }
@@ -71,7 +71,7 @@ export class PostCommentService {
 
     const where: any = {
       postId,
-      deletedAt: null,
+      deletedAt: NOT_DELETED,
       OR: [{ parentId: null }, { parentId: { isSet: false } }],
     };
 
@@ -130,7 +130,7 @@ export class PostCommentService {
 
     const where: any = {
       parentId: commentId,
-      deletedAt: null,
+      deletedAt: NOT_DELETED,
     };
 
     if (cursorData) {
@@ -185,7 +185,7 @@ export class PostCommentService {
 
   async deleteComment(commentId: string, userId: string) {
     const comment = await this.prisma.postComment.findFirst({
-      where: { id: commentId, deletedAt: null },
+      where: { id: commentId, deletedAt: NOT_DELETED },
     });
     if (!comment) return null;
     if (comment.authorId !== userId) throw new Error('FORBIDDEN');
@@ -212,7 +212,7 @@ export class PostCommentService {
 
   async likeComment(commentId: string, userId: string, emoji: string = '❤️') {
     const comment = await this.prisma.postComment.findFirst({
-      where: { id: commentId, deletedAt: null },
+      where: { id: commentId, deletedAt: NOT_DELETED },
     });
     if (!comment) return null;
 
@@ -238,7 +238,7 @@ export class PostCommentService {
 
   async unlikeComment(commentId: string, userId: string, emoji: string = '❤️') {
     const comment = await this.prisma.postComment.findFirst({
-      where: { id: commentId, deletedAt: null },
+      where: { id: commentId, deletedAt: NOT_DELETED },
     });
     if (!comment) return null;
 
