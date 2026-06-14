@@ -35,7 +35,7 @@ const useUserStoreMock = (selector: Selector<unknown>) => selector(userStoreStat
 (useUserStoreMock as unknown as { getState: () => typeof userStoreState }).getState = () => userStoreState;
 
 jest.mock('@/stores/user-store', () => ({
-  useUserStore: useUserStoreMock,
+  useUserStore: (selector: (s: unknown) => unknown) => useUserStoreMock(selector),
 }));
 
 jest.mock('@/lib/config', () => ({

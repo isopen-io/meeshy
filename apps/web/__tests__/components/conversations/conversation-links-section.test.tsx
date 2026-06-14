@@ -9,6 +9,8 @@ import { copyToClipboard } from '@/lib/clipboard';
 jest.mock('@/services/auth-manager.service', () => ({
   authManager: {
     getAuthToken: jest.fn(),
+    registerOnClear: jest.fn(),
+    getAnonymousSession: jest.fn(() => null),
   },
 }));
 

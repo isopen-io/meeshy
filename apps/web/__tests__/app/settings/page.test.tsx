@@ -98,6 +98,8 @@ jest.mock('@/services/auth-manager.service', () => ({
   authManager: {
     getAuthToken: () => mockAuthToken,
     clearAllSessions: jest.fn(),
+    registerOnClear: jest.fn(),
+    getAnonymousSession: jest.fn(() => null),
   },
 }));
 
@@ -165,7 +167,7 @@ jest.mock('@/components/settings/privacy-settings', () => ({
   PrivacySettings: () => <div data-testid="privacy-settings">Privacy</div>,
 }));
 
-jest.mock('@/components/settings/MediaSettings', () => ({
+jest.mock('@/components/settings/media-settings', () => ({
   MediaSettings: () => <div data-testid="media-settings">Media</div>,
 }));
 

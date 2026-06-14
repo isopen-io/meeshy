@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { ApplicationSettings } from './ApplicationSettings';
 import { authManager } from '@/services/auth-manager.service';
 import { API_CONFIG } from '@/lib/config';
+import { toast } from 'sonner';
 
 // Mock dependencies
 jest.mock('@/services/auth-manager.service');
@@ -265,7 +266,6 @@ describe('ApplicationSettings', () => {
     });
 
     it('should show success message after save', async () => {
-      import { toast } from 'sonner';
 
       // Make a change
       const switches = screen.getAllByRole('switch');
@@ -281,7 +281,6 @@ describe('ApplicationSettings', () => {
     });
 
     it('should show error message if save fails', async () => {
-      import { toast } from 'sonner';
 
       // Mock failed save (first call returns prefs, second call fails)
       (global.fetch as jest.Mock)
@@ -353,7 +352,6 @@ describe('ApplicationSettings', () => {
     });
 
     it('should reset tutorials when reset button is clicked', async () => {
-      import { toast } from 'sonner';
       const user = userEvent.setup();
 
       const resetButton = screen.getByText(/Reset/i);

@@ -18,6 +18,7 @@ import sys
 import os
 import asyncio
 import time
+import pytest
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -134,6 +135,7 @@ def main():
 
 
 # Pour pytest
+@pytest.mark.slow
 def test_mono_speaker_pipeline():
     """Test pytest pour le pipeline mono-locuteur"""
     from test_pipeline_mono_speaker import test_mono_speaker_pipeline as _test
@@ -141,6 +143,7 @@ def test_mono_speaker_pipeline():
     assert success, f"Pipeline mono-locuteur a échoué: {errors}"
 
 
+@pytest.mark.slow
 def test_multi_speaker_pipeline():
     """Test pytest pour le pipeline multi-locuteur"""
     from test_pipeline_multi_speaker import test_multi_speaker_pipeline as _test
