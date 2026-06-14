@@ -113,6 +113,8 @@ jest.mock('@/hooks/use-dashboard-data', () => ({
   useDashboardData: () => ({
     data: mockDashboardData,
     isLoading: mockDashboardLoading,
+    isPending: mockDashboardLoading && !mockDashboardData,
+    isFetching: mockDashboardLoading && !!mockDashboardData,
     error: mockDashboardError,
     refetch: mockRefetch,
   }),

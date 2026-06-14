@@ -172,15 +172,19 @@ export async function deriveKeyFromPassword(
 /**
  * Validate encryption metadata
  */
-export function validateMetadata(metadata: any): metadata is EncryptionMetadata {
+export function validateMetadata(metadata: unknown): metadata is EncryptionMetadata {
+  if (!metadata || typeof metadata !== 'object') {
+    return false;
+  }
+  const m = metadata as Record<string, unknown>;
   return (
-    metadata &&
-    typeof metadata === 'object' &&
-    ['e2ee', 'server'].includes(metadata.mode) &&
-    ['signal_v3', 'aes-256-gcm'].includes(metadata.protocol) &&
-    typeof metadata.keyId === 'string' &&
-    typeof metadata.iv === 'string' &&
-    typeof metadata.authTag === 'string'
+    typeof m.mode === 'string' &&
+    ['e2ee', 'server'].includes(m.mode) &&
+    typeof m.protocol === 'string' &&
+    ['signal_v3', 'aes-256-gcm'].includes(m.protocol) &&
+    typeof m.keyId === 'string' &&
+    typeof m.iv === 'string' &&
+    typeof m.authTag === 'string'
   );
 }
 
@@ -190,7 +194,7 @@ export function validateMetadata(metadata: any): metadata is EncryptionMetadata 
  */
 export function prepareForStorage(payload: EncryptedPayload): {
   encryptedContent: string;
-  encryptionMetadata: Record<string, any>;
+  encryptionMetadata: EncryptionMetadata;
 } {
   return {
     encryptedContent: payload.ciphertext,
@@ -204,7 +208,7 @@ export function prepareForStorage(payload: EncryptedPayload): {
  */
 export function reconstructPayload(
   encryptedContent: string,
-  encryptionMetadata: any
+  encryptionMetadata: unknown
 ): EncryptedPayload {
   if (!validateMetadata(encryptionMetadata)) {
     throw new Error('Invalid encryption metadata');
