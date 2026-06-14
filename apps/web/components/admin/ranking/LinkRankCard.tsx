@@ -2,8 +2,9 @@ import React from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { RankingItem } from '@/hooks/use-ranking-data';
-import { RANKING_CRITERIA } from './constants';
+import { RANKING_CRITERIA, criterionLabelKey } from './constants';
 import { formatCount, getRankBadge } from './utils';
+import { useI18n } from '@/hooks/useI18n';
 
 interface LinkRankCardProps {
   item: RankingItem;
@@ -11,6 +12,7 @@ interface LinkRankCardProps {
 }
 
 export const LinkRankCard = React.memo(({ item, criterion }: LinkRankCardProps) => {
+  const { t } = useI18n('admin');
   const currentCriterion = RANKING_CRITERIA.links.find(c => c.value === criterion);
   const isTopThree = item.rank && item.rank <= 3;
 
@@ -47,7 +49,7 @@ export const LinkRankCard = React.memo(({ item, criterion }: LinkRankCardProps) 
             </span>
             <span className="text-xs text-gray-400">•</span>
             <Badge variant="outline" className="text-xs">
-              {item.metadata?.shortCode ? '🔍 Tracké' : '📤 Partage'}
+              {item.metadata?.shortCode ? t('ranking.linkTrackedBadge') : t('ranking.linkShareBadge')}
             </Badge>
           </div>
           <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -60,21 +62,21 @@ export const LinkRankCard = React.memo(({ item, criterion }: LinkRankCardProps) 
           )}
           {item.metadata?.conversation && (
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Conversation: {item.metadata.conversation.title || item.metadata.conversation.identifier}
+              {t('ranking.conversationPrefix')} {item.metadata.conversation.title || item.metadata.conversation.identifier}
             </p>
           )}
           <div className="flex items-center space-x-3 mt-1 text-xs text-gray-500">
             {item.metadata?.totalClicks !== undefined && (
-              <span>👁️ {formatCount(item.metadata.totalClicks)} visites</span>
+              <span>👁️ {formatCount(item.metadata.totalClicks)} {t('ranking.unitVisits')}</span>
             )}
             {item.metadata?.uniqueClicks !== undefined && (
-              <span>👤 {formatCount(item.metadata.uniqueClicks)} uniques</span>
+              <span>👤 {formatCount(item.metadata.uniqueClicks)} {t('ranking.unitUnique')}</span>
             )}
             {item.currentUses !== undefined && (
-              <span>✅ {formatCount(item.currentUses)} utilisations</span>
+              <span>✅ {formatCount(item.currentUses)} {t('ranking.unitUses')}</span>
             )}
             {item.maxUses !== undefined && item.maxUses > 0 && (
-              <span>/ {formatCount(item.maxUses)} max</span>
+              <span>/ {formatCount(item.maxUses)} {t('ranking.unitMax')}</span>
             )}
           </div>
         </div>
@@ -90,7 +92,7 @@ export const LinkRankCard = React.memo(({ item, criterion }: LinkRankCardProps) 
           </span>
         </div>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          {currentCriterion?.label}
+          {t(criterionLabelKey(criterion))}
         </p>
       </div>
     </div>

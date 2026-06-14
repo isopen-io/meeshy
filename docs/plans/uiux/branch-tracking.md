@@ -16,15 +16,17 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | **48i** (iOS only : solde « reliquats ancienne palette » du différé 45i — épuration 2 fichiers morts `SampleData.swift`+`MessageComposer.swift` (pbxproj nettoyé) + bloc feed legacy mort RootViewComponents 697–1113 (`ThemedFeedComposer`/`ThemedFeedCard`/`FeedActionButton`/10 wrappers Colorful-Legacy, liveness vérifiée) ; re-peinture charte des surfaces vivantes (RootViewComponents/FeedView/FeedView+Attachments/WidgetPreviewView/AttachmentPreparationService/ConversationAnimatedBackground/MeeshyWidgets + 6 singles) ; +6 `.accessibilityLabel` toolbar FeedComposerSheet ; +4 clés i18n `widget.preview.action.*` ×5 locales ; filtre story « cool » documenté intentionnel) |
-| Last merged PR | #610 (47w), #605 (46w) ; iter-48i sur `claude/wizardly-rubin-ph295e` |
-| Last Merged Base (commit) | 7659cb0e (merge #610) — base de la branche iter-48i |
-| Next iteration | **49** — repartir de `main` HEAD post-merge iter-48i |
+| Last completed iteration | **49w** (web only : surface admin Ranking i18n — (1) **bug critique** réparé : préfixe namespace cassé `admin.ranking.*` → `ranking.*` sur 13 libellés de `RankingFilters` qui affichaient les **clés brutes** dans toutes les langues ; (2) 33 labels `RANKING_CRITERIA` FR durs → clés `ranking.criteria.*` ×4 locales (champ `label` supprimé de `constants.ts`, helper `criterionLabelKey`) ; (3) 7 chaînes FR dures `LinkRankCard` → i18n ; (4) fichier de test ranking mort réanimé (syntax error `import` dans `it()` + mock `useI18n` → 30/30 verts). Consommateurs : 4 RankCards + RankingFilters + RankingStatsImpl) |
+| Last merged PR | #610 (47w), #605 (46w) ; iter-48i sur `claude/wizardly-rubin-ph295e` ; iter-49w sur `claude/focused-brown-uxa19f` |
+| Last Merged Base (commit) | 7659cb0e (merge #610) — base iter-48i ; iter-49w basée sur `main` HEAD post-48i |
+| Next iteration | **50** — repartir de `main` HEAD post-merge iter-49w |
 
-### Deferred carry-over — web (pour 49+)
+### Deferred carry-over — web (pour 50+)
 - ~~chart hex sans variante dark (RankingStatsImpl/MermaidDiagramImpl/AgentOverviewTab)~~ → **SOLDÉ en 48w** (ne plus auditer ces 3 fichiers pour le dark mode)
+- ~~`RANKING_CRITERIA` labels FR durs (`ranking/constants.ts`)~~ → **SOLDÉ en 49w** (champ `label` supprimé, i18n `ranking.criteria.*` ; ne plus re-flagger ces 33 labels ni le préfixe `admin.ranking.*` de RankingFilters — corrigé)
+- **NOUVEAU (49w)** : `getTypeLabel`/`getMessageTypeIcon` (`ranking/utils.tsx`) renvoient `Groupe`/`Publique` FR durs — à i18n dans une passe dédiée (codes de type de conversation, possible réutilisation hors ranking)
+- **NOUVEAU (49w)** : tests web touchant `stores` (ex. `__tests__/admin/ranking/page.test.tsx`) échouent en env-local sur la résolution `@meeshy/shared/encryption` (`.js` en source TS) — config jest / mock chaîne, non bloquant (`continue-on-error` job web CI), à corriger isolément
 - retrait dépendance orpheline `next-themes` de `apps/web/package.json` (zéro import restant post-48w ; touche `pnpm-lock.yaml` — à faire isolément)
-- `RANKING_CRITERIA` labels dans `components/admin/ranking/constants.ts` — probablement FR durs (tooltip charts), à auditer
 - consolidation `notifications/preferences` page vs composant
 - réactions par pièce jointe (wiring gateway, feature commune web+Android)
 - audit qualité es/pt (relecture des traductions existantes)
@@ -81,3 +83,4 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 46w | claude/elegant-noether-09t4x2 | #605 | ✅ |
 | 47w | claude/blissful-ritchie-8d57jg | #610 | ✅ |
 | 48i | claude/wizardly-rubin-ph295e | ⏳ | ⏳ |
+| 49w | claude/focused-brown-uxa19f | ⏳ | ⏳ |

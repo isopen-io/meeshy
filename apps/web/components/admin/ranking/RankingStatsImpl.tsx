@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart2, TrendingUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Area, AreaChart, Line } from 'recharts';
 import { RankingItem } from '@/hooks/use-ranking-data';
-import { RANKING_CRITERIA } from './constants';
+import { criterionLabelKey } from './constants';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import { useResolvedTheme } from '@/hooks/use-resolved-theme';
 import { useI18n } from '@/hooks/useI18n';
@@ -26,9 +26,10 @@ export function RankingStats({ rankings, criterion, entityType }: RankingStatsPr
   const chartColors = isDark
     ? { grid: '#78350f', axis: '#fbbf24', tooltipBg: '#1c1917', tooltipBorder: '#d97706', tooltipText: '#fde68a', gold: '#fbbf24', silver: '#9ca3af', bronze: '#d97706', rest: '#b45309' }
     : { grid: '#fef3c7', axis: '#d97706', tooltipBg: '#fffbeb', tooltipBorder: '#fbbf24', tooltipText: '#92400e', gold: '#fbbf24', silver: '#d1d5db', bronze: '#d97706', rest: '#fcd34d' };
-  const currentCriterion = React.useMemo(() => {
-    return RANKING_CRITERIA[entityType].find(c => c.value === criterion);
-  }, [entityType, criterion]);
+  const criterionLabel = React.useMemo(
+    () => t(criterionLabelKey(criterion)),
+    [t, criterion]
+  );
 
   const top10Data = rankings.slice(0, 10).map((item, index) => ({
     name: item.name || `#${index + 1}`,
@@ -74,7 +75,7 @@ export function RankingStats({ rankings, criterion, entityType }: RankingStatsPr
                   borderRadius: '8px',
                   color: chartColors.tooltipText
                 }}
-                formatter={(value: unknown) => [formatCount(value, locale), currentCriterion?.label]}
+                formatter={(value: unknown) => [formatCount(value, locale), criterionLabel]}
               />
               <Bar dataKey="value" radius={[0, 8, 8, 0]}>
                 {top10Data.map((entry, index) => (
@@ -134,7 +135,7 @@ export function RankingStats({ rankings, criterion, entityType }: RankingStatsPr
                   borderRadius: '8px',
                   color: chartColors.tooltipText
                 }}
-                formatter={(value: unknown) => [formatCount(value, locale), currentCriterion?.label]}
+                formatter={(value: unknown) => [formatCount(value, locale), criterionLabel]}
                 labelFormatter={(label) => t('ranking.charts.position', { label: String(label) })}
               />
               <Area

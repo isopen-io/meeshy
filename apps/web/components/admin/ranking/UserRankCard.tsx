@@ -1,10 +1,11 @@
 import React from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { RankingItem } from '@/hooks/use-ranking-data';
-import { RANKING_CRITERIA } from './constants';
+import { RANKING_CRITERIA, criterionLabelKey } from './constants';
 import { formatCount, getRankBadge } from './utils';
 import { Clock } from 'lucide-react';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
+import { useI18n } from '@/hooks/useI18n';
 
 interface UserRankCardProps {
   item: RankingItem;
@@ -25,6 +26,7 @@ function formatDate(dateString: string | undefined, locale: string) {
 
 export const UserRankCard = React.memo(({ item, criterion }: UserRankCardProps) => {
   const locale = useCurrentInterfaceLanguage();
+  const { t } = useI18n('admin');
   const currentCriterion = RANKING_CRITERIA.users.find(c => c.value === criterion);
   const isTopThree = item.rank && item.rank <= 3;
 
@@ -77,7 +79,7 @@ export const UserRankCard = React.memo(({ item, criterion }: UserRankCardProps) 
               </span>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              {currentCriterion?.label}
+              {t(criterionLabelKey(criterion))}
             </p>
           </div>
         )}
