@@ -69,17 +69,25 @@ export class PostCommentService {
   async getComments(postId: string, cursor?: string, limit: number = 20, currentUserId?: string) {
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
+    // Top-level comments only — replies (parentId set) are loaded lazily via
+    // getReplies. The parentId filter lives in AND so the cursor's own OR can
+    // be appended without clobbering it (a bare `where.OR = …` on pagination
+    // dropped the parentId guard and leaked replies into page 2+).
     const where: any = {
       postId,
       deletedAt: NOT_DELETED,
-      OR: [{ parentId: null }, { parentId: { isSet: false } }],
+      AND: [
+        { OR: [{ parentId: null }, { parentId: { isSet: false } }] },
+      ],
     };
 
     if (cursorData) {
-      where.OR = [
-        { createdAt: { lt: new Date(cursorData.createdAt) } },
-        { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
-      ];
+      where.AND.push({
+        OR: [
+          { createdAt: { lt: new Date(cursorData.createdAt) } },
+          { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
+        ],
+      });
     }
 
     const comments = await this.prisma.postComment.findMany({
