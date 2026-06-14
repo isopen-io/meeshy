@@ -128,43 +128,28 @@ struct PrivacySettingsView: View {
         }
     }
 
-    // MARK: - Encryption
+    // MARK: - Encryption (bientôt disponible)
 
+    /// Le chiffrement E2EE n'est pas encore opérationnel : la section est
+    /// affichée GRISÉE et NON interactive avec un statut explicite « Désactivé /
+    /// Bientôt disponible » (décision produit 2026-06-14). Aucune préférence de
+    /// chiffrement n'est éditable tant que la fonctionnalité n'est pas livrée —
+    /// éviter de laisser croire qu'un chiffrement optionnel/actif existe.
     private var encryptionSection: some View {
         settingsSection(title: String(localized: "settings.privacy.encryption", defaultValue: "Chiffrement", bundle: .main), icon: "lock.shield.fill", color: "3498DB") {
-            settingsRow(icon: "key.fill", title: String(localized: "settings.privacy.encryption_preference", defaultValue: "Préférence", bundle: .main), color: "3498DB") {
-                Picker("", selection: Binding(
-                    get: { prefs.privacy.encryptionPreference },
-                    set: { val in prefs.updatePrivacy { $0.encryptionPreference = val } }
-                )) {
-                    ForEach(EncryptionPreference.allCases, id: \.self) { pref in
-                        Text(encryptionLabel(pref)).tag(pref)
-                    }
-                }
-                .pickerStyle(.menu)
-                .tint(Color(hex: accentColor))
+            settingsRow(icon: "hourglass", title: String(localized: "settings.privacy.encryption.coming_soon", defaultValue: "Bientôt disponible", bundle: .main), color: "3498DB") {
+                Text(String(localized: "settings.privacy.encryption.status_disabled", defaultValue: "Désactivé", bundle: .main))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(theme.textSecondary)
             }
-
-            privacyToggle(icon: "lock.rotation", title: String(localized: "settings.privacy.auto_encrypt", defaultValue: "Auto-chiffrer new conv.", bundle: .main), color: "4ADE80",
-                          keyPath: \.autoEncryptNewConversations)
-
-            privacyToggle(icon: "lock.badge.clock", title: String(localized: "settings.privacy.show_encryption_status", defaultValue: "Afficher statut chiffr.", bundle: .main), color: MeeshyColors.infoHex,
-                          keyPath: \.showEncryptionStatus)
-
-            privacyToggle(icon: "exclamationmark.lock.fill", title: String(localized: "settings.privacy.warn_unencrypted", defaultValue: "Alerter non chiffré", bundle: .main), color: "FF6B6B",
-                          keyPath: \.warnOnUnencrypted)
         }
+        .opacity(0.55)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(String(localized: "settings.privacy.encryption.coming_soon.a11y", defaultValue: "Chiffrement — bientôt disponible, actuellement désactivé", bundle: .main))
     }
 
     // MARK: - Helpers
-
-    private func encryptionLabel(_ pref: EncryptionPreference) -> String {
-        switch pref {
-        case .disabled: return String(localized: "settings.privacy.encryption.disabled", defaultValue: "Désactivé", bundle: .main)
-        case .optional: return String(localized: "settings.privacy.encryption.optional", defaultValue: "Optionnel", bundle: .main)
-        case .always: return String(localized: "settings.privacy.encryption.always", defaultValue: "Toujours", bundle: .main)
-        }
-    }
 
     private func privacyToggle(
         icon: String,
