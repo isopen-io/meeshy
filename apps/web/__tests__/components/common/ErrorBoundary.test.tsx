@@ -39,8 +39,7 @@ const savedLocation = window.location;
 
 beforeEach(() => {
   jest.clearAllMocks();
-  // Set window.location via Object.defineProperty
-  Object.defineProperty(window, 'location', { value: {
+  window.location = {
     ...savedLocation,
     reload: mockReload,
     href: 'http://localhost:3000',
@@ -55,11 +54,11 @@ beforeEach(() => {
     assign: jest.fn(),
     replace: jest.fn(),
     toString: () => 'http://localhost:3000',
-  }, writable: true });
+  } as unknown as Location;
 });
 
 afterEach(() => {
-  Object.defineProperty(window, 'location', { value: savedLocation as any, writable: true });
+  window.location = savedLocation;
 });
 
 describe('ErrorBoundary', () => {

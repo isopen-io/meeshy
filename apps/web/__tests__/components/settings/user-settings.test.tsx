@@ -76,6 +76,8 @@ jest.mock('@/hooks/use-accessibility', () => ({
 jest.mock('@/services/auth-manager.service', () => ({
   authManager: {
     getAuthToken: () => 'test-token',
+    registerOnClear: jest.fn(),
+    getAnonymousSession: jest.fn(() => null),
   },
 }));
 
