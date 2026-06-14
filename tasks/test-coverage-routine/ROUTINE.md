@@ -24,15 +24,19 @@ git checkout -B claude/coverage/<slice-id> origin/main   # fresh branch off late
   android uses the Gradle wrapper; iOS uses `./apps/ios/meeshy.sh`).
 - Read `PROGRESS.md` end-to-end. Read the last 3 entries of `RUNLOG.md` to see what just landed
   and avoid repeating a slice that's mid-flight.
+- **In-flight check (replaces any CI concurrency guard):** list open `claude/coverage/*` PRs. If one
+  exists, you are likely overlapping a previous run — *finish that phase* (rebase, get it green,
+  merge) instead of starting a new slice. Only start a new slice when no coverage PR is open.
 
 ## 1. Select the slice (deterministic)
 
 1. If any **Sprint 0** item is `☐`, take the lowest-numbered one. Sprint 0 comes before features.
 2. Otherwise take the highest-priority `☐` **(feature × app)** cell in the matrix, scanning
    top-to-bottom, left-to-right. P0 before P1 before P2.
-3. Mark it `◐` in `PROGRESS.md` on your phase branch (the workflow `concurrency` group already
-   serializes runs, so two phases never race; each phase starts from the latest main where the
-   previous phase's `☑` has already merged). On merge, the `◐`→`☑` flip lands on main.
+3. Mark it `◐` in `PROGRESS.md` on your phase branch. Runs are ≥1h apart and the pre-flight
+   in-flight check (open `claude/coverage/*` PR) keeps two phases from racing; each new phase starts
+   from the latest main where the previous phase's `☑` has already merged. On merge, the `◐`→`☑`
+   flip lands on main.
 4. Resolve the cell to concrete files: intersect the feature's module targets (`PROGRESS.md`
    §Per-feature module targets) with the app's manifest (`manifests/<app>.md`) domain groups, to
    get the **exhaustive file list** for the slice. **Verify the files still exist** (the codebase

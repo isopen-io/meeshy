@@ -4,18 +4,20 @@ A self-perpetuating routine that drives the whole monorepo toward 92% line+branc
 one verified feature-slice at a time, on a 3-hour cadence.
 
 ## Why it's built this way
-Claude Code sessions run in ephemeral containers — a single session can't sit and fire every 3
-hours for ~1–2 weeks. So the durable state lives in git, and a **GitHub Actions cron** launches a
-fresh agent each cycle that resumes from that state.
+A single Claude Code session runs in an ephemeral container — it can't sit and fire every 3 hours
+for ~1–2 weeks. So the durable state lives in git, and a **scheduler launches a fresh agent each
+cycle** that resumes from that state. The scheduler is **Claude Code itself** — a web **Routine**
+(cloud, time-based) or a **local cron** driving `claude -p`. See `SETUP-ROUTINE.md`.
 
 ## The pieces
 | File | Role |
 |------|------|
 | `PROGRESS.md` | **Source of truth.** Feature × app matrix, Sprint 0 CI fixes, per-feature module targets, baselines. Each run reads it to pick the next slice and writes it back. |
-| `ROUTINE.md` | The agent playbook: pre-flight → select slice → TDD loop → reviewer gate → commit → record. |
+| `ROUTINE.md` | The agent playbook (scheduler-agnostic): pre-flight → select slice → TDD loop → reviewer gate → PR → merge. |
 | `REVIEWER.md` | The quality rubric the reviewer subagent enforces. Coverage is necessary, not sufficient — kills tautological tests. |
 | `RUNLOG.md` | Append-only history of what each run did and where the next resumes. |
-| `../../.github/workflows/test-coverage-routine.yml` | The 3-hour cron. Each run branches off main, does one phase, opens a PR, and merges it to main when green + reviewed + tests-only. |
+| `SETUP-ROUTINE.md` | How to schedule it: web Routine (`/schedule`, every 3h) **or** local cron. |
+| `run-routine.sh` | Local headless driver (`claude -p`) for cron/launchd/systemd. |
 
 ## How a cycle (one "phase") works
 1. Cron (or manual dispatch) starts a fresh Claude agent, which branches off the latest `main`
@@ -28,16 +30,15 @@ fresh agent each cycle that resumes from that state.
    CI green, reviewer PASS, clean rebase on main (conflicts resolved by *keeping both* tests).
    Otherwise leaves the PR open and marks the slice `⚠ blocked`. One phase per run.
 
-## One-time setup (maintainer)
-1. Add a repo secret: **`ANTHROPIC_API_KEY`** (or `CLAUDE_CODE_OAUTH_TOKEN` and uncomment that line
-   in the workflow).
-2. **Merge this scaffolding to `main` first** — scheduled workflows only fire from the default
-   branch, so cron won't run until `test-coverage-routine.yml` is on main.
-3. Enable **Settings → Actions → General → "Allow GitHub Actions to create and approve pull
-   requests"**, and set branch protection on main so the bot can merge a green PR (required checks
-   are fine — it never force-merges past red CI).
-4. Kick the first run from **Actions → Test Coverage Routine → Run workflow** to verify end-to-end.
-   The first phase executes **Sprint 0** (restores CI enforcement).
+## One-time setup
+Follow `SETUP-ROUTINE.md`. In short:
+- **Web Routine (recommended):** create a routine at https://claude.ai/code/routines (or `/schedule
+  every 3 hours …`) on `isopen-io/meeshy`, paste the prompt, pick an environment whose network
+  policy allows package installs. Runs unattended in the cloud; merges via the GitHub integration.
+- **Local cron:** `claude auth login` once, then schedule `run-routine.sh` every 3h (cron/launchd/
+  systemd).
+- Either way, the **first phase executes Sprint 0** (restores CI enforcement). Make sure the repo's
+  branch protection lets the agent merge a *green* PR — it never force-merges past red CI.
 
 ## Order of work
 - **Sprint 0 first** — restore CI enforcement so the tests actually gate (remove `continue-on-error`,

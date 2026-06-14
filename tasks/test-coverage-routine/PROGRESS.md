@@ -4,7 +4,8 @@
 > Every scheduled run reads it, picks the next slice, does the work, then updates it.
 > Do NOT delete history — append run entries to `RUNLOG.md`.
 
-- **Cadence:** every 3h via `.github/workflows/test-coverage-routine.yml` (lives on `main`).
+- **Cadence:** every 3h, driven by a Claude Code **web Routine** or **local cron** (see
+  `SETUP-ROUTINE.md`). Not GitHub Actions.
 - **Phase = one run's slice.** Each run branches off the latest `main`
   (`claude/coverage/<slice-id>`), does the slice, opens a PR, and **merges it to main** when green +
   reviewed + tests-only (see `ROUTINE.md` §7). No long-lived branch; conflicts resolved by keeping
