@@ -32,7 +32,7 @@ Each item is a separate slice; run them in order. Validate via the PR's own CI r
 | 0.2 | Remove `continue-on-error` for web + gateway test jobs | `.github/workflows/ci.yml:211,224` | ☑ |
 | 0.3 | Re-enable the disabled Python test job with a CPU-only marker split (no GB model downloads) | `.github/workflows/ci.yml:242` (`if: false`) | ☑ |
 | 0.4 | Add **ratcheting** `coverageThreshold` to web jest at the measured baseline | `apps/web/jest.config.js` | ☑ |
-| 0.5 | Stop gateway jest from silently excluding `routes/middleware/websocket/grpc` & ignoring whole test dirs; add a global threshold at baseline | `services/gateway/jest.config.json` | ☐ |
+| 0.5 | Stop gateway jest from silently excluding `routes/middleware/websocket/grpc` & ignoring whole test dirs; add a global threshold at baseline | `services/gateway/jest.config.json` | ☑ |
 | 0.6 | Restore translator `fail_under` toward 80 on the non-excluded set; tighten over-broad `exclude_lines` (error handling/cleanup should count) | `services/translator/pyproject.toml` | ☐ |
 | 0.7 | Triage & un-skip the dark `.skip` test files (or delete with justification) | `gateway: ZmqTranslationClient.test.ts.skip`, `AttachmentService.test.ts.skip`, `AuthHandler.test.ts.skip` | ☐ |
 
@@ -154,7 +154,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
 | web | `pnpm --filter web test:coverage` | 33.10 | 25.77 | 2026-06-14 (re-measured after Sprint 0.2/0.3 fixes; threshold floor set at 33/25) |
-| gateway | `pnpm --filter gateway test:coverage` | 52.12 | 47.16 | 2026-06-14 |
+| gateway | `pnpm --filter gateway test:coverage` | 32.18 | 28.87 | 2026-06-14 (re-measured after Sprint 0.5: expanded collectCoverageFrom to include routes/middleware/socketio; threshold floor set at 32/28) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | 37.09 | n/a | 2026-06-14 (subset: no-GPU tests only; 4 files w/ import errors excluded) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |
