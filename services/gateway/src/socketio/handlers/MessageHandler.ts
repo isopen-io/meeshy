@@ -940,8 +940,8 @@ export class MessageHandler {
       attachments: this._serializeAttachmentsField(message),
       replyToId: message.replyToId,
       replyTo: (message as never)['replyTo'],
-      // Réponse à une story/status : `storyReplyTo` (snapshot figé) est ajouté
-      // par `broadcastNewMessage` après ce build, en miroir de `forwardedFrom`.
+      // Réponse à un post : `postReplyTo` (snapshot figé) est ajouté par
+      // `broadcastNewMessage` après ce build, en miroir de `forwardedFrom`.
       storyReplyToId: message.storyReplyToId || undefined,
       forwardedFromId: message.forwardedFromId || undefined,
       forwardedFromConversationId: message.forwardedFromConversationId || undefined,
