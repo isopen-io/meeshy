@@ -15,4 +15,17 @@
     <string name="conversations_preview_location">📍 Localização</string>
     <string name="conversations_preview_you">Você</string>
     <string name="conversations_preview_sender_format">%1$s: %2$s</string>
+    <string name="conversations_search">Pesquisar</string>
+    <string name="conversations_search_hint">Pesquisar conversas</string>
+    <string name="conversations_search_close">Fechar pesquisa</string>
+    <string name="conversations_no_results">Nenhuma conversa corresponde</string>
+    <string name="conversations_filter_all">Todos</string>
+    <string name="conversations_filter_unread">Não lidos</string>
+    <string name="conversations_filter_personal">Pessoal</string>
+    <string name="conversations_filter_private">Privadas</string>
+    <string name="conversations_filter_open">Abertas</string>
+    <string name="conversations_filter_global">Globais</string>
+    <string name="conversations_filter_channels">Canais</string>
+    <string name="conversations_filter_favorites">Favoritos</string>
+    <string name="conversations_filter_archived">Arquivadas</string>
 </resources>

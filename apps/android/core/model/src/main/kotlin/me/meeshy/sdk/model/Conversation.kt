@@ -22,6 +22,7 @@ data class ApiConversation(
     val isAnnouncementChannel: Boolean = false,
     val slowModeSeconds: Int? = null,
     val autoTranslateEnabled: Boolean? = null,
+    val isActive: Boolean? = null,
     val preferences: ApiConversationPreferences? = null,
 ) {
     val memberCount: Int get() = participants.size
@@ -59,6 +60,7 @@ data class ApiConversationPreferences(
     val customName: String? = null,
     val categoryId: String? = null,
     val mentionsOnly: Boolean = false,
+    val reaction: String? = null,
 )
 
 @Serializable

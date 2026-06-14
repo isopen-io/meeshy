@@ -12,6 +12,8 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ConversationFilter
+import me.meeshy.sdk.model.ConversationFilters
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
@@ -26,8 +28,16 @@ data class ConversationListUiState(
     val errorMessage: String? = null,
     val connection: SocketConnectionState = SocketConnectionState.DISCONNECTED,
     val currentUserId: String? = null,
+    val selectedFilter: ConversationFilter = ConversationFilter.ALL,
+    val searchText: String = "",
+    val isSearchActive: Boolean = false,
 ) {
     val banner: ConnectionBanner get() = bannerFor(connection, isSyncing)
+
+    /** True when a filter/search is narrowing the list yet nothing matches — distinct from a cold-empty cache. */
+    val isFilteredEmpty: Boolean
+        get() = conversations.isEmpty() && !showSkeleton && errorMessage == null &&
+            (selectedFilter != ConversationFilter.ALL || searchText.isNotBlank())
 }
 
 @HiltViewModel
@@ -41,6 +51,9 @@ class ConversationListViewModel @Inject constructor(
     private val _state = MutableStateFlow(ConversationListUiState())
     val state: StateFlow<ConversationListUiState> = _state.asStateFlow()
 
+    /** Authoritative, unfiltered cache list; [ConversationListUiState.conversations] is the filtered view. */
+    private var rawConversations: List<ApiConversation> = emptyList()
+
     init {
         viewModelScope.launch {
             repository.conversationsStream(
@@ -50,7 +63,8 @@ class ConversationListViewModel @Inject constructor(
                     }
                 },
             ).collect { result ->
-                _state.update { it.applyResult(result) }
+                rawConversations = result.rawListOr(rawConversations)
+                _state.update { it.applyResultFlags(result, rawConversations).withVisible(rawConversations) }
             }
         }
 
@@ -62,7 +76,7 @@ class ConversationListViewModel @Inject constructor(
 
         viewModelScope.launch {
             sessionRepository.currentUser.collect { user ->
-                _state.update { it.copy(currentUserId = user?.id) }
+                _state.update { it.copy(currentUserId = user?.id).withVisible(rawConversations) }
             }
         }
 
@@ -82,6 +96,24 @@ class ConversationListViewModel @Inject constructor(
                     repository.refresh()
                 }
             }
+        }
+    }
+
+    /** Selects a filter tab and re-derives the visible list from the cached conversations (no network). */
+    fun selectFilter(filter: ConversationFilter) {
+        _state.update { it.copy(selectedFilter = filter).withVisible(rawConversations) }
+    }
+
+    /** Updates the free-text search query and re-derives the visible list (no network). */
+    fun setSearch(query: String) {
+        _state.update { it.copy(searchText = query).withVisible(rawConversations) }
+    }
+
+    /** Opens or closes the search field; closing clears the query and restores the full list. */
+    fun setSearchActive(active: Boolean) {
+        _state.update {
+            val next = if (active) it else it.copy(searchText = "")
+            next.copy(isSearchActive = active).withVisible(rawConversations)
         }
     }
 
@@ -105,29 +137,37 @@ class ConversationListViewModel @Inject constructor(
     }
 }
 
-/** Maps a [CacheResult] onto the screen state — skeleton only on a cold, error-free [CacheResult.Empty]. */
-private fun ConversationListUiState.applyResult(
+/** Extracts the list carried by a [CacheResult], keeping [fallback] when a sync carries no value yet. */
+private fun CacheResult<List<ApiConversation>>.rawListOr(
+    fallback: List<ApiConversation>,
+): List<ApiConversation> = when (this) {
+    is CacheResult.Fresh -> value
+    is CacheResult.Stale -> value
+    is CacheResult.Syncing -> value ?: fallback
+    CacheResult.Empty -> emptyList()
+}
+
+/**
+ * Re-derives the visible (filtered + searched) list from the authoritative [raw]
+ * cache list, applying the active filter, search query and current user identity.
+ */
+private fun ConversationListUiState.withVisible(raw: List<ApiConversation>): ConversationListUiState =
+    copy(conversations = ConversationFilters.apply(raw, selectedFilter, searchText, currentUserId))
+
+/**
+ * Maps a [CacheResult]'s SWR flags onto the screen state — skeleton only on a
+ * cold, error-free empty cache. The visible list is computed separately by
+ * [withVisible] so an active filter never triggers the cold-start skeleton.
+ */
+private fun ConversationListUiState.applyResultFlags(
     result: CacheResult<List<ApiConversation>>,
+    raw: List<ApiConversation>,
 ): ConversationListUiState = when (result) {
-    is CacheResult.Fresh -> copy(
-        conversations = result.value,
-        isSyncing = false,
-        showSkeleton = false,
-        errorMessage = null,
-    )
-    is CacheResult.Stale -> copy(
-        conversations = result.value,
-        isSyncing = true,
-        showSkeleton = false,
-    )
+    is CacheResult.Fresh -> copy(isSyncing = false, showSkeleton = false, errorMessage = null)
+    is CacheResult.Stale -> copy(isSyncing = true, showSkeleton = false)
     is CacheResult.Syncing -> copy(
-        conversations = result.value ?: conversations,
         isSyncing = true,
-        showSkeleton = result.value == null && conversations.isEmpty() && errorMessage == null,
+        showSkeleton = result.value == null && raw.isEmpty() && errorMessage == null,
     )
-    CacheResult.Empty -> copy(
-        conversations = emptyList(),
-        isSyncing = false,
-        showSkeleton = errorMessage == null,
-    )
+    CacheResult.Empty -> copy(isSyncing = false, showSkeleton = errorMessage == null)
 }
