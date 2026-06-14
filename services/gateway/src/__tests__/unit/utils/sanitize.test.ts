@@ -104,6 +104,14 @@ describe('SecuritySanitizer', () => {
       expect(SecuritySanitizer.sanitizeText(plainText)).toBe(plainText);
     });
 
+    it('should preserve newlines, tabs and carriage returns (message line breaks)', () => {
+      const input = 'Line 1\nLine 2\tTabbed\r\nLine 3';
+      const result = SecuritySanitizer.sanitizeText(input);
+      expect(result).toContain('\n');
+      expect(result).toContain('\t');
+      expect(result).toBe('Line 1\nLine 2\tTabbed\r\nLine 3');
+    });
+
     it('should strip basic HTML tags', () => {
       const input = '<p>Hello</p>';
       expect(SecuritySanitizer.sanitizeText(input)).toBe('Hello');
