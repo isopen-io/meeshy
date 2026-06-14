@@ -307,7 +307,20 @@ struct RootView: View {
                             startId: launch.startId,
                             revealCompleted: reelsRevealCompleted,
                             safeArea: safeArea,
-                            onClose: { closeReels() }
+                            onClose: { closeReels() },
+                            onOpenProfile: { userId, username in
+                                router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
+                            },
+                            onOpenStory: { userId in
+                                storyViewerCoordinator.present(StoryViewerRequest(
+                                    id: userId,
+                                    startAtFirstUnviewed: true,
+                                    singleGroup: true
+                                ))
+                            },
+                            authorHasStory: { userId in
+                                storyViewModel.storyRingState(forUserId: userId) != .none
+                            }
                         )
                     }
                 )

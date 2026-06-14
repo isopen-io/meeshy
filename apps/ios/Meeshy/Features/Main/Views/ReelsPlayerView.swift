@@ -56,10 +56,25 @@ struct ReelsPlayerView: View {
     /// so the chrome reads them explicitly to clear the Dynamic Island / home bar).
     var safeArea: EdgeInsets = EdgeInsets()
     var onClose: () -> Void
+    /// Opens the author's profile (wired in RootView to the same
+    /// `router.deepLinkProfileUser` sheet the feed uses). `nil` = no-op.
+    var onOpenProfile: ((_ userId: String, _ username: String) -> Void)? = nil
+    /// Opens the author's active story (wired in RootView to the same
+    /// `StoryViewerCoordinator` the feed uses). `nil` = no-op.
+    var onOpenStory: ((_ userId: String) -> Void)? = nil
+    /// Reports whether the given author currently has an active story, so the
+    /// avatar tap can route to the story (else it falls back to the profile).
+    /// Backed by `StoryViewModel.hasUnviewedStories` / `storyRingState` in
+    /// RootView — the single source of truth the feed avatars read.
+    var authorHasStory: ((_ userId: String) -> Bool)? = nil
 
     @StateObject private var viewModel = ReelsViewModel()
     @State private var commentsReel: FeedPost?
     @State private var edgeDrag: CGFloat = 0
+    /// Immersive mode: when `true`, ALL chrome (back button, info overlay,
+    /// action rail, scrub) is hidden for distraction-free viewing. Toggled on
+    /// by a long-press; any tap restores it (mirrors the Story viewer).
+    @State private var chromeHidden = false
 
     var body: some View {
         ZStack {
@@ -97,16 +112,42 @@ struct ReelsPlayerView: View {
                 isLiked: viewModel.isLiked(reel.id),
                 likeCount: viewModel.likeCount(reel),
                 isBookmarked: viewModel.isBookmarked(reel.id),
+                chromeHidden: $chromeHidden,
                 onLike: { viewModel.toggleLike(reel) },
                 onComment: { commentsReel = reel },
                 onBookmark: { viewModel.toggleBookmark(reel) },
-                onShare: { viewModel.share(reel) }
+                onShare: { viewModel.share(reel) },
+                onTapAuthorName: { openProfile(for: reel) },
+                onTapAvatar: { openAvatarDestination(for: reel) }
             )
             .onAppear {
                 Task { await viewModel.loadMoreIfNeeded(currentReel: reel) }
             }
         }
         .ignoresSafeArea()
+    }
+
+    // MARK: Author navigation
+
+    /// Author name tap → profile. Mirrors the feed's
+    /// `router.deepLinkProfileUser = ProfileSheetUser(...)` path via the
+    /// `onOpenProfile` callback wired in RootView.
+    private func openProfile(for reel: FeedPost) {
+        guard !reel.authorId.isEmpty else { return }
+        HapticFeedback.light()
+        onOpenProfile?(reel.authorId, reel.authorUsername ?? reel.author)
+    }
+
+    /// Avatar tap → the author's story if they have an active one (mirrors the
+    /// feed avatar's story-ring behavior), otherwise opens the profile.
+    private func openAvatarDestination(for reel: FeedPost) {
+        guard !reel.authorId.isEmpty else { return }
+        HapticFeedback.light()
+        if authorHasStory?(reel.authorId) == true {
+            onOpenStory?(reel.authorId)
+        } else {
+            onOpenProfile?(reel.authorId, reel.authorUsername ?? reel.author)
+        }
     }
 
     // MARK: Empty / loading
@@ -165,6 +206,10 @@ struct ReelsPlayerView: View {
             // once the status bar hides, so floor it to clear the island reliably.
             .padding(.top, max(safeArea.top, 50) + 28)
             .accessibilityLabel(String(localized: "reels.back", defaultValue: "Retour", bundle: .main))
+            // Part of the chrome — fades out in immersive mode (long-press).
+            .opacity(chromeHidden ? 0 : 1)
+            .allowsHitTesting(!chromeHidden)
+            .animation(.easeInOut(duration: 0.25), value: chromeHidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -181,18 +226,40 @@ struct ReelPageView: View {
     let isLiked: Bool
     let likeCount: Int
     let isBookmarked: Bool
+    /// Shared immersive flag (owned by `ReelsPlayerView`). Long-press hides all
+    /// chrome; the next tap restores it (mirrors the Story viewer).
+    @Binding var chromeHidden: Bool
     var onLike: () -> Void
     var onComment: () -> Void
     var onBookmark: () -> Void
     var onShare: () -> Void
+    /// Author name tap → profile.
+    var onTapAuthorName: () -> Void
+    /// Avatar tap → story (if active) else profile.
+    var onTapAvatar: () -> Void
 
     @State private var descriptionExpanded = false
+    /// Prisme: the language the viewer explicitly picked via a flag / the
+    /// translate toggle. `nil` = the auto-resolved preferred translation.
+    @State private var selectedLanguage: String?
     // Plain reference (NOT @ObservedObject): the page itself doesn't need to
     // re-render on every 0.1s time tick — only `ReelScrubBar` observes the
     // manager. Used here only for the fire-and-forget `togglePlayPause()` tap.
     private let playerManager = SharedAVPlayerManager.shared
 
     private var accentColor: String { reel.authorColor }
+
+    /// Description text for the currently-explored language (Prisme): preferred
+    /// by default, the original when the translate toggle is on, or a specific
+    /// available translation when a flag is tapped.
+    private var displayedDescription: String {
+        guard let sel = selectedLanguage?.lowercased() else { return reel.displayContent }
+        if sel == reel.originalLanguage?.lowercased() { return reel.content }
+        if let t = reel.translations?.first(where: { $0.key.lowercased() == sel })?.value {
+            return t.text
+        }
+        return reel.displayContent
+    }
 
     /// True when this active reel is a video so the scrub bar shows only where
     /// there is a seekable timeline (images/audio reels have none here).
@@ -207,15 +274,18 @@ struct ReelPageView: View {
                 .background(Color.black)
                 .clipped()
 
-            // Tap-pause zone — fills the screen BEHIND the overlay. Taps that
-            // land OUTSIDE the description and the action rail (which sit on top
-            // with their own gestures) reach this layer and toggle play/pause on
-            // the video surface. Image/audio reels have no toggle, so it's gated.
-            if isVideoReel {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture { playerManager.togglePlayPause() }
-            }
+            // Immersive gesture zone — fills the screen BEHIND the overlay.
+            //   • Tap (chrome visible)  → toggle play/pause (video reels only).
+            //   • Tap (chrome hidden)   → ONLY restore chrome; do NOT also
+            //     play/pause on this restoring tap (mirrors the Story reader's
+            //     resume-tap guard).
+            //   • Long-press            → enter immersive mode (hide chrome).
+            // Always present (even for image/audio reels) so long-press immersion
+            // works everywhere; play/pause is gated to video reels inside.
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { handleContentTap() }
+                .onLongPressGesture(minimumDuration: 0.3) { enterImmersive() }
 
             LinearGradient(
                 colors: [.clear, .clear, .black.opacity(0.6)],
@@ -243,8 +313,34 @@ struct ReelPageView: View {
                 }
             }
             .padding(.bottom, 96)
+            // The whole chrome stack (info + rail + scrub) fades out together in
+            // immersive mode and stops taking touches so the restoring tap and
+            // long-press reach the content zone underneath.
+            .opacity(chromeHidden ? 0 : 1)
+            .allowsHitTesting(!chromeHidden)
+            .animation(.easeInOut(duration: 0.25), value: chromeHidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: Immersive mode
+
+    /// Long-press confirmed → hide all chrome for distraction-free viewing.
+    private func enterImmersive() {
+        guard !chromeHidden else { return }
+        HapticFeedback.medium()
+        withAnimation(.easeInOut(duration: 0.25)) { chromeHidden = true }
+    }
+
+    /// A tap on the content zone. The FIRST tap while immersed only restores the
+    /// chrome — it must NOT also toggle play/pause (Story-reader resume-tap
+    /// semantics). Otherwise it's the normal play/pause toggle (video only).
+    private func handleContentTap() {
+        if chromeHidden {
+            withAnimation(.easeInOut(duration: 0.25)) { chromeHidden = false }
+            return
+        }
+        if isVideoReel { playerManager.togglePlayPause() }
     }
 
     // MARK: Media
@@ -276,32 +372,42 @@ struct ReelPageView: View {
         .ignoresSafeArea()
     }
 
-    // MARK: Info overlay (author + description + timestamp)
+    // MARK: Info overlay (author + description + timestamp + language flags)
 
     private var infoOverlay: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                MeeshyAvatar(
-                    name: reel.author,
-                    context: .postAuthor,
-                    accentColor: accentColor,
-                    avatarURL: reel.authorAvatarURL
-                )
+                // Avatar tap → author's story (if active) else profile.
+                Button(action: onTapAvatar) {
+                    MeeshyAvatar(
+                        name: reel.author,
+                        context: .postAuthor,
+                        accentColor: accentColor,
+                        avatarURL: reel.authorAvatarURL
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "reels.author.avatar", defaultValue: "Story de l'auteur", bundle: .main))
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(reel.author)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundColor(.white)
-                    if let username = reel.authorUsername, !username.isEmpty {
-                        Text("@\(username)")
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.7))
+                // Name tap → author profile.
+                Button(action: onTapAuthorName) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(reel.author)
+                            .font(.subheadline.weight(.bold))
+                            .foregroundColor(.white)
+                        if let username = reel.authorUsername, !username.isEmpty {
+                            Text("@\(username)")
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.7))
+                        }
                     }
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "reels.author.profile", defaultValue: "Profil de l'auteur", bundle: .main))
             }
 
-            if !reel.displayContent.isEmpty {
-                Text(reel.displayContent)
+            if !displayedDescription.isEmpty {
+                Text(displayedDescription)
                     .font(.subheadline)
                     .foregroundColor(.white)
                     .lineLimit(descriptionExpanded ? nil : 3)
@@ -311,9 +417,27 @@ struct ReelPageView: View {
                     }
             }
 
-            Text(RelativeTimeFormatter.shortString(for: reel.timestamp))
-                .font(.caption2)
-                .foregroundColor(.white.opacity(0.65))
+            // Prisme Linguistique — meta row mirroring the message-bubble footer:
+            // timestamp, then the translate toggle, then the available-language
+            // flag pills (tap a flag to read that language; the active one is
+            // underlined). Inline next to the date, as in conversation bubbles.
+            ReelMetaRow(
+                timestamp: RelativeTimeFormatter.shortString(for: reel.timestamp),
+                originalLanguage: reel.originalLanguage,
+                translationLanguages: Array(reel.translations?.keys ?? Dictionary<String, PostTranslation>().keys),
+                selectedLanguage: selectedLanguage,
+                onSelectLanguage: { code in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedLanguage = (selectedLanguage?.lowercased() == code.lowercased()) ? nil : code
+                    }
+                },
+                onToggleTranslate: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        let orig = reel.originalLanguage
+                        selectedLanguage = (selectedLanguage?.lowercased() == orig?.lowercased()) ? nil : orig
+                    }
+                }
+            )
         }
         .shadow(color: .black.opacity(0.4), radius: 4, y: 1)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -392,13 +516,86 @@ private struct ReelActionButton: View {
     }
 }
 
+// MARK: - Reel Language Flags (Prisme Linguistique)
+
+/// Meta row for a reel — mirrors the conversation message-bubble footer
+/// (`BubbleFooter.metaLeading`): the timestamp, then the translate toggle
+/// (`🌐`, stable position), then the available-language flag pills. Tapping a
+/// flag reads that language; the active one is underlined in its language color.
+/// The translate toggle flips between the viewer's preferred translation and the
+/// original. (Per-language is a LOCAL switch over the post's pre-loaded
+/// translations — iOS has no on-demand post-translation request path.)
+private struct ReelMetaRow: View {
+    let timestamp: String
+    let originalLanguage: String?
+    let translationLanguages: [String]
+    let selectedLanguage: String?
+    var onSelectLanguage: (String) -> Void
+    var onToggleTranslate: () -> Void
+
+    /// Deduped, ordered (original first), capped at 4 to stay discreet.
+    private var codes: [String] {
+        var seen = Set<String>()
+        var ordered: [String] = []
+        func add(_ raw: String?) {
+            guard let code = raw, !code.isEmpty, !seen.contains(code.lowercased()) else { return }
+            seen.insert(code.lowercased())
+            ordered.append(code)
+        }
+        add(originalLanguage)
+        translationLanguages.sorted().forEach { add($0) }
+        return Array(ordered.prefix(4))
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(timestamp)
+                .font(.caption2)
+                .foregroundColor(.white.opacity(0.65))
+
+            if !codes.isEmpty {
+                // Translate affordance first (stable), exactly like the bubble footer.
+                Button(action: onToggleTranslate) {
+                    Image(systemName: "translate")
+                        .font(.caption2.weight(.medium))
+                        .foregroundColor(MeeshyColors.indigo400)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "reels.translate", defaultValue: "Traduire", bundle: .main))
+
+                HStack(spacing: 6) {
+                    ForEach(codes, id: \.self) { code in
+                        let display = LanguageDisplay.from(code: code)
+                        let isActive = selectedLanguage?.lowercased() == code.lowercased()
+                        Button { onSelectLanguage(code) } label: {
+                            VStack(spacing: 1) {
+                                Text(display?.flag ?? code.uppercased())
+                                    .font(isActive ? .caption : .caption2)
+                                if isActive {
+                                    RoundedRectangle(cornerRadius: 1)
+                                        .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
+                                        .frame(width: 10, height: 1.5)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(display?.name ?? code.uppercased())
+                    }
+                }
+            }
+        }
+        .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
+    }
+}
+
 // MARK: - Reel Scrub Bar
 
-/// Draggable seek bar for the active reel video. Bound to the shared engine's
+/// Draggable seek bar for the active reel video — Instagram-reels style: just
+/// the track + thumb, no time numbers. Bound to the shared engine's
 /// `currentTime` / `duration`; dragging seeks anywhere in the clip via
-/// `seek(to:)`. Position / duration are shown above the track. Reuses the
-/// proven scrub pattern (GeometryReader + high-priority drag so the horizontal
-/// pan wins over the vertical pager) and the SDK's `formatMediaDuration`.
+/// `seek(to:)`. Reuses the proven scrub pattern (GeometryReader + high-priority
+/// drag so the horizontal pan wins over the vertical pager).
 ///
 /// App-side (not an SDK atom): it is bound to the `SharedAVPlayerManager`
 /// singleton and placed by a product decision (reels-only, no skip, no
@@ -417,35 +614,13 @@ private struct ReelScrubBar: View {
         return isSeeking ? seekFraction : manager.currentTime / manager.duration
     }
 
-    private var displayedTime: Double {
-        isSeeking ? seekFraction * manager.duration : manager.currentTime
-    }
-
-    /// Time left in the clip (shown on the right as `-MM:SS`).
-    private var remainingTime: Double {
-        max(0, manager.duration - displayedTime)
-    }
-
     var body: some View {
-        VStack(spacing: 6) {
-            HStack {
-                // Élapsé (début) à gauche…
-                Text(formatMediaDuration(displayedTime))
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.85))
-                Spacer()
-                // …durée restante à droite.
-                Text("-\(formatMediaDuration(remainingTime))")
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.7))
-            }
-            .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
-
-            track
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(localized: "reels.scrub", defaultValue: "Avancer ou reculer", bundle: .main))
-        .accessibilityValue(formatMediaDuration(displayedTime))
+        track
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "reels.scrub", defaultValue: "Avancer ou reculer", bundle: .main))
+            // No on-screen time numbers (Instagram-reels style), but VoiceOver
+            // still announces playback position as a percentage.
+            .accessibilityValue("\(Int((progress * 100).rounded()))%")
     }
 
     private var track: some View {
@@ -474,12 +649,17 @@ private struct ReelScrubBar: View {
                         seekFraction = max(0, min(1, value.location.x / geo.size.width))
                     }
                     .onEnded { value in
-                        guard manager.duration > 0 else { isSeeking = false; return }
+                        // ALWAYS clear the seeking flag, even on the early
+                        // duration==0 bail. A drag whose `onEnded` leaves
+                        // `isSeeking` stuck `true` would freeze `progress` on
+                        // the stale `seekFraction` forever — the scrub would
+                        // stop tracking playback and seeks would die (the
+                        // "scrub dead after a play-through" failure mode).
+                        defer { isSeeking = false; seekFraction = 0 }
+                        guard manager.duration > 0 else { return }
                         let fraction = max(0, min(1, value.location.x / geo.size.width))
                         manager.seek(to: fraction * manager.duration)
                         HapticFeedback.light()
-                        isSeeking = false
-                        seekFraction = 0
                     }
             )
         }
@@ -560,10 +740,16 @@ private struct ReelVideoView: View {
         guard isActive, ready else { return }
         if manager.activeURL != attachment.fileUrl {
             manager.attachmentId = media.id
-            manager.shouldLoop = true
             manager.isMuted = false
             manager.load(urlString: attachment.fileUrl)
         }
+        // Looping MUST be (re)asserted AFTER `load()`. `load()` calls
+        // `cleanup()` internally, which resets `shouldLoop = false`; setting it
+        // before `load()` is silently clobbered, so the very first end-of-item
+        // takes the tear-down branch and the reel never replays (the "scrub bar
+        // dead after one play-through" bug). Re-asserting here every drive pass
+        // also keeps it true across the reveal transition's disappear/reappear.
+        manager.shouldLoop = true
         // Hold on the poster (PAUSED) until the liquid reveal completes; start
         // playback only when the disc has reached full screen.
         guard revealCompleted else { return }
