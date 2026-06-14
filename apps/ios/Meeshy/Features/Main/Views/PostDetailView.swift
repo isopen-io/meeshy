@@ -417,45 +417,50 @@ struct PostDetailView: View {
             ConnectionBanner()
 
             if let post = displayPost {
-                ZStack(alignment: .top) {
-                    ScrollViewReader { scrollProxy in
-                        ScrollView(showsIndicators: false) {
-                            // Sentinel: publishes the scroll offset so the floating
-                            // header collapses + reveals the author. Sentinel sits at
-                            // the top of the content (before the LazyVStack's top
-                            // padding) → minY≈0 at rest, goes negative on scroll.
-                            GeometryReader { geo in
-                                Color.clear.preference(
-                                    key: ScrollOffsetPreferenceKey.self,
-                                    value: geo.frame(in: .named(Self.scrollSpace)).minY
-                                )
-                            }
-                            .frame(height: 0)
+                ScrollViewReader { scrollProxy in
+                    ScrollView(showsIndicators: false) {
+                        // Sentinel: publishes the scroll offset so the floating
+                        // header reveals the author at scroll. minY≈0 at rest
+                        // (content origin sits just under the header inset),
+                        // goes negative on scroll.
+                        GeometryReader { geo in
+                            Color.clear.preference(
+                                key: ScrollOffsetPreferenceKey.self,
+                                value: geo.frame(in: .named(Self.scrollSpace)).minY
+                            )
+                        }
+                        .frame(height: 0)
 
-                            LazyVStack(spacing: 0) {
-                                postDetailContent(post)
-                            }
-                            .padding(.top, CollapsibleHeaderMetrics.expandedHeight)
-                            .padding(.bottom, 80)
+                        LazyVStack(spacing: 0) {
+                            postDetailContent(post)
                         }
-                        .coordinateSpace(name: Self.scrollSpace)
-                        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
-                            headerScrollOffset = offset
-                        }
-                        .onAppear {
-                            if showComments {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                    withAnimation {
-                                        scrollProxy.scrollTo("commentsSection", anchor: .top)
-                                    }
-                                    composerFocusTrigger.toggle()
+                        .padding(.bottom, 80)
+                    }
+                    .coordinateSpace(name: Self.scrollSpace)
+                    .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
+                        headerScrollOffset = offset
+                    }
+                    // Floating translucent header pinned to the top. `safeAreaInset`
+                    // reserves the header height for the content (author block stays
+                    // visible right below it at rest) while letting the content scroll
+                    // UNDER the translucent surface — the canonical SwiftUI pattern for
+                    // a bar over a scroll view, and it handles the safe area itself.
+                    // (A plain ZStack overlay let the header's `.ignoresSafeArea(.top)`
+                    // pull the scroll content under the bar and hide the author.)
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        postDetailHeader(post)
+                    }
+                    .onAppear {
+                        if showComments {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                withAnimation {
+                                    scrollProxy.scrollTo("commentsSection", anchor: .top)
                                 }
+                                composerFocusTrigger.toggle()
                             }
                         }
-                    } // ScrollViewReader
-
-                    postDetailHeader(post)
-                } // ZStack
+                    }
+                } // ScrollViewReader
             } else if viewModel.isLoading {
                 Spacer()
                 ProgressView()
