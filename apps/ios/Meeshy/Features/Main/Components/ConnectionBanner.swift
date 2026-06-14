@@ -58,6 +58,28 @@ struct ConnectionBanner: View {
     /// Duration of the "En ligne" acknowledgement (seconds).
     private static let onlineAckDuration: Duration = .seconds(4)
 
+    /// Grace window before a dropped socket is surfaced as "Reconnexion".
+    /// A reconnection that completes within this window — the common case at
+    /// cold start and on resume-from-background — never shows the pill; only a
+    /// genuinely stalled connection (> `reconnectingGraceDuration`) does. This
+    /// is the "ne pas polluer la tuile si non nécessaire" rule.
+    private static let reconnectingGraceDuration: Duration = .seconds(3)
+
+    /// `true` once the `.disconnected` state has actually been surfaced as the
+    /// "Reconnexion" pill (grace window elapsed while still disconnected).
+    /// Gates the pill so a fast reconnect stays invisible.
+    @State private var showReconnecting: Bool = false
+
+    /// Cancellable handle for the grace-window task. Stored on `@State` so a
+    /// reconnect cancels a pending surface and successive flaps don't pile up.
+    @State private var reconnectingGraceTimer: Task<Void, Never>?
+
+    /// `true` once a *visible* down state (offline shown, or "Reconnexion"
+    /// surfaced after the grace) has been displayed since the last connected
+    /// state. Drives whether the transient "En ligne" confirmation is shown —
+    /// it must only acknowledge a problem the user actually saw.
+    @State private var downWasSurfaced: Bool = false
+
     init(onItemTap: ((OutboxUIItem.Source) -> Void)? = nil) {
         self.onItemTap = onItemTap
     }
@@ -95,7 +117,7 @@ struct ConnectionBanner: View {
                 source: nil,
                 showsActivityDots: false
             ))
-        } else if isDisconnected {
+        } else if isDisconnected && showReconnecting {
             result.append(SyncPillEntry(
                 id: "status.disconnected",
                 label: String(localized: "connection.reconnecting", defaultValue: "Reconnexion"),
@@ -146,36 +168,117 @@ struct ConnectionBanner: View {
                 }
                 .onAppear {
                     lastObservedStatus = statusVM.status
+                    handleInitialStatus(statusVM.status)
                 }
         }
     }
 
-    /// `true` only when the connection becomes genuinely usable again — the
-    /// SOCKET (re)connects (`.connected`/`.syncing`) after having been `.offline`
-    /// or `.disconnected`. Confirming "En ligne" on a mere `.offline → .disconnected`
-    /// (device network back but the socket still reconnecting) would falsely tell
-    /// the user they are online while no socket exists yet.
+    /// `true` only when the connection becomes genuinely usable again
+    /// (`.connected`/`.syncing`) AND a *visible* down state was actually shown
+    /// to the user beforehand (`downWasSurfaced`). Confirming "En ligne" at cold
+    /// start or after a fast resume — where the socket blips through
+    /// `.disconnected` without the "Reconnexion" pill ever appearing — would be
+    /// a parasitic flash acknowledging a problem the user never saw.
     static func shouldConfirmReturnOnline(
+        downWasSurfaced: Bool,
+        new: ConnectionStatusViewModel.Status
+    ) -> Bool {
+        let isUp = new == .connected || new == .syncing
+        return downWasSurfaced && isUp
+    }
+
+    /// `true` when a freshly-dropped socket should open a grace window before
+    /// surfacing "Reconnexion". Only a NEW drop (the previous state was not
+    /// already `.disconnected`) starts the window; staying disconnected lets the
+    /// running window finish without being pushed back.
+    static func shouldStartReconnectingGrace(
         previous: ConnectionStatusViewModel.Status?,
         new: ConnectionStatusViewModel.Status
     ) -> Bool {
-        let wasDown = previous == .offline || previous == .disconnected
-        let isUp = new == .connected || new == .syncing
-        return wasDown && isUp
+        new == .disconnected && previous != .disconnected
     }
 
-    /// Detects the transition back to a genuinely-connected state and schedules a
-    /// task that clears the "En ligne" acknowledgement after `onlineAckDuration`.
-    /// Cancels any pending task so successive flap-up / flap-down cycles don't
-    /// pile up handlers.
+    /// `true` when, at the end of the grace window, the socket is STILL down so
+    /// the "Reconnexion" pill should finally be surfaced. A reconnect that
+    /// landed during the window leaves a non-`.disconnected` status → stays
+    /// silent.
+    static func shouldSurfaceReconnecting(
+        statusAtDeadline: ConnectionStatusViewModel.Status
+    ) -> Bool {
+        statusAtDeadline == .disconnected
+    }
+
+    /// Seeds the surfacing state machine from the status observed at mount,
+    /// since `adaptiveOnChange` only fires on subsequent changes. A banner that
+    /// mounts already `.disconnected` (cold start) still gets its grace window;
+    /// one that mounts `.offline` is treated as a surfaced down state.
+    private func handleInitialStatus(_ status: ConnectionStatusViewModel.Status) {
+        switch status {
+        case .offline:
+            downWasSurfaced = true
+        case .disconnected:
+            scheduleReconnectingGrace()
+        case .connected, .syncing:
+            break
+        }
+    }
+
+    /// Drives the connection-pill state machine on every status change:
+    /// - `.offline`      → surfaced immediately (important), cancels any grace.
+    /// - `.disconnected` → opens a grace window; "Reconnexion" only shows after
+    ///   it elapses while still down (fast reconnects stay silent).
+    /// - `.connected`/`.syncing` → cancels grace, confirms "En ligne" only if a
+    ///   down state was actually surfaced, then clears that flag.
     private func handleStatusTransition(
         from oldValue: ConnectionStatusViewModel.Status?,
         to newValue: ConnectionStatusViewModel.Status
     ) {
         let previous = oldValue ?? lastObservedStatus
         lastObservedStatus = newValue
-        guard Self.shouldConfirmReturnOnline(previous: previous, new: newValue) else { return }
 
+        switch newValue {
+        case .offline:
+            cancelReconnectingGrace()
+            showReconnecting = false
+            downWasSurfaced = true
+
+        case .disconnected:
+            if Self.shouldStartReconnectingGrace(previous: previous, new: newValue) {
+                scheduleReconnectingGrace()
+            }
+
+        case .connected, .syncing:
+            cancelReconnectingGrace()
+            showReconnecting = false
+            if Self.shouldConfirmReturnOnline(downWasSurfaced: downWasSurfaced, new: newValue) {
+                confirmReturnOnline()
+            }
+            downWasSurfaced = false
+        }
+    }
+
+    /// Opens (or restarts) the grace window. When it elapses, "Reconnexion" is
+    /// surfaced only if the socket is still down (`shouldSurfaceReconnecting`).
+    private func scheduleReconnectingGrace() {
+        reconnectingGraceTimer?.cancel()
+        reconnectingGraceTimer = Task { @MainActor [graceDuration = Self.reconnectingGraceDuration] in
+            try? await Task.sleep(for: graceDuration)
+            guard !Task.isCancelled else { return }
+            guard Self.shouldSurfaceReconnecting(statusAtDeadline: statusVM.status) else { return }
+            showReconnecting = true
+            downWasSurfaced = true
+        }
+    }
+
+    private func cancelReconnectingGrace() {
+        reconnectingGraceTimer?.cancel()
+        reconnectingGraceTimer = nil
+    }
+
+    /// Shows the transient green "En ligne" pill, clearing it after
+    /// `onlineAckDuration`. Cancels any pending clear so flap-up / flap-down
+    /// cycles don't pile up handlers.
+    private func confirmReturnOnline() {
         justReturnedOnlineTimer?.cancel()
         showJustReturnedOnline = true
         justReturnedOnlineTimer = Task { @MainActor [showDuration = Self.onlineAckDuration] in

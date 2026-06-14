@@ -78,29 +78,14 @@ struct BubbleExpandableText: View, Equatable {
                 .accessibilityLabel(String(localized: "bubble.expand.show", defaultValue: "Show full message", bundle: .main))
             }
         } else {
-            VStack(alignment: .leading, spacing: 4) {
-                MessageTextRenderer.render(content, fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .tint(linkTint)
-                    .textSelection(.enabled)
-
-                if isExpanded && content.count > Self.truncateLimit {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            isExpanded = false
-                        }
-                    } label: {
-                        Image(systemName: "chevron.up")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(textColor.opacity(0.6))
-                            .frame(maxWidth: .infinity, minHeight: 28, alignment: .center)
-                            .padding(.top, 2)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "bubble.expand.hide", defaultValue: "Collapse message", bundle: .main))
-                }
-            }
+            // Déplié (ou court) : on affiche le message COMPLET sans aucun
+            // bouton. Le dépliage est à sens unique — le chevron "V" a rempli
+            // son rôle et disparaît (spec : « déplier uniquement et disparaître,
+            // pas de repli »). `isExpanded` reste local à la sous-vue.
+            MessageTextRenderer.render(content, fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm)
+                .fixedSize(horizontal: false, vertical: true)
+                .tint(linkTint)
+                .textSelection(.enabled)
         }
     }
 

@@ -641,9 +641,29 @@ describe('Social Notification Methods', () => {
       expect(createArg.data.priority).toBe('low');
     });
 
-    it('should return null when commentLikeEnabled preference is false (default)', async () => {
-      // Default preferences have commentLikeEnabled: false
+    it('should create comment_like notification by default (enabled by default)', async () => {
+      // Spec produit 2026-06-14 : tout activé par défaut sauf DnD. Une
+      // préférence absente résout vers `commentLikeEnabled ?? true`.
       setupSuccessMocks(mockPrisma, { type: 'comment_like', priority: 'low' });
+
+      const result = await service.createCommentLikeNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentId: COMMENT_ID,
+        commentAuthorId: AUTHOR_ID,
+        emoji: '👍',
+      });
+
+      expect(result).not.toBeNull();
+      expect(mockPrisma.notification.create).toHaveBeenCalled();
+    });
+
+    it('should return null when commentLikeEnabled is explicitly disabled', async () => {
+      setupSuccessMocks(
+        mockPrisma,
+        { type: 'comment_like', priority: 'low' },
+        { commentLikeEnabled: false },
+      );
 
       const result = await service.createCommentLikeNotification({
         actorId: ACTOR_ID,

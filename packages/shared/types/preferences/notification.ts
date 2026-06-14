@@ -24,7 +24,7 @@ export const NotificationPreferenceSchema = z.object({
   contactRequestEnabled: z.boolean().default(true),
   groupInviteEnabled: z.boolean().default(true),
   memberJoinedEnabled: z.boolean().default(true),
-  memberLeftEnabled: z.boolean().default(false),
+  memberLeftEnabled: z.boolean().default(true),
 
   // Social / Post notifications
   postLikeEnabled: z.boolean().default(true),
@@ -32,7 +32,7 @@ export const NotificationPreferenceSchema = z.object({
   postRepostEnabled: z.boolean().default(true),
   storyReactionEnabled: z.boolean().default(true),
   commentReplyEnabled: z.boolean().default(true),
-  commentLikeEnabled: z.boolean().default(false),
+  commentLikeEnabled: z.boolean().default(true),
 
   // Do Not Disturb
   dndEnabled: z.boolean().default(false),
@@ -69,13 +69,13 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreference = {
   contactRequestEnabled: true,
   groupInviteEnabled: true,
   memberJoinedEnabled: true,
-  memberLeftEnabled: false,
+  memberLeftEnabled: true,
   postLikeEnabled: true,
   postCommentEnabled: true,
   postRepostEnabled: true,
   storyReactionEnabled: true,
   commentReplyEnabled: true,
-  commentLikeEnabled: false,
+  commentLikeEnabled: true,
   dndEnabled: false,
   dndStartTime: '22:00',
   dndEndTime: '08:00',
