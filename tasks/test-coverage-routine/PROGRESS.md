@@ -29,7 +29,7 @@ Each item is a separate slice; run them in order. Validate via the PR's own CI r
 | # | Task | File(s) | Status |
 |---|------|---------|--------|
 | 0.1 | Measure current coverage baselines (web jest, gateway jest, translator pytest, iOS, android) and record them in this file | — | ☑ |
-| 0.2 | Remove `continue-on-error` for web + gateway test jobs | `.github/workflows/ci.yml:211,224` | ☐ |
+| 0.2 | Remove `continue-on-error` for web + gateway test jobs | `.github/workflows/ci.yml:211,224` | ⚠ |
 | 0.3 | Re-enable the disabled Python test job with a CPU-only marker split (no GB model downloads) | `.github/workflows/ci.yml:242` (`if: false`) | ☐ |
 | 0.4 | Add **ratcheting** `coverageThreshold` to web jest at the measured baseline | `apps/web/jest.config.js` | ☐ |
 | 0.5 | Stop gateway jest from silently excluding `routes/middleware/websocket/grpc` & ignoring whole test dirs; add a global threshold at baseline | `services/gateway/jest.config.json` | ☐ |
