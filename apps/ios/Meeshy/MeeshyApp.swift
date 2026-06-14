@@ -156,6 +156,12 @@ struct MeeshyApp: App {
                     NotificationToastManager.shared.focusFilterProvider = {
                         MeeshyFocusStore.shared.current.toSDKSnapshot()
                     }
+                    // Local-First : résous le sous-titre des toasts de
+                    // conversation (nom renommé + favori) depuis le snapshot
+                    // local App Group, jamais le titre brut serveur.
+                    NotificationToastManager.shared.conversationPresentationProvider = { conversationId in
+                        WidgetDataManager.shared.conversationToastPresentation(forId: conversationId)
+                    }
                     await CacheCoordinator.shared.start()
                     // Touch PresenceManager early so it has subscribed to
                     // `presence:snapshot` + `user:status` + `didReconnect`

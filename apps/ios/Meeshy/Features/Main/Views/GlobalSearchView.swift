@@ -456,10 +456,12 @@ struct GlobalSearchView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(result.name)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(1)
+                    ConversationTitleLabel(
+                        name: result.name,
+                        favoriteEmoji: result.conversation.userState.reaction,
+                        font: .system(size: 14, weight: .bold),
+                        color: theme.textPrimary
+                    )
 
                     Spacer()
 

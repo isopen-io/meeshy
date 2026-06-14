@@ -29,7 +29,9 @@ struct ForwardPickerSheet: View {
         }
         let query = searchText.lowercased()
         return conversations.filter { conv in
-            conv.id != sourceConversationId && conv.name.lowercased().contains(query)
+            conv.id != sourceConversationId
+                && (conv.displayName.lowercased().contains(query)
+                    || conv.name.lowercased().contains(query))
         }
     }
 
@@ -150,7 +152,7 @@ struct ForwardPickerSheet: View {
     private func conversationRow(_ conv: Conversation) -> some View {
         HStack(spacing: 12) {
             MeeshyAvatar(
-                name: conv.name,
+                name: conv.displayName,
                 context: .conversationList,
                 accentColor: conv.accentColor,
                 avatarURL: conv.avatar,
@@ -159,10 +161,12 @@ struct ForwardPickerSheet: View {
             )
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(conv.name)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(1)
+                ConversationTitleLabel(
+                    name: conv.displayName,
+                    favoriteEmoji: conv.userState.reaction,
+                    font: .system(size: 15, weight: .medium),
+                    color: theme.textPrimary
+                )
 
                 HStack(spacing: 4) {
                     Text(conv.type.rawValue)
