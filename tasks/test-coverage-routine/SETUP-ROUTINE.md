@@ -16,11 +16,19 @@ open a PR, and merge via the GitHub integration).
 
 Docs: https://code.claude.com/docs/en/routines  ·  Min interval: **1 hour** (so every 3h is fine).
 
+**Prerequisite — scaffolding on `main`.** A Routine runs on a fresh clone of the **default branch
+(`main`)**, so `tasks/test-coverage-routine/*` must be on `main` for the run to read `ROUTINE.md`.
+Either merge the scaffolding PR (`claude/test-coverage-analysis-8s1io1 → main`) first, **or** rely on
+the self-bootstrap line in the prompt below (it fetches the scaffolding from that branch until it's
+merged). Merging first is cleaner.
+
 **Create it (web UI):** go to https://claude.ai/code/routines → New routine →
 - **Repo:** `isopen-io/meeshy`
 - **Schedule trigger:** every 3 hours (your timezone)
 - **Environment:** one whose network policy allows package installs (pnpm/uv/gradle) — "Trusted" or
-  a Custom allowlist; set the `ANTHROPIC_*`/registry env it needs. No API key needed in the repo.
+  a Custom allowlist; set the registry/env it needs. No API key needed in the repo. Make sure the
+  GitHub integration can push branches, open PRs, and merge a green PR (branch protection on main
+  must permit the bot to merge required-checks-passing PRs — it never force-merges past red CI).
 - **Prompt:** paste the block below.
 
 **Or create it from the CLI** (in an interactive `claude` session on this repo):
@@ -32,6 +40,11 @@ Then `/schedule list` / `/schedule update` to manage it.
 ### Routine prompt (paste this)
 ```
 You are the autonomous test-coverage agent for isopen-io/meeshy.
+
+Bootstrap: if tasks/test-coverage-routine/ROUTINE.md is not present on the checked-out branch,
+run `git fetch origin claude/test-coverage-analysis-8s1io1 && git checkout
+origin/claude/test-coverage-analysis-8s1io1 -- tasks/test-coverage-routine` to obtain it, then
+proceed. (Once the scaffolding is merged to main this is a no-op.)
 
 Read and follow EXACTLY: tasks/test-coverage-routine/ROUTINE.md
 State / what to do next:           tasks/test-coverage-routine/PROGRESS.md
