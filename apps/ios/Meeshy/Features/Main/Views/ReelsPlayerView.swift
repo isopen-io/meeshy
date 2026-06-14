@@ -859,7 +859,9 @@ private struct ReelVideoView: View {
 /// renders its video ABOVE same-level SwiftUI siblings, which was hiding the
 /// action rail / info / scrub bar. The player is owned by `SharedAVPlayerManager`;
 /// this only renders it. Mirrors the SDK's `_AVPlayerLayerView` (Story player).
-private struct ReelVideoSurface: UIViewRepresentable {
+/// `internal` (not `private`) so the feed-card surface (`ReelFeedVideoSurface`)
+/// can reuse the same chrome-free render path for muted background playback.
+struct ReelVideoSurface: UIViewRepresentable {
     let player: AVPlayer
 
     func makeUIView(context: Context) -> ReelPlayerLayerView {
@@ -1055,7 +1057,9 @@ private struct ReelAudioControl: View {
 
 /// Edge-to-edge progressive image used as a video poster and as the image-reel
 /// content. Falls back to a tinted fill while loading.
-private struct ReelPoster: View {
+/// `internal` (not `private`) so the feed-card surface (`ReelFeedVideoSurface`)
+/// can reuse it as the muted-video poster.
+struct ReelPoster: View {
     let thumbHash: String?
     let url: String?
     let color: String
