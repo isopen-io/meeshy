@@ -96,4 +96,32 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
      mismatch, API call expectation mismatches. These require per-test investigation beyond CI-config scope.
   5. GATEWAY FAILURES: 7 suites / 22 tests — pre-existing production bugs unchanged (not touched here)
 - Next slice: 0.3 needs CI validation, then 0.4 (web jest coverage threshold)
-- Commit: (see branch claude/coverage/sprint0-3-and-web-test-fixes)
+- Commit: (see PR #650 claude/coverage/sprint0-3-and-web-test-fixes → merged to main)
+
+## 2026-06-14T18:13Z — Sprint 0.3 × Python CI fix + marker fixes (automated run #4)
+- Targeted: Python translator test job CI failures on PR #650 (4 additional commits after initial push)
+- Result: ☑ done — PR #650 merged to main; Python CI job now passing
+- Coverage: translator 54.77% line (up from 37.09% baseline; 1388 tests passing, 28 skipped, 13 deselected)
+- Tests added: 0 (CI config + test infrastructure fixes only)
+- Reviewer: n/a (auto-merged by human)
+- Notes:
+  1. ROOT CAUSE: `pytest.ini` in `services/translator/` overrides `pyproject.toml` (pytest emits
+     "WARNING: ignoring pytest config in pyproject.toml!"). The `pythonpath = ["."]` added to
+     `pyproject.toml` in prior run was silently ignored — had to add `pythonpath = .` to `pytest.ini`.
+  2. conftest.py also patched: added translator root to `sys.path` as belt-and-suspenders for
+     `from src.services.*` imports.
+  3. CI marker extended: `-m "not slow and not gpu and not e2e and not integration"` (CLI `-m` overrides
+     `addopts` `-m "not e2e"` in pytest.ini, so e2e/integration tests needing live services would have
+     run without this change).
+  4. `test_pipelines_quick.py`: added `@pytest.mark.slow` to `test_mono_speaker_pipeline` and
+     `test_multi_speaker_pipeline` (require live NLLB/Whisper/Chatterbox models).
+  5. `test_transcription_translation_only.py`: renamed `test_transcription_and_translation` →
+     `_run_transcription_and_translation` (helper with required non-fixture params, not a pytest test;
+     references macOS-local audio paths `/Users/smpceo/...`).
+  6. Web analysis (background agent): 73 failing suites, ~95% fixable test-only. Top categories:
+     stale i18n assertions (~203 failures), missing Socket.IO mocks (~63), undefined store methods
+     (~20+), encryption mock gaps (~10). All fixable without touching production code.
+  7. Gateway failures: 7 suites / 22 tests — pre-existing production bugs (unchanged).
+  8. New translator baseline: 54.77% line (was 37.09%); `--cov-fail-under` should be raised to 54.
+- Next slice: 0.4 (add ratcheting `coverageThreshold` to web jest config at 22% line / 17% branch baseline)
+- Commit: (see PR #650 — final 5 commits including Python fixes)

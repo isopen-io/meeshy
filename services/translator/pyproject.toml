@@ -277,7 +277,7 @@ exclude_lines = [
     "async def __aexit__",
     "await.*close",
 ]
-fail_under = 10  # Reduced from 80% - project under active development
+fail_under = 54  # Sprint 0.3 ratchet (CI enforces via --cov-fail-under flag in ci.yml)
 show_missing = true
 
 # =============================================================================
