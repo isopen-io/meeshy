@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
-import { authorSelect, postInclude } from './posts/postIncludes';
+import { authorSelect, postInclude, NOT_DELETED } from './posts/postIncludes';
 import {
   reelAffinityScore,
   type ReelAffinityContext,
@@ -86,7 +86,7 @@ export class PostFeedService {
 
     // Phase 1 — Fetch candidates
     const where: any = {
-      deletedAt: null,
+      deletedAt: NOT_DELETED,
       type: { in: [PostType.POST, PostType.REEL] },
       visibility: { in: ['PUBLIC', 'FRIENDS'] },
       // Exclude expired (isSet: false matches MongoDB docs where field is absent)
@@ -185,7 +185,7 @@ export class PostFeedService {
           // set AND whose author is the viewer. Drives the "I've already
           // reposted this" green icon on the feed.
           this.prisma.post.findMany({
-            where: { authorId: userId, repostOfId: { in: postIds }, deletedAt: null },
+            where: { authorId: userId, repostOfId: { in: postIds }, deletedAt: NOT_DELETED },
             select: { repostOfId: true },
           }),
         ])
@@ -221,7 +221,7 @@ export class PostFeedService {
     const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds);
 
     const where: any = {
-      deletedAt: null,
+      deletedAt: NOT_DELETED,
       type: PostType.STORY,
       AND: [
         visibilityFilter,
@@ -275,7 +275,7 @@ export class PostFeedService {
     const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds);
 
     const whereClause: any = {
-      deletedAt: null,
+      deletedAt: NOT_DELETED,
       type: PostType.STATUS,
       AND: [
         visibilityFilter,
@@ -315,7 +315,7 @@ export class PostFeedService {
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
     const where: any = {
-      deletedAt: null,
+      deletedAt: NOT_DELETED,
       type: PostType.STATUS,
       visibility: PostVisibility.PUBLIC,
       AND: [
@@ -400,7 +400,7 @@ export class PostFeedService {
     }
 
     const candidates = await this.prisma.post.findMany({
-      where: { deletedAt: null, type: PostType.REEL, AND: andClauses },
+      where: { deletedAt: NOT_DELETED, type: PostType.REEL, AND: andClauses },
       include: feedPostInclude,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: candidatePoolSize,
@@ -564,7 +564,7 @@ export class PostFeedService {
 
     const where: any = {
       authorId: targetUserId,
-      deletedAt: null,
+      deletedAt: NOT_DELETED,
       type: { in: [PostType.POST, PostType.REEL] },
     };
 
@@ -628,7 +628,7 @@ export class PostFeedService {
 
     const where: any = {
       communityId,
-      deletedAt: null,
+      deletedAt: NOT_DELETED,
       type: { in: [PostType.POST, PostType.REEL] },
       visibility: { in: ['PUBLIC', 'COMMUNITY'] },
     };

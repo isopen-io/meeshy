@@ -550,7 +550,8 @@ describe('PostFeedService.getReels', () => {
 
     const where = mockPostFindMany.mock.calls[0][0].where;
     expect(where.type).toBe('REEL');
-    expect(where.deletedAt).toBeNull();
+    // MongoDB: live posts have NO `deletedAt` key — match on isSet, not null.
+    expect(where.deletedAt).toEqual({ isSet: false });
     expect(where.AND).toEqual(
       expect.arrayContaining([{ authorId: { not: 'user-1' } }])
     );
@@ -643,5 +644,39 @@ describe('PostFeedService.getReels', () => {
 
     expect(result.items).toHaveLength(1);
     expect((result.items[0] as any).id).toBe('r-1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression — MongoDB soft-delete matcher (deletedAt isSet:false)
+//
+// Prisma's bare `{ deletedAt: null }` filter does NOT match MongoDB documents
+// where the field is ABSENT (Prisma omits unset optionals at insert time), so
+// it silently dropped every live post → feed / reels returned `data: []` in
+// production despite a full Post collection. The queries MUST match on
+// `isSet:false`. A mocked Prisma client cannot reproduce the query-engine
+// behaviour, so we assert the query SHAPE instead — the exact locus of the bug.
+// ---------------------------------------------------------------------------
+describe('PostFeedService — deletedAt soft-delete matcher (MongoDB isSet)', () => {
+  it('getFeed exclut les posts supprimés via { isSet: false }, jamais un null nu', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getFeed('user-1');
+
+    const where = mockPostFindMany.mock.calls[0][0].where;
+    expect(where.deletedAt).toEqual({ isSet: false });
+    expect(where.deletedAt).not.toBeNull();
+  });
+
+  it('getReels exclut les réels supprimés via { isSet: false }, jamais un null nu', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getReels('user-1');
+
+    const where = mockPostFindMany.mock.calls[0][0].where;
+    expect(where.deletedAt).toEqual({ isSet: false });
+    expect(where.deletedAt).not.toBeNull();
   });
 });
