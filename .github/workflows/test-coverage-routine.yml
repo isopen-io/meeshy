@@ -1,0 +1,103 @@
+# Autonomous test-coverage routine.
+#
+# Every 5 hours, launches a fresh Claude Code agent that executes the playbook in
+# tasks/test-coverage-routine/ROUTINE.md: it reads PROGRESS.md, picks the next slice,
+# writes tests TDD-style to 100% line+branch on the targeted modules, runs the reviewer
+# gate (REVIEWER.md), commits, updates the tracker, and pushes to the working branch.
+# It maintains a single PR; it never merges. A human reviews and merges.
+#
+# SETUP REQUIRED (one-time, by a maintainer):
+#   Add ONE of these repo secrets (Settings → Secrets and variables → Actions):
+#     - ANTHROPIC_API_KEY        (Anthropic API key), OR
+#     - CLAUDE_CODE_OAUTH_TOKEN  (Claude Code OAuth token, from `claude setup-token`)
+#   The default GITHUB_TOKEN is used for commits/PRs (permissions block below).
+#
+# Cadence is "best effort" cron — GitHub may delay scheduled runs under load. Trigger
+# manually anytime via the Actions tab (workflow_dispatch).
+
+name: Test Coverage Routine
+
+on:
+  schedule:
+    - cron: "0 */5 * * *"   # every 5 hours
+  workflow_dispatch:
+    inputs:
+      slice:
+        description: "Optional: force a specific slice (e.g. 'P0 Auth × gateway'). Blank = next in PROGRESS.md."
+        required: false
+        type: string
+
+# Never let two routine runs touch the branch at once. The PROGRESS.md ◐ marker is the
+# durable lock; this is the in-CI guard. Do NOT cancel in-progress — let a run finish its slice.
+concurrency:
+  group: test-coverage-routine
+  cancel-in-progress: false
+
+permissions:
+  contents: write          # commit + push to the working branch
+  pull-requests: write     # create/update the tracking PR
+  id-token: write
+
+env:
+  WORK_BRANCH: claude/test-coverage-analysis-8s1io1
+
+jobs:
+  routine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout working branch (full history for rebase)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.WORK_BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "meeshy-coverage-bot"
+          git config user.email "coverage-bot@users.noreply.github.com"
+
+      # Toolchains the agent may need to run suites. Kept light; the agent installs
+      # per-app deps for the slice it actually touches (see ROUTINE.md §Pre-flight).
+      - name: Setup Node + pnpm
+        uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - name: Setup uv (Python, for translator slices)
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Run the coverage routine
+        uses: anthropics/claude-code-action@v1
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        with:
+          # If you use an OAuth token instead of an API key, uncomment:
+          # claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            You are the autonomous test-coverage agent for this repository.
+
+            Read and follow EXACTLY: tasks/test-coverage-routine/ROUTINE.md
+            State / what to do next:        tasks/test-coverage-routine/PROGRESS.md
+            Reviewer rubric (mandatory gate): tasks/test-coverage-routine/REVIEWER.md
+
+            Mission for THIS run:
+            - Complete ONE slice (Sprint 0 items first, then the highest-priority ☐ cell).
+            - Forced slice (if provided): "${{ github.event.inputs.slice }}"
+            - Write tests TDD-style to 100% line+branch on the slice's targeted modules,
+              covering edge cases per the checklist.
+            - Pass the reviewer gate before committing.
+            - Update PROGRESS.md + append to RUNLOG.md, commit, push to ${{ env.WORK_BRANCH }},
+              and create/update the single tracking PR (never merge).
+            - Leave the repo green. Advance exactly one slice, then stop.
+
+            Hard rules: behavior over implementation; no tautological tests; never lower a
+            coverage floor or weaken a test to pass; never push to any branch other than
+            ${{ env.WORK_BRANCH }}; never commit secrets.
+          claude_args: >-
+            --max-turns 120
