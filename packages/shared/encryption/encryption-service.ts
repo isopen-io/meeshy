@@ -7,6 +7,7 @@
 
 import type {
   EncryptedPayload,
+  EncryptionMetadata,
   EncryptionMode,
   SignalKeyBundle,
 } from '../types/encryption.js';
@@ -497,7 +498,7 @@ export class SharedEncryptionService {
   async processReceivedMessage(message: {
     content: string;
     encryptedContent?: string | null;
-    encryptionMetadata?: any;
+    encryptionMetadata?: unknown;
   }): Promise<string> {
     // Check if message is encrypted
     if (!message.encryptedContent || !message.encryptionMetadata) {
@@ -524,7 +525,7 @@ export class SharedEncryptionService {
    */
   prepareForStorage(payload: EncryptedPayload): {
     encryptedContent: string;
-    encryptionMetadata: Record<string, any>;
+    encryptionMetadata: EncryptionMetadata;
   } {
     return prepareForStorage(payload);
   }

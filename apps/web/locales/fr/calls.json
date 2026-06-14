@@ -114,6 +114,18 @@
         "firefox": "Firefox : Cliquez sur l'icône caméra dans la barre d'adresse",
         "safari": "Safari : Allez dans Réglages Safari > Confidentialité > Caméra/Microphone"
       }
+    },
+    "incoming": {
+      "videoCall": "Appel vidéo",
+      "subtitle": "Appel entrant...",
+      "accept": "Accepter",
+      "decline": "Refuser",
+      "acceptLabel": "Accepter l'appel",
+      "declineLabel": "Refuser l'appel"
+    },
+    "waiting": {
+      "forParticipant": "En attente du participant...",
+      "noVideo": "Pas de vidéo"
     }
   }
 }

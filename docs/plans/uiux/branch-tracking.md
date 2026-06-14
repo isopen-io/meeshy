@@ -16,15 +16,24 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | **49i** (iOS only : solde le différé 48i « SDK MeeshyUI — ancienne palette ». Migration du chrome SDK trio `08D9D6`/`FF2E63`/`4ECDC4` + accent pourpre `A855F7` vers `MeeshyColors` sur 29 fichiers — Auth (AuthTextField/LanguageSelector/MeeshyForgotPasswordView→brandPrimary), Community (unification indigo complète ; quitter/requis→error ; public toggle→success ; presetColors documenté), Primitives (EmojiReactionPicker/LanguagePickerSheet→brandPrimary, NotificationBadge→error, ConversationSettingsView Modérateur→success, EmptyStateView/ChatBubble défauts→brandPrimaryHex, UserIdentityBar→brandPrimary), UserProfileSheet débloquer→[success,successDeep], Media/Location défauts accentColor ×19→brandPrimaryHex, VoiceProfile ×4→brandPrimaryHex ; commentaires d'intention sur MeeshyAvatar story ring + NotificationListView ladder. Documentés intentionnels NON migrés : palettes de contenu/swatches utilisateur (Story/Community presetColors), affordance story ring Instagram, ladder catégoriel notifications, speakerPalette, TagInputView, filtres .vivid, previews #DEBUG, modèles SDK core testés) |
-| Last merged PR | #628 (main HEAD) ; iter-48i mergé ; iter-49i sur `claude/upbeat-euler-c48142` |
-| Last Merged Base (commit) | 2c65d379 (merge #628) — base de la branche iter-49i |
-| Next iteration | **50** — repartir de `main` HEAD post-merge iter-49i |
+| Last completed iteration (iOS) | **49i** (iOS only : solde le différé 48i « SDK MeeshyUI — ancienne palette ». Migration du chrome SDK trio `08D9D6`/`FF2E63`/`4ECDC4` + accent pourpre `A855F7` vers `MeeshyColors` sur 29 fichiers — Auth (AuthTextField/LanguageSelector/MeeshyForgotPasswordView→brandPrimary), Community (unification indigo complète ; quitter/requis→error ; public toggle→success ; presetColors documenté), Primitives (EmojiReactionPicker/LanguagePickerSheet→brandPrimary, NotificationBadge→error, ConversationSettingsView Modérateur→success, EmptyStateView/ChatBubble défauts→brandPrimaryHex, UserIdentityBar→brandPrimary), UserProfileSheet débloquer→[success,successDeep], Media/Location défauts accentColor ×19→brandPrimaryHex, VoiceProfile ×4→brandPrimaryHex ; commentaires d'intention sur MeeshyAvatar story ring + NotificationListView ladder ; + i18n label a11y `userIdentity.translation.available`. Documentés intentionnels NON migrés : palettes de contenu/swatches utilisateur (Story/Community presetColors), affordance story ring Instagram, ladder catégoriel notifications, speakerPalette, TagInputView, filtres .vivid, previews #DEBUG, modèles SDK core testés) |
+| Last completed iteration (web) | **49wb** (web only : surface admin Ranking i18n — (1) **bug critique** réparé : préfixe namespace cassé `admin.ranking.*` → `ranking.*` sur 13 libellés de `RankingFilters` qui affichaient les **clés brutes** dans toutes les langues ; (2) 33 labels `RANKING_CRITERIA` FR durs → clés `ranking.criteria.*` ×4 locales (champ `label` supprimé de `constants.ts`, helper `criterionLabelKey`) ; (3) 7 chaînes FR dures `LinkRankCard` → i18n ; (4) fichier de test ranking mort réanimé → 30/30 verts). **Note** : numérotée `49wb` car un autre agent a livré en parallèle une `49w` distincte (i18n+dark mode appel vidéo — `CallNotification`/`VideoCallInterface`, déjà mergée) ; périmètres disjoints, les deux conservées. |
+| Last merged PR | #610 (47w), #605 (46w) ; iter-48i #617 ; iter-49w (appel vidéo) `claude/eager-keller-e6eq78` (mergée) ; iter-49wb (ranking) `claude/focused-brown-uxa19f` ⏳ ; iter-49i `claude/upbeat-euler-c48142` ⏳ (PR #630) |
+| Last Merged Base (commit) | `c9417ebc` (main HEAD post-49w) — base re-synchronisée pour iter-49i (PR #630) |
+| Next iteration | **50** — repartir de `main` HEAD post-merge iter-49i / iter-49wb |
 
-### Deferred carry-over — web (pour 49+)
+### Deferred carry-over — web (pour 50+)
+- **NOUVEAU (repéré 49w appel-vidéo, hors cluster appel entrant)** : fallbacks anglais dans `t()` —
+  `video-calls/AudioEffectsCarousel.tsx` (`'Audio Effects'`/`'Customize your voice'`/
+  `'Click on an effect to configure it'`), `AudioEffectsPanel.tsx` (`'Select playback mode'`) ;
+  FR durs `audio/AudioEffectsTimeline.tsx:61`, `audio/AudioControls.tsx:238` (« Voix clonée »),
+  `v2/GhostBadge.tsx:29`, `common/PrintButton.tsx` (label défaut « Imprimer ») ;
+  a11y `v2/PostCard.tsx:255` `alt={m.alt ?? ''}` → fallback `m.fileName`.
 - ~~chart hex sans variante dark (RankingStatsImpl/MermaidDiagramImpl/AgentOverviewTab)~~ → **SOLDÉ en 48w** (ne plus auditer ces 3 fichiers pour le dark mode)
+- ~~`RANKING_CRITERIA` labels FR durs (`ranking/constants.ts`)~~ → **SOLDÉ en 49wb** (champ `label` supprimé, i18n `ranking.criteria.*` ; ne plus re-flagger ces 33 labels ni le préfixe `admin.ranking.*` de RankingFilters — corrigé)
+- **NOUVEAU (49wb)** : `getTypeLabel`/`getMessageTypeIcon` (`ranking/utils.tsx`) renvoient `Groupe`/`Publique` FR durs — à i18n dans une passe dédiée (codes de type de conversation, possible réutilisation hors ranking)
+- **NOUVEAU (49wb)** : tests web touchant `stores` (ex. `__tests__/admin/ranking/page.test.tsx`) échouent en env-local sur la résolution `@meeshy/shared/encryption` (`.js` en source TS) — config jest / mock chaîne, non bloquant (`continue-on-error` job web CI), à corriger isolément
 - retrait dépendance orpheline `next-themes` de `apps/web/package.json` (zéro import restant post-48w ; touche `pnpm-lock.yaml` — à faire isolément)
-- `RANKING_CRITERIA` labels dans `components/admin/ranking/constants.ts` — probablement FR durs (tooltip charts), à auditer
 - consolidation `notifications/preferences` page vs composant
 - réactions par pièce jointe (wiring gateway, feature commune web+Android)
 - audit qualité es/pt (relecture des traductions existantes)
@@ -38,7 +47,7 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 - ~~SampleData.swift + reliquats ancienne palette app~~ → **SOLDÉ en 48i** (ne plus auditer le trio `08D9D6|FF2E63|4ECDC4` côté `apps/ios` ; seul reliquat intentionnel : StoryViewerView+Content:180 = filtre artistique « cool »)
 - ~~SDK MeeshyUI chrome ancienne palette (trio + A855F7) : Auth/Community/EmojiReactionPicker/LanguagePickerSheet/NotificationBadge/EmptyStateView/UserIdentityBar/ConversationSettingsView/UserProfileSheet/Media/Location/VoiceProfile défauts~~ → **SOLDÉ en 49i** (ne plus auditer le chrome `MeeshyUI` pour le trio/A855F7). Reliquats documentés **intentionnels** (NE PAS re-flagger) : MeeshyAvatar story ring (affordance Instagram), NotificationListView.color (ladder catégoriel), MediaTypes.speakerPalette, StoryFilter .vivid, Story swatches (DrawingEditToolOptions/StoryComposerView/StoryTextEditorView), CommunitySettings presetColors, TagInputView palette, StatsCard/AchievementBadge previews #DEBUG, modèles SDK core (testés)
 - **Ladder catégoriel arc-en-ciel — UNE décision charte (app + SDK)** : NotificationListView.color (11 cat.), TagInputView, speakerPalette, + app-side UniversalComposerBar/toolbars feed (emoji/doc) + prepareVideo défaut FF6B6B (FF9F43/45B7D1/2ECC71/F8B500/9B59B6/E74C3C/FF6B6B). Arbitrer « catégoriel = identité hue-codée OU charte indigo ? »
-- `UserIdentityBar` `accessibilityLabel("Traduction disponible")` FR brut (clé i18n SDK `.module`)
+- ~~`UserIdentityBar` `accessibilityLabel("Traduction disponible")` FR brut~~ → **SOLDÉ 49i** (clé `userIdentity.translation.available`, 5 locales)
 - FriendRequestListView 11 polices ; PostDetailView (.textSelection + 21 hex — re-vérifié OK iter-45, retirer si confirmé) ; arbitrage `time.*` (FeedPostCard) vs `time.short.*` (ShortRelativeTime) ; ConversationInfoSheet (52 polices), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (27), NewConversationView (16), DataExportView (16), DataStorageView (11) ; washes AudioPostComposer (décision design) ; TrackingLinksView Color(hex:) ; IncomingCallView .white contraste ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) ; ThemedConversationRow theme-aware (leaf-view)
 
 ### Deferred carry-over — Android (pour 46+)
@@ -82,5 +91,7 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 45 | claude/blissful-ritchie-dp7ibu | #597 | ✅ |
 | 46w | claude/elegant-noether-09t4x2 | #605 | ✅ |
 | 47w | claude/blissful-ritchie-8d57jg | #610 | ✅ |
-| 48i | claude/wizardly-rubin-ph295e | (merged) | ✅ |
-| 49i | claude/upbeat-euler-c48142 | ⏳ | ⏳ |
+| 48i | claude/wizardly-rubin-ph295e | #617 | ✅ |
+| 49w | claude/eager-keller-e6eq78 (appel vidéo) | ✅ | ✅ |
+| 49wb | claude/focused-brown-uxa19f (admin ranking) | ⏳ | ⏳ |
+| 49i | claude/upbeat-euler-c48142 (SDK MeeshyUI palette) | #630 | ⏳ |

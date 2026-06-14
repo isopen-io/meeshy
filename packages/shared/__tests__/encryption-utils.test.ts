@@ -316,6 +316,23 @@ describe('validateMetadata', () => {
     expect(validateMetadata(123)).toBe(false);
     expect(validateMetadata([])).toBe(false);
   });
+
+  it('should return a strict boolean false (not nullish) for nullish input', () => {
+    expect(validateMetadata(null)).toBe(false);
+    expect(validateMetadata(undefined)).toBe(false);
+  });
+
+  it('should return false when a required field has a non-string type', () => {
+    const metadata = {
+      mode: 'server',
+      protocol: 'aes-256-gcm',
+      keyId: 123,
+      iv: 'abc',
+      authTag: 'def',
+    };
+
+    expect(validateMetadata(metadata)).toBe(false);
+  });
 });
 
 describe('prepareForStorage', () => {
