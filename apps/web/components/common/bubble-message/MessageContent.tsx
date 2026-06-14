@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Check, CornerUpRight } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { MarkdownMessage } from '@/components/messages/MarkdownMessage';
+import { ExpandableMessageText } from './ExpandableMessageText';
 import { MessageReactions } from '@/components/common/message-reactions';
 import { MessageReplyPreview } from './MessageReplyPreview';
 import { useMessageReadStatus, useReadStatusSummary } from '@/stores/conversation-ui-store';
@@ -161,7 +161,7 @@ export const MessageContent = memo(function MessageContent({
                 transition={{ duration: 0.2 }}
                 style={{ position: 'relative', zIndex: 1 }}
               >
-                <MarkdownMessage
+                <ExpandableMessageText
                   content={displayContentWithMentions}
                   className={cn(
                     "text-sm sm:text-base break-words",
@@ -169,9 +169,7 @@ export const MessageContent = memo(function MessageContent({
                       ? "text-white [&_code]:bg-white/15 [&_code]:text-white/95 [&_pre]:bg-white/10 [&_a]:text-indigo-200 [&_a]:underline"
                       : "text-gray-800 dark:text-gray-100 [&_a]:text-indigo-500 [&_a]:dark:text-indigo-400"
                   )}
-                  enableTracking={true}
                   isOwnMessage={isOwnMessage}
-                  onLinkClick={() => {}}
                 />
               </motion.div>
             </AnimatePresence>

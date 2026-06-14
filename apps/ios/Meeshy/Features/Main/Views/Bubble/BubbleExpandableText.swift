@@ -2,7 +2,7 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Texte de bulle avec troncature "show more / show less" gere localement.
+/// Texte de bulle avec troncature « Voir plus » (depliage a sens unique) gere localement.
 ///
 /// Was: ThemedMessageBubble.expandableTextView (lignes 771-819) +
 /// `textTruncateLimit` (ligne 761) + `truncateAtWord` (lignes 859-864).
@@ -55,27 +55,27 @@ struct BubbleExpandableText: View, Equatable {
                     .tint(linkTint)
                     .textSelection(.enabled)
 
+                // Bouton texte « Voir plus » aligné en bas à droite (spec produit).
                 // Hit-area élargie via `.frame(minHeight: 28).contentShape(Rectangle())`
-                // pour rester au-dessus du minimum thumb-friendly (24pt) sans grossir
-                // visuellement l'icône. `.buttonStyle(.plain)` est OBLIGATOIRE pour
-                // que le tap survive au `.simultaneousGesture(LongPressGesture(0.35))`
-                // que `BubbleSwipeContainer` pose sur la bulle — sans lui le default
-                // style entre en arbitrage avec le long-press parent et le tap est
-                // souvent avalé.
+                // pour rester au-dessus du minimum thumb-friendly (24pt).
+                // `.buttonStyle(.plain)` est OBLIGATOIRE pour que le tap survive au
+                // `.simultaneousGesture(LongPressGesture(0.35))` que `BubbleSwipeContainer`
+                // pose sur la bulle — sans lui le default style entre en arbitrage avec
+                // le long-press parent et le tap est souvent avalé.
                 Button {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         isExpanded = true
                     }
                 } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
+                    Text(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(textColor.opacity(0.6))
-                        .frame(maxWidth: .infinity, minHeight: 28, alignment: .center)
+                        .frame(maxWidth: .infinity, minHeight: 28, alignment: .trailing)
                         .padding(.top, 2)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "bubble.expand.show", defaultValue: "Show full message", bundle: .main))
+                .accessibilityLabel(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
             }
         } else {
             // Déplié (ou court) : on affiche le message COMPLET sans aucun
