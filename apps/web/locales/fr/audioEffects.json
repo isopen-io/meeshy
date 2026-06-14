@@ -342,7 +342,10 @@
         "totalActiveTime": "Temps total avec effets",
         "activations": "Activations",
         "parameterChanges": "Modifications"
-      }
+      },
+      "segment": "segment",
+      "segments": "segments",
+      "noSegment": "Aucun segment"
     },
     "badge": {
       "hasEffects": "Effets audio",
@@ -358,7 +361,8 @@
       "scrollLeft": "Défiler vers la gauche",
       "scrollRight": "Défiler vers la droite"
     },
-    "closePanel": "Fermer le panneau d'effets audio"
+    "closePanel": "Fermer le panneau d'effets audio",
+    "clonedVoice": "Voix clonée"
   },
   "microphone": {
     "noMicDetected": "Aucun microphone détecté.",

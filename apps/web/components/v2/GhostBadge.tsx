@@ -1,5 +1,7 @@
 'use client';
 
+import { useI18n } from '@/hooks/useI18n';
+
 export interface GhostBadgeProps {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
@@ -7,6 +9,7 @@ export interface GhostBadgeProps {
 }
 
 export function GhostBadge({ size = 'sm', className = '', showBackground = true }: GhostBadgeProps) {
+  const { t } = useI18n('common');
   const sizeConfig = {
     sm: { container: 'w-4 h-4', icon: 'w-3 h-3' },
     md: { container: 'w-5 h-5', icon: 'w-3.5 h-3.5' },
@@ -26,7 +29,7 @@ export function GhostBadge({ size = 'sm', className = '', showBackground = true 
         background: showBackground ? 'var(--gp-surface)' : 'transparent',
         border: showBackground ? '1.5px solid var(--gp-text-muted)' : 'none',
       }}
-      title="Utilisateur anonyme"
+      title={t('anonymousUser', 'Utilisateur anonyme')}
     >
       <GhostIcon className={config.icon} />
     </div>

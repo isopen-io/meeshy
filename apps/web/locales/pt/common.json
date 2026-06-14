@@ -271,7 +271,8 @@
     },
     "postPlaceholder": "No que você está pensando?",
     "captionPlaceholder": "Adicione uma legenda (opcional)...",
-    "quotePlaceholder": "Adicione seus pensamentos..."
+    "quotePlaceholder": "Adicione seus pensamentos...",
+    "anonymousUser": "Usuário anônimo"
   },
   "copied": "Copiado",
   "never": "Nunca"
