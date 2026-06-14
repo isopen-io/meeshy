@@ -91,8 +91,8 @@ export function AudioEffectsCarousel({
             <span className="text-lg">🎭</span>
           </div>
           <div>
-            <h3 className="text-white text-sm font-bold">{t('title') || 'Audio Effects'}</h3>
-            <p className="text-gray-400 text-[10px]">{t('subtitle') || 'Customize your voice'}</p>
+            <h3 className="text-white text-sm font-bold">{t('title', 'Audio Effects')}</h3>
+            <p className="text-gray-400 text-[10px]">{t('subtitle', 'Customize your voice')}</p>
           </div>
         </div>
 
@@ -148,7 +148,7 @@ export function AudioEffectsCarousel({
         currentPreset={currentPreset}
         availablePresets={availablePresets}
         availableBackSounds={availableBackSounds}
-        emptyMessage={t('selectEffectPrompt') || 'Click on an effect to configure it'}
+        emptyMessage={t('selectEffectPrompt', 'Click on an effect to configure it')}
       />
     </div>
   );

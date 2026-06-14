@@ -271,7 +271,8 @@
     },
     "postPlaceholder": "Qu'est-ce qui te passe par la tête ?",
     "captionPlaceholder": "Ajoute une légende (optionnel)...",
-    "quotePlaceholder": "Ajoute ton commentaire..."
+    "quotePlaceholder": "Ajoute ton commentaire...",
+    "anonymousUser": "Utilisateur anonyme"
   },
   "copied": "Copié",
   "never": "Jamais"

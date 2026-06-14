@@ -212,7 +212,8 @@
       "bookmark": "Bookmark",
       "removeBookmark": "Remove bookmark",
       "translate": "Translate",
-      "translatePost": "Translate post"
+      "translatePost": "Translate post",
+      "imageAlt": "Image {index}"
     },
     "videoPlayer": {
       "play": "Play",

@@ -471,7 +471,7 @@ export function AudioEffectsPanel({
             <div>
               <LabelWithTooltip
                 label={t("backSound.loopMode.label")}
-                tooltip={t("backSound.loopMode.tooltip") || "Select playback mode"}
+                tooltip={t("backSound.loopMode.tooltip", "Select playback mode")}
               />
               <Select
                 value={effectsState.backSound.params.loopMode}
