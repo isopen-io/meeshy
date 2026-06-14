@@ -280,10 +280,18 @@ public struct APITextTranslation: Decodable, Identifiable, Sendable {
 /// Métadonnées enrichies de la story citée — renvoyées par le gateway dans
 /// `GET /messages` quand le message répond à une story. `nil` si la story a
 /// été supprimée.
-public struct APIStoryReplyTarget: Decodable, Sendable {
+/// Snapshot figé du post cité (status/story/reel/post) dans une réponse —
+/// reçu via le champ `postReplyTo` (legacy : `storyReplyTo`). Survit à
+/// l'expiration du post car capturé au moment de la réponse.
+public struct APIPostReplyTarget: Decodable, Sendable {
     public let id: String
+    /// Type du post cité ("STATUS" | "STORY" | "POST" | "REEL"), figé dans le
+    /// snapshot. Optionnel pour compat avec les payloads legacy.
+    public let type: String?
     public let reactionCount: Int
     public let commentCount: Int
+    /// Nombre de partages de la story, figé au moment de la réponse.
+    public let shareCount: Int
     public let createdAt: Date
     public let thumbnailUrl: String?
     public let previewText: String
@@ -292,7 +300,7 @@ public struct APIStoryReplyTarget: Decodable, Sendable {
     public let moodEmoji: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, reactionCount, commentCount, createdAt, thumbnailUrl, previewText, moodEmoji
+        case id, type, reactionCount, commentCount, shareCount, createdAt, thumbnailUrl, previewText, moodEmoji
     }
 
     nonisolated(unsafe) private static let isoFractional: ISO8601DateFormatter = {
@@ -305,8 +313,10 @@ public struct APIStoryReplyTarget: Decodable, Sendable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
+        type = try c.decodeIfPresent(String.self, forKey: .type)
         reactionCount = try c.decode(Int.self, forKey: .reactionCount)
         commentCount = try c.decode(Int.self, forKey: .commentCount)
+        shareCount = try c.decodeIfPresent(Int.self, forKey: .shareCount) ?? 0
         thumbnailUrl = try c.decodeIfPresent(String.self, forKey: .thumbnailUrl)
         previewText = try c.decode(String.self, forKey: .previewText)
         moodEmoji = try c.decodeIfPresent(String.self, forKey: .moodEmoji)
@@ -341,7 +351,8 @@ public struct APIMessage: Sendable {
     public var isDeleted: Bool { deletedAt != nil }
     public let replyToId: String?
     public let storyReplyToId: String?
-    public let storyReplyTo: APIStoryReplyTarget?
+    /// Snapshot figé du post cité (reçu via `postReplyTo`, legacy `storyReplyTo`).
+    public let postReplyTo: APIPostReplyTarget?
     public let forwardedFromId: String?
     public let forwardedFromConversationId: String?
     public let pinnedAt: String?
@@ -377,7 +388,7 @@ extension APIMessage: Decodable {
     private enum CodingKeys: String, CodingKey {
         case id, clientMessageId, conversationId, senderId, content, originalLanguage
         case messageType, messageSource, isEdited, deletedAt
-        case replyToId, storyReplyToId, storyReplyTo, forwardedFromId, forwardedFromConversationId
+        case replyToId, storyReplyToId, postReplyTo, storyReplyTo, forwardedFromId, forwardedFromConversationId
         case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt
         case isEncrypted, encryptionMode, createdAt, updatedAt
         case sender, attachments, replyTo, forwardedFrom, forwardedFromConversation
@@ -408,7 +419,10 @@ extension APIMessage: Decodable {
         deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
         replyToId = try c.decodeIfPresent(String.self, forKey: .replyToId)
         storyReplyToId = try c.decodeIfPresent(String.self, forKey: .storyReplyToId)
-        storyReplyTo = try c.decodeIfPresent(APIStoryReplyTarget.self, forKey: .storyReplyTo)
+        // Champ moderne `postReplyTo` ; fallback `storyReplyTo` pour les
+        // payloads legacy (messages écrits avant le renommage).
+        postReplyTo = try c.decodeIfPresent(APIPostReplyTarget.self, forKey: .postReplyTo)
+            ?? c.decodeIfPresent(APIPostReplyTarget.self, forKey: .storyReplyTo)
         forwardedFromId = try c.decodeIfPresent(String.self, forKey: .forwardedFromId)
         forwardedFromConversationId = try c.decodeIfPresent(String.self, forKey: .forwardedFromConversationId)
         pinnedAt = try c.decodeIfPresent(String.self, forKey: .pinnedAt)
@@ -586,10 +600,10 @@ extension APIMessage {
                     attachmentThumbnailUrl: firstAtt?.thumbnailUrl
                 )
             }
-            // Enriched story-reply target (thumbnail + reaction/comment
-            // counts + publish date) — lets the quoted-reply citation show
-            // the real story preview instead of a bare "Story" placeholder.
-            if let target = storyReplyTo {
+            // Snapshot figé du post cité (vignette + compteurs like/commentaire/
+            // partage + date, ou emoji+contenu+date pour un mood) — la citation
+            // affiche le vrai aperçu et survit à l'expiration du post.
+            if let target = postReplyTo {
                 // Réponse à un mood : rendu dédié (emoji + contenu + date).
                 if let emoji = target.moodEmoji {
                     return ReplyReference(
@@ -607,6 +621,7 @@ extension APIMessage {
                     storyPublishedAt: target.createdAt,
                     storyReactionCount: target.reactionCount,
                     storyCommentCount: target.commentCount,
+                    storyShareCount: target.shareCount,
                     storyThumbnailUrl: target.thumbnailUrl
                 )
             }

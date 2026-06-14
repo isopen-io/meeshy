@@ -1306,9 +1306,10 @@ public actor MessagePersistenceActor {
                 let reactionsJson: Data? = uiReactions.isEmpty ? nil : try? encoder.encode(uiReactions)
 
                 let replyToJson: Data? = {
-                    // Réponse à une story : le gateway enrichit `storyReplyTo`.
-                    // On construit un ReplyReference riche pour BubbleStoryReplyPreview.
-                    if let story = api.storyReplyTo {
+                    // Réponse à un post : snapshot figé `postReplyTo` (survit à
+                    // l'expiration). On construit un ReplyReference riche pour la
+                    // citation (mood : emoji+contenu+date ; story : aperçu+compteurs).
+                    if let story = api.postReplyTo {
                         let trimmed = story.previewText.trimmingCharacters(in: .whitespacesAndNewlines)
                         // Réponse à un mood : rendu dédié (emoji + contenu + date).
                         if let emoji = story.moodEmoji {
@@ -1332,6 +1333,7 @@ public actor MessagePersistenceActor {
                             storyPublishedAt: story.createdAt,
                             storyReactionCount: story.reactionCount,
                             storyCommentCount: story.commentCount,
+                            storyShareCount: story.shareCount,
                             storyThumbnailUrl: story.thumbnailUrl
                         )
                         return try? encoder.encode(ref)

@@ -1104,6 +1104,8 @@ public struct ReplyReference: Codable, Sendable {
     public var storyPublishedAt: Date?
     public var storyReactionCount: Int?
     public var storyCommentCount: Int?
+    /// Nombre de partages de la story, figé au moment de la réponse.
+    public var storyShareCount: Int?
     public var storyThumbnailUrl: String?
     /// Emoji de l'humeur citée. Non-nil ⇒ cette réponse cite un mood/statut
     /// (rendu dédié : emoji + contenu + date) plutôt qu'une story générique.
@@ -1111,7 +1113,7 @@ public struct ReplyReference: Codable, Sendable {
     public var moodEmoji: String?
 
     public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, attachmentType: String? = nil, attachmentThumbnailUrl: String? = nil, isStoryReply: Bool = false,
-                storyPublishedAt: Date? = nil, storyReactionCount: Int? = nil, storyCommentCount: Int? = nil, storyThumbnailUrl: String? = nil, moodEmoji: String? = nil) {
+                storyPublishedAt: Date? = nil, storyReactionCount: Int? = nil, storyCommentCount: Int? = nil, storyShareCount: Int? = nil, storyThumbnailUrl: String? = nil, moodEmoji: String? = nil) {
         self.messageId = messageId
         self.authorName = authorName
         self.previewText = previewText
@@ -1123,6 +1125,7 @@ public struct ReplyReference: Codable, Sendable {
         self.storyPublishedAt = storyPublishedAt
         self.storyReactionCount = storyReactionCount
         self.storyCommentCount = storyCommentCount
+        self.storyShareCount = storyShareCount
         self.storyThumbnailUrl = storyThumbnailUrl
         self.moodEmoji = moodEmoji
     }

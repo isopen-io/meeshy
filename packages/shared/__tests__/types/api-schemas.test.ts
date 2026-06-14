@@ -23,16 +23,19 @@ describe('messageSchema — clientMessageId reconciliation key', () => {
   })
 })
 
-describe('messageSchema — storyReplyTo enriched cited-story object', () => {
-  it('declares storyReplyTo so Fastify does not strip the enriched story metadata', () => {
-    expect(messageSchema.properties).toHaveProperty('storyReplyTo')
+describe('messageSchema — postReplyTo cited-post snapshot', () => {
+  it('declares postReplyTo so Fastify does not strip the frozen post snapshot', () => {
+    expect(messageSchema.properties).toHaveProperty('postReplyTo')
   })
 
-  it('exposes the cited-story detail fields', () => {
+  it('exposes the cited-post detail fields (incl. type, shareCount, moodEmoji)', () => {
     const prop = (messageSchema.properties as Record<string, { properties?: Record<string, unknown> }>)
-      .storyReplyTo
+      .postReplyTo
     expect(prop.properties).toBeDefined()
-    for (const field of ['id', 'reactionCount', 'commentCount', 'createdAt', 'thumbnailUrl', 'previewText']) {
+    for (const field of [
+      'id', 'type', 'reactionCount', 'commentCount', 'shareCount',
+      'createdAt', 'thumbnailUrl', 'previewText', 'moodEmoji',
+    ]) {
       expect(prop.properties).toHaveProperty(field)
     }
   })

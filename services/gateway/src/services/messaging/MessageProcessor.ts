@@ -16,6 +16,11 @@ import { AttachmentService } from '../attachments';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { shouldProcessAudioAttachment } from '../../utils/transcription';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+import {
+  buildPostReplyTo,
+  POST_REPLY_SNAPSHOT_SELECT,
+  type PostReplyTo,
+} from './postReplySnapshot';
 
 // Logger dédié pour MessageProcessor
 const logger = enhancedLogger.child({ module: 'MessageProcessor' });
@@ -365,6 +370,16 @@ export class MessageProcessor {
     if (data.expiresAt && !(effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL)) effectFlags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
     if (data.isViewOnce && !(effectFlags & MESSAGE_EFFECT_FLAGS.VIEW_ONCE)) effectFlags |= MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
 
+    // Réponse à un post (status/story/reel/post) : GELER un snapshot du post
+    // cité MAINTENANT, pendant qu'il existe encore. Sans ça, à l'expiration
+    // (STATUS 1h / STORY 21h) la résolution live de `storyReplyToId` renvoie
+    // null et la citation perd contenu + emoji mood + date + compteurs +
+    // vignette. Le snapshot est rangé dans `metadata.postReplyTo` — réutilise
+    // le champ `metadata Json?` existant (pas de colonne dédiée).
+    const postReplyTo = data.storyReplyToId
+      ? await this.capturePostReplyTo(data.storyReplyToId)
+      : null;
+
     // ÉTAPE 3: Créer le message avec le contenu traité et encryption.
     //
     // Phase 4 §6.2 — INSERT direct + catch P2002 atomique. Le findUnique
@@ -382,6 +397,7 @@ export class MessageProcessor {
       messageSource: data.messageSource || 'user',
       replyToId: data.replyToId,
       storyReplyToId: data.storyReplyToId || null,
+      ...(postReplyTo ? { metadata: { postReplyTo } } : {}),
       forwardedFromId: data.forwardedFromId,
       forwardedFromConversationId: data.forwardedFromConversationId,
       isEncrypted: encryptionContext.isEncrypted,
@@ -1125,6 +1141,25 @@ export class MessageProcessor {
         }));
     } catch {
       return [];
+    }
+  }
+
+  /**
+   * Gèle un snapshot du post cité (`metadata.postReplyTo`) au moment de la
+   * réponse. Best-effort : en cas d'échec ou de post introuvable, retourne null
+   * (l'enrichissement GET retombe sur la résolution live de `storyReplyToId`).
+   */
+  private async capturePostReplyTo(postId: string): Promise<PostReplyTo | null> {
+    try {
+      const post = await this.prisma.post.findUnique({
+        where: { id: postId },
+        select: POST_REPLY_SNAPSHOT_SELECT,
+      });
+      if (!post) return null;
+      return buildPostReplyTo(post);
+    } catch (error) {
+      enhancedLogger.warn('capturePostReplyTo failed', { postId, error });
+      return null;
     }
   }
 }

@@ -314,9 +314,9 @@ final class MessageModelsTests: XCTestCase {
         XCTAssertTrue(contact.emails.isEmpty)
     }
 
-    // MARK: - APIMessage.storyReplyTo
+    // MARK: - APIMessage.postReplyTo (snapshot figé du post cité)
 
-    func test_apiMessage_decodesStoryReplyTo() throws {
+    func test_apiMessage_decodesPostReplyTo_story_withShareCount() throws {
         let json = """
         {
           "id": "msg_1",
@@ -325,10 +325,12 @@ final class MessageModelsTests: XCTestCase {
           "createdAt": "2026-05-19T10:00:00Z",
           "updatedAt": "2026-05-19T10:00:00Z",
           "storyReplyToId": "story_42",
-          "storyReplyTo": {
+          "postReplyTo": {
             "id": "story_42",
+            "type": "STORY",
             "reactionCount": 12,
             "commentCount": 3,
+            "shareCount": 4,
             "createdAt": "2026-05-18T08:00:00.000Z",
             "thumbnailUrl": "https://cdn.example/s42.jpg",
             "previewText": "Ma story du matin"
@@ -338,11 +340,59 @@ final class MessageModelsTests: XCTestCase {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let message = try decoder.decode(APIMessage.self, from: Data(json.utf8))
-        let story = try XCTUnwrap(message.storyReplyTo)
-        XCTAssertEqual(story.id, "story_42")
-        XCTAssertEqual(story.reactionCount, 12)
-        XCTAssertEqual(story.commentCount, 3)
-        XCTAssertEqual(story.thumbnailUrl, "https://cdn.example/s42.jpg")
-        XCTAssertEqual(story.previewText, "Ma story du matin")
+        let post = try XCTUnwrap(message.postReplyTo)
+        XCTAssertEqual(post.id, "story_42")
+        XCTAssertEqual(post.type, "STORY")
+        XCTAssertEqual(post.reactionCount, 12)
+        XCTAssertEqual(post.commentCount, 3)
+        XCTAssertEqual(post.shareCount, 4)
+        XCTAssertEqual(post.thumbnailUrl, "https://cdn.example/s42.jpg")
+        XCTAssertEqual(post.previewText, "Ma story du matin")
+        XCTAssertNil(post.moodEmoji)
+    }
+
+    func test_apiMessage_decodesPostReplyTo_status_mood() throws {
+        let json = """
+        {
+          "id": "msg_2", "conversationId": "c", "senderId": "s",
+          "createdAt": "2026-05-19T10:00:00Z", "updatedAt": "2026-05-19T10:00:00Z",
+          "storyReplyToId": "status_7",
+          "postReplyTo": {
+            "id": "status_7", "type": "STATUS",
+            "reactionCount": 0, "commentCount": 0, "shareCount": 0,
+            "createdAt": "2026-05-18T08:00:00.000Z",
+            "previewText": "en forme", "moodEmoji": "😴"
+          }
+        }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let message = try decoder.decode(APIMessage.self, from: Data(json.utf8))
+        let post = try XCTUnwrap(message.postReplyTo)
+        XCTAssertEqual(post.type, "STATUS")
+        XCTAssertEqual(post.moodEmoji, "😴")
+        XCTAssertEqual(post.previewText, "en forme")
+    }
+
+    func test_apiMessage_decodesLegacyStoryReplyTo_key() throws {
+        // Payload legacy (clé `storyReplyTo`, sans type/shareCount) → fallback.
+        let json = """
+        {
+          "id": "msg_3", "conversationId": "c", "senderId": "s",
+          "createdAt": "2026-05-19T10:00:00Z", "updatedAt": "2026-05-19T10:00:00Z",
+          "storyReplyToId": "story_9",
+          "storyReplyTo": {
+            "id": "story_9", "reactionCount": 1, "commentCount": 0,
+            "createdAt": "2026-05-18T08:00:00.000Z", "previewText": "legacy"
+          }
+        }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let message = try decoder.decode(APIMessage.self, from: Data(json.utf8))
+        let post = try XCTUnwrap(message.postReplyTo)
+        XCTAssertEqual(post.id, "story_9")
+        XCTAssertEqual(post.previewText, "legacy")
+        XCTAssertEqual(post.shareCount, 0) // défaut quand absent
     }
 }
