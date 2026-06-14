@@ -519,33 +519,41 @@ private struct ReelVideoView: View {
 
     @ViewBuilder
     private func content(ready: Bool) -> some View {
-        ZStack {
-            ReelPoster(thumbHash: media.thumbHash, url: media.thumbnailUrl ?? media.url, color: media.thumbnailColor)
+        // GeometryReader reports the REAL finite allocated size; an explicit
+        // `.frame(width:height:)` from it pins the video surface to the screen.
+        // A layer-backed `UIViewRepresentable` otherwise reports the video's
+        // aspect-fill intrinsic width (e.g. 1561pt for 16:9) and `.frame(maxWidth:
+        // .infinity)` does NOT clamp it — that inflated the page ZStack to the
+        // video width and pushed the action rail / info / scrub bar off-screen.
+        GeometryReader { geo in
+            ZStack {
+                ReelPoster(thumbHash: media.thumbHash, url: media.thumbnailUrl ?? media.url, color: media.thumbnailColor)
 
-            // Tap-to-pause is handled by the page-level tap zone (ReelPageView),
-            // so this surface stays gesture-free to avoid swallowing scrub/rail
-            // touches.
-            if isActive, ready, isShowingThis, let player = manager.player {
-                // `ReelVideoSurface.sizeThatFits` pins the surface to the proposed
-                // (screen) size so it never reports the video's aspect-fill
-                // intrinsic width (e.g. 1561pt for 16:9), which would inflate the
-                // ZStack and push the info overlay / action rail / scrub off-screen.
-                ReelVideoSurface(player: player)
-                    .ignoresSafeArea()
-            } else if isActive, !ready {
-                ProgressView()
-                    .tint(.white)
+                // Tap-to-pause is handled by the page-level tap zone (ReelPageView),
+                // so this surface stays gesture-free to avoid swallowing scrub/rail
+                // touches.
+                if isActive, ready, isShowingThis, let player = manager.player {
+                    ReelVideoSurface(player: player)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                } else if isActive, !ready {
+                    ProgressView()
+                        .tint(.white)
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
+            .onAppear { drive(ready: ready) }
+            .adaptiveOnChange(of: isActive) { _, _ in drive(ready: ready) }
+            .adaptiveOnChange(of: ready) { _, _ in drive(ready: ready) }
+            .adaptiveOnChange(of: revealCompleted) { _, _ in drive(ready: ready) }
+            .onDisappear {
+                // Releasing only when this page actually owns the engine avoids
+                // tearing down the next reel that has already loaded during paging.
+                if isShowingThis { manager.stop() }
             }
         }
-        .onAppear { drive(ready: ready) }
-        .adaptiveOnChange(of: isActive) { _, _ in drive(ready: ready) }
-        .adaptiveOnChange(of: ready) { _, _ in drive(ready: ready) }
-        .adaptiveOnChange(of: revealCompleted) { _, _ in drive(ready: ready) }
-        .onDisappear {
-            // Releasing only when this page actually owns the engine avoids
-            // tearing down the next reel that has already loaded during paging.
-            if isShowingThis { manager.stop() }
-        }
+        .ignoresSafeArea()
     }
 
     private func drive(ready: Bool) {
