@@ -2,6 +2,11 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import { authorSelect, postInclude } from './posts/postIncludes';
+import {
+  reelAffinityScore,
+  type ReelAffinityContext,
+  type ReelSeed,
+} from './posts/reelAffinity';
 import type { CacheStore } from './CacheStore';
 
 const FEED_SOCIAL_CACHE_TTL = 300; // 5 min — friend lists change infrequently
@@ -343,6 +348,215 @@ export class PostFeedService {
       : null;
 
     return { items, nextCursor, hasMore };
+  }
+
+  /**
+   * Thread Reels plein écran à scroll vertical continu.
+   *
+   * Déclenché quand l'utilisateur touche un réel dans le Feed : `seedReelId`
+   * est ce réel, et le thread est classé par AFFINITÉ au seed (même auteur,
+   * langue, @mentions communes) + affinité utilisateur (contacts, langues
+   * lues) + popularité/fraîcheur, en faisant couler les réels déjà vus.
+   * Sans seed (onglet Reels « Pour toi ») : affinité utilisateur seule.
+   *
+   * Le scoring vit dans `reelAffinityScore` (pur, testable) — point d'insertion
+   * du moteur de reco/monétisation (watch-time via `PostView.duration`,
+   * filtrage collaboratif, embeddings). Le contrat de pagination (curseur
+   * opaque createdAt+id) reste stable quand le moteur remplacera le scoring.
+   * Le retrieval reste chronologique (pool récent) : limite assumée de la
+   * fondation, à upgrader avec le moteur.
+   */
+  async getReels(
+    userId: string,
+    opts: { seedReelId?: string; cursor?: string; limit?: number } = {}
+  ) {
+    const { seedReelId, cursor, limit = 20 } = opts;
+    const candidatePoolSize = Math.min(limit * 4, 120);
+    const cursorData = cursor ? decodeCursor(cursor) : null;
+
+    const [friendIds, dmContactIds, viewerLanguages, seed] = await Promise.all([
+      this.getFriendIds(userId),
+      this.getDirectConversationContactIds(userId),
+      this.getViewerLanguages(userId),
+      seedReelId ? this.getReelSeed(seedReelId) : Promise.resolve(null),
+    ]);
+    const contactIds = new Set([...friendIds, ...dmContactIds]);
+    const visibilityFilter = this.buildVisibilityFilter(userId, [...contactIds]);
+
+    const andClauses: any[] = [
+      visibilityFilter,
+      // Thread de découverte : pas les réels de l'utilisateur lui-même.
+      { authorId: { not: userId } },
+    ];
+    // Le seed est déjà affiché par le client (point d'entrée du thread).
+    if (seedReelId) andClauses.push({ id: { not: seedReelId } });
+    if (cursorData) {
+      andClauses.push({
+        OR: [
+          { createdAt: { lt: new Date(cursorData.createdAt) } },
+          { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
+        ],
+      });
+    }
+
+    const candidates = await this.prisma.post.findMany({
+      where: { deletedAt: null, type: PostType.REEL, AND: andClauses },
+      include: feedPostInclude,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: candidatePoolSize,
+    });
+
+    if (candidates.length === 0) {
+      return { items: [], nextCursor: null, hasMore: false };
+    }
+
+    const candidateIds = candidates.map((c) => c.id);
+    const [seenReelIds, mentionsByPost] = await Promise.all([
+      this.getSeenPostIds(userId, candidateIds),
+      this.getMentionsByPost(candidateIds),
+    ]);
+
+    const ctx: ReelAffinityContext = {
+      nowMs: Date.now(),
+      viewerId: userId,
+      contactIds,
+      viewerLanguages,
+      seenReelIds,
+      seed,
+    };
+
+    const scored = candidates
+      .map((post) => ({
+        post,
+        score: reelAffinityScore(
+          {
+            id: post.id,
+            authorId: post.authorId,
+            originalLanguage: (post as any).originalLanguage ?? null,
+            createdAt: post.createdAt,
+            likeCount: post.likeCount ?? 0,
+            commentCount: post.commentCount ?? 0,
+            repostCount: post.repostCount ?? 0,
+            bookmarkCount: post.bookmarkCount ?? 0,
+            viewCount: post.viewCount ?? 0,
+            mentionedUserIds: mentionsByPost.get(post.id) ?? [],
+          },
+          ctx
+        ),
+      }))
+      .sort((a, b) => b.score - a.score);
+
+    const top = scored.slice(0, limit + 1);
+    const hasMore = top.length > limit;
+    const items = hasMore ? top.slice(0, limit) : top;
+    const lastItem = items[items.length - 1];
+    const nextCursor = hasMore && lastItem
+      ? encodeCursor(lastItem.post.createdAt, lastItem.post.id)
+      : null;
+
+    return {
+      items: await this.enrichReelsForViewer(items.map((s) => s.post), userId),
+      nextCursor,
+      hasMore,
+    };
+  }
+
+  /** Enrichit des réels avec l'état viewer (réactions + like). */
+  private async enrichReelsForViewer(items: any[], viewerUserId: string) {
+    if (items.length === 0) return [];
+    const postIds = items.map((p) => p.id);
+    const userReactions = await this.prisma.postReaction.findMany({
+      where: { userId: viewerUserId, postId: { in: postIds } },
+      select: { postId: true, emoji: true },
+    });
+    const userReactionsMap = new Map<string, string[]>();
+    for (const r of userReactions) {
+      const list = userReactionsMap.get(r.postId) ?? [];
+      list.push(r.emoji);
+      userReactionsMap.set(r.postId, list);
+    }
+    return items.map((p) => ({
+      ...this.enrichWithLikeStatus(p, viewerUserId),
+      currentUserReactions: userReactionsMap.get(p.id) ?? [],
+    }));
+  }
+
+  /** Langues que l'utilisateur lit (Prisme Linguistique). Best-effort. */
+  private async getViewerLanguages(userId: string): Promise<Set<string>> {
+    try {
+      const u = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          systemLanguage: true,
+          regionalLanguage: true,
+          customDestinationLanguage: true,
+        },
+      });
+      const langs = [u?.systemLanguage, u?.regionalLanguage, u?.customDestinationLanguage]
+        .filter((l): l is string => !!l && l.trim() !== '');
+      return new Set(langs);
+    } catch {
+      return new Set();
+    }
+  }
+
+  /** Métadonnées du réel touché (auteur, langue, @mentions) pour la similitude. */
+  private async getReelSeed(seedReelId: string): Promise<ReelSeed | null> {
+    try {
+      const [reel, mentions] = await Promise.all([
+        this.prisma.post.findUnique({
+          where: { id: seedReelId },
+          select: { id: true, authorId: true, originalLanguage: true },
+        }),
+        this.prisma.postMention.findMany({
+          where: { postId: seedReelId },
+          select: { mentionedUserId: true },
+        }),
+      ]);
+      if (!reel) return null;
+      return {
+        id: reel.id,
+        authorId: reel.authorId,
+        originalLanguage: reel.originalLanguage ?? null,
+        mentionedUserIds: new Set(mentions.map((m) => m.mentionedUserId)),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Réels déjà vus parmi un ensemble de candidats. Best-effort. */
+  private async getSeenPostIds(userId: string, postIds: string[]): Promise<Set<string>> {
+    if (postIds.length === 0) return new Set();
+    try {
+      const views = await this.prisma.postView.findMany({
+        where: { userId, postId: { in: postIds } },
+        select: { postId: true },
+      });
+      return new Set(views.map((v) => v.postId));
+    } catch {
+      return new Set();
+    }
+  }
+
+  /** @mentions par post pour un ensemble de candidats. Best-effort. */
+  private async getMentionsByPost(postIds: string[]): Promise<Map<string, string[]>> {
+    const map = new Map<string, string[]>();
+    if (postIds.length === 0) return map;
+    try {
+      const mentions = await this.prisma.postMention.findMany({
+        where: { postId: { in: postIds } },
+        select: { postId: true, mentionedUserId: true },
+      });
+      for (const m of mentions) {
+        const list = map.get(m.postId) ?? [];
+        list.push(m.mentionedUserId);
+        map.set(m.postId, list);
+      }
+      return map;
+    } catch {
+      return map;
+    }
   }
 
   async getUserPosts(targetUserId: string, viewerUserId: string | undefined, cursor?: string, limit: number = 20) {
