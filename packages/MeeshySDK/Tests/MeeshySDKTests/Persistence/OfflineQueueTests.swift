@@ -443,8 +443,16 @@ final class OfflineQueueTests: XCTestCase {
     }
 
     func test_cancelCreatePost_deletesRow_soRecoveryReturnsNil() async throws {
-        try await enqueueCreatePost(cmid: "cmid_cancel", content: "doomed", type: "STATUS")
-        await queue.cancelCreatePost(clientMutationId: "cmid_cancel")
+        // The cancel→recovery contract keys on the outbox row id `ofqm_<cmid>`,
+        // which `enqueue` derives from the payload's `clientMutationId` ONLY when
+        // that cmid passes `ClientMutationId.isValid` (strict `cmid_<uuid v4>`).
+        // A human-readable literal like "cmid_cancel" fails validation, so enqueue
+        // mints a fresh cmid for the row id and cancel-by-literal misses the row.
+        // All production callers use `ClientMutationId.generate()`, so the test
+        // must too — otherwise it exercises a path that cannot occur in prod.
+        let cmid = ClientMutationId.generate()
+        try await enqueueCreatePost(cmid: cmid, content: "doomed", type: "STATUS")
+        await queue.cancelCreatePost(clientMutationId: cmid)
         let recovered = await queue.recoverLastUnsentPost(matchingTypes: ["STATUS"], olderThan: 0)
         XCTAssertNil(recovered, "a superseded row must not be recoverable")
     }
