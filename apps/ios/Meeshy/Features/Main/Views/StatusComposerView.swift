@@ -45,6 +45,10 @@ struct StatusComposerView: View {
     @State private var selectedVisibility: StatusVisibility = .public
     @State private var selectedUserIds: [String] = []
     @State private var didApplyInitialValues = false
+    /// `clientMutationId` of a mood recovered from the offline queue (pre-filled
+    /// as a draft). Set when the composer opens onto a stuck unsent mood; the
+    /// re-send supersedes this row so the resend replaces it (no duplicate).
+    @State private var recoveredCmid: String?
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 5)
 
@@ -103,6 +107,18 @@ struct StatusComposerView: View {
                 didApplyInitialValues = true
                 if let emoji = initialEmoji { selectedEmoji = emoji }
                 if let text = initialText { statusText = text }
+                // Draft recovery: only for a fresh compose (not a repost or a
+                // caller-prefilled mood). Pre-fill the last mood that got stuck
+                // offline so the user can re-send it instead of losing it.
+                if initialEmoji == nil, initialText == nil, viaUsername == nil {
+                    Task {
+                        guard let draft = await viewModel.recoverUnsentStatus() else { return }
+                        if selectedEmoji == nil, let emoji = draft.moodEmoji { selectedEmoji = emoji }
+                        if statusText.isEmpty { statusText = draft.content }
+                        if let vis = StatusVisibility(rawValue: draft.visibility) { selectedVisibility = vis }
+                        recoveredCmid = draft.clientMutationId
+                    }
+                }
             }
         }
     }
@@ -200,6 +216,12 @@ struct StatusComposerView: View {
             HapticFeedback.success()
 
             Task {
+                // Supersede the recovered stuck mood (if any) so re-sending it
+                // replaces the queued row instead of duplicating it on reconnect.
+                if let cmid = recoveredCmid {
+                    await viewModel.supersedeRecoveredStatus(clientMutationId: cmid)
+                    recoveredCmid = nil
+                }
                 await viewModel.setStatus(
                     emoji: emoji,
                     content: statusText.isEmpty ? nil : statusText,
