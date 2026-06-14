@@ -572,8 +572,9 @@ class FeedViewModel: ObservableObject {
 
     /// A post/reel is "stuck offline" (recoverable as a composer draft) once it
     /// has been unsent for longer than this — the "pas envoyé dans la minute →
-    /// offline" rule shared by every composer.
-    static let offlineStuckThreshold: TimeInterval = 60
+    /// offline" rule shared by every composer. `nonisolated` so it can be read
+    /// from any isolation (matches `SyncPillViewModel.staleInflightThreshold`).
+    nonisolated static let offlineStuckThreshold: TimeInterval = 60
 
     /// Returns the last POST/REEL that got stuck offline (unsent for more than
     /// `offlineStuckThreshold`) so the feed composer can pre-fill it as a draft.

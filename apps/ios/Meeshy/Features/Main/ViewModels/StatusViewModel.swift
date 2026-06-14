@@ -21,8 +21,9 @@ class StatusViewModel: ObservableObject {
 
     /// A mood is "stuck offline" (recoverable as a draft) once it has been
     /// unsent for longer than this — the "pas envoyé dans la minute → offline"
-    /// rule shared by every composer.
-    static let offlineStuckThreshold: TimeInterval = 60
+    /// rule shared by every composer. `nonisolated` so it can be read from any
+    /// isolation (matches `SyncPillViewModel.staleInflightThreshold`).
+    nonisolated static let offlineStuckThreshold: TimeInterval = 60
 
     // Cursor pagination
     private var nextCursor: String?
