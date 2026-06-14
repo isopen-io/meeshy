@@ -455,7 +455,8 @@ describe('Social Notification Methods', () => {
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
       expect(createArg.data.type).toBe('post_repost');
       expect(createArg.data.priority).toBe('normal');
-      expect(createArg.data.content).toContain('repost');
+      // Body is the FR repost phrase « a partagé <noun> » (no English "repost").
+      expect(createArg.data.content).toContain('partagé');
     });
 
     it('should include repostId and originalPostId in metadata', async () => {
