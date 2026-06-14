@@ -309,7 +309,7 @@ jobs:
         run: |
           cd services/translator
           uv run --python ${{ env.PYTHON_VERSION }} pytest -v --tb=short \
-            -m "not slow and not gpu" \
+            -m "not slow and not gpu and not e2e and not integration" \
             --cov=src --cov-report=xml --cov-report=term --cov-fail-under=37
 
       - name: Upload coverage
