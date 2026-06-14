@@ -164,6 +164,13 @@ struct MeeshyApp: App {
                     // land before any view referencing PresenceManager.shared
                     // has been built, and PassthroughSubject would drop it.
                     _ = PresenceManager.shared
+                    // Start NWPathMonitor at the very top of boot so the splash
+                    // gating below can read a resolved `isOffline` (the keychain +
+                    // session work between here and the socket-wait gives the
+                    // initial path time to land). Without this early touch the
+                    // monitor would first start at the gate and still report the
+                    // optimistic `online` default, defeating the offline fast-path.
+                    _ = NetworkMonitor.shared
                     // Wire StoryOfflineQueue publish handler + network-reconnect
                     // flush. Idempotent — safe to call on every cold start.
                     StoryOfflineQueueBootstrap.shared.start()
@@ -359,7 +366,15 @@ struct MeeshyApp: App {
                         // on NE bloque PAS : ConversationListView a son
                         // skeleton (`loadState == .loading`) qui prend le
                         // relais et anime le chargement initial.
-                        if hasCachedContent {
+                        // Offline fast-path : when the device is confirmed offline
+                        // the sockets cannot handshake, so awaiting them only burns
+                        // the full `socketTimeout` (1.5s) of dead time behind the
+                        // splash. The cached list is ready — dismiss on the 1.0s
+                        // floor instead and let presences/unreads refresh once the
+                        // sockets land after reconnect. Only the optimistic `online`
+                        // default (path not yet resolved) or a real online path
+                        // takes the bounded wait.
+                        if hasCachedContent && !NetworkMonitor.shared.isOffline {
                             let remaining = maxSplashDuration - splashStart.duration(to: .now)
                             let bounded = min(socketTimeout, remaining)
                             if bounded > .zero {

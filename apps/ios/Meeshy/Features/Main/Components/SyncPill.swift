@@ -35,6 +35,27 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
     /// status rows (offline / reconnecting / syncing) — those swallow the
     /// tap as a manual advance instead.
     let source: OutboxUIItem.Source?
+    /// Whether the trailing animated ellipsis ("…") is shown. `true` only for
+    /// entries representing work actually in flight (sending, syncing,
+    /// reconnecting); `false` for terminal / static states (offline, online,
+    /// permanently failed) so a finished operation never reads as ongoing.
+    let showsActivityDots: Bool
+
+    init(
+        id: String,
+        label: String,
+        iconName: String?,
+        dotStyle: SyncPillDotStyle,
+        source: OutboxUIItem.Source?,
+        showsActivityDots: Bool = true
+    ) {
+        self.id = id
+        self.label = label
+        self.iconName = iconName
+        self.dotStyle = dotStyle
+        self.source = source
+        self.showsActivityDots = showsActivityDots
+    }
 }
 
 /// Inline rotating pill that lists every signal the user might care about
@@ -118,7 +139,7 @@ struct SyncPill: View {
     private var pillContent: some View {
         HStack(spacing: 6) {
             statusDot
-            Text((visibleEntry?.label ?? "") + animatedDots)
+            Text((visibleEntry?.label ?? "") + (visibleEntry?.showsActivityDots == true ? animatedDots : ""))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(isDark ? .white.opacity(0.7) : .primary.opacity(0.6))
                 .lineLimit(1)
