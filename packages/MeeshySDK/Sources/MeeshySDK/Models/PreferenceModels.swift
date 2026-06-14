@@ -429,9 +429,9 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         pushEnabled: true, emailEnabled: true, soundEnabled: true, vibrationEnabled: true,
         newMessageEnabled: true, missedCallEnabled: true, voicemailEnabled: true, systemEnabled: true,
         conversationEnabled: true, replyEnabled: true, mentionEnabled: true, reactionEnabled: true,
-        contactRequestEnabled: true, groupInviteEnabled: true, memberJoinedEnabled: true, memberLeftEnabled: false,
+        contactRequestEnabled: true, groupInviteEnabled: true, memberJoinedEnabled: true, memberLeftEnabled: true,
         postLikeEnabled: true, postCommentEnabled: true, postRepostEnabled: true, storyReactionEnabled: true,
-        commentReplyEnabled: true, commentLikeEnabled: false,
+        commentReplyEnabled: true, commentLikeEnabled: true,
         dndEnabled: false, dndStartTime: "22:00", dndEndTime: "08:00", dndDays: [],
         showPreview: true, showSenderName: true, groupNotifications: true, notificationBadgeEnabled: true,
         extras: [:]
@@ -442,9 +442,9 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         newMessageEnabled: Bool = true, missedCallEnabled: Bool = true, voicemailEnabled: Bool = true,
         systemEnabled: Bool = true, conversationEnabled: Bool = true, replyEnabled: Bool = true,
         mentionEnabled: Bool = true, reactionEnabled: Bool = true, contactRequestEnabled: Bool = true,
-        groupInviteEnabled: Bool = true, memberJoinedEnabled: Bool = true, memberLeftEnabled: Bool = false,
+        groupInviteEnabled: Bool = true, memberJoinedEnabled: Bool = true, memberLeftEnabled: Bool = true,
         postLikeEnabled: Bool = true, postCommentEnabled: Bool = true, postRepostEnabled: Bool = true,
-        storyReactionEnabled: Bool = true, commentReplyEnabled: Bool = true, commentLikeEnabled: Bool = false,
+        storyReactionEnabled: Bool = true, commentReplyEnabled: Bool = true, commentLikeEnabled: Bool = true,
         dndEnabled: Bool = false, dndStartTime: String = "22:00", dndEndTime: String = "08:00", dndDays: [DndDay] = [],
         showPreview: Bool = true, showSenderName: Bool = true, groupNotifications: Bool = true,
         notificationBadgeEnabled: Bool = true, extras: [String: CodableValue] = [:]

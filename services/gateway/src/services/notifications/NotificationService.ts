@@ -461,7 +461,7 @@ export class NotificationService {
       case 'post_repost':       return prefs.postRepostEnabled ?? true;
       case 'story_reaction':    return prefs.storyReactionEnabled ?? true;
       case 'status_reaction':   return prefs.storyReactionEnabled ?? true;
-      case 'comment_like':      return prefs.commentLikeEnabled ?? false;
+      case 'comment_like':      return prefs.commentLikeEnabled ?? true;
       case 'comment_reply':     return prefs.commentReplyEnabled ?? true;
       case 'story_new_comment':
       case 'friend_story_comment':
