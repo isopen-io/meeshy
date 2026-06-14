@@ -7,7 +7,7 @@ public struct VoiceProfileManageView: View {
     @StateObject private var viewModel = VoiceProfileManageViewModel()
     let accentColor: String
 
-    public init(accentColor: String = "A855F7") {
+    public init(accentColor: String = MeeshyColors.brandPrimaryHex) {
         self.accentColor = accentColor
     }
 

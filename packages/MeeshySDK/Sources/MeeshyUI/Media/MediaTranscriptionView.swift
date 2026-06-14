@@ -56,7 +56,7 @@ struct FlowLayout: Layout {
 public struct MediaTranscriptionView: View {
     public let segments: [TranscriptionDisplaySegment]
     public let currentTime: Double
-    public var accentColor: String = "08D9D6"
+    public var accentColor: String = MeeshyColors.brandPrimaryHex
     public var maxHeight: CGFloat = 200
     public var onSeek: ((Double) -> Void)? = nil
     /// BUG D fix — gate active-segment detection on the real playing state.
@@ -70,7 +70,7 @@ public struct MediaTranscriptionView: View {
     private var isDark: Bool { theme.mode.isDark }
 
     public init(segments: [TranscriptionDisplaySegment], currentTime: Double,
-                accentColor: String = "08D9D6", maxHeight: CGFloat = 200,
+                accentColor: String = MeeshyColors.brandPrimaryHex, maxHeight: CGFloat = 200,
                 isPlaying: Bool = true,
                 onSeek: ((Double) -> Void)? = nil) {
         self.segments = segments; self.currentTime = currentTime

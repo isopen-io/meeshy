@@ -220,9 +220,9 @@ public struct UserIdentityBar: View {
         case .translateButton(let action):
             Image(systemName: "translate")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(Color(hex: "4ECDC4"))
+                .foregroundColor(MeeshyColors.brandPrimary)
                 .onTapGesture { action() }
-                .accessibilityLabel("Traduction disponible")
+                .accessibilityLabel(String(localized: "userIdentity.translation.available", defaultValue: "Traduction disponible", bundle: .module))
 
         case .presence(let state):
             if state != .offline {

@@ -8,7 +8,7 @@ public struct CodeViewerView: View {
     public let attachment: MeeshyMessageAttachment
     public let language: CodeLanguage
     public let context: MediaPlayerContext
-    public var accentColor: String = "08D9D6"
+    public var accentColor: String = MeeshyColors.brandPrimaryHex
     public var onDelete: (() -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -22,7 +22,7 @@ public struct CodeViewerView: View {
     private var syntaxTheme: SyntaxTheme { .github(isDark: isDark) }
 
     public init(attachment: MeeshyMessageAttachment, language: CodeLanguage,
-                context: MediaPlayerContext, accentColor: String = "08D9D6",
+                context: MediaPlayerContext, accentColor: String = MeeshyColors.brandPrimaryHex,
                 onDelete: (() -> Void)? = nil) {
         self.attachment = attachment
         self.language = language

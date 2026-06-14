@@ -231,7 +231,7 @@ public struct LanguagePickerSheet: View {
             TextField(String(localized: "languagePicker.search", defaultValue: "Rechercher une langue…", bundle: .module), text: $searchText)
                 .font(.system(size: 15))
                 .foregroundColor(style == .dark ? .white : .primary)
-                .tint(Color(hex: "08D9D6"))
+                .tint(MeeshyColors.brandPrimary)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -263,7 +263,7 @@ public struct LanguagePickerSheet: View {
 
     private func languageCell(_ lang: TranslationLanguage) -> some View {
         let isSelected = selectedId == lang.id
-        let accent = Color(hex: "08D9D6")
+        let accent = MeeshyColors.brandPrimary
 
         return Button {
             HapticFeedback.medium()

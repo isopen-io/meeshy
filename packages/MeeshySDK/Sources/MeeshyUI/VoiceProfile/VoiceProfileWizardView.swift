@@ -8,7 +8,7 @@ public struct VoiceProfileWizardView: View {
     let accentColor: String
     let onComplete: (() -> Void)?
 
-    public init(accentColor: String = "A855F7", onComplete: (() -> Void)? = nil) {
+    public init(accentColor: String = MeeshyColors.brandPrimaryHex, onComplete: (() -> Void)? = nil) {
         self.accentColor = accentColor
         self.onComplete = onComplete
     }

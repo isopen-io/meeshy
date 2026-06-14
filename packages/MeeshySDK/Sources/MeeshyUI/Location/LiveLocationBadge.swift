@@ -9,7 +9,7 @@ public struct LiveLocationBadge: View {
 
     @State private var isPulsing = false
 
-    public init(username: String, remainingTime: TimeInterval, accentColor: String = "08D9D6", onStop: (() -> Void)? = nil) {
+    public init(username: String, remainingTime: TimeInterval, accentColor: String = MeeshyColors.brandPrimaryHex, onStop: (() -> Void)? = nil) {
         self.username = username; self.remainingTime = remainingTime
         self.accentColor = accentColor; self.onStop = onStop
     }
@@ -94,7 +94,7 @@ public struct LiveLocationDurationPicker: View {
     @Binding var selectedDuration: LiveLocationDuration
     let accentColor: String
 
-    public init(selectedDuration: Binding<LiveLocationDuration>, accentColor: String = "08D9D6") {
+    public init(selectedDuration: Binding<LiveLocationDuration>, accentColor: String = MeeshyColors.brandPrimaryHex) {
         self._selectedDuration = selectedDuration
         self.accentColor = accentColor
     }

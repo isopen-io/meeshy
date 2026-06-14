@@ -525,7 +525,7 @@ public struct NotificationBadge: View {
         if count > 0 {
             ZStack {
                 Circle()
-                    .fill(Color(hex: "FF2E63").opacity(isPulsing ? 0.4 : 1.0))
+                    .fill(MeeshyColors.error.opacity(isPulsing ? 0.4 : 1.0))
                     .frame(width: isPulsing ? 28 : 18, height: isPulsing ? 28 : 18)
 
                 Text("\(min(count, 99))")
@@ -534,8 +534,8 @@ public struct NotificationBadge: View {
                     .frame(width: 18, height: 18)
                     .background(
                         Circle()
-                            .fill(Color(hex: "FF2E63"))
-                            .shadow(color: Color(hex: "FF2E63").opacity(0.5), radius: 3)
+                            .fill(MeeshyColors.error)
+                            .shadow(color: MeeshyColors.error.opacity(0.5), radius: 3)
                     )
             }
             .offset(x: 16, y: -16)

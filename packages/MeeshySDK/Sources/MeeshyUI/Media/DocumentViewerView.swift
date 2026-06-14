@@ -8,7 +8,7 @@ import MeeshySDK
 public struct DocumentViewerView: View {
     public let attachment: MeeshyMessageAttachment
     public let context: MediaPlayerContext
-    public var accentColor: String = "08D9D6"
+    public var accentColor: String = MeeshyColors.brandPrimaryHex
     public var onDelete: (() -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -19,7 +19,7 @@ public struct DocumentViewerView: View {
     private var docType: DocumentMediaType { DocumentMediaType.detect(from: attachment) }
 
     public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
-                accentColor: String = "08D9D6", onDelete: (() -> Void)? = nil) {
+                accentColor: String = MeeshyColors.brandPrimaryHex, onDelete: (() -> Void)? = nil) {
         self.attachment = attachment; self.context = context
         self.accentColor = accentColor; self.onDelete = onDelete
     }

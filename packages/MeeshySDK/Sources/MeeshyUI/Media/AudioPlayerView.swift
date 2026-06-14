@@ -455,7 +455,7 @@ public struct AudioPlayerView: View {
     public let attachment: MeeshyMessageAttachment
     public let context: MediaPlayerContext
 
-    public var accentColor: String = "08D9D6"
+    public var accentColor: String = MeeshyColors.brandPrimaryHex
     public var transcription: MessageTranscription? = nil
     public var translatedAudios: [MessageTranslatedAudio] = []
 
@@ -587,7 +587,7 @@ public struct AudioPlayerView: View {
 
     public init<TopContent: View, BottomContent: View>(
         attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
-        accentColor: String = "08D9D6", transcription: MessageTranscription? = nil,
+        accentColor: String = MeeshyColors.brandPrimaryHex, transcription: MessageTranscription? = nil,
         translatedAudios: [MessageTranslatedAudio] = [],
         onFullscreen: (() -> Void)? = nil,
         onRequestTranscription: (() -> Void)? = nil,

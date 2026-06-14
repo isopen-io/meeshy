@@ -185,7 +185,7 @@ public struct CommunityCreateView: View {
                 if required {
                     Text("*")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(Color(hex: "FF2E63"))
+                        .foregroundColor(MeeshyColors.error)
                 }
             }
 
@@ -247,8 +247,8 @@ public struct CommunityCreateView: View {
                 .foregroundStyle(
                     LinearGradient(
                         colors: viewModel.isPrivate
-                            ? [Color(hex: "A855F7"), Color(hex: "6366F1")]
-                            : [Color(hex: "10B981"), Color(hex: "06B6D4")],
+                            ? [MeeshyColors.indigo500, MeeshyColors.indigo700]
+                            : [MeeshyColors.success, MeeshyColors.successDeep],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -267,7 +267,7 @@ public struct CommunityCreateView: View {
             Spacer()
 
             Toggle("", isOn: $viewModel.isPrivate)
-                .tint(Color(hex: "A855F7"))
+                .tint(MeeshyColors.brandPrimary)
                 .labelsHidden()
         }
         .padding(14)
@@ -324,7 +324,7 @@ public struct CommunityCreateView: View {
                 HStack {
                     Spacer()
                     ProgressView()
-                        .tint(Color(hex: "A855F7"))
+                        .tint(MeeshyColors.brandPrimary)
                     Spacer()
                 }
                 .padding(.vertical, 8)
@@ -358,7 +358,7 @@ public struct CommunityCreateView: View {
         .padding(.vertical, 6)
         .background(
             LinearGradient(
-                colors: [Color(hex: "FF2E63"), Color(hex: "A855F7")],
+                colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
                 startPoint: .leading,
                 endPoint: .trailing
             )
@@ -440,7 +440,7 @@ public struct CommunityCreateView: View {
             .background(
                 LinearGradient(
                     colors: viewModel.isValid
-                        ? [Color(hex: "FF2E63"), Color(hex: "A855F7")]
+                        ? [MeeshyColors.indigo500, MeeshyColors.indigo700]
                         : [Color.gray.opacity(0.4)],
                     startPoint: .leading,
                     endPoint: .trailing
@@ -448,7 +448,7 @@ public struct CommunityCreateView: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .shadow(
-                color: viewModel.isValid ? Color(hex: "FF2E63").opacity(0.3) : .clear,
+                color: viewModel.isValid ? MeeshyColors.brandPrimary.opacity(0.3) : .clear,
                 radius: 10, y: 4
             )
         }
