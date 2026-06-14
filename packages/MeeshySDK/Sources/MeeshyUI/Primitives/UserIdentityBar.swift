@@ -222,7 +222,7 @@ public struct UserIdentityBar: View {
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(MeeshyColors.brandPrimary)
                 .onTapGesture { action() }
-                .accessibilityLabel("Traduction disponible")
+                .accessibilityLabel(String(localized: "userIdentity.translation.available", defaultValue: "Traduction disponible", bundle: .module))
 
         case .presence(let state):
             if state != .offline {
