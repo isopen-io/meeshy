@@ -1538,8 +1538,14 @@ export function registerMessagesRoutes(
         return sendBadRequest(reply, result.error || 'Invalid message request');
       }
 
-      // Broadcaster via socket (async)
-      if (socketIOHandler && result.data) {
+      // Broadcaster via socket (async) — SAUF sur un dedup idempotent.
+      // Quand le même clientMessageId est renvoyé (ex: à la reconnexion, où
+      // l'outbox SQLite ET le retry en mémoire drainent le même message), le
+      // message existe déjà et a déjà été broadcasté au premier envoi. Re-broadcaster
+      // `message:new` est ce qui dupliquait la bulle chez l'expéditeur (course
+      // echo/reconcile) ET le récepteur. Le flag est posé in-process par
+      // MessageProcessor.saveMessage (cf. §6.2 idempotence).
+      if (socketIOHandler && result.data && !(result.data as { isDuplicate?: boolean }).isDuplicate) {
         const broadcastConvId = result.data.conversationId || conversationId;
         setImmediate(() => {
           socketIOHandler.broadcastMessage(result.data as any, broadcastConvId).catch((err: any) => {

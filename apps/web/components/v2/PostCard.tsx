@@ -247,12 +247,12 @@ function PostCard({
             className="mb-3 grid gap-1.5 rounded-xl overflow-hidden"
             style={{ gridTemplateColumns: media.length === 1 ? '1fr' : 'repeat(2, 1fr)' }}
           >
-            {media.slice(0, 4).map((m) => (
+            {media.slice(0, 4).map((m, i) => (
               <div key={m.id} className="relative bg-[var(--gp-parchment)] aspect-square overflow-hidden">
                 {m.mimeType.startsWith('image/') && (
                   <img
                     src={m.thumbnailUrl ?? m.fileUrl}
-                    alt={m.alt ?? ''}
+                    alt={m.alt ?? t('post.imageAlt', { index: String(i + 1) })}
                     className="w-full h-full object-cover"
                     loading="lazy"
                   />

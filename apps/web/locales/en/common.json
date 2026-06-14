@@ -271,7 +271,8 @@
     },
     "postPlaceholder": "What's on your mind?",
     "captionPlaceholder": "Add a caption (optional)...",
-    "quotePlaceholder": "Add your thoughts..."
+    "quotePlaceholder": "Add your thoughts...",
+    "anonymousUser": "Anonymous user"
   },
   "copied": "Copied",
   "never": "Never"

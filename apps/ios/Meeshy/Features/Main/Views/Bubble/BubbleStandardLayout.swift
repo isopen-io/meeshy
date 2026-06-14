@@ -230,6 +230,16 @@ struct BubbleStandardLayout: View {
         if let raw = content.text?.raw, raw.count > BubbleExpandableText.truncateLimit {
             return nil
         }
+        // Link-preview bubbles host a self-loading OG card whose height changes
+        // when metadata lands (skeleton → populated card with a 2-line title +
+        // description + thumbnail) WITHOUT any `BubbleContent` change —
+        // `firstLinkURL` is identical before and after the fetch, so the
+        // content-keyed cache would return the stale skeleton-era height and the
+        // populated card would overflow the bubble frame (the misalignment seen
+        // on device). Measure live, like expandable bubbles above.
+        if content.text?.firstLinkURL != nil {
+            return nil
+        }
         return BubbleHeightCacheContext(messageId: content.messageId, content: content)
     }
 
@@ -815,6 +825,15 @@ struct BubbleStandardLayout: View {
                 }
         }
 
+        // Edited badge — inline, directly BELOW the quoted reply (when present)
+        // and above the body. Was a `.topLeading` overlay offset by a hardcoded
+        // `reply ? 52` value that mis-fired whenever the quote was taller than
+        // 52pt (sender name + 2 preview lines), overlapping the quote. Inline
+        // placement tracks the real reply height with no magic numbers.
+        if content.editedAt != nil {
+            editedIndicator
+        }
+
         if hasBubbleBodyContent {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(nonMediaAttachments) { attachment in
@@ -861,7 +880,6 @@ struct BubbleStandardLayout: View {
 
     @ViewBuilder
     private var textBubbleContent: some View {
-        let hasEdited = content.editedAt != nil
         // Body + footer are stacked by `BubbleBodyFooterLayout`, not a plain
         // VStack. The footer carries a trailing Spacer — language flags on the
         // leading edge, timestamp + delivery check on the trailing edge. In a
@@ -887,14 +905,6 @@ struct BubbleStandardLayout: View {
             // est toujours adapté ici — le widget média qui héberge sa propre
             // citation gère son footer en interne (bottomSlot ou overlay).
             standardFooter
-        }
-        .padding(.top, hasEdited ? 12 : 0)
-        .overlay(alignment: .topLeading) {
-            if hasEdited {
-                editedIndicator
-                    .padding(.leading, 12)
-                    .padding(.top, 6 + (content.reply != nil ? 52 : 0))
-            }
         }
         // FAILED outgoing send — reserve a trailing strip and glue the retry
         // band INTO it as an integrated edge tab (clipped to the bubble's rounded

@@ -19,6 +19,8 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiConversationPreferences
+import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
@@ -153,6 +155,84 @@ class ConversationListViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.isUserRefreshing).isFalse()
+    }
+
+    @Test
+    fun selecting_a_filter_narrows_the_visible_list() = runTest(dispatcher) {
+        val convs = listOf(
+            ApiConversation(id = "read", title = "Read", unreadCount = 0),
+            ApiConversation(id = "unread", title = "Unread", unreadCount = 4),
+        )
+        val vm = viewModel(repositoryReturning(flowOf(CacheResult.Fresh(convs, ageMillis = 0))))
+        advanceUntilIdle()
+        assertThat(vm.state.value.conversations).hasSize(2)
+
+        vm.selectFilter(ConversationFilter.UNREAD)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.conversations.map { it.id }).containsExactly("unread")
+        assertThat(vm.state.value.selectedFilter).isEqualTo(ConversationFilter.UNREAD)
+    }
+
+    @Test
+    fun search_filters_by_title_and_flags_filtered_empty() = runTest(dispatcher) {
+        val convs = listOf(
+            ApiConversation(id = "a", title = "Design Team"),
+            ApiConversation(id = "b", title = "Operations"),
+        )
+        val vm = viewModel(repositoryReturning(flowOf(CacheResult.Fresh(convs, ageMillis = 0))))
+        advanceUntilIdle()
+
+        vm.setSearch("design")
+        advanceUntilIdle()
+        assertThat(vm.state.value.conversations.map { it.id }).containsExactly("a")
+
+        vm.setSearch("zzz")
+        advanceUntilIdle()
+        assertThat(vm.state.value.conversations).isEmpty()
+        assertThat(vm.state.value.isFilteredEmpty).isTrue()
+        assertThat(vm.state.value.showSkeleton).isFalse()
+    }
+
+    @Test
+    fun closing_search_clears_the_query_and_restores_the_list() = runTest(dispatcher) {
+        val convs = listOf(
+            ApiConversation(id = "a", title = "Design Team"),
+            ApiConversation(id = "b", title = "Operations"),
+        )
+        val vm = viewModel(repositoryReturning(flowOf(CacheResult.Fresh(convs, ageMillis = 0))))
+        advanceUntilIdle()
+
+        vm.setSearchActive(true)
+        vm.setSearch("design")
+        advanceUntilIdle()
+        assertThat(vm.state.value.conversations).hasSize(1)
+
+        vm.setSearchActive(false)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.searchText).isEmpty()
+        assertThat(vm.state.value.isSearchActive).isFalse()
+        assertThat(vm.state.value.conversations).hasSize(2)
+    }
+
+    @Test
+    fun archived_conversations_are_hidden_from_all_filter_but_shown_under_archived() = runTest(dispatcher) {
+        val convs = listOf(
+            ApiConversation(id = "live", title = "Live"),
+            ApiConversation(
+                id = "old",
+                title = "Old",
+                preferences = ApiConversationPreferences(isArchived = true),
+            ),
+        )
+        val vm = viewModel(repositoryReturning(flowOf(CacheResult.Fresh(convs, ageMillis = 0))))
+        advanceUntilIdle()
+        assertThat(vm.state.value.conversations.map { it.id }).containsExactly("live")
+
+        vm.selectFilter(ConversationFilter.ARCHIVED)
+        advanceUntilIdle()
+        assertThat(vm.state.value.conversations.map { it.id }).containsExactly("old")
     }
 
     @Test

@@ -4,10 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Printer } from 'lucide-react';
 
 interface PrintButtonProps {
-  label?: string;
+  label: string;
 }
 
-export function PrintButton({ label = 'Imprimer' }: PrintButtonProps) {
+export function PrintButton({ label }: PrintButtonProps) {
   const handlePrint = () => {
     window.print();
   };

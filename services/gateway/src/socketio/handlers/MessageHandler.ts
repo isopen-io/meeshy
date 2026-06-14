@@ -238,9 +238,12 @@ export class MessageHandler {
       // Répondre au client
       this._sendResponse(callback, response);
 
-      // Broadcaster le message si succès
+      // Broadcaster le message si succès — SAUF sur un dedup idempotent
+      // (même clientMessageId renvoyé). Le message existe déjà et a déjà été
+      // broadcasté au premier envoi ; re-broadcaster `message:new` duplique la
+      // bulle. Flag posé in-process par MessageProcessor.saveMessage.
       // response.data is already enriched (sender.user, attachments, replyTo) from saveMessage include
-      if (response.success && response.data) {
+      if (response.success && response.data && !(response.data as { isDuplicate?: boolean }).isDuplicate) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
         await performanceLogger.withTiming(
           'ws.broadcastNewMessage',
