@@ -15,7 +15,31 @@
  * @jest-environment node
  */
 
-import { buildPushHeader } from '../../../../services/notifications/NotificationService';
+import { buildPushHeader, conversationTypeIcon } from '../../../../services/notifications/NotificationService';
+
+describe('conversationTypeIcon — distinction visuelle du type de groupe', () => {
+  it('groupe privé → 👥 (communauté, PAS cadenas)', () => {
+    expect(conversationTypeIcon('group')).toBe('👥');
+  });
+  it('groupe public → 🌐', () => {
+    expect(conversationTypeIcon('public')).toBe('🌐');
+  });
+  it('général / broadcast → 📢', () => {
+    expect(conversationTypeIcon('global')).toBe('📢');
+    expect(conversationTypeIcon('broadcast')).toBe('📢');
+  });
+  it('direct / inconnu / vide → pas d\'icône', () => {
+    expect(conversationTypeIcon('direct')).toBe('');
+    expect(conversationTypeIcon('')).toBe('');
+    expect(conversationTypeIcon(null)).toBe('');
+    expect(conversationTypeIcon(undefined)).toBe('');
+  });
+  it('jamais le cadenas (réservé à un futur état verrouillé, évoque le chiffrement)', () => {
+    for (const t of ['group', 'public', 'global', 'broadcast']) {
+      expect(conversationTypeIcon(t)).not.toBe('🔒');
+    }
+  });
+});
 
 describe('buildPushHeader', () => {
   it('builds {title=sender, subtitle=conv} for a global conversation message', () => {
@@ -24,7 +48,7 @@ describe('buildPushHeader', () => {
       actor: { id: 'u1', username: 'meeshy', displayName: 'meeshy sama' },
       context: { conversationType: 'global', conversationTitle: 'Meeshy Global' },
     });
-    expect(result).toEqual({ title: 'meeshy sama', subtitle: 'Meeshy Global' });
+    expect(result).toEqual({ title: 'meeshy sama', subtitle: '📢 Meeshy Global' });
   });
 
   it('builds {title=sender, subtitle=conv} for a group conversation message', () => {
@@ -33,7 +57,7 @@ describe('buildPushHeader', () => {
       actor: { id: 'u1', username: 'alice', displayName: 'Alice Martin' },
       context: { conversationType: 'group', conversationTitle: 'Équipe Dev' },
     });
-    expect(result).toEqual({ title: 'Alice Martin', subtitle: 'Équipe Dev' });
+    expect(result).toEqual({ title: 'Alice Martin', subtitle: '👥 Équipe Dev' });
   });
 
   it('omits subtitle for direct messages (1-on-1)', () => {
@@ -63,14 +87,14 @@ describe('buildPushHeader', () => {
       actor: { id: 'u1', username: 'alice', displayName: 'Alice' },
       context: { conversationType: 'group', conversationTitle: 'Équipe Dev' },
     });
-    expect(reactionResult.subtitle).toBe('Équipe Dev');
+    expect(reactionResult.subtitle).toBe('👥 Équipe Dev');
 
     const mentionResult = buildPushHeader({
       type: 'user_mentioned',
       actor: { id: 'u1', username: 'alice', displayName: 'Alice' },
       context: { conversationType: 'global', conversationTitle: 'Meeshy Global' },
     });
-    expect(mentionResult.subtitle).toBe('Meeshy Global');
+    expect(mentionResult.subtitle).toBe('📢 Meeshy Global');
   });
 
   it('omits subtitle for group reactions/mentions in direct conversations', () => {
@@ -108,7 +132,7 @@ describe('buildPushHeader', () => {
       context: { conversationType: 'global', conversationTitle: 'Meeshy Global' },
     });
     expect(result.title).toBe('alice');
-    expect(result.subtitle).toBe('Meeshy Global');
+    expect(result.subtitle).toBe('📢 Meeshy Global');
   });
 
   it('falls back to "Meeshy" when no actor is provided', () => {

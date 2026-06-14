@@ -46,7 +46,7 @@ final class NotificationPayloadHelpersTests: XCTestCase {
             userInfo: userInfo
         )
 
-        XCTAssertEqual(result, "Mon groupe")
+        XCTAssertEqual(result, "👥 Mon groupe")
     }
 
     func test_preservedSubtitle_globalWithEmptySubtitle_returnsConversationTitle() {
@@ -61,7 +61,7 @@ final class NotificationPayloadHelpersTests: XCTestCase {
             userInfo: userInfo
         )
 
-        XCTAssertEqual(result, "Meeshy Global")
+        XCTAssertEqual(result, "📢 Meeshy Global")
     }
 
     func test_preservedSubtitle_whitespaceOnlySubtitle_returnsConversationTitle() {
@@ -76,7 +76,7 @@ final class NotificationPayloadHelpersTests: XCTestCase {
             userInfo: userInfo
         )
 
-        XCTAssertEqual(result, "Equipe Dev")
+        XCTAssertEqual(result, "👥 Equipe Dev")
     }
 
     func test_preservedSubtitle_directConversation_returnsNil() {
@@ -207,7 +207,61 @@ final class NotificationPayloadHelpersTests: XCTestCase {
             userInfo: userInfo
         )
 
-        XCTAssertEqual(result, "Equipe Dev")
+        // Le chemin fallback préfixe l'icône de type (cohérence avec le gateway).
+        XCTAssertEqual(result, "👥 Equipe Dev")
+    }
+
+    // MARK: - Icône de type de conversation
+
+    func test_conversationTypeIcon_distinguishesGroupTypes() {
+        XCTAssertEqual(NotificationPayloadHelpers.conversationTypeIcon("group"), "👥")
+        XCTAssertEqual(NotificationPayloadHelpers.conversationTypeIcon("public"), "🌐")
+        XCTAssertEqual(NotificationPayloadHelpers.conversationTypeIcon("global"), "📢")
+        XCTAssertEqual(NotificationPayloadHelpers.conversationTypeIcon("broadcast"), "📢")
+        XCTAssertEqual(NotificationPayloadHelpers.conversationTypeIcon("direct"), "")
+        XCTAssertEqual(NotificationPayloadHelpers.conversationTypeIcon(""), "")
+    }
+
+    func test_conversationTypeIcon_neverLock() {
+        // Le cadenas évoque le chiffrement — jamais utilisé pour le type.
+        for type in ["group", "public", "global", "broadcast"] {
+            XCTAssertNotEqual(NotificationPayloadHelpers.conversationTypeIcon(type), "🔒")
+        }
+    }
+
+    func test_composedSubtitle_usesCustomNameWhenPresent() {
+        // Renommage local de l'utilisateur prioritaire sur le titre canonique.
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "group",
+            conversationTitle: "Équipe Dev",
+            customName: "Ma team 💪"
+        )
+        XCTAssertEqual(result, "👥 Ma team 💪")
+    }
+
+    func test_composedSubtitle_fallsBackToCanonicalTitle_whenNoCustomName() {
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "public",
+            conversationTitle: "Annonces",
+            customName: nil
+        )
+        XCTAssertEqual(result, "🌐 Annonces")
+    }
+
+    func test_composedSubtitle_blankCustomName_fallsBackToCanonical() {
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "global",
+            conversationTitle: "Meeshy Global",
+            customName: "   "
+        )
+        XCTAssertEqual(result, "📢 Meeshy Global")
+    }
+
+    func test_composedSubtitle_directOrEmpty_returnsNil() {
+        XCTAssertNil(NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "direct", conversationTitle: "Alice", customName: nil))
+        XCTAssertNil(NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "group", conversationTitle: nil, customName: nil))
     }
 
     // MARK: - Bug B — audio body fallback

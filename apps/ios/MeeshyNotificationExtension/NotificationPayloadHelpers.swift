@@ -62,7 +62,9 @@ nonisolated enum NotificationPayloadHelpers {
 
         // 2. Legacy fallback: rebuild the group/global conversation name from
         //    userInfo for pushes whose alert subtitle never made it through
-        //    (e.g. E2EE payloads where only `data` survives).
+        //    (e.g. E2EE payloads where only `data` survives). On préfixe l'icône
+        //    de type pour rester cohérent avec le subtitle construit par le
+        //    gateway (qui préfixe déjà `conversationTypeIcon`).
         let conversationType = (userInfo["conversationType"] as? String) ?? ""
         let isGroupOrGlobal = !conversationType.isEmpty && conversationType != "direct"
         guard isGroupOrGlobal else { return nil }
@@ -70,7 +72,55 @@ nonisolated enum NotificationPayloadHelpers {
         let title = (userInfo["conversationTitle"] as? String) ?? ""
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        return trimmed
+        let icon = conversationTypeIcon(conversationType)
+        return icon.isEmpty ? trimmed : "\(icon) \(trimmed)"
+    }
+
+    /// Icône préfixant le nom d'une conversation de groupe dans une notification,
+    /// pour distinguer son type d'un coup d'œil :
+    ///   - groupe privé   (group)             → 👥  (communauté de personnes)
+    ///   - groupe public  (public)            → 🌐  (ouvert à tous)
+    ///   - général/broadcast (global, broadcast) → 📢
+    ///   - direct / inconnu                   → ""  (pas d'icône)
+    ///
+    /// Miroir exact du helper TS `conversationTypeIcon` côté gateway
+    /// (services/gateway/.../NotificationService.ts) — garder les deux en
+    /// lockstep. Le cadenas 🔒 est délibérément évité (évoque le chiffrement) ;
+    /// il sera réservé à un futur état « conversation verrouillée ».
+    nonisolated static func conversationTypeIcon(_ conversationType: String) -> String {
+        switch conversationType.trimmingCharacters(in: .whitespaces).lowercased() {
+        case "group":  return "👥"
+        case "public": return "🌐"
+        case "global", "broadcast": return "📢"
+        default: return ""
+        }
+    }
+
+    /// Compose le subtitle final d'une notification de conversation de groupe :
+    /// `<icône de type> <nom>`, où `nom` est le renommage local de l'utilisateur
+    /// (`customName`) s'il existe, sinon le titre canonique fourni par le
+    /// gateway. Retourne `nil` pour une conversation directe (pas de subtitle)
+    /// ou quand aucun nom n'est disponible.
+    ///
+    /// PUR et testable. `customName` est passé par l'appelant : le toast in-app
+    /// foreground (accès complet aux préférences) le fournit ; le NSE background
+    /// passe `nil` tant que les customNames ne sont pas miroirés dans l'App
+    /// Group (suivi).
+    nonisolated static func composedConversationSubtitle(
+        conversationType: String,
+        conversationTitle: String?,
+        customName: String?
+    ) -> String? {
+        let type = conversationType.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !type.isEmpty, type != "direct" else { return nil }
+
+        let custom = customName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let canonical = conversationTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = (custom?.isEmpty == false ? custom : canonical) ?? ""
+        guard !name.isEmpty else { return nil }
+
+        let icon = conversationTypeIcon(type)
+        return icon.isEmpty ? name : "\(icon) \(name)"
     }
 
     /// Returns a body fallback for an audio-only push when the current body
