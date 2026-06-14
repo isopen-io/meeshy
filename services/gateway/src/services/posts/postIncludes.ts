@@ -15,6 +15,23 @@
 
 import { Prisma } from '@meeshy/shared/prisma/client';
 
+/**
+ * MongoDB "live post" matcher for the `deletedAt` soft-delete column.
+ *
+ * Prisma's bare `{ deletedAt: null }` filter does NOT match documents where the
+ * field is ABSENT on MongoDB — Prisma omits unset optional fields at insert
+ * time, so every never-deleted Post stores no `deletedAt` key at all. The naive
+ * `null` filter then silently drops EVERY live post, which emptied the feed /
+ * reels / stories endpoints in production (all posts returned `data: []` while
+ * the collection was full).
+ *
+ * Match on the field being unset instead — the same `isSet:false` pattern used
+ * for `parentId` (commentsPreviewInclude below) and `expiresAt` (PostFeedService).
+ * Soft-deleted posts always carry a real `deletedAt` date (`isSet:true`) and so
+ * remain excluded.
+ */
+export const NOT_DELETED = { isSet: false };
+
 export const authorSelect = Prisma.validator<Prisma.UserSelect>()({
   id: true,
   username: true,
@@ -74,7 +91,7 @@ export const mediaInclude = Prisma.validator<Prisma.Post$mediaArgs>()({
  */
 export const commentsPreviewInclude = Prisma.validator<Prisma.Post$commentsArgs>()({
   where: {
-    deletedAt: null,
+    deletedAt: NOT_DELETED,
     OR: [{ parentId: null }, { parentId: { isSet: false } }],
   },
   select: {
