@@ -48,12 +48,22 @@ struct RootView: View {
     @ObservedObject private var notificationManager = NotificationToastManager.shared
     @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
     @Environment(\.colorScheme) private var systemColorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotionEnabled
     @State private var showFeed = false
     @State private var feedWasVisibleBeforeNav = false
     @State private var showMenu = false
     /// Drives the immersive reels overlay. A long-press on the feed button (or a
     /// tap on a reel card in the feed) sets `reelsPresenter.launch`.
     @ObservedObject private var reelsPresenter = ReelsPresenter.shared
+    /// Liquid "water wave" reveal of the reels overlay. `reelsRevealProgress`
+    /// drives the `LiquidRevealShape` mask 0→1 (open) / 1→0 (close) from the
+    /// feed button's on-screen position; `reelsRevealCompleted` flips true only
+    /// once the disc reaches full screen — the first reel video stays on its
+    /// poster (PAUSED) until then. `reelsRevealClosing` routes the reverse wave
+    /// before `reelsPresenter.dismiss()`.
+    @State private var reelsRevealProgress: Double = 0
+    @State private var reelsRevealCompleted = false
+    @State private var reelsRevealClosing = false
     /// Hoisted out of `@State` (Phase H) so deep-stack screens such as
     /// `StoryNotificationTargetScreen` can present the viewer through
     /// `.environmentObject` injection without threading a binding through
@@ -274,27 +284,30 @@ struct RootView: View {
                     .zIndex(50)
             }
 
-            // 3b. Reels overlay — full-screen immersive pager. Enters with an
-            // "agrandissement" (scale + opacity) so it reads as the feed button
-            // expanding into the reel rather than a sheet sliding up.
+            // 3b. Reels overlay — full-screen immersive pager. Born as a liquid
+            // disc at the feed button's exact on-screen position, the wavy edge
+            // expands until it covers the screen (`LiquidRevealShape`). The real
+            // first reel is masked from the small-disc state onward; its video
+            // stays on the poster (PAUSED) until `reelsRevealCompleted` fires at
+            // full screen. Close runs the reverse wave back toward the button.
             if let launch = reelsPresenter.launch {
-                ReelsPlayerView(
-                    seedPosts: launch.seedPosts,
-                    startId: launch.startId,
-                    onClose: {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                            reelsPresenter.dismiss()
-                        }
+                ReelsRevealContainer(
+                    revealProgress: reelsRevealProgress,
+                    feedButtonPositionRaw: feedButtonPosition,
+                    isSearchBarVisible: !isScrollingDown,
+                    reduceMotion: reduceMotionEnabled,
+                    content: {
+                        ReelsPlayerView(
+                            seedPosts: launch.seedPosts,
+                            startId: launch.startId,
+                            revealCompleted: reelsRevealCompleted,
+                            onClose: { closeReels() }
+                        )
                     }
                 )
                 .id(launch.id)
-                .transition(
-                    .asymmetric(
-                        insertion: .scale(scale: 0.82).combined(with: .opacity),
-                        removal: .scale(scale: 0.9).combined(with: .opacity)
-                    )
-                )
                 .zIndex(60)
+                .onAppear { openReels() }
             }
 
             // 4. Draggable Floating buttons (hidden while a reel is open so they
@@ -1276,15 +1289,55 @@ struct RootView: View {
         .ignoresSafeArea()
     }
 
+    // MARK: - Reels Liquid Reveal Orchestration
+
+    /// Opens the reels overlay: animate the wavy disc 0→1 from the feed button,
+    /// then flip `reelsRevealCompleted` (the signal that gates the first reel's
+    /// playback to full screen). Reduce Motion uses a quick cross-fade but still
+    /// gates play to completion.
+    private func openReels() {
+        reelsRevealCompleted = false
+        reelsRevealClosing = false
+        reelsRevealProgress = 0
+        let duration: Double = reduceMotionEnabled ? 0.22 : 0.55
+        withAnimation(.easeOut(duration: duration)) {
+            reelsRevealProgress = 1
+        }
+        // Gate playback on the disc reaching full screen. A timer mirrors the
+        // animation duration since `LiquidRevealShape` has no completion handler.
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+            guard reelsPresenter.launch != nil, !reelsRevealClosing else { return }
+            reelsRevealCompleted = true
+        }
+    }
+
+    /// Closes the reels overlay with the reverse wave: shrink the disc back
+    /// toward the feed button (1→0), THEN dismiss. Reduce Motion cross-fades.
+    private func closeReels() {
+        guard !reelsRevealClosing else { return }
+        reelsRevealClosing = true
+        reelsRevealCompleted = false
+        HapticFeedback.light()
+        let duration: Double = reduceMotionEnabled ? 0.2 : 0.42
+        withAnimation(.easeIn(duration: duration)) {
+            reelsRevealProgress = 0
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+            reelsPresenter.dismiss()
+            reelsRevealClosing = false
+        }
+    }
+
     // MARK: - Draggable Floating Buttons (Free Position)
     private var draggableFloatingButtons: some View {
         FreeFloatingButtonsContainer(
             leftPosition: $feedButtonPosition,
             rightPosition: $menuButtonPosition,
             onLeftTap: {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    showFeed.toggle()
-                }
+                HapticFeedback.light()
+                // Tap ouvre les Reels ; la vague liquide est pilotée par
+                // `openReels()` sur le `.onAppear` de l'overlay (pas de transition scale).
+                reelsPresenter.presentFresh()
             },
             onRightTap: {
                 if showMenu {
@@ -1300,8 +1353,9 @@ struct RootView: View {
             },
             onLeftLongPress: {
                 HapticFeedback.medium()
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                    reelsPresenter.presentFresh()
+                // Long-press ouvre l'overlay Feeds (le tap est réservé aux Reels).
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    showFeed.toggle()
                 }
             },
             onRightLongPress: {
@@ -1435,6 +1489,146 @@ extension View {
                     .delay(showMenu ? delay : 0),
                 value: showMenu
             )
+    }
+}
+
+// MARK: - Reels Liquid Reveal Container
+
+/// Masks the immersive reels view with a `LiquidRevealShape` (water-wave
+/// circular reveal) born at the feed button's exact on-screen position. The
+/// REAL first reel is visible inside the disc from the small-disc state onward
+/// (we mask the live view, not a placeholder). Under Reduce Motion the wavy
+/// mask is swapped for a plain cross-fade — still roughly honoring the origin.
+///
+/// Inlined alongside `RootView` so the file stays self-contained (no
+/// project.pbxproj entry for a separate component file).
+private struct ReelsRevealContainer<Content: View>: View {
+    let revealProgress: Double
+    /// Raw "x,y" (0-1 normalized) feed button position as persisted by RootView.
+    let feedButtonPositionRaw: String
+    /// Mirrors the floating-button container's search-bar flag — it selects the
+    /// bottom safe-zone used to place the button (and thus the reveal focus).
+    let isSearchBarVisible: Bool
+    let reduceMotion: Bool
+    @ViewBuilder let content: () -> Content
+
+    /// A continuously flowing phase so the liquid edge "ripples" while expanding.
+    @State private var wavePhase: Double = 0
+
+    var body: some View {
+        GeometryReader { geo in
+            let center = FeedButtonAnchor.unitPoint(
+                fromRaw: feedButtonPositionRaw,
+                screenSize: geo.size,
+                safeArea: geo.safeAreaInsets,
+                isSearchBarVisible: isSearchBarVisible
+            )
+
+            content()
+                .ignoresSafeArea()
+                .modifier(
+                    ReelsRevealMaskModifier(
+                        revealProgress: revealProgress,
+                        center: center,
+                        wavePhase: wavePhase,
+                        reduceMotion: reduceMotion
+                    )
+                )
+        }
+        .ignoresSafeArea()
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.linear(duration: 2.4).repeatForever(autoreverses: false)) {
+                wavePhase = 2 * .pi
+            }
+        }
+    }
+}
+
+/// Applies the reveal mask. Split out so the wavy-vs-fade branch reads cleanly.
+private struct ReelsRevealMaskModifier: ViewModifier {
+    let revealProgress: Double
+    let center: UnitPoint
+    let wavePhase: Double
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        if reduceMotion {
+            // Plain cross-fade honoring the origin loosely (no wavy edge).
+            content.opacity(revealProgress)
+        } else {
+            content.mask(
+                LiquidRevealShape(
+                    center: center,
+                    progress: revealProgress,
+                    baseRadius: 26,           // feed button radius (52pt circle)
+                    amplitude: 16,
+                    frequency: 9,
+                    phase: wavePhase
+                )
+                .ignoresSafeArea()
+            )
+        }
+    }
+}
+
+// MARK: - Feed Button Anchor (pure mapping)
+
+/// Pure mapping from the persisted feed-button position ("x,y", 0-1 normalized)
+/// to a `UnitPoint` (0-1 fraction of the full screen rect) for the reveal focus.
+///
+/// Mirrors `FreeFloatingButton.screenPosition(for:)` EXACTLY (same constants:
+/// buttonSize 52, minEdgePadding 20, topSafeZone 50, bottomSafeZone 110/50) so
+/// the disc is born at the button's true center, not a naive linear corner map.
+/// Kept as a standalone helper so the math is unit-testable without SwiftUI.
+enum FeedButtonAnchor {
+    static let buttonSize: CGFloat = 52
+    static let minEdgePadding: CGFloat = 20
+    static let topSafeZone: CGFloat = 50
+    static let bottomSafeZoneWithSearch: CGFloat = 110
+    static let bottomSafeZoneNoSearch: CGFloat = 50
+
+    /// Returns the button center as a screen point in the given geometry.
+    static func screenPoint(
+        fromRaw raw: String,
+        screenSize: CGSize,
+        safeArea: EdgeInsets,
+        isSearchBarVisible: Bool
+    ) -> CGPoint {
+        let pos = parse(raw)
+        let half = buttonSize / 2
+        let bottomSafeZone = isSearchBarVisible ? bottomSafeZoneWithSearch : bottomSafeZoneNoSearch
+        let minX = safeArea.leading + minEdgePadding + half
+        let maxX = screenSize.width - safeArea.trailing - minEdgePadding - half
+        let minY = safeArea.top + topSafeZone + half
+        let maxY = screenSize.height - safeArea.bottom - bottomSafeZone - half
+        let x = minX + (maxX - minX) * pos.x
+        let y = minY + (maxY - minY) * pos.y
+        return CGPoint(x: x, y: y)
+    }
+
+    /// Returns the button center as a `UnitPoint` (0-1 fraction of the full rect).
+    static func unitPoint(
+        fromRaw raw: String,
+        screenSize: CGSize,
+        safeArea: EdgeInsets,
+        isSearchBarVisible: Bool
+    ) -> UnitPoint {
+        guard screenSize.width > 0, screenSize.height > 0 else { return .topLeading }
+        let p = screenPoint(fromRaw: raw, screenSize: screenSize, safeArea: safeArea, isSearchBarVisible: isSearchBarVisible)
+        return UnitPoint(x: p.x / screenSize.width, y: p.y / screenSize.height)
+    }
+
+    /// Parses "x,y" (0-1) → clamped CGPoint. Defaults to top-left (0,0) — the
+    /// same default RootView persists for the feed button.
+    static func parse(_ raw: String) -> CGPoint {
+        let parts = raw.split(separator: ",")
+        guard parts.count == 2,
+              let x = Double(parts[0]),
+              let y = Double(parts[1]) else {
+            return CGPoint(x: 0, y: 0)
+        }
+        return CGPoint(x: min(max(x, 0), 1), y: min(max(y, 0), 1))
     }
 }
 

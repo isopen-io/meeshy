@@ -241,7 +241,7 @@ struct ConversationListHeaderOverlay: View {
 
     var body: some View {
         CollapsibleHeader(
-            title: "Meeshy",
+            title: "Meeshy Chats",
             scrollOffset: scrollOffset,
             showBackButton: false,
             titleColor: theme.textPrimary,

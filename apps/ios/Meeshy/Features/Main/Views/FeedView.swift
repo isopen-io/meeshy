@@ -444,7 +444,7 @@ struct FeedView: View {
             if sizeClass != .regular {
                 VStack(spacing: 0) {
                     CollapsibleHeader(
-                        title: String(localized: "feed.title", defaultValue: "Feeds", bundle: .main),
+                        title: "Meeshy Feed",
                         scrollOffset: headerScrollOffset,
                         showBackButton: false,
                         titleColor: theme.textPrimary,
