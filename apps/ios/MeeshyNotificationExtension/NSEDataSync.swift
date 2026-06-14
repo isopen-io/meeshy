@@ -16,6 +16,48 @@ nonisolated enum NSEDataSync {
 
     private static let appGroupId = "group.me.meeshy.apps"
     private static let pendingDirName = "nse_pending_messages"
+    private static let snapshotsKey = "conversation_snapshots"
+
+    // MARK: - Local-First conversation snapshot (App Group)
+
+    /// Détails LOCAL-FIRST d'une conversation, résolus depuis le snapshot App
+    /// Group écrit par l'app — sans requête serveur. SDK-free (miroir du contrat
+    /// `ConversationSnapshotPayload`). `categoryName` ne porte QUE les catégories
+    /// CRÉÉES PAR L'UTILISATEUR (l'app y met `nil` pour les catégories induites).
+    struct LocalConversationDetails: Decodable {
+        let customName: String?
+        let favoriteEmoji: String?
+        let categoryName: String?
+        let isMuted: Bool
+        let isLocked: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case customName, favoriteEmoji, categoryName, isMuted, isLocked
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            customName = try c.decodeIfPresent(String.self, forKey: .customName)
+            favoriteEmoji = try c.decodeIfPresent(String.self, forKey: .favoriteEmoji)
+            categoryName = try c.decodeIfPresent(String.self, forKey: .categoryName)
+            isMuted = (try c.decodeIfPresent(Bool.self, forKey: .isMuted)) ?? false
+            isLocked = (try c.decodeIfPresent(Bool.self, forKey: .isLocked)) ?? false
+        }
+    }
+
+    /// Détails locaux d'une conversation, lus depuis le store keyé de l'App
+    /// Group. `nil` si absent (l'appelant retombe sur le titre canonique du
+    /// push). Best-effort, jamais throwing.
+    static func conversationDetails(forId conversationId: String) -> LocalConversationDetails? {
+        guard !conversationId.isEmpty,
+              let defaults = UserDefaults(suiteName: appGroupId),
+              let data = defaults.data(forKey: snapshotsKey) else { return nil }
+        let decoder = JSONDecoder()
+        guard let map = try? decoder.decode([String: LocalConversationDetails].self, from: data) else {
+            return nil
+        }
+        return map[conversationId]
+    }
 
     // MARK: - Sync entry point
 

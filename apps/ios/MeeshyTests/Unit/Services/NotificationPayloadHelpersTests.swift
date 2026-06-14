@@ -46,7 +46,7 @@ final class NotificationPayloadHelpersTests: XCTestCase {
             userInfo: userInfo
         )
 
-        XCTAssertEqual(result, "Mon groupe")
+        XCTAssertEqual(result, "👥 Mon groupe")
     }
 
     func test_preservedSubtitle_globalWithEmptySubtitle_returnsConversationTitle() {
@@ -61,7 +61,7 @@ final class NotificationPayloadHelpersTests: XCTestCase {
             userInfo: userInfo
         )
 
-        XCTAssertEqual(result, "Meeshy Global")
+        XCTAssertEqual(result, "📢 Meeshy Global")
     }
 
     func test_preservedSubtitle_whitespaceOnlySubtitle_returnsConversationTitle() {
@@ -76,7 +76,7 @@ final class NotificationPayloadHelpersTests: XCTestCase {
             userInfo: userInfo
         )
 
-        XCTAssertEqual(result, "Equipe Dev")
+        XCTAssertEqual(result, "👥 Equipe Dev")
     }
 
     func test_preservedSubtitle_directConversation_returnsNil() {
@@ -169,19 +169,40 @@ final class NotificationPayloadHelpersTests: XCTestCase {
         XCTAssertEqual(result, "Votre story")
     }
 
-    func test_preservedSubtitle_originalSubtitleWins_overConversationTitleFallback() {
+    func test_preservedSubtitle_groupConversation_composesConversationSubtitle() {
+        // Une notif DE CONVERSATION (conversationType présent) est recomposée
+        // côté client : icône + titre. Le subtitle d'origine n'est pertinent que
+        // pour les notifs SOCIALES (sans conversationType).
         let userInfo = makeUserInfo(
             conversationType: "group",
             conversationTitle: "Mon groupe"
         )
 
         let result = NotificationPayloadHelpers.preservedSubtitle(
-            originalSubtitle: "En réponse à « Bonne idée ! »",
+            originalSubtitle: "titre brut ignoré",
             currentSubtitle: "",
             userInfo: userInfo
         )
 
-        XCTAssertEqual(result, "En réponse à « Bonne idée ! »")
+        XCTAssertEqual(result, "👥 Mon groupe")
+    }
+
+    func test_preservedSubtitle_groupConversation_prefersLocalCustomName() {
+        // Local-First : le renommage LOCAL de l'utilisateur (résolu App Group)
+        // est préféré au titre canonique fourni par le gateway.
+        let userInfo = makeUserInfo(
+            conversationType: "group",
+            conversationTitle: "Mon groupe"
+        )
+
+        let result = NotificationPayloadHelpers.preservedSubtitle(
+            originalSubtitle: "",
+            currentSubtitle: "",
+            userInfo: userInfo,
+            customName: "Ma team 💪"
+        )
+
+        XCTAssertEqual(result, "👥 Ma team 💪")
     }
 
     func test_preservedSubtitle_originalSubtitlePreservedByiOS_returnsNil() {
@@ -207,7 +228,130 @@ final class NotificationPayloadHelpersTests: XCTestCase {
             userInfo: userInfo
         )
 
-        XCTAssertEqual(result, "Equipe Dev")
+        // Le chemin fallback préfixe l'icône de type (cohérence avec le gateway).
+        XCTAssertEqual(result, "👥 Equipe Dev")
+    }
+
+    // MARK: - Icône de type de conversation
+
+    func test_conversationTypeIcon_distinguishesGroupTypes() {
+        XCTAssertEqual(NotificationPayloadHelpers.conversationTypeIcon("group"), "👥")
+        XCTAssertEqual(NotificationPayloadHelpers.conversationTypeIcon("public"), "🌐")
+        XCTAssertEqual(NotificationPayloadHelpers.conversationTypeIcon("global"), "📢")
+        XCTAssertEqual(NotificationPayloadHelpers.conversationTypeIcon("broadcast"), "📢")
+        XCTAssertEqual(NotificationPayloadHelpers.conversationTypeIcon("direct"), "")
+        XCTAssertEqual(NotificationPayloadHelpers.conversationTypeIcon(""), "")
+    }
+
+    func test_conversationTypeIcon_neverLock() {
+        // Le cadenas évoque le chiffrement — jamais utilisé pour le type.
+        for type in ["group", "public", "global", "broadcast"] {
+            XCTAssertNotEqual(NotificationPayloadHelpers.conversationTypeIcon(type), "🔒")
+        }
+    }
+
+    func test_composedSubtitle_usesCustomNameWhenPresent() {
+        // Renommage local de l'utilisateur prioritaire sur le titre canonique.
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "group",
+            conversationTitle: "Équipe Dev",
+            customName: "Ma team 💪"
+        )
+        XCTAssertEqual(result, "👥 Ma team 💪")
+    }
+
+    func test_composedSubtitle_fallsBackToCanonicalTitle_whenNoCustomName() {
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "public",
+            conversationTitle: "Annonces",
+            customName: nil
+        )
+        XCTAssertEqual(result, "🌐 Annonces")
+    }
+
+    func test_composedSubtitle_blankCustomName_fallsBackToCanonical() {
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "global",
+            conversationTitle: "Meeshy Global",
+            customName: "   "
+        )
+        XCTAssertEqual(result, "📢 Meeshy Global")
+    }
+
+    func test_composedSubtitle_directOrEmpty_returnsNil() {
+        XCTAssertNil(NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "direct", conversationTitle: "Alice", customName: nil))
+        XCTAssertNil(NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "group", conversationTitle: nil, customName: nil))
+    }
+
+    // MARK: - Format complet (favori + type + nom + (catégorie) + mute/lock)
+
+    func test_composedSubtitle_fullFormat_matchesUserExample() {
+        // 😴 👥 Cours de mathématique classe CME1 (cours élémentaire) 🔒
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "group",
+            conversationTitle: "Cours de mathématique classe CME1",
+            customName: nil,
+            favoriteEmoji: "😴",
+            categoryName: "cours élémentaire",
+            isMuted: false,
+            isLocked: true
+        )
+        XCTAssertEqual(result, "😴 👥 Cours de mathématique classe CME1 (cours élémentaire) 🔒")
+    }
+
+    func test_composedSubtitle_favoriteFirst_thenTypeIcon() {
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "public",
+            conversationTitle: "Annonces",
+            customName: nil,
+            favoriteEmoji: "⭐️"
+        )
+        XCTAssertEqual(result, "⭐️ 🌐 Annonces")
+    }
+
+    func test_composedSubtitle_mutedBadge_afterTitle() {
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "group",
+            conversationTitle: "Famille",
+            customName: nil,
+            isMuted: true
+        )
+        XCTAssertEqual(result, "👥 Famille 🔇")
+    }
+
+    func test_composedSubtitle_muteAndLock_bothAfterTitle() {
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "group",
+            conversationTitle: "Projet",
+            customName: nil,
+            isMuted: true,
+            isLocked: true
+        )
+        XCTAssertEqual(result, "👥 Projet 🔇 🔒")
+    }
+
+    func test_composedSubtitle_noCategory_noParentheses() {
+        // categoryName nil (catégorie induite/prédéfinie ou aucune) → pas de ().
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "group",
+            conversationTitle: "Équipe",
+            customName: nil,
+            categoryName: nil
+        )
+        XCTAssertEqual(result, "👥 Équipe")
+    }
+
+    func test_composedSubtitle_customNamePreferred_withFavoriteAndCategory() {
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "group",
+            conversationTitle: "Titre canonique",
+            customName: "Mon renommage",
+            favoriteEmoji: "🔥",
+            categoryName: "Boulot"
+        )
+        XCTAssertEqual(result, "🔥 👥 Mon renommage (Boulot)")
     }
 
     // MARK: - Bug B — audio body fallback

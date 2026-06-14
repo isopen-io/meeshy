@@ -43,7 +43,12 @@ nonisolated enum NotificationPayloadHelpers {
     nonisolated static func preservedSubtitle(
         originalSubtitle: String,
         currentSubtitle: String,
-        userInfo: [AnyHashable: Any]
+        userInfo: [AnyHashable: Any],
+        customName: String? = nil,
+        favoriteEmoji: String? = nil,
+        categoryName: String? = nil,
+        isMuted: Bool = false,
+        isLocked: Bool = false
     ) -> String? {
         // Only repair when the post-`updating(from: intent)` subtitle was wiped.
         // Trimming whitespace catches the "single space" workaround that
@@ -52,25 +57,105 @@ nonisolated enum NotificationPayloadHelpers {
             return nil
         }
 
-        // 1. Whatever the gateway sent in the alert wins — it already encodes
-        //    the right context for the notification type (group name, story /
-        //    post / mood context, parent comment…).
-        let trimmedOriginal = originalSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedOriginal.isEmpty {
-            return trimmedOriginal
+        // 1. Notification DE CONVERSATION (group/public/global/broadcast) : la
+        //    présentation est résolue CÔTÉ CLIENT (Local-First). On compose
+        //    `<icône de type> <customName ?? titre canonique>` — le gateway
+        //    n'envoie que les identifiants bruts (type + titre), le client
+        //    préfère le renommage LOCAL (`customName`) résolu depuis l'App
+        //    Group, et déduit l'icône du type. Indépendant de la valeur du
+        //    subtitle d'origine (qui n'est que le titre brut).
+        let conversationType = (userInfo["conversationType"] as? String) ?? ""
+        if !conversationType.trimmingCharacters(in: .whitespaces).isEmpty,
+           conversationType.lowercased() != "direct" {
+            return composedConversationSubtitle(
+                conversationType: conversationType,
+                conversationTitle: userInfo["conversationTitle"] as? String,
+                customName: customName,
+                favoriteEmoji: favoriteEmoji,
+                categoryName: categoryName,
+                isMuted: isMuted,
+                isLocked: isLocked
+            )
         }
 
-        // 2. Legacy fallback: rebuild the group/global conversation name from
-        //    userInfo for pushes whose alert subtitle never made it through
-        //    (e.g. E2EE payloads where only `data` survives).
-        let conversationType = (userInfo["conversationType"] as? String) ?? ""
-        let isGroupOrGlobal = !conversationType.isEmpty && conversationType != "direct"
-        guard isGroupOrGlobal else { return nil }
+        // 2. Notification SOCIALE (réponse story/post, mood…) : le subtitle
+        //    d'origine est une string explicite du gateway (« Votre story »,
+        //    « En réponse à … ») — on la restaure telle quelle.
+        let trimmedOriginal = originalSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedOriginal.isEmpty ? nil : trimmedOriginal
+    }
 
-        let title = (userInfo["conversationTitle"] as? String) ?? ""
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        return trimmed
+    /// Icône préfixant le nom d'une conversation de groupe dans une notification,
+    /// pour distinguer son type d'un coup d'œil :
+    ///   - groupe privé   (group)             → 👥  (communauté de personnes)
+    ///   - groupe public  (public)            → 🌐  (ouvert à tous)
+    ///   - général/broadcast (global, broadcast) → 📢
+    ///   - direct / inconnu                   → ""  (pas d'icône)
+    ///
+    /// Miroir exact du helper TS `conversationTypeIcon` côté gateway
+    /// (services/gateway/.../NotificationService.ts) — garder les deux en
+    /// lockstep. Le cadenas 🔒 est délibérément évité (évoque le chiffrement) ;
+    /// il sera réservé à un futur état « conversation verrouillée ».
+    nonisolated static func conversationTypeIcon(_ conversationType: String) -> String {
+        switch conversationType.trimmingCharacters(in: .whitespaces).lowercased() {
+        case "group":  return "👥"
+        case "public": return "🌐"
+        case "global", "broadcast": return "📢"
+        default: return ""
+        }
+    }
+
+    /// Compose le subtitle final d'une notification de conversation de groupe,
+    /// dans l'ordre demandé :
+    ///
+    ///   `<emoji favori> <icône de type> <nom> (<catégorie>) <mute> <lock>`
+    ///
+    /// Exemple : `😴 👥 Cours de mathématique classe CME1 (cours élémentaire) 🔒`
+    ///
+    /// - `nom` = renommage LOCAL (`customName`) s'il existe, sinon titre canonique.
+    /// - `favoriteEmoji` = emoji favori associé à la conversation (en TÊTE).
+    /// - `categoryName` = nom d'une catégorie CRÉÉE PAR L'UTILISATEUR uniquement
+    ///   (les catégories induites/prédéfinies passent `nil` → pas de parenthèses).
+    /// - `🔇`/`🔒` = badges mute / verrou, APRÈS le titre (et la catégorie).
+    ///
+    /// Retourne `nil` pour une conversation directe ou sans nom. PUR et testable.
+    nonisolated static func composedConversationSubtitle(
+        conversationType: String,
+        conversationTitle: String?,
+        customName: String?,
+        favoriteEmoji: String? = nil,
+        categoryName: String? = nil,
+        isMuted: Bool = false,
+        isLocked: Bool = false
+    ) -> String? {
+        let type = conversationType.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !type.isEmpty, type != "direct" else { return nil }
+
+        let custom = customName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let canonical = conversationTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = (custom?.isEmpty == false ? custom : canonical) ?? ""
+        guard !name.isEmpty else { return nil }
+
+        var parts: [String] = []
+        // 1. Emoji favori, en premier.
+        if let fav = favoriteEmoji?.trimmingCharacters(in: .whitespaces), !fav.isEmpty {
+            parts.append(fav)
+        }
+        // 2. Icône de type de groupe.
+        let icon = conversationTypeIcon(type)
+        if !icon.isEmpty { parts.append(icon) }
+        // 3. Nom + (catégorie utilisateur) accolée.
+        let cat = categoryName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let cat, !cat.isEmpty {
+            parts.append("\(name) (\(cat))")
+        } else {
+            parts.append(name)
+        }
+        // 4. Badges après le titre : mute puis lock.
+        if isMuted { parts.append("🔇") }
+        if isLocked { parts.append("🔒") }
+
+        return parts.joined(separator: " ")
     }
 
     /// Returns a body fallback for an audio-only push when the current body

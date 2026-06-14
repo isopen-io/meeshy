@@ -90,6 +90,10 @@ export function buildPushHeader(input: {
 
   const actorName = resolveActorName(input.actor);
   const title = input.customTitle?.trim() || actorName;
+  // Le subtitle ne porte que le NOM CANONIQUE du groupe — l'icône de type et le
+  // renommage local (customName) sont résolus CÔTÉ CLIENT (NSE + toast), en
+  // Local-First, depuis les préférences locales (cf. ConversationSnapshot App
+  // Group). Le gateway ne recompose pas la présentation systématiquement.
   const subtitle = isGroupMessage && conversationTitle !== ''
     ? conversationTitle
     : undefined;

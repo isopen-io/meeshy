@@ -550,17 +550,24 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             let updatedContent = try content.updating(from: intent)
 
             // Bug A — `content.updating(from: intent)` wipes the APN-native
-            // `subtitle` field. For group / global conversations the gateway
-            // sends the conversation name via `subtitle` (see
-            // services/gateway/.../NotificationService.ts → buildPushHeader),
-            // so without this repair the banner loses the conversation name
-            // entirely and the user sees only the sender. The helper returns
-            // `nil` for direct conversations or when iOS happened to keep
-            // the subtitle, so we never clobber a value iOS preserved.
+            // `subtitle` field. Pour une conversation de groupe, on RECOMPOSE le
+            // subtitle CÔTÉ CLIENT (Local-First) : `<icône de type> <customName
+            // ?? titre>`. Le gateway n'envoie que les identifiants bruts ; le
+            // `customName` (renommage LOCAL) est résolu depuis le snapshot App
+            // Group keyé par conversationId — préféré au titre canonique,
+            // possiblement en avance sur le backend. Pour une notif sociale, le
+            // helper restaure le subtitle explicite du gateway tel quel.
+            let localDetails = (userInfo["conversationId"] as? String)
+                .flatMap { NSEDataSync.conversationDetails(forId: $0) }
             if let restored = NotificationPayloadHelpers.preservedSubtitle(
                 originalSubtitle: content.subtitle,
                 currentSubtitle: updatedContent.subtitle,
-                userInfo: userInfo
+                userInfo: userInfo,
+                customName: localDetails?.customName,
+                favoriteEmoji: localDetails?.favoriteEmoji,
+                categoryName: localDetails?.categoryName,
+                isMuted: localDetails?.isMuted ?? false,
+                isLocked: localDetails?.isLocked ?? false
             ),
                let mutable = updatedContent.mutableCopy() as? UNMutableNotificationContent {
                 mutable.subtitle = restored
