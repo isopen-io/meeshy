@@ -104,6 +104,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         throw NSError(domain: "mock", code: -1)
     }
     func recordImpressions(postIds: [String], source: String) async throws {}
+    func recordEngagement(_ sessions: [EngagementSession]) async throws {}
 }
 
 // MARK: - ComposeAndPublishFlowTests
