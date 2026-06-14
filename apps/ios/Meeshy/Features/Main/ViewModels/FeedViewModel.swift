@@ -587,11 +587,17 @@ class FeedViewModel: ObservableObject {
     /// the reconcile (U1 ST2) swaps the optimistic post for the server one (no
     /// duplicate). Rolls back on synchronous enqueue refusal or `.exhausted`.
     /// Falls back to the text-only path when there are no media URLs.
+    ///
+    /// `type` mirrors the online media path (`ReelComposition.defaultType`): a
+    /// video / multi-image post created offline is enqueued as a `REEL` so it
+    /// lands on the reels surface once the OutboxFlusher uploads it — reusing the
+    /// exact post durability machinery, only the server-side `type` differs.
     func createOfflineMediaPost(
         localMediaURLs: [URL],
         content: String?,
         visibility: String = "PUBLIC",
-        originalLanguage: String? = nil
+        originalLanguage: String? = nil,
+        type: String = "POST"
     ) async {
         publishError = nil
         publishSuccess = false
@@ -612,7 +618,7 @@ class FeedViewModel: ObservableObject {
             authorId: currentUser?.id ?? "",
             authorUsername: currentUser?.username,
             authorAvatarURL: currentUser?.avatar,
-            type: "POST",
+            type: type,
             content: content ?? "",
             timestamp: Date(),
             media: localMediaURLs.map(Self.optimisticFeedMedia(forLocalURL:)),
@@ -627,7 +633,8 @@ class FeedViewModel: ObservableObject {
                 clientMutationId: cmid,
                 content: content,
                 visibility: visibility,
-                originalLanguage: originalLanguage
+                originalLanguage: originalLanguage,
+                type: type
             )
             publishSuccess = true
             observeOutcome(cmid: cmid, rollback: { [weak self] in

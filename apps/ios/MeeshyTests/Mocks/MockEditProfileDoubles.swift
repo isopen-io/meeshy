@@ -35,6 +35,7 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         let content: String?
         let visibility: String
         let originalLanguage: String?
+        let type: String?
     }
 
     var enqueuePostMediaCalls: [EnqueuePostMediaCall] = []
@@ -48,14 +49,16 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         clientMutationId: String,
         content: String?,
         visibility: String,
-        originalLanguage: String?
+        originalLanguage: String?,
+        type: String?
     ) async throws -> OfflineQueue.EnqueueMediaResult {
         enqueuePostMediaCalls.append(EnqueuePostMediaCall(
             sourceMediaURLs: sourceMediaURLs,
             clientMutationId: clientMutationId,
             content: content,
             visibility: visibility,
-            originalLanguage: originalLanguage
+            originalLanguage: originalLanguage,
+            type: type
         ))
         if let enqueuePostMediaError { throw enqueuePostMediaError }
         return OfflineQueue.EnqueueMediaResult(

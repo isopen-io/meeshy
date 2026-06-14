@@ -153,6 +153,13 @@ extension FeedView {
         if NetworkMonitor.shared.isOffline, audioURL == nil {
             let sources = attachments.compactMap { mediaFiles[$0.id] }
             let lang = composerLanguage
+            // Same reel-vs-post classification as the online TUS path below, so a
+            // video / multi-image post composed offline becomes a REEL once it
+            // flushes — no online/offline divergence on the surface it lands on.
+            let postType = ReelComposition.defaultType(
+                mimeTypes: attachments.map(\.mimeType),
+                forcePlainPost: composerForcePlainPost
+            ).rawValue
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 showComposer = false
                 isComposerFocused = false
@@ -166,7 +173,8 @@ extension FeedView {
                     localMediaURLs: sources,
                     content: text,
                     visibility: postVisibility,
-                    originalLanguage: lang
+                    originalLanguage: lang,
+                    type: postType
                 )
             }
             return
@@ -1125,6 +1133,12 @@ struct FeedComposerSheet: View {
         if NetworkMonitor.shared.isOffline {
             let sources = attachments.compactMap { mediaFiles[$0.id] }
             let lang = composerLanguage
+            // Mirror the online classification (line below) so an offline media
+            // post lands on the same surface (REEL for video / multi-image).
+            let postType = ReelComposition.defaultType(
+                mimeTypes: attachments.map(\.mimeType),
+                forcePlainPost: forcePlainPost
+            ).rawValue
             onDismiss()
             HapticFeedback.success()
             FeedbackToastManager.shared.showSuccess("Post en attente d'envoi")
@@ -1133,7 +1147,8 @@ struct FeedComposerSheet: View {
                     localMediaURLs: sources,
                     content: text,
                     visibility: postVisibility,
-                    originalLanguage: lang
+                    originalLanguage: lang,
+                    type: postType
                 )
             }
             return

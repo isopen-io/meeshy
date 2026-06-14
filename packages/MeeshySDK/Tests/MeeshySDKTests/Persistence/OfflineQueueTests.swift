@@ -367,6 +367,35 @@ final class OfflineQueueTests: XCTestCase {
         XCTAssertEqual(payload.visibility, "PUBLIC")
         XCTAssertEqual(payload.originalLanguage, "fr")
         XCTAssertTrue(payload.attachmentIds.isEmpty)
+        XCTAssertNil(payload.type, "default media post carries no type → gateway POST default")
+    }
+
+    func test_enqueuePostMedia_reelType_persistsReelOnCreatePostRow() async throws {
+        let cmid = "cmid_\(UUID().uuidString.lowercased())"
+        let url = try makeTempMediaFile(ext: "mp4")
+
+        _ = try await queue.enqueuePostMedia(
+            sourceMediaURLs: [url],
+            clientMutationId: cmid,
+            content: "My reel",
+            visibility: "PUBLIC",
+            originalLanguage: "en",
+            type: "REEL"
+        )
+
+        // The durable row must carry the REEL type so the dispatcher creates the
+        // post on the reels surface on reconnect — the only divergence from a
+        // plain offline media post is this server-side type.
+        let maybePool = await queue.outboxPoolForTesting
+        let pool = try XCTUnwrap(maybePool)
+        let record = try await pool.read { db in
+            try OutboxRecord.filter(Column("id") == "ofqm_\(cmid)").fetchOne(db)
+        }
+        let row = try XCTUnwrap(record)
+        XCTAssertEqual(row.kind, .createPost)
+        let payload = try JSONDecoder().decode(CreatePostPayload.self, from: row.payload)
+        XCTAssertEqual(payload.type, "REEL")
+        XCTAssertEqual(payload.localMediaPaths?.count, 1)
     }
 
     private func makeTempMediaFile(ext: String) throws -> URL {

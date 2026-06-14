@@ -228,6 +228,13 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// `nil`/empty = text-only or already-uploaded post. Optional so older
     /// persisted rows decode as nil. Mirrors message media durability (S7b/S8).
     public let localMediaPaths: [String]?
+    /// Server-side post type (`"POST" | "REEL" | …`), forwarded to the gateway so
+    /// an OFFLINE media post lands on the right surface — a video / multi-image
+    /// post created offline becomes a `REEL` exactly like the online path
+    /// (`ReelComposition.defaultType`). `nil` = the gateway default (`POST`).
+    /// Optional so older persisted rows (pre-reel-offline) decode as nil and
+    /// keep replaying as plain posts.
+    public let type: String?
 
     public init(
         clientMutationId: String,
@@ -235,7 +242,8 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         attachmentIds: [String],
         visibility: String,
         originalLanguage: String? = nil,
-        localMediaPaths: [String]? = nil
+        localMediaPaths: [String]? = nil,
+        type: String? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.content = content
@@ -243,6 +251,7 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         self.visibility = visibility
         self.originalLanguage = originalLanguage
         self.localMediaPaths = localMediaPaths
+        self.type = type
     }
 }
 

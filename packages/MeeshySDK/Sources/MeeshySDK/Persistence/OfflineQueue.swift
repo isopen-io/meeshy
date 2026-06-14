@@ -412,7 +412,8 @@ public protocol OfflineQueueing: Sendable {
         clientMutationId: String,
         content: String?,
         visibility: String,
-        originalLanguage: String?
+        originalLanguage: String?,
+        type: String?
     ) async throws -> OfflineQueue.EnqueueMediaResult
 }
 
@@ -1437,7 +1438,8 @@ public actor OfflineQueue {
         clientMutationId cmid: String,
         content: String?,
         visibility: String,
-        originalLanguage: String? = nil
+        originalLanguage: String? = nil,
+        type: String? = nil
     ) async throws -> EnqueueMediaResult {
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
 
@@ -1451,7 +1453,8 @@ public actor OfflineQueue {
             attachmentIds: [],
             visibility: visibility,
             originalLanguage: originalLanguage,
-            localMediaPaths: relativePaths
+            localMediaPaths: relativePaths,
+            type: type
         )
 
         // Phase A — write-ahead INSERT of the `.createPost` row (referencing the

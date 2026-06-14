@@ -682,8 +682,32 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(call?.content, "Photo post")
         XCTAssertEqual(call?.originalLanguage, "en")
         XCTAssertEqual(call?.visibility, "PUBLIC")
+        XCTAssertEqual(call?.type, "POST", "default type stays POST when not specified")
+        XCTAssertEqual(sut.posts[0].type, "POST")
         XCTAssertEqual(sut.posts[0].id, call?.clientMutationId,
             "optimistic post must be keyed by the cmid for ST2 reconcile")
+    }
+
+    func test_createOfflineMediaPost_reelType_enqueuesReelAndInsertsReelOptimisticPost() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+        let urls = [URL(fileURLWithPath: "/tmp/clip.mp4")]
+
+        await sut.createOfflineMediaPost(
+            localMediaURLs: urls,
+            content: "My reel",
+            originalLanguage: "en",
+            type: "REEL"
+        )
+
+        // The optimistic post is a REEL so it surfaces on the reel pager
+        // immediately, and the durable row carries the REEL type so the flush
+        // lands the post on the reels surface — reusing the post media machinery.
+        XCTAssertEqual(sut.posts.count, 1)
+        XCTAssertEqual(sut.posts[0].type, "REEL")
+        XCTAssertTrue(sut.posts[0].isReel)
+        XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
+        XCTAssertEqual(queue.enqueuePostMediaCalls.first?.type, "REEL")
     }
 
     func test_createOfflineMediaPost_enqueueRefused_rollsBackOptimisticPost() async {

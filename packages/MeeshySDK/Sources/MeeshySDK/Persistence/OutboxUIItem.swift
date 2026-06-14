@@ -94,6 +94,8 @@ extension OutboxUIItem {
             return mapComment(record: record)
         case .toggleLikePost, .toggleLikeComment:
             return mapPostReaction(record: record)
+        case .createPost:
+            return mapCreatePost(record: record)
         case .markAsRead,
              .sendFriendRequest,
              .respondFriendRequest,
@@ -102,8 +104,7 @@ extension OutboxUIItem {
              .createConversation,
              .updateConversation,
              .updateProfile,
-             .updateSettings,
-             .createPost:
+             .updateSettings:
             return mapOther(record: record)
         }
     }
@@ -283,6 +284,41 @@ extension OutboxUIItem {
             iconKind: .reaction,
             attachmentCount: 0,
             source: source,
+            status: record.status,
+            createdAt: record.createdAt
+        )
+    }
+
+    /// A queued post/reel create (`.createPost`). Decodes `CreatePostPayload` to
+    /// distinguish a REEL from a plain POST (so the pill reads "Publication de
+    /// réel" vs "Publication de post") and to derive an accurate media icon +
+    /// content preview. Falls back to a plain post on decode failure.
+    private static func mapCreatePost(record: OutboxRecord) -> OutboxUIItem {
+        let payload = try? JSONDecoder().decode(CreatePostPayload.self, from: record.payload)
+        let isReel = (payload?.type ?? "").uppercased() == "REEL"
+        let mediaPaths = payload?.localMediaPaths ?? []
+
+        let icon: IconKind
+        if let first = mediaPaths.first {
+            switch AttachmentKind(mimeType: MimeTypeResolver.mimeType(forExtension: (first as NSString).pathExtension)) {
+            case .video: icon = .video
+            case .audio: icon = .audio
+            default:     icon = .image
+            }
+        } else {
+            icon = .text
+        }
+
+        let content = payload?.content ?? ""
+        let preview = content.isEmpty ? nil : truncatePreview(content)
+
+        return OutboxUIItem(
+            id: record.id,
+            kind: .other(isReel ? "createReel" : "createPost"),
+            titlePreview: preview,
+            iconKind: icon,
+            attachmentCount: mediaPaths.count,
+            source: .unknown,
             status: record.status,
             createdAt: record.createdAt
         )

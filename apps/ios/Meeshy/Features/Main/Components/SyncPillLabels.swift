@@ -71,6 +71,7 @@ enum SyncPillLabels {
         case "updateProfile":           return "Mise à jour profil"
         case "updateSettings":          return "Mise à jour réglages"
         case "createPost":              return "Publication de post"
+        case "createReel":              return "Publication de réel"
         case "deleteComment":           return "Suppression commentaire"
         default:                        return "Synchronisation"
         }

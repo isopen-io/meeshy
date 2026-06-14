@@ -402,6 +402,10 @@ struct OutboxDispatcher: OutboxDispatching {
             let mediaIds: [String]?
             let visibility: String
             let originalLanguage: String?
+            /// Post type forwarded to `CreatePostSchema`. Omitted when nil so the
+            /// gateway applies its `POST` default — keeps legacy rows (written
+            /// before reel-offline carried no `type`) replaying as plain posts.
+            let type: String?
 
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
@@ -409,17 +413,19 @@ struct OutboxDispatcher: OutboxDispatching {
                 if let mediaIds, !mediaIds.isEmpty { try container.encode(mediaIds, forKey: .mediaIds) }
                 try container.encode(visibility, forKey: .visibility)
                 if let originalLanguage, !originalLanguage.isEmpty { try container.encode(originalLanguage, forKey: .originalLanguage) }
+                if let type, !type.isEmpty { try container.encode(type, forKey: .type) }
             }
 
             enum CodingKeys: String, CodingKey {
-                case content, mediaIds, visibility, originalLanguage
+                case content, mediaIds, visibility, originalLanguage, type
             }
         }
         let body = CreatePostBody(
             content: payload.content,
             mediaIds: resolvedMediaIds.isEmpty ? nil : resolvedMediaIds,
             visibility: payload.visibility,
-            originalLanguage: payload.originalLanguage
+            originalLanguage: payload.originalLanguage,
+            type: payload.type
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             endpoint: "/posts",
