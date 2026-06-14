@@ -3475,7 +3475,13 @@ class ConversationViewModel: ObservableObject {
 
         isInJumpedState = false
         hasNewerMessages = false
+        // Also clear any active in-conversation search state so the results
+        // banner / filter never linger after returning to the latest window.
         currentSearchQuery = nil
+        stateStore.currentSearchQuery = nil
+        searchResults = []
+        stateStore.searchResults = []
+        searchHasMore = false
 
         // Restore the latest window from GRDB; the store observation surfaces
         // the updated messages slice automatically — no snapshot-restore needed.

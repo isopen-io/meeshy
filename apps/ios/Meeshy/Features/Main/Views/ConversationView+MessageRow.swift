@@ -181,6 +181,9 @@ extension ConversationView {
     }
 
     func dismissSearch() {
+        // Cancel any pending debounce so a stale `endSearch` / `searchMessages`
+        // can't fire after the search UI has been dismissed.
+        searchDebounceTask?.cancel()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             headerState.showSearch = false
             headerState.searchQuery = ""
@@ -190,15 +193,6 @@ extension ConversationView {
         isSearchFocused = false
         // Restore the full conversation window + clear search state.
         Task { await viewModel.endSearch() }
-    }
-
-    // MARK: - Search Overlay (combines bar + blur + results)
-
-    var searchOverlay: some View {
-        VStack(spacing: 0) {
-            searchBar
-            searchResultsBlurOverlay
-        }
     }
 
     // MARK: - Search Results Blur Overlay (extracted for type-checker)
