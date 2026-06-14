@@ -110,4 +110,19 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   3. Added conservative `coverageThreshold` floors to `apps/web/jest.config.js`: lines:33, branches:25, statements:32, functions:29. All four verified PASS against current coverage.
   4. PROGRESS.md baselines table updated to reflect new re-measured web values.
   5. Next slice: Sprint 0.5 (stop gateway jest from silently excluding routes/middleware/websocket/grpc; add global threshold at baseline)
-- Commit: (see PR claude/coverage/sprint0-4-web-threshold)
+- Commit: (see PR #654 — merged to main 2026-06-14T22:22Z, squash)
+
+## 2026-06-14T22:13Z — Sprint 0.4 cont. (rebase+fix) + Sprint 0.5 × gateway collectCoverageFrom
+- Targeted: `services/gateway/jest.config.json` — expand collectCoverageFrom + add threshold
+- Result: ☑ done
+- Coverage: gateway true baseline line 32.18% / branch 28.87% (re-measured post Sprint 0.5 fix); threshold floor: lines≥32, branches≥28, statements≥31, functions≥34
+- Tests added: 4 new tests in `attachmentIncludes.test.ts` (Sprint 0.4 fix); 0 new tests for Sprint 0.5 (config-only)
+- Reviewer: PASS (rounds: 1)
+- Notes:
+  1. SPRINT 0.4 CARRY: Rebased `claude/coverage/sprint0-4-web-threshold` on latest main (868606db). Fixed stale test assertions in `attachmentIncludes.test.ts` caused by BUG2 A' production change (reactions relation added to attachmentMediaSelect after the sprint0-4 branch was created). Gateway CI improved: 7→6 failing suites, 22→18 failing tests. PR #654 merged to main.
+  2. SPRINT 0.5: `collectCoverageFrom` in `services/gateway/jest.config.json` expanded from services+utils-only to include `src/routes/**/*.ts`, `src/middleware/**/*.ts`, `src/socketio/**/*.ts`. Removed vestigial `!src/websocket/**/*` and `!src/grpc/**/*` exclusions (those directories do not exist). Added `coverageThreshold` at new true baseline: lines:32, branches:28, statements:31, functions:34. Verified thresholds pass locally.
+  3. New gateway true coverage: 32.18% line / 28.87% branch (down from inflated 52.12%/47.16% that only counted services+utils). The drop is expected and correct — the new numbers reflect the full scope.
+  4. testPathIgnorePatterns triage (un-ignoring specific test dirs) deferred to Sprint 0.7.
+  5. Pre-existing gateway failures: 6 suites (down from 7 after attachmentIncludes fix) — production bugs, not fixable in test scope.
+- Next slice: Sprint 0.6 (restore translator fail_under toward 80; tighten exclude_lines)
+- Commit: (see branch claude/coverage/sprint0-5-gateway-threshold)
