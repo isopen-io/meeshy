@@ -28,7 +28,7 @@ Each item is a separate slice; run them in order. Validate via the PR's own CI r
 
 | # | Task | File(s) | Status |
 |---|------|---------|--------|
-| 0.1 | Measure current coverage baselines (web jest, gateway jest, translator pytest, iOS, android) and record them in this file | — | ☐ |
+| 0.1 | Measure current coverage baselines (web jest, gateway jest, translator pytest, iOS, android) and record them in this file | — | ☑ |
 | 0.2 | Remove `continue-on-error` for web + gateway test jobs | `.github/workflows/ci.yml:211,224` | ☐ |
 | 0.3 | Re-enable the disabled Python test job with a CPU-only marker split (no GB model downloads) | `.github/workflows/ci.yml:242` (`if: false`) | ☐ |
 | 0.4 | Add **ratcheting** `coverageThreshold` to web jest at the measured baseline | `apps/web/jest.config.js` | ☐ |
@@ -149,11 +149,37 @@ The routine resolves a cell to concrete files here. Keep this list updated as th
 
 ## Coverage baselines (filled by slice 0.1)
 
+Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && pnpm build`.
+
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
-| web | `pnpm --filter web test:coverage` | — | — | — |
-| gateway | `pnpm --filter gateway test:coverage` | — | — | — |
-| translator | `uv run pytest --cov=src` | — | — | — |
-| iOS | `./apps/ios/meeshy.sh test` | — | — | — |
-| android | `apps/android/meeshy.sh test` (or `./gradlew test`) | — | — | — |
-| shared | `pnpm --filter @meeshy/shared test:coverage` | — | — | — |
+| web | `pnpm --filter web test:coverage` | 22.37 | 17.30 | 2026-06-14 |
+| gateway | `pnpm --filter gateway test:coverage` | 52.12 | 47.16 | 2026-06-14 |
+| translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | 37.09 | n/a | 2026-06-14 (subset: no-GPU tests only; 4 files w/ import errors excluded) |
+| iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
+| android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |
+| shared | `pnpm --filter @meeshy/shared test:coverage` | 95.22 | 92.17 | 2026-06-14 |
+
+### Key findings from baseline measurement
+
+**CI enforcement gaps identified (Sprint 0 items):**
+
+1. **Web + gateway tests run with `continue-on-error: true`** (ci.yml lines 211, 224) — CI never
+   fails on test failures in these suites. This makes the test gate non-blocking.
+2. **Python translator tests completely disabled** (`if: false`, ci.yml line 242) — zero Python
+   coverage enforcement in CI.
+3. **Gateway jest excludes routes, middleware, websocket, grpc** from `collectCoverageFrom`
+   (jest.config.json) — large portions of the codebase silently uncovered.
+4. **Gateway has 3 `.skip` test files** (`ZmqTranslationClient.test.ts.skip`,
+   `AttachmentService.test.ts.skip`, `AuthHandler.test.ts.skip`) — tests excluded entirely.
+5. **Translator `fail_under = 10`** (pyproject.toml) — floor is essentially no coverage gate.
+6. **Web tests fail due to unresolved `encryption-service.js` import** from
+   `packages/shared/encryption/index.ts` → 95 test suites error (Jest can't load modules that
+   import this); total web coverage therefore understates actual testable coverage.
+7. **Shared coverage already strong**: 95.22% line / 92.17% branch — already at target.
+
+### Web test failure root cause
+`packages/shared/encryption/index.ts` re-exports `./encryption-service.js` (compiled JS path).
+When web Jest runs, the `@meeshy/shared` alias resolves to the TS source tree (not dist), so
+`encryption-service.js` doesn't exist at the TS source path. Fix: ensure `packages/shared` is
+built before web tests run (Sprint 0 fix or per-run pre-step).
