@@ -328,6 +328,41 @@ final class MutationPayloadsTests: XCTestCase {
         XCTAssertEqual(decoded.type, "REEL")
     }
 
+    /// An offline STATUS (mood) carries its emoji + audience through the same
+    /// `.createPost` row as posts — the roundtrip must preserve every field.
+    func test_createPostPayload_roundtrip_withStatusFields() throws {
+        let original = CreatePostPayload(
+            clientMutationId: ClientMutationId.generate(),
+            content: "Feeling good",
+            attachmentIds: [],
+            visibility: "ONLY",
+            type: "STATUS",
+            moodEmoji: "😎",
+            audioUrl: "https://cdn/audio.m4a",
+            audioDuration: 7,
+            visibilityUserIds: ["u1", "u2"]
+        )
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(CreatePostPayload.self, from: data)
+        XCTAssertEqual(decoded, original)
+        XCTAssertEqual(decoded.moodEmoji, "😎")
+        XCTAssertEqual(decoded.audioDuration, 7)
+        XCTAssertEqual(decoded.visibilityUserIds, ["u1", "u2"])
+    }
+
+    /// A legacy `.createPost` row (no status fields) still decodes, with the new
+    /// optionals defaulting to nil.
+    func test_createPostPayload_decodesLegacyRowWithoutStatusFields() throws {
+        let legacyJSON = """
+        {"clientMutationId":"cmid_legacy2","content":"hi","attachmentIds":[],"visibility":"PUBLIC","type":"POST"}
+        """
+        let decoded = try decoder.decode(CreatePostPayload.self, from: Data(legacyJSON.utf8))
+        XCTAssertNil(decoded.moodEmoji)
+        XCTAssertNil(decoded.audioUrl)
+        XCTAssertNil(decoded.audioDuration)
+        XCTAssertNil(decoded.visibilityUserIds)
+    }
+
     // MARK: - ToggleLikePostPayload (Phase C)
 
     func test_toggleLikePostPayload_encodes_likedBool() throws {

@@ -398,6 +398,57 @@ final class OfflineQueueTests: XCTestCase {
         XCTAssertEqual(payload.localMediaPaths?.count, 1)
     }
 
+    // MARK: - Offline draft recovery (recoverLastUnsentPost / cancelCreatePost)
+
+    private func enqueueCreatePost(
+        cmid: String,
+        content: String,
+        type: String,
+        moodEmoji: String? = nil
+    ) async throws {
+        let payload = CreatePostPayload(
+            clientMutationId: cmid,
+            content: content,
+            attachmentIds: [],
+            visibility: "PUBLIC",
+            type: type,
+            moodEmoji: moodEmoji
+        )
+        try await queue.enqueue(.createPost, payload: payload, conversationId: nil)
+    }
+
+    func test_recoverLastUnsentPost_returnsMostRecentMatchingType() async throws {
+        try await enqueueCreatePost(cmid: "cmid_post", content: "a post", type: "POST")
+        try await enqueueCreatePost(cmid: "cmid_status", content: "a mood", type: "STATUS", moodEmoji: "🎉")
+
+        // A status composer recovers only STATUS rows.
+        let status = await queue.recoverLastUnsentPost(matchingTypes: ["STATUS"], olderThan: 0)
+        XCTAssertEqual(status?.type, "STATUS")
+        XCTAssertEqual(status?.content, "a mood")
+        XCTAssertEqual(status?.moodEmoji, "🎉")
+        XCTAssertEqual(status?.clientMutationId, "cmid_status")
+
+        // A post composer recovers POST/REEL but never a STATUS row.
+        let post = await queue.recoverLastUnsentPost(matchingTypes: ["POST", "REEL"], olderThan: 0)
+        XCTAssertEqual(post?.type, "POST")
+        XCTAssertEqual(post?.content, "a post")
+    }
+
+    func test_recoverLastUnsentPost_skipsRowsYoungerThanThreshold() async throws {
+        try await enqueueCreatePost(cmid: "cmid_fresh", content: "just now", type: "POST")
+        // A row enqueued "just now" is still actively sending, not yet stuck:
+        // with a 1h threshold it must NOT be recovered.
+        let recovered = await queue.recoverLastUnsentPost(matchingTypes: ["POST"], olderThan: 3600)
+        XCTAssertNil(recovered)
+    }
+
+    func test_cancelCreatePost_deletesRow_soRecoveryReturnsNil() async throws {
+        try await enqueueCreatePost(cmid: "cmid_cancel", content: "doomed", type: "STATUS")
+        await queue.cancelCreatePost(clientMutationId: "cmid_cancel")
+        let recovered = await queue.recoverLastUnsentPost(matchingTypes: ["STATUS"], olderThan: 0)
+        XCTAssertNil(recovered, "a superseded row must not be recoverable")
+    }
+
     private func makeTempMediaFile(ext: String) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("media_\(UUID().uuidString).\(ext)")

@@ -67,6 +67,23 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         )
     }
 
+    /// Stubbed recovery result; tests set this to simulate a stuck offline item.
+    var recoverLastUnsentPostResult: RecoveredOfflinePost?
+    var recoverLastUnsentPostCalls: [(types: Set<String>, olderThan: TimeInterval)] = []
+    var cancelCreatePostCalls: [String] = []
+
+    func recoverLastUnsentPost(
+        matchingTypes: Set<String>,
+        olderThan: TimeInterval
+    ) async -> RecoveredOfflinePost? {
+        recoverLastUnsentPostCalls.append((matchingTypes, olderThan))
+        return recoverLastUnsentPostResult
+    }
+
+    func cancelCreatePost(clientMutationId: String) async {
+        cancelCreatePostCalls.append(clientMutationId)
+    }
+
     func outcomeStream(for cmid: String) async -> AsyncStream<OutboxOutcome> {
         AsyncStream<OutboxOutcome> { continuation in
             outcomeContinuations[cmid] = continuation
