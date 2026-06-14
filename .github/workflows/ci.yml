@@ -208,7 +208,6 @@ jobs:
 
       - name: Run tests with coverage (bun)
         if: env.PACKAGE_MANAGER == 'bun'
-        continue-on-error: ${{ matrix.package.name == 'web' || matrix.package.name == 'gateway' }}
         run: |
           # Web tests must use Jest (configured with Next.js)
           if [ "${{ matrix.package.name }}" = "web" ]; then
@@ -221,7 +220,6 @@ jobs:
 
       - name: Run tests with coverage (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
-        continue-on-error: ${{ matrix.package.name == 'web' || matrix.package.name == 'gateway' }}
         run: pnpm run test:coverage --filter=${{ matrix.package.filter }}
 
       - name: Upload coverage

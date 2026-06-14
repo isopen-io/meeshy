@@ -38,3 +38,16 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: n/a (PROGRESS.md/RUNLOG.md metadata only, no test diff)
 - Notes: Next slice = 0.2 (remove continue-on-error for web+gateway in ci.yml)
 - Commit: (see PR claude/coverage/sprint0-1-baselines)
+
+## 2026-06-14T16:00Z — Sprint 0.2 × CI gate (web + gateway continue-on-error)
+- Targeted: `.github/workflows/ci.yml` lines 211, 224
+- Result: ☑ done
+- Coverage: N/A (CI-config-only slice — no test code added)
+- Tests added: 0
+- Reviewer: PASS (rounds: 1)
+- Notes: Both "Test web" and "Test gateway" CI jobs were already passing (conclusion=success on
+  sha b2e24aa4) — the `continue-on-error` was only masking potential future regressions. Removed
+  both occurrences of `continue-on-error: ${{ matrix.package.name == 'web' || matrix.package.name == 'gateway' }}`
+  from the bun and pnpm test steps. The `Upload coverage` step's `continue-on-error: true` was
+  intentionally left (Codecov upload is non-critical). Next slice = 0.3 (re-enable Python test job).
+- Commit: (see PR claude/coverage/sprint0-2-ci-gate)
