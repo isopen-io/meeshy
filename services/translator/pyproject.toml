@@ -260,24 +260,16 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "if __name__ == .__main__.:",
     "@abstractmethod",
-    # Exclude platform-specific code
+    # Platform-specific code
     "if sys.platform",
-    # Exclude GPU-specific code (not testable in CI)
+    # GPU-specific code (not testable in CI — no CUDA hardware)
     "if torch.cuda",
     "cuda",
     "CUDA",
-    # Exclude model downloading code (requires network)
-    "download",
+    # HuggingFace model download calls (require network + disk in CI)
     "hf_hub",
-    # Exclude fallback/retry logic that's hard to test
-    "except Exception",
-    "except BaseException",
-    "finally:",
-    # Exclude async cleanup code
-    "async def __aexit__",
-    "await.*close",
 ]
-fail_under = 10  # Reduced from 80% - project under active development
+fail_under = 30  # Sprint 0.6: raised from 10; excludes tightened (error handling now counted)
 show_missing = true
 
 # =============================================================================
