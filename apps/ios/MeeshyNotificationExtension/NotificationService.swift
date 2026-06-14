@@ -557,13 +557,17 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             // Group keyé par conversationId — préféré au titre canonique,
             // possiblement en avance sur le backend. Pour une notif sociale, le
             // helper restaure le subtitle explicite du gateway tel quel.
-            let localCustomName = (userInfo["conversationId"] as? String)
-                .flatMap { NSEDataSync.conversationCustomName(forId: $0) }
+            let localDetails = (userInfo["conversationId"] as? String)
+                .flatMap { NSEDataSync.conversationDetails(forId: $0) }
             if let restored = NotificationPayloadHelpers.preservedSubtitle(
                 originalSubtitle: content.subtitle,
                 currentSubtitle: updatedContent.subtitle,
                 userInfo: userInfo,
-                customName: localCustomName
+                customName: localDetails?.customName,
+                favoriteEmoji: localDetails?.favoriteEmoji,
+                categoryName: localDetails?.categoryName,
+                isMuted: localDetails?.isMuted ?? false,
+                isLocked: localDetails?.isLocked ?? false
             ),
                let mutable = updatedContent.mutableCopy() as? UNMutableNotificationContent {
                 mutable.subtitle = restored

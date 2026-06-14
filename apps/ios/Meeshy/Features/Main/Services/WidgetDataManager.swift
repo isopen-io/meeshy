@@ -43,6 +43,9 @@ struct ConversationSnapshotPayload: Codable {
     let isLocked: Bool
     /// Emoji favori associé à la conversation (classification utilisateur).
     let favoriteEmoji: String?
+    /// Nom d'une catégorie CRÉÉE PAR L'UTILISATEUR (nil pour les catégories
+    /// induites/prédéfinies — elles ne s'affichent pas entre parenthèses).
+    let categoryName: String?
     let accentColor: String?
     let unreadCount: Int
 }
@@ -109,18 +112,35 @@ final class WidgetDataManager: NotificationWidgetSink {
 
         // Store keyé Local-First (toutes conversations, prefs complètes) — la
         // NSE l'interroge par conversationId pour résoudre customName + badges
-        // sans requête serveur.
-        publishConversationSnapshots(conversations)
+        // sans requête serveur. La résolution du nom de catégorie UTILISATEUR
+        // est async (acteur `UserCategoryStore`) ; le publish keyé attend donc
+        // un Task, le store array du widget reste synchrone ci-dessus.
+        Task { [conversations] in
+            let userCategoryNamesById = await Self.resolveUserCategoryNames()
+            await self.publishConversationSnapshots(conversations, categoryNamesById: userCategoryNamesById)
+        }
+    }
+
+    /// `[sectionId: nom]` des catégories CRÉÉES PAR L'UTILISATEUR uniquement
+    /// (source `UserCategoryStore`). Les catégories induites/prédéfinies n'y
+    /// figurent pas → elles ne s'afficheront pas entre parenthèses.
+    private static func resolveUserCategoryNames() async -> [String: String] {
+        let categories = await UserCategoryStore.shared.categories()
+        return Dictionary(categories.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
     }
 
     /// Miroir-e le détail keyé des conversations (prefs LOCALES) dans l'App
     /// Group pour la NSE et les widgets. Map depuis `ConversationUserState`
     /// (source de vérité locale, possiblement non encore synchronisée backend).
-    func publishConversationSnapshots(_ conversations: [MeeshyConversation]) {
+    func publishConversationSnapshots(
+        _ conversations: [MeeshyConversation],
+        categoryNamesById: [String: String]
+    ) {
         guard let defaults = sharedDefaults else { return }
         let snapshots: [String: ConversationSnapshotPayload] = conversations
             .prefix(snapshotsCap)
             .reduce(into: [:]) { acc, conv in
+                let categoryName = conv.userState.sectionId.flatMap { categoryNamesById[$0] }
                 acc[conv.id] = ConversationSnapshotPayload(
                     id: conv.id,
                     type: conv.type.rawValue,
@@ -131,6 +151,7 @@ final class WidgetDataManager: NotificationWidgetSink {
                     isArchived: conv.userState.isArchived,
                     isLocked: conv.userState.isLocked,
                     favoriteEmoji: conv.userState.reaction,
+                    categoryName: categoryName,
                     accentColor: conv.accentColor,
                     unreadCount: conv.userState.unreadCount
                 )

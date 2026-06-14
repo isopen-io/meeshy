@@ -20,27 +20,43 @@ nonisolated enum NSEDataSync {
 
     // MARK: - Local-First conversation snapshot (App Group)
 
-    /// Snapshot SDK-free d'une conversation, miroir du contrat écrit par l'app
-    /// (`ConversationSnapshotPayload`). Décodé depuis l'App Group pour résoudre
-    /// localement le renommage utilisateur (et plus tard les badges) sans
-    /// requête serveur. Seuls les champs lus ici sont déclarés (Codable tolère
-    /// les clés en trop).
-    private struct ConversationLocalSnapshot: Decodable {
+    /// Détails LOCAL-FIRST d'une conversation, résolus depuis le snapshot App
+    /// Group écrit par l'app — sans requête serveur. SDK-free (miroir du contrat
+    /// `ConversationSnapshotPayload`). `categoryName` ne porte QUE les catégories
+    /// CRÉÉES PAR L'UTILISATEUR (l'app y met `nil` pour les catégories induites).
+    struct LocalConversationDetails: Decodable {
         let customName: String?
+        let favoriteEmoji: String?
+        let categoryName: String?
+        let isMuted: Bool
+        let isLocked: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case customName, favoriteEmoji, categoryName, isMuted, isLocked
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            customName = try c.decodeIfPresent(String.self, forKey: .customName)
+            favoriteEmoji = try c.decodeIfPresent(String.self, forKey: .favoriteEmoji)
+            categoryName = try c.decodeIfPresent(String.self, forKey: .categoryName)
+            isMuted = (try c.decodeIfPresent(Bool.self, forKey: .isMuted)) ?? false
+            isLocked = (try c.decodeIfPresent(Bool.self, forKey: .isLocked)) ?? false
+        }
     }
 
-    /// Renommage LOCAL (`customName`) d'une conversation, lu depuis le store
-    /// keyé de l'App Group écrit par l'app. `nil` si absent (l'appelant retombe
-    /// alors sur le titre canonique du push). Best-effort, jamais throwing.
-    static func conversationCustomName(forId conversationId: String) -> String? {
+    /// Détails locaux d'une conversation, lus depuis le store keyé de l'App
+    /// Group. `nil` si absent (l'appelant retombe sur le titre canonique du
+    /// push). Best-effort, jamais throwing.
+    static func conversationDetails(forId conversationId: String) -> LocalConversationDetails? {
         guard !conversationId.isEmpty,
               let defaults = UserDefaults(suiteName: appGroupId),
               let data = defaults.data(forKey: snapshotsKey) else { return nil }
         let decoder = JSONDecoder()
-        guard let map = try? decoder.decode([String: ConversationLocalSnapshot].self, from: data),
-              let snapshot = map[conversationId] else { return nil }
-        let trimmed = snapshot.customName?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return (trimmed?.isEmpty == false) ? trimmed : nil
+        guard let map = try? decoder.decode([String: LocalConversationDetails].self, from: data) else {
+            return nil
+        }
+        return map[conversationId]
     }
 
     // MARK: - Sync entry point

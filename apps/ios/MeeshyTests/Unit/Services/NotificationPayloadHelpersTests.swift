@@ -285,6 +285,75 @@ final class NotificationPayloadHelpersTests: XCTestCase {
             conversationType: "group", conversationTitle: nil, customName: nil))
     }
 
+    // MARK: - Format complet (favori + type + nom + (catégorie) + mute/lock)
+
+    func test_composedSubtitle_fullFormat_matchesUserExample() {
+        // 😴 👥 Cours de mathématique classe CME1 (cours élémentaire) 🔒
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "group",
+            conversationTitle: "Cours de mathématique classe CME1",
+            customName: nil,
+            favoriteEmoji: "😴",
+            categoryName: "cours élémentaire",
+            isMuted: false,
+            isLocked: true
+        )
+        XCTAssertEqual(result, "😴 👥 Cours de mathématique classe CME1 (cours élémentaire) 🔒")
+    }
+
+    func test_composedSubtitle_favoriteFirst_thenTypeIcon() {
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "public",
+            conversationTitle: "Annonces",
+            customName: nil,
+            favoriteEmoji: "⭐️"
+        )
+        XCTAssertEqual(result, "⭐️ 🌐 Annonces")
+    }
+
+    func test_composedSubtitle_mutedBadge_afterTitle() {
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "group",
+            conversationTitle: "Famille",
+            customName: nil,
+            isMuted: true
+        )
+        XCTAssertEqual(result, "👥 Famille 🔇")
+    }
+
+    func test_composedSubtitle_muteAndLock_bothAfterTitle() {
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "group",
+            conversationTitle: "Projet",
+            customName: nil,
+            isMuted: true,
+            isLocked: true
+        )
+        XCTAssertEqual(result, "👥 Projet 🔇 🔒")
+    }
+
+    func test_composedSubtitle_noCategory_noParentheses() {
+        // categoryName nil (catégorie induite/prédéfinie ou aucune) → pas de ().
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "group",
+            conversationTitle: "Équipe",
+            customName: nil,
+            categoryName: nil
+        )
+        XCTAssertEqual(result, "👥 Équipe")
+    }
+
+    func test_composedSubtitle_customNamePreferred_withFavoriteAndCategory() {
+        let result = NotificationPayloadHelpers.composedConversationSubtitle(
+            conversationType: "group",
+            conversationTitle: "Titre canonique",
+            customName: "Mon renommage",
+            favoriteEmoji: "🔥",
+            categoryName: "Boulot"
+        )
+        XCTAssertEqual(result, "🔥 👥 Mon renommage (Boulot)")
+    }
+
     // MARK: - Bug B — audio body fallback
 
     func test_audioBodyFallback_emptyBodyWithAudioMime_returnsLocalizedFallback() {

@@ -44,7 +44,11 @@ nonisolated enum NotificationPayloadHelpers {
         originalSubtitle: String,
         currentSubtitle: String,
         userInfo: [AnyHashable: Any],
-        customName: String? = nil
+        customName: String? = nil,
+        favoriteEmoji: String? = nil,
+        categoryName: String? = nil,
+        isMuted: Bool = false,
+        isLocked: Bool = false
     ) -> String? {
         // Only repair when the post-`updating(from: intent)` subtitle was wiped.
         // Trimming whitespace catches the "single space" workaround that
@@ -66,7 +70,11 @@ nonisolated enum NotificationPayloadHelpers {
             return composedConversationSubtitle(
                 conversationType: conversationType,
                 conversationTitle: userInfo["conversationTitle"] as? String,
-                customName: customName
+                customName: customName,
+                favoriteEmoji: favoriteEmoji,
+                categoryName: categoryName,
+                isMuted: isMuted,
+                isLocked: isLocked
             )
         }
 
@@ -97,20 +105,28 @@ nonisolated enum NotificationPayloadHelpers {
         }
     }
 
-    /// Compose le subtitle final d'une notification de conversation de groupe :
-    /// `<icône de type> <nom>`, où `nom` est le renommage local de l'utilisateur
-    /// (`customName`) s'il existe, sinon le titre canonique fourni par le
-    /// gateway. Retourne `nil` pour une conversation directe (pas de subtitle)
-    /// ou quand aucun nom n'est disponible.
+    /// Compose le subtitle final d'une notification de conversation de groupe,
+    /// dans l'ordre demandé :
     ///
-    /// PUR et testable. `customName` est passé par l'appelant : le toast in-app
-    /// foreground (accès complet aux préférences) le fournit ; le NSE background
-    /// passe `nil` tant que les customNames ne sont pas miroirés dans l'App
-    /// Group (suivi).
+    ///   `<emoji favori> <icône de type> <nom> (<catégorie>) <mute> <lock>`
+    ///
+    /// Exemple : `😴 👥 Cours de mathématique classe CME1 (cours élémentaire) 🔒`
+    ///
+    /// - `nom` = renommage LOCAL (`customName`) s'il existe, sinon titre canonique.
+    /// - `favoriteEmoji` = emoji favori associé à la conversation (en TÊTE).
+    /// - `categoryName` = nom d'une catégorie CRÉÉE PAR L'UTILISATEUR uniquement
+    ///   (les catégories induites/prédéfinies passent `nil` → pas de parenthèses).
+    /// - `🔇`/`🔒` = badges mute / verrou, APRÈS le titre (et la catégorie).
+    ///
+    /// Retourne `nil` pour une conversation directe ou sans nom. PUR et testable.
     nonisolated static func composedConversationSubtitle(
         conversationType: String,
         conversationTitle: String?,
-        customName: String?
+        customName: String?,
+        favoriteEmoji: String? = nil,
+        categoryName: String? = nil,
+        isMuted: Bool = false,
+        isLocked: Bool = false
     ) -> String? {
         let type = conversationType.trimmingCharacters(in: .whitespaces).lowercased()
         guard !type.isEmpty, type != "direct" else { return nil }
@@ -120,8 +136,26 @@ nonisolated enum NotificationPayloadHelpers {
         let name = (custom?.isEmpty == false ? custom : canonical) ?? ""
         guard !name.isEmpty else { return nil }
 
+        var parts: [String] = []
+        // 1. Emoji favori, en premier.
+        if let fav = favoriteEmoji?.trimmingCharacters(in: .whitespaces), !fav.isEmpty {
+            parts.append(fav)
+        }
+        // 2. Icône de type de groupe.
         let icon = conversationTypeIcon(type)
-        return icon.isEmpty ? name : "\(icon) \(name)"
+        if !icon.isEmpty { parts.append(icon) }
+        // 3. Nom + (catégorie utilisateur) accolée.
+        let cat = categoryName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let cat, !cat.isEmpty {
+            parts.append("\(name) (\(cat))")
+        } else {
+            parts.append(name)
+        }
+        // 4. Badges après le titre : mute puis lock.
+        if isMuted { parts.append("🔇") }
+        if isLocked { parts.append("🔒") }
+
+        return parts.joined(separator: " ")
     }
 
     /// Returns a body fallback for an audio-only push when the current body
