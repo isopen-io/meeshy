@@ -9,6 +9,7 @@ import React, { useEffect, useRef } from 'react';
 import { Phone, PhoneOff, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useI18n } from '@/hooks/useI18n';
 import type { CallInitiatedEvent } from '@meeshy/shared/types/video-call';
 
 interface CallNotificationProps {
@@ -18,6 +19,7 @@ interface CallNotificationProps {
 }
 
 export function CallNotification({ call, onAccept, onReject }: CallNotificationProps) {
+  const { t } = useI18n('calls');
   const ringtoneRef = useRef<import('@/utils/ringtone').Ringtone | null>(null);
 
   // Play ringtone on mount
@@ -80,7 +82,7 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
         <div className="flex items-center justify-center gap-2 mb-2">
           <Video className="w-5 h-5 text-green-600 dark:text-green-400 animate-pulse" />
           <span className="text-sm font-medium text-green-600 dark:text-green-400">
-            Video Call
+            {t('calls.incoming.videoCall')}
           </span>
         </div>
 
@@ -96,7 +98,7 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
             id="call-notification-description"
             className="text-sm text-gray-600 dark:text-gray-400 animate-pulse"
           >
-            Incoming call...
+            {t('calls.incoming.subtitle')}
           </p>
         </div>
 
@@ -105,23 +107,23 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
           <Button
             variant="destructive"
             size="lg"
-            className="flex-1 gap-2 bg-red-500 hover:bg-red-600"
+            className="flex-1 gap-2 bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700"
             onClick={onReject}
-            aria-label="Decline call"
+            aria-label={t('calls.incoming.declineLabel')}
           >
             <PhoneOff className="w-5 h-5" />
-            Decline
+            {t('calls.incoming.decline')}
           </Button>
           <Button
             variant="default"
             size="lg"
-            className="flex-1 gap-2 bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/50"
+            className="flex-1 gap-2 bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800 text-white shadow-lg shadow-green-500/50"
             onClick={onAccept}
-            aria-label="Accept call"
+            aria-label={t('calls.incoming.acceptLabel')}
             autoFocus
           >
             <Phone className="w-5 h-5" />
-            Accept
+            {t('calls.incoming.accept')}
           </Button>
         </div>
       </div>
