@@ -38,7 +38,7 @@ export class SecuritySanitizer {
     // Additional protection: remove zero-width characters and control chars
     return sanitized
       .replace(/[\u200B-\u200D\uFEFF]/g, '') // Zero-width chars (invisible)
-      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Control chars
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '') // Control chars (keep \t \n \r)
       .replace(/[\uFFF9-\uFFFB]/g, '') // Interlinear annotation chars
       .trim();
   }

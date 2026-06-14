@@ -50,6 +50,15 @@ describe('sanitizeText', () => {
     expect(result).toBe('HelloWorld');
   });
 
+  it('should preserve newlines, tabs and carriage returns (message line breaks)', () => {
+    const input = 'Line 1\nLine 2\tTabbed\r\nLine 3';
+    const result = sanitizeText(input);
+
+    expect(result).toBe('Line 1\nLine 2\tTabbed\r\nLine 3');
+    expect(result).toContain('\n');
+    expect(result).toContain('\t');
+  });
+
   it('should trim whitespace', () => {
     const input = '  Hello World  ';
     const result = sanitizeText(input);
