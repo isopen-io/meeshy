@@ -2,6 +2,58 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
+/// Conteneur d'observation pour `ReelFeedCard` : SEUL point qui dépend de
+/// `activeReelId`. Il observe le coordinator et calcule `isActive` EN INTERNE,
+/// de sorte que le body de `FeedView` ne lise jamais `activeReelId` — sans quoi
+/// tout changement d'élection ré-évaluerait le `ForEach` entier (I1). Ici, seuls
+/// les conteneurs visibles du `LazyVStack` se ré-évaluent ; `ReelFeedCard`
+/// (feuille Equatable, inputs primitifs) court-circuite les cartes dont
+/// `isActive` n'a pas bougé.
+struct ReelFeedCardContainer: View {
+    @ObservedObject var coordinator: ReelFeedAutoplayCoordinator
+    let post: FeedPost
+    let isDark: Bool
+
+    let isLiked: Bool
+    let displayLikeCount: Int
+    let isBookmarked: Bool
+    let displayBookmarkCount: Int
+    let isReposted: Bool
+    let displayRepostCount: Int
+    let displayShareCount: Int
+
+    let onTapMedia: () -> Void
+    let onLike: (String) -> Void
+    let onComment: (String) -> Void
+    let onRepost: (String) -> Void
+    let onBookmark: (String) -> Void
+    let onShare: (String) -> Void
+    let onTapAuthor: (String) -> Void
+
+    var body: some View {
+        ReelFeedCard(
+            post: post,
+            isActive: coordinator.activeReelId == post.id,
+            isDark: isDark,
+            isLiked: isLiked,
+            displayLikeCount: displayLikeCount,
+            isBookmarked: isBookmarked,
+            displayBookmarkCount: displayBookmarkCount,
+            isReposted: isReposted,
+            displayRepostCount: displayRepostCount,
+            displayShareCount: displayShareCount,
+            onTapMedia: onTapMedia,
+            onLike: onLike,
+            onComment: onComment,
+            onRepost: onRepost,
+            onBookmark: onBookmark,
+            onShare: onShare,
+            onTapAuthor: onTapAuthor
+        )
+        .equatable()
+    }
+}
+
 /// Carte Réel plein-cadre du feed : média en fond (aspect-fill, plafond 4:5),
 /// auteur + boutons en overlay, logo Réel coin haut-droit sans texte. Autoplay
 /// muet quand `isActive`. Tap sur le média → viewer plein écran via `onTapMedia`.

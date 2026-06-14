@@ -639,9 +639,11 @@ struct FeedView: View {
     /// même bloc d'ouverture viewer (`ReelsPresenter.present`). Le tap média
     /// fait d'abord le handoff (clear + pause du moteur feed) avant de présenter.
     private func reelFeedCardView(for post: FeedPost) -> some View {
-        ReelFeedCard(
+        // `ReelFeedCardContainer` observe le coordinator et calcule `isActive` en
+        // interne : le body de FeedView ne dépend donc pas d'`activeReelId` (I1).
+        ReelFeedCardContainer(
+            coordinator: reelAutoplay,
             post: post,
-            isActive: reelAutoplay.activeReelId == post.id,
             isDark: isDark,
             isLiked: postLikedIds.contains(post.id),
             displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
@@ -664,10 +666,16 @@ struct FeedView: View {
             },
             onLike: { _ in togglePostHeart(post: post) },
             onComment: { _ in
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    _ = expandedComments.insert(post.id)
+                // Les commentaires d'un réel vivent dans le viewer plein écran
+                // (interactions riches) — même handoff que le tap média : on coupe
+                // la lecture muette du feed puis on présente le viewer sur ce post.
+                reelAutoplay.clear()
+                SharedAVPlayerManager.shared.pause()
+                HapticFeedback.medium()
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id)
                 }
-                HapticFeedback.light()
+                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
             },
             onRepost: { postId in togglePostRepost(postId: postId) },
             onBookmark: { postId in togglePostBookmark(postId: postId) },
@@ -679,7 +687,8 @@ struct FeedView: View {
                 )
             }
         )
-        .equatable()
+        // Pas de `.equatable()` ici : le conteneur observe le coordinator (non
+        // Equatable). Le court-circuit Equatable vit à l'intérieur, sur `ReelFeedCard`.
     }
 
     private func standardFeedPostCardView(for post: FeedPost) -> some View {

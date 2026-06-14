@@ -59,8 +59,12 @@ struct ReelFeedVideoSurface: View {
     }
 
     private func drive(ready: Bool) {
-        guard isActive, ready else {
-            // Plus actif (ou plus prêt) mais on possède encore le moteur → pause.
+        // Défense en profondeur (C1) : ne jamais (re)lancer la lecture pendant un
+        // appel VoIP — la session audio appartient à l'appel. Même si l'élection
+        // n'a pas été vidée à temps, on ne joue pas. Pause si on tenait le moteur.
+        guard isActive, ready, !MediaSessionCoordinator.shared.isCallActive else {
+            // Plus actif (ou plus prêt, ou appel actif) mais on possède encore le
+            // moteur → pause.
             if isShowingThis { manager.pause() }
             return
         }
