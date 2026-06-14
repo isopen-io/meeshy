@@ -16,12 +16,18 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | **48i** (iOS only : solde « reliquats ancienne palette » du différé 45i — épuration 2 fichiers morts `SampleData.swift`+`MessageComposer.swift` (pbxproj nettoyé) + bloc feed legacy mort RootViewComponents 697–1113 (`ThemedFeedComposer`/`ThemedFeedCard`/`FeedActionButton`/10 wrappers Colorful-Legacy, liveness vérifiée) ; re-peinture charte des surfaces vivantes (RootViewComponents/FeedView/FeedView+Attachments/WidgetPreviewView/AttachmentPreparationService/ConversationAnimatedBackground/MeeshyWidgets + 6 singles) ; +6 `.accessibilityLabel` toolbar FeedComposerSheet ; +4 clés i18n `widget.preview.action.*` ×5 locales ; filtre story « cool » documenté intentionnel) |
-| Last merged PR | #610 (47w), #605 (46w) ; iter-48i sur `claude/wizardly-rubin-ph295e` |
-| Last Merged Base (commit) | 7659cb0e (merge #610) — base de la branche iter-48i |
-| Next iteration | **49** — repartir de `main` HEAD post-merge iter-48i |
+| Last completed iteration | **49w** (Web only : i18n + dark mode du flux d'appel vidéo — `CallNotification` (notification d'appel entrant plein écran, 100 % anglais dur → `useI18n('calls')` + sous-arbre `calls.incoming.*` ×4 locales, 6 chaînes texte+aria-labels) + variantes `dark:` des boutons accepter/refuser ; `VideoCallInterface` fallbacks `calls.waiting.*`/`calls.status.connecting`) |
+| Last merged PR | iter-48i #617 ; #610 (47w), #605 (46w) ; iter-49w ⏳ sur `claude/eager-keller-e6eq78` |
+| Last Merged Base (commit) | 2c65d379 (merge #628) — base de la branche iter-49w |
+| Next iteration | **50** — repartir de `main` HEAD post-merge iter-49w |
 
-### Deferred carry-over — web (pour 49+)
+### Deferred carry-over — web (pour 50+)
+- **NOUVEAU (repéré 49w, hors cluster appel entrant)** : fallbacks anglais dans `t()` —
+  `video-calls/AudioEffectsCarousel.tsx` (`'Audio Effects'`/`'Customize your voice'`/
+  `'Click on an effect to configure it'`), `AudioEffectsPanel.tsx` (`'Select playback mode'`) ;
+  FR durs `audio/AudioEffectsTimeline.tsx:61`, `audio/AudioControls.tsx:238` (« Voix clonée »),
+  `v2/GhostBadge.tsx:29`, `common/PrintButton.tsx` (label défaut « Imprimer ») ;
+  a11y `v2/PostCard.tsx:255` `alt={m.alt ?? ''}` → fallback `m.fileName`.
 - ~~chart hex sans variante dark (RankingStatsImpl/MermaidDiagramImpl/AgentOverviewTab)~~ → **SOLDÉ en 48w** (ne plus auditer ces 3 fichiers pour le dark mode)
 - retrait dépendance orpheline `next-themes` de `apps/web/package.json` (zéro import restant post-48w ; touche `pnpm-lock.yaml` — à faire isolément)
 - `RANKING_CRITERIA` labels dans `components/admin/ranking/constants.ts` — probablement FR durs (tooltip charts), à auditer
@@ -80,4 +86,5 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 45 | claude/blissful-ritchie-dp7ibu | #597 | ✅ |
 | 46w | claude/elegant-noether-09t4x2 | #605 | ✅ |
 | 47w | claude/blissful-ritchie-8d57jg | #610 | ✅ |
-| 48i | claude/wizardly-rubin-ph295e | ⏳ | ⏳ |
+| 48i | claude/wizardly-rubin-ph295e | #617 | ✅ |
+| 49w | claude/eager-keller-e6eq78 | ⏳ | ⏳ |

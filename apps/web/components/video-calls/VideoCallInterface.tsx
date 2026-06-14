@@ -553,9 +553,9 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
                   {remoteParticipant?.username?.[0]?.toUpperCase() || '?'}
                 </span>
               </div>
-              <p className="text-lg">{remoteParticipant?.username || 'Waiting for participant...'}</p>
+              <p className="text-lg">{remoteParticipant?.username || t('calls.waiting.forParticipant')}</p>
               <p className="text-sm text-gray-400 mt-2">
-                {connectionState === 'connecting' ? 'Connecting...' : 'No video'}
+                {connectionState === 'connecting' ? t('calls.status.connecting') : t('calls.waiting.noVideo')}
               </p>
             </div>
           </div>

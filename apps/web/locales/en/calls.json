@@ -114,6 +114,18 @@
         "firefox": "Firefox: Click the camera icon in the address bar",
         "safari": "Safari: Go to Safari Settings > Privacy > Camera/Microphone"
       }
+    },
+    "incoming": {
+      "videoCall": "Video Call",
+      "subtitle": "Incoming call...",
+      "accept": "Accept",
+      "decline": "Decline",
+      "acceptLabel": "Accept call",
+      "declineLabel": "Decline call"
+    },
+    "waiting": {
+      "forParticipant": "Waiting for participant...",
+      "noVideo": "No video"
     }
   }
 }
