@@ -53,7 +53,7 @@ function DashboardPageContent() {
   const { t, currentLanguage } = useI18n('dashboard');
 
   // Dashboard data with parallel fetching
-  const { data: dashboardData, isLoading, error, refetch } = useDashboardData();
+  const { data: dashboardData, isPending, error, refetch } = useDashboardData();
   const { stats, recentConversations, recentCommunities } = useDashboardStats(dashboardData);
 
   // Modal states
@@ -151,8 +151,9 @@ function DashboardPageContent() {
     );
   }
 
-  // Loading state
-  if (isLoading) {
+  // Cache-first : squelette plein écran uniquement au cold-start (aucune donnée en cache).
+  // Un rafraîchissement d'arrière-plan (isFetching) laisse le cache affiché.
+  if (isPending) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">

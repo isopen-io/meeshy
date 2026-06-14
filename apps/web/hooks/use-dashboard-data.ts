@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import type { DashboardData } from '@/services/dashboard.service';
 import { dashboardService } from '@/services/dashboard.service';
 import { useUser } from '@/stores';
+import { logger } from '@/utils/logger';
 
 const CACHE_DURATION = 30000; // 30 seconds
 
@@ -40,7 +41,7 @@ export function useDashboardData() {
         throw new Error('Failed to load dashboard data');
       }
     } catch (err) {
-      console.error('Error loading dashboard:', err);
+      logger.error('Error loading dashboard:', err);
       setError(err instanceof Error ? err : new Error('Unknown error occurred'));
     } finally {
       setIsLoading(false);
@@ -54,6 +55,10 @@ export function useDashboardData() {
   return {
     data,
     isLoading,
+    // Cache-first : `isPending` = cold-start (aucune donnée) → squelette légitime ;
+    // `isFetching` = rafraîchissement d'arrière-plan (cache présent) → rendre le cache.
+    isPending: isLoading && !data,
+    isFetching: isLoading && !!data,
     error,
     refetch: useCallback(() => fetchData(true), [fetchData]),
   };
