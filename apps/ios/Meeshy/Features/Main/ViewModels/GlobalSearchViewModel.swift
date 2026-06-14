@@ -309,7 +309,7 @@ final class GlobalSearchViewModel: ObservableObject {
             guard let conv = byId[id] else { return nil }
             return GlobalSearchConversationResult(
                 id: conv.id,
-                name: conv.name,
+                name: conv.displayName,
                 avatar: conv.avatar ?? conv.participantAvatarURL,
                 type: conv.type,
                 memberCount: conv.memberCount,
@@ -332,7 +332,7 @@ final class GlobalSearchViewModel: ObservableObject {
                 let conv = apiConv.toConversation(currentUserId: userId)
                 return GlobalSearchConversationResult(
                     id: conv.id,
-                    name: conv.name,
+                    name: conv.displayName,
                     avatar: conv.avatar ?? conv.participantAvatarURL,
                     type: conv.type,
                     memberCount: conv.memberCount,

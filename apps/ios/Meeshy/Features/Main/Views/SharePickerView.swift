@@ -241,7 +241,7 @@ struct SharePickerView: View {
     private func shareRow(for conv: Conversation) -> some View {
         HStack(spacing: 12) {
             MeeshyAvatar(
-                name: conv.name,
+                name: conv.displayName,
                 context: .conversationList,
                 accentColor: conv.accentColor,
                 avatarURL: conv.avatar,
@@ -250,10 +250,12 @@ struct SharePickerView: View {
             )
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(conv.name)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(1)
+                ConversationTitleLabel(
+                    name: conv.displayName,
+                    favoriteEmoji: conv.userState.reaction,
+                    font: .system(size: 15, weight: .medium),
+                    color: theme.textPrimary
+                )
 
                 HStack(spacing: 4) {
                     Text(conversationTypeLabel(conv.type))

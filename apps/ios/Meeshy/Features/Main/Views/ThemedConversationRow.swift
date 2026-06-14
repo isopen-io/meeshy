@@ -693,3 +693,53 @@ private struct ConversationAvatarView: View {
         }
     }
 }
+
+// MARK: - ConversationTitleLabel (shared)
+
+/// Source unique de présentation du *titre d'une conversation* dans toutes les
+/// remontées (header, recherche, transfert de message, partage). Compose le nom
+/// tel que l'utilisateur le voit : `[emoji favori] [nom local renommé]`.
+///
+/// - `name` : doit être `conversation.displayName` (= `customName ?? title ??
+///   identifier`), JAMAIS `conversation.name` (qui ignore le renommage local).
+/// - `favoriteEmoji` : `conversation.userState.reaction` — l'emoji de
+///   classification favorite, affiché EN TÊTE (même ordre que les notifications
+///   iOS, cf. `NotificationPayloadHelpers.composedConversationSubtitle`).
+///
+/// Local-First : la résolution est purement cliente (préférences locales,
+/// possiblement non encore synchronisées backend). Aucun recalcul serveur.
+/// Les éléments voisins (badge non-lu, sparkle de revalidation, bouton) restent
+/// dans le HStack appelant — ce composant ne rend QUE `[favori] [nom]`.
+struct ConversationTitleLabel: View {
+    let name: String
+    var favoriteEmoji: String? = nil
+    var font: Font = .subheadline
+    var color: Color = .primary
+    var lineLimit: Int = 1
+    var spacing: CGFloat = 5
+
+    private var favorite: String? {
+        guard let trimmed = favoriteEmoji?.trimmingCharacters(in: .whitespaces),
+              !trimmed.isEmpty else { return nil }
+        return trimmed
+    }
+
+    var body: some View {
+        HStack(spacing: spacing) {
+            if let favorite {
+                Text(favorite)
+                    .accessibilityLabel(Text(String(
+                        localized: "conversation.favorite.a11y",
+                        defaultValue: "Favori \(favorite)",
+                        bundle: .main
+                    )))
+            }
+            Text(name)
+                .foregroundColor(color)
+                .lineLimit(lineLimit)
+                .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.leading)
+        }
+        .font(font)
+    }
+}

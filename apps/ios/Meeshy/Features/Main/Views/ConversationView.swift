@@ -1414,10 +1414,12 @@ struct ConversationView: View {
     @ViewBuilder
     private var anonymousHeaderBar: some View {
         HStack {
-            Text(conversation?.name ?? "Conversation")
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                .foregroundColor(.white)
-                .lineLimit(1)
+            ConversationTitleLabel(
+                name: conversation?.displayName ?? "Conversation",
+                favoriteEmoji: conversation?.userState.reaction,
+                font: .system(size: 15, weight: .semibold, design: .rounded),
+                color: .white
+            )
             Spacer()
             Button {
                 HapticFeedback.light()
@@ -1518,12 +1520,13 @@ struct ConversationView: View {
     @ViewBuilder
     private var expandedHeaderTitleLabel: some View {
         HStack(spacing: 6) {
-            Text(conversation?.name ?? "Conversation")
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-                .multilineTextAlignment(.leading)
+            ConversationTitleLabel(
+                name: conversation?.displayName ?? "Conversation",
+                favoriteEmoji: conversation?.userState.reaction,
+                font: .system(size: 13, weight: .bold, design: .rounded),
+                color: .white,
+                lineLimit: 2
+            )
             // Subtle "revalidating" sparkle: shown while we serve stale cache
             // and silently refresh from the server. Disappears as soon as the
             // REST response lands — no blocking spinner.

@@ -94,7 +94,7 @@ final class WidgetDataManager: NotificationWidgetSink {
             .map { conv in
                 WidgetConversation(
                     id: conv.id,
-                    contactName: conv.name,
+                    contactName: conv.displayName,
                     contactAvatar: conv.type == .group ? "person.3.fill" : "person.circle.fill",
                     lastMessage: formatLastMessage(conv),
                     timestamp: conv.lastMessageAt,
@@ -160,6 +160,33 @@ final class WidgetDataManager: NotificationWidgetSink {
         defaults.set(data, forKey: snapshotsKey)
     }
 
+    /// Résolution Local-First **synchrone** de la présentation d'une
+    /// conversation (nom renommé + emoji favori) pour les toasts in-app, depuis
+    /// le store keyé App Group `conversation_snapshots` que ce manager maintient
+    /// déjà (`publishConversationSnapshots`). Réutilise l'infra existante —
+    /// aucune nouvelle source de données. Retourne `nil` si la conversation n'a
+    /// pas (encore) de snapshot local → le toast retombe sur le titre serveur.
+    func conversationToastPresentation(
+        forId id: String
+    ) -> NotificationToastManager.ConversationPresentation? {
+        guard let defaults = sharedDefaults,
+              let data = defaults.data(forKey: snapshotsKey),
+              let snapshots = try? JSONDecoder().decode(
+                  [String: ConversationSnapshotPayload].self, from: data
+              ),
+              let payload = snapshots[id] else { return nil }
+
+        let custom = payload.customName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let canonical = payload.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = (custom?.isEmpty == false ? custom : canonical) ?? ""
+        guard !name.isEmpty else { return nil }
+
+        return NotificationToastManager.ConversationPresentation(
+            name: name,
+            favoriteEmoji: payload.favoriteEmoji
+        )
+    }
+
     func publishFavoriteContacts(_ conversations: [MeeshyConversation]) {
         let favorites = conversations
             .filter { $0.userState.isPinned && $0.type == .direct }
@@ -167,7 +194,7 @@ final class WidgetDataManager: NotificationWidgetSink {
             .map { conv in
                 WidgetFavoriteContact(
                     id: conv.id,
-                    name: conv.name,
+                    name: conv.displayName,
                     avatar: "person.circle.fill",
                     status: conv.lastSeenText ?? "Offline",
                     accentColor: conv.accentColor

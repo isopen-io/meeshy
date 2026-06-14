@@ -43,6 +43,52 @@ public final class NotificationToastManager: ObservableObject {
     /// (it lives in the app target), so we ask for a pull closure instead.
     public var focusFilterProvider: (@MainActor () -> FocusFilterSnapshot)?
 
+    /// Présentation Local-First (nom renommé + emoji favori) d'une conversation
+    /// pour les toasts in-app. Le SDK ne peut pas lire le snapshot local des
+    /// conversations de l'app, donc la cible app injecte une closure de pull —
+    /// même pattern que `focusFilterProvider`. Retourne `nil` → on retombe sur
+    /// le titre serveur (`event.toastSubtitle`).
+    public var conversationPresentationProvider: (@MainActor (_ conversationId: String) -> ConversationPresentation?)?
+
+    /// Pièces de présentation d'une conversation, résolues par l'app et
+    /// consommées par le toast. `name` = `customName ?? title` (renommage
+    /// local), `favoriteEmoji` = classification favorite. Local-First : l'app
+    /// les lit depuis ses préférences locales (possiblement non encore
+    /// synchronisées backend).
+    public struct ConversationPresentation: Sendable {
+        public let name: String
+        public let favoriteEmoji: String?
+
+        public init(name: String, favoriteEmoji: String?) {
+            self.name = name
+            self.favoriteEmoji = favoriteEmoji
+        }
+
+        /// `<favori> <nom>` (favori en tête), ou `<nom>` sans favori — même
+        /// ordre que les notifications push (favori d'abord).
+        public var composedSubtitle: String {
+            guard let fav = favoriteEmoji?.trimmingCharacters(in: .whitespaces),
+                  !fav.isEmpty else { return name }
+            return "\(fav) \(name)"
+        }
+    }
+
+    /// Sous-titre à afficher sous le titre du toast. Pour un événement de
+    /// conversation (qui a déjà un sous-titre = nom de groupe), préfère la
+    /// présentation LOCALE (nom renommé + favori). Sinon retombe sur
+    /// `event.toastSubtitle`. Les messages directs (sans sous-titre) restent
+    /// inchangés.
+    @MainActor
+    public func resolvedToastSubtitle(for event: SocketNotificationEvent) -> String? {
+        let base = event.toastSubtitle
+        guard base != nil,
+              let conversationId = event.conversationId,
+              let presentation = conversationPresentationProvider?(conversationId) else {
+            return base
+        }
+        return presentation.composedSubtitle
+    }
+
     private var cancellables = Set<AnyCancellable>()
     private var toastDismissTask: Task<Void, Never>?
     private static let toastDuration: UInt64 = 7_000_000_000
