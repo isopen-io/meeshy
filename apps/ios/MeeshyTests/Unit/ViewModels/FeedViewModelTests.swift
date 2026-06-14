@@ -682,8 +682,32 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(call?.content, "Photo post")
         XCTAssertEqual(call?.originalLanguage, "en")
         XCTAssertEqual(call?.visibility, "PUBLIC")
+        XCTAssertEqual(call?.type, "POST", "default type stays POST when not specified")
+        XCTAssertEqual(sut.posts[0].type, "POST")
         XCTAssertEqual(sut.posts[0].id, call?.clientMutationId,
             "optimistic post must be keyed by the cmid for ST2 reconcile")
+    }
+
+    func test_createOfflineMediaPost_reelType_enqueuesReelAndInsertsReelOptimisticPost() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+        let urls = [URL(fileURLWithPath: "/tmp/clip.mp4")]
+
+        await sut.createOfflineMediaPost(
+            localMediaURLs: urls,
+            content: "My reel",
+            originalLanguage: "en",
+            type: "REEL"
+        )
+
+        // The optimistic post is a REEL so it surfaces on the reel pager
+        // immediately, and the durable row carries the REEL type so the flush
+        // lands the post on the reels surface — reusing the post media machinery.
+        XCTAssertEqual(sut.posts.count, 1)
+        XCTAssertEqual(sut.posts[0].type, "REEL")
+        XCTAssertTrue(sut.posts[0].isReel)
+        XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
+        XCTAssertEqual(queue.enqueuePostMediaCalls.first?.type, "REEL")
     }
 
     func test_createOfflineMediaPost_enqueueRefused_rollsBackOptimisticPost() async {
@@ -708,6 +732,33 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(queue.enqueueCalls.count, 1, "falls back to the durable text-only path")
         XCTAssertEqual(queue.enqueueCalls.first?.kind, .createPost)
         XCTAssertEqual(sut.posts.count, 1)
+    }
+
+    // MARK: - Offline draft recovery (post / reel)
+
+    func test_recoverUnsentPost_queriesPostAndReelTypesWithOfflineThreshold() async {
+        let queue = MockOfflineQueue()
+        queue.recoverLastUnsentPostResult = RecoveredOfflinePost(
+            clientMutationId: "cmid_p", content: "stuck", visibility: "PUBLIC",
+            originalLanguage: nil, type: "REEL", moodEmoji: nil, audioUrl: nil,
+            audioDuration: nil, visibilityUserIds: nil, localMediaURLs: [], createdAt: Date()
+        )
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+
+        let draft = await sut.recoverUnsentPost()
+
+        XCTAssertEqual(draft?.type, "REEL")
+        XCTAssertEqual(queue.recoverLastUnsentPostCalls.first?.types, ["POST", "REEL"])
+        XCTAssertEqual(queue.recoverLastUnsentPostCalls.first?.olderThan, FeedViewModel.offlineStuckThreshold)
+    }
+
+    func test_supersedeRecoveredPost_cancelsTheStuckRow() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+
+        await sut.supersedeRecoveredPost(clientMutationId: "cmid_p")
+
+        XCTAssertEqual(queue.cancelCreatePostCalls, ["cmid_p"])
     }
 
     // MARK: - repostPost()

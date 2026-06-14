@@ -592,4 +592,74 @@ final class StatusViewModelTests: XCTestCase {
         XCTAssertTrue(sut.statuses.isEmpty, "Status should be removed from the list")
         XCTAssertEqual(mockStatusService.deleteCallCount, 1)
     }
+
+    // MARK: - Offline durability + draft recovery
+
+    func test_setStatus_whenOffline_enqueuesDurableStatusRow_notDirectCreate() async {
+        let queue = MockOfflineQueue()
+        let offlineSUT = StatusViewModel(
+            mode: .friends,
+            statusService: mockStatusService,
+            socialSocket: mockSocket,
+            authManager: mockAuthManager,
+            offlineQueue: queue,
+            isOffline: { true }
+        )
+
+        await offlineSUT.setStatus(emoji: "🎉", content: "Offline mood", visibility: "PUBLIC")
+
+        // Durable outbox path — NOT a direct statusService.create (lost offline).
+        XCTAssertEqual(mockStatusService.createCallCount, 0)
+        XCTAssertEqual(queue.enqueueCalls.count, 1)
+        XCTAssertEqual(queue.enqueueCalls.first?.kind, .createPost)
+        let payload = queue.enqueueCalls.first?.payload as? CreatePostPayload
+        XCTAssertEqual(payload?.type, "STATUS")
+        XCTAssertEqual(payload?.moodEmoji, "🎉")
+        XCTAssertEqual(payload?.content, "Offline mood")
+    }
+
+    func test_recoverUnsentStatus_queriesStatusTypeWithOfflineThreshold() async {
+        let queue = MockOfflineQueue()
+        queue.recoverLastUnsentPostResult = RecoveredOfflinePost(
+            clientMutationId: "cmid_mood",
+            content: "Stuck mood",
+            visibility: "PUBLIC",
+            originalLanguage: nil,
+            type: "STATUS",
+            moodEmoji: "😎",
+            audioUrl: nil,
+            audioDuration: nil,
+            visibilityUserIds: nil,
+            localMediaURLs: [],
+            createdAt: Date()
+        )
+        let offlineSUT = StatusViewModel(
+            mode: .friends,
+            statusService: mockStatusService,
+            socialSocket: mockSocket,
+            authManager: mockAuthManager,
+            offlineQueue: queue
+        )
+
+        let draft = await offlineSUT.recoverUnsentStatus()
+
+        XCTAssertEqual(draft?.moodEmoji, "😎")
+        XCTAssertEqual(queue.recoverLastUnsentPostCalls.first?.types, ["STATUS"])
+        XCTAssertEqual(queue.recoverLastUnsentPostCalls.first?.olderThan, StatusViewModel.offlineStuckThreshold)
+    }
+
+    func test_supersedeRecoveredStatus_cancelsTheStuckRow() async {
+        let queue = MockOfflineQueue()
+        let offlineSUT = StatusViewModel(
+            mode: .friends,
+            statusService: mockStatusService,
+            socialSocket: mockSocket,
+            authManager: mockAuthManager,
+            offlineQueue: queue
+        )
+
+        await offlineSUT.supersedeRecoveredStatus(clientMutationId: "cmid_mood")
+
+        XCTAssertEqual(queue.cancelCreatePostCalls, ["cmid_mood"])
+    }
 }

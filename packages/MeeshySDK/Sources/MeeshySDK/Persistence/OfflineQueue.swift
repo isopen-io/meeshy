@@ -412,8 +412,73 @@ public protocol OfflineQueueing: Sendable {
         clientMutationId: String,
         content: String?,
         visibility: String,
-        originalLanguage: String?
+        originalLanguage: String?,
+        type: String?
     ) async throws -> OfflineQueue.EnqueueMediaResult
+
+    /// Draft recovery — returns the most recent unsent `.createPost` row whose
+    /// type is in `matchingTypes` and that has been stuck for more than
+    /// `olderThan` seconds (the "not sent within the minute → offline" rule), so
+    /// the matching composer can pre-fill it as a draft. `nil` when nothing
+    /// qualifies. Resolves the row's `localMediaPaths` back to existing file
+    /// URLs so the composer can restore media too.
+    func recoverLastUnsentPost(
+        matchingTypes: Set<String>,
+        olderThan: TimeInterval
+    ) async -> RecoveredOfflinePost?
+
+    /// Supersedes a recovered offline post/status/reel: deletes its `.createPost`
+    /// outbox row (id `ofqm_<cmid>`) and reclaims its pending-media files. Called
+    /// when the user re-sends the recovered draft so the resend replaces the
+    /// stuck row instead of racing it to the server (no duplicate on reconnect).
+    func cancelCreatePost(clientMutationId: String) async
+}
+
+/// A recovered offline post / status / reel, decoded from a stuck `.createPost`
+/// outbox row so a composer can pre-fill it as a draft. Carries the originating
+/// `clientMutationId` so the resend can supersede the original row via
+/// `cancelCreatePost`.
+public struct RecoveredOfflinePost: Sendable, Equatable {
+    public let clientMutationId: String
+    public let content: String
+    public let visibility: String
+    public let originalLanguage: String?
+    /// `"POST" | "REEL" | "STATUS"` — defaulted to `"POST"` when the row carried
+    /// no explicit type (legacy rows).
+    public let type: String
+    public let moodEmoji: String?
+    public let audioUrl: String?
+    public let audioDuration: Int?
+    public let visibilityUserIds: [String]?
+    /// Absolute file URLs of pending media that still exist on disk.
+    public let localMediaURLs: [URL]
+    public let createdAt: Date
+
+    public init(
+        clientMutationId: String,
+        content: String,
+        visibility: String,
+        originalLanguage: String?,
+        type: String,
+        moodEmoji: String?,
+        audioUrl: String?,
+        audioDuration: Int?,
+        visibilityUserIds: [String]?,
+        localMediaURLs: [URL],
+        createdAt: Date
+    ) {
+        self.clientMutationId = clientMutationId
+        self.content = content
+        self.visibility = visibility
+        self.originalLanguage = originalLanguage
+        self.type = type
+        self.moodEmoji = moodEmoji
+        self.audioUrl = audioUrl
+        self.audioDuration = audioDuration
+        self.visibilityUserIds = visibilityUserIds
+        self.localMediaURLs = localMediaURLs
+        self.createdAt = createdAt
+    }
 }
 
 extension OfflineQueue: OfflineQueueing {}
@@ -1437,7 +1502,8 @@ public actor OfflineQueue {
         clientMutationId cmid: String,
         content: String?,
         visibility: String,
-        originalLanguage: String? = nil
+        originalLanguage: String? = nil,
+        type: String? = nil
     ) async throws -> EnqueueMediaResult {
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
 
@@ -1451,7 +1517,8 @@ public actor OfflineQueue {
             attachmentIds: [],
             visibility: visibility,
             originalLanguage: originalLanguage,
-            localMediaPaths: relativePaths
+            localMediaPaths: relativePaths,
+            type: type
         )
 
         // Phase A — write-ahead INSERT of the `.createPost` row (referencing the
@@ -1742,6 +1809,78 @@ public actor OfflineQueue {
             }
         } catch {
             logger.error("dequeue failed: \(error.localizedDescription, privacy: .public)")
+        }
+        await refreshPendingCount()
+    }
+
+    // MARK: - Offline Draft Recovery (createPost / status / reel)
+
+    public func recoverLastUnsentPost(
+        matchingTypes types: Set<String>,
+        olderThan threshold: TimeInterval
+    ) async -> RecoveredOfflinePost? {
+        guard let pool = outboxPool else { return nil }
+        let normalizedTypes = Set(types.map { $0.uppercased() })
+        let cutoff = Date().addingTimeInterval(-threshold)
+        let records: [OutboxRecord] = (try? await pool.read { db in
+            try OutboxRecord
+                .filter(Column("kind") == OutboxKind.createPost.rawValue)
+                .filter([
+                    OutboxStatus.pending.rawValue,
+                    OutboxStatus.inflight.rawValue,
+                    OutboxStatus.failed.rawValue,
+                    OutboxStatus.exhausted.rawValue
+                ].contains(Column("status")))
+                .order(Column("createdAt").desc)
+                .fetchAll(db)
+        }) ?? []
+
+        let decoder = JSONDecoder()
+        for record in records {
+            // "Not sent within the minute → offline": only rows stuck longer than
+            // the threshold qualify; a just-enqueued row is still actively sending.
+            guard record.createdAt <= cutoff else { continue }
+            guard let payload = try? decoder.decode(CreatePostPayload.self, from: record.payload) else { continue }
+            let resolvedType = (payload.type ?? "POST").uppercased()
+            guard normalizedTypes.contains(resolvedType) else { continue }
+
+            let urls: [URL] = (payload.localMediaPaths ?? []).compactMap { stored in
+                let path = Self.absoluteMediaPath(forStored: stored)
+                return FileManager.default.fileExists(atPath: path) ? URL(fileURLWithPath: path) : nil
+            }
+            return RecoveredOfflinePost(
+                clientMutationId: payload.clientMutationId,
+                content: payload.content,
+                visibility: payload.visibility,
+                originalLanguage: payload.originalLanguage,
+                type: resolvedType,
+                moodEmoji: payload.moodEmoji,
+                audioUrl: payload.audioUrl,
+                audioDuration: payload.audioDuration,
+                visibilityUserIds: payload.visibilityUserIds,
+                localMediaURLs: urls,
+                createdAt: record.createdAt
+            )
+        }
+        return nil
+    }
+
+    public func cancelCreatePost(clientMutationId cmid: String) async {
+        let outboxId = "ofqm_\(cmid)"
+        guard let pool = outboxPool else { return }
+        // Reclaim pending-media files before deleting the row so they don't leak.
+        if let record = try? await pool.read({ db in try OutboxRecord.fetchOne(db, key: outboxId) }),
+           let payload = try? JSONDecoder().decode(CreatePostPayload.self, from: record.payload) {
+            for stored in payload.localMediaPaths ?? [] {
+                try? FileManager.default.removeItem(atPath: Self.absoluteMediaPath(forStored: stored))
+            }
+        }
+        do {
+            try await pool.write { db in
+                _ = try OutboxRecord.deleteOne(db, key: outboxId)
+            }
+        } catch {
+            logger.error("cancelCreatePost failed: \(error.localizedDescription, privacy: .public)")
         }
         await refreshPendingCount()
     }

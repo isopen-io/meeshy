@@ -83,7 +83,8 @@ struct ConnectionBanner: View {
                 label: String(localized: "connection.offline", defaultValue: "Hors ligne"),
                 iconName: "wifi.slash",
                 dotStyle: .warning,
-                source: nil
+                source: nil,
+                showsActivityDots: false
             ))
         } else if showJustReturnedOnline && !isDisconnected {
             result.append(SyncPillEntry(
@@ -91,7 +92,8 @@ struct ConnectionBanner: View {
                 label: String(localized: "connection.online", defaultValue: "En ligne"),
                 iconName: "wifi",
                 dotStyle: .success,
-                source: nil
+                source: nil,
+                showsActivityDots: false
             ))
         } else if isDisconnected {
             result.append(SyncPillEntry(
@@ -115,12 +117,15 @@ struct ConnectionBanner: View {
         }
 
         for item in pendingItems {
+            let isTerminalFailure = item.status == .failed || item.status == .exhausted
             result.append(SyncPillEntry(
                 id: item.id,
                 label: SyncPillLabels.operationLabel(for: item),
                 iconName: itemIcon(for: item.iconKind),
-                dotStyle: (item.status == .failed || item.status == .exhausted) ? .error : .brand,
-                source: item.source
+                dotStyle: isTerminalFailure ? .error : .brand,
+                source: item.source,
+                // A permanently-failed row is not in flight — no activity dots.
+                showsActivityDots: !isTerminalFailure
             ))
         }
 

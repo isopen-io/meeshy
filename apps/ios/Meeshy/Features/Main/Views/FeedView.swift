@@ -99,6 +99,11 @@ struct FeedView: View {
     @State var pendingMediaFiles: [String: URL] = [:]
     @State var pendingThumbnails: [String: UIImage] = [:]
     @State var pendingAudioURL: URL?
+    /// `clientMutationId` of a post/reel recovered from the offline queue and
+    /// pre-filled as a draft when the composer opened onto a stuck unsent post.
+    /// The re-send supersedes this row so it replaces the stuck one (no duplicate
+    /// on reconnect). `nil` when the compose is fresh.
+    @State var recoveredPostCmid: String?
 
     /// In-flight preparations rendered as loading tiles in the attachments
     /// row. Each entry is promoted to `pendingAttachments` once it reaches
@@ -453,6 +458,9 @@ struct FeedView: View {
             // Full-screen composer overlay
             if showComposer {
                 composerOverlay
+                    // Draft recovery: when the composer opens onto an empty
+                    // compose, pre-fill the last post/reel that got stuck offline.
+                    .task { await recoverStuckPostDraftIfNeeded() }
             }
         }
     }
@@ -988,6 +996,7 @@ struct FeedView: View {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showComposer = false
                         isComposerFocused = false
+                        recoveredPostCmid = nil
                     }
                 }
 
@@ -1000,6 +1009,7 @@ struct FeedView: View {
                             showComposer = false
                             isComposerFocused = false
                             composerText = ""
+                            recoveredPostCmid = nil
                         }
                     } label: {
                         Text(String(localized: "Annuler", defaultValue: "Annuler"))

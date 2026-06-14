@@ -35,6 +35,7 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         let content: String?
         let visibility: String
         let originalLanguage: String?
+        let type: String?
     }
 
     var enqueuePostMediaCalls: [EnqueuePostMediaCall] = []
@@ -48,20 +49,39 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         clientMutationId: String,
         content: String?,
         visibility: String,
-        originalLanguage: String?
+        originalLanguage: String?,
+        type: String?
     ) async throws -> OfflineQueue.EnqueueMediaResult {
         enqueuePostMediaCalls.append(EnqueuePostMediaCall(
             sourceMediaURLs: sourceMediaURLs,
             clientMutationId: clientMutationId,
             content: content,
             visibility: visibility,
-            originalLanguage: originalLanguage
+            originalLanguage: originalLanguage,
+            type: type
         ))
         if let enqueuePostMediaError { throw enqueuePostMediaError }
         return OfflineQueue.EnqueueMediaResult(
             outboxId: "ofqm_\(clientMutationId)",
             localMediaPaths: sourceMediaURLs.map { $0.lastPathComponent }
         )
+    }
+
+    /// Stubbed recovery result; tests set this to simulate a stuck offline item.
+    var recoverLastUnsentPostResult: RecoveredOfflinePost?
+    var recoverLastUnsentPostCalls: [(types: Set<String>, olderThan: TimeInterval)] = []
+    var cancelCreatePostCalls: [String] = []
+
+    func recoverLastUnsentPost(
+        matchingTypes: Set<String>,
+        olderThan: TimeInterval
+    ) async -> RecoveredOfflinePost? {
+        recoverLastUnsentPostCalls.append((matchingTypes, olderThan))
+        return recoverLastUnsentPostResult
+    }
+
+    func cancelCreatePost(clientMutationId: String) async {
+        cancelCreatePostCalls.append(clientMutationId)
     }
 
     func outcomeStream(for cmid: String) async -> AsyncStream<OutboxOutcome> {

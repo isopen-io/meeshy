@@ -498,7 +498,14 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // race in and trip the 401 path. With the gateway's sliding-window
         // semantics this also extends the session another 365 days, so an
         // active user is renewed indefinitely.
-        if isCurrentTokenExpired, let _ = sessionToken {
+        //
+        // Skip while offline: this is `await`ed and gates the splash (the only
+        // network call on the cold-start critical path). Offline it cannot
+        // succeed and would hang the splash for the full URLSession timeout
+        // (30-60s) behind a launch the cache could already serve. No API call
+        // can race in offline anyway, so deferring the refresh to the next
+        // reconnect / 401 is safe. Online behaviour is unchanged.
+        if isCurrentTokenExpired, sessionToken != nil, NetworkMonitor.shared.isOnline {
             _ = try? await refreshSession(force: false)
         }
 
