@@ -48,6 +48,13 @@ final class ReelsPresenter: ObservableObject {
 struct ReelsPlayerView: View {
     let seedPosts: [FeedPost]
     let startId: String?
+    /// `true` once the liquid reveal disc has reached full screen. Gates the
+    /// first reel's playback: the video stays on its poster (PAUSED) during the
+    /// reveal and only starts when this flips true (driven by RootView).
+    var revealCompleted: Bool
+    /// Real safe-area insets (the media is full-bleed via `.ignoresSafeArea()`,
+    /// so the chrome reads them explicitly to clear the Dynamic Island / home bar).
+    var safeArea: EdgeInsets = EdgeInsets()
     var onClose: () -> Void
 
     @StateObject private var viewModel = ReelsViewModel()
@@ -86,6 +93,7 @@ struct ReelsPlayerView: View {
             ReelPageView(
                 reel: reel,
                 isActive: viewModel.currentId == reel.id,
+                revealCompleted: revealCompleted,
                 isLiked: viewModel.isLiked(reel.id),
                 likeCount: viewModel.likeCount(reel),
                 isBookmarked: viewModel.isBookmarked(reel.id),
@@ -153,7 +161,9 @@ struct ReelsPlayerView: View {
                     .adaptiveGlass(in: Circle(), tint: .black.opacity(0.35))
             }
             .padding(.leading, 12)
-            .padding(.top, 8)
+            // Sit clearly below the Dynamic Island. `safeArea.top` fluctuates
+            // once the status bar hides, so floor it to clear the island reliably.
+            .padding(.top, max(safeArea.top, 50) + 28)
             .accessibilityLabel(String(localized: "reels.back", defaultValue: "Retour", bundle: .main))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -167,6 +177,7 @@ struct ReelsPlayerView: View {
 struct ReelPageView: View {
     let reel: FeedPost
     let isActive: Bool
+    let revealCompleted: Bool
     let isLiked: Bool
     let likeCount: Int
     let isBookmarked: Bool
@@ -176,8 +187,18 @@ struct ReelPageView: View {
     var onShare: () -> Void
 
     @State private var descriptionExpanded = false
+    // Plain reference (NOT @ObservedObject): the page itself doesn't need to
+    // re-render on every 0.1s time tick — only `ReelScrubBar` observes the
+    // manager. Used here only for the fire-and-forget `togglePlayPause()` tap.
+    private let playerManager = SharedAVPlayerManager.shared
 
     private var accentColor: String { reel.authorColor }
+
+    /// True when this active reel is a video so the scrub bar shows only where
+    /// there is a seekable timeline (images/audio reels have none here).
+    private var isVideoReel: Bool {
+        reel.primaryReelMedia?.type == .video
+    }
 
     var body: some View {
         ZStack {
@@ -185,6 +206,16 @@ struct ReelPageView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.black)
                 .clipped()
+
+            // Tap-pause zone — fills the screen BEHIND the overlay. Taps that
+            // land OUTSIDE the description and the action rail (which sit on top
+            // with their own gestures) reach this layer and toggle play/pause on
+            // the video surface. Image/audio reels have no toggle, so it's gated.
+            if isVideoReel {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { playerManager.togglePlayPause() }
+            }
 
             LinearGradient(
                 colors: [.clear, .clear, .black.opacity(0.6)],
@@ -202,8 +233,16 @@ struct ReelPageView: View {
                     actionRail
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 96)
+
+                // Draggable scrub bar — only for the active video reel. Sits
+                // just below the description / action rail. Drag to seek.
+                if isVideoReel && isActive {
+                    ReelScrubBar(manager: playerManager, accentColor: accentColor)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 14)
+                }
             }
+            .padding(.bottom, 96)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -215,7 +254,7 @@ struct ReelPageView: View {
         if let media = reel.primaryReelMedia {
             switch media.type {
             case .video:
-                ReelVideoView(media: media, isActive: isActive)
+                ReelVideoView(media: media, isActive: isActive, revealCompleted: revealCompleted)
             case .image:
                 ReelImageView(reel: reel)
             case .audio:
@@ -353,6 +392,102 @@ private struct ReelActionButton: View {
     }
 }
 
+// MARK: - Reel Scrub Bar
+
+/// Draggable seek bar for the active reel video. Bound to the shared engine's
+/// `currentTime` / `duration`; dragging seeks anywhere in the clip via
+/// `seek(to:)`. Position / duration are shown above the track. Reuses the
+/// proven scrub pattern (GeometryReader + high-priority drag so the horizontal
+/// pan wins over the vertical pager) and the SDK's `formatMediaDuration`.
+///
+/// App-side (not an SDK atom): it is bound to the `SharedAVPlayerManager`
+/// singleton and placed by a product decision (reels-only, no skip, no
+/// tap-zones — the user explicitly chose the draggable bar only).
+private struct ReelScrubBar: View {
+    @ObservedObject var manager: SharedAVPlayerManager
+    let accentColor: String
+
+    @State private var isSeeking = false
+    @State private var seekFraction: Double = 0
+
+    private var accent: Color { Color(hex: accentColor) }
+
+    private var progress: Double {
+        guard manager.duration > 0 else { return 0 }
+        return isSeeking ? seekFraction : manager.currentTime / manager.duration
+    }
+
+    private var displayedTime: Double {
+        isSeeking ? seekFraction * manager.duration : manager.currentTime
+    }
+
+    /// Time left in the clip (shown on the right as `-MM:SS`).
+    private var remainingTime: Double {
+        max(0, manager.duration - displayedTime)
+    }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            HStack {
+                // Élapsé (début) à gauche…
+                Text(formatMediaDuration(displayedTime))
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.85))
+                Spacer()
+                // …durée restante à droite.
+                Text("-\(formatMediaDuration(remainingTime))")
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
+
+            track
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "reels.scrub", defaultValue: "Avancer ou reculer", bundle: .main))
+        .accessibilityValue(formatMediaDuration(displayedTime))
+    }
+
+    private var track: some View {
+        GeometryReader { geo in
+            let trackHeight: CGFloat = 4
+            let thumbSize: CGFloat = 14
+            let filledWidth = geo.size.width * CGFloat(progress)
+
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.white.opacity(0.3)).frame(height: trackHeight)
+                Capsule().fill(accent).frame(width: max(0, filledWidth), height: trackHeight)
+                Circle().fill(Color.white).frame(width: thumbSize, height: thumbSize)
+                    .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                    .scaleEffect(isSeeking ? 1.25 : 1.0)
+                    .offset(x: max(0, min(filledWidth - thumbSize / 2, geo.size.width - thumbSize)))
+            }
+            // 32pt target + high-priority drag so the scrub wins over the
+            // vertical pager (same rationale as VideoTransportControls.seekBar).
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        guard manager.duration > 0 else { return }
+                        isSeeking = true
+                        seekFraction = max(0, min(1, value.location.x / geo.size.width))
+                    }
+                    .onEnded { value in
+                        guard manager.duration > 0 else { isSeeking = false; return }
+                        let fraction = max(0, min(1, value.location.x / geo.size.width))
+                        manager.seek(to: fraction * manager.duration)
+                        HapticFeedback.light()
+                        isSeeking = false
+                        seekFraction = 0
+                    }
+            )
+        }
+        .frame(height: 32)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSeeking)
+    }
+}
+
 // MARK: - Reel Video
 
 /// Plays a reel video full-bleed through the single shared engine
@@ -363,6 +498,11 @@ private struct ReelActionButton: View {
 private struct ReelVideoView: View {
     let media: FeedMedia
     let isActive: Bool
+    /// Gate: the first reel's playback starts only once the liquid reveal disc
+    /// has reached full screen. Until then the poster (first frame) stays
+    /// visible PAUSED. Subsequent reels (paged to after the reveal) see this as
+    /// already `true`, so they play normally.
+    let revealCompleted: Bool
 
     @ObservedObject private var manager = SharedAVPlayerManager.shared
 
@@ -379,26 +519,41 @@ private struct ReelVideoView: View {
 
     @ViewBuilder
     private func content(ready: Bool) -> some View {
-        ZStack {
-            ReelPoster(thumbHash: media.thumbHash, url: media.thumbnailUrl ?? media.url, color: media.thumbnailColor)
+        // GeometryReader reports the REAL finite allocated size; an explicit
+        // `.frame(width:height:)` from it pins the video surface to the screen.
+        // A layer-backed `UIViewRepresentable` otherwise reports the video's
+        // aspect-fill intrinsic width (e.g. 1561pt for 16:9) and `.frame(maxWidth:
+        // .infinity)` does NOT clamp it — that inflated the page ZStack to the
+        // video width and pushed the action rail / info / scrub bar off-screen.
+        GeometryReader { geo in
+            ZStack {
+                ReelPoster(thumbHash: media.thumbHash, url: media.thumbnailUrl ?? media.url, color: media.thumbnailColor)
 
-            if isActive, ready, isShowingThis, let player = manager.player {
-                ReelVideoSurface(player: player)
-                    .ignoresSafeArea()
-                    .onTapGesture { manager.togglePlayPause() }
-            } else if isActive, !ready {
-                ProgressView()
-                    .tint(.white)
+                // Tap-to-pause is handled by the page-level tap zone (ReelPageView),
+                // so this surface stays gesture-free to avoid swallowing scrub/rail
+                // touches.
+                if isActive, ready, isShowingThis, let player = manager.player {
+                    ReelVideoSurface(player: player)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                } else if isActive, !ready {
+                    ProgressView()
+                        .tint(.white)
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
+            .onAppear { drive(ready: ready) }
+            .adaptiveOnChange(of: isActive) { _, _ in drive(ready: ready) }
+            .adaptiveOnChange(of: ready) { _, _ in drive(ready: ready) }
+            .adaptiveOnChange(of: revealCompleted) { _, _ in drive(ready: ready) }
+            .onDisappear {
+                // Releasing only when this page actually owns the engine avoids
+                // tearing down the next reel that has already loaded during paging.
+                if isShowingThis { manager.stop() }
             }
         }
-        .onAppear { drive(ready: ready) }
-        .adaptiveOnChange(of: isActive) { _, _ in drive(ready: ready) }
-        .adaptiveOnChange(of: ready) { _, _ in drive(ready: ready) }
-        .onDisappear {
-            // Releasing only when this page actually owns the engine avoids
-            // tearing down the next reel that has already loaded during paging.
-            if isShowingThis { manager.stop() }
-        }
+        .ignoresSafeArea()
     }
 
     private func drive(ready: Bool) {
@@ -409,31 +564,49 @@ private struct ReelVideoView: View {
             manager.isMuted = false
             manager.load(urlString: attachment.fileUrl)
         }
+        // Hold on the poster (PAUSED) until the liquid reveal completes; start
+        // playback only when the disc has reached full screen.
+        guard revealCompleted else { return }
         manager.play()
     }
 }
 
-/// Hidden-chrome AVKit surface filling the screen. The player itself is owned by
-/// `SharedAVPlayerManager`; this only renders it.
-private struct ReelVideoSurface: UIViewControllerRepresentable {
+/// Full-bleed video surface backed DIRECTLY by an `AVPlayerLayer` (not
+/// `AVPlayerViewController`). A plain layer-backed `UIView` composites correctly
+/// BENEATH the SwiftUI overlays in the ZStack; `AVPlayerViewController` instead
+/// renders its video ABOVE same-level SwiftUI siblings, which was hiding the
+/// action rail / info / scrub bar. The player is owned by `SharedAVPlayerManager`;
+/// this only renders it. Mirrors the SDK's `_AVPlayerLayerView` (Story player).
+private struct ReelVideoSurface: UIViewRepresentable {
     let player: AVPlayer
 
-    func makeUIViewController(context: Context) -> AVPlayerViewController {
-        let controller = AVPlayerViewController()
-        controller.player = player
-        controller.showsPlaybackControls = false
-        controller.videoGravity = .resizeAspectFill
-        controller.view.backgroundColor = .black
-        controller.allowsPictureInPicturePlayback = false
-        controller.updatesNowPlayingInfoCenter = false
-        return controller
+    func makeUIView(context: Context) -> ReelPlayerLayerView {
+        let view = ReelPlayerLayerView()
+        view.backgroundColor = .black
+        view.playerLayer.player = player
+        view.playerLayer.videoGravity = .resizeAspectFill
+        return view
     }
 
-    func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
-        if controller.player !== player {
-            controller.player = player
+    func updateUIView(_ view: ReelPlayerLayerView, context: Context) {
+        if view.playerLayer.player !== player {
+            view.playerLayer.player = player
         }
     }
+
+    /// Pin the surface to the proposed size. Without this a layer-backed
+    /// `UIViewRepresentable` reports the video's aspect-fill intrinsic size,
+    /// inflating the enclosing ZStack and pushing the SwiftUI overlays off-screen.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: ReelPlayerLayerView, context: Context) -> CGSize? {
+        proposal.replacingUnspecifiedDimensions()
+    }
+}
+
+/// Layer-backed `UIView` whose backing layer IS an `AVPlayerLayer` — GPU-composited
+/// video that respects SwiftUI ZStack z-ordering (overlays stay on top).
+private final class ReelPlayerLayerView: UIView {
+    override static var layerClass: AnyClass { AVPlayerLayer.self }
+    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
 }
 
 // MARK: - Reel Image

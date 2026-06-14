@@ -241,7 +241,7 @@ struct ConversationListHeaderOverlay: View {
 
     var body: some View {
         CollapsibleHeader(
-            title: "Meeshy",
+            title: "Meeshy Chats",
             scrollOffset: scrollOffset,
             showBackButton: false,
             titleColor: theme.textPrimary,
@@ -272,7 +272,7 @@ struct ConversationListHeaderOverlay: View {
                 }
             },
             titleView: {
-                Text("Meeshy")
+                Text("Meeshy Chats")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
