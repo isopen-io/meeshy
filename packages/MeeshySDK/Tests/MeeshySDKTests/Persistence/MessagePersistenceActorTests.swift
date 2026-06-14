@@ -42,6 +42,58 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(fetched[0].changeVersion, 1)
     }
 
+    /// Regression — "message reçu en double" (transient duplicate bubble).
+    ///
+    /// A server echo that races ahead of the REST ACK and misses the cid match
+    /// inserts a SECOND "mirror" row keyed on the server id. When the ACK later
+    /// backfills the optimistic row's serverId via `applyEvent(.serverAck)`,
+    /// BOTH rows then carry the same serverId — the user sees a duplicate bubble
+    /// until a later publish collapses it (which is why it "disappears after a
+    /// few minutes / interaction"). The reconcile must purge the mirror so the
+    /// optimistic row (which holds the cid tracking + local relations) is the
+    /// only survivor for that serverId.
+    func test_applyEvent_serverAck_purgesRacingMirrorRow() async throws {
+        // Optimistic row authored locally (PK = cid, serverId nil until ack).
+        let optimistic = MessageRecordFactory.make(localId: "cid_dup", conversationId: "conv_dup")
+        try await actor.insertOptimistic(optimistic)
+        // Racing echo that missed the cid match → mirror row keyed on the server id.
+        var mirror = MessageRecordFactory.make(localId: "srv_dup", conversationId: "conv_dup", state: .sent)
+        mirror.serverId = "srv_dup"
+        try await actor.insertOptimistic(mirror)
+
+        // The REST ACK finally lands and backfills the optimistic row's serverId.
+        _ = try await actor.applyEvent(localId: "cid_dup",
+            event: .serverAck(serverId: "srv_dup", at: Date()))
+
+        let rows = try actor.messages(for: "conv_dup", limit: 10)
+        let withServerId = rows.filter { $0.serverId == "srv_dup" }
+        XCTAssertEqual(withServerId.count, 1, "exactly one row must carry the server id (mirror purged)")
+        XCTAssertEqual(withServerId.first?.localId, "cid_dup", "the optimistic/cid row survives, not the mirror")
+    }
+
+    /// Companion to the serverAck case for the OTHER reconcile path:
+    /// `upsertFromAPIMessages`. A no-cid echo inserts a mirror row; a later
+    /// cid-bearing echo reconciles the optimistic row by `clientMessageId` and
+    /// must purge the mirror so a single row survives per serverId — carrying
+    /// the server content on the optimistic (cid) row.
+    func test_upsertFromAPIMessages_cidReconcile_purgesRacingMirrorRow() async throws {
+        let optimistic = MessageRecordFactory.make(localId: "cid_up", conversationId: "conv_up")
+        try await actor.insertOptimistic(optimistic)
+        var mirror = MessageRecordFactory.make(localId: "srv_up", conversationId: "conv_up", state: .sent)
+        mirror.serverId = "srv_up"
+        try await actor.insertOptimistic(mirror)
+
+        // The cid-bearing echo reconciles the optimistic row by clientMessageId.
+        let echo = makeAPIMessage(id: "srv_up", conversationId: "conv_up", content: "Hello", clientMessageId: "cid_up")
+        try await actor.upsertFromAPIMessages([echo])
+
+        let rows = try actor.messages(for: "conv_up", limit: 10)
+        let withServerId = rows.filter { $0.serverId == "srv_up" }
+        XCTAssertEqual(withServerId.count, 1, "exactly one row must carry the server id (mirror purged)")
+        XCTAssertEqual(withServerId.first?.localId, "cid_up", "the optimistic/cid row survives, not the mirror")
+        XCTAssertEqual(withServerId.first?.content, "Hello", "the surviving row holds the reconciled server content")
+    }
+
     func test_applyEvent_invalidTransition_returnsNil() async throws {
         let record = MessageRecordFactory.make(localId: "temp_003", state: .read)
         try await actor.insertOptimistic(record)

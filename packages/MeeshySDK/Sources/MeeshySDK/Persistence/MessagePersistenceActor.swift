@@ -315,6 +315,17 @@ public actor MessagePersistenceActor {
             if case .serverAck(let serverId, let at) = event {
                 record.serverId = serverId
                 record.sentAt = at
+                // Purge a racing mirror row: an echo that reached
+                // `upsertFromAPIMessages` BEFORE this ACK and missed the cid
+                // match inserted a second row keyed on the server id
+                // (localId == serverId). Now that this optimistic row
+                // (localId == cid) owns the serverId, that mirror is a duplicate
+                // bubble — delete it so a single row survives per serverId.
+                // Guarded on `localId != serverId` so a normal received row
+                // (inserted with localId == serverId) never deletes itself.
+                if localId != serverId {
+                    try MessageRecord.deleteOne(db, key: serverId)
+                }
                 // `save` (upsert) not `insert`: the socket ingestion path may
                 // have already reconciled this optimistic row and written its
                 // PendingIdRecord (echo racing ahead of the REST ACK). A raw
@@ -1577,6 +1588,12 @@ public actor MessagePersistenceActor {
                         // first reconciliation IS a row change (serverId backfill),
                         // so gating this on `rowChanged` never skips a needed save.
                         if existing.localId != api.id {
+                            // Purge a racing mirror row (localId == api.id) left
+                            // by an earlier echo that missed the cid match: this
+                            // reconcile promotes the optimistic row (localId ==
+                            // cid) to own the server id, so the server-keyed
+                            // mirror is now a duplicate bubble.
+                            try MessageRecord.deleteOne(db, key: api.id)
                             try PendingIdRecord(
                                 localId: existing.localId, serverId: api.id,
                                 conversationId: api.conversationId, reconciledAt: Date()
