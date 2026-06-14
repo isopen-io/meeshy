@@ -7,7 +7,7 @@ public struct ChatBubble: View {
     public let isMe: Bool
     public var index: Int = 0
     public var animateEntrance: Bool = true
-    public var contactColor: String = "FF2E63"
+    public var contactColor: String = MeeshyColors.brandPrimaryHex
 
     @State private var isVisible = false
     @State private var isPressed = false
@@ -20,7 +20,7 @@ public struct ChatBubble: View {
     private var theme: ThemeManager { ThemeManager.shared }
     private var isDark: Bool { colorScheme == .dark }
 
-    public init(text: String, isMe: Bool, index: Int = 0, animateEntrance: Bool = true, contactColor: String = "FF2E63") {
+    public init(text: String, isMe: Bool, index: Int = 0, animateEntrance: Bool = true, contactColor: String = MeeshyColors.brandPrimaryHex) {
         self.text = text; self.isMe = isMe; self.index = index; self.animateEntrance = animateEntrance; self.contactColor = contactColor
     }
 

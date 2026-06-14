@@ -1127,7 +1127,7 @@ public struct UserProfileSheet: View {
                     .padding(.vertical, 10)
                     .background(
                         LinearGradient(
-                            colors: [Color(hex: "FF6B6B"), Color(hex: "FF2E63")],
+                            colors: [MeeshyColors.success, MeeshyColors.successDeep],
                             startPoint: .leading, endPoint: .trailing
                         )
                     )

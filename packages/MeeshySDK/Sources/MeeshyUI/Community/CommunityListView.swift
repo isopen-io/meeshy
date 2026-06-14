@@ -35,7 +35,7 @@ public struct CommunityListView: View {
                 if viewModel.isLoading && viewModel.communities.isEmpty {
                     Spacer()
                     ProgressView()
-                        .tint(Color(hex: "FF2E63"))
+                        .tint(MeeshyColors.brandPrimary)
                     Spacer()
                 } else if viewModel.communities.isEmpty && !viewModel.isLoading {
                     Spacer()
@@ -72,7 +72,7 @@ public struct CommunityListView: View {
                         .font(.system(size: 22))
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [Color(hex: "FF2E63"), Color(hex: "A855F7")],
+                                colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -121,7 +121,7 @@ public struct CommunityListView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [Color(hex: "FF2E63"), Color(hex: "A855F7")],
+                        colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -147,7 +147,7 @@ public struct CommunityListView: View {
                 .padding(.vertical, 12)
                 .background(
                     LinearGradient(
-                        colors: [Color(hex: "FF2E63"), Color(hex: "A855F7")],
+                        colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -187,7 +187,7 @@ public struct CommunityListView: View {
 
                 if viewModel.hasMore {
                     ProgressView()
-                        .tint(Color(hex: "A855F7"))
+                        .tint(MeeshyColors.brandPrimary)
                         .padding()
                         .task { await viewModel.loadMore() }
                 }

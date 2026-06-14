@@ -7,7 +7,7 @@ import MeeshySDK
 public struct ImageViewerView: View {
     public let attachment: MeeshyMessageAttachment
     public let context: MediaPlayerContext
-    public var accentColor: String = "08D9D6"
+    public var accentColor: String = MeeshyColors.brandPrimaryHex
 
     public var onDelete: (() -> Void)? = nil
     public var onEdit: (() -> Void)? = nil
@@ -45,7 +45,7 @@ public struct ImageViewerView: View {
     public var isOwnMessage: Bool = false
 
     public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
-                accentColor: String = "08D9D6", isOwnMessage: Bool = false,
+                accentColor: String = MeeshyColors.brandPrimaryHex, isOwnMessage: Bool = false,
                 onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil) {
         self.attachment = attachment; self.context = context; self.accentColor = accentColor
         self.isOwnMessage = isOwnMessage

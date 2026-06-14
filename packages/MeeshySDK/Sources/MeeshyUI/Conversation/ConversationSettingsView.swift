@@ -459,7 +459,7 @@ public struct ConversationSettingsView: View {
             HStack(spacing: 3) {
                 Image(systemName: "checkmark.shield.fill").font(.system(size: 9))
                 Text("Moderateur").font(.system(size: 11, weight: .medium))
-            }.foregroundColor(Color(hex: "4ECDC4"))
+            }.foregroundColor(MeeshyColors.success)
         case .member:
             EmptyView()
         }

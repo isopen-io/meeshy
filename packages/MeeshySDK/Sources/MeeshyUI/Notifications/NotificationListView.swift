@@ -50,6 +50,9 @@ enum NotificationCategory: String, CaseIterable {
         }
     }
 
+    // Categorical filter palette: each notification category keeps a distinct
+    // hue so the filter chips read as a colour-coded set, not brand chrome.
+    // Treated as one ladder (arbitrated separately) — do not migrate piecemeal.
     var color: String {
         switch self {
         case .all: return "6366F1"

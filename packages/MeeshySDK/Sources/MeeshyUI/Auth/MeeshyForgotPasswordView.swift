@@ -100,7 +100,7 @@ public struct MeeshyForgotPasswordView: View {
             VStack(spacing: 16) {
                 Image(systemName: "envelope.badge.fill")
                     .font(.system(size: 48))
-                    .foregroundStyle(Color(hex: "4ECDC4"))
+                    .foregroundStyle(MeeshyColors.brandPrimary)
 
                 Text(String(localized: "auth.forgotPassword.emailSent", defaultValue: "Email envoye !", bundle: .module))
                     .font(.title3.weight(.bold))
@@ -245,7 +245,7 @@ public struct MeeshyForgotPasswordView: View {
                         }
                         .padding(.vertical, 14)
                         .frame(maxWidth: .infinity)
-                        .background(Color(hex: "4ECDC4"))
+                        .background(MeeshyColors.brandPrimary)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 24)
@@ -306,7 +306,7 @@ public struct MeeshyForgotPasswordView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(Color(hex: "4ECDC4"))
+            .background(MeeshyColors.brandPrimary)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .foregroundStyle(.white)
         }

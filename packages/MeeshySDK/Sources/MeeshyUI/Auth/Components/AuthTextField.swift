@@ -37,7 +37,7 @@ public struct AuthTextField: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .foregroundStyle(isFocused ? Color(hex: "4ECDC4") : theme.textMuted)
+                    .foregroundStyle(isFocused ? MeeshyColors.brandPrimary : theme.textMuted)
                     .frame(width: 20)
 
                 if isSecure && !isShowingPassword {
@@ -70,7 +70,7 @@ public struct AuthTextField: View {
             .overlay(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .strokeBorder(
-                        isFocused ? Color(hex: "4ECDC4").opacity(0.6) :
+                        isFocused ? MeeshyColors.brandPrimary.opacity(0.6) :
                             validationError != nil ? Color.red.opacity(0.5) :
                             theme.inputBorder.opacity(0.3),
                         lineWidth: 1

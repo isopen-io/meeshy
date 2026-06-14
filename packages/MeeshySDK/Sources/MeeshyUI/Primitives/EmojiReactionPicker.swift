@@ -353,14 +353,14 @@ public struct EmojiFullPickerSheet: View {
                             Text(category.name)
                                 .font(.system(size: 9, weight: .medium))
                                 .foregroundColor(selectedCategory == index
-                                    ? (style == .dark ? .white : Color(hex: "08D9D6"))
+                                    ? (style == .dark ? .white : MeeshyColors.brandPrimary)
                                     : (style == .dark ? .white.opacity(0.5) : .gray))
                         }
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(
                             RoundedRectangle(cornerRadius: 10)
                                 .fill(selectedCategory == index
-                                    ? (style == .dark ? Color.white.opacity(0.15) : Color(hex: "08D9D6").opacity(0.12))
+                                    ? (style == .dark ? Color.white.opacity(0.15) : MeeshyColors.brandPrimary.opacity(0.12))
                                     : Color.clear)
                         )
                     }
@@ -453,14 +453,14 @@ public struct EmojiKeyboardPanel: View {
                                 Text(category.name)
                                     .font(.system(size: 9, weight: .medium))
                                     .foregroundColor(selectedCategory == index
-                                        ? (style == .dark ? .white : Color(hex: "08D9D6"))
+                                        ? (style == .dark ? .white : MeeshyColors.brandPrimary)
                                         : (style == .dark ? .white.opacity(0.4) : .gray))
                             }
                             .padding(.horizontal, 10).padding(.vertical, 6)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
                                     .fill(selectedCategory == index
-                                        ? (style == .dark ? Color.white.opacity(0.15) : Color(hex: "08D9D6").opacity(0.12))
+                                        ? (style == .dark ? Color.white.opacity(0.15) : MeeshyColors.brandPrimary.opacity(0.12))
                                         : Color.clear)
                             )
                         }

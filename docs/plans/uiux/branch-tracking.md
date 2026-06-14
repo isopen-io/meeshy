@@ -16,10 +16,10 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | **48i** (iOS only : solde « reliquats ancienne palette » du différé 45i — épuration 2 fichiers morts `SampleData.swift`+`MessageComposer.swift` (pbxproj nettoyé) + bloc feed legacy mort RootViewComponents 697–1113 (`ThemedFeedComposer`/`ThemedFeedCard`/`FeedActionButton`/10 wrappers Colorful-Legacy, liveness vérifiée) ; re-peinture charte des surfaces vivantes (RootViewComponents/FeedView/FeedView+Attachments/WidgetPreviewView/AttachmentPreparationService/ConversationAnimatedBackground/MeeshyWidgets + 6 singles) ; +6 `.accessibilityLabel` toolbar FeedComposerSheet ; +4 clés i18n `widget.preview.action.*` ×5 locales ; filtre story « cool » documenté intentionnel) |
-| Last merged PR | #610 (47w), #605 (46w) ; iter-48i sur `claude/wizardly-rubin-ph295e` |
-| Last Merged Base (commit) | 7659cb0e (merge #610) — base de la branche iter-48i |
-| Next iteration | **49** — repartir de `main` HEAD post-merge iter-48i |
+| Last completed iteration | **49i** (iOS only : solde le différé 48i « SDK MeeshyUI — ancienne palette ». Migration du chrome SDK trio `08D9D6`/`FF2E63`/`4ECDC4` + accent pourpre `A855F7` vers `MeeshyColors` sur 29 fichiers — Auth (AuthTextField/LanguageSelector/MeeshyForgotPasswordView→brandPrimary), Community (unification indigo complète ; quitter/requis→error ; public toggle→success ; presetColors documenté), Primitives (EmojiReactionPicker/LanguagePickerSheet→brandPrimary, NotificationBadge→error, ConversationSettingsView Modérateur→success, EmptyStateView/ChatBubble défauts→brandPrimaryHex, UserIdentityBar→brandPrimary), UserProfileSheet débloquer→[success,successDeep], Media/Location défauts accentColor ×19→brandPrimaryHex, VoiceProfile ×4→brandPrimaryHex ; commentaires d'intention sur MeeshyAvatar story ring + NotificationListView ladder. Documentés intentionnels NON migrés : palettes de contenu/swatches utilisateur (Story/Community presetColors), affordance story ring Instagram, ladder catégoriel notifications, speakerPalette, TagInputView, filtres .vivid, previews #DEBUG, modèles SDK core testés) |
+| Last merged PR | #628 (main HEAD) ; iter-48i mergé ; iter-49i sur `claude/upbeat-euler-c48142` |
+| Last Merged Base (commit) | 2c65d379 (merge #628) — base de la branche iter-49i |
+| Next iteration | **50** — repartir de `main` HEAD post-merge iter-49i |
 
 ### Deferred carry-over — web (pour 49+)
 - ~~chart hex sans variante dark (RankingStatsImpl/MermaidDiagramImpl/AgentOverviewTab)~~ → **SOLDÉ en 48w** (ne plus auditer ces 3 fichiers pour le dark mode)
@@ -34,10 +34,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 - `hooks/useI18n.ts` = simple re-export de `use-i18n.ts` (vérifié 48w — pas un doublon, ne pas re-flagger)
 - `/v2` garde son ThemeProvider propre (`gp-theme-mode`, `data-theme`) — système assumé, ne pas unifier avec `useResolvedTheme`
 
-### Deferred carry-over — iOS (pour 49+, post-48i)
-- ~~SampleData.swift + reliquats ancienne palette app (RootViewComponents/FeedView/FeedView+Attachments/WidgetPreviewView/AboutView/MessageComposer/AttachmentPreparationService/ConversationAnimatedBackground + divers ×1)~~ → **SOLDÉ en 48i** (ne plus auditer le trio `08D9D6|FF2E63|4ECDC4` côté `apps/ios` ; seul reliquat intentionnel : StoryViewerView+Content:180 = filtre artistique « cool »)
-- **NOUVEAU (découvert 48i)** : ancienne palette côté SDK `MeeshyUI` — chrome UI à migrer (EmojiReactionPicker ×3, NotificationListView:64, MeeshyAvatar:417 fallback gradient, CommunitySettingsView:19, AuthTextField/LanguageSelector/MeeshyForgotPasswordView…) vs palettes de contenu utilisateur à documenter intentionnelles (Story DrawingEditToolOptions/StoryComposerView/StoryTextEditorView)
-- FriendRequestListView 11 polices ; PostDetailView (.textSelection + 21 hex — re-vérifié OK iter-45, retirer si confirmé) ; arbitrage `time.*` (FeedPostCard) vs `time.short.*` (ShortRelativeTime) ; ConversationInfoSheet (52 polices), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (27), NewConversationView (16), DataExportView (16), DataStorageView (11) ; washes AudioPostComposer (décision design) ; ladder catégoriel arc-en-ciel (FF9F43/45B7D1/2ECC71/F8B500/9B59B6/E74C3C/FF6B6B — UniversalComposerBar + toolbars feed emoji/doc + prepareVideo défaut, à arbitrer charte en une décision) ; VoiceProfileWizardView/TrackingLinksView Color(hex:) ; IncomingCallView .white contraste ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) ; ThemedConversationRow theme-aware (leaf-view)
+### Deferred carry-over — iOS (pour 50+, post-49i)
+- ~~SampleData.swift + reliquats ancienne palette app~~ → **SOLDÉ en 48i** (ne plus auditer le trio `08D9D6|FF2E63|4ECDC4` côté `apps/ios` ; seul reliquat intentionnel : StoryViewerView+Content:180 = filtre artistique « cool »)
+- ~~SDK MeeshyUI chrome ancienne palette (trio + A855F7) : Auth/Community/EmojiReactionPicker/LanguagePickerSheet/NotificationBadge/EmptyStateView/UserIdentityBar/ConversationSettingsView/UserProfileSheet/Media/Location/VoiceProfile défauts~~ → **SOLDÉ en 49i** (ne plus auditer le chrome `MeeshyUI` pour le trio/A855F7). Reliquats documentés **intentionnels** (NE PAS re-flagger) : MeeshyAvatar story ring (affordance Instagram), NotificationListView.color (ladder catégoriel), MediaTypes.speakerPalette, StoryFilter .vivid, Story swatches (DrawingEditToolOptions/StoryComposerView/StoryTextEditorView), CommunitySettings presetColors, TagInputView palette, StatsCard/AchievementBadge previews #DEBUG, modèles SDK core (testés)
+- **Ladder catégoriel arc-en-ciel — UNE décision charte (app + SDK)** : NotificationListView.color (11 cat.), TagInputView, speakerPalette, + app-side UniversalComposerBar/toolbars feed (emoji/doc) + prepareVideo défaut FF6B6B (FF9F43/45B7D1/2ECC71/F8B500/9B59B6/E74C3C/FF6B6B). Arbitrer « catégoriel = identité hue-codée OU charte indigo ? »
+- `UserIdentityBar` `accessibilityLabel("Traduction disponible")` FR brut (clé i18n SDK `.module`)
+- FriendRequestListView 11 polices ; PostDetailView (.textSelection + 21 hex — re-vérifié OK iter-45, retirer si confirmé) ; arbitrage `time.*` (FeedPostCard) vs `time.short.*` (ShortRelativeTime) ; ConversationInfoSheet (52 polices), ConversationDashboardView (43), TwoFactorSetupView (42, héros intentionnels), CallView (34), InviteFriendsSheet (33), ProfileView/GlobalSearchView (32), SettingsView (27), NewConversationView (16), DataExportView (16), DataStorageView (11) ; washes AudioPostComposer (décision design) ; TrackingLinksView Color(hex:) ; IncomingCallView .white contraste ; AvatarContextMenuItem → LocalizedStringKey (API SDK à évaluer) ; ThemedConversationRow theme-aware (leaf-view)
 
 ### Deferred carry-over — Android (pour 46+)
 parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ; exceptions documentées : SettingsScreen 14.dp, emoji 22.sp (acceptées, ne pas re-flagger)
@@ -80,4 +82,5 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 45 | claude/blissful-ritchie-dp7ibu | #597 | ✅ |
 | 46w | claude/elegant-noether-09t4x2 | #605 | ✅ |
 | 47w | claude/blissful-ritchie-8d57jg | #610 | ✅ |
-| 48i | claude/wizardly-rubin-ph295e | ⏳ | ⏳ |
+| 48i | claude/wizardly-rubin-ph295e | (merged) | ✅ |
+| 49i | claude/upbeat-euler-c48142 | ⏳ | ⏳ |

@@ -20,7 +20,7 @@ public struct EmptyStateView: View {
         title: String,
         subtitle: String,
         actionLabel: String? = nil,
-        accentColor: String = "4ECDC4",
+        accentColor: String = MeeshyColors.brandPrimaryHex,
         compact: Bool = false,
         onAction: (() -> Void)? = nil
     ) {

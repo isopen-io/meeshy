@@ -11,7 +11,7 @@ public struct LocationMessageView: View {
     let onTapFullscreen: (() -> Void)?
 
     public init(latitude: Double, longitude: Double, placeName: String? = nil,
-                address: String? = nil, accentColor: String = "08D9D6",
+                address: String? = nil, accentColor: String = MeeshyColors.brandPrimaryHex,
                 onTapFullscreen: (() -> Void)? = nil) {
         self.latitude = latitude; self.longitude = longitude
         self.placeName = placeName; self.address = address

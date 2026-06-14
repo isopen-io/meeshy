@@ -15,6 +15,9 @@ public struct CommunitySettingsView: View {
     public var onDeleted: (() -> Void)? = nil
     public var onLeft: (() -> Void)? = nil
 
+    // User-content palette: swatches the user picks to colour their own
+    // community. Intentionally a vibrant spread (not the Indigo brand chrome) —
+    // these are content choices, not UI chrome. Do not migrate to MeeshyColors.
     private let presetColors = [
         "FF2E63", "A855F7", "08D9D6", "FF6B6B",
         "4ECDC4", "45B7D1", "F59E0B", "10B981",
@@ -452,7 +455,7 @@ final class CommunitySettingsViewModel: ObservableObject {
         self.originalAvatarUrl = avatarStr
         self.originalBannerUrl = bannerStr
 
-        let savedColor = UserDefaults.standard.string(forKey: "community.color.\(community.id)") ?? "4ECDC4"
+        let savedColor = UserDefaults.standard.string(forKey: "community.color.\(community.id)") ?? MeeshyColors.brandPrimaryHex
         let savedEmoji = UserDefaults.standard.string(forKey: "community.emoji.\(community.id)") ?? ""
         self.localColor = savedColor
         self.localEmoji = savedEmoji

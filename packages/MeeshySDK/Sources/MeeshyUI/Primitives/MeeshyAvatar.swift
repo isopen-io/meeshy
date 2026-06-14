@@ -409,6 +409,9 @@ public struct MeeshyAvatar: View {
     private var storyRing: some View {
         switch effectiveStoryState {
         case .unread:
+            // Intentional multi-colour ring: the unread-story affordance is a
+            // universally recognised pattern (Instagram-style). It is content
+            // chrome, not brand chrome — kept off the Indigo scale on purpose.
             Circle()
                 .stroke(
                     AngularGradient(

@@ -12,7 +12,7 @@ public struct TranscriptionBadgeView: View {
 
     public init(transcriptionText: String, language: String? = nil,
                 confidence: Double? = nil, isOnDevice: Bool = false,
-                accentColor: String = "08D9D6") {
+                accentColor: String = MeeshyColors.brandPrimaryHex) {
         self.transcriptionText = transcriptionText
         self.language = language; self.confidence = confidence
         self.isOnDevice = isOnDevice; self.accentColor = accentColor

@@ -41,7 +41,7 @@ public struct CommunityDetailView: View {
 
             if viewModel.isLoading && viewModel.community == nil {
                 ProgressView()
-                    .tint(Color(hex: "FF2E63"))
+                    .tint(MeeshyColors.brandPrimary)
             } else if let community = viewModel.community {
                 ScrollView {
                     VStack(spacing: 0) {
@@ -335,7 +335,7 @@ public struct CommunityDetailView: View {
             HStack(spacing: 4) {
                 Image(systemName: icon)
                     .font(.system(size: 12))
-                    .foregroundColor(Color(hex: "A855F7"))
+                    .foregroundColor(MeeshyColors.brandPrimary)
                 Text(value)
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
@@ -388,10 +388,10 @@ public struct CommunityDetailView: View {
                         Text(String(localized: "community.detail.leave.label", defaultValue: "Quitter la communaute", bundle: .module))
                     }
                     .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundColor(Color(hex: "FF2E63"))
+                    .foregroundColor(MeeshyColors.error)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(Color(hex: "FF2E63").opacity(0.1))
+                    .background(MeeshyColors.error.opacity(0.1))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
             }
@@ -405,7 +405,7 @@ public struct CommunityDetailView: View {
             VStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 18))
-                    .foregroundColor(Color(hex: "A855F7"))
+                    .foregroundColor(MeeshyColors.brandPrimary)
                 Text(title)
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundColor(theme.textSecondary)
@@ -469,9 +469,9 @@ public struct CommunityDetailView: View {
         HStack(spacing: 12) {
             Image(systemName: "number")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(Color(hex: "A855F7"))
+                .foregroundColor(MeeshyColors.brandPrimary)
                 .frame(width: 36, height: 36)
-                .background(Color(hex: "A855F7").opacity(0.1))
+                .background(MeeshyColors.brandPrimary.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
 
             VStack(alignment: .leading, spacing: 2) {
@@ -609,7 +609,7 @@ struct AddChannelSheet: View {
 
                 if isLoading && conversations.isEmpty {
                     ProgressView()
-                        .tint(Color(hex: "A855F7"))
+                        .tint(MeeshyColors.brandPrimary)
                 } else if filtered.isEmpty && !isLoading {
                     emptyState
                 } else {
@@ -677,7 +677,7 @@ struct AddChannelSheet: View {
                     Spacer()
                     if isLoadingMore {
                         ProgressView()
-                            .tint(Color(hex: "A855F7"))
+                            .tint(MeeshyColors.brandPrimary)
                     }
                     Spacer()
                 }
@@ -693,9 +693,9 @@ struct AddChannelSheet: View {
         HStack(spacing: 12) {
             Image(systemName: "number")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(Color(hex: "A855F7"))
+                .foregroundColor(MeeshyColors.brandPrimary)
                 .frame(width: 32, height: 32)
-                .background(Color(hex: "A855F7").opacity(0.1))
+                .background(MeeshyColors.brandPrimary.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
             VStack(alignment: .leading, spacing: 2) {
@@ -723,7 +723,7 @@ struct AddChannelSheet: View {
 
             if isAdding == conversation.id {
                 ProgressView()
-                    .tint(Color(hex: "A855F7"))
+                    .tint(MeeshyColors.brandPrimary)
             } else if conversation.communityId != nil {
                 Image(systemName: "arrow.right.circle.fill")
                     .font(.system(size: 20))
@@ -731,7 +731,7 @@ struct AddChannelSheet: View {
             } else {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 20))
-                    .foregroundColor(Color(hex: "A855F7"))
+                    .foregroundColor(MeeshyColors.brandPrimary)
             }
         }
         .padding(.vertical, 4)

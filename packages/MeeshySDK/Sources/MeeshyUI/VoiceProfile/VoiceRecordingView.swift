@@ -16,7 +16,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
     @StateObject private var recorder: Recorder
     @State private var recordedSamples: [RecordedSample] = []
 
-    public init(recorder: @autoclosure @escaping () -> Recorder, accentColor: String = "A855F7", minimumSamples: Int = 3,
+    public init(recorder: @autoclosure @escaping () -> Recorder, accentColor: String = MeeshyColors.brandPrimaryHex, minimumSamples: Int = 3,
                 minimumDurationSeconds: Int = 10, onSamplesReady: (([Data]) -> Void)? = nil) {
         self._recorder = StateObject(wrappedValue: recorder())
         self.accentColor = accentColor
@@ -237,7 +237,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
 // MARK: - Backward-compatible convenience init
 
 extension VoiceRecordingView where Recorder == DefaultSDKAudioRecorder {
-    public init(accentColor: String = "A855F7", minimumSamples: Int = 3,
+    public init(accentColor: String = MeeshyColors.brandPrimaryHex, minimumSamples: Int = 3,
                 minimumDurationSeconds: Int = 10, onSamplesReady: (([Data]) -> Void)? = nil) {
         self.init(
             recorder: DefaultSDKAudioRecorder(),
