@@ -734,6 +734,33 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(sut.posts.count, 1)
     }
 
+    // MARK: - Offline draft recovery (post / reel)
+
+    func test_recoverUnsentPost_queriesPostAndReelTypesWithOfflineThreshold() async {
+        let queue = MockOfflineQueue()
+        queue.recoverLastUnsentPostResult = RecoveredOfflinePost(
+            clientMutationId: "cmid_p", content: "stuck", visibility: "PUBLIC",
+            originalLanguage: nil, type: "REEL", moodEmoji: nil, audioUrl: nil,
+            audioDuration: nil, visibilityUserIds: nil, localMediaURLs: [], createdAt: Date()
+        )
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+
+        let draft = await sut.recoverUnsentPost()
+
+        XCTAssertEqual(draft?.type, "REEL")
+        XCTAssertEqual(queue.recoverLastUnsentPostCalls.first?.types, ["POST", "REEL"])
+        XCTAssertEqual(queue.recoverLastUnsentPostCalls.first?.olderThan, FeedViewModel.offlineStuckThreshold)
+    }
+
+    func test_supersedeRecoveredPost_cancelsTheStuckRow() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+
+        await sut.supersedeRecoveredPost(clientMutationId: "cmid_p")
+
+        XCTAssertEqual(queue.cancelCreatePostCalls, ["cmid_p"])
+    }
+
     // MARK: - repostPost()
 
     func test_repostPost_quoteRepost_passesQuoteContent() async {

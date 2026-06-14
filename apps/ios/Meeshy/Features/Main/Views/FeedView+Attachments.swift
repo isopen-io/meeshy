@@ -119,10 +119,68 @@ extension FeedView {
         HapticFeedback.light()
     }
 
+    // MARK: - Offline Draft Recovery (post / reel)
+
+    /// Pre-fills the composer with the last post/reel that got stuck offline
+    /// (unsent for more than the threshold). Only acts on a fresh, empty compose
+    /// so it never clobbers what the user is typing. Media is restored through
+    /// the existing preparation pipeline (`trackSheetPreparation`) — no re-pick.
+    @MainActor
+    func recoverStuckPostDraftIfNeeded() async {
+        guard composerText.isEmpty,
+              pendingAttachments.isEmpty,
+              pendingAudioURL == nil,
+              recoveredPostCmid == nil else { return }
+        guard let draft = await viewModel.recoverUnsentPost() else { return }
+
+        composerText = draft.content
+        postVisibility = draft.visibility
+        // Preserve the original classification: a plain POST that carried media
+        // must stay a POST, while a REEL re-derives from its media as usual.
+        composerForcePlainPost = (draft.type == "POST")
+        recoveredPostCmid = draft.clientMutationId
+
+        for url in draft.localMediaURLs {
+            restoreRecoveredMedia(url: url)
+        }
+        FeedbackToastManager.shared.show(String(localized: "feed.draft.recovered", defaultValue: "Brouillon hors-ligne restauré", bundle: .main))
+    }
+
+    /// Rebuilds a composer attachment from a recovered local media file via the
+    /// same preparation pipeline the pickers use (`trackFeedPreparation`, so
+    /// `pendingAttachments` / `pendingMediaFiles` / thumbnails stay consistent).
+    /// `deleteSourceAfterCompression` is false so the queued row's pending-media
+    /// file survives until the resend supersedes it.
+    private func restoreRecoveredMedia(url: URL) {
+        let mime = MimeTypeResolver.mimeType(forExtension: url.pathExtension)
+        switch AttachmentKind(mimeType: mime) {
+        case .video:
+            let prep = AttachmentPreparationService.shared.prepareVideo(
+                sourceURL: url, deleteSourceAfterCompression: false, context: .feedPost)
+            trackFeedPreparation(prep)
+        case .audio:
+            // Audio offline posts aren't queued through this composer path yet.
+            break
+        default:
+            guard let image = UIImage(contentsOfFile: url.path) else { return }
+            let prep = AttachmentPreparationService.shared.prepareImage(
+                image, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex)
+            trackFeedPreparation(prep)
+        }
+    }
+
     // MARK: - Publish Post with Attachments
     func publishPostWithAttachments() {
         let text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !pendingAttachments.isEmpty else { return }
+
+        // A recovered stuck post is being re-sent — supersede its queued row so
+        // the resend replaces it (and reclaims its pending-media) instead of
+        // racing it to the server (no duplicate on reconnect).
+        if let cmid = recoveredPostCmid {
+            recoveredPostCmid = nil
+            Task { await viewModel.supersedeRecoveredPost(clientMutationId: cmid) }
+        }
 
         let attachments = pendingAttachments
         let audioURL = pendingAudioURL
@@ -301,6 +359,9 @@ extension FeedView {
         pendingAudioURL = nil
         pendingMediaFiles.removeAll()
         pendingThumbnails.removeAll()
+        // Drop any recovered-draft link: a dismissed/cleaned composer must not
+        // later supersede the stuck row (it stays queued for the next recovery).
+        recoveredPostCmid = nil
     }
 
     // MARK: - Pending Attachments Row

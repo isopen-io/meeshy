@@ -570,6 +570,27 @@ class FeedViewModel: ObservableObject {
         }
     }
 
+    /// A post/reel is "stuck offline" (recoverable as a composer draft) once it
+    /// has been unsent for longer than this — the "pas envoyé dans la minute →
+    /// offline" rule shared by every composer.
+    static let offlineStuckThreshold: TimeInterval = 60
+
+    /// Returns the last POST/REEL that got stuck offline (unsent for more than
+    /// `offlineStuckThreshold`) so the feed composer can pre-fill it as a draft.
+    func recoverUnsentPost() async -> RecoveredOfflinePost? {
+        await offlineQueue.recoverLastUnsentPost(
+            matchingTypes: ["POST", "REEL"],
+            olderThan: Self.offlineStuckThreshold
+        )
+    }
+
+    /// Supersedes a recovered post/reel when the user re-sends it from the
+    /// composer, so the resend replaces the stuck row (and reclaims its
+    /// pending-media files) instead of duplicating it on reconnect.
+    func supersedeRecoveredPost(clientMutationId: String) async {
+        await offlineQueue.cancelCreatePost(clientMutationId: clientMutationId)
+    }
+
     /// Removes an optimistic post by id (re-resolving the index since the feed
     /// may mutate across an `await`). Rolls back a queued create the outbox
     /// refused or exhausted.
