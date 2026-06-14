@@ -102,7 +102,7 @@ describe('Socket.IO notification:new payload — title / subtitle', () => {
     const payload = findNotificationNewEmit(mockIO);
     expect(payload).toBeDefined();
     expect(payload.title).toBe('Alice Martin');
-    expect(payload.subtitle).toBe('👥 Équipe Dev');
+    expect(payload.subtitle).toBe('Équipe Dev');
   });
 
   it('emits title=sender but no subtitle for a direct (1-on-1) message', async () => {
@@ -163,7 +163,7 @@ describe('Socket.IO notification:new payload — title / subtitle', () => {
     expect(payload.content).toContain('🎵 Audio');
     expect(payload.content).toContain('0:34');
     expect(payload.title).toBe('Carol');
-    expect(payload.subtitle).toBe('👥 Voice Notes');
+    expect(payload.subtitle).toBe('Voice Notes');
   });
 
   it('falls back to "Meeshy" as title when no actor is provided (system notification with conversation context)', async () => {
@@ -192,6 +192,6 @@ describe('Socket.IO notification:new payload — title / subtitle', () => {
     const payload = findNotificationNewEmit(mockIO);
     expect(payload).toBeDefined();
     // Non-direct → subtitle should carry the conversation title (here global = "Global")
-    expect(payload.subtitle).toBe('📢 Global');
+    expect(payload.subtitle).toBe('Global');
   });
 });

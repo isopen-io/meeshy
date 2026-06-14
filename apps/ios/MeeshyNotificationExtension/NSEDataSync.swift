@@ -16,6 +16,32 @@ nonisolated enum NSEDataSync {
 
     private static let appGroupId = "group.me.meeshy.apps"
     private static let pendingDirName = "nse_pending_messages"
+    private static let snapshotsKey = "conversation_snapshots"
+
+    // MARK: - Local-First conversation snapshot (App Group)
+
+    /// Snapshot SDK-free d'une conversation, miroir du contrat écrit par l'app
+    /// (`ConversationSnapshotPayload`). Décodé depuis l'App Group pour résoudre
+    /// localement le renommage utilisateur (et plus tard les badges) sans
+    /// requête serveur. Seuls les champs lus ici sont déclarés (Codable tolère
+    /// les clés en trop).
+    private struct ConversationLocalSnapshot: Decodable {
+        let customName: String?
+    }
+
+    /// Renommage LOCAL (`customName`) d'une conversation, lu depuis le store
+    /// keyé de l'App Group écrit par l'app. `nil` si absent (l'appelant retombe
+    /// alors sur le titre canonique du push). Best-effort, jamais throwing.
+    static func conversationCustomName(forId conversationId: String) -> String? {
+        guard !conversationId.isEmpty,
+              let defaults = UserDefaults(suiteName: appGroupId),
+              let data = defaults.data(forKey: snapshotsKey) else { return nil }
+        let decoder = JSONDecoder()
+        guard let map = try? decoder.decode([String: ConversationLocalSnapshot].self, from: data),
+              let snapshot = map[conversationId] else { return nil }
+        let trimmed = snapshot.customName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (trimmed?.isEmpty == false) ? trimmed : nil
+    }
 
     // MARK: - Sync entry point
 

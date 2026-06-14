@@ -72,31 +72,6 @@ const CONVERSATION_SUBTITLE_TYPES = new Set([
   'message_reaction',
 ]);
 
-/**
- * Icône préfixant le nom de la conversation dans le subtitle des notifications,
- * pour distinguer d'un coup d'œil le type de groupe :
- *   - groupe privé   (group)             → 👥  (communauté de personnes)
- *   - groupe public  (public)            → 🌐  (ouvert à tous)
- *   - général/broadcast (global, broadcast) → 📢
- * `direct` (DM) n'a pas de subtitle, donc pas d'icône.
- *
- * NB : le cadenas 🔒 n'est PAS utilisé ici — il évoque le chiffrement. Il est
- * réservé à un futur état « conversation verrouillée » (contenu masqué tant
- * qu'on n'ouvre pas), orthogonal au type. Le helper Swift miroir vit dans
- * `NotificationPayloadHelpers.conversationTypeIcon` (NSE) — garder en lockstep.
- *
- * Exporté pour test unitaire — pur et sans effet de bord.
- */
-export function conversationTypeIcon(conversationType: string | null | undefined): string {
-  switch ((conversationType ?? '').trim().toLowerCase()) {
-    case 'group':     return '👥';
-    case 'public':    return '🌐';
-    case 'global':
-    case 'broadcast': return '📢';
-    default:          return '';
-  }
-}
-
 export function buildPushHeader(input: {
   type: string;
   customTitle?: string;
@@ -115,11 +90,12 @@ export function buildPushHeader(input: {
 
   const actorName = resolveActorName(input.actor);
   const title = input.customTitle?.trim() || actorName;
-  // Préfixe le nom du groupe d'une icône de type (privé/public/général) pour
-  // que le destinataire distingue immédiatement la nature de la conversation.
-  const icon = conversationTypeIcon(conversationType);
+  // Le subtitle ne porte que le NOM CANONIQUE du groupe — l'icône de type et le
+  // renommage local (customName) sont résolus CÔTÉ CLIENT (NSE + toast), en
+  // Local-First, depuis les préférences locales (cf. ConversationSnapshot App
+  // Group). Le gateway ne recompose pas la présentation systématiquement.
   const subtitle = isGroupMessage && conversationTitle !== ''
-    ? (icon ? `${icon} ${conversationTitle}` : conversationTitle)
+    ? conversationTitle
     : undefined;
 
   return { title, subtitle };

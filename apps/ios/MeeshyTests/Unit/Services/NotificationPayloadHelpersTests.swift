@@ -169,19 +169,40 @@ final class NotificationPayloadHelpersTests: XCTestCase {
         XCTAssertEqual(result, "Votre story")
     }
 
-    func test_preservedSubtitle_originalSubtitleWins_overConversationTitleFallback() {
+    func test_preservedSubtitle_groupConversation_composesConversationSubtitle() {
+        // Une notif DE CONVERSATION (conversationType présent) est recomposée
+        // côté client : icône + titre. Le subtitle d'origine n'est pertinent que
+        // pour les notifs SOCIALES (sans conversationType).
         let userInfo = makeUserInfo(
             conversationType: "group",
             conversationTitle: "Mon groupe"
         )
 
         let result = NotificationPayloadHelpers.preservedSubtitle(
-            originalSubtitle: "En réponse à « Bonne idée ! »",
+            originalSubtitle: "titre brut ignoré",
             currentSubtitle: "",
             userInfo: userInfo
         )
 
-        XCTAssertEqual(result, "En réponse à « Bonne idée ! »")
+        XCTAssertEqual(result, "👥 Mon groupe")
+    }
+
+    func test_preservedSubtitle_groupConversation_prefersLocalCustomName() {
+        // Local-First : le renommage LOCAL de l'utilisateur (résolu App Group)
+        // est préféré au titre canonique fourni par le gateway.
+        let userInfo = makeUserInfo(
+            conversationType: "group",
+            conversationTitle: "Mon groupe"
+        )
+
+        let result = NotificationPayloadHelpers.preservedSubtitle(
+            originalSubtitle: "",
+            currentSubtitle: "",
+            userInfo: userInfo,
+            customName: "Ma team 💪"
+        )
+
+        XCTAssertEqual(result, "👥 Ma team 💪")
     }
 
     func test_preservedSubtitle_originalSubtitlePreservedByiOS_returnsNil() {

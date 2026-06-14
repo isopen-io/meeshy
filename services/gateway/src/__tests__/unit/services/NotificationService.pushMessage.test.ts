@@ -243,7 +243,7 @@ describe('NotificationService — message push title/body', () => {
 
       const payload = lastPushPayload();
       expect(payload.title).toBe('Alice Martin');
-      expect((payload as { subtitle?: string }).subtitle).toBe('👥 Équipe Dev');
+      expect((payload as { subtitle?: string }).subtitle).toBe('Équipe Dev');
     });
 
     it('test_createMessageNotification_group_bodyHasNoSenderNamePrefix', async () => {
@@ -283,7 +283,7 @@ describe('NotificationService — message push title/body', () => {
 
       const payload = lastPushPayload();
       expect(payload.title).toBe('alice');
-      expect((payload as { subtitle?: string }).subtitle).toBe('👥 Équipe Dev');
+      expect((payload as { subtitle?: string }).subtitle).toBe('Équipe Dev');
     });
   });
 
@@ -406,7 +406,7 @@ describe('NotificationService — message push title/body', () => {
 
       const payload = lastPushPayload();
       expect(payload.title).toBe('Alice Martin');
-      expect((payload as { subtitle?: string }).subtitle).toBe('👥 Équipe Dev');
+      expect((payload as { subtitle?: string }).subtitle).toBe('Équipe Dev');
       expect(payload.body).toBe('Sprint +1🎬');
     });
   });

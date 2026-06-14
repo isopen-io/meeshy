@@ -43,7 +43,8 @@ nonisolated enum NotificationPayloadHelpers {
     nonisolated static func preservedSubtitle(
         originalSubtitle: String,
         currentSubtitle: String,
-        userInfo: [AnyHashable: Any]
+        userInfo: [AnyHashable: Any],
+        customName: String? = nil
     ) -> String? {
         // Only repair when the post-`updating(from: intent)` subtitle was wiped.
         // Trimming whitespace catches the "single space" workaround that
@@ -52,28 +53,28 @@ nonisolated enum NotificationPayloadHelpers {
             return nil
         }
 
-        // 1. Whatever the gateway sent in the alert wins — it already encodes
-        //    the right context for the notification type (group name, story /
-        //    post / mood context, parent comment…).
-        let trimmedOriginal = originalSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedOriginal.isEmpty {
-            return trimmedOriginal
+        // 1. Notification DE CONVERSATION (group/public/global/broadcast) : la
+        //    présentation est résolue CÔTÉ CLIENT (Local-First). On compose
+        //    `<icône de type> <customName ?? titre canonique>` — le gateway
+        //    n'envoie que les identifiants bruts (type + titre), le client
+        //    préfère le renommage LOCAL (`customName`) résolu depuis l'App
+        //    Group, et déduit l'icône du type. Indépendant de la valeur du
+        //    subtitle d'origine (qui n'est que le titre brut).
+        let conversationType = (userInfo["conversationType"] as? String) ?? ""
+        if !conversationType.trimmingCharacters(in: .whitespaces).isEmpty,
+           conversationType.lowercased() != "direct" {
+            return composedConversationSubtitle(
+                conversationType: conversationType,
+                conversationTitle: userInfo["conversationTitle"] as? String,
+                customName: customName
+            )
         }
 
-        // 2. Legacy fallback: rebuild the group/global conversation name from
-        //    userInfo for pushes whose alert subtitle never made it through
-        //    (e.g. E2EE payloads where only `data` survives). On préfixe l'icône
-        //    de type pour rester cohérent avec le subtitle construit par le
-        //    gateway (qui préfixe déjà `conversationTypeIcon`).
-        let conversationType = (userInfo["conversationType"] as? String) ?? ""
-        let isGroupOrGlobal = !conversationType.isEmpty && conversationType != "direct"
-        guard isGroupOrGlobal else { return nil }
-
-        let title = (userInfo["conversationTitle"] as? String) ?? ""
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        let icon = conversationTypeIcon(conversationType)
-        return icon.isEmpty ? trimmed : "\(icon) \(trimmed)"
+        // 2. Notification SOCIALE (réponse story/post, mood…) : le subtitle
+        //    d'origine est une string explicite du gateway (« Votre story »,
+        //    « En réponse à … ») — on la restaure telle quelle.
+        let trimmedOriginal = originalSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedOriginal.isEmpty ? nil : trimmedOriginal
     }
 
     /// Icône préfixant le nom d'une conversation de groupe dans une notification,
