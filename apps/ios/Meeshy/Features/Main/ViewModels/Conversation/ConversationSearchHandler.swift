@@ -12,12 +12,14 @@ final class ConversationSearchHandler {
     private let state: ConversationStateStore
     private let conversationId: String
     private let messageService: MessageServiceProviding
+    private let persistence: MessagePersistenceActor
     private var nextCursor: String?
 
-    init(state: ConversationStateStore, conversationId: String, messageService: MessageServiceProviding = MessageService.shared) {
+    init(state: ConversationStateStore, conversationId: String, messageService: MessageServiceProviding = MessageService.shared, persistence: MessagePersistenceActor) {
         self.state = state
         self.conversationId = conversationId
         self.messageService = messageService
+        self.persistence = persistence
     }
 
     /// Fresh search: resets the cursor, hydrates `state.searchResults`
@@ -39,6 +41,10 @@ final class ConversationSearchHandler {
 
         do {
             let response = try await messageService.search(conversationId: conversationId, query: trimmed, limit: 20)
+            // Persist the matched messages so the in-situ filtered-conversation
+            // view can render them as real bubbles — including matches that fall
+            // outside the currently-loaded window.
+            try? await persistence.upsertFromAPIMessages(response.data)
             state.searchResults = response.data.map { buildSearchResult($0, query: trimmed) }
             nextCursor = response.cursorPagination?.nextCursor
             state.searchHasMore = response.cursorPagination?.hasMore ?? false
@@ -63,6 +69,7 @@ final class ConversationSearchHandler {
                 query: trimmed,
                 cursor: cursor
             )
+            try? await persistence.upsertFromAPIMessages(response.data)
             state.searchResults.append(contentsOf: response.data.map { buildSearchResult($0, query: trimmed) })
             nextCursor = response.cursorPagination?.nextCursor
             state.searchHasMore = response.cursorPagination?.hasMore ?? false

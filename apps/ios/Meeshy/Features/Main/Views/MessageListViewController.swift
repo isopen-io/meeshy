@@ -439,6 +439,12 @@ final class MessageListViewController: UIViewController {
             let preferred = vm?.preferredTranslation(for: message.id)
             let transcription = vm?.messageTranscriptions[message.id]
             let translatedAudios = vm?.messageTranslatedAudios[message.id] ?? []
+            // Active in-conversation search term — snapped as a primitive so the
+            // Equatable bubble highlights matches in search-filter mode. Nil in
+            // normal mode (no highlight). The visible cells reconfigure whenever
+            // the filtered message set changes (which always accompanies a query
+            // change), so the highlight stays in sync.
+            let highlightTerm = vm?.currentSearchQuery
             // Galerie audio plein écran : `AudioFullscreenView` n'affiche son
             // pager que si cette liste est non-vide. Sans ce wiring, le tap
             // sur l'icône / chip plein écran d'une bulle audio ouvre un
@@ -576,6 +582,7 @@ final class MessageListViewController: UIViewController {
                         isLastReceivedMessage: isLastReceived,
                         isLastSentMessage: isLastSent,
                         mentionDisplayNames: mentionDisplayNames,
+                        highlightSearchTerm: highlightTerm,
                         currentUserId: myId,
                         userLanguages: userLanguages,
                         activeDisplayLangCode: languageSelection?.activeDisplayLangCode,
@@ -779,6 +786,22 @@ final class MessageListViewController: UIViewController {
             .dropFirst()
             .sink { [weak self] _ in
                 // Preferred language revision change requires full reconfigure of all items
+                self?.applySnapshot(animated: false)
+            }
+            .store(in: &cancellables)
+
+        // In-conversation search term changes (enter / exit / refine the
+        // filtered-conversation search) require re-running the cell registration
+        // so each bubble shows or clears the highlight. `applySnapshot`
+        // reconfigures every existing item in place — same full-reconfigure
+        // pattern as preferredLanguageRevision. The set change on enter/exit
+        // already triggers this; the explicit sink also covers a refinement
+        // that keeps the same match set but a different term.
+        vm.$currentSearchQuery
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] _ in
                 self?.applySnapshot(animated: false)
             }
             .store(in: &cancellables)
