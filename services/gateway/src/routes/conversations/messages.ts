@@ -4,6 +4,11 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { aggregateAttachmentReactions } from '../../socketio/serializeAttachmentForSocket';
 import { MessagingService } from '../../services/messaging/MessagingService';
+import {
+  buildPostReplyTo,
+  postReplyToFromMetadata,
+  POST_REPLY_SNAPSHOT_SELECT,
+} from '../../services/messaging/postReplySnapshot';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
@@ -1099,49 +1104,34 @@ export function registerMessagesRoutes(
 
       timings.forwardedEnrichment = performance.now() - t0;
 
-      // ===== ENRICHIR LES RÉPONSES À UNE STORY =====
-      // Miroir de l'enrichissement forwardé : le client a besoin des détails
-      // de la story citée (compteurs, date, vignette, aperçu) pour rendre la
-      // bulle de citation. Le message ne porte que `storyReplyToId` en DB.
-      const storyReplyIds = mappedMessages
-        .filter((m: any) => m.storyReplyToId)
+      // ===== ENRICHIR LES RÉPONSES À UN POST (status/story/reel/post) =====
+      // Source de vérité : le SNAPSHOT figé dans `metadata.postReplyTo`, capturé
+      // au moment de la réponse — il survit à l'expiration du post (STATUS 1h /
+      // STORY 21h) et à sa suppression. On le hisse en champ top-level
+      // `postReplyTo` (contrat client propre). La résolution live de
+      // `storyReplyToId` n'est qu'un fallback pour les messages legacy.
+      for (const m of mappedMessages) {
+        if (!m.storyReplyToId) continue;
+        const fromSnapshot = postReplyToFromMetadata(m.metadata);
+        if (fromSnapshot) m.postReplyTo = fromSnapshot;
+      }
+
+      const legacyPostReplyIds = mappedMessages
+        .filter((m: any) => m.storyReplyToId && !m.postReplyTo)
         .map((m: any) => m.storyReplyToId as string);
 
-      if (storyReplyIds.length > 0) {
-        const uniqueStoryIds = [...new Set(storyReplyIds)];
-        const citedStories = await prisma.post.findMany({
-          where: { id: { in: uniqueStoryIds } },
-          select: {
-            id: true,
-            content: true,
-            reactionCount: true,
-            commentCount: true,
-            createdAt: true,
-            // `moodEmoji` non-null ⇒ le post cité est un mood/statut : le client
-            // affiche alors une citation dédiée (emoji + contenu + date).
-            moodEmoji: true,
-            media: {
-              select: { thumbnailUrl: true },
-              orderBy: { order: 'asc' },
-              take: 1
-            }
-          }
+      if (legacyPostReplyIds.length > 0) {
+        const uniquePostIds = [...new Set(legacyPostReplyIds)];
+        const citedPosts = await prisma.post.findMany({
+          where: { id: { in: uniquePostIds } },
+          select: POST_REPLY_SNAPSHOT_SELECT,
         });
-        const storyMap = new Map(citedStories.map((s) => [s.id, s]));
+        const postMap = new Map(citedPosts.map((p) => [p.id, p]));
         for (const m of mappedMessages) {
-          if (!m.storyReplyToId) continue;
-          const story = storyMap.get(m.storyReplyToId);
-          if (!story) continue; // story supprimée → storyReplyTo reste absent
-          const preview = (story.content ?? '').trim().slice(0, 80);
-          m.storyReplyTo = {
-            id: story.id,
-            reactionCount: story.reactionCount,
-            commentCount: story.commentCount,
-            createdAt: story.createdAt,
-            thumbnailUrl: story.media[0]?.thumbnailUrl ?? null,
-            previewText: preview,
-            moodEmoji: story.moodEmoji ?? null
-          };
+          if (!m.storyReplyToId || m.postReplyTo) continue;
+          const post = postMap.get(m.storyReplyToId);
+          if (!post) continue; // post supprimé sans snapshot → citation absente
+          m.postReplyTo = buildPostReplyTo(post);
         }
       }
 

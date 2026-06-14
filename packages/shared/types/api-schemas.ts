@@ -621,17 +621,22 @@ export const messageSchema = {
 
     // Reply & Forward
     replyToId: { type: 'string', nullable: true, description: 'ID of message being replied to' },
-    storyReplyTo: {
+    postReplyTo: {
       type: 'object',
       nullable: true,
-      description: 'Métadonnées enrichies de la story citée quand le message répond à une story (null si la story est supprimée)',
+      description: 'Snapshot figé du post cité (status/story/reel/post) — mood emoji, contenu, date, vignette, compteurs like/commentaire/partage — capturé au moment de la réponse et stocké dans metadata.postReplyTo. Survit à l\'expiration du post. null seulement pour un message legacy dont le post a été supprimé avant le snapshot.',
       properties: {
         id: { type: 'string' },
+        // STATUS | STORY | POST | REEL — pilote le rendu (mood vs story) côté client.
+        type: { type: 'string', nullable: true },
         reactionCount: { type: 'integer' },
         commentCount: { type: 'integer' },
+        shareCount: { type: 'integer' },
         createdAt: { type: 'string', format: 'date-time' },
         thumbnailUrl: { type: 'string', nullable: true },
-        previewText: { type: 'string' }
+        previewText: { type: 'string' },
+        // Non-null ⇒ mood/statut : citation dédiée emoji + contenu + date.
+        moodEmoji: { type: 'string', nullable: true }
       }
     },
     replyTo: {

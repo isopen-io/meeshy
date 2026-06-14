@@ -548,7 +548,11 @@ model Message {
   editedAt                    DateTime?
   deletedAt                   DateTime?
   replyToId                   String?   @db.ObjectId
-  /// ID of the story/post being replied to
+  /// ID du post cité quand le message répond à un post (status/story/reel/post).
+  /// Le SNAPSHOT figé des détails du post (mood emoji, contenu, date, vignette,
+  /// compteurs like/commentaire/partage) est stocké dans `metadata.postReplyTo`
+  /// — il survit à l'expiration du post (STATUS 1h / STORY 21h) et à sa
+  /// suppression. La résolution live via cet id n'est qu'un fallback legacy.
   storyReplyToId              String?   @db.ObjectId
   /// ID of the original message if this is a forwarded message
   forwardedFromId             String?   @db.ObjectId

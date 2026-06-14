@@ -13,6 +13,11 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../../services/CacheStore';
 import { isBlockedBetween } from '../../utils/blocking';
 import { MessagingService } from '../../services/MessagingService';
+import {
+  buildPostReplyTo,
+  postReplyToFromMetadata,
+  POST_REPLY_SNAPSHOT_SELECT,
+} from '../../services/messaging/postReplySnapshot';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
@@ -527,6 +532,26 @@ export class MessageHandler {
         if (originalConv) (messagePayload as Record<string, unknown>).forwardedFromConversation = originalConv;
       }
 
+      // Réponse à un post (status/story/reel/post) : servir le SNAPSHOT figé
+      // (rangé dans `metadata.postReplyTo` à la création) pour que le
+      // destinataire voie la citation immédiatement et qu'elle survive à
+      // l'expiration du post. Hissé en `postReplyTo` top-level. Fallback live
+      // legacy via lookup du post.
+      if (message.storyReplyToId) {
+        const fromSnapshot = postReplyToFromMetadata((message as never)['metadata']);
+        if (fromSnapshot) {
+          (messagePayload as Record<string, unknown>).postReplyTo = fromSnapshot;
+        } else {
+          const post = await this.prisma.post.findUnique({
+            where: { id: message.storyReplyToId },
+            select: POST_REPLY_SNAPSHOT_SELECT,
+          });
+          if (post) {
+            (messagePayload as Record<string, unknown>).postReplyTo = buildPostReplyTo(post);
+          }
+        }
+      }
+
       if (message.content) {
         const mentionedUsers = await resolveMentionedUsers(this.prisma, [message.content]);
         if (mentionedUsers.length > 0) {
@@ -915,6 +940,9 @@ export class MessageHandler {
       attachments: this._serializeAttachmentsField(message),
       replyToId: message.replyToId,
       replyTo: (message as never)['replyTo'],
+      // Réponse à une story/status : `storyReplyTo` (snapshot figé) est ajouté
+      // par `broadcastNewMessage` après ce build, en miroir de `forwardedFrom`.
+      storyReplyToId: message.storyReplyToId || undefined,
       forwardedFromId: message.forwardedFromId || undefined,
       forwardedFromConversationId: message.forwardedFromConversationId || undefined,
       isEncrypted: message.isEncrypted,

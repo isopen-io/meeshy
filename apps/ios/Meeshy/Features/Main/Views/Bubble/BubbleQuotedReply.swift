@@ -263,7 +263,8 @@ struct BubbleStoryReplyPreview: View, Equatable {
         PreviewSlice(
             storyPublishedAt: reply.storyPublishedAt,
             storyReactionCount: reply.storyReactionCount,
-            storyCommentCount: reply.storyCommentCount
+            storyCommentCount: reply.storyCommentCount,
+            storyShareCount: reply.storyShareCount
         )
     }
 
@@ -271,6 +272,7 @@ struct BubbleStoryReplyPreview: View, Equatable {
         let storyPublishedAt: Date?
         let storyReactionCount: Int?
         let storyCommentCount: Int?
+        let storyShareCount: Int?
     }
 
     @ViewBuilder
@@ -294,37 +296,46 @@ struct BubbleStoryReplyPreview: View, Equatable {
 
             let reactions = reply.storyReactionCount ?? 0
             let comments = reply.storyCommentCount ?? 0
-            if reactions > 0 || comments > 0 {
+            let shares = reply.storyShareCount ?? 0
+            if reactions > 0 || comments > 0 || shares > 0 {
                 Text("(")
                     .font(.caption2)
                     .foregroundColor(previewColor.opacity(0.6))
                 if reactions > 0 {
-                    HStack(spacing: 2) {
-                        Image(systemName: "heart.fill")
-                            .font(.caption2)
-                        Text("\(reactions)")
-                            .font(.caption2.weight(.medium))
-                    }
-                    .foregroundColor(previewColor.opacity(0.8))
+                    storyMetric(icon: "heart.fill", value: reactions)
                 }
-                if reactions > 0 && comments > 0 {
-                    Text("\u{2022}")
-                        .font(.caption2)
-                        .foregroundColor(previewColor.opacity(0.5))
+                if reactions > 0 && (comments > 0 || shares > 0) {
+                    storyMetricSeparator
                 }
                 if comments > 0 {
-                    HStack(spacing: 2) {
-                        Image(systemName: "bubble.right.fill")
-                            .font(.caption2)
-                        Text("\(comments)")
-                            .font(.caption2.weight(.medium))
-                    }
-                    .foregroundColor(previewColor.opacity(0.8))
+                    storyMetric(icon: "bubble.right.fill", value: comments)
+                }
+                if comments > 0 && shares > 0 {
+                    storyMetricSeparator
+                }
+                if shares > 0 {
+                    storyMetric(icon: "arrowshape.turn.up.right.fill", value: shares)
                 }
                 Text(")")
                     .font(.caption2)
                     .foregroundColor(previewColor.opacity(0.6))
             }
         }
+    }
+
+    private func storyMetric(icon: String, value: Int) -> some View {
+        HStack(spacing: 2) {
+            Image(systemName: icon)
+                .font(.caption2)
+            Text("\(value)")
+                .font(.caption2.weight(.medium))
+        }
+        .foregroundColor(previewColor.opacity(0.8))
+    }
+
+    private var storyMetricSeparator: some View {
+        Text("\u{2022}")
+            .font(.caption2)
+            .foregroundColor(previewColor.opacity(0.5))
     }
 }

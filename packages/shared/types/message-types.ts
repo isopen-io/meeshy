@@ -106,6 +106,8 @@ export interface GatewayMessage {
 
   // ===== REPLY/FORWARD =====
   readonly replyToId?: string;
+  /** ID du post cité (status/story/reel/post) quand le message répond à un post. Snapshot figé dans `metadata.postReplyTo`. @see schema.prisma */
+  readonly storyReplyToId?: string;
   readonly forwardedFromId?: string;
   readonly forwardedFromConversationId?: string;
 
