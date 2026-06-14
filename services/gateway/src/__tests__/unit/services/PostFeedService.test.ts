@@ -59,6 +59,9 @@ let mockParticipantFindMany: jest.Mock;
 let mockPostViewFindMany: jest.Mock;
 let mockPostBookmarkFindMany: jest.Mock;
 let mockPostImpressionGroupBy: jest.Mock;
+let mockUserFindUnique: jest.Mock;
+let mockPostFindUnique: jest.Mock;
+let mockPostMentionFindMany: jest.Mock;
 let mockPrisma: PrismaClient;
 
 beforeEach(() => {
@@ -69,12 +72,15 @@ beforeEach(() => {
   mockPostViewFindMany = jest.fn().mockResolvedValue([]);
   mockPostBookmarkFindMany = jest.fn().mockResolvedValue([]);
   mockPostImpressionGroupBy = jest.fn().mockResolvedValue([]);
+  mockUserFindUnique = jest.fn().mockResolvedValue(null);
+  mockPostFindUnique = jest.fn().mockResolvedValue(null);
+  mockPostMentionFindMany = jest.fn().mockResolvedValue([]);
 
   mockPrisma = {
     post: {
       findMany: mockPostFindMany,
       findFirst: jest.fn(),
-      findUnique: jest.fn(),
+      findUnique: mockPostFindUnique,
       create: jest.fn(),
       update: jest.fn(),
       count: jest.fn(),
@@ -188,6 +194,16 @@ beforeEach(() => {
       aggregate: jest.fn(),
       fields: {} as any,
     } as unknown as PrismaClient['postImpression'],
+    user: {
+      findUnique: mockUserFindUnique,
+      findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn(),
+    } as unknown as PrismaClient['user'],
+    postMention: {
+      findMany: mockPostMentionFindMany,
+      findFirst: jest.fn(),
+      findUnique: jest.fn(),
+    } as unknown as PrismaClient['postMention'],
   } as unknown as PrismaClient;
 });
 
@@ -514,5 +530,118 @@ describe('PostFeedService.getFeed — intent/interest ranking', () => {
     expect(result.hasMore).toBe(true);
     const decoded = decodeCursor(result.nextCursor as string);
     expect(decoded?.id).toBe('newer-1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PostFeedService.getReels — thread plein écran seedé par affinité (2026-06-13)
+//
+// Toucher un réel dans le Feed ouvre un thread plein écran de réels classés par
+// affinité au réel touché (« seed ») + affinité utilisateur. Scoring pur dans
+// reelAffinity.ts (testé à part) ; ici on couvre le câblage service.
+// ---------------------------------------------------------------------------
+
+describe('PostFeedService.getReels', () => {
+  it('filtre type=REEL et exclut les réels de l\'utilisateur lui-même', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getReels('user-1');
+
+    const where = mockPostFindMany.mock.calls[0][0].where;
+    expect(where.type).toBe('REEL');
+    expect(where.deletedAt).toBeNull();
+    expect(where.AND).toEqual(
+      expect.arrayContaining([{ authorId: { not: 'user-1' } }])
+    );
+  });
+
+  it('exclut le réel seed de la liste (déjà affiché par le client)', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+    mockPostFindUnique.mockResolvedValue({ id: 'seed-1', authorId: 'author-9', originalLanguage: 'fr' });
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getReels('user-1', { seedReelId: 'seed-1' });
+
+    const where = mockPostFindMany.mock.calls[0][0].where;
+    expect(where.AND).toEqual(expect.arrayContaining([{ id: { not: 'seed-1' } }]));
+  });
+
+  it('récupère un pool de candidats plus large que la page (limit×4) pour scorer', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getReels('user-1', { limit: 5 });
+
+    expect(mockPostFindMany.mock.calls[0][0].take).toBe(20);
+  });
+
+  it('classe le réel du même auteur que le seed AVANT un réel sans affinité', async () => {
+    const sameAuthorAsSeed = makePost('r-same', {
+      type: 'REEL',
+      authorId: 'author-seed',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+    });
+    const unrelated = makePost('r-other', {
+      type: 'REEL',
+      authorId: 'author-x',
+      createdAt: new Date('2025-06-01T00:00:00Z'), // plus récent mais sans affinité seed
+    });
+    // Pool dans l'ordre chronologique (unrelated d'abord) — l'affinité doit réordonner.
+    mockPostFindMany.mockResolvedValue([unrelated, sameAuthorAsSeed]);
+    mockPostFindUnique.mockResolvedValue({ id: 'seed-1', authorId: 'author-seed', originalLanguage: 'fr' });
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getReels('user-1', { seedReelId: 'seed-1', limit: 10 });
+
+    expect(result.items.map((p: any) => p.id)).toEqual(['r-same', 'r-other']);
+  });
+
+  it('fait couler un réel déjà vu sous un réel non vu', async () => {
+    const seen = makePost('r-seen', {
+      type: 'REEL',
+      authorId: 'author-x',
+      createdAt: new Date('2025-06-01T00:00:00Z'),
+    });
+    const fresh = makePost('r-fresh', {
+      type: 'REEL',
+      authorId: 'author-x',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+    });
+    mockPostFindMany.mockResolvedValue([seen, fresh]);
+    mockPostViewFindMany.mockResolvedValue([{ postId: 'r-seen' }]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getReels('user-1', { limit: 10 });
+
+    expect(result.items.map((p: any) => p.id)).toEqual(['r-fresh', 'r-seen']);
+  });
+
+  it('enrichit chaque reel avec currentUserReactions du viewer', async () => {
+    const reel = makePost('r-9', { type: 'REEL' });
+    mockPostFindMany.mockResolvedValue([reel]);
+    mockPostReactionFindMany.mockResolvedValue([makeReactionRow('r-9', '🔥')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getReels('user-1');
+
+    expect((result.items[0] as any).currentUserReactions).toEqual(['🔥']);
+  });
+
+  it('reste fonctionnel quand les requêtes d\'affinité auxiliaires échouent (best-effort)', async () => {
+    const reel = makePost('r-1', { type: 'REEL' });
+    mockPostFindMany.mockResolvedValue([reel]);
+    mockUserFindUnique.mockRejectedValue(new Error('db down'));
+    mockPostMentionFindMany.mockRejectedValue(new Error('db down'));
+    mockPostViewFindMany.mockRejectedValue(new Error('db down'));
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getReels('user-1');
+
+    expect(result.items).toHaveLength(1);
+    expect((result.items[0] as any).id).toBe('r-1');
   });
 });

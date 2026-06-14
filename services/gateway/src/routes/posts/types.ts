@@ -235,6 +235,14 @@ export const FeedQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
+/**
+ * Feed Reels : comme FeedQuery, plus `seed` = id du réel touché dans le Feed.
+ * Présent → thread d'affinité « basé sur ce réel » ; absent → onglet « Pour toi ».
+ */
+export const ReelFeedQuerySchema = FeedQuerySchema.extend({
+  seed: z.string().optional(),
+});
+
 export const LikeSchema = z.object({
   emoji: z.string().max(10).default('❤️'),
 });

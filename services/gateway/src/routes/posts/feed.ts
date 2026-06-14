@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostFeedService } from '../../services/PostFeedService';
-import { FeedQuerySchema, UserParams, CommunityParams } from './types';
+import { FeedQuerySchema, ReelFeedQuerySchema, UserParams, CommunityParams } from './types';
 import { sendSuccess, sendUnauthorized, sendInternalError } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import { getCacheStore } from '../../services/CacheStore';
@@ -83,6 +83,46 @@ export function registerFeedRoutes(
       return sendSuccess(reply, stories, { meta: { mentionedUsers: storyMentionedUsers } });
     } catch (error) {
       fastify.log.error(`[GET /posts/feed/stories] Error: ${error}`);
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
+    }
+  });
+
+  // GET /posts/feed/reels — Vertical full-screen reel thread.
+  // `?seed=<reelId>` (réel touché dans le Feed) → thread d'affinité ; sans seed
+  // → onglet « Pour toi » (affinité utilisateur seule).
+  fastify.get('/posts/feed/reels', {
+    preValidation: [requiredAuth],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+      }
+
+      const query = ReelFeedQuerySchema.safeParse(request.query);
+      const { cursor, limit, seed } = query.success
+        ? query.data
+        : { cursor: undefined, limit: 20, seed: undefined };
+
+      const result = await feedService.getReels(authContext.registeredUser.id, {
+        seedReelId: seed,
+        cursor,
+        limit,
+      });
+
+      reply.header('Cache-Control', 'private, no-cache');
+
+      const reelContents = collectPostContents(result.items);
+      const reelMentionedUsers = reelContents.length > 0
+        ? await resolveMentionedUsers(prisma, reelContents)
+        : [];
+
+      return sendSuccess(reply, result.items, {
+        pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
+        meta: { mentionedUsers: reelMentionedUsers },
+      });
+    } catch (error) {
+      fastify.log.error(`[GET /posts/feed/reels] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
