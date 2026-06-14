@@ -99,7 +99,7 @@ def build(app_title, slug, src_root, exts, is_test, src_stem, test_stems_fn, dep
     lines.append("")
     lines.append(f"> Exhaustive list of **every** source file, grouped by feature/domain. "
                  f"`[~]` = a same-named test exists today (heuristic — may be shallow); "
-                 f"`[ ]` = no obvious test. The routine must bring each to **100% line+branch** "
+                 f"`[ ]` = no obvious test. The routine must bring each to **92% line+branch** "
                  f"and flip to `[x]` once reviewer-approved.")
     lines.append("")
     lines.append(f"- Source files: **{total}**")
@@ -108,7 +108,7 @@ def build(app_title, slug, src_root, exts, is_test, src_stem, test_stems_fn, dep
     lines.append(f"- Needing tests / verification: **{total-have}**")
     lines.append("")
     lines.append("Heuristic note: a `[~]` only means a similarly-named test file exists — it does "
-                 "NOT mean 100% coverage. Every file, `[~]` included, must be verified to 100%.")
+                 "NOT mean 92% coverage. Every file, `[~]` included, must be verified to 92%.")
     lines.append("")
     for g in sorted(groups):
         gfiles = groups[g]

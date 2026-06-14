@@ -4,13 +4,19 @@
 > Every scheduled run reads it, picks the next slice, does the work, then updates it.
 > Do NOT delete history — append run entries to `RUNLOG.md`.
 
-- **Branch:** `claude/test-coverage-analysis-8s1io1`
-- **Cadence:** every 5h via `.github/workflows/test-coverage-routine.yml`
-- **Coverage target:** **100% line + branch** on the targeted module(s) of each slice
-  (enforced per-file, not globally — see `ROUTINE.md` §Coverage rules).
-- **Quality gate:** every slice must PASS the reviewer rubric in `REVIEWER.md` before commit.
+- **Cadence:** every 3h via `.github/workflows/test-coverage-routine.yml` (lives on `main`).
+- **Phase = one run's slice.** Each run branches off the latest `main`
+  (`claude/coverage/<slice-id>`), does the slice, opens a PR, and **merges it to main** when green +
+  reviewed + tests-only (see `ROUTINE.md` §7). No long-lived branch; conflicts resolved by keeping
+  both sides' tests.
+- **Coverage target:** **≥92% line + branch** on the targeted module(s) **and ≥92% on the diff's
+  changed lines** (enforced per-file + per-diff — see `ROUTINE.md` §Coverage rules).
+- **Quality gate:** every phase must PASS the reviewer rubric in `REVIEWER.md` before merge.
+- **Merge guard:** never merge past red CI, never merge a diff that touches production logic
+  (left open for a human).
 
-Legend: `☐` todo · `◐` in progress · `☑` done (100% on targeted files + reviewer PASS) · `⊘` n/a
+Legend: `☐` todo · `◐` in progress · `☑` done (≥92% + reviewer PASS, merged to main) · `⊘` n/a
+· `⚠` blocked
 
 ---
 
@@ -37,7 +43,7 @@ Each item is a separate slice; run them in order. Validate via the PR's own CI r
 
 ## Feature matrix (end-to-end vertical slices)
 
-Each cell = "100% line+branch on this feature's modules in this app, reviewer-approved."
+Each cell = "92% line+branch on this feature's modules in this app, reviewer-approved."
 A run targets **one (feature × app) cell**. Pick the highest-priority `☐` cell, top-to-bottom.
 `P0` rows are security/correctness-critical and come first.
 
@@ -66,7 +72,7 @@ A run targets **one (feature × app) cell**. Pick the highest-priority `☐` cel
 
 The **complete, every-file** lists live in [`manifests/`](manifests/README.md) — one per app,
 grouped by feature/domain, with a checkbox per source file (2,538 files total; ~1,716 untested).
-The routine ticks `[x]` there as each file reaches 100% line+branch + reviewer PASS.
+The routine ticks `[x]` there as each file reaches 92% line+branch + reviewer PASS.
 
 | App | Manifest | Files | Untested-ish |
 |-----|----------|:-----:|:------------:|
@@ -80,7 +86,7 @@ The routine ticks `[x]` there as each file reaches 100% line+branch + reviewer P
 
 When a `(feature × app)` cell is selected, resolve it to files by intersecting the manifest's
 domain groups with the feature's module targets below, then cover **every** file in that
-intersection to 100% before flipping the cell `☑`.
+intersection to 92% before flipping the cell `☑`.
 
 ## Per-feature module targets
 
@@ -99,7 +105,7 @@ The routine resolves a cell to concrete files here. Keep this list updated as th
 - **translator:** audio attachment intake `src/services/zmq_transcription_handler.py`, `audio_fetcher.py`
 - **web:** `lib/encryption/e2ee-crypto.ts`, `adapters/web-crypto-adapter.ts`, `adapters/indexeddb-key-storage-adapter.ts`, `services/attachmentService.ts`, `tusUploadService.ts`
 - **iOS:** `Services/E2EAPI.swift`, attachment adopters
-- **shared:** `encryption/*` (already strong — verify branch coverage 100%)
+- **shared:** `encryption/*` (already strong — verify branch coverage 92%)
 
 ### Prisme Linguistique
 - **gateway:** `packages/shared/utils/conversation-helpers.ts` call-sites in message-translation
@@ -107,7 +113,7 @@ The routine resolves a cell to concrete files here. Keep this list updated as th
 - **web:** `utils/user-language-preferences.ts`, `services/translation.service.ts`, `advanced-translation.service.ts`, `message-translation.service.ts`
 - **iOS:** `Features/Main/ViewModels/Conversation/TranslationResolver.swift`, `ConversationStateStore.swift`
 - **android:** `feature/chat/**` translation display, `LanguageProviding` equivalent
-- **shared:** `utils/conversation-helpers.ts` (strong — verify 100% branch), `language-normalize.ts`
+- **shared:** `utils/conversation-helpers.ts` (strong — verify 92% branch), `language-normalize.ts`
 
 ### Messaging core
 - **gateway:** `src/services/messaging/MessageProcessor.ts`, `MessageValidator.ts`, `socketio/handlers/MessageHandler.ts`, `routes/conversations/messages.ts`

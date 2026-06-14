@@ -1,6 +1,6 @@
 # Test Coverage Routine — Agent Playbook
 
-You are an autonomous TDD agent. You run on a 5-hour schedule. Each run you complete **one
+You are an autonomous TDD agent. You run on a 3-hour schedule. Each run you complete **one
 slice** of test coverage, prove it, record it, and leave the repo green. The next run resumes
 from `PROGRESS.md`. You are not expected to finish everything in one run — steady, verified
 increments over ~1–2 weeks are the goal.
@@ -12,14 +12,17 @@ passes the `REVIEWER.md` gate before commit, repo stays green, one slice per run
 
 ## 0. Pre-flight
 
+Each run = one **phase** on its own short-lived branch off the latest `main`. Phases merge to
+`main` independently, so branches never pile up and conflicts stay small.
+
 ```bash
-git fetch origin
-git checkout claude/test-coverage-analysis-8s1io1 || git checkout -b claude/test-coverage-analysis-8s1io1 origin/main
-git rebase origin/main          # stay current with main; resolve conflicts conservatively
+git fetch origin main
+git checkout -B claude/coverage/<slice-id> origin/main   # fresh branch off latest main per phase
 ```
+- `<slice-id>` is a slug of the slice, e.g. `sprint0-2-ci-gate` or `p0-auth-gateway`.
 - Install deps for the app you'll touch (`pnpm install`; translator `uv sync --extra cpu --extra dev`;
   android uses the Gradle wrapper; iOS uses `./apps/ios/meeshy.sh`).
-- Read `PROGRESS.md` end-to-end. Read the last 3 entries of `RUNLOG.md` to see what just happened
+- Read `PROGRESS.md` end-to-end. Read the last 3 entries of `RUNLOG.md` to see what just landed
   and avoid repeating a slice that's mid-flight.
 
 ## 1. Select the slice (deterministic)
@@ -27,19 +30,19 @@ git rebase origin/main          # stay current with main; resolve conflicts cons
 1. If any **Sprint 0** item is `☐`, take the lowest-numbered one. Sprint 0 comes before features.
 2. Otherwise take the highest-priority `☐` **(feature × app)** cell in the matrix, scanning
    top-to-bottom, left-to-right. P0 before P1 before P2.
-3. Mark it `◐` in `PROGRESS.md`, commit that marker immediately (`chore(coverage): claim <slice>`),
-   and push — so a concurrent run won't pick the same slice. Use the workflow concurrency group
-   too, but the marker is the durable lock.
+3. Mark it `◐` in `PROGRESS.md` on your phase branch (the workflow `concurrency` group already
+   serializes runs, so two phases never race; each phase starts from the latest main where the
+   previous phase's `☑` has already merged). On merge, the `◐`→`☑` flip lands on main.
 4. Resolve the cell to concrete files: intersect the feature's module targets (`PROGRESS.md`
    §Per-feature module targets) with the app's manifest (`manifests/<app>.md`) domain groups, to
    get the **exhaustive file list** for the slice. **Verify the files still exist** (the codebase
    moves); if a path is stale, find the current equivalent and update both the targets list and the
    manifest. Cover **every** file in that intersection — no skipping `[~]` files (they're often
-   shallow; verify they're truly 100%).
+   shallow; verify they're truly 92%).
 
 ## 2. Scope the slice
 
-A slice = "100% line + branch coverage on this feature's modules in this app, with edge cases."
+A slice = "92% line + branch coverage on this feature's modules in this app, with edge cases."
 If the feature's module set is large (e.g. the 21KB `orchestrator.service.ts`), it's fine to
 split across multiple runs — cover a coherent sub-unit fully rather than smearing thinly. Record
 the sub-split in `PROGRESS.md` so the next run continues the same cell.
@@ -75,7 +78,7 @@ For each behavior the module exposes through its **public API**:
 
 ## 4. Run it green + measure coverage
 
-Run only the relevant suite (fast feedback), then confirm 100% on the **targeted files**:
+Run only the relevant suite (fast feedback), then confirm 92% on the **targeted files**:
 
 | App | Test + coverage command |
 |-----|-------------------------|
@@ -87,9 +90,11 @@ Run only the relevant suite (fast feedback), then confirm 100% on the **targeted
 | shared | `pnpm --filter @meeshy/shared exec jest <paths> --coverage` |
 
 **Coverage rules:**
-- Target is **100% line + branch on the slice's targeted files**, shown via `--cov-report=term-missing`
+- Target is **≥92% line + branch on the slice's targeted files**, shown via `--cov-report=term-missing`
   / jest's uncovered-line report.
-- If reaching 100% would require testing genuinely meaningless code (unreachable defensive branches,
+- Additionally, **≥92% coverage on the diff's changed lines** (diff coverage). This is the gate that
+  actually prevents regressions — any line you add/touch must be exercised.
+- If reaching 92% would require testing genuinely meaningless code (unreachable defensive branches,
   generated code), do **not** write a tautological test. Instead add a *justified* ignore
   (`/* istanbul ignore next -- <reason> */` or coverage `exclude_lines`) and note it for the reviewer.
   The reviewer decides if the justification holds.
@@ -105,25 +110,44 @@ Spawn a reviewer subagent and hand it the diff + `REVIEWER.md`. It returns PASS 
 If `/code-review` is available as a skill, you may use it for the review; otherwise launch a
 general-purpose subagent with the rubric.
 
-## 6. Commit, record, push
+## 6. Commit, record, open PR
 
 1. Update `PROGRESS.md`: flip the cell `◐`→`☑` (or note sub-progress), update the baselines table,
    and **ratchet** the relevant `coverageThreshold` up to the new measured floor (Sprint 0 wired the
    thresholds; never lower them). Also tick `[x]` for each completed file in `manifests/<app>.md`.
 2. Append a `RUNLOG.md` entry (template below).
 3. Commit with a conventional message:
-   `test(<app>): cover <feature> — <modules> to 100% line+branch`
+   `test(<app>): cover <feature> — <modules> to ≥92% line+branch`
    End the body with the session URL line per repo convention.
-4. Push with `git push -u origin claude/test-coverage-analysis-8s1io1` (retry on network error:
+4. Push the phase branch: `git push -u origin claude/coverage/<slice-id>` (retry on network error:
    2s/4s/8s/16s backoff).
-5. **Maintain a single PR** for this branch (create it on the first run if absent; do not open a new
-   one each run). Keep its body's checklist in sync with `PROGRESS.md`. Do **not** merge — a human
-   reviews and merges.
+5. Open a PR from the phase branch into `main` (one PR per phase) via the `gh` CLI on the runner or
+   the GitHub MCP tools. Title = the commit subject; body = the slice, files covered, before→after
+   coverage, reviewer verdict.
 
-## 7. Leave it clean
+## 7. Merge to main (mandatory end-of-phase) — with conflict management
 
-- Repo must be green (the suite you touched passes; you didn't break others).
-- Exactly one slice advanced. Stop. The next scheduled run resumes from `PROGRESS.md`.
+A phase is not done until it is **merged to main**. Merge **only when ALL four hold**:
+1. **Diff is tests + test/CI config only** — no production logic changed. (Minimal, justified
+   testability refactors are the one exception and must be flagged for a human — if present, do
+   NOT auto-merge; leave the PR open.)
+2. **Full CI is green** on the PR.
+3. **Reviewer verdict = PASS** (§5).
+4. **Clean rebase on the latest main.** Before merging: `git fetch origin main && git rebase
+   origin/main`. On conflicts — they'll almost always be in `PROGRESS.md`/`manifests/`/test files —
+   **keep BOTH sides** (union the test files; merge the tracker ticks), re-run the touched suite,
+   and re-confirm coverage. Never resolve a conflict by dropping tests or assertions.
+
+Then squash-merge (`gh pr merge --squash --delete-branch`) and delete the branch.
+
+**If any precondition can't be met this run:** leave the PR open, mark the slice `⚠ blocked` in
+`PROGRESS.md` (on the branch / in the PR) with the precise reason, and stop. Never force a merge
+past red CI or over production-logic changes.
+
+## 8. Leave it clean
+
+- `main` must be green after the merge (you didn't break other suites).
+- Exactly one phase advanced + merged. Stop. The next scheduled run branches fresh off the new main.
 
 ---
 
@@ -131,7 +155,9 @@ general-purpose subagent with the rubric.
 
 - **Never** weaken a test, delete an assertion, or lower a coverage floor to make CI pass. Fix the
   cause.
-- **Never** push to `main` or any branch other than `claude/test-coverage-analysis-8s1io1`.
+- **Never** merge past red CI, and **never** merge a diff that touches production logic — open the
+  PR and stop for a human instead. Direct commits to `main` are forbidden; reach main only via the
+  squash-merge of a reviewed, green per-phase PR.
 - **Never** commit secrets or real credentials in fixtures.
 - Don't touch unrelated production code. If a module is untestable without a refactor, do the
   smallest refactor, justify it in the commit, and flag it to the reviewer.
@@ -145,7 +171,7 @@ general-purpose subagent with the rubric.
 ## <UTC timestamp> — <slice id, e.g. P0 Auth × gateway>
 - Targeted: <files>
 - Result: <☑ done | ◐ partial | ⚠ blocked>
-- Coverage: <module> line X%→100%, branch Y%→100%
+- Coverage: <module> line X%→≥92%, branch Y%→≥92%
 - Tests added: <n> (<test file paths>)
 - Reviewer: PASS (rounds: <n>) | FAIL→fixed
 - Notes / where the next run resumes:

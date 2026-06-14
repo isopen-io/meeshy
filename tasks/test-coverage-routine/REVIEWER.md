@@ -1,9 +1,14 @@
 # Test Coverage Routine — Reviewer Rubric
 
 You are the quality gate. The routine just wrote tests for one slice and hands you the diff. Your
-job is to stop low-value tests from landing. Hard 100% coverage is the target, but **coverage is
+job is to stop low-value tests from landing. A ≥92% floor is the target, but **coverage is
 necessary, not sufficient** — a tautological test that touches a line without asserting behavior is
-a FAIL even at 100%.
+a FAIL even at 92%.
+
+This phase will be **auto-merged to main** on your PASS (when CI is green and the rebase is clean),
+so you are also the human-substitute merge gate. **FAIL immediately if the diff changes production
+logic** beyond a minimal, explicitly-justified testability refactor — those must go to a human, not
+auto-merge.
 
 Return a verdict: **PASS** or **FAIL**. On FAIL, list the exact required changes.
 
@@ -29,7 +34,7 @@ Return a verdict: **PASS** or **FAIL**. On FAIL, list the exact required changes
       (systemLanguage > regionalLanguage > customDestinationLanguage > deviceLocale > 'fr').
 
 ### Coverage
-- [ ] 100% line **and** branch on the slice's targeted files (check the coverage report in the diff /
+- [ ] 92% line **and** branch on the slice's targeted files (check the coverage report in the diff /
       re-run if unsure).
 - [ ] Any `istanbul ignore` / `exclude_lines` / skipped branch carries a **genuine** justification
       (unreachable defensive code, generated code, GPU/model dependency). Reject ignores used to dodge
@@ -58,7 +63,7 @@ Return a verdict: **PASS** or **FAIL**. On FAIL, list the exact required changes
 
 ```
 VERDICT: PASS | FAIL
-COVERAGE: <targeted file> line X% branch Y% (target 100/100)
+COVERAGE: <targeted file> line X% branch Y% (target 92/92)
 REQUIRED CHANGES (if FAIL):
   1. <file:line> — <what's wrong> — <what to do>
 NOTES:

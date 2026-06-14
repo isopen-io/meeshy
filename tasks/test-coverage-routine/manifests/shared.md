@@ -1,12 +1,12 @@
 # Coverage Manifest — Shared package (TS)
 
-> Exhaustive list of **every** source file, grouped by feature/domain. `[~]` = a same-named test exists today (heuristic — may be shallow); `[ ]` = no obvious test. The routine must bring each to **100% line+branch** and flip to `[x]` once reviewer-approved.
+> Exhaustive list of **every** source file, grouped by feature/domain. `[~]` = a same-named test exists today (heuristic — may be shallow); `[ ]` = no obvious test. The routine must bring each to **92% line+branch** and flip to `[x]` once reviewer-approved.
 
 - Source files: **78**
 - With a same-named test today (heuristic): **18** (23%)
 - Needing tests / verification: **60**
 
-Heuristic note: a `[~]` only means a similarly-named test file exists — it does NOT mean 100% coverage. Every file, `[~]` included, must be verified to 100%.
+Heuristic note: a `[~]` only means a similarly-named test file exists — it does NOT mean 92% coverage. Every file, `[~]` included, must be verified to 92%.
 
 ## (root)  (0/2 have a test)
 

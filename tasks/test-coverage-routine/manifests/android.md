@@ -1,12 +1,12 @@
 # Coverage Manifest — Android app (Kotlin)
 
-> Exhaustive list of **every** source file, grouped by feature/domain. `[~]` = a same-named test exists today (heuristic — may be shallow); `[ ]` = no obvious test. The routine must bring each to **100% line+branch** and flip to `[x]` once reviewer-approved.
+> Exhaustive list of **every** source file, grouped by feature/domain. `[~]` = a same-named test exists today (heuristic — may be shallow); `[ ]` = no obvious test. The routine must bring each to **92% line+branch** and flip to `[x]` once reviewer-approved.
 
 - Source files: **148**
 - With a same-named test today (heuristic): **28** (19%)
 - Needing tests / verification: **120**
 
-Heuristic note: a `[~]` only means a similarly-named test file exists — it does NOT mean 100% coverage. Every file, `[~]` included, must be verified to 100%.
+Heuristic note: a `[~]` only means a similarly-named test file exists — it does NOT mean 92% coverage. Every file, `[~]` included, must be verified to 92%.
 
 ## app/src/main  (0/6 have a test)
 
