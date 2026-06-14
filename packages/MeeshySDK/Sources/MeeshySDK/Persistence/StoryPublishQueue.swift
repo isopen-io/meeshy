@@ -223,6 +223,16 @@ public actor StoryPublishQueue {
         items
     }
 
+    /// Draft recovery — the most recent queued story that has been stuck
+    /// (unpublished) for longer than `olderThan` seconds, so the composer can
+    /// pre-fill it as a draft (the "pas envoyé dans la minute → offline" rule).
+    /// `items` is append-ordered oldest→newest, so `.last(where:)` is the most
+    /// recent match. `nil` when nothing has been stuck long enough.
+    public func recoverLastStuckItem(olderThan threshold: TimeInterval) -> StoryPublishQueueItem? {
+        let cutoff = Date().addingTimeInterval(-threshold)
+        return items.last { $0.createdAt <= cutoff }
+    }
+
     public var count: Int {
         items.count
     }

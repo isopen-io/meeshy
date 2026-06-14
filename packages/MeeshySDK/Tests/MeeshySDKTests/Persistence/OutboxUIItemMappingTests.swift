@@ -318,4 +318,55 @@ struct OutboxUIItemMappingTests {
         #expect(item.iconKind == .text)
         #expect(item.titlePreview == "(message)")
     }
+
+    // MARK: - createPost / createReel (offline post & reel)
+
+    private func createPostPayload(
+        content: String = "",
+        localMediaPaths: [String]? = nil,
+        type: String? = nil,
+        moodEmoji: String? = nil
+    ) -> Data {
+        let payload = CreatePostPayload(
+            clientMutationId: "cmid_post",
+            content: content,
+            attachmentIds: [],
+            visibility: "PUBLIC",
+            originalLanguage: nil,
+            localMediaPaths: localMediaPaths,
+            type: type,
+            moodEmoji: moodEmoji
+        )
+        return try! JSONEncoder().encode(payload)
+    }
+
+    @Test func test_from_createPost_textOnly_returnsCreatePostKind() {
+        let r = record(kind: .createPost, payload: createPostPayload(content: "Hello"))
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.kind == .other("createPost"))
+        #expect(item.iconKind == .text)
+        #expect(item.titlePreview == "Hello")
+    }
+
+    @Test func test_from_createPost_reelType_returnsCreateReelKindAndVideoIcon() {
+        let r = record(kind: .createPost, payload: createPostPayload(
+            content: "My reel",
+            localMediaPaths: ["pending-media/cmid_post/0.mp4"],
+            type: "REEL"
+        ))
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.kind == .other("createReel"))
+        #expect(item.iconKind == .video)
+        #expect(item.attachmentCount == 1)
+    }
+
+    @Test func test_from_createPost_statusType_returnsCreateStatusKindAndEmojiPreview() {
+        let r = record(kind: .createPost, payload: createPostPayload(
+            content: "", type: "STATUS", moodEmoji: "🎉"))
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.kind == .other("createStatus"))
+        #expect(item.iconKind == .text)
+        // Empty body → the mood emoji is surfaced as the preview.
+        #expect(item.titlePreview == "🎉")
+    }
 }

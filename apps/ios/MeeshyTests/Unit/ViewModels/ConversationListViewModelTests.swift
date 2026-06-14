@@ -2678,8 +2678,12 @@ final class RelativeTimeFormatterShortTests: XCTestCase {
     }
 
     func test_label_weeks_flooredFromSeconds() {
+        // The ladder caps weeks at the 30-day boundary (`RelativeTime.classify`:
+        // `days < 30 → weeks`, then months), so the week bucket spans 1–4 weeks.
+        // 7 days → 1 week ; 26 days → floors to 3 weeks (26/7). Beyond 29 days the
+        // label rolls into months and is covered by the months test below.
         XCTAssertTrue(label(secondsAgo: 604_800).contains("1"))
-        XCTAssertTrue(label(secondsAgo: 604_800 * 12).contains("12"))
+        XCTAssertTrue(label(secondsAgo: 86_400 * 26).contains("3"))
     }
 
     func test_label_futureDate_treatedAsNow() {

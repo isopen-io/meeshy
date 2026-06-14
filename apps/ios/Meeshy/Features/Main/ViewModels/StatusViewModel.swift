@@ -16,6 +16,14 @@ class StatusViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let socialSocket: SocialSocketProviding
     private let authManager: AuthManaging
+    private let offlineQueue: OfflineQueueing
+    private let isOffline: () -> Bool
+
+    /// A mood is "stuck offline" (recoverable as a draft) once it has been
+    /// unsent for longer than this — the "pas envoyé dans la minute → offline"
+    /// rule shared by every composer. `nonisolated` so it can be read from any
+    /// isolation (matches `SyncPillViewModel.staleInflightThreshold`).
+    nonisolated static let offlineStuckThreshold: TimeInterval = 60
 
     // Cursor pagination
     private var nextCursor: String?
@@ -30,12 +38,16 @@ class StatusViewModel: ObservableObject {
         mode: StatusService.Mode = .friends,
         statusService: StatusServiceProviding = StatusService.shared,
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
-        authManager: AuthManaging = AuthManager.shared
+        authManager: AuthManaging = AuthManager.shared,
+        offlineQueue: OfflineQueueing = OfflineQueue.shared,
+        isOffline: @escaping () -> Bool = { NetworkMonitor.shared.isOffline }
     ) {
         self.mode = mode
         self.statusService = statusService
         self.socialSocket = socialSocket
         self.authManager = authManager
+        self.offlineQueue = offlineQueue
+        self.isOffline = isOffline
     }
 
     // MARK: - Load Statuses
@@ -138,6 +150,31 @@ class StatusViewModel: ObservableObject {
     // MARK: - Set Status
 
     func setStatus(emoji: String, content: String?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, viaUsername: String? = nil) async {
+        // Offline: persist the mood durably through the SAME `.createPost` outbox
+        // row as posts/reels (type STATUS) so it is not lost, and survives an app
+        // kill. We do NOT insert an optimistic entry — unlike posts, the gateway
+        // does not echo the clientMutationId on `status:created`, so the mood is
+        // reconciled when it actually lands (via the socket) on reconnect. The
+        // composer can recover this stuck row as a draft (recoverUnsentStatus).
+        if isOffline() {
+            let payload = CreatePostPayload(
+                clientMutationId: ClientMutationId.generate(),
+                content: content ?? "",
+                attachmentIds: [],
+                visibility: visibility,
+                type: "STATUS",
+                moodEmoji: emoji,
+                visibilityUserIds: visibilityUserIds
+            )
+            do {
+                try await offlineQueue.enqueue(.createPost, payload: payload, conversationId: nil)
+                FeedbackToastManager.shared.showSuccess(String(localized: "status.queuedOffline", defaultValue: "Mood en attente d'envoi", bundle: .main))
+            } catch {
+                FeedbackToastManager.shared.showError(String(localized: "status.publishError", defaultValue: "Error publishing status", bundle: .main))
+            }
+            return
+        }
+
         do {
             let post = try await statusService.create(moodEmoji: emoji, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, viaUsername: viaUsername)
 
@@ -149,6 +186,23 @@ class StatusViewModel: ObservableObject {
         } catch {
             FeedbackToastManager.shared.showError(String(localized: "status.publishError", defaultValue: "Error publishing status", bundle: .main))
         }
+    }
+
+    // MARK: - Offline Draft Recovery
+
+    /// Returns the last mood that got stuck offline (unsent for more than
+    /// `offlineStuckThreshold`) so the composer can pre-fill it as a draft.
+    func recoverUnsentStatus() async -> RecoveredOfflinePost? {
+        await offlineQueue.recoverLastUnsentPost(
+            matchingTypes: ["STATUS"],
+            olderThan: Self.offlineStuckThreshold
+        )
+    }
+
+    /// Supersedes a recovered mood when the user re-sends it from the composer,
+    /// so the resend replaces the stuck row instead of duplicating it.
+    func supersedeRecoveredStatus(clientMutationId: String) async {
+        await offlineQueue.cancelCreatePost(clientMutationId: clientMutationId)
     }
 
     // MARK: - Clear Status

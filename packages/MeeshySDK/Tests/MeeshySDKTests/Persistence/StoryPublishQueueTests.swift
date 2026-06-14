@@ -49,6 +49,28 @@ final class StoryPublishQueueTests: XCTestCase {
         XCTAssertEqual(count, 0)
     }
 
+    // MARK: - recoverLastStuckItem (offline draft recovery)
+
+    func test_recoverLastStuckItem_returnsMostRecentStuckItem() async {
+        let older = makeItem(visibility: "PUBLIC")
+        let newer = makeItem(visibility: "FRIENDS")
+        await queue.enqueue(older)
+        await queue.enqueue(newer)
+
+        // olderThan: 0 → both qualify; the most recent (append-ordered last) wins.
+        let recovered = await queue.recoverLastStuckItem(olderThan: 0)
+        XCTAssertEqual(recovered?.id, newer.id)
+        XCTAssertEqual(recovered?.visibility, "FRIENDS")
+    }
+
+    func test_recoverLastStuckItem_skipsItemsYoungerThanThreshold() async {
+        await queue.enqueue(makeItem(visibility: "PUBLIC"))
+        // Just-enqueued items are still actively publishing, not yet stuck: a 1h
+        // threshold must recover nothing.
+        let recovered = await queue.recoverLastStuckItem(olderThan: 3600)
+        XCTAssertNil(recovered)
+    }
+
     // MARK: - processNext — success path
 
     func test_processNext_success_emitsPublishSucceeded() async {

@@ -402,6 +402,16 @@ struct OutboxDispatcher: OutboxDispatching {
             let mediaIds: [String]?
             let visibility: String
             let originalLanguage: String?
+            /// Post type forwarded to `CreatePostSchema`. Omitted when nil so the
+            /// gateway applies its `POST` default — keeps legacy rows (written
+            /// before reel-offline carried no `type`) replaying as plain posts.
+            let type: String?
+            // STATUS/mood fields — only set for `type == "STATUS"` rows; omitted
+            // (and ignored by the gateway) otherwise.
+            let moodEmoji: String?
+            let audioUrl: String?
+            let audioDuration: Int?
+            let visibilityUserIds: [String]?
 
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
@@ -409,17 +419,28 @@ struct OutboxDispatcher: OutboxDispatching {
                 if let mediaIds, !mediaIds.isEmpty { try container.encode(mediaIds, forKey: .mediaIds) }
                 try container.encode(visibility, forKey: .visibility)
                 if let originalLanguage, !originalLanguage.isEmpty { try container.encode(originalLanguage, forKey: .originalLanguage) }
+                if let type, !type.isEmpty { try container.encode(type, forKey: .type) }
+                if let moodEmoji, !moodEmoji.isEmpty { try container.encode(moodEmoji, forKey: .moodEmoji) }
+                if let audioUrl, !audioUrl.isEmpty { try container.encode(audioUrl, forKey: .audioUrl) }
+                if let audioDuration { try container.encode(audioDuration, forKey: .audioDuration) }
+                if let visibilityUserIds, !visibilityUserIds.isEmpty { try container.encode(visibilityUserIds, forKey: .visibilityUserIds) }
             }
 
             enum CodingKeys: String, CodingKey {
-                case content, mediaIds, visibility, originalLanguage
+                case content, mediaIds, visibility, originalLanguage, type
+                case moodEmoji, audioUrl, audioDuration, visibilityUserIds
             }
         }
         let body = CreatePostBody(
             content: payload.content,
             mediaIds: resolvedMediaIds.isEmpty ? nil : resolvedMediaIds,
             visibility: payload.visibility,
-            originalLanguage: payload.originalLanguage
+            originalLanguage: payload.originalLanguage,
+            type: payload.type,
+            moodEmoji: payload.moodEmoji,
+            audioUrl: payload.audioUrl,
+            audioDuration: payload.audioDuration,
+            visibilityUserIds: payload.visibilityUserIds
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             endpoint: "/posts",

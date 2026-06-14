@@ -570,6 +570,36 @@ class FeedViewModel: ObservableObject {
         }
     }
 
+    /// A post/reel is "stuck offline" (recoverable as a composer draft) once it
+    /// has been unsent for longer than this — the "pas envoyé dans la minute →
+    /// offline" rule shared by every composer. `nonisolated` so it can be read
+    /// from any isolation (matches `SyncPillViewModel.staleInflightThreshold`).
+    nonisolated static let offlineStuckThreshold: TimeInterval = 60
+
+    /// Returns the last POST/REEL that got stuck offline (unsent for more than
+    /// `offlineStuckThreshold`) so the feed composer can pre-fill it as a draft.
+    func recoverUnsentPost() async -> RecoveredOfflinePost? {
+        await offlineQueue.recoverLastUnsentPost(
+            matchingTypes: ["POST", "REEL"],
+            olderThan: Self.offlineStuckThreshold
+        )
+    }
+
+    /// Supersedes a recovered post/reel when the user re-sends it from the
+    /// composer, so the resend replaces the stuck row (and reclaims its
+    /// pending-media files) instead of duplicating it on reconnect.
+    ///
+    /// Also drops the orphaned optimistic feed post keyed by this cmid: an
+    /// offline post/reel was inserted optimistically (id == cmid) when first
+    /// queued, and its `.createPost` row is what we're now deleting — without
+    /// this the optimistic card would linger in the feed forever (its row gone,
+    /// so it can never reconcile). The resend inserts a fresh optimistic card
+    /// under a new cmid.
+    func supersedeRecoveredPost(clientMutationId: String) async {
+        removeOptimisticPost(id: clientMutationId)
+        await offlineQueue.cancelCreatePost(clientMutationId: clientMutationId)
+    }
+
     /// Removes an optimistic post by id (re-resolving the index since the feed
     /// may mutate across an `await`). Rolls back a queued create the outbox
     /// refused or exhausted.
@@ -587,11 +617,17 @@ class FeedViewModel: ObservableObject {
     /// the reconcile (U1 ST2) swaps the optimistic post for the server one (no
     /// duplicate). Rolls back on synchronous enqueue refusal or `.exhausted`.
     /// Falls back to the text-only path when there are no media URLs.
+    ///
+    /// `type` mirrors the online media path (`ReelComposition.defaultType`): a
+    /// video / multi-image post created offline is enqueued as a `REEL` so it
+    /// lands on the reels surface once the OutboxFlusher uploads it — reusing the
+    /// exact post durability machinery, only the server-side `type` differs.
     func createOfflineMediaPost(
         localMediaURLs: [URL],
         content: String?,
         visibility: String = "PUBLIC",
-        originalLanguage: String? = nil
+        originalLanguage: String? = nil,
+        type: String = "POST"
     ) async {
         publishError = nil
         publishSuccess = false
@@ -612,7 +648,7 @@ class FeedViewModel: ObservableObject {
             authorId: currentUser?.id ?? "",
             authorUsername: currentUser?.username,
             authorAvatarURL: currentUser?.avatar,
-            type: "POST",
+            type: type,
             content: content ?? "",
             timestamp: Date(),
             media: localMediaURLs.map(Self.optimisticFeedMedia(forLocalURL:)),
@@ -627,7 +663,8 @@ class FeedViewModel: ObservableObject {
                 clientMutationId: cmid,
                 content: content,
                 visibility: visibility,
-                originalLanguage: originalLanguage
+                originalLanguage: originalLanguage,
+                type: type
             )
             publishSuccess = true
             observeOutcome(cmid: cmid, rollback: { [weak self] in
