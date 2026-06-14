@@ -232,10 +232,17 @@ export async function registerDownloadRoutes(
           }
         }
       },
-      onSend: async (request, reply, payload) => {
+      // SYNCHRONOUS on purpose. This route already carries the app-wide async
+      // `conditionalGetOnSend` onSend hook; a SECOND *async* onSend hook makes a
+      // void-returning handler (e.g. `return sendNotFound(reply, …)` when the
+      // file is missing) resolve `undefined`, so Fastify issues a duplicate
+      // `reply.send(undefined)` → `ERR_HTTP_HEADERS_SENT` crash bursts (frequent
+      // on missing avatars). Keeping this hook synchronous leaves cgo as the
+      // only async onSend hook — the proven-safe state every other route has.
+      onSend: (request, reply, payload, done) => {
         reply.removeHeader('X-Frame-Options');
         reply.header('Content-Security-Policy', "frame-ancestors *");
-        return payload;
+        done(null, payload);
       }
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
