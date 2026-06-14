@@ -53,8 +53,6 @@
     }]
   },
   "moduleFileExtensions": ["ts", "js", "json"],
-  "collectCoverage": true,
-
   "coverageThreshold": {
     "global": {
       "lines": 32,
