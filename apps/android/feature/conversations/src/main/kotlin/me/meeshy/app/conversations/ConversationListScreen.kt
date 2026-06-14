@@ -16,6 +16,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,12 +26,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -65,10 +70,28 @@ fun ConversationListScreen(
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.conversations_title), fontWeight = FontWeight.Bold) },
+                title = {
+                    if (state.isSearchActive) {
+                        ConversationSearchField(
+                            query = state.searchText,
+                            onQueryChange = viewModel::setSearch,
+                        )
+                    } else {
+                        Text(stringResource(R.string.conversations_title), fontWeight = FontWeight.Bold)
+                    }
+                },
                 actions = {
-                    IconButton(onClick = onLogout) {
-                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.conversations_logout))
+                    if (state.isSearchActive) {
+                        IconButton(onClick = { viewModel.setSearchActive(false) }) {
+                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.conversations_search_close))
+                        }
+                    } else {
+                        IconButton(onClick = { viewModel.setSearchActive(true) }) {
+                            Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.conversations_search))
+                        }
+                        IconButton(onClick = onLogout) {
+                            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.conversations_logout))
+                        }
                     }
                 },
             )
@@ -80,6 +103,10 @@ fun ConversationListScreen(
                 .padding(padding),
         ) {
             ConnectionBannerStrip(state.banner)
+            ConversationFilterBar(
+                selected = state.selectedFilter,
+                onSelect = viewModel::selectFilter,
+            )
             Box(modifier = Modifier.weight(1f)) {
                 when {
                     state.showSkeleton -> SkeletonList()
@@ -90,6 +117,9 @@ fun ConversationListScreen(
                             stringResource(R.string.conversations_retry),
                             viewModel::refresh,
                         )
+
+                    state.conversations.isEmpty() && state.isFilteredEmpty ->
+                        CenteredMessage(stringResource(R.string.conversations_no_results), null, null)
 
                     state.conversations.isEmpty() ->
                         CenteredMessage(stringResource(R.string.conversations_empty), null, null)
@@ -113,6 +143,27 @@ fun ConversationListScreen(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ConversationSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+) {
+    TextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        placeholder = { Text(stringResource(R.string.conversations_search_hint)) },
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+        ),
+    )
 }
 
 @Composable

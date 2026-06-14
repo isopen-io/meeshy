@@ -187,7 +187,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       spinner gated sur le geste utilisateur — les revalidations SWR de fond
       restent silencieuses) ; cursor-based infinite scroll / branding pending
 - [ ] Sectioned list with collapsible user categories + pinned section + drag-to-category
-- [ ] Filtering (all/unread/personal/private/open/global/channels/favorites/archived) + search overlay
+- [x] Filtering (all/unread/personal/private/open/global/channels/favorites/archived) + search overlay
+      — `ConversationFilter` enum (couleurs iOS) + `ConversationFilters.apply` pur
+      (port fidèle de `filterConversations` : soft-delete masqué partout, archivés
+      masqués sauf onglet Archives, recherche insensible à la casse sur titre /
+      nom personnalisé / participants) ; barre de chips `LazyRow` + champ de
+      recherche dans l'app bar ; 22 tests verts (11 modèle + 11 VM)
 - [ ] Communities carousel + category filter chips
 - [ ] Pinned / muted / locked / archived / favorited (emoji) states
 - [ ] Swipe actions (pin, mute, lock, archive, mark read/unread, block, hide)
