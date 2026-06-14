@@ -287,6 +287,7 @@ extension APIPost {
         feedPost.repostCount = repostCount ?? 0
         feedPost.bookmarkCount = bookmarkCount ?? 0
         feedPost.shareCount = shareCount ?? 0
+        feedPost.viewCount = viewCount ?? 0
         return feedPost
     }
 

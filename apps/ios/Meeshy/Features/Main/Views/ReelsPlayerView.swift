@@ -455,6 +455,24 @@ struct ReelPageView: View {
             )
             .accessibilityLabel(String(localized: "reels.action.like", defaultValue: "J'aime", bundle: .main))
 
+            // Vues du réel — indicateur informatif (non interactif) sous les cœurs.
+            if reel.viewCount > 0 {
+                VStack(spacing: 5) {
+                    Image(systemName: "eye.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.9))
+                        .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                    Text(ReelActionButton.compact(reel.viewCount))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.35), radius: 2)
+                }
+                .frame(width: 48)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(String(localized: "reels.action.views", defaultValue: "Vues", bundle: .main))
+                .accessibilityValue("\(reel.viewCount)")
+            }
+
             ReelActionButton(
                 systemName: "bubble.right.fill",
                 tint: .white,
@@ -509,7 +527,7 @@ private struct ReelActionButton: View {
         .buttonStyle(.plain)
     }
 
-    private static func compact(_ value: Int) -> String {
+    fileprivate static func compact(_ value: Int) -> String {
         if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
         if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
         return "\(value)"
