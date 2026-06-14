@@ -105,6 +105,7 @@ enum SyncPillLabels {
         case "updateSettings":          return "Mise à jour réglages"
         case "createPost":              return "Publication de post"
         case "createReel":              return "Publication de réel"
+        case "createStatus":            return "Publication de mood"
         case "deleteComment":           return "Suppression commentaire"
         default:                        return "Synchronisation"
         }
@@ -124,6 +125,7 @@ enum SyncPillLabels {
         case "updateSettings":          return "Réglages non enregistrés"
         case "createPost":              return "Post non publié"
         case "createReel":              return "Réel non publié"
+        case "createStatus":            return "Mood non publié"
         case "deleteComment":           return "Commentaire non supprimé"
         default:                        return "Échec de synchronisation"
         }

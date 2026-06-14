@@ -42,6 +42,16 @@ final class SyncPillLabelsTests: XCTestCase {
         XCTAssertEqual(label, "Publication de réel")
     }
 
+    func test_createStatus_pending_readsAsPublishingMood() {
+        let label = SyncPillLabels.operationLabel(for: item(kind: .other("createStatus"), status: .inflight))
+        XCTAssertEqual(label, "Publication de mood")
+    }
+
+    func test_createStatus_exhausted_readsAsNotPublished() {
+        let label = SyncPillLabels.operationLabel(for: item(kind: .other("createStatus"), status: .exhausted))
+        XCTAssertEqual(label, "Mood non publié")
+    }
+
     // MARK: - Failure phrasing (failed / exhausted)
 
     /// The user's report: a permanently-failed reaction lingered in the queue

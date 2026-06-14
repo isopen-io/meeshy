@@ -324,7 +324,8 @@ struct OutboxUIItemMappingTests {
     private func createPostPayload(
         content: String = "",
         localMediaPaths: [String]? = nil,
-        type: String? = nil
+        type: String? = nil,
+        moodEmoji: String? = nil
     ) -> Data {
         let payload = CreatePostPayload(
             clientMutationId: "cmid_post",
@@ -333,7 +334,8 @@ struct OutboxUIItemMappingTests {
             visibility: "PUBLIC",
             originalLanguage: nil,
             localMediaPaths: localMediaPaths,
-            type: type
+            type: type,
+            moodEmoji: moodEmoji
         )
         return try! JSONEncoder().encode(payload)
     }
@@ -356,5 +358,15 @@ struct OutboxUIItemMappingTests {
         #expect(item.kind == .other("createReel"))
         #expect(item.iconKind == .video)
         #expect(item.attachmentCount == 1)
+    }
+
+    @Test func test_from_createPost_statusType_returnsCreateStatusKindAndEmojiPreview() {
+        let r = record(kind: .createPost, payload: createPostPayload(
+            content: "", type: "STATUS", moodEmoji: "🎉"))
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.kind == .other("createStatus"))
+        #expect(item.iconKind == .text)
+        // Empty body → the mood emoji is surfaced as the preview.
+        #expect(item.titlePreview == "🎉")
     }
 }

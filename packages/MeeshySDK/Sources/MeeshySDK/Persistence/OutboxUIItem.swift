@@ -289,13 +289,14 @@ extension OutboxUIItem {
         )
     }
 
-    /// A queued post/reel create (`.createPost`). Decodes `CreatePostPayload` to
-    /// distinguish a REEL from a plain POST (so the pill reads "Publication de
-    /// réel" vs "Publication de post") and to derive an accurate media icon +
-    /// content preview. Falls back to a plain post on decode failure.
+    /// A queued post/reel/status create (`.createPost`). Decodes `CreatePostPayload`
+    /// to distinguish a REEL / STATUS from a plain POST (so the pill reads
+    /// "Publication de réel" / "Publication de statut" vs "Publication de post")
+    /// and to derive an accurate media icon + content preview. Falls back to a
+    /// plain post on decode failure.
     private static func mapCreatePost(record: OutboxRecord) -> OutboxUIItem {
         let payload = try? JSONDecoder().decode(CreatePostPayload.self, from: record.payload)
-        let isReel = (payload?.type ?? "").uppercased() == "REEL"
+        let type = (payload?.type ?? "POST").uppercased()
         let mediaPaths = payload?.localMediaPaths ?? []
 
         let icon: IconKind
@@ -309,12 +310,28 @@ extension OutboxUIItem {
             icon = .text
         }
 
+        // A status carries a mood emoji rather than a text preview when its body
+        // is empty, so the pill still says something meaningful.
         let content = payload?.content ?? ""
-        let preview = content.isEmpty ? nil : truncatePreview(content)
+        let preview: String?
+        if !content.isEmpty {
+            preview = truncatePreview(content)
+        } else if type == "STATUS", let emoji = payload?.moodEmoji, !emoji.isEmpty {
+            preview = emoji
+        } else {
+            preview = nil
+        }
+
+        let rawKind: String
+        switch type {
+        case "REEL":   rawKind = "createReel"
+        case "STATUS": rawKind = "createStatus"
+        default:       rawKind = "createPost"
+        }
 
         return OutboxUIItem(
             id: record.id,
-            kind: .other(isReel ? "createReel" : "createPost"),
+            kind: .other(rawKind),
             titlePreview: preview,
             iconKind: icon,
             attachmentCount: mediaPaths.count,

@@ -116,6 +116,9 @@ struct StatusComposerView: View {
                         if selectedEmoji == nil, let emoji = draft.moodEmoji { selectedEmoji = emoji }
                         if statusText.isEmpty { statusText = draft.content }
                         if let vis = StatusVisibility(rawValue: draft.visibility) { selectedVisibility = vis }
+                        // Restore the audience too, else an ONLY/EXCEPT mood would
+                        // re-send with an empty list and the gateway would reject it.
+                        if let ids = draft.visibilityUserIds { selectedUserIds = ids }
                         recoveredCmid = draft.clientMutationId
                     }
                 }

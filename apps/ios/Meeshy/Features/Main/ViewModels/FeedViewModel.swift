@@ -587,7 +587,15 @@ class FeedViewModel: ObservableObject {
     /// Supersedes a recovered post/reel when the user re-sends it from the
     /// composer, so the resend replaces the stuck row (and reclaims its
     /// pending-media files) instead of duplicating it on reconnect.
+    ///
+    /// Also drops the orphaned optimistic feed post keyed by this cmid: an
+    /// offline post/reel was inserted optimistically (id == cmid) when first
+    /// queued, and its `.createPost` row is what we're now deleting — without
+    /// this the optimistic card would linger in the feed forever (its row gone,
+    /// so it can never reconcile). The resend inserts a fresh optimistic card
+    /// under a new cmid.
     func supersedeRecoveredPost(clientMutationId: String) async {
+        removeOptimisticPost(id: clientMutationId)
         await offlineQueue.cancelCreatePost(clientMutationId: clientMutationId)
     }
 
