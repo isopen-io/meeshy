@@ -97,3 +97,17 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   5. GATEWAY FAILURES: 7 suites / 22 tests — pre-existing production bugs unchanged (not touched here)
 - Next slice: 0.3 needs CI validation, then 0.4 (web jest coverage threshold)
 - Commit: (see branch claude/coverage/sprint0-3-and-web-test-fixes)
+
+## 2026-06-14T18:30Z — Sprint 0.3 ☑ confirm + Sprint 0.4 × web coverageThreshold
+- Targeted: `apps/web/jest.config.js` — add ratcheting `coverageThreshold` at measured baseline
+- Result: ☑ done
+- Coverage: web line 33.10% / branch 25.77% (re-measured post Sprint 0.2/0.3 fixes; threshold floor: lines≥33, branches≥25, statements≥32, functions≥29)
+- Tests added: 0 (CI-config-only slice)
+- Reviewer: PASS (rounds: 1)
+- Notes:
+  1. Confirmed Sprint 0.3 (PR #650) was merged to main — PROGRESS.md updated 0.3 ◐→☑.
+  2. Re-measured web coverage post Sprint 0.2/0.3 fixes: 33.10% line / 25.77% branch (up from 22.37%/17.30% Sprint 0.1 baseline) — improvements from web test infrastructure fixes (ESM mapper, mock fixes).
+  3. Added conservative `coverageThreshold` floors to `apps/web/jest.config.js`: lines:33, branches:25, statements:32, functions:29. All four verified PASS against current coverage.
+  4. PROGRESS.md baselines table updated to reflect new re-measured web values.
+  5. Next slice: Sprint 0.5 (stop gateway jest from silently excluding routes/middleware/websocket/grpc; add global threshold at baseline)
+- Commit: (see PR claude/coverage/sprint0-4-web-threshold)
