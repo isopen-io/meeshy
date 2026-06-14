@@ -1,48 +1,39 @@
-# Plan — Iteration 49w (2026-06-14)
+# Plan — Iteration 49w (2026-06-14) — Web : i18n + dark mode du flux d'appel vidéo
 
-Base : `main` HEAD post-merge iter-48i. Branche : `claude/focused-brown-uxa19f`.
-Périmètre : **web only**, surface admin Ranking (i18n).
+## Objectif
+Compléter la localisation et le dark mode de la **feature appel vidéo** côté web, en
+priorisant la surface la plus visible : la **notification d'appel entrant** (`CallNotification`,
+plein écran, `role="alertdialog"`), restée 100 % en anglais dur alors que le namespace
+`calls.json` est déjà riche.
 
-## Objectifs
-1. Réparer le préfixe i18n cassé `admin.ranking.*` → `ranking.*` (clés brutes affichées).
-2. Internationaliser les 33 labels `RANKING_CRITERIA` (champ `label` FR dur supprimé).
-3. Internationaliser les chaînes FR dures adjacentes de `LinkRankCard`.
-4. Réanimer le fichier de test ranking (mort) pour valider les corrections.
+## Base
+- Branche de travail : `claude/eager-keller-e6eq78`
+- Base : `main` post-merge #628 (`2c65d379`)
 
-## Étapes réalisées
+## Étapes
+1. **Locales** — ajouter `calls.incoming.*` (videoCall/subtitle/accept/decline/acceptLabel/
+   declineLabel) et `calls.waiting.*` (forParticipant/noVideo) dans les 4 fichiers
+   `locales/{en,fr,es,pt}/calls.json`. ✅
+2. **CallNotification.tsx** — `import { useI18n }` + `const { t } = useI18n('calls')` ;
+   remplacer les 6 chaînes dures (texte + aria-labels) par `t('calls.incoming.*')` ;
+   ajouter les variantes `dark:` aux boutons accepter/refuser. ✅
+3. **VideoCallInterface.tsx** — remplacer les 3 fallbacks durs (`Waiting for participant...`,
+   `Connecting...`, `No video`) par `t('calls.waiting.forParticipant')`,
+   `t('calls.status.connecting')` (clé existante), `t('calls.waiting.noVideo')`. ✅
+4. **Validation** — JSON parse OK ×4 ; cohérence du pattern `useI18n('calls')` +
+   `t('calls.…')` avec l'existant ; CallNotification confirmé vivant (rendu par CallManager). ✅
+5. **Docs** — analyse `2026-06-14-iteration-49w.md`, ce plan, mise à jour `branch-tracking.md`. ✅
+6. **CI + merge** — pousser, attendre CI verte (lint/type-check/tests web), merger dans `main`.
 
-### i18n locales (×4 : en/fr/es/pt, `locales/{loc}/admin.json`)
-- [x] Bloc `ranking.criteria.*` (33 clés) — fr = libellés d'origine préservés ; en/es/pt traduits.
-- [x] Clés `ranking.linkTrackedBadge`, `linkShareBadge`, `conversationPrefix`,
-      `unitVisits`, `unitUnique`, `unitUses`, `unitMax`.
-- [x] Parité vérifiée : 1738 clés/locale, 0 manquante/excédentaire.
+## Vérification
+- `node -e JSON.parse` sur les 4 calls.json → OK.
+- Aucune nouvelle dépendance ; aucune signature de type modifiée (`useI18n` renvoie `{ t }`).
+- Risque : minimal (chaînes + classes Tailwind + clés i18n additives).
 
-### Composants (`components/admin/ranking/`)
-- [x] `constants.ts` : champ `label` supprimé de chaque critère (icône+value conservés) ;
-      export helper `criterionLabelKey(value) = ranking.criteria.${value}`.
-- [x] `UserRankCard` / `ConversationRankCard` / `MessageRankCard` : `useI18n('admin')` +
-      `t(criterionLabelKey(criterion))`.
-- [x] `LinkRankCard` : `useI18n` + label critère i18n + 7 chaînes FR → `t('ranking.*')`.
-- [x] `RankingFilters` : 13 appels `admin.ranking.*` → `ranking.*` ; `criteriaList` mappe
-      vers `{...c, label: t(criterionLabelKey(c.value))}` (recherche + affichage sur libellé traduit).
-- [x] `RankingStatsImpl` : `currentCriterion?.label` → `criterionLabel = t(criterionLabelKey(criterion))`
-      (formatters tooltip top10 + évolution) ; import `RANKING_CRITERIA` mort retiré.
-
-### Test (`components/admin/ranking/__tests__/RankingComponents.test.tsx`)
-- [x] `import { adminService }` remonté en tête (était DANS un `it()` = Syntax Error).
-- [x] Mock `@/hooks/useI18n` adossé à `locales/fr/admin.json` (coupe la chaîne encryption +
-      rend les libellés fr attendus).
-- [x] `formatCount(..., 'fr-FR')` explicite + assertions séparateur locale-agnostiques.
-- [x] **30/30 verts**.
-
-## Vérifications
-- [x] Simulation node du loader `useI18n` : 100 % des clés ranking résolvent sur les 4 locales.
-- [x] `tsc --noEmit` : 0 erreur sur les fichiers `admin/ranking/*` modifiés.
-- [x] `jest RankingComponents.test.tsx` : 30/30.
-- [x] Aucune occurrence `admin.ranking.` résiduelle dans `components/`/`app/`.
-
-## Hors périmètre (différés → branch-tracking.md)
-- `getTypeLabel`/`getMessageTypeIcon` FR durs ; `next-themes` orphelin ; deep links `/v2`,
-  swipe-back, audit dark admin (reste) ; tests web env-local (chaîne encryption).
-
-## ✅ Status : implémenté, testé, prêt à merger dans `main`.
+## Fichiers touchés
+- `apps/web/locales/{en,fr,es,pt}/calls.json`
+- `apps/web/components/video-call/CallNotification.tsx`
+- `apps/web/components/video-calls/VideoCallInterface.tsx`
+- `docs/analyses/uiux/2026-06-14-iteration-49w.md`
+- `docs/plans/uiux/2026-06-14-plan-iteration-49w.md`
+- `docs/plans/uiux/branch-tracking.md`

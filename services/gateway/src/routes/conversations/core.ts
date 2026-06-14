@@ -836,7 +836,7 @@ export function registerCoreRoutes(
       const allUserIds = [userId, ...uniqueParticipantIds];
       const allUsers = await prisma.user.findMany({
         where: { id: { in: allUserIds } },
-        select: { id: true, displayName: true, username: true }
+        select: { id: true, displayName: true, username: true, avatar: true }
       });
       const userMap = new Map(allUsers.map(u => [u.id, u]));
       const defaultPermissions = {
@@ -986,30 +986,26 @@ export function registerCoreRoutes(
       const notificationService = fastify.notificationService;
       if (notificationService && uniqueParticipantIds.length > 0) {
         try {
-          // Récupérer les informations du créateur
-          const creator = await prisma.user.findUnique({
-            where: { id: userId },
-            select: {
-              username: true,
-              displayName: true,
-              avatar: true
-            }
-          });
+          // Le créateur est déjà chargé dans userMap (userId ∈ allUserIds) :
+          // pas de second aller-retour DB.
+          const creator = userMap.get(userId);
 
           if (creator) {
-            // Envoyer une notification à chaque participant invité
-            for (const participantId of uniqueParticipantIds) {
-              await notificationService.createConversationInviteNotification({
-                invitedUserId: participantId,
-                inviterId: userId,
-                inviterUsername: creator.displayName || creator.username,
-                inviterAvatar: creator.avatar || undefined,
-                conversationId: conversation.id,
-                conversationTitle: displayTitle,
-                conversationType: type
-              });
-              logger.debug('invitation notification sent', { participantId, conversationId: conversation.id });
-            }
+            // Notifications d'invitation indépendantes : fan-out parallèle (O(1) latence).
+            await Promise.all(
+              uniqueParticipantIds.map(async (participantId) => {
+                await notificationService.createConversationInviteNotification({
+                  invitedUserId: participantId,
+                  inviterId: userId,
+                  inviterUsername: creator.displayName || creator.username,
+                  inviterAvatar: creator.avatar || undefined,
+                  conversationId: conversation.id,
+                  conversationTitle: displayTitle,
+                  conversationType: type
+                });
+                logger.debug('invitation notification sent', { participantId, conversationId: conversation.id });
+              })
+            );
           }
         } catch (notifError) {
           logger.error('error sending invitation notifications', { error: notifError });

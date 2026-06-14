@@ -16,16 +16,22 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | **49w** (web only : surface admin Ranking i18n — (1) **bug critique** réparé : préfixe namespace cassé `admin.ranking.*` → `ranking.*` sur 13 libellés de `RankingFilters` qui affichaient les **clés brutes** dans toutes les langues ; (2) 33 labels `RANKING_CRITERIA` FR durs → clés `ranking.criteria.*` ×4 locales (champ `label` supprimé de `constants.ts`, helper `criterionLabelKey`) ; (3) 7 chaînes FR dures `LinkRankCard` → i18n ; (4) fichier de test ranking mort réanimé (syntax error `import` dans `it()` + mock `useI18n` → 30/30 verts). Consommateurs : 4 RankCards + RankingFilters + RankingStatsImpl) |
-| Last merged PR | #610 (47w), #605 (46w) ; iter-48i sur `claude/wizardly-rubin-ph295e` ; iter-49w sur `claude/focused-brown-uxa19f` |
-| Last Merged Base (commit) | 7659cb0e (merge #610) — base iter-48i ; iter-49w basée sur `main` HEAD post-48i |
-| Next iteration | **50** — repartir de `main` HEAD post-merge iter-49w |
+| Last completed iteration | **49wb** (web only : surface admin Ranking i18n — (1) **bug critique** réparé : préfixe namespace cassé `admin.ranking.*` → `ranking.*` sur 13 libellés de `RankingFilters` qui affichaient les **clés brutes** dans toutes les langues ; (2) 33 labels `RANKING_CRITERIA` FR durs → clés `ranking.criteria.*` ×4 locales (champ `label` supprimé de `constants.ts`, helper `criterionLabelKey`) ; (3) 7 chaînes FR dures `LinkRankCard` → i18n ; (4) fichier de test ranking mort réanimé → 30/30 verts). **Note** : numérotée `49wb` car un autre agent a livré en parallèle une `49w` distincte (i18n+dark mode appel vidéo — `CallNotification`/`VideoCallInterface`, déjà mergée) ; périmètres disjoints, les deux conservées. |
+| Last merged PR | #610 (47w), #605 (46w) ; iter-48i #617 ; iter-49w (appel vidéo) sur `claude/eager-keller-e6eq78` (mergée) ; iter-49wb (ranking) sur `claude/focused-brown-uxa19f` ⏳ |
+| Last Merged Base (commit) | iter-49wb re-synchronisée sur `main` post-merge 49w appel-vidéo |
+| Next iteration | **50** — repartir de `main` HEAD post-merge iter-49wb |
 
 ### Deferred carry-over — web (pour 50+)
+- **NOUVEAU (repéré 49w appel-vidéo, hors cluster appel entrant)** : fallbacks anglais dans `t()` —
+  `video-calls/AudioEffectsCarousel.tsx` (`'Audio Effects'`/`'Customize your voice'`/
+  `'Click on an effect to configure it'`), `AudioEffectsPanel.tsx` (`'Select playback mode'`) ;
+  FR durs `audio/AudioEffectsTimeline.tsx:61`, `audio/AudioControls.tsx:238` (« Voix clonée »),
+  `v2/GhostBadge.tsx:29`, `common/PrintButton.tsx` (label défaut « Imprimer ») ;
+  a11y `v2/PostCard.tsx:255` `alt={m.alt ?? ''}` → fallback `m.fileName`.
 - ~~chart hex sans variante dark (RankingStatsImpl/MermaidDiagramImpl/AgentOverviewTab)~~ → **SOLDÉ en 48w** (ne plus auditer ces 3 fichiers pour le dark mode)
-- ~~`RANKING_CRITERIA` labels FR durs (`ranking/constants.ts`)~~ → **SOLDÉ en 49w** (champ `label` supprimé, i18n `ranking.criteria.*` ; ne plus re-flagger ces 33 labels ni le préfixe `admin.ranking.*` de RankingFilters — corrigé)
-- **NOUVEAU (49w)** : `getTypeLabel`/`getMessageTypeIcon` (`ranking/utils.tsx`) renvoient `Groupe`/`Publique` FR durs — à i18n dans une passe dédiée (codes de type de conversation, possible réutilisation hors ranking)
-- **NOUVEAU (49w)** : tests web touchant `stores` (ex. `__tests__/admin/ranking/page.test.tsx`) échouent en env-local sur la résolution `@meeshy/shared/encryption` (`.js` en source TS) — config jest / mock chaîne, non bloquant (`continue-on-error` job web CI), à corriger isolément
+- ~~`RANKING_CRITERIA` labels FR durs (`ranking/constants.ts`)~~ → **SOLDÉ en 49wb** (champ `label` supprimé, i18n `ranking.criteria.*` ; ne plus re-flagger ces 33 labels ni le préfixe `admin.ranking.*` de RankingFilters — corrigé)
+- **NOUVEAU (49wb)** : `getTypeLabel`/`getMessageTypeIcon` (`ranking/utils.tsx`) renvoient `Groupe`/`Publique` FR durs — à i18n dans une passe dédiée (codes de type de conversation, possible réutilisation hors ranking)
+- **NOUVEAU (49wb)** : tests web touchant `stores` (ex. `__tests__/admin/ranking/page.test.tsx`) échouent en env-local sur la résolution `@meeshy/shared/encryption` (`.js` en source TS) — config jest / mock chaîne, non bloquant (`continue-on-error` job web CI), à corriger isolément
 - retrait dépendance orpheline `next-themes` de `apps/web/package.json` (zéro import restant post-48w ; touche `pnpm-lock.yaml` — à faire isolément)
 - consolidation `notifications/preferences` page vs composant
 - réactions par pièce jointe (wiring gateway, feature commune web+Android)
@@ -82,5 +88,6 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 45 | claude/blissful-ritchie-dp7ibu | #597 | ✅ |
 | 46w | claude/elegant-noether-09t4x2 | #605 | ✅ |
 | 47w | claude/blissful-ritchie-8d57jg | #610 | ✅ |
-| 48i | claude/wizardly-rubin-ph295e | ⏳ | ⏳ |
-| 49w | claude/focused-brown-uxa19f | ⏳ | ⏳ |
+| 48i | claude/wizardly-rubin-ph295e | #617 | ✅ |
+| 49w | claude/eager-keller-e6eq78 (appel vidéo) | ✅ | ✅ |
+| 49wb | claude/focused-brown-uxa19f (admin ranking) | ⏳ | ⏳ |
