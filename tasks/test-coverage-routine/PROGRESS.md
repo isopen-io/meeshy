@@ -62,6 +62,26 @@ A run targets **one (feature × app) cell**. Pick the highest-priority `☐` cel
 
 ---
 
+## Exhaustive file-level checklists
+
+The **complete, every-file** lists live in [`manifests/`](manifests/README.md) — one per app,
+grouped by feature/domain, with a checkbox per source file (2,538 files total; ~1,716 untested).
+The routine ticks `[x]` there as each file reaches 100% line+branch + reviewer PASS.
+
+| App | Manifest | Files | Untested-ish |
+|-----|----------|:-----:|:------------:|
+| Gateway | [`manifests/gateway.md`](manifests/gateway.md) | 316 | 228 |
+| Translator | [`manifests/translator.md`](manifests/translator.md) | 110 | 86 |
+| Web | [`manifests/web.md`](manifests/web.md) | 1091 | 728 |
+| iOS | [`manifests/ios.md`](manifests/ios.md) | 346 | 250 |
+| Android | [`manifests/android.md`](manifests/android.md) | 148 | 120 |
+| Shared | [`manifests/shared.md`](manifests/shared.md) | 78 | 60 |
+| MeeshySDK | [`manifests/sdk-swift.md`](manifests/sdk-swift.md) | 449 | 244 |
+
+When a `(feature × app)` cell is selected, resolve it to files by intersecting the manifest's
+domain groups with the feature's module targets below, then cover **every** file in that
+intersection to 100% before flipping the cell `☑`.
+
 ## Per-feature module targets
 
 The routine resolves a cell to concrete files here. Keep this list updated as the codebase moves.

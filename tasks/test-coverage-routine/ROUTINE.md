@@ -30,9 +30,12 @@ git rebase origin/main          # stay current with main; resolve conflicts cons
 3. Mark it `◐` in `PROGRESS.md`, commit that marker immediately (`chore(coverage): claim <slice>`),
    and push — so a concurrent run won't pick the same slice. Use the workflow concurrency group
    too, but the marker is the durable lock.
-4. Resolve the cell to concrete files via `PROGRESS.md` §Per-feature module targets. **Verify the
-   files still exist** (the codebase moves); if a path is stale, find the current equivalent and
-   update the targets list.
+4. Resolve the cell to concrete files: intersect the feature's module targets (`PROGRESS.md`
+   §Per-feature module targets) with the app's manifest (`manifests/<app>.md`) domain groups, to
+   get the **exhaustive file list** for the slice. **Verify the files still exist** (the codebase
+   moves); if a path is stale, find the current equivalent and update both the targets list and the
+   manifest. Cover **every** file in that intersection — no skipping `[~]` files (they're often
+   shallow; verify they're truly 100%).
 
 ## 2. Scope the slice
 
@@ -106,7 +109,7 @@ general-purpose subagent with the rubric.
 
 1. Update `PROGRESS.md`: flip the cell `◐`→`☑` (or note sub-progress), update the baselines table,
    and **ratchet** the relevant `coverageThreshold` up to the new measured floor (Sprint 0 wired the
-   thresholds; never lower them).
+   thresholds; never lower them). Also tick `[x]` for each completed file in `manifests/<app>.md`.
 2. Append a `RUNLOG.md` entry (template below).
 3. Commit with a conventional message:
    `test(<app>): cover <feature> — <modules> to 100% line+branch`
