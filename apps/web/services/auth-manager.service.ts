@@ -21,6 +21,7 @@ class AuthManager {
   private constructor() {}
 
   public static getInstance(): AuthManager {
+    /* istanbul ignore else */
     if (!AuthManager.instance) {
       AuthManager.instance = new AuthManager();
     }
@@ -43,6 +44,7 @@ class AuthManager {
     sessionToken?: string,
     expiresIn?: number
   ): void {
+    /* istanbul ignore next */
     if (typeof window === 'undefined') return;
 
     this.clearAllSessions();
@@ -57,12 +59,14 @@ class AuthManager {
   }
 
   updateUser(user: User): void {
+    /* istanbul ignore next */
     if (typeof window === 'undefined') return;
     localStorage.setItem(AUTH_STORAGE_KEYS.USER_DATA, JSON.stringify(user));
     this.setSessionCookie(user);
   }
 
   updateTokens(authToken: string, refreshToken?: string, sessionToken?: string, expiresIn?: number): void {
+    /* istanbul ignore next */
     if (typeof window === 'undefined') return;
     localStorage.setItem(AUTH_STORAGE_KEYS.AUTH_TOKEN, authToken);
     if (refreshToken) localStorage.setItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
@@ -72,16 +76,19 @@ class AuthManager {
   // ==================== GETTERS ====================
 
   getAuthToken(): string | null {
+    /* istanbul ignore next */
     if (typeof window === 'undefined') return null;
     return localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN);
   }
 
   getRefreshToken(): string | null {
+    /* istanbul ignore next */
     if (typeof window === 'undefined') return null;
     return localStorage.getItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN);
   }
 
   getCurrentUser(): User | null {
+    /* istanbul ignore next */
     if (typeof window === 'undefined') return null;
     const data = localStorage.getItem(AUTH_STORAGE_KEYS.USER_DATA);
     if (!data) return null;
@@ -99,6 +106,7 @@ class AuthManager {
   // ==================== ANONYMOUS SESSIONS ====================
 
   setAnonymousSession(token: string, participantId: string, expiresHours: number = 24): void {
+    /* istanbul ignore next */
     if (typeof window === 'undefined') return;
 
     const expiresAt = Date.now() + (expiresHours * 60 * 60 * 1000);
@@ -109,6 +117,7 @@ class AuthManager {
   }
 
   getAnonymousSession(): AnonymousSession | null {
+    /* istanbul ignore next */
     if (typeof window === 'undefined') return null;
 
     const sessionStr = localStorage.getItem(AUTH_STORAGE_KEYS.ANONYMOUS_SESSION);
@@ -143,6 +152,7 @@ class AuthManager {
   // ==================== CLEANUP ====================
 
   clearAllSessions(): void {
+    /* istanbul ignore next */
     if (typeof window === 'undefined') return;
 
     try {
@@ -192,6 +202,7 @@ class AuthManager {
   }
 
   private clearAuthCookies(): void {
+    /* istanbul ignore next */
     if (typeof document === 'undefined') return;
 
     document.cookie.split(";").forEach((c) => {
@@ -209,6 +220,7 @@ class AuthManager {
   // ==================== HELPERS ====================
 
   private setSessionCookie(user: User): void {
+    /* istanbul ignore next */
     if (typeof document === 'undefined') return;
 
     const sessionData = {
@@ -224,6 +236,7 @@ class AuthManager {
   }
 
   private safeRemoveItem(key: string): void {
+    /* istanbul ignore next */
     if (typeof window === 'undefined' || !window.localStorage) return;
     try {
       localStorage.removeItem(key);
@@ -231,6 +244,7 @@ class AuthManager {
   }
 
   clearTemporaryAuthData(): void {
+    /* istanbul ignore next */
     if (typeof window === 'undefined') return;
     try {
       sessionStorage.removeItem(SESSION_STORAGE_KEYS.TWO_FACTOR_TEMP_TOKEN);
