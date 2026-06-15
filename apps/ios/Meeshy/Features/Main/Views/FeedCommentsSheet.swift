@@ -316,21 +316,33 @@ struct CommentsSheetView: View {
                 likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
                 parentId: parentId
             )
+            // The echoed event for OUR own just-sent comment: replace the optimistic
+            // placeholder (same author + content) in place instead of duplicating it.
+            func isTwin(_ c: FeedComment) -> Bool {
+                c.id.hasPrefix("tmp_")
+                    && c.authorId == feedComment.authorId
+                    && c.content == feedComment.content
+                    && c.parentId == parentId
+            }
             if let parentId {
-                // Always insert into repliesMap so auto-preview stays live
                 var existing = repliesMap[parentId] ?? []
-                if !existing.contains(where: { $0.id == feedComment.id }) {
+                if let idx = existing.firstIndex(where: isTwin) {
+                    existing[idx] = feedComment                 // reconcile our temp
+                    repliesMap[parentId] = existing
+                } else if !existing.contains(where: { $0.id == feedComment.id }) {
                     existing.insert(feedComment, at: 0)
                     repliesMap[parentId] = existing
-                }
-                var current = liveComments ?? post.comments
-                if let idx = current.firstIndex(where: { $0.id == parentId }) {
-                    current[idx].replies += 1
-                    liveComments = current
+                    var current = liveComments ?? post.comments
+                    if let idx = current.firstIndex(where: { $0.id == parentId }) {
+                        current[idx].replies += 1
+                        liveComments = current
+                    }
                 }
             } else {
                 var current = liveComments ?? post.comments
-                if !current.contains(where: { $0.id == feedComment.id }) {
+                if let idx = current.firstIndex(where: isTwin) {
+                    current[idx] = feedComment                  // reconcile our temp
+                } else if !current.contains(where: { $0.id == feedComment.id }) {
                     current.insert(feedComment, at: 0)
                 }
                 liveComments = current
@@ -609,25 +621,38 @@ struct CommentsSheetView: View {
                 let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
                 let effectFlags = flags > 0 ? Int(flags) : nil
 
-                // Optimistic: a top-level comment appears instantly and reconciles
-                // with the server row on success (or rolls back on failure).
+                // Optimistic: insert the comment in its place IMMEDIATELY — a reply
+                // goes under its parent (sub-message), otherwise it's a top-level
+                // row — WITHOUT waiting for the network. The confirmed server row
+                // reconciles it (REST response OR the `comment:added` socket event,
+                // whichever lands first); a failure rolls it back.
                 let tempId = "tmp_\(UUID().uuidString)"
-                if parentId == nil {
-                    let me = AuthManager.shared.currentUser
-                    let optimistic = FeedComment(
-                        id: tempId,
-                        author: me?.displayName ?? me?.username ?? "",
-                        authorId: me?.id ?? "",
-                        authorAvatarURL: me?.avatar,
-                        content: text, timestamp: Date(),
-                        likes: 0, replies: 0, parentId: nil,
-                        effectFlags: effectFlags ?? 0
-                    )
+                let me = AuthManager.shared.currentUser
+                let optimistic = FeedComment(
+                    id: tempId,
+                    author: me?.displayName ?? me?.username ?? "",
+                    authorId: me?.id ?? "",
+                    authorAvatarURL: me?.avatar,
+                    content: text, timestamp: Date(),
+                    likes: 0, replies: 0, parentId: parentId,
+                    effectFlags: effectFlags ?? 0
+                )
+                if let parentId {
+                    var existing = repliesMap[parentId] ?? []
+                    existing.insert(optimistic, at: 0)
+                    repliesMap[parentId] = existing
+                    expandedThreads.insert(parentId)
+                    var current = liveComments ?? post.comments
+                    if let idx = current.firstIndex(where: { $0.id == parentId }) {
+                        current[idx].replies += 1
+                        liveComments = current
+                    }
+                } else {
                     var current = liveComments ?? post.comments
                     current.insert(optimistic, at: 0)
                     liveComments = current
-                    liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
                 }
+                liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
 
                 Task {
                     do {
@@ -640,19 +665,17 @@ struct CommentsSheetView: View {
                             parentId: parentId,
                             effectFlags: apiComment.effectFlags ?? effectFlags ?? 0
                         )
+                        // Swap the optimistic temp for the server row (no count
+                        // change). Idempotent if the socket event already did it.
                         if let parentId {
                             var existing = repliesMap[parentId] ?? []
-                            existing.insert(feedComment, at: 0)
-                            repliesMap[parentId] = existing
-                            expandedThreads.insert(parentId)
-                            var current = liveComments ?? post.comments
-                            if let idx = current.firstIndex(where: { $0.id == parentId }) {
-                                current[idx].replies += 1
-                                liveComments = current
+                            if let idx = existing.firstIndex(where: { $0.id == tempId }) {
+                                existing[idx] = feedComment
+                            } else if !existing.contains(where: { $0.id == feedComment.id }) {
+                                existing.insert(feedComment, at: 0)
                             }
-                            liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
+                            repliesMap[parentId] = existing
                         } else {
-                            // Reconcile the optimistic row with the server one.
                             var current = liveComments ?? post.comments
                             if let idx = current.firstIndex(where: { $0.id == tempId }) {
                                 current[idx] = feedComment
@@ -663,13 +686,22 @@ struct CommentsSheetView: View {
                         }
                         onCommentSent?(post.id)
                     } catch {
-                        // Roll back the optimistic top-level row.
-                        if parentId == nil {
+                        // Roll back the optimistic row + counts.
+                        if let parentId {
+                            var existing = repliesMap[parentId] ?? []
+                            existing.removeAll { $0.id == tempId }
+                            repliesMap[parentId] = existing
+                            var current = liveComments ?? post.comments
+                            if let idx = current.firstIndex(where: { $0.id == parentId }), current[idx].replies > 0 {
+                                current[idx].replies -= 1
+                                liveComments = current
+                            }
+                        } else {
                             var current = liveComments ?? post.comments
                             current.removeAll { $0.id == tempId }
                             liveComments = current
-                            liveCommentCount = max((liveCommentCount ?? post.comments.count) - 1, 0)
                         }
+                        liveCommentCount = max((liveCommentCount ?? post.comments.count) - 1, 0)
                         FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
                     }
                 }
