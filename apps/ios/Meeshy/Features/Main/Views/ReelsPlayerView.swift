@@ -835,7 +835,17 @@ private struct ReelVideoView: View {
             .onDisappear {
                 // Releasing only when this page actually owns the engine avoids
                 // tearing down the next reel that has already loaded during paging.
-                if isShowingThis { manager.stop() }
+                //
+                // `!revealCompleted` : NE PAS détruire l'engine sur le disappear
+                // TRANSITOIRE de l'ouverture. À t≈duration le masque tombe
+                // (`reelsRevealMasked → false`), ce qui fait basculer
+                // `ReelsRevealMaskModifier` de `content.mask(...)` vers `content`
+                // (branches d'identité différentes) → SwiftUI recrée cette vue.
+                // Détruire ici le player qui vient de démarrer (playLead) forçait un
+                // reload + `play()` depuis 0 → le réel jouait DEUX fois. La vraie
+                // fermeture passe par `closeReels()` qui met `revealCompleted = false`
+                // d'abord, donc le teardown légitime fire toujours.
+                if isShowingThis, !revealCompleted { manager.stop() }
             }
         }
         .ignoresSafeArea()
