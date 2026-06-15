@@ -22,15 +22,29 @@ let mockPreferencesMap = new Map<string, any>();
 let mockCategories: any[] = [];
 
 jest.mock('@/stores/conversation-preferences-store', () => ({
-  useConversationPreferencesStore: () => ({
-    preferencesMap: mockPreferencesMap,
-    categories: mockCategories,
-    isLoading: false,
-    isInitialized: true,
+  useConversationPreferencesStore: jest.fn((selector: any) => {
+    const state = {
+      preferencesMap: mockPreferencesMap,
+      categories: mockCategories,
+      isLoading: false,
+      isInitialized: true,
+      initialize: jest.fn(),
+      togglePin: jest.fn(),
+      toggleMute: jest.fn(),
+      toggleArchive: jest.fn(),
+    };
+    return selector ? selector(state) : state;
+  }),
+  useConversationPreference: (_id: string) => undefined,
+  useConversationCategories: () => mockCategories,
+  useConversationPreferencesActions: () => ({
     initialize: jest.fn(),
+    getPreferences: jest.fn(),
     togglePin: jest.fn(),
     toggleMute: jest.fn(),
     toggleArchive: jest.fn(),
+    setReaction: jest.fn(),
+    refreshPreferences: jest.fn(),
   }),
 }));
 
@@ -39,6 +53,15 @@ jest.mock('@/stores/user-store', () => ({
     getUserById: jest.fn(),
     _lastStatusUpdate: 0,
   })),
+  useUserById: jest.fn(() => null),
+  useUserStatusTick: jest.fn(),
+}));
+
+jest.mock('@/hooks/use-prefetch-on-hover', () => ({
+  usePrefetchOnHover: () => ({
+    onMouseEnter: jest.fn(),
+    onMouseLeave: jest.fn(),
+  }),
 }));
 
 // Mock sonner toast
@@ -290,7 +313,7 @@ describe('ConversationList', () => {
     it('should show loading state when isLoading is true', async () => {
       render(<ConversationList {...defaultProps} isLoading={true} />);
 
-      expect(screen.getByText('Loading conversations...')).toBeInTheDocument();
+      expect(screen.getByRole('status')).toBeInTheDocument();
     });
   });
 

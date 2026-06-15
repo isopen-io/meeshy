@@ -110,6 +110,18 @@ public final class PlaybackCoordinator {
         SharedAVPlayerManager.shared.stop()
     }
 
+    /// Stops every audio / external player but leaves the shared video engine
+    /// (`SharedAVPlayerManager`) untouched. Used when paging away from a reel so
+    /// the previous clip's audio is cut without racing the incoming video reel,
+    /// which drives its own engine.
+    public func stopAllAudio() {
+        pruneDeadReferences()
+        for (_, weak) in audioPlayers {
+            weak.player?.stop()
+        }
+        stopAllExternal(except: nil)
+    }
+
     // MARK: - Cleanup
 
     private func stopAllExternal(except excludeId: ObjectIdentifier?) {

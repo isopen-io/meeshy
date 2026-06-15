@@ -5,6 +5,45 @@ import { CommentComposer } from '@/components/v2/CommentComposer';
 import { CommentList } from '@/components/v2/CommentList';
 import type { PostComment } from '@meeshy/shared/types/post';
 
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const map: Record<string, string> = {
+        'commentComposer.replyingTo': 'Replying to',
+        'commentComposer.cancelReply': 'Cancel reply',
+        'commentComposer.replyPlaceholder': 'Write a reply...',
+        'commentComposer.commentPlaceholder': 'Write a comment...',
+        'commentComposer.replyInput': 'Reply input',
+        'commentComposer.commentInput': 'Comment input',
+        'commentComposer.send': 'Send comment',
+      };
+      return map[key] ?? key;
+    },
+    tArray: () => [],
+    locale: 'en',
+    currentLanguage: 'en',
+    setLocale: () => {},
+    isLoading: false,
+  }),
+}));
+
+jest.mock('@/hooks/composer/useMentions', () => ({
+  useMentions: () => ({
+    showMentionAutocomplete: false,
+    mentionQuery: '',
+    mentionPosition: { top: 0, left: 0 },
+    handleTextChange: () => {},
+    handleMentionSelect: () => {},
+    closeMentionAutocomplete: () => {},
+    getMentionedUserIds: () => [],
+    clearMentionedUserIds: () => {},
+  }),
+}));
+
+jest.mock('@/components/common/MentionAutocomplete', () => ({
+  MentionAutocomplete: () => null,
+}));
+
 // Mock Avatar and TranslationToggle to avoid complex deps
 jest.mock('@/components/v2/Avatar', () => ({
   Avatar: ({ name }: { name: string }) => <div data-testid="avatar">{name}</div>,

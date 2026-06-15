@@ -9,6 +9,27 @@ import '@testing-library/jest-dom';
 import { AttachmentGallery } from '@/components/attachments/AttachmentGallery';
 import type { Attachment } from '@meeshy/shared/types/attachment';
 
+// Mock next/image to render a plain <img> element (avoids URL transformation)
+jest.mock('next/image', () => ({
+  __esModule: true,
+  default: ({ src, alt, className, width, height, style, loading, onError, fill, sizes, ...props }: any) => (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      width={width}
+      height={height}
+      style={style}
+      loading={loading}
+      onError={onError}
+      data-fill={fill}
+      data-sizes={sizes}
+      {...props}
+    />
+  ),
+}));
+
 // Mock i18n
 jest.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({
@@ -23,9 +44,26 @@ jest.mock('@/hooks/useI18n', () => ({
         'gallery.previous': 'Previous',
         'gallery.next': 'Next',
         'gallery.goToMessage': 'Go to message',
+        'gallery.deleteSuccess': 'Fichier supprimé avec succès',
+        'gallery.deleteError': 'Impossible de supprimer le fichier',
+        'gallery.delete': 'Supprimer',
+        'contextMenu.confirmDeleteTitle': 'Confirmer la suppression',
+        'contextMenu.confirmDeleteDescription': 'Êtes-vous sûr de vouloir supprimer ce fichier ?',
+        'contextMenu.confirmDeleteIrreversible': 'Cette action est irréversible.',
+        'contextMenu.cancel': 'Annuler',
+        'contextMenu.delete': 'Supprimer',
+        'contextMenu.deleting': 'Suppression...',
       };
-      return translations[key] || key;
+      const raw = translations[key] || key;
+      if (params) {
+        return Object.entries(params).reduce(
+          (acc, [k, v]) => acc.replace(`{${k}}`, String(v)),
+          raw
+        );
+      }
+      return raw;
     },
+    locale: 'fr',
   }),
 }));
 

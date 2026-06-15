@@ -20,6 +20,7 @@ jest.mock('@/services/api.service', () => ({
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     onAudioTranslation: jest.fn().mockReturnValue(() => {}),
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 

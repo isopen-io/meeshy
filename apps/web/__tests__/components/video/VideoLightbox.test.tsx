@@ -63,6 +63,7 @@ jest.mock('lucide-react', () => ({
 
 // Mock formatFileSize
 jest.mock('@meeshy/shared/types/attachment', () => ({
+  ...jest.requireActual('@meeshy/shared/types/attachment'),
   formatFileSize: (size: number) => `${(size / 1024).toFixed(1)} KB`,
 }));
 
@@ -71,6 +72,50 @@ global.requestAnimationFrame = jest.fn((cb) => {
   return 1;
 });
 global.cancelAnimationFrame = jest.fn();
+
+// Mock useI18n hook with common namespace translations
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'common.close': 'Fermer',
+        'common.download': 'Télécharger',
+        'common.play': 'Lire',
+        'common.pause': 'Pause',
+        'common.mute': 'Couper le son',
+        'common.unmute': 'Activer le son',
+        'common.previous': 'Vidéo précédente',
+        'common.next': 'Vidéo suivante',
+        'common.enterFullscreen': 'Plein écran',
+        'common.exitFullscreen': 'Quitter le plein écran',
+      };
+      return translations[key] || key;
+    },
+    isLoading: false,
+  }),
+}));
+
+// Mock useI18n (aliased import)
+jest.mock('@/hooks/useI18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'common.close': 'Fermer',
+        'common.download': 'Télécharger',
+        'common.play': 'Lire',
+        'common.pause': 'Pause',
+        'common.mute': 'Couper le son',
+        'common.unmute': 'Activer le son',
+        'common.previous': 'Vidéo précédente',
+        'common.next': 'Vidéo suivante',
+        'common.enterFullscreen': 'Plein écran',
+        'common.exitFullscreen': 'Quitter le plein écran',
+      };
+      return translations[key] || key;
+    },
+    isLoading: false,
+  }),
+}));
 
 // Mock HTMLMediaElement
 Object.defineProperty(HTMLMediaElement.prototype, 'play', {
@@ -142,7 +187,8 @@ describe('VideoLightbox', () => {
     it('should display video file size', () => {
       render(<VideoLightbox {...defaultProps} />);
 
-      expect(screen.getByText(/KB/)).toBeInTheDocument();
+      // formatFileSize(5242880) = '5 MB'
+      expect(screen.getByText(/\d+(\.\d+)?\s*(KB|MB|GB)/i)).toBeInTheDocument();
     });
 
     it('should display video dimensions', () => {

@@ -216,6 +216,7 @@ asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
+pythonpath = ["."]
 addopts = "-v --tb=short -x"
 filterwarnings = [
     "ignore::DeprecationWarning",
@@ -248,6 +249,14 @@ omit = [
     "src/services/voice_clone_service.py",
     "src/services/unified_tts_service.py",
     "src/utils/model_utils.py",
+    # TTS backend implementations: each requires downloading and loading a specific model
+    # (Chatterbox, Higgs, XTTS, MMS, VITS). Logic is thin wrappers around model inference;
+    # meaningful tests need the actual model weights which are not available in CI.
+    "src/services/tts/backends/chatterbox_backend.py",
+    "src/services/tts/backends/higgs_backend.py",
+    "src/services/tts/backends/xtts_backend.py",
+    "src/services/tts/backends/mms_backend.py",
+    "src/services/tts/backends/vits_backend.py",
 ]
 parallel = true
 
@@ -261,22 +270,19 @@ exclude_lines = [
     "@abstractmethod",
     # Exclude platform-specific code
     "if sys.platform",
-    # Exclude GPU-specific code (not testable in CI)
-    "if torch.cuda",
-    "cuda",
-    "CUDA",
-    # Exclude model downloading code (requires network)
-    "download",
-    "hf_hub",
-    # Exclude fallback/retry logic that's hard to test
-    "except Exception",
-    "except BaseException",
-    "finally:",
-    # Exclude async cleanup code
-    "async def __aexit__",
-    "await.*close",
+    # Exclude GPU-specific code (not testable in CI without GPU).
+    # "torch\\.cuda" matches any line that calls the torch.cuda API (narrower than
+    # the old bare "cuda"/"CUDA" word match, which also caught comments and string literals).
+    "torch\\.cuda",
 ]
-fail_under = 10  # Reduced from 80% - project under active development
+# Sprint 0.6: raised from 10 → 37 (matches --cov-fail-under=37 in CI).
+# Removed over-broad exclusions: "download", "hf_hub", "await.*close",
+# "async def __aexit__", "cuda"/"CUDA" word matches, "except Exception",
+# "except BaseException", "finally:". TTS backends moved to
+# [tool.coverage.run].omit (they require model weights not present in CI).
+# The omit additions reduce the denominator enough to absorb the newly-counted
+# exception/finally lines while keeping coverage ≥ 37%.
+fail_under = 37
 show_missing = true
 
 # =============================================================================

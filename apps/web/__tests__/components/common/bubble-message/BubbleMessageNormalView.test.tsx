@@ -247,7 +247,13 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     emit: jest.fn(),
     on: jest.fn(),
     off: jest.fn(),
+    onStatusChange: jest.fn(() => () => {}),
   },
+}));
+
+// Mock MessageReadStatusDetails to avoid React Query dependency
+jest.mock('@/components/common/bubble-message/MessageReadStatusDetails', () => ({
+  MessageReadStatusDetails: () => null,
 }));
 
 // Mock CLIENT_EVENTS
@@ -915,7 +921,7 @@ describe('BubbleMessageNormalView', () => {
   describe('iOS Parity — Visual styling', () => {
     it('devrait appliquer le gradient indigo brand sur les messages propres', () => {
       renderNormalView({
-        message: createMockMessage({ senderId: 'user-456' }),
+        message: createMockMessage({ senderId: 'user-456', sender: { id: 'user-456', userId: 'user-456', firstName: 'John', lastName: 'Doe', username: 'johndoe', avatar: null } }),
         currentUser: createMockUser({ id: 'user-456' }),
       });
 
@@ -926,7 +932,7 @@ describe('BubbleMessageNormalView', () => {
 
     it('devrait garder le gradient indigo en dark mode (pas gray)', () => {
       renderNormalView({
-        message: createMockMessage({ senderId: 'user-456' }),
+        message: createMockMessage({ senderId: 'user-456', sender: { id: 'user-456', userId: 'user-456', firstName: 'John', lastName: 'Doe', username: 'johndoe', avatar: null } }),
         currentUser: createMockUser({ id: 'user-456' }),
       });
 
@@ -937,7 +943,7 @@ describe('BubbleMessageNormalView', () => {
 
     it('devrait appliquer le border-radius iOS (rounded-2xl)', () => {
       renderNormalView({
-        message: createMockMessage({ senderId: 'user-456' }),
+        message: createMockMessage({ senderId: 'user-456', sender: { id: 'user-456', userId: 'user-456', firstName: 'John', lastName: 'Doe', username: 'johndoe', avatar: null } }),
         currentUser: createMockUser({ id: 'user-456' }),
       });
 
@@ -947,7 +953,7 @@ describe('BubbleMessageNormalView', () => {
 
     it('devrait appliquer une shadow sur les messages propres', () => {
       renderNormalView({
-        message: createMockMessage({ senderId: 'user-456' }),
+        message: createMockMessage({ senderId: 'user-456', sender: { id: 'user-456', userId: 'user-456', firstName: 'John', lastName: 'Doe', username: 'johndoe', avatar: null } }),
         currentUser: createMockUser({ id: 'user-456' }),
       });
 

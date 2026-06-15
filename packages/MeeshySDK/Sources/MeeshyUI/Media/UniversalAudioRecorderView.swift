@@ -322,18 +322,16 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     // MARK: - Actions
 
     private func handleStartRecording() {
-        // See `StoryVoiceRecorder.startRecording` for the same fix rationale:
-        // `requestRecordPermission`'s callback runs on the TCC server queue
-        // and `DispatchQueue.main.async` does not prove `@MainActor` to
-        // Swift 6, so calling `@MainActor` APIs from there crashes with
-        // `swift_task_isCurrentExecutorImpl`.
-        AVAudioSession.sharedInstance().requestRecordPermission { granted in
-            Task { @MainActor in
-                guard granted else { return }
-                recorder.configure(with: settings)
-                recorder.startRecording()
-                HapticFeedback.medium()
-            }
+        // Le closure de `requestRecordPermission` hériterait de `@MainActor`
+        // (defaultIsolation MeeshyUI) et trapperait à l'entrée sur la queue TCC.
+        // `AVAudioSession.requestMicrophonePermission()` confine la demande à un
+        // helper `nonisolated`. Cf. `MicrophonePermission.swift`.
+        Task { @MainActor in
+            let granted = await AVAudioSession.requestMicrophonePermission()
+            guard granted else { return }
+            recorder.configure(with: settings)
+            recorder.startRecording()
+            HapticFeedback.medium()
         }
     }
 

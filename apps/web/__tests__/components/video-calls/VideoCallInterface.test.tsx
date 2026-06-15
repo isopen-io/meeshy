@@ -64,7 +64,7 @@ jest.mock('@/hooks/use-adaptive-degradation', () => ({
   useAdaptiveDegradation: (...args: unknown[]) => useAdaptiveDegradationMock(...(args as [])),
 }));
 jest.mock('@/services/meeshy-socketio.service', () => ({
-  meeshySocketIOService: { getSocket: () => null },
+  meeshySocketIOService: { getSocket: () => null, onStatusChange: jest.fn(() => () => {}) },
 }));
 jest.mock('@/stores/call-store', () => {
   const useCallStore = jest.fn(() => storeState) as unknown as {

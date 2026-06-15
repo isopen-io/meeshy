@@ -98,6 +98,8 @@ jest.mock('@/services/auth-manager.service', () => ({
   authManager: {
     getAuthToken: () => mockAuthToken,
     clearAllSessions: jest.fn(),
+    registerOnClear: jest.fn(),
+    getAnonymousSession: jest.fn(() => null),
   },
 }));
 
@@ -165,7 +167,7 @@ jest.mock('@/components/settings/privacy-settings', () => ({
   PrivacySettings: () => <div data-testid="privacy-settings">Privacy</div>,
 }));
 
-jest.mock('@/components/settings/MediaSettings', () => ({
+jest.mock('@/components/settings/media-settings', () => ({
   MediaSettings: () => <div data-testid="media-settings">Media</div>,
 }));
 
@@ -190,6 +192,42 @@ jest.mock('@/components/settings/beta-playground', () => ({
 
 jest.mock('@/components/settings/encryption-settings', () => ({
   EncryptionSettings: () => <div data-testid="encryption-settings">Security</div>,
+}));
+
+// Mock all @tanstack/react-query hooks to avoid requiring QueryClientProvider
+const mockQueryClient = {
+  prefetchQuery: jest.fn(),
+  setQueryData: jest.fn(),
+  getQueryData: jest.fn(),
+  invalidateQueries: jest.fn(),
+  cancelQueries: jest.fn(),
+  removeQueries: jest.fn(),
+  resetQueries: jest.fn(),
+  clear: jest.fn(),
+};
+
+jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
+  useQueryClient: () => mockQueryClient,
+  useIsMutating: () => 0,
+  useIsFetching: () => 0,
+  useQuery: () => ({ data: undefined, isLoading: false, isError: false, error: null }),
+  useMutation: () => ({ mutate: jest.fn(), mutateAsync: jest.fn(), isPending: false }),
+}));
+
+// Control variables for useCurrentUserQuery mock state
+let mockUserData: any = null;
+let mockUserLoading = false;
+let mockUserError: Error | null = null;
+
+jest.mock('@/hooks/queries', () => ({
+  ...jest.requireActual('@/hooks/queries'),
+  useCurrentUserQuery: () => ({
+    data: mockUserData,
+    isLoading: mockUserLoading,
+    error: mockUserError,
+    isError: !!mockUserError,
+  }),
 }));
 
 // Import the component after mocks
@@ -218,7 +256,12 @@ describe('SettingsPage', () => {
     mockFetchError = null;
     capturedOnUserUpdate = null;
 
-    // Setup default fetch mock - handles 3 parallel fetches from settings page
+    // Default: user loaded, not loading, no error
+    mockUserData = mockUser;
+    mockUserLoading = false;
+    mockUserError = null;
+
+    // Setup default fetch mock for any remaining direct fetch calls
     mockFetchResponse = {
       ok: true,
       status: 200,
@@ -232,11 +275,9 @@ describe('SettingsPage', () => {
       if (mockFetchError) {
         return Promise.reject(mockFetchError);
       }
-      // Main user fetch
       if (url.includes('/auth/me')) {
         return Promise.resolve(mockFetchResponse);
       }
-      // Notification/privacy preference fetches - return OK with empty data
       return Promise.resolve({
         ok: true,
         status: 200,
@@ -247,8 +288,9 @@ describe('SettingsPage', () => {
 
   describe('Loading State', () => {
     it('should render loading spinner initially', async () => {
-      // Make fetch hang
-      (global.fetch as jest.Mock).mockImplementation(() => new Promise(() => {}));
+      // Simulate loading state via React Query hook
+      mockUserLoading = true;
+      mockUserData = null;
 
       const { container } = render(<SettingsPage />);
 
@@ -257,7 +299,8 @@ describe('SettingsPage', () => {
     });
 
     it('should have proper accessibility for loading state', async () => {
-      (global.fetch as jest.Mock).mockImplementation(() => new Promise(() => {}));
+      mockUserLoading = true;
+      mockUserData = null;
 
       render(<SettingsPage />);
 
@@ -268,7 +311,8 @@ describe('SettingsPage', () => {
 
     it('should respect reduced motion preference', async () => {
       // This is mocked to return false, so animation should be present
-      (global.fetch as jest.Mock).mockImplementation(() => new Promise(() => {}));
+      mockUserLoading = true;
+      mockUserData = null;
 
       const { container } = render(<SettingsPage />);
 
@@ -278,8 +322,9 @@ describe('SettingsPage', () => {
   });
 
   describe('Authentication Flow', () => {
-    it('should redirect to login if no auth token', async () => {
-      mockAuthToken = null;
+    it('should redirect to login if query returns error', async () => {
+      mockUserError = new Error('Unauthorized');
+      mockUserData = null;
 
       render(<SettingsPage />);
 
@@ -288,28 +333,24 @@ describe('SettingsPage', () => {
       });
     });
 
-    it('should redirect to login on 401 response', async () => {
-      mockFetchResponse = {
-        ok: false,
-        status: 401,
-        json: () => Promise.resolve({ error: 'Unauthorized' }),
-      };
+    it('should redirect to login on auth error', async () => {
+      mockUserError = new Error('Unauthorized');
+      mockUserData = null;
 
       render(<SettingsPage />);
 
       await waitFor(() => {
-        expect(mockClearAllSessions).toHaveBeenCalled();
         expect(mockPush).toHaveBeenCalledWith('/login');
       });
     });
 
     it('should redirect to login on fetch error', async () => {
-      mockFetchError = new Error('Network error');
+      mockUserError = new Error('Network error');
+      mockUserData = null;
 
       render(<SettingsPage />);
 
       await waitFor(() => {
-        expect(mockToast.error).toHaveBeenCalled();
         expect(mockPush).toHaveBeenCalledWith('/login');
       });
     });
@@ -372,53 +413,37 @@ describe('SettingsPage', () => {
   });
 
   describe('Error Handling', () => {
-    it('should show error toast on API error response', async () => {
-      mockFetchResponse = {
-        ok: false,
-        status: 500,
-        json: () => Promise.resolve({ error: 'Server error' }),
-      };
+    it('should redirect to login on query error', async () => {
+      mockUserError = new Error('Server error');
+      mockUserData = null;
 
       render(<SettingsPage />);
 
       await waitFor(() => {
-        expect(mockToast.error).toHaveBeenCalledWith('Server error');
+        expect(mockPush).toHaveBeenCalledWith('/login');
       });
     });
 
-    it('should show error toast when response has no user data', async () => {
-      mockFetchResponse = {
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({
-          success: false,
-          error: 'No user data',
-        }),
-      };
+    it('should redirect to login when query fails', async () => {
+      mockUserError = new Error('Failed to load user');
+      mockUserData = null;
 
       render(<SettingsPage />);
 
       await waitFor(() => {
-        expect(mockToast.error).toHaveBeenCalled();
+        expect(mockPush).toHaveBeenCalledWith('/login');
       });
     });
 
     it('should not render settings when user is null', async () => {
-      mockFetchResponse = {
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({
-          success: true,
-          data: { user: null },
-        }),
-      };
+      mockUserData = null;
+      mockUserLoading = false;
+      mockUserError = null;
 
       const { container } = render(<SettingsPage />);
 
-      await waitFor(() => {
-        // Wait for loading to complete
-        expect(container.querySelector('.animate-spin')).not.toBeInTheDocument();
-      });
+      // Not loading, no user - renders null
+      expect(container.querySelector('.animate-spin')).not.toBeInTheDocument();
 
       // CompleteUserSettings should not be rendered
       expect(screen.queryByTestId('complete-user-settings')).not.toBeInTheDocument();
@@ -470,19 +495,13 @@ describe('SettingsPage', () => {
   });
 
   describe('API Request Headers', () => {
-    it('should include proper headers in initial load request', async () => {
+    it('should render settings page when user data is available', async () => {
+      // The component uses React Query (useCurrentUserQuery) - no direct fetch
       render(<SettingsPage />);
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(
-          'http://test-api/auth/me',
-          expect.objectContaining({
-            headers: {
-              'Authorization': 'Bearer valid-token',
-              'Content-Type': 'application/json',
-            },
-          })
-        );
+        expect(screen.getByTestId('dashboard-layout')).toBeInTheDocument();
+        expect(screen.getByTestId('complete-user-settings')).toBeInTheDocument();
       });
     });
   });

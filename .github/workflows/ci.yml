@@ -208,7 +208,6 @@ jobs:
 
       - name: Run tests with coverage (bun)
         if: env.PACKAGE_MANAGER == 'bun'
-        continue-on-error: ${{ matrix.package.name == 'web' || matrix.package.name == 'gateway' }}
         run: |
           # Web tests must use Jest (configured with Next.js)
           if [ "${{ matrix.package.name }}" = "web" ]; then
@@ -221,7 +220,6 @@ jobs:
 
       - name: Run tests with coverage (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
-        continue-on-error: ${{ matrix.package.name == 'web' || matrix.package.name == 'gateway' }}
         run: pnpm run test:coverage --filter=${{ matrix.package.filter }}
 
       - name: Upload coverage
@@ -239,7 +237,7 @@ jobs:
   # ===========================================================================
   test-python:
     name: Test Python (translator)
-    if: false  # Disabled - ML model downloads fill disk, specific tests run elsewhere
+    if: true  # Sprint 0.3: re-enabled with CPU-only marker split + baseline threshold
     runs-on: ubuntu-latest
     needs: quality
     steps:
@@ -310,7 +308,9 @@ jobs:
         timeout-minutes: 30
         run: |
           cd services/translator
-          uv run --python ${{ env.PYTHON_VERSION }} pytest -v --tb=short --cov=src --cov-report=xml --cov-report=term --cov-fail-under=80
+          uv run --python ${{ env.PYTHON_VERSION }} pytest -v --tb=short \
+            -m "not slow and not gpu and not e2e and not integration" \
+            --cov=src --cov-report=xml --cov-report=term --cov-fail-under=37
 
       - name: Upload coverage
         uses: codecov/codecov-action@v5

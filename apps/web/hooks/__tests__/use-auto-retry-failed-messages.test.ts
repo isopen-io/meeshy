@@ -16,6 +16,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     sendMessage: (...args: unknown[]) => mockSendMessage(...args),
     getConnectionDiagnostics: () => mockGetConnectionDiagnostics(),
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 

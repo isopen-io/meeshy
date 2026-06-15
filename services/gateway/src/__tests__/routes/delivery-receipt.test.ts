@@ -63,7 +63,7 @@ const ioChain: any = {};
 ioChain.to = jest.fn(() => ioChain);
 ioChain.emit = emitMock;
 const io = { to: jest.fn(() => ioChain) };
-const socketIOHandler = { getManager: () => ({ io }) };
+const socketIOHandler = { getManager: () => ({ getIO: () => io }) };
 
 const url = (conversationId = CONVERSATION_ID, messageId = MESSAGE_ID) =>
   `/conversations/${conversationId}/messages/${messageId}/delivery-receipt`;

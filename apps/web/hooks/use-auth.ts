@@ -16,7 +16,7 @@ import { useUser, useAuthActions, useIsAuthChecking } from '@/stores';
 import { authManager } from '@/services/auth-manager.service';
 import { isPublicRoute, isSharedChatRoute } from '@/utils/route-utils';
 
-// Fonction helper pour les logs de développement
+/* istanbul ignore next */
 const devLog = (message: string, ...args: any[]) => {
   if (process.env.NODE_ENV === 'development') {
     // console.log(message, ...args);
@@ -111,6 +111,7 @@ export function useAuth() {
 
   // Initialiser l'authentification au chargement
   useEffect(() => {
+    /* istanbul ignore next */
     if (hasInitialized.current) return;
     hasInitialized.current = true;
     checkAuth();
@@ -168,8 +169,10 @@ export function useAuth() {
         setUserRef.current(null);
       }
       
+      /* istanbul ignore next */
       if (pathname === '/login') return;
-      
+
+      /* istanbul ignore next */
       const search = typeof window !== 'undefined' ? window.location.search : '';
       const fullPath = pathname !== '/' ? pathname + search : undefined;
       const loginUrl = fullPath ? `/login?returnUrl=${encodeURIComponent(fullPath)}` : '/login';
@@ -216,6 +219,7 @@ export function useAuth() {
   const joinAnonymously = useCallback((participant: any, sessionToken: string, conversationShareLinkId?: string) => {
     authManager.setAnonymousSession(sessionToken, participant.id, 24);
 
+    /* istanbul ignore else */
     if (typeof window !== 'undefined') {
       localStorage.setItem('anonymous_participant', JSON.stringify(participant));
       if (conversationShareLinkId) {

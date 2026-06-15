@@ -5,7 +5,7 @@ public enum CollapsibleHeaderMetrics {
     public static var collapsedHeight: CGFloat { 44 }
 }
 
-public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, TrailingContent: View>: View {
+public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, TrailingContent: View, CenterContent: View>: View {
     let title: String
     let subtitle: String?
     let scrollOffset: CGFloat
@@ -17,6 +17,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     let leading: (() -> LeadingContent)?
     let titleView: (() -> TitleContent)?
     let trailing: () -> TrailingContent
+    let centerReveal: (() -> CenterContent)?
 
     public static var expandedHeight: CGFloat { 64 }
     public static var collapsedHeight: CGFloat { 44 }
@@ -33,7 +34,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
         @ViewBuilder leading: @escaping () -> LeadingContent,
         @ViewBuilder titleView: @escaping () -> TitleContent,
         @ViewBuilder trailing: @escaping () -> TrailingContent = { EmptyView() }
-    ) {
+    ) where CenterContent == EmptyView {
         self.title = title
         self.subtitle = subtitle
         self.scrollOffset = scrollOffset
@@ -45,10 +46,22 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
         self.leading = leading
         self.titleView = titleView
         self.trailing = trailing
+        self.centerReveal = nil
     }
 
     public var progress: CGFloat {
         min(1, max(0, -scrollOffset / 60))
+    }
+
+    /// Reveal curve for the centered slot. Stays fully hidden during the first
+    /// 60% of the collapse, then fades linearly to fully visible at full
+    /// collapse — gives the "author appears once the inline header scrolled
+    /// away" feel (style X). Pure + `nonisolated` so it is testable off the
+    /// MainActor under MeeshyUI's default isolation.
+    nonisolated public static func revealOpacity(forProgress progress: CGFloat) -> CGFloat {
+        let start: CGFloat = 0.6
+        guard progress > start else { return 0 }
+        return min(1, (progress - start) / (1 - start))
     }
 
     private var headerHeight: CGFloat {
@@ -137,6 +150,17 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
             .padding(.horizontal, 12)
             .padding(.bottom, titleBottomPadding)
             .frame(height: headerHeight, alignment: .bottom)
+            .overlay(alignment: .bottom) {
+                if let centerReveal {
+                    centerReveal()
+                        .padding(.horizontal, 56)   // réserve l'espace du back button (gauche) + trailing (droite)
+                        .padding(.bottom, titleBottomPadding)
+                        .opacity(Double(Self.revealOpacity(forProgress: progress)))
+                        .offset(y: lerp(6, 0, Self.revealOpacity(forProgress: progress)))
+                        .allowsHitTesting(Self.revealOpacity(forProgress: progress) > 0.5)
+                        .accessibilityHidden(Self.revealOpacity(forProgress: progress) < 0.5)
+                }
+            }
 
             Divider()
                 .opacity(Double(progress) * 0.3)
@@ -198,7 +222,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
 
 // MARK: - Convenience init (no custom titleView, no leading — backward compatible)
 
-extension CollapsibleHeader where LeadingContent == EmptyView, TitleContent == EmptyView {
+extension CollapsibleHeader where LeadingContent == EmptyView, TitleContent == EmptyView, CenterContent == EmptyView {
     public init(
         title: String,
         subtitle: String? = nil,
@@ -221,12 +245,13 @@ extension CollapsibleHeader where LeadingContent == EmptyView, TitleContent == E
         self.leading = nil
         self.titleView = nil
         self.trailing = trailing
+        self.centerReveal = nil
     }
 }
 
 // MARK: - Convenience init (custom titleView, no leading)
 
-extension CollapsibleHeader where LeadingContent == EmptyView {
+extension CollapsibleHeader where LeadingContent == EmptyView, CenterContent == EmptyView {
     public init(
         title: String,
         subtitle: String? = nil,
@@ -250,5 +275,36 @@ extension CollapsibleHeader where LeadingContent == EmptyView {
         self.leading = nil
         self.titleView = titleView
         self.trailing = trailing
+        self.centerReveal = nil
+    }
+}
+
+// MARK: - Convenience init (centered reveal slot, no leading, no left title)
+
+extension CollapsibleHeader where LeadingContent == EmptyView, TitleContent == EmptyView {
+    public init(
+        title: String = "",
+        subtitle: String? = nil,
+        scrollOffset: CGFloat,
+        showBackButton: Bool = true,
+        onBack: (() -> Void)? = nil,
+        titleColor: Color,
+        backArrowColor: Color,
+        backgroundColor: Color,
+        @ViewBuilder centerReveal: @escaping () -> CenterContent,
+        @ViewBuilder trailing: @escaping () -> TrailingContent = { EmptyView() }
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.scrollOffset = scrollOffset
+        self.showBackButton = showBackButton
+        self.onBack = onBack
+        self.titleColor = titleColor
+        self.backArrowColor = backArrowColor
+        self.backgroundColor = backgroundColor
+        self.leading = nil
+        self.titleView = nil
+        self.trailing = trailing
+        self.centerReveal = centerReveal
     }
 }

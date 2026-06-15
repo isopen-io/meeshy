@@ -135,7 +135,7 @@ global.fetch = mockFetch;
 const savedLocation = window.location;
 
 beforeAll(() => {
-  Object.defineProperty(window, 'location', { value: {
+  window.location = {
     href: '',
     pathname: '/login',
     search: '',
@@ -149,11 +149,11 @@ beforeAll(() => {
     assign: jest.fn(),
     replace: jest.fn(),
     toString: () => 'http://localhost:3000',
-  }, writable: true });
+  } as unknown as Location;
 });
 
 afterAll(() => {
-  Object.defineProperty(window, 'location', { value: savedLocation as any, writable: true });
+  window.location = savedLocation;
 });
 
 describe('LoginForm', () => {

@@ -25,6 +25,8 @@ struct PostDetailView: View {
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false
     @State private var isTextExpanded = false
+    @State private var headerScrollOffset: CGFloat = 0
+    private static let scrollSpace = "postDetailScroll"
     /// Set once `PostService.share(... generateLink: true)` returns — the
     /// `.sheet(item:)` further down presents the system share UI as soon
     /// as this becomes non-nil and clears it on dismiss.
@@ -411,29 +413,53 @@ struct PostDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            navBar
-
             // Connection status banner (banner manages its own socket observation)
             ConnectionBanner()
 
             if let post = displayPost {
                 ScrollViewReader { scrollProxy in
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 0) {
-                        postDetailContent(post)
+                    ScrollView(showsIndicators: false) {
+                        // Sentinel: publishes the scroll offset so the floating
+                        // header reveals the author at scroll. minY≈0 at rest
+                        // (content origin sits just under the header inset),
+                        // goes negative on scroll.
+                        GeometryReader { geo in
+                            Color.clear.preference(
+                                key: ScrollOffsetPreferenceKey.self,
+                                value: geo.frame(in: .named(Self.scrollSpace)).minY
+                            )
+                        }
+                        .frame(height: 0)
+
+                        LazyVStack(spacing: 0) {
+                            postDetailContent(post)
+                        }
+                        .padding(.bottom, 80)
                     }
-                    .padding(.bottom, 80)
-                }
-                .onAppear {
-                    if showComments {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            withAnimation {
-                                scrollProxy.scrollTo("commentsSection", anchor: .top)
+                    .coordinateSpace(name: Self.scrollSpace)
+                    .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
+                        headerScrollOffset = offset
+                    }
+                    // Floating translucent header pinned to the top. `safeAreaInset`
+                    // reserves the header height for the content (author block stays
+                    // visible right below it at rest) while letting the content scroll
+                    // UNDER the translucent surface — the canonical SwiftUI pattern for
+                    // a bar over a scroll view, and it handles the safe area itself.
+                    // (A plain ZStack overlay let the header's `.ignoresSafeArea(.top)`
+                    // pull the scroll content under the bar and hide the author.)
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        postDetailHeader(post)
+                    }
+                    .onAppear {
+                        if showComments {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                withAnimation {
+                                    scrollProxy.scrollTo("commentsSection", anchor: .top)
+                                }
+                                composerFocusTrigger.toggle()
                             }
-                            composerFocusTrigger.toggle()
                         }
                     }
-                }
                 } // ScrollViewReader
             } else if viewModel.isLoading {
                 Spacer()
@@ -580,67 +606,141 @@ struct PostDetailView: View {
                 let attachments = post.media
                     .filter { $0.type == .image || $0.type == .video }
                     .map { $0.toMessageAttachment() }
+                // Infos auteur en bas de la galerie (au-dessus des dimensions),
+                // identique au chemin feed (`FeedPostCard`). Tous les médias d'un
+                // poste partagent le même auteur.
+                let senderInfo = ConversationViewModel.MediaSenderInfo(
+                    senderName: post.author,
+                    senderAvatarURL: post.authorAvatarURL,
+                    senderColor: post.authorColor,
+                    sentAt: post.timestamp
+                )
+                let senderMap = Dictionary(uniqueKeysWithValues: attachments.map { ($0.id, senderInfo) })
                 ConversationMediaGalleryView(
                     allAttachments: attachments,
                     startAttachmentId: fullscreenMediaId ?? attachments.first?.id ?? "",
-                    accentColor: accentColor
+                    accentColor: accentColor,
+                    senderInfoMap: senderMap
                 )
             }
         }
     }
 
-    // MARK: - Nav Bar (minimal: < and ...)
+    // MARK: - Floating Header (CollapsibleHeader)
 
-    private var navBar: some View {
-        HStack {
+    /// Centered author chip revealed in the floating header as the inline
+    /// author block scrolls away. Tapping opens the profile sheet (mirrors the
+    /// inline name tap).
+    @ViewBuilder
+    private func authorRevealView(_ post: FeedPost) -> some View {
+        HStack(spacing: 8) {
             Button {
-                HapticFeedback.light()
-                router.pop()
+                selectedProfileUser = .from(feedPost: post)
             } label: {
-                Image(systemName: "chevron.left")
-                    .font(.callout.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(theme.inputBackground))
-            }
-
-            Spacer()
-
-            Menu {
-                Button {
-                    Task { await mintShareLink(action: .copyToPasteboard) }
-                } label: {
-                    Label(String(localized: "feed.post.detail.copy_link", defaultValue: "Copier le lien", bundle: .main), systemImage: "link")
-                }
-                Button {
-                    Task { await mintShareLink(action: .presentShareSheet) }
-                } label: {
-                    Label(String(localized: "feed.post.detail.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
-                }
-                if displayPost?.authorId == AuthManager.shared.currentUser?.id {
-                    Button {
-                        isEditing = true
-                        HapticFeedback.light()
-                    } label: {
-                        Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
+                HStack(spacing: 8) {
+                    MeeshyAvatar(
+                        name: post.author,
+                        context: .custom(26),
+                        accentColor: post.authorColor,
+                        avatarURL: post.authorAvatarURL
+                    )
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(post.author)
+                            .font(.subheadline.weight(.bold))
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(1)
+                        Text(RelativeTimeFormatter.shortString(for: post.timestamp))
+                            .font(.caption2)
+                            .foregroundColor(theme.textMuted)
                     }
                 }
-                Button(role: .destructive) {
-                    HapticFeedback.light()
-                    Task { await viewModel.reportPost(postId) }
-                } label: {
-                    Label(String(localized: "feed.post.detail.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
+            }
+            .buttonStyle(.plain)
+
+            // Détails de langue insérés dans le header (miroir du bloc auteur inline) :
+            // drapeaux tappables + icône translate. Hors du Button profil pour que les
+            // gestes de langue ne déclenchent pas l'ouverture du profil.
+            let flags = buildAvailableFlags()
+            if !flags.isEmpty || (post.translations != nil && !post.translations!.isEmpty) {
+                HStack(spacing: 5) {
+                    ForEach(flags, id: \.self) { code in
+                        let display = LanguageDisplay.from(code: code)
+                        let isActive = code == secondaryLangCode
+                        VStack(spacing: 1) {
+                            Text(display?.flag ?? "?")
+                                .font(isActive ? .caption : .caption2)
+                                .scaleEffect(isActive ? 1.05 : 1.0)
+                            if isActive {
+                                RoundedRectangle(cornerRadius: 1)
+                                    .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
+                                    .frame(width: 10, height: 1.5)
+                            }
+                        }
+                        .animation(.easeInOut(duration: 0.2), value: isActive)
+                        .onTapGesture { handleFlagTap(code) }
+                    }
+                    if post.translations != nil, !post.translations!.isEmpty {
+                        Image(systemName: "translate")
+                            .font(.caption2.weight(.medium))
+                            .foregroundColor(MeeshyColors.indigo400)
+                            .onTapGesture {
+                                HapticFeedback.light()
+                                showTranslationSheet = true
+                            }
+                    }
                 }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.callout.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(theme.inputBackground))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+    }
+
+    /// The `…` menu, lifted out of the old navBar into the header's trailing slot.
+    private var postMenu: some View {
+        Menu {
+            Button {
+                Task { await mintShareLink(action: .copyToPasteboard) }
+            } label: {
+                Label(String(localized: "feed.post.detail.copy_link", defaultValue: "Copier le lien", bundle: .main), systemImage: "link")
+            }
+            Button {
+                Task { await mintShareLink(action: .presentShareSheet) }
+            } label: {
+                Label(String(localized: "feed.post.detail.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
+            }
+            if displayPost?.authorId == AuthManager.shared.currentUser?.id {
+                Button {
+                    isEditing = true
+                    HapticFeedback.light()
+                } label: {
+                    Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
+                }
+            }
+            Button(role: .destructive) {
+                HapticFeedback.light()
+                Task { await viewModel.reportPost(postId) }
+            } label: {
+                Label(String(localized: "feed.post.detail.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.callout.weight(.semibold))
+                .foregroundColor(theme.textPrimary)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(theme.inputBackground.opacity(0.6)))
+        }
+    }
+
+    private func postDetailHeader(_ post: FeedPost) -> some View {
+        CollapsibleHeader(
+            title: "",
+            scrollOffset: headerScrollOffset,
+            showBackButton: true,
+            onBack: { HapticFeedback.light(); router.pop() },
+            titleColor: theme.textPrimary,
+            backArrowColor: theme.textPrimary,
+            backgroundColor: theme.backgroundPrimary,
+            centerReveal: { authorRevealView(post) },
+            trailing: { postMenu }
+        )
     }
 
     // MARK: - Text Zone

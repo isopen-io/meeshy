@@ -9,12 +9,21 @@ import type { User } from '@meeshy/shared/types';
 
 // Mock the auth-manager.service
 jest.mock('../../services/auth-manager.service', () => ({
-  AUTH_STORAGE_KEYS: {
-    ZUSTAND_AUTH: 'meeshy-auth',
-  },
   authManager: {
     clearAllSessions: jest.fn(),
-    getAuthToken: jest.fn(),
+    getAuthToken: jest.fn(() => null),
+    registerOnClear: jest.fn(),
+    getAnonymousSession: jest.fn(() => null),
+    updateTokens: jest.fn(),
+    getCurrentUser: jest.fn(() => null),
+    getRefreshToken: jest.fn(() => null),
+  },
+}));
+
+// Mock the constants/auth module
+jest.mock('../../constants/auth', () => ({
+  AUTH_STORAGE_KEYS: {
+    ZUSTAND_AUTH: 'meeshy-auth',
   },
 }));
 
@@ -218,14 +227,14 @@ describe('AuthStore', () => {
       expect(authManager.clearAllSessions).toHaveBeenCalled();
     });
 
-    it('should reset user preferences', async () => {
-      const { resetUserPreferences } = await import('../../stores/user-preferences-store');
+    it('should call clearAllSessions on logout', async () => {
+      const { authManager } = await import('../../services/auth-manager.service');
 
       await act(async () => {
         await useAuthStore.getState().logout();
       });
 
-      expect(resetUserPreferences).toHaveBeenCalled();
+      expect(authManager.clearAllSessions).toHaveBeenCalled();
     });
   });
 
@@ -339,13 +348,9 @@ describe('AuthStore', () => {
     });
 
     it('should set isAuthenticated to true if token and user exist', async () => {
-      act(() => {
-        useAuthStore.setState({
-          authToken: 'test-token',
-          user: mockUser,
-          sessionExpiry: new Date(Date.now() + 3600000), // 1 hour in future
-        });
-      });
+      const { authManager } = await import('../../services/auth-manager.service');
+      (authManager.getAuthToken as jest.Mock).mockReturnValue('test-token');
+      (authManager.getCurrentUser as jest.Mock).mockReturnValue(mockUser);
 
       await act(async () => {
         await useAuthStore.getState().initializeAuth();
@@ -355,12 +360,9 @@ describe('AuthStore', () => {
     });
 
     it('should set isAuthenticated to false if no token', async () => {
-      act(() => {
-        useAuthStore.setState({
-          authToken: null,
-          user: mockUser,
-        });
-      });
+      const { authManager } = await import('../../services/auth-manager.service');
+      (authManager.getAuthToken as jest.Mock).mockReturnValue(null);
+      (authManager.getCurrentUser as jest.Mock).mockReturnValue(null);
 
       await act(async () => {
         await useAuthStore.getState().initializeAuth();
@@ -369,44 +371,22 @@ describe('AuthStore', () => {
       expect(useAuthStore.getState().isAuthenticated).toBe(false);
     });
 
-    it('should attempt refresh if session is expired', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          accessToken: 'new-token',
-          refreshToken: 'new-refresh',
-          expiresIn: 3600,
-        }),
-      });
-
-      act(() => {
-        useAuthStore.setState({
-          authToken: 'test-token',
-          refreshToken: 'test-refresh',
-          user: mockUser,
-          sessionExpiry: new Date(Date.now() - 1000), // 1 second in past
-        });
-      });
+    it('should set isAuthenticated to false if authManager has no token', async () => {
+      const { authManager } = await import('../../services/auth-manager.service');
+      (authManager.getAuthToken as jest.Mock).mockReturnValue(null);
+      (authManager.getCurrentUser as jest.Mock).mockReturnValue(null);
 
       await act(async () => {
         await useAuthStore.getState().initializeAuth();
       });
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/auth/refresh', expect.any(Object));
+      expect(useAuthStore.getState().isAuthenticated).toBe(false);
     });
 
-    it('should clear auth if refresh fails for expired session', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-      });
-
-      act(() => {
-        useAuthStore.setState({
-          authToken: 'test-token',
-          refreshToken: 'test-refresh',
-          user: mockUser,
-          sessionExpiry: new Date(Date.now() - 1000), // 1 second in past
-        });
+    it('should set isAuthenticated to false if authManager throws', async () => {
+      const { authManager } = await import('../../services/auth-manager.service');
+      (authManager.getAuthToken as jest.Mock).mockImplementation(() => {
+        throw new Error('Auth error');
       });
 
       await act(async () => {
@@ -415,7 +395,7 @@ describe('AuthStore', () => {
 
       const state = useAuthStore.getState();
       expect(state.isAuthenticated).toBe(false);
-      expect(state.authToken).toBeNull();
+      expect(state.isAuthChecking).toBe(false);
     });
   });
 

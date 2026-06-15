@@ -1367,7 +1367,16 @@ struct BubbleBodyFooterLayout: Layout {
 
     private func measuredSize(proposal: ProposedViewSize, subviews: Subviews) -> CGSize {
         guard let body = subviews.first else { return .zero }
-        let bodyProbe = body.sizeThatFits(proposal)
+        // Probe the body's INTRINSIC height (`height: nil`), never the proposed
+        // height. A link-preview body hosts a `LinkPreviewCard` whose
+        // `.frame(minHeight: 64)` has no maximum, so when handed the incoming
+        // proposal's height it grows to FILL it — and since this measured size
+        // becomes the parent's next proposal, the height runs away in a feedback
+        // loop (observed: a 213→383 inflation, leaving ~170pt of empty bubble
+        // that the next message overlapped into). `placeSubviews` already probes
+        // with `height: nil`; measuring the same way here keeps the reported
+        // height equal to the placed height (no cell-height drift).
+        let bodyProbe = body.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
         guard subviews.count > 1 else { return bodyProbe }
 
         let footer = subviews[1]

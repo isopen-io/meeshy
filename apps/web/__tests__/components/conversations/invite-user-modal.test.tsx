@@ -8,7 +8,30 @@ import type { User } from '@/types';
 // Mock hooks
 jest.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({
-    t: (key: string) => key,
+    t: (key: string, params?: Record<string, any>) => {
+      const translations: Record<string, string> = {
+        'inviteModal.title': 'Inviter des utilisateurs',
+        'conversationDetails.inviteSearchPlaceholder': 'Rechercher des utilisateurs...',
+        'inviteModal.selectedUsers': `Utilisateurs sélectionnés (${params?.count ?? 0})`,
+        'inviteModal.searchResults': 'Résultats de recherche',
+        'inviteModal.noUsersFound': 'Aucun utilisateur trouvé',
+        'inviteModal.selected': 'Sélectionné',
+        'inviteModal.add': 'Ajouter',
+        'inviteModal.cancel': 'Annuler',
+        'inviteModal.inviting': 'Invitation en cours...',
+        'inviteModal.inviteButton': `Inviter ${params?.count ?? 0} utilisateur(s)`,
+        'inviteModal.searchError': 'Erreur lors de la recherche',
+        'inviteModal.inviteSuccess': `${params?.count ?? 0} utilisateur(s) invité(s) avec succès`,
+        'inviteModal.partialError': `${params?.count ?? 0} invitation(s) ont échoué`,
+        'inviteModal.inviteError': 'Erreur lors de l\'invitation',
+      };
+      return translations[key] || key;
+    },
+    locale: 'fr',
+    setLocale: jest.fn(),
+    isLoading: false,
+    currentLanguage: 'fr',
+    tArray: jest.fn(() => []),
   }),
 }));
 
