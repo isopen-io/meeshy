@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model
 
 import kotlinx.serialization.Serializable
+import me.meeshy.sdk.lang.LanguageResolver
 
 /** A post author — port of APIAuthor (PostModels.swift). */
 @Serializable
@@ -113,6 +114,35 @@ data class ApiPost(
     val mentionedUsers: List<MentionedUser>? = null,
     val viaUsername: String? = null,
 )
+
+/**
+ * Prisme Linguistique resolution for posts. Post translations are a
+ * language-keyed map (vs. the message list form), so we walk the preferred
+ * languages and pick the first non-blank match — never an arbitrary entry.
+ */
+private fun Map<String, ApiPostTranslationEntry>?.preferredEntry(
+    prefs: LanguageResolver.ContentLanguagePreferences,
+): ApiPostTranslationEntry? {
+    val translations = this?.takeIf { it.isNotEmpty() } ?: return null
+    for (language in LanguageResolver.preferredContentLanguages(prefs)) {
+        val match = translations.entries.firstOrNull { (key, entry) ->
+            key.equals(language, ignoreCase = true) && entry.text.isNotBlank()
+        }?.value
+        if (match != null) return match
+    }
+    return null
+}
+
+/**
+ * Content to display under the Prisme Linguistique: the preferred translation,
+ * or the original [content] when no translation targets a preferred language.
+ */
+fun ApiPost.displayContent(prefs: LanguageResolver.ContentLanguagePreferences): String =
+    translations.preferredEntry(prefs)?.text ?: content.orEmpty()
+
+/** True when the displayed content is a translation rather than the original. */
+fun ApiPost.isTranslated(prefs: LanguageResolver.ContentLanguagePreferences): Boolean =
+    translations.preferredEntry(prefs) != null
 
 /** A viewer of a post — port of APIPostViewer (PostModels.swift). */
 @Serializable

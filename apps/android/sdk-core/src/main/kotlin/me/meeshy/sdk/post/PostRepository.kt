@@ -71,9 +71,32 @@ class PostRepository @Inject constructor(
 
     suspend fun refresh() = revalidateFeed()
 
-    suspend fun likePost(postId: String) {
-        apiCall { postApi.like(postId) }
-        _feedCache.value = _feedCache.value?.map { if (it.id == postId) it.copy(likeCount = (it.likeCount ?: 0) + 1) else it }
+    /**
+     * Optimistic like toggle (ARCHITECTURE.md §4). The viewer's own like state
+     * (`isLikedByMe`) flips instantly with the count; the network confirms after
+     * and the cache rolls back on failure. Returns true when the mutation was
+     * accepted by the gateway.
+     */
+    suspend fun toggleLike(postId: String): Boolean {
+        val target = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
+        val wasLiked = target.isLikedByMe == true
+        applyLike(postId, liked = !wasLiked, likeCount = adjustedCount(target.likeCount, wasLiked))
+
+        val result = if (wasLiked) apiCall { postApi.unlike(postId) } else apiCall { postApi.like(postId) }
+        if (result is NetworkResult.Failure) {
+            applyLike(postId, liked = wasLiked, likeCount = target.likeCount)
+            return false
+        }
+        return true
+    }
+
+    private fun adjustedCount(current: Int?, wasLiked: Boolean): Int =
+        ((current ?: 0) + if (wasLiked) -1 else 1).coerceAtLeast(0)
+
+    private fun applyLike(postId: String, liked: Boolean, likeCount: Int?) {
+        _feedCache.value = _feedCache.value?.map {
+            if (it.id == postId) it.copy(isLikedByMe = liked, likeCount = likeCount) else it
+        }
     }
 
     private suspend fun revalidateFeed(onError: (Throwable) -> Unit = {}) {
