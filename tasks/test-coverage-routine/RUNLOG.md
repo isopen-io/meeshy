@@ -279,3 +279,24 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   6. Pre-existing gateway failures: 6 suites / 18 tests — production bugs, unchanged.
 - Next slice: P0 Messaging core × gateway (`src/services/messaging/MessageProcessor.ts`, `socketio/handlers/MessageHandler.ts`) OR P0 Prisme Linguistique × translator (`src/services/language_capabilities.py`)
 - Commit: (see branch `claude/bold-cray-rfe3j9`)
+
+## 2026-06-15T11:00Z — P0 Encryption & attachments × web (encryption adapters)
+- Targeted: `lib/encryption/adapters/browser-signal-stores.ts`, `lib/encryption/adapters/web-crypto-adapter.ts`, `lib/encryption/adapters/indexeddb-key-storage-adapter.ts`
+- Result: ☑ done — all 3 Encryption × web adapter files ≥92% line+branch; feature matrix cell flipped ☐→☑
+- Coverage (final run):
+  - browser-signal-stores.ts: 93.51% stmts / 100% branches / 100% lines
+  - web-crypto-adapter.ts: 100% stmts / 93.75% branches / 100% lines
+  - indexeddb-key-storage-adapter.ts: 93.37% stmts / 97.05% branches / 100% lines
+  - Note: lib/encryption/e2ee-crypto.ts + attachment-encryption.ts already at 100% from prior runs. attachmentService.ts + tusUploadService.ts deferred to next sub-slice (0%).
+- Tests added: 550 lines across 3 modified test files (+91 total new tests)
+  - `browser-signal-stores.test.ts` (+470 lines): BrowserIdentityKeyStore (loadFromStorage, getIdentityKeyPair lazy-load, throws when empty, getIdentityKey, saveIdentity 3 cases, isTrustedIdentity 2 cases, getIdentity 2 cases, arraysEqual different lengths), BrowserPreKeyStore (save+get roundtrip, not-found throw, removePreKey), BrowserSignedPreKeyStore (roundtrip, not-found), BrowserKyberPreKeyStore (roundtrip, not-found, markUsed with/without record), BrowserSessionStore (roundtrip, null return, getExistingSessions partial), BrowserSenderKeyStore (roundtrip, null return), createBrowserSignalStores error recovery (loadFromStorage throws → generates new identity)
+  - `web-crypto-adapter.test.ts` (+26 lines): decrypt with invalid key type, decrypt wraps crypto failure with descriptive message
+  - `indexeddb-key-storage-adapter.test.ts` (+52 lines): DB open failure with try/finally restore, importKeys roundtrip with non-empty conversations+userKeys (verified readable after import)
+- Reviewer: PASS (rounds: 1 — two issues fixed: fragile inline global.indexedDB restore → try/finally; tautological `open.toHaveBeenCalled` → actual data verification via getConversationKey+getUserKeys)
+- Notes:
+  1. Pre-existing web failures: 13 suites (same as on main — zero new failures introduced).
+  2. PROGRESS.md deduplication: removed 2 duplicate P0 rows (Auth×web row 3 was stale, Encryption×web row 2 was incorrect ☐ — both consolidated).
+  3. PR #682 (web test suite fixes, 297/297 pass) was merged to main at start of this run.
+  4. attachmentService.ts + tusUploadService.ts coverage (0%) deferred to next slice.
+- Next slice: P0 Encryption & attachments × web (part 2): `services/attachmentService.ts`, `services/tusUploadService.ts`
+- Commit: (see branch claude/coverage/p0-encryption-web)
