@@ -633,28 +633,64 @@ struct PostDetailView: View {
     /// inline name tap).
     @ViewBuilder
     private func authorRevealView(_ post: FeedPost) -> some View {
-        Button {
-            selectedProfileUser = .from(feedPost: post)
-        } label: {
-            HStack(spacing: 8) {
-                MeeshyAvatar(
-                    name: post.author,
-                    context: .custom(26),
-                    accentColor: post.authorColor,
-                    avatarURL: post.authorAvatarURL
-                )
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(post.author)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(1)
-                    Text(RelativeTimeFormatter.shortString(for: post.timestamp))
-                        .font(.caption2)
-                        .foregroundColor(theme.textMuted)
+        HStack(spacing: 8) {
+            Button {
+                selectedProfileUser = .from(feedPost: post)
+            } label: {
+                HStack(spacing: 8) {
+                    MeeshyAvatar(
+                        name: post.author,
+                        context: .custom(26),
+                        accentColor: post.authorColor,
+                        avatarURL: post.authorAvatarURL
+                    )
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(post.author)
+                            .font(.subheadline.weight(.bold))
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(1)
+                        Text(RelativeTimeFormatter.shortString(for: post.timestamp))
+                            .font(.caption2)
+                            .foregroundColor(theme.textMuted)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+
+            // Détails de langue insérés dans le header (miroir du bloc auteur inline) :
+            // drapeaux tappables + icône translate. Hors du Button profil pour que les
+            // gestes de langue ne déclenchent pas l'ouverture du profil.
+            let flags = buildAvailableFlags()
+            if !flags.isEmpty || (post.translations != nil && !post.translations!.isEmpty) {
+                HStack(spacing: 5) {
+                    ForEach(flags, id: \.self) { code in
+                        let display = LanguageDisplay.from(code: code)
+                        let isActive = code == secondaryLangCode
+                        VStack(spacing: 1) {
+                            Text(display?.flag ?? "?")
+                                .font(isActive ? .caption : .caption2)
+                                .scaleEffect(isActive ? 1.05 : 1.0)
+                            if isActive {
+                                RoundedRectangle(cornerRadius: 1)
+                                    .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
+                                    .frame(width: 10, height: 1.5)
+                            }
+                        }
+                        .animation(.easeInOut(duration: 0.2), value: isActive)
+                        .onTapGesture { handleFlagTap(code) }
+                    }
+                    if post.translations != nil, !post.translations!.isEmpty {
+                        Image(systemName: "translate")
+                            .font(.caption2.weight(.medium))
+                            .foregroundColor(MeeshyColors.indigo400)
+                            .onTapGesture {
+                                HapticFeedback.light()
+                                showTranslationSheet = true
+                            }
+                    }
                 }
             }
         }
-        .buttonStyle(.plain)
     }
 
     /// The `…` menu, lifted out of the old navBar into the header's trailing slot.

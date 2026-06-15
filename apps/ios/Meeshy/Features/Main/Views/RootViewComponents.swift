@@ -336,6 +336,42 @@ struct ThemedFeedOverlay: View {
         }
     }
 
+    // MARK: - Feed header (mirror de « Meeshy Chats »)
+
+    /// Header épinglé en haut du feed, même traitement visuel que le header
+    /// « Meeshy Chats » (`ConversationListHeaderOverlay`) : titre dégradé indigo +
+    /// action glass à droite. Ici l'action lance la vue des Réels (`presentFresh`).
+    private var feedHeader: some View {
+        CollapsibleHeader(
+            title: "Meeshy Feed",
+            scrollOffset: 0,
+            showBackButton: false,
+            titleColor: theme.textPrimary,
+            backArrowColor: MeeshyColors.indigo500,
+            backgroundColor: theme.backgroundPrimary,
+            titleView: {
+                Text("Meeshy Feed")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(
+                        LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
+                    )
+            },
+            trailing: {
+                Button {
+                    HapticFeedback.medium()
+                    ReelsPresenter.shared.presentFresh()
+                } label: {
+                    Image(systemName: "play.rectangle.on.rectangle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(MeeshyColors.indigo500)
+                        .frame(width: 40, height: 40)
+                        .adaptiveGlass(in: Circle(), interactive: true)
+                }
+                .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
+            }
+        )
+    }
+
     // MARK: - Reel card (full-frame)
 
     /// Carte Réel plein-cadre. Réutilise EXACTEMENT les handlers optimistes de
@@ -395,10 +431,10 @@ struct ThemedFeedOverlay: View {
                 )
             }
         )
-        // Marges horizontales pour aligner la carte Réel sur les posts standards
-        // (chemin iPhone). `FeedPostCard` applique son propre `.padding(.horizontal, 16)` ;
-        // sans ça la carte Réel était bord-à-bord sur iPhone (le fix iPad existait déjà).
-        .padding(.horizontal, 16)
+        // Marge latérale plus serrée que les posts standards (`FeedPostCard` = 16)
+        // → la carte Réel est un peu plus large sur iPhone, tout en gardant une
+        // séparation nette des bords.
+        .padding(.horizontal, 12)
     }
 
     // MARK: - Standard post card
@@ -585,6 +621,11 @@ struct ThemedFeedOverlay: View {
                     )
                 }
             }
+        }
+        .overlay(alignment: .top) {
+            // Header « Meeshy Feed » épinglé (le ScrollView réserve déjà ~70pt en
+            // tête via le Spacer initial pour qu'il glisse dessous au scroll).
+            feedHeader
         }
         .task {
             if viewModel.posts.isEmpty {
