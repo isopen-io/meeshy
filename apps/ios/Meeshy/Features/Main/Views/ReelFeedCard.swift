@@ -232,10 +232,7 @@ struct ReelFeedCard: View, Equatable {
 
     private var actionsRow: some View {
         HStack(spacing: 0) {
-            reelButton(system: isLiked || displayLikeCount > 0 ? "heart.fill" : "heart",
-                       tint: isLiked ? MeeshyColors.error : .white,
-                       count: displayLikeCount,
-                       label: String(localized: "feed.post.likes_count", defaultValue: "\(displayLikeCount) j'aime", bundle: .main)) { onLike(post.id) }
+            likeButton
             Spacer()
             reelButton(system: "bubble.right",
                        tint: .white,
@@ -257,6 +254,40 @@ struct ReelFeedCard: View, Equatable {
                        count: displayShareCount,
                        label: String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main)) { onShare(post.id) }
         }
+    }
+
+    // Bouton like dédié : cœur plein dès qu'il y a des likes (rouge si moi, blanc
+    // sinon). Quand j'ai liké, un contour `heart` en couleur d'accent se superpose
+    // au `heart.fill` pour matérialiser « moi j'ai liké ». Sans like et sans avoir
+    // liké : `heart` outline neutre.
+    private var likeButton: some View {
+        let isFilled = isLiked || displayLikeCount > 0
+        let fillTint: Color = isLiked ? MeeshyColors.error : .white
+        return Button {
+            onLike(post.id)
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 5) {
+                ZStack {
+                    Image(systemName: isFilled ? "heart.fill" : "heart")
+                        .font(.system(size: 18))
+                        .foregroundColor(isFilled ? fillTint : .white)
+                    if isLiked {
+                        Image(systemName: "heart")
+                            .font(.system(size: 18))
+                            .foregroundColor(Color(hex: accentHex))
+                    }
+                }
+                if displayLikeCount > 0 {
+                    Text("\(displayLikeCount)")
+                        .font(.footnote.weight(.medium))
+                        .foregroundColor(.white)
+                }
+            }
+            .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "feed.post.likes_count", defaultValue: "\(displayLikeCount) j'aime", bundle: .main))
     }
 
     private func reelButton(system: String, tint: Color, count: Int, label: String, action: @escaping () -> Void) -> some View {
