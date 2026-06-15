@@ -57,7 +57,7 @@ const customJestConfig = {
     '^rehype-sanitize$': '<rootDir>/__mocks__/react-markdown.js',
     // Mock react-syntax-highlighter to avoid ESM issues
     '^react-syntax-highlighter$': '<rootDir>/__mocks__/react-syntax-highlighter.js',
-    '^react-syntax-highlighter/dist/esm/(.*)$': '<rootDir>/__mocks__/react-syntax-highlighter/dist/esm/$1.js',
+    '^react-syntax-highlighter/dist/esm/(.*)$': '<rootDir>/__mocks__/react-syntax-highlighter.js',
   },
   // Transform ESM packages - handle both standard and pnpm nested node_modules
   transformIgnorePatterns: [

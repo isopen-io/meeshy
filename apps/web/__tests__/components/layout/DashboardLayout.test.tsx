@@ -94,9 +94,10 @@ global.fetch = jest.fn().mockResolvedValue({
   json: () => Promise.resolve({}),
 });
 
-// Mock NotificationBell component
+// Mock NotificationDropdown component (DashboardLayout uses NotificationDropdown, not NotificationBell)
 jest.mock('@/components/notifications', () => ({
   NotificationBell: () => <div data-testid="notification-bell">NotificationBell</div>,
+  NotificationDropdown: () => <div data-testid="notification-bell">NotificationBell</div>,
 }));
 
 // Mock ShareAffiliateButton component

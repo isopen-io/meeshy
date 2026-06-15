@@ -33,6 +33,7 @@ const mockEmit = jest.fn();
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     getSocket: () => mockGetSocket(),
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 
@@ -154,7 +155,7 @@ describe('useVideoCall', () => {
       });
 
       expect(mockToastError).toHaveBeenCalledWith(
-        'Video calls are only available for direct conversations'
+        'Calls are only available for direct conversations'
       );
       expect(mockGetUserMedia).not.toHaveBeenCalled();
     });

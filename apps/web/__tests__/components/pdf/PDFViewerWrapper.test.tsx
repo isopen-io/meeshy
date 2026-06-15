@@ -9,6 +9,30 @@ import '@testing-library/jest-dom';
 import { PDFViewerWrapper } from '../../../components/pdf/PDFViewerWrapper';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 
+// Mock useI18n hook with viewers namespace translations
+jest.mock('@/hooks/useI18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'pdf.loadError': 'Impossible de charger le PDF',
+        'pdf.openInNewTab': 'Ouvrir dans un nouvel onglet',
+        'pdf.download': 'Télécharger',
+        'pdf.downloadPdf': 'Télécharger le PDF',
+        'pdf.delete': 'Supprimer ce PDF',
+        'pdf.fullscreen': 'Ouvrir en plein écran',
+        'pdf.previousPage': 'Page précédente',
+        'pdf.nextPage': 'Page suivante',
+        'pdf.zoomOut': 'Réduire le zoom',
+        'pdf.zoomIn': 'Agrandir le zoom',
+        'pdf.close': 'Fermer',
+        'pdf.nativeControls': 'Utilisez les contrôles natifs du PDF pour naviguer • Échap pour fermer',
+      };
+      return translations[key] || key;
+    },
+    isLoading: false,
+  }),
+}));
+
 // Mock window.open
 const mockWindowOpen = jest.fn();
 Object.defineProperty(window, 'open', {

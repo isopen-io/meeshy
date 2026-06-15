@@ -5,6 +5,43 @@ import { ConversationLinksSection } from '../../../components/conversations/conv
 import { authManager } from '@/services/auth-manager.service';
 import { copyToClipboard } from '@/lib/clipboard';
 
+// Mock i18n hook
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, params?: Record<string, any>) => {
+      const translations: Record<string, string> = {
+        'links.title': 'Liens de partage',
+        'links.loading': 'Chargement des liens...',
+        'links.empty': 'Aucun lien de partage',
+        'links.copy': 'Copier',
+        'links.defaultName': 'Lien sans nom',
+        'links.noDescription': 'Aucune description',
+        'links.createdBy': 'Créé par:',
+        'links.createdAt': 'Créé le:',
+        'links.permissions': 'Permissions',
+        'links.permissionMessages': 'Messages',
+        'links.permissionImages': 'Images',
+        'links.permissionFiles': 'Fichiers',
+        'links.permissionHistory': 'Historique',
+        'links.restrictions': 'Restrictions',
+        'links.languagesLabel': 'Langues:',
+        'links.countriesLabel': 'Pays:',
+        'links.statusActive': 'Actif',
+        'links.statusExpired': 'Expiré',
+        'links.statusDisabled': 'Désactivé',
+        'links.activeLinks': `Liens actifs (${params?.count || 0})`,
+        'links.expiredLinks': `Liens expirés (${params?.count || 0})`,
+      };
+      return translations[key] || key;
+    },
+    locale: 'fr',
+    setLocale: jest.fn(),
+    isLoading: false,
+    currentLanguage: 'fr',
+    tArray: jest.fn(() => []),
+  }),
+}));
+
 // Mock services
 jest.mock('@/services/auth-manager.service', () => ({
   authManager: {

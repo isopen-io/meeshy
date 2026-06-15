@@ -51,6 +51,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     getSocket: () => mockGetSocket(),
     onReactionAdded: (cb: (data: unknown) => void) => mockOnReactionAdded(cb),
     onReactionRemoved: (cb: (data: unknown) => void) => mockOnReactionRemoved(cb),
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 

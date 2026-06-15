@@ -12,9 +12,9 @@ describe('ConversationUIStore', () => {
     act(() => {
       useConversationUIStore.setState({
         currentConversationId: null,
-        typingUsers: new Map(),
-        draftMessages: new Map(),
-        replyingTo: new Map(),
+        typingUsers: {},
+        draftMessages: {},
+        replyingTo: {},
         isCompactView: false,
         showTranslations: true,
       });
@@ -33,9 +33,9 @@ describe('ConversationUIStore', () => {
       const state = useConversationUIStore.getState();
 
       expect(state.currentConversationId).toBeNull();
-      expect(state.typingUsers.size).toBe(0);
-      expect(state.draftMessages.size).toBe(0);
-      expect(state.replyingTo.size).toBe(0);
+      expect(Object.keys(state.typingUsers).length).toBe(0);
+      expect(Object.keys(state.draftMessages).length).toBe(0);
+      expect(Object.keys(state.replyingTo).length).toBe(0);
       expect(state.isCompactView).toBe(false);
       expect(state.showTranslations).toBe(true);
     });
@@ -78,8 +78,8 @@ describe('ConversationUIStore', () => {
           useConversationUIStore.getState().addTypingUser('conv-123', 'user-1');
         });
 
-        const typing = useConversationUIStore.getState().typingUsers.get('conv-123');
-        expect(typing?.has('user-1')).toBe(true);
+        const typing = useConversationUIStore.getState().typingUsers['conv-123'];
+        expect(typing?.includes('user-1')).toBe(true);
       });
 
       it('should support multiple typing users in same conversation', () => {
@@ -88,10 +88,10 @@ describe('ConversationUIStore', () => {
           useConversationUIStore.getState().addTypingUser('conv-123', 'user-2');
         });
 
-        const typing = useConversationUIStore.getState().typingUsers.get('conv-123');
-        expect(typing?.size).toBe(2);
-        expect(typing?.has('user-1')).toBe(true);
-        expect(typing?.has('user-2')).toBe(true);
+        const typing = useConversationUIStore.getState().typingUsers['conv-123'];
+        expect(typing?.length).toBe(2);
+        expect(typing?.includes('user-1')).toBe(true);
+        expect(typing?.includes('user-2')).toBe(true);
       });
 
       it('should support typing users in different conversations', () => {
@@ -101,8 +101,8 @@ describe('ConversationUIStore', () => {
         });
 
         const state = useConversationUIStore.getState();
-        expect(state.typingUsers.get('conv-123')?.has('user-1')).toBe(true);
-        expect(state.typingUsers.get('conv-456')?.has('user-2')).toBe(true);
+        expect(state.typingUsers['conv-123']?.includes('user-1')).toBe(true);
+        expect(state.typingUsers['conv-456']?.includes('user-2')).toBe(true);
       });
 
       it('should auto-remove typing user after 5 seconds', () => {
@@ -113,7 +113,7 @@ describe('ConversationUIStore', () => {
         });
 
         // Verify user is typing
-        expect(useConversationUIStore.getState().typingUsers.get('conv-123')?.has('user-1')).toBe(true);
+        expect(useConversationUIStore.getState().typingUsers['conv-123']?.includes('user-1')).toBe(true);
 
         // Advance time by 5 seconds
         act(() => {
@@ -121,8 +121,8 @@ describe('ConversationUIStore', () => {
         });
 
         // User should be removed (conversation entry is deleted when empty)
-        const typingUsers = useConversationUIStore.getState().typingUsers.get('conv-123');
-        expect(typingUsers === undefined || !typingUsers.has('user-1')).toBe(true);
+        const typingUsers = useConversationUIStore.getState().typingUsers['conv-123'];
+        expect(typingUsers === undefined || !typingUsers.includes('user-1')).toBe(true);
       });
     });
 
@@ -133,8 +133,8 @@ describe('ConversationUIStore', () => {
           useConversationUIStore.getState().removeTypingUser('conv-123', 'user-1');
         });
 
-        const typing = useConversationUIStore.getState().typingUsers.get('conv-123');
-        expect(typing?.has('user-1')).toBeFalsy();
+        const typing = useConversationUIStore.getState().typingUsers['conv-123'];
+        expect(typing?.includes('user-1')).toBeFalsy();
       });
 
       it('should remove conversation entry when no users remain', () => {
@@ -143,7 +143,7 @@ describe('ConversationUIStore', () => {
           useConversationUIStore.getState().removeTypingUser('conv-123', 'user-1');
         });
 
-        expect(useConversationUIStore.getState().typingUsers.has('conv-123')).toBe(false);
+        expect('conv-123' in useConversationUIStore.getState().typingUsers).toBe(false);
       });
 
       it('should not affect other typing users', () => {
@@ -153,8 +153,8 @@ describe('ConversationUIStore', () => {
           useConversationUIStore.getState().removeTypingUser('conv-123', 'user-1');
         });
 
-        const typing = useConversationUIStore.getState().typingUsers.get('conv-123');
-        expect(typing?.has('user-2')).toBe(true);
+        const typing = useConversationUIStore.getState().typingUsers['conv-123'];
+        expect(typing?.includes('user-2')).toBe(true);
       });
     });
 
@@ -166,7 +166,7 @@ describe('ConversationUIStore', () => {
           useConversationUIStore.getState().clearTypingUsers('conv-123');
         });
 
-        expect(useConversationUIStore.getState().typingUsers.has('conv-123')).toBe(false);
+        expect('conv-123' in useConversationUIStore.getState().typingUsers).toBe(false);
       });
 
       it('should not affect other conversations', () => {
@@ -177,8 +177,8 @@ describe('ConversationUIStore', () => {
         });
 
         const state = useConversationUIStore.getState();
-        expect(state.typingUsers.has('conv-123')).toBe(false);
-        expect(state.typingUsers.get('conv-456')?.has('user-2')).toBe(true);
+        expect('conv-123' in state.typingUsers).toBe(false);
+        expect(state.typingUsers['conv-456']?.includes('user-2')).toBe(true);
       });
     });
 
@@ -215,7 +215,7 @@ describe('ConversationUIStore', () => {
           useConversationUIStore.getState().setDraftMessage('conv-123', mockDraft);
         });
 
-        const draft = useConversationUIStore.getState().draftMessages.get('conv-123');
+        const draft = useConversationUIStore.getState().draftMessages['conv-123'];
         expect(draft).toEqual(mockDraft);
       });
 
@@ -227,7 +227,7 @@ describe('ConversationUIStore', () => {
           useConversationUIStore.getState().setDraftMessage('conv-123', newDraft);
         });
 
-        const draft = useConversationUIStore.getState().draftMessages.get('conv-123');
+        const draft = useConversationUIStore.getState().draftMessages['conv-123'];
         expect(draft?.content).toBe('Updated draft');
       });
 
@@ -240,8 +240,8 @@ describe('ConversationUIStore', () => {
         });
 
         const state = useConversationUIStore.getState();
-        expect(state.draftMessages.get('conv-123')?.content).toBe('Hello, this is a draft');
-        expect(state.draftMessages.get('conv-456')?.content).toBe('Another draft');
+        expect(state.draftMessages['conv-123']?.content).toBe('Hello, this is a draft');
+        expect(state.draftMessages['conv-456']?.content).toBe('Another draft');
       });
     });
 
@@ -252,7 +252,7 @@ describe('ConversationUIStore', () => {
           useConversationUIStore.getState().clearDraftMessage('conv-123');
         });
 
-        expect(useConversationUIStore.getState().draftMessages.has('conv-123')).toBe(false);
+        expect('conv-123' in useConversationUIStore.getState().draftMessages).toBe(false);
       });
 
       it('should not affect other drafts', () => {
@@ -265,8 +265,8 @@ describe('ConversationUIStore', () => {
         });
 
         const state = useConversationUIStore.getState();
-        expect(state.draftMessages.has('conv-123')).toBe(false);
-        expect(state.draftMessages.get('conv-456')?.content).toBe('Another draft');
+        expect('conv-123' in state.draftMessages).toBe(false);
+        expect(state.draftMessages['conv-456']?.content).toBe('Another draft');
       });
     });
 
@@ -294,7 +294,7 @@ describe('ConversationUIStore', () => {
           useConversationUIStore.getState().setReplyingTo('conv-123', 'msg-456');
         });
 
-        const replyingTo = useConversationUIStore.getState().replyingTo.get('conv-123');
+        const replyingTo = useConversationUIStore.getState().replyingTo['conv-123'];
         expect(replyingTo).toBe('msg-456');
       });
 
@@ -304,7 +304,7 @@ describe('ConversationUIStore', () => {
           useConversationUIStore.getState().setReplyingTo('conv-123', null);
         });
 
-        expect(useConversationUIStore.getState().replyingTo.has('conv-123')).toBe(false);
+        expect(useConversationUIStore.getState().replyingTo['conv-123']).toBeNull();
       });
 
       it('should support replies in multiple conversations', () => {
@@ -314,8 +314,8 @@ describe('ConversationUIStore', () => {
         });
 
         const state = useConversationUIStore.getState();
-        expect(state.replyingTo.get('conv-123')).toBe('msg-1');
-        expect(state.replyingTo.get('conv-456')).toBe('msg-2');
+        expect(state.replyingTo['conv-123']).toBe('msg-1');
+        expect(state.replyingTo['conv-456']).toBe('msg-2');
       });
     });
 
@@ -342,7 +342,7 @@ describe('ConversationUIStore', () => {
           useConversationUIStore.getState().clearReplyingTo('conv-123');
         });
 
-        expect(useConversationUIStore.getState().replyingTo.has('conv-123')).toBe(false);
+        expect('conv-123' in useConversationUIStore.getState().replyingTo).toBe(false);
       });
     });
   });
@@ -406,9 +406,9 @@ describe('ConversationUIStore', () => {
 
       const state = useConversationUIStore.getState();
       expect(state.currentConversationId).toBeNull();
-      expect(state.typingUsers.size).toBe(0);
-      expect(state.draftMessages.size).toBe(0);
-      expect(state.replyingTo.size).toBe(0);
+      expect(Object.keys(state.typingUsers).length).toBe(0);
+      expect(Object.keys(state.draftMessages).length).toBe(0);
+      expect(Object.keys(state.replyingTo).length).toBe(0);
       expect(state.isCompactView).toBe(false);
       expect(state.showTranslations).toBe(true);
     });
@@ -429,9 +429,9 @@ describe('ConversationUIStore', () => {
         useConversationUIStore.getState().addTypingUser('conv-123', 'user-2');
       });
 
-      const typing = useConversationUIStore.getState().typingUsers.get('conv-123');
-      expect(Array.from(typing || [])).toContain('user-1');
-      expect(Array.from(typing || [])).toContain('user-2');
+      const typing = useConversationUIStore.getState().typingUsers['conv-123'];
+      expect((typing || []).includes('user-1')).toBe(true);
+      expect((typing || []).includes('user-2')).toBe(true);
     });
 
     it('useDraftMessage should return draft for conversation', () => {
@@ -439,7 +439,7 @@ describe('ConversationUIStore', () => {
         useConversationUIStore.getState().setDraftMessage('conv-123', { content: 'Test' });
       });
 
-      const draft = useConversationUIStore.getState().draftMessages.get('conv-123');
+      const draft = useConversationUIStore.getState().draftMessages['conv-123'];
       expect(draft?.content).toBe('Test');
     });
 
@@ -448,7 +448,7 @@ describe('ConversationUIStore', () => {
         useConversationUIStore.getState().setReplyingTo('conv-123', 'msg-456');
       });
 
-      const replyingTo = useConversationUIStore.getState().replyingTo.get('conv-123');
+      const replyingTo = useConversationUIStore.getState().replyingTo['conv-123'];
       expect(replyingTo).toBe('msg-456');
     });
   });

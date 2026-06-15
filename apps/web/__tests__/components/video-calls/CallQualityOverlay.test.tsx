@@ -6,7 +6,7 @@ jest.mock('@/hooks/useI18n', () => ({
 // Break the heavy transitive import chain (socket service → encryption) pulled
 // in by ConnectionQualityBadge's quality helpers; irrelevant to this overlay.
 jest.mock('@/services/meeshy-socketio.service', () => ({
-  meeshySocketIOService: { getSocket: () => null },
+  meeshySocketIOService: { getSocket: () => null, onStatusChange: jest.fn(() => () => {}) },
 }));
 
 import { CallQualityOverlay } from '@/components/video-calls/CallQualityOverlay';

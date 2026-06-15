@@ -30,6 +30,7 @@ jest.mock('@/services/user-preferences.service', () => ({
 jest.mock('@/services/conversations.service', () => ({
   conversationsService: {
     updateConversation: jest.fn(),
+    getEncryptionStatus: jest.fn(() => Promise.resolve({ encryptionMode: 'none', isActive: false })),
   },
 }));
 

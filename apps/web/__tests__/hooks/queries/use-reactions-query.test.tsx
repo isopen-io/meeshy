@@ -39,6 +39,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       mockOnReactionRemoved(handler);
       return jest.fn(); // Return unsubscribe function
     },
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 

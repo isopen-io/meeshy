@@ -23,6 +23,7 @@ const mockSocket = {
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     getSocket: () => mockSocket,
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 

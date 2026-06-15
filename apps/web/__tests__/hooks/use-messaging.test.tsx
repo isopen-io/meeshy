@@ -155,6 +155,7 @@ describe('useMessaging', () => {
         undefined,
         undefined,
         undefined,
+        undefined,
         undefined
       );
     });
@@ -172,6 +173,7 @@ describe('useMessaging', () => {
         'Reply message',
         'en',
         'original-msg-id',
+        undefined,
         undefined,
         undefined,
         undefined
@@ -192,6 +194,7 @@ describe('useMessaging', () => {
         'en',
         undefined,
         ['user-789'],
+        undefined,
         undefined,
         undefined
       );
@@ -219,7 +222,8 @@ describe('useMessaging', () => {
         undefined,
         undefined,
         ['attachment-1'],
-        ['image/png']
+        ['image/png'],
+        undefined
       );
     });
 

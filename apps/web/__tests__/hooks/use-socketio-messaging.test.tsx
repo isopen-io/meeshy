@@ -73,6 +73,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onUserStatus: (...args: any[]) => (mockOnUserStatus as any)(...args),
     onConversationStats: (...args: any[]) => (mockOnConversationStats as any)(...args),
     onConversationOnlineStats: (...args: any[]) => (mockOnConversationOnlineStats as any)(...args),
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 
