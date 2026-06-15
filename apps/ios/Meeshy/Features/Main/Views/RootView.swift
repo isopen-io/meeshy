@@ -1366,9 +1366,12 @@ struct RootView: View {
             rightPosition: $menuButtonPosition,
             onLeftTap: {
                 HapticFeedback.light()
-                // Tap ouvre les Reels ; la vague liquide est pilotée par
-                // `openReels()` sur le `.onAppear` de l'overlay (pas de transition scale).
-                reelsPresenter.presentFresh()
+                // Le tap ouvre l'overlay Feed (sa vocation : l'icône est le Feed).
+                // L'ouverture des Reels n'est PLUS déclenchée ici — elle se fait
+                // désormais via le bouton Réels du header « Meeshy Feed ».
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    showFeed.toggle()
+                }
             },
             onRightTap: {
                 if showMenu {
@@ -1384,7 +1387,8 @@ struct RootView: View {
             },
             onLeftLongPress: {
                 HapticFeedback.medium()
-                // Long-press ouvre l'overlay Feeds (le tap est réservé aux Reels).
+                // Long-press : même action que le tap (ouvre/ferme l'overlay Feed).
+                // Les Reels se lancent depuis le bouton dédié du header « Meeshy Feed ».
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     showFeed.toggle()
                 }
