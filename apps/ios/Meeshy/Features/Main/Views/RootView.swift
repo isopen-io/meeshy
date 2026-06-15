@@ -1321,21 +1321,20 @@ struct RootView: View {
         reelsRevealMasked = true
         reelsRevealProgress = 0
         let duration: Double = reduceMotionEnabled ? 0.18 : 0.35
-        // Start the reel ~0.2s before the wave finishes (clamped so it never
-        // precedes the disc actually leaving the button).
-        let playLead = min(0.2, duration * 0.6)
         withAnimation(.easeOut(duration: duration)) {
             reelsRevealProgress = 1
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, duration - playLead)) {
-            guard reelsPresenter.launch != nil, !reelsRevealClosing else { return }
-            reelsRevealCompleted = true
-        }
-        // Drop the mask once the disc reaches full screen — a persistent mask over
-        // the AVPlayer layer freezes it on the poster.
+        // Wait for the reveal to FINISH before the first reel plays. Starting
+        // earlier played UNDER the (poster-freezing) `.mask()`: those frames were
+        // invisible, then dropping the mask snapped the surface to an already-
+        // advanced frame — the launch flash. Now, at the animation's end, drop the
+        // mask FIRST (the poster / frame 0 shows), THEN start playback from frame 0
+        // over the poster that stays underneath (`ReelVideoView` keeps `ReelPoster`
+        // behind the surface) → seamless, no flash and no black gap.
         DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
             guard reelsPresenter.launch != nil, !reelsRevealClosing else { return }
             reelsRevealMasked = false
+            reelsRevealCompleted = true
         }
     }
 
