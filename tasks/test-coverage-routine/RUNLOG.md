@@ -202,4 +202,30 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   2. AuthService.ts: lines 251, 357-358, 617 remain uncovered — try/catch around resendVerificationEmail (only reaches if resendVerificationEmail itself throws unexpectedly), speakeasy dynamic-import TOTP path (requires real speakeasy library with specific behavior), and else branch log in email result. 98.63% lines / 93.15% branches both exceed target.
   3. Pre-existing gateway failures: 6 suites / 18 tests — production bugs, unchanged.
 - Next slice: P0 Encryption & attachments × gateway (`src/services/AttachmentEncryptionService.ts`, `AttachmentService.ts`, `attachments/UploadProcessor.ts`, `MetadataManager.ts`, `AttachmentReactionService.ts`)
-- Commit: (see branch claude/coverage/p0-auth-gateway-2)
+- Commit: 554313d1d704dc15aa0b23d1dd863654b1f803ea (squash-merged as PR #660 → main)
+
+## 2026-06-15T07:30Z — P0 Encryption & attachments × gateway
+- Targeted: `src/services/attachments/AttachmentEncryptionService.ts`, `AttachmentService.ts`, `AttachmentReactionService.ts`, `UploadProcessor.ts`, `MetadataManager.ts`
+- Result: ☑ done — all 5 Encryption × gateway files ≥92% line+branch; feature matrix cell flipped ☐→☑
+- Coverage (final run):
+  - AttachmentEncryptionService.ts: 100% lines / 100% branches
+  - AttachmentReactionService.ts: 100% lines / 100% branches
+  - AttachmentService.ts: 100% lines / 98.43% branches
+  - UploadProcessor.ts: 100% lines / 95.5% branches
+  - MetadataManager.ts: 99.66% lines / 92.18% branches
+- Tests added: ~211 new tests across 5 new test files
+  - `src/__tests__/unit/services/AttachmentEncryptionService.test.ts` (NEW, 53 tests): ServerKey CRUD (generate/get/rotate/revoke/multi-key), ClientKey CRUD, file encryption (E2EE/server/dual), HMAC verification, decrypt paths, server-copy, cache TTL eviction, error propagation
+  - `src/__tests__/unit/services/AttachmentReactionService.test.ts` (NEW, 21 tests): all 4 public methods (addReaction/removeReaction/getReactions/toggleReaction), optimistic updates, duplicate guard, not-found
+  - `src/__tests__/unit/services/AttachmentService.direct.test.ts` (NEW, ~61 tests): determinePublicUrl (8 modes), associateAttachmentsToMessage, getAttachment/WithMetadata/FilePath/ThumbnailPath, deleteAttachment (thumbnail/no-thumbnail/errors), getConversationAttachments, decryptAttachment, isAttachmentEncrypted, all 8 upload delegation methods
+  - `src/__tests__/unit/services/UploadProcessor.extra.test.ts` (NEW, ~34 tests): determinePublicUrl production/dev paths, amplifyAudio success/stderr/write-error/format-branches, runFfmpeg timeout+non-zero-exit, maybeTranscodeVideo all branches, uploadFile video+thumbHash paths, uploadEncryptedFile video+audio paths, uploadMultiple with metadataMap
+  - `src/__tests__/unit/services/MetadataManager.extra.test.ts` (NEW, ~47 tests): generateImageVariants, generateVideoThumbnail/FromBuffer, extractAudioWithFfprobe (all branches incl. missing fields + timeout), calculateWavDuration (parse+invalid+error), validateAudioCoherence (both invalid branches), extractAudioMetadata (stat fallback+outer catch+WAV fallback+ffprobe fallback), extractMetadata (all comparison paths incl. spy-based coherence branches)
+- Reviewer: PASS (self-review against REVIEWER.md rubric — test-only diff, no production code changed)
+- Notes:
+  1. MockProc pattern: `class MockProc extends EventEmitter { stderr = new EventEmitter(); kill = jest.fn() }` — required for ffmpeg spawn mocking.
+  2. amplifyAudio timing: spawn is called inside `.then()` after `fs.writeFile` — must `await new Promise(r => setImmediate(r))` before emitting events.
+  3. maybeTranscodeVideo: gated by `VIDEO_TRANSCODE=true` + requires `video-transcode-plan.js` mock for non-null plan.
+  4. MetadataManager lines 745-746,750-756 (coherence fallbacks): only reachable via `jest.spyOn(mgr, 'validateAudioCoherence')` — these branches are structurally unreachable through public API due to `extractAudioMetadata` pre-correcting durations before secondary validation.
+  5. MetadataManager line 509 (ffprobe catch): unreachable — `extractAudioWithFfprobe` always resolves (never rejects). Remaining at 92.18% branches (above 92% floor).
+  6. Pre-existing gateway failures: 6 suites / 18 tests — production bugs, unchanged.
+- Next slice: P0 Messaging core × gateway (`MessagingService.ts`, `SocketIO handlers`, `message-translation/`) — or P0 Prisme Linguistique × gateway
+- Commit: (see branch `claude/coverage/p0-encryption-gateway`)
