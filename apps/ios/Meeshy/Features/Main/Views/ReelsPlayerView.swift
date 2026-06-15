@@ -477,15 +477,33 @@ struct ReelPageView: View {
 
             // Audio reels show the post caption only when it adds something
             // beyond the transcript hero; text/image reels always show it.
+            // Collapsed: 3 lines + tap to expand. Expanded: a height-bounded
+            // ScrollView so a long caption stays fully readable AND scrollable
+            // instead of overflowing off the top of the screen (the previous
+            // `lineLimit(nil)` + `fixedSize` grew unbounded and clipped).
             if audioMedia == nil, !displayedDescription.isEmpty {
-                Text(displayedDescription)
-                    .font(.subheadline)
-                    .foregroundColor(.white)
-                    .lineLimit(descriptionExpanded ? nil : 3)
-                    .fixedSize(horizontal: false, vertical: true)
+                if descriptionExpanded {
+                    ScrollView(.vertical, showsIndicators: true) {
+                        Text(displayedDescription)
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 240)
                     .onTapGesture {
                         withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
                     }
+                } else {
+                    Text(displayedDescription)
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
+                        }
+                }
             }
 
             // Prisme Linguistique — meta row mirroring the message-bubble footer:
@@ -914,35 +932,101 @@ final class ReelPlayerLayerView: UIView {
     var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
 }
 
-// MARK: - Reel Image
+// MARK: - Reel Media Layout
 
-/// Image reel: a single image fills the screen; multiple images become a
-/// horizontal carousel (orthogonal to the vertical reel paging) with dots.
-private struct ReelImageView: View {
-    let reel: FeedPost
-    @State private var currentImageId: String?
+/// Pure classification of a reel's media into the surface that should render it.
+/// App-side: it encodes the product decision of HOW a reel composes its media
+/// (single video, image carousel, rich audio, or images + independent audio),
+/// derived solely from the post's media. `resolve` is total and order-preserving.
+///
+/// Not yet wired into `mediaLayer` (which still shows `primaryReelMedia`): it is
+/// the tested foundation for the deferred images+audio mixed-media composition.
+enum ReelMediaLayout: Equatable {
+    /// No playable/visual media (documents / locations only, or empty).
+    case empty
+    /// A single video drives the reel — video wins over every other kind.
+    case video(FeedMedia)
+    /// One or more images, no audio: a full-screen image carousel.
+    case images([FeedMedia])
+    /// One or more audios, no images and no video: the rich audio surface.
+    case audioOnly([FeedMedia])
+    /// Images (full-screen carousel background) with one or more audios.
+    case imagesWithAudio(images: [FeedMedia], audios: [FeedMedia])
 
-    private var images: [FeedMedia] { reel.media.filter { $0.type == .image } }
-
-    var body: some View {
-        Group {
-            if images.count <= 1, let media = images.first {
-                imageFill(media)
-            } else {
-                ZStack(alignment: .bottom) {
-                    AdaptiveHorizontalPager(items: images, currentPageID: $currentImageId) { _, media in
-                        imageFill(media)
-                    }
-                    dots
-                        .padding(.bottom, 150)
-                }
-            }
+    /// Classifies `media` into a layout. Video has top priority; otherwise the
+    /// presence of images and/or audios decides. Documents/locations are ignored
+    /// (never a reel surface), so a post carrying only those resolves to `.empty`.
+    static func resolve(media: [FeedMedia]) -> ReelMediaLayout {
+        if let video = media.first(where: { $0.type == .video }) { return .video(video) }
+        let images = media.filter { $0.type == .image }
+        let audios = media.filter { $0.type == .audio }
+        switch (images.isEmpty, audios.isEmpty) {
+        case (true, true): return .empty
+        case (false, true): return .images(images)
+        case (true, false): return .audioOnly(audios)
+        case (false, false): return .imagesWithAudio(images: images, audios: audios)
         }
-        .onAppear { if currentImageId == nil { currentImageId = images.first?.id } }
     }
 
-    private func imageFill(_ media: FeedMedia) -> some View {
-        ReelPoster(thumbHash: media.thumbHash, url: media.url ?? media.thumbnailUrl, color: media.thumbnailColor)
+    static func == (lhs: ReelMediaLayout, rhs: ReelMediaLayout) -> Bool {
+        switch (lhs, rhs) {
+        case (.empty, .empty):
+            return true
+        case let (.video(a), .video(b)):
+            return a.id == b.id
+        case let (.images(a), .images(b)):
+            return a.map(\.id) == b.map(\.id)
+        case let (.audioOnly(a), .audioOnly(b)):
+            return a.map(\.id) == b.map(\.id)
+        case let (.imagesWithAudio(ai, aa), .imagesWithAudio(bi, ba)):
+            return ai.map(\.id) == bi.map(\.id) && aa.map(\.id) == ba.map(\.id)
+        default:
+            return false
+        }
+    }
+}
+
+// MARK: - Reel Image Carousel
+
+/// Image reel: a single image, or a horizontal page-snapping carousel of images
+/// (orthogonal to the vertical reel paging) with dots.
+///
+/// Mirrors the proven `ConversationMediaGalleryView` composition to fix three
+/// carousel defects: ONE `.ignoresSafeArea()` at the pager level (never per
+/// cell), each page pinned to the EXACT viewport so the paging stride equals the
+/// page width (no half-shown image), and the visible index seeded SYNCHRONOUSLY
+/// at init (the first image is present from the first frame — not set in
+/// `.onAppear`, which raced `scrollPosition(id:)` and could open scrolled past
+/// the first image).
+private struct ReelImageView: View {
+    let reel: FeedPost
+    private let images: [FeedMedia]
+    @State private var currentImageId: String?
+
+    init(reel: FeedPost) {
+        self.reel = reel
+        let imgs = reel.media.filter { $0.type == .image }
+        self.images = imgs
+        _currentImageId = State(initialValue: imgs.first?.id)
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            if images.count <= 1 {
+                if let media = images.first {
+                    ReelImageCell(media: media)
+                } else {
+                    Color.black
+                }
+            } else {
+                AdaptiveHorizontalPager(items: images, currentPageID: $currentImageId, fillVertical: true) { _, media in
+                    ReelImageCell(media: media)
+                }
+                dots
+                    .padding(.bottom, 150)
+            }
+        }
+        .ignoresSafeArea()
     }
 
     private var dots: some View {
@@ -953,6 +1037,59 @@ private struct ReelImageView: View {
                     .frame(width: 6, height: 6)
             }
         }
+    }
+}
+
+/// One carousel page, pinned to the exact viewport via `GeometryReader` so the
+/// paging stride equals the page width (clean snap) and the image is centred.
+/// A ~9:16 image fills the screen (its `.fit` foreground covers the backdrop);
+/// any other ratio shows the WHOLE image centred over a blurred backdrop of
+/// itself — never black bars, never a cropped/off-centre image.
+private struct ReelImageCell: View {
+    let media: FeedMedia
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                ReelImageBackdrop(media: media)
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
+
+                ProgressiveCachedImage(
+                    thumbHash: media.thumbHash,
+                    thumbnailUrl: media.thumbnailUrl ?? media.url,
+                    fullUrl: media.url ?? media.thumbnailUrl,
+                    autoLoad: true
+                ) {
+                    Color.clear
+                }
+                .aspectRatio(contentMode: .fit)
+                .frame(width: geo.size.width, height: geo.size.height)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
+        }
+    }
+}
+
+/// Ambient blurred fill behind a `.fit` carousel image — its own image scaled to
+/// fill, blurred and slightly dimmed. Falls back to the media's tint colour.
+private struct ReelImageBackdrop: View {
+    let media: FeedMedia
+
+    var body: some View {
+        ProgressiveCachedImage(
+            thumbHash: media.thumbHash,
+            thumbnailUrl: media.thumbnailUrl ?? media.url,
+            fullUrl: media.url ?? media.thumbnailUrl,
+            autoLoad: true
+        ) {
+            Color(hex: media.thumbnailColor)
+        }
+        .aspectRatio(contentMode: .fill)
+        .scaleEffect(1.15)
+        .blur(radius: 28)
+        .overlay(Color.black.opacity(0.22))
     }
 }
 
