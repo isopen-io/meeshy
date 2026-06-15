@@ -250,6 +250,20 @@ describe('TranslationService', () => {
 
       expect(result.sourceLanguage).toBe('auto');
     });
+
+    it('falls back to model parameter when response.data.model is absent', async () => {
+      mockAxios.post.mockResolvedValueOnce({
+        data: {
+          translated_text: 'Bonjour',
+          detected_language: 'en',
+          // model intentionally absent to exercise the || model fallback branch
+        },
+      });
+
+      const result = await translationService.translateWithAutoDetect('Hello', 'fr', 'advanced' as any);
+
+      expect(result.model).toBe('advanced');
+    });
   });
 
   describe('checkHealth', () => {
