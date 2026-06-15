@@ -92,6 +92,9 @@ struct ReelsPlayerView: View {
         .task { viewModel.seed(posts: seedPosts, startId: startId) }
         .adaptiveOnChange(of: viewModel.currentId) { _, newId in
             guard let newId else { return }
+            // Never carry immersive-hidden chrome into the next reel — the scrub
+            // bar / action rail / info must reappear when you page.
+            if chromeHidden { chromeHidden = false }
             HapticFeedback.light()
             viewModel.recordView(newId)
         }
