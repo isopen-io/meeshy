@@ -888,7 +888,9 @@ struct ReelVideoSurface: UIViewRepresentable {
 
 /// Layer-backed `UIView` whose backing layer IS an `AVPlayerLayer` — GPU-composited
 /// video that respects SwiftUI ZStack z-ordering (overlays stay on top).
-private final class ReelPlayerLayerView: UIView {
+/// `internal` (not `private`) because the now-`internal` `ReelVideoSurface`
+/// exposes it through its representable methods (shared with `ReelFeedVideoSurface`).
+final class ReelPlayerLayerView: UIView {
     override static var layerClass: AnyClass { AVPlayerLayer.self }
     var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
 }
