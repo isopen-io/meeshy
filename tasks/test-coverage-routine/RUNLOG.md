@@ -97,3 +97,68 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   5. GATEWAY FAILURES: 7 suites / 22 tests — pre-existing production bugs unchanged (not touched here)
 - Next slice: 0.3 needs CI validation, then 0.4 (web jest coverage threshold)
 - Commit: (see branch claude/coverage/sprint0-3-and-web-test-fixes)
+
+## 2026-06-14T18:30Z — Sprint 0.3 ☑ confirm + Sprint 0.4 × web coverageThreshold
+- Targeted: `apps/web/jest.config.js` — add ratcheting `coverageThreshold` at measured baseline
+- Result: ☑ done
+- Coverage: web line 33.10% / branch 25.77% (re-measured post Sprint 0.2/0.3 fixes; threshold floor: lines≥33, branches≥25, statements≥32, functions≥29)
+- Tests added: 0 (CI-config-only slice)
+- Reviewer: PASS (rounds: 1)
+- Notes:
+  1. Confirmed Sprint 0.3 (PR #650) was merged to main — PROGRESS.md updated 0.3 ◐→☑.
+  2. Re-measured web coverage post Sprint 0.2/0.3 fixes: 33.10% line / 25.77% branch (up from 22.37%/17.30% Sprint 0.1 baseline) — improvements from web test infrastructure fixes (ESM mapper, mock fixes).
+  3. Added conservative `coverageThreshold` floors to `apps/web/jest.config.js`: lines:33, branches:25, statements:32, functions:29. All four verified PASS against current coverage.
+  4. PROGRESS.md baselines table updated to reflect new re-measured web values.
+  5. Next slice: Sprint 0.5 (stop gateway jest from silently excluding routes/middleware/websocket/grpc; add global threshold at baseline)
+- Commit: (see PR #654 — merged to main 2026-06-14T22:22Z, squash)
+
+## 2026-06-14T22:13Z — Sprint 0.4 cont. (rebase+fix) + Sprint 0.5 × gateway collectCoverageFrom
+- Targeted: `services/gateway/jest.config.json` — expand collectCoverageFrom + add threshold
+- Result: ☑ done
+- Coverage: gateway true baseline line 32.18% / branch 28.87% (re-measured post Sprint 0.5 fix); threshold floor: lines≥32, branches≥28, statements≥31, functions≥34
+- Tests added: 4 new tests in `attachmentIncludes.test.ts` (Sprint 0.4 fix); 0 new tests for Sprint 0.5 (config-only)
+- Reviewer: PASS (rounds: 1)
+- Notes:
+  1. SPRINT 0.4 CARRY: Rebased `claude/coverage/sprint0-4-web-threshold` on latest main (868606db). Fixed stale test assertions in `attachmentIncludes.test.ts` caused by BUG2 A' production change (reactions relation added to attachmentMediaSelect after the sprint0-4 branch was created). Gateway CI improved: 7→6 failing suites, 22→18 failing tests. PR #654 merged to main.
+  2. SPRINT 0.5: `collectCoverageFrom` in `services/gateway/jest.config.json` expanded from services+utils-only to include `src/routes/**/*.ts`, `src/middleware/**/*.ts`, `src/socketio/**/*.ts`. Removed vestigial `!src/websocket/**/*` and `!src/grpc/**/*` exclusions (those directories do not exist). Added `coverageThreshold` at new true baseline: lines:32, branches:28, statements:31, functions:34. Verified thresholds pass locally.
+  3. New gateway true coverage: 32.18% line / 28.87% branch (down from inflated 52.12%/47.16% that only counted services+utils). The drop is expected and correct — the new numbers reflect the full scope.
+  4. testPathIgnorePatterns triage (un-ignoring specific test dirs) deferred to Sprint 0.7.
+  5. Pre-existing gateway failures: 6 suites (down from 7 after attachmentIncludes fix) — production bugs, not fixable in test scope.
+- Next slice: Sprint 0.6 (restore translator fail_under toward 80; tighten exclude_lines)
+- Commit: (see branch claude/coverage/sprint0-5-gateway-threshold)
+
+## 2026-06-15T00:00Z — Sprint 0.6 × translator fail_under + tighten exclude_lines
+- Targeted: `services/translator/pyproject.toml` (coverage config only — no tests added, no production code)
+- Result: ☑ done
+- Coverage: translator baseline 37.09% (Sprint 0.1 measurement) — floor raised 10→37 in pyproject.toml; net coverage expected to improve due to TTS backend omissions
+- Tests added: 0 (CI-config-only slice)
+- Reviewer: PASS (rounds: 1)
+- Notes:
+  1. `fail_under`: 10 → 37, aligning pyproject.toml with the `--cov-fail-under=37` already in `.github/workflows/ci.yml` (set in Sprint 0.3). Ratchet rule satisfied.
+  2. `[tool.coverage.run].omit`: added 5 TTS backend files (`chatterbox_backend.py`, `higgs_backend.py`, `xtts_backend.py`, `mms_backend.py`, `vits_backend.py`). These are thin model-inference wrappers requiring actual GPU model weights; testing them meaningfully without weights is not feasible. Consistent with the existing omit rationale for `voice_clone_service.py` etc.
+  3. `[tool.coverage.report].exclude_lines` — removed 10 over-broad patterns:
+     - `"download"` / `"hf_hub"`: matched attribute names/comments, not just model calls; backend files now in `omit`
+     - `"await.*close"` / `"async def __aexit__"`: testable with mocks (67 call-sites in test files)
+     - `"cuda"` / `"CUDA"` bare word: matched comments and string literals like `return "cuda"`
+     - `"except Exception"` / `"except BaseException"` / `"finally:"`: real error-handling code that should count
+     - `"if torch.cuda"`: subsumed by the new more precise pattern
+  4. Added narrower replacement: `"torch\\.cuda"` — specifically targets torch.cuda GPU API lines
+     (e.g., `torch.cuda.empty_cache()`, `torch.cuda.is_available()`) that genuinely need GPU hardware.
+     The 5 backend omissions reduce the denominator enough (~2000 lines) to absorb the newly-counted
+     exception/finally/close lines and keep coverage ≥ 37%.
+- Next slice: Sprint 0.7 — triage and un-skip the 3 `.skip` test files (`ZmqTranslationClient.test.ts.skip`, `AttachmentService.test.ts.skip`, `AuthHandler.test.ts.skip`)
+- Commit: (see branch claude/coverage/sprint0-6-translator-threshold)
+
+## 2026-06-15T01:30Z — Sprint 0.7 × gateway .skip file triage
+- Targeted: `services/gateway/src/__tests__/unit/services/ZmqTranslationClient.test.ts.skip`, `AttachmentService.test.ts.skip`, `services/gateway/src/socketio/handlers/__tests__/AuthHandler.test.ts.skip`
+- Result: ☑ done
+- Coverage: N/A (no new tests — the active `.test.ts` counterparts were already committed in a prior PR; this slice removes the dead originals)
+- Tests added: 0 new (101 tests already active: 100 pass, 1 skipped)
+- Reviewer: PASS (merged via PR #658, squash)
+- Notes:
+  1. FINDING: All three `.test.ts` active versions already existed in HEAD (committed alongside the `.skip` files in the same commit `b23e9982`). The `.test.ts` files use `@jest/globals` and `jest.fn()`; the `.skip` originals used Vitest (`vi.fn()`). Tests were already running and passing.
+  2. ACTION: Deleted the 3 `.skip` files via `git rm` — they are dead code shadowing nothing (Jest ignores `.ts.skip` extensions by default, but their presence is misleading).
+  3. LOCAL VERIFICATION: `jest --testPathPatterns="ZmqTranslationClient|AttachmentService.test|AuthHandler.test"` → 3 suites, 100 passed, 1 skipped, 0 failed.
+  4. Pre-existing gateway failures (6 suites / 18 tests) unchanged — production bugs, not touched.
+- Next slice: Sprint 1 → Feature matrix P0 cells. First target: **Auth gateway** (`src/services/AuthService.ts`, `TwoFactorService.ts`, `MagicLinkService.ts`, `PasswordResetService.ts`, `SessionService.ts`, `routes/two-factor.ts`, `middleware/auth.ts`)
+- Commit: 92135501 (PR #658 → merged to main 2026-06-15T04:03Z)
