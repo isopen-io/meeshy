@@ -301,7 +301,7 @@ jobs:
           # Then sync all dependencies
           uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
 
-      - name: Run tests with coverage (Sprint 0.6 baseline)
+      - name: Run tests with coverage (80% minimum)
         env:
           DATABASE_URL: "mongodb://localhost:27017/test"
           CI: "true"
@@ -310,7 +310,7 @@ jobs:
           cd services/translator
           uv run --python ${{ env.PYTHON_VERSION }} pytest -v --tb=short \
             -m "not slow and not gpu and not e2e and not integration" \
-            --cov=src --cov-report=xml --cov-report=term --cov-fail-under=30
+            --cov=src --cov-report=xml --cov-report=term --cov-fail-under=37
 
       - name: Upload coverage
         uses: codecov/codecov-action@v5

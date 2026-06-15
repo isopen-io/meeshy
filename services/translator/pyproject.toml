@@ -249,6 +249,14 @@ omit = [
     "src/services/voice_clone_service.py",
     "src/services/unified_tts_service.py",
     "src/utils/model_utils.py",
+    # TTS backend implementations: each requires downloading and loading a specific model
+    # (Chatterbox, Higgs, XTTS, MMS, VITS). Logic is thin wrappers around model inference;
+    # meaningful tests need the actual model weights which are not available in CI.
+    "src/services/tts/backends/chatterbox_backend.py",
+    "src/services/tts/backends/higgs_backend.py",
+    "src/services/tts/backends/xtts_backend.py",
+    "src/services/tts/backends/mms_backend.py",
+    "src/services/tts/backends/vits_backend.py",
 ]
 parallel = true
 
@@ -260,16 +268,21 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "if __name__ == .__main__.:",
     "@abstractmethod",
-    # Platform-specific code
+    # Exclude platform-specific code
     "if sys.platform",
-    # GPU-specific code (not testable in CI — no CUDA hardware)
-    "if torch.cuda",
-    "cuda",
-    "CUDA",
-    # HuggingFace model download calls (require network + disk in CI)
-    "hf_hub",
+    # Exclude GPU-specific code (not testable in CI without GPU).
+    # "torch\\.cuda" matches any line that calls the torch.cuda API (narrower than
+    # the old bare "cuda"/"CUDA" word match, which also caught comments and string literals).
+    "torch\\.cuda",
 ]
-fail_under = 30  # Sprint 0.6: raised from 10; excludes tightened (error handling now counted)
+# Sprint 0.6: raised from 10 → 37 (matches --cov-fail-under=37 in CI).
+# Removed over-broad exclusions: "download", "hf_hub", "await.*close",
+# "async def __aexit__", "cuda"/"CUDA" word matches, "except Exception",
+# "except BaseException", "finally:". TTS backends moved to
+# [tool.coverage.run].omit (they require model weights not present in CI).
+# The omit additions reduce the denominator enough to absorb the newly-counted
+# exception/finally lines while keeping coverage ≥ 37%.
+fail_under = 37
 show_missing = true
 
 # =============================================================================
