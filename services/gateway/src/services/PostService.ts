@@ -1,3 +1,4 @@
+import { randomInt } from 'crypto';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
@@ -733,12 +734,18 @@ export class PostService {
     };
   }
 
-  /** Génère un token de partage unique de 6 caractères (collision → re-tirage). */
+  /**
+   * Génère un token de partage unique de 6 caractères (collision → re-tirage).
+   * Utilise un CSPRNG (`crypto.randomInt`) — JAMAIS `Math.random()` : un PRNG
+   * prédictible laisserait deviner les tokens d'autres partageurs (énumération,
+   * usurpation d'attribution). 6 chars suffisent face au brute-force grâce au
+   * rate-limiting de `/l/:token` (contenu partagé déjà public).
+   */
   private async generateShareToken(): Promise<string> {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     for (let attempt = 0; attempt < 10; attempt += 1) {
       let token = '';
-      for (let i = 0; i < 6; i += 1) token += chars.charAt(Math.floor(Math.random() * chars.length));
+      for (let i = 0; i < 6; i += 1) token += chars.charAt(randomInt(0, chars.length));
       const clash = await this.prisma.trackingLink.findUnique({ where: { token } });
       if (!clash) return token;
     }

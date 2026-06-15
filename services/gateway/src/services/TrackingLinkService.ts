@@ -1,8 +1,24 @@
+import { randomInt } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { TrackingLink, TrackingLinkClick } from '@meeshy/shared/types/tracking-link';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'TrackingLinkService' });
+
+/**
+ * Cible typée résolue depuis un token `/l/<token>` — sert la page de
+ * redirection intelligente (web) et le DeepLinkRouter (iOS). `kind` distingue
+ * un lien de tracking (partage de post/reel/story) d'une invitation conversation.
+ */
+export type ResolvedLinkTarget = {
+  kind: 'tracking' | 'conversation';
+  targetType: string;
+  targetId: string | null;
+  originalUrl: string | null;
+  sharerId: string | null;
+  isActive: boolean;
+  expiresAt: Date | null;
+};
 
 /**
  * Service pour gérer les liens de tracking
@@ -21,7 +37,7 @@ export class TrackingLinkService {
     const characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let token = '';
     for (let i = 0; i < 6; i++) {
-      token += characters.charAt(Math.floor(Math.random() * characters.length));
+      token += characters.charAt(randomInt(0, characters.length));
     }
     return token;
   }
@@ -132,6 +148,51 @@ export class TrackingLinkService {
     });
 
     return trackingLink as TrackingLink | null;
+  }
+
+  /**
+   * Résout un token `/l/<token>` vers sa cible typée. Tente d'abord un
+   * TrackingLink (partage de post/reel/story), puis tombe en fallback sur un
+   * ConversationShareLink (invitation). Un lien expiré ou désactivé est résolu
+   * mais marqué `isActive: false` (la page/app décide). Renvoie `null` si aucun
+   * lien ne correspond (→ 404 côté route).
+   */
+  async resolveTarget(token: string): Promise<ResolvedLinkTarget | null> {
+    const link = await this.prisma.trackingLink.findUnique({ where: { token } });
+    if (link) {
+      return {
+        kind: 'tracking',
+        targetType: link.targetType,
+        targetId: link.targetId ?? null,
+        originalUrl: link.originalUrl ?? null,
+        sharerId: link.createdBy ?? null,
+        isActive: this.isLinkActive(link.isActive, link.expiresAt ?? null),
+        expiresAt: link.expiresAt ?? null,
+      };
+    }
+
+    const invitation = await this.prisma.conversationShareLink.findFirst({
+      where: { OR: [{ linkId: token }, { identifier: token }] }
+    });
+    if (invitation) {
+      return {
+        kind: 'conversation',
+        targetType: 'CONVERSATION',
+        targetId: invitation.conversationId,
+        originalUrl: null,
+        sharerId: invitation.createdBy ?? null,
+        isActive: this.isLinkActive(invitation.isActive, invitation.expiresAt ?? null),
+        expiresAt: invitation.expiresAt ?? null,
+      };
+    }
+
+    return null;
+  }
+
+  private isLinkActive(isActive: boolean, expiresAt: Date | null): boolean {
+    if (!isActive) return false;
+    if (expiresAt && expiresAt.getTime() <= Date.now()) return false;
+    return true;
   }
 
   /**
