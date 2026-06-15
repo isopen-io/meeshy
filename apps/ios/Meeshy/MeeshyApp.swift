@@ -308,6 +308,17 @@ struct MeeshyApp: App {
                         await OutboxRetryScheduler.shared.startObservingNetworkReconnect()
                     }
 
+                    // Engagement outbox boot: recover orphan .open sessions
+                    // (crash-truncated), evict rows older than 7d / over the cap,
+                    // flush finalized rows, and arm the reconnect observer so a
+                    // session finalized offline ships as soon as the link returns.
+                    Task { @MainActor in
+                        await EngagementOutbox.shared.bootSweep()
+                        await EngagementOutbox.shared.purge(olderThan: Date().addingTimeInterval(-7 * 86400), maxRows: 5000)
+                        await EngagementFlushTrigger.flushNow()
+                        EngagementRetryScheduler.shared.startObservingNetworkReconnect()
+                    }
+
                     // Session check gates auth and MUST finish before the splash
                     // dismisses. Friendship hydration only powers non-critical
                     // friend-status badges, yet it fetches ALL sent + received
@@ -445,6 +456,11 @@ struct MeeshyApp: App {
                         // BGTasks → sync widgets) and guarantees the task id
                         // is ended even if a step throws.
                         Task { await BackgroundTransitionCoordinator.shared.enterBackground() }
+                        // Persist current dwell/watch into the open engagement
+                        // rows so an OS kill while suspended is recovered as a
+                        // truncated session at next boot (no network flush here —
+                        // background time is too scarce, the resume/boot paths flush).
+                        Task { await EngagementTracker.shared.checkpointAll() }
                         // Compact free pages and refresh query-planner stats on
                         // every background transition. Runs at background priority
                         // so the system can defer or kill it under memory pressure.

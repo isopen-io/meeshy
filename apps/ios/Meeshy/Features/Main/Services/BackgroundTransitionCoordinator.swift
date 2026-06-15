@@ -157,6 +157,9 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             let nextRetry = await flusher.flush()
             OutboxRetryScheduler.shared.schedule(at: nextRetry)
         }
+        await withBudget("engagement.flush") {
+            await EngagementFlushTrigger.flushNow()
+        }
     }
 
     // MARK: - Private
