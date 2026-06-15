@@ -154,11 +154,11 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Result: ☑ done
 - Coverage: N/A (no new tests — the active `.test.ts` counterparts were already committed in a prior PR; this slice removes the dead originals)
 - Tests added: 0 new (101 tests already active: 100 pass, 1 skipped)
-- Reviewer: n/a (pending PR review)
+- Reviewer: PASS (merged via PR #658, squash)
 - Notes:
   1. FINDING: All three `.test.ts` active versions already existed in HEAD (committed alongside the `.skip` files in the same commit `b23e9982`). The `.test.ts` files use `@jest/globals` and `jest.fn()`; the `.skip` originals used Vitest (`vi.fn()`). Tests were already running and passing.
   2. ACTION: Deleted the 3 `.skip` files via `git rm` — they are dead code shadowing nothing (Jest ignores `.ts.skip` extensions by default, but their presence is misleading).
   3. LOCAL VERIFICATION: `jest --testPathPatterns="ZmqTranslationClient|AttachmentService.test|AuthHandler.test"` → 3 suites, 100 passed, 1 skipped, 0 failed.
   4. Pre-existing gateway failures (6 suites / 18 tests) unchanged — production bugs, not touched.
 - Next slice: Sprint 1 → Feature matrix P0 cells. First target: **Auth gateway** (`src/services/AuthService.ts`, `TwoFactorService.ts`, `MagicLinkService.ts`, `PasswordResetService.ts`, `SessionService.ts`, `routes/two-factor.ts`, `middleware/auth.ts`)
-- Commit: (see branch claude/coverage/sprint0-7-gateway-skip-files)
+- Commit: 92135501 (PR #658 → merged to main 2026-06-15T04:03Z)
