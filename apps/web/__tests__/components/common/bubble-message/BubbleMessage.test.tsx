@@ -127,6 +127,7 @@ const createMockMessage = (overrides = {}): any => ({
   translations: [],
   sender: {
     id: 'user-456',
+    userId: 'user-456',
     firstName: 'John',
     lastName: 'Doe',
     username: 'johndoe',
@@ -286,7 +287,7 @@ describe('BubbleMessage', () => {
 
   describe('Mode Edit', () => {
     it('devrait afficher le bouton edit pour son propre message', () => {
-      const message = createMockMessage({ sender: { id: 'user-456' } });
+      const message = createMockMessage({ sender: { id: 'user-456', userId: 'user-456' } });
       const currentUser = createMockUser({ id: 'user-456' });
 
       renderBubbleMessage({ message, currentUser });
@@ -295,7 +296,7 @@ describe('BubbleMessage', () => {
     });
 
     it('devrait afficher le bouton edit pour un moderateur', () => {
-      const message = createMockMessage({ sender: { id: 'other-user' } });
+      const message = createMockMessage({ sender: { id: 'other-user', userId: 'other-user' } });
       const currentUser = createMockUser({ id: 'user-456' });
 
       renderBubbleMessage({ message, currentUser, userRole: 'MODERATOR' });
@@ -304,7 +305,7 @@ describe('BubbleMessage', () => {
     });
 
     it('ne devrait pas afficher le bouton edit pour un message d\'autrui en tant que USER', () => {
-      const message = createMockMessage({ sender: { id: 'other-user' } });
+      const message = createMockMessage({ sender: { id: 'other-user', userId: 'other-user' } });
       const currentUser = createMockUser({ id: 'user-456' });
 
       renderBubbleMessage({ message, currentUser, userRole: 'USER' });
@@ -426,7 +427,7 @@ describe('BubbleMessage', () => {
 
   describe('Mode Report', () => {
     it('devrait afficher le bouton report pour un message d\'autrui (non anonyme)', () => {
-      const message = createMockMessage({ sender: { id: 'other-user' } });
+      const message = createMockMessage({ sender: { id: 'other-user', userId: 'other-user' } });
       const currentUser = createMockUser({ id: 'user-456' });
 
       renderBubbleMessage({ message, currentUser, isAnonymous: false });
@@ -441,7 +442,7 @@ describe('BubbleMessage', () => {
     });
 
     it('ne devrait pas afficher le bouton report en mode anonyme', () => {
-      const message = createMockMessage({ sender: { id: 'other-user' } });
+      const message = createMockMessage({ sender: { id: 'other-user', userId: 'other-user' } });
       const currentUser = createMockUser({ id: 'user-456' });
 
       renderBubbleMessage({ message, currentUser, isAnonymous: true });
@@ -450,7 +451,7 @@ describe('BubbleMessage', () => {
     });
 
     it('devrait passer en mode report quand on clique sur le bouton', async () => {
-      const message = createMockMessage({ sender: { id: 'other-user' } });
+      const message = createMockMessage({ sender: { id: 'other-user', userId: 'other-user' } });
       const currentUser = createMockUser({ id: 'user-456' });
 
       renderBubbleMessage({ message, currentUser });
@@ -463,7 +464,7 @@ describe('BubbleMessage', () => {
     });
 
     it('devrait appeler reportService lors du signalement', async () => {
-      const message = createMockMessage({ sender: { id: 'other-user' } });
+      const message = createMockMessage({ sender: { id: 'other-user', userId: 'other-user' } });
       const currentUser = createMockUser({ id: 'user-456' });
 
       renderBubbleMessage({ message, currentUser });
@@ -488,7 +489,7 @@ describe('BubbleMessage', () => {
 
     testRoles.forEach(role => {
       it(`devrait gerer correctement les permissions pour le role ${role}`, () => {
-        const message = createMockMessage({ sender: { id: 'other-user' } });
+        const message = createMockMessage({ sender: { id: 'other-user', userId: 'other-user' } });
         const currentUser = createMockUser({ id: 'user-456' });
 
         renderBubbleMessage({ message, currentUser, userRole: role });

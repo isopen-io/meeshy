@@ -98,6 +98,14 @@ jest.mock('@/components/messages/failed-message-banner', () => ({
   ),
 }));
 
+jest.mock('../../../components/conversations/PinnedMessageBanner', () => ({
+  PinnedMessageBanner: () => null,
+}));
+
+jest.mock('../../../components/conversations/MessageSearch', () => ({
+  MessageSearch: () => null,
+}));
+
 // Mock data
 const mockCurrentUser: User = {
   id: 'user-1',

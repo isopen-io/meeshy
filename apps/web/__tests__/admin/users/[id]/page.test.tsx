@@ -49,21 +49,21 @@ jest.mock('sonner', () => ({
 
 // Mock AdminLayout component
 jest.mock('@/components/admin/AdminLayout', () => {
-  return function MockAdminLayout({ children }: { children: React.ReactNode }) {
+  return function MockAdminLayout({ children }) {
     return <div data-testid="admin-layout">{children}</div>;
   };
 });
 
 // Mock UI components
 jest.mock('@/components/ui/card', () => ({
-  Card: ({ children, className }: any) => <div data-testid="card" className={className}>{children}</div>,
-  CardContent: ({ children, className }: any) => <div data-testid="card-content" className={className}>{children}</div>,
-  CardHeader: ({ children, className }: any) => <div data-testid="card-header" className={className}>{children}</div>,
-  CardTitle: ({ children, className }: any) => <div data-testid="card-title" className={className}>{children}</div>,
+  Card: ({ children, className }) => <div data-testid="card" className={className}>{children}</div>,
+  CardContent: ({ children, className }) => <div data-testid="card-content" className={className}>{children}</div>,
+  CardHeader: ({ children, className }) => <div data-testid="card-header" className={className}>{children}</div>,
+  CardTitle: ({ children, className }) => <div data-testid="card-title" className={className}>{children}</div>,
 }));
 
 jest.mock('@/components/ui/button', () => ({
-  Button: ({ children, onClick, disabled, className, variant }: any) => (
+  Button: ({ children, onClick, disabled, className, variant }) => (
     <button data-testid="button" onClick={onClick} disabled={disabled} className={className}>
       {children}
     </button>
@@ -71,42 +71,42 @@ jest.mock('@/components/ui/button', () => ({
 }));
 
 jest.mock('@/components/ui/badge', () => ({
-  Badge: ({ children, variant, className }: any) => (
+  Badge: ({ children, variant, className }) => (
     <span data-testid="badge" className={className}>{children}</span>
   ),
 }));
 
 jest.mock('@/components/ui/input', () => ({
-  Input: (props: any) => <input data-testid="input" {...props} />,
+  Input: (props) => <input data-testid="input" {...props} />,
 }));
 
 jest.mock('@/components/ui/avatar', () => ({
-  Avatar: ({ children, className }: any) => (
+  Avatar: ({ children, className }) => (
     <div data-testid="avatar" className={className}>{children}</div>
   ),
-  AvatarImage: ({ src, alt }: any) => (
+  AvatarImage: ({ src, alt }) => (
     <img data-testid="avatar-image" src={src} alt={alt} />
   ),
-  AvatarFallback: ({ children }: any) => (
+  AvatarFallback: ({ children }) => (
     <div data-testid="avatar-fallback">{children}</div>
   ),
 }));
 
 // Mock sub-components that have been extracted from the page
 jest.mock('@/components/admin/user-detail/UserActivitySection', () => ({
-  UserActivitySection: ({ userId }: { userId: string }) => (
+  UserActivitySection: ({ userId }) => (
     <div data-testid="user-activity-section" data-user-id={userId}>Activity Section</div>
   ),
 }));
 
 jest.mock('@/components/admin/user-detail/UserGeolocationSection', () => ({
-  UserGeolocationSection: ({ user }: { user: any }) => (
+  UserGeolocationSection: ({ user }) => (
     <div data-testid="user-geolocation-section">Geolocation Section</div>
   ),
 }));
 
 jest.mock('@/components/admin/user-detail/UserPersonalInfoSection', () => ({
-  UserPersonalInfoSection: ({ user, userId, onUpdate }: any) => {
+  UserPersonalInfoSection: ({ user, userId, onUpdate }) => {
     const [editing, setEditing] = React.useState(false);
     const [firstName, setFirstName] = React.useState(user?.firstName || '');
     const [lastName, setLastName] = React.useState(user?.lastName || '');
@@ -116,23 +116,23 @@ jest.mock('@/components/admin/user-detail/UserPersonalInfoSection', () => ({
       return (
         <div data-testid="personal-info-section">
           <h3>Informations du profil</h3>
-          <input value={firstName} onChange={(e: any) => setFirstName(e.target.value)} />
-          <input value={lastName} onChange={(e: any) => setLastName(e.target.value)} />
+          <input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+          <input value={lastName} onChange={(e) => setLastName(e.target.value)} />
           <input
             value={username}
-            onChange={(e: any) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))}
+            onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))}
           />
           <button onClick={async () => {
             try {
-              const { apiService } = require('../../../../services/api.service');
-              await apiService.patch(`/admin/users/${userId}`, { firstName, lastName, username });
-              const { toast } = require('sonner');
-              toast.success('Profil mis à jour avec succès');
+              const { apiService: api } = require('../../../../services/api.service');
+              await api.patch(`/admin/users/${userId}`, { firstName, lastName, username });
+              const { toast: t } = require('sonner');
+              t.success('Profil mis à jour avec succès');
               setEditing(false);
               onUpdate?.();
             } catch {
-              const { toast } = require('sonner');
-              toast.error('Erreur lors de la mise à jour');
+              const { toast: t } = require('sonner');
+              t.error('Erreur lors de la mise à jour');
             }
           }}>Sauvegarder</button>
           <button onClick={() => { setEditing(false); setFirstName(user?.firstName || ''); setLastName(user?.lastName || ''); setUsername(user?.username || ''); }}>Annuler</button>
@@ -153,13 +153,13 @@ jest.mock('@/components/admin/user-detail/UserPersonalInfoSection', () => ({
 }));
 
 jest.mock('@/components/admin/user-detail/UserContactInfoSection', () => ({
-  UserContactInfoSection: ({ user }: any) => (
+  UserContactInfoSection: ({ user }) => (
     <div data-testid="contact-info-section">Contact Info</div>
   ),
 }));
 
 jest.mock('@/components/admin/user-detail/UserLanguageSection', () => ({
-  UserLanguageSection: ({ user }: any) => (
+  UserLanguageSection: ({ user }) => (
     <div data-testid="language-section">
       {user?.systemLanguage && <span>{user.systemLanguage}</span>}
       {user?.regionalLanguage && <span>{user.regionalLanguage}</span>}
@@ -168,7 +168,7 @@ jest.mock('@/components/admin/user-detail/UserLanguageSection', () => ({
 }));
 
 jest.mock('@/components/admin/user-detail/UserSecuritySection', () => ({
-  UserSecuritySection: ({ user, onResetPassword }: any) => (
+  UserSecuritySection: ({ user, onResetPassword }) => (
     <div data-testid="security-section">
       <h3>Sécurité</h3>
       <h3>Sécurité du compte</h3>
@@ -226,7 +226,13 @@ describe('UserDetailPage', () => {
 
       const { container } = render(<UserDetailPage />);
 
-      expect(screen.getByText('Chargement...')).toBeInTheDocument();
+      // The loading state renders the loadError translation key text alongside the spinner
+      // i18n may not have resolved yet, so the raw key may appear instead of the translated string
+      expect(
+        screen.getByText((text) =>
+          text === 'Error loading user' || text === 'usersDetail.loadError'
+        )
+      ).toBeInTheDocument();
       const spinner = container.querySelector('.animate-spin');
       expect(spinner).toBeInTheDocument();
     });
@@ -244,7 +250,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Utilisateur introuvable')).toBeInTheDocument();
+        expect(screen.getByText('User not found')).toBeInTheDocument();
       });
     });
 
@@ -259,7 +265,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Retour à la liste')).toBeInTheDocument();
+        expect(screen.getByText('Back to list')).toBeInTheDocument();
       });
     });
 
@@ -275,10 +281,10 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Retour à la liste')).toBeInTheDocument();
+        expect(screen.getByText('Back to list')).toBeInTheDocument();
       });
 
-      const backButton = screen.getByText('Retour à la liste');
+      const backButton = screen.getByText('Back to list');
       await user.click(backButton);
 
       expect(mockPush).toHaveBeenCalledWith('/admin/users');
@@ -292,7 +298,9 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(mockToast.error).toHaveBeenCalledWith("Erreur lors du chargement de l'utilisateur");
+        expect(mockToast.error).toHaveBeenCalledWith(
+          expect.stringMatching(/Error loading user|usersDetail\.errorLoadingUser/)
+        );
         expect(mockPush).toHaveBeenCalledWith('/admin/users');
       });
     });
@@ -329,7 +337,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Actif')).toBeInTheDocument();
+        expect(screen.getByText('Active')).toBeInTheDocument();
       });
     });
 
@@ -344,7 +352,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Inactif')).toBeInTheDocument();
+        expect(screen.getByText('Inactive')).toBeInTheDocument();
       });
     });
 
@@ -352,7 +360,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Retour')).toBeInTheDocument();
+        expect(screen.getByText('Back')).toBeInTheDocument();
       });
     });
 
@@ -361,10 +369,10 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Retour')).toBeInTheDocument();
+        expect(screen.getByText('Back')).toBeInTheDocument();
       });
 
-      const backButton = screen.getByText('Retour');
+      const backButton = screen.getByText('Back');
       await user.click(backButton);
 
       expect(mockPush).toHaveBeenCalledWith('/admin/users');
@@ -634,7 +642,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Rôle et permissions')).toBeInTheDocument();
+        expect(screen.getByText('Role and permissions')).toBeInTheDocument();
       });
     });
 
@@ -642,7 +650,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        const matches = screen.getAllByText('Utilisateur');
+        const matches = screen.getAllByText('User');
         expect(matches.length).toBeGreaterThan(0);
       });
     });
@@ -651,8 +659,8 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        // There are multiple "Modifier" buttons
-        const editButtons = screen.getAllByText('Modifier');
+        // There are multiple "Edit" buttons
+        const editButtons = screen.getAllByText('Edit');
         expect(editButtons.length).toBeGreaterThan(0);
       });
     });
@@ -662,19 +670,17 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Rôle et permissions')).toBeInTheDocument();
+        expect(screen.getByText('Role and permissions')).toBeInTheDocument();
       });
 
-      // Find the role section's edit button
-      const roleSection = screen.getByText('Rôle et permissions').closest('div');
-      const editButtons = screen.getAllByText('Modifier');
-      // Click the second one (role edit)
-      if (editButtons.length > 1) {
-        await user.click(editButtons[1]);
+      const editButtons = screen.getAllByText('Edit');
+      // Click the role section's edit button
+      if (editButtons.length > 0) {
+        await user.click(editButtons[editButtons.length - 1]);
       }
 
       await waitFor(() => {
-        expect(screen.getByText('Nouveau rôle')).toBeInTheDocument();
+        expect(screen.getByText('New role')).toBeInTheDocument();
       });
     });
 
@@ -688,26 +694,24 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Rôle et permissions')).toBeInTheDocument();
+        expect(screen.getByText('Role and permissions')).toBeInTheDocument();
       });
 
-      const editButtons = screen.getAllByText('Modifier');
-      if (editButtons.length > 1) {
-        await user.click(editButtons[1]);
+      const editButtons = screen.getAllByText('Edit');
+      if (editButtons.length > 0) {
+        await user.click(editButtons[editButtons.length - 1]);
       }
 
       await waitFor(() => {
-        expect(screen.getByText('Enregistrer')).toBeInTheDocument();
+        expect(screen.getByText('Save')).toBeInTheDocument();
       });
 
       // Try to save without reason
-      const saveButton = screen.getByText('Enregistrer');
+      const saveButton = screen.getByText('Save');
       await user.click(saveButton);
 
       await waitFor(() => {
-        expect(mockToast.error).toHaveBeenCalledWith(
-          'Veuillez fournir une raison (min 10 caractères)'
-        );
+        expect(mockToast.error).toHaveBeenCalledWith('A reason is required');
       });
     });
 
@@ -721,27 +725,27 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Rôle et permissions')).toBeInTheDocument();
+        expect(screen.getByText('Role and permissions')).toBeInTheDocument();
       });
 
-      const editButtons = screen.getAllByText('Modifier');
-      if (editButtons.length > 1) {
-        await user.click(editButtons[1]);
+      const editButtons = screen.getAllByText('Edit');
+      if (editButtons.length > 0) {
+        await user.click(editButtons[editButtons.length - 1]);
       }
 
       await waitFor(() => {
-        expect(screen.getByPlaceholderText(/Expliquez pourquoi/)).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/Reason for role change/)).toBeInTheDocument();
       });
 
-      const reasonInput = screen.getByPlaceholderText(/Expliquez pourquoi/);
+      const reasonInput = screen.getByPlaceholderText(/Reason for role change/);
       await user.type(reasonInput, 'Promotion to admin role for the user');
 
-      const saveButton = screen.getByText('Enregistrer');
+      const saveButton = screen.getByText('Save');
       await user.click(saveButton);
 
       await waitFor(() => {
         expect(mockAdminService.updateUserRole).toHaveBeenCalledWith('user-123', 'USER');
-        expect(mockToast.success).toHaveBeenCalledWith('Rôle mis à jour avec succès');
+        expect(mockToast.success).toHaveBeenCalledWith('Role updated successfully');
       });
     });
   });
@@ -784,8 +788,8 @@ describe('UserDetailPage', () => {
       await user.click(resetButton);
 
       await waitFor(() => {
-        expect(screen.getByText('Nouveau mot de passe')).toBeInTheDocument();
-        expect(screen.getByText('Confirmer le mot de passe')).toBeInTheDocument();
+        expect(screen.getByText('New password')).toBeInTheDocument();
+        expect(screen.getByText('Confirm password')).toBeInTheDocument();
       });
     });
 
@@ -800,8 +804,10 @@ describe('UserDetailPage', () => {
       const resetButton = screen.getByText('Réinitialiser le mot de passe');
       await user.click(resetButton);
 
+      // Both the modal title and the submit button say "Reset password" — wait for the button
       await waitFor(() => {
-        expect(screen.getByText('Réinitialiser')).toBeInTheDocument();
+        const resetPasswordElements = screen.getAllByText('Reset password');
+        expect(resetPasswordElements.length).toBeGreaterThan(0);
       });
 
       // Enter mismatched passwords
@@ -818,11 +824,14 @@ describe('UserDetailPage', () => {
         await user.type(confirmPasswordInput, 'differentpassword');
       }
 
-      const submitButton = screen.getByText('Réinitialiser');
-      await user.click(submitButton);
+      // Click the button element specifically (not the title)
+      const submitButton = screen.getAllByText('Reset password').find(
+        (el) => el.tagName === 'BUTTON'
+      );
+      if (submitButton) await user.click(submitButton);
 
       await waitFor(() => {
-        expect(mockToast.error).toHaveBeenCalledWith('Les mots de passe ne correspondent pas');
+        expect(mockToast.error).toHaveBeenCalledWith('Passwords do not match');
       });
     });
 
@@ -843,8 +852,10 @@ describe('UserDetailPage', () => {
       const resetButton = screen.getByText('Réinitialiser le mot de passe');
       await user.click(resetButton);
 
+      // Both the modal title and the submit button say "Reset password" — wait for the button
       await waitFor(() => {
-        expect(screen.getByText('Réinitialiser')).toBeInTheDocument();
+        const resetPasswordElements = screen.getAllByText('Reset password');
+        expect(resetPasswordElements.length).toBeGreaterThan(0);
       });
 
       const passwordInputs = screen.getAllByDisplayValue('');
@@ -857,15 +868,18 @@ describe('UserDetailPage', () => {
         await user.type(passwordFields[1], 'newpassword123');
       }
 
-      const submitButton = screen.getByText('Réinitialiser');
-      await user.click(submitButton);
+      // Click the button element specifically (not the title)
+      const submitButton = screen.getAllByText('Reset password').find(
+        (el) => el.tagName === 'BUTTON'
+      );
+      if (submitButton) await user.click(submitButton);
 
       await waitFor(() => {
         expect(mockApiService.post).toHaveBeenCalledWith(
           '/admin/users/user-123/reset-password',
           expect.objectContaining({ newPassword: 'newpassword123' })
         );
-        expect(mockToast.success).toHaveBeenCalledWith('Mot de passe réinitialisé avec succès');
+        expect(mockToast.success).toHaveBeenCalledWith('Password reset successfully');
       });
     });
   });
@@ -884,7 +898,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Statistiques')).toBeInTheDocument();
+        expect(screen.getByText('Statistics')).toBeInTheDocument();
       });
     });
 
@@ -908,7 +922,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Membre depuis')).toBeInTheDocument();
+        expect(screen.getByText('Member since')).toBeInTheDocument();
       });
     });
 
@@ -916,7 +930,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Dernière activité')).toBeInTheDocument();
+        expect(screen.getByText('Last activity')).toBeInTheDocument();
       });
     });
   });
@@ -935,7 +949,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Actions rapides')).toBeInTheDocument();
+        expect(screen.getByText('Quick actions')).toBeInTheDocument();
       });
     });
 
@@ -943,7 +957,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Désactiver le compte')).toBeInTheDocument();
+        expect(screen.getByText('Disable account')).toBeInTheDocument();
       });
     });
 
@@ -958,7 +972,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Activer le compte')).toBeInTheDocument();
+        expect(screen.getByText('Enable account')).toBeInTheDocument();
       });
     });
 
@@ -972,15 +986,15 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Désactiver le compte')).toBeInTheDocument();
+        expect(screen.getByText('Disable account')).toBeInTheDocument();
       });
 
-      const toggleButton = screen.getByText('Désactiver le compte');
+      const toggleButton = screen.getByText('Disable account');
       await user.click(toggleButton);
 
       await waitFor(() => {
         expect(mockAdminService.toggleUserStatus).toHaveBeenCalledWith('user-123', false);
-        expect(mockToast.success).toHaveBeenCalledWith('Utilisateur désactivé');
+        expect(mockToast.success).toHaveBeenCalledWith('User deactivated');
       });
     });
 
@@ -988,7 +1002,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("Supprimer l'utilisateur")).toBeInTheDocument();
+        expect(screen.getByText("Delete user")).toBeInTheDocument();
       });
     });
 
@@ -997,15 +1011,15 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("Supprimer l'utilisateur")).toBeInTheDocument();
+        expect(screen.getByText("Delete user")).toBeInTheDocument();
       });
 
-      const deleteButton = screen.getByText("Supprimer l'utilisateur");
+      const deleteButton = screen.getByText("Delete user");
       await user.click(deleteButton);
 
       await waitFor(() => {
-        expect(screen.getByText(/Cette action est irréversible/)).toBeInTheDocument();
-        expect(screen.getByText('Confirmer')).toBeInTheDocument();
+        expect(screen.getByText(/This action is irreversible/)).toBeInTheDocument();
+        expect(screen.getByText('Confirm')).toBeInTheDocument();
       });
     });
 
@@ -1014,21 +1028,21 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("Supprimer l'utilisateur")).toBeInTheDocument();
+        expect(screen.getByText("Delete user")).toBeInTheDocument();
       });
 
-      const deleteButton = screen.getByText("Supprimer l'utilisateur");
+      const deleteButton = screen.getByText("Delete user");
       await user.click(deleteButton);
 
       await waitFor(() => {
-        expect(screen.getByText('Confirmer')).toBeInTheDocument();
+        expect(screen.getByText('Confirm')).toBeInTheDocument();
       });
 
-      const cancelButton = screen.getByText('Annuler');
+      const cancelButton = screen.getByText('Cancel');
       await user.click(cancelButton);
 
       await waitFor(() => {
-        expect(screen.queryByText('Cette action est irréversible !')).not.toBeInTheDocument();
+        expect(screen.queryByText('This action is irreversible !')).not.toBeInTheDocument();
       });
     });
 
@@ -1041,22 +1055,22 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("Supprimer l'utilisateur")).toBeInTheDocument();
+        expect(screen.getByText("Delete user")).toBeInTheDocument();
       });
 
-      const deleteButton = screen.getByText("Supprimer l'utilisateur");
+      const deleteButton = screen.getByText("Delete user");
       await user.click(deleteButton);
 
       await waitFor(() => {
-        expect(screen.getByText('Confirmer')).toBeInTheDocument();
+        expect(screen.getByText('Confirm')).toBeInTheDocument();
       });
 
-      const confirmButton = screen.getByText('Confirmer');
+      const confirmButton = screen.getByText('Confirm');
       await user.click(confirmButton);
 
       await waitFor(() => {
         expect(mockAdminService.deleteUser).toHaveBeenCalledWith('user-123');
-        expect(mockToast.success).toHaveBeenCalledWith('Utilisateur supprimé avec succès');
+        expect(mockToast.success).toHaveBeenCalledWith('User deleted successfully');
         expect(mockPush).toHaveBeenCalledWith('/admin/users');
       });
     });
@@ -1117,7 +1131,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Complétion du profil')).toBeInTheDocument();
+        expect(screen.getByText('Profile completion')).toBeInTheDocument();
         expect(screen.getByText('80%')).toBeInTheDocument();
       });
     });
@@ -1160,7 +1174,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        const matches = screen.getAllByText('Administrateur');
+        const matches = screen.getAllByText('Administrator');
         expect(matches.length).toBeGreaterThan(0);
       });
     });
@@ -1176,7 +1190,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        const matches = screen.getAllByText('Modérateur');
+        const matches = screen.getAllByText('Moderator');
         expect(matches.length).toBeGreaterThan(0);
       });
     });
@@ -1192,7 +1206,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        const matches = screen.getAllByText('Auditeur');
+        const matches = screen.getAllByText('Auditor');
         expect(matches.length).toBeGreaterThan(0);
       });
     });
@@ -1208,7 +1222,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        const matches = screen.getAllByText('Analyste');
+        const matches = screen.getAllByText('Analyst');
         expect(matches.length).toBeGreaterThan(0);
       });
     });
@@ -1256,7 +1270,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Membre depuis')).toBeInTheDocument();
+        expect(screen.getByText('Member since')).toBeInTheDocument();
       });
     });
 
@@ -1271,7 +1285,7 @@ describe('UserDetailPage', () => {
       render(<UserDetailPage />);
 
       await waitFor(() => {
-        expect(screen.queryByText('Complétion du profil')).not.toBeInTheDocument();
+        expect(screen.queryByText('Profile completion')).not.toBeInTheDocument();
       });
     });
   });

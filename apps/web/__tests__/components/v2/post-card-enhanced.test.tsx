@@ -2,6 +2,38 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { PostCard } from '@/components/v2/PostCard';
 
+const COMPONENTS_EN: Record<string, string> = {
+  'post.pinned': 'Pinned',
+  'post.menu': 'Post menu',
+  'post.edit': 'Edit',
+  'post.pin': 'Pin',
+  'post.unpin': 'Unpin',
+  'post.delete': 'Delete',
+  'post.like': 'Like post',
+  'post.unlike': 'Unlike post',
+  'post.repost': 'Repost',
+  'post.bookmark': 'Bookmark',
+  'post.removeBookmark': 'Remove bookmark',
+  'post.translate': 'Translate',
+  'post.translatePost': 'Translate post',
+  'post.imageAlt': 'Image {index}',
+};
+
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, params?: Record<string, string>) => {
+      const val = COMPONENTS_EN[key] ?? key;
+      if (params) return val.replace(/\{(\w+)\}/g, (_: string, k: string) => params[k] ?? `{${k}}`);
+      return val;
+    },
+    tArray: () => [],
+    locale: 'en',
+    currentLanguage: 'en',
+    setLocale: () => {},
+    isLoading: false,
+  }),
+}));
+
 jest.mock('@/components/v2/Avatar', () => ({
   Avatar: ({ name }: { name: string }) => <div data-testid="avatar">{name}</div>,
 }));

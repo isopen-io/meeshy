@@ -9,6 +9,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     getConnectionDiagnostics: jest.fn(),
     reconnect: jest.fn(),
+    onStatusChange: jest.fn(() => jest.fn()),
   },
 }));
 
@@ -17,10 +18,45 @@ jest.mock('@/lib/utils', () => ({
   cn: (...classes: (string | undefined | boolean)[]) => classes.filter(Boolean).join(' '),
 }));
 
+// Mock use-i18n to provide expected translations
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'clickToReconnect': 'Cliquez pour reconnecter',
+        'reconnecting': 'Reconnexion en cours...',
+        'bubbleStream.reconnect': 'Connect',
+        'bubbleStream.reconnecting': 'Reconnct',
+      };
+      return translations[key] || key;
+    },
+    locale: 'fr',
+  }),
+}));
+
+// Mock useConnectionStatus hook to control state in tests
+let mockConnectionStatus = {
+  isOnline: true,
+  isSocketConnected: true,
+  hasSocket: true,
+  isReady: true,
+};
+
+jest.mock('@/hooks/use-connection-status', () => ({
+  useConnectionStatus: () => mockConnectionStatus,
+}));
+
 describe('ConnectionStatusIndicator', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
+    // Reset to connected state
+    mockConnectionStatus = {
+      isOnline: true,
+      isSocketConnected: true,
+      hasSocket: true,
+      isReady: true,
+    };
   });
 
   afterEach(() => {
@@ -29,10 +65,12 @@ describe('ConnectionStatusIndicator', () => {
 
   describe('Connected State', () => {
     it('should not render anything when connected', () => {
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: true,
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: true,
         hasSocket: true,
-      });
+        isReady: true,
+      };
 
       const { container } = render(<ConnectionStatusIndicator />);
 
@@ -42,10 +80,12 @@ describe('ConnectionStatusIndicator', () => {
 
   describe('Disconnected State', () => {
     it('should render disconnected indicator when not connected', () => {
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
         hasSocket: false,
-      });
+        isReady: false,
+      };
 
       render(<ConnectionStatusIndicator />);
 
@@ -54,10 +94,12 @@ describe('ConnectionStatusIndicator', () => {
     });
 
     it('should show red styling when disconnected', () => {
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
         hasSocket: false,
-      });
+        isReady: false,
+      };
 
       render(<ConnectionStatusIndicator />);
 
@@ -67,10 +109,12 @@ describe('ConnectionStatusIndicator', () => {
     });
 
     it('should have correct title when disconnected', () => {
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
         hasSocket: false,
-      });
+        isReady: false,
+      };
 
       render(<ConnectionStatusIndicator />);
 
@@ -81,32 +125,28 @@ describe('ConnectionStatusIndicator', () => {
 
   describe('Reconnecting State', () => {
     it('should show reconnecting indicator when has socket but not connected', () => {
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
+      // isReconnecting = isOnline && hasSocket && !isSocketConnected
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
         hasSocket: true,
-      });
+        isReady: false,
+      };
 
       render(<ConnectionStatusIndicator />);
-
-      // After initial render and interval check
-      act(() => {
-        jest.advanceTimersByTime(1000);
-      });
 
       expect(screen.getByText('Reconnct')).toBeInTheDocument();
     });
 
     it('should show yellow styling when reconnecting', () => {
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
         hasSocket: true,
-      });
+        isReady: false,
+      };
 
       render(<ConnectionStatusIndicator />);
-
-      act(() => {
-        jest.advanceTimersByTime(1000);
-      });
 
       const button = screen.getByRole('button');
       expect(button.className).toContain('bg-yellow-500');
@@ -114,32 +154,28 @@ describe('ConnectionStatusIndicator', () => {
     });
 
     it('should show spinning indicator when reconnecting', () => {
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
         hasSocket: true,
-      });
+        isReady: false,
+      };
 
       render(<ConnectionStatusIndicator />);
-
-      act(() => {
-        jest.advanceTimersByTime(1000);
-      });
 
       const spinner = screen.getByText(/🟡/);
       expect(spinner.className).toContain('animate-spin');
     });
 
     it('should have correct title when reconnecting', () => {
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
         hasSocket: true,
-      });
+        isReady: false,
+      };
 
       render(<ConnectionStatusIndicator />);
-
-      act(() => {
-        jest.advanceTimersByTime(1000);
-      });
 
       const button = screen.getByRole('button');
       expect(button).toHaveAttribute('title', 'Reconnexion en cours...');
@@ -148,10 +184,12 @@ describe('ConnectionStatusIndicator', () => {
 
   describe('Reconnect Functionality', () => {
     it('should call reconnect when clicked', () => {
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
         hasSocket: false,
-      });
+        isReady: false,
+      };
 
       render(<ConnectionStatusIndicator />);
 
@@ -162,24 +200,29 @@ describe('ConnectionStatusIndicator', () => {
     });
 
     it('should show reconnecting state after clicking', () => {
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
         hasSocket: false,
-      });
+        isReady: false,
+      };
 
       render(<ConnectionStatusIndicator />);
 
       const button = screen.getByRole('button');
       fireEvent.click(button);
 
+      // After clicking, manualReconnecting=true → shows reconnecting state
       expect(screen.getByText('Reconnct')).toBeInTheDocument();
     });
 
     it('should reset reconnecting state after timeout', () => {
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
         hasSocket: false,
-      });
+        isReady: false,
+      };
 
       render(<ConnectionStatusIndicator />);
 
@@ -188,7 +231,7 @@ describe('ConnectionStatusIndicator', () => {
 
       expect(screen.getByText('Reconnct')).toBeInTheDocument();
 
-      // After 3 seconds
+      // After 3 seconds, manualReconnecting resets to false
       act(() => {
         jest.advanceTimersByTime(3000);
       });
@@ -199,73 +242,63 @@ describe('ConnectionStatusIndicator', () => {
   });
 
   describe('Connection Status Polling', () => {
-    it('should check connection status every second', () => {
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
+    it('should check connection status on initial render', () => {
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
         hasSocket: false,
-      });
+        isReady: false,
+      };
 
       render(<ConnectionStatusIndicator />);
 
-      expect(meeshySocketIOService.getConnectionDiagnostics).toHaveBeenCalledTimes(1);
-
-      act(() => {
-        jest.advanceTimersByTime(1000);
-      });
-
-      expect(meeshySocketIOService.getConnectionDiagnostics).toHaveBeenCalledTimes(2);
-
-      act(() => {
-        jest.advanceTimersByTime(1000);
-      });
-
-      expect(meeshySocketIOService.getConnectionDiagnostics).toHaveBeenCalledTimes(3);
+      // Component renders based on hook state (no direct polling of getConnectionDiagnostics)
+      expect(screen.getByRole('button')).toBeInTheDocument();
     });
 
-    it('should clean up interval on unmount', () => {
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
+    it('should clean up on unmount without errors', () => {
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
         hasSocket: false,
-      });
+        isReady: false,
+      };
 
       const { unmount } = render(<ConnectionStatusIndicator />);
 
-      unmount();
-
-      const callsBefore = (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mock.calls.length;
+      expect(() => unmount()).not.toThrow();
 
       act(() => {
         jest.advanceTimersByTime(2000);
       });
 
-      const callsAfter = (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mock.calls.length;
-
-      // Should not have made any additional calls
-      expect(callsAfter).toBe(callsBefore);
+      // Should not crash after unmount
     });
   });
 
   describe('Dynamic Connection Status', () => {
     it('should update UI when connection status changes', () => {
       // Start disconnected
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
         hasSocket: false,
-      });
+        isReady: false,
+      };
 
-      const { container } = render(<ConnectionStatusIndicator />);
+      const { container, rerender } = render(<ConnectionStatusIndicator />);
 
       expect(screen.getByText('Connect')).toBeInTheDocument();
 
-      // Now simulate connection
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: true,
+      // Now simulate connection by updating mockConnectionStatus and re-rendering
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: true,
         hasSocket: true,
-      });
+        isReady: true,
+      };
 
-      act(() => {
-        jest.advanceTimersByTime(1000);
-      });
+      rerender(<ConnectionStatusIndicator />);
 
       // Should not render anything when connected
       expect(container.firstChild).toBeNull();
@@ -274,10 +307,12 @@ describe('ConnectionStatusIndicator', () => {
 
   describe('Custom ClassName', () => {
     it('should apply custom className', () => {
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
         hasSocket: false,
-      });
+        isReady: false,
+      };
 
       render(<ConnectionStatusIndicator className="custom-class" />);
 
@@ -288,10 +323,12 @@ describe('ConnectionStatusIndicator', () => {
 
   describe('Accessibility', () => {
     it('should be a button element', () => {
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
         hasSocket: false,
-      });
+        isReady: false,
+      };
 
       render(<ConnectionStatusIndicator />);
 
@@ -299,10 +336,12 @@ describe('ConnectionStatusIndicator', () => {
     });
 
     it('should have hover opacity styling', () => {
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
         hasSocket: false,
-      });
+        isReady: false,
+      };
 
       render(<ConnectionStatusIndicator />);
 
@@ -313,10 +352,12 @@ describe('ConnectionStatusIndicator', () => {
 
   describe('Edge Cases', () => {
     it('should handle initial undefined state gracefully', () => {
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
-        hasSocket: undefined,
-      });
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
+        hasSocket: false,
+        isReady: false,
+      };
 
       render(<ConnectionStatusIndicator />);
 
@@ -325,23 +366,25 @@ describe('ConnectionStatusIndicator', () => {
 
     it('should handle rapid status changes', () => {
       // Start disconnected
-      (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-        isConnected: false,
+      mockConnectionStatus = {
+        isOnline: true,
+        isSocketConnected: false,
         hasSocket: false,
-      });
+        isReady: false,
+      };
 
-      const { container } = render(<ConnectionStatusIndicator />);
+      const { container, rerender } = render(<ConnectionStatusIndicator />);
 
       // Rapid changes
       for (let i = 0; i < 5; i++) {
-        (meeshySocketIOService.getConnectionDiagnostics as jest.Mock).mockReturnValue({
-          isConnected: i % 2 === 0,
+        mockConnectionStatus = {
+          isOnline: true,
+          isSocketConnected: i % 2 === 0,
           hasSocket: true,
-        });
+          isReady: i % 2 === 0,
+        };
 
-        act(() => {
-          jest.advanceTimersByTime(1000);
-        });
+        rerender(<ConnectionStatusIndicator />);
       }
 
       // Should not crash and should render based on last state

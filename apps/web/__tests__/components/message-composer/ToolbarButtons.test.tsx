@@ -4,6 +4,19 @@ import { useAnimationConfig } from '@/hooks/composer/useAnimationConfig';
 
 jest.mock('@/hooks/composer/useAnimationConfig');
 
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'composer.recordVoice': 'Record voice message',
+        'composer.attachFile': 'Attach file',
+      };
+      return translations[key] || key;
+    },
+    locale: 'en',
+  }),
+}));
+
 describe('ToolbarButtons', () => {
   beforeEach(() => {
     (useAnimationConfig as jest.Mock).mockReturnValue({

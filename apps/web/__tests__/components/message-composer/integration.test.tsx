@@ -86,6 +86,19 @@ jest.mock('@/hooks/useI18n', () => ({
   }),
 }));
 
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    locale: 'en-US',
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'composer.recordVoice': 'Record voice message',
+        'composer.attachFile': 'Attach file',
+      };
+      return translations[key] || key;
+    },
+  }),
+}));
+
 // Mock Framer Motion
 jest.mock('framer-motion', () => ({
   motion: {
@@ -119,8 +132,8 @@ describe('MessageComposer Integration', () => {
       expect(textarea).toBeInTheDocument();
 
       // Vérifier que les boutons toolbar sont présents
-      expect(screen.getByLabelText(/Record voice message|Enregistrer/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/Attach file|Ajouter des fichiers/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Record voice message/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Attach file/i)).toBeInTheDocument();
     });
 
     it('should have correct structure with GlassContainer wrapper', () => {

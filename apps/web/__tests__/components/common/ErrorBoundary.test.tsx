@@ -15,6 +15,24 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { ErrorBoundary } from '../../../components/common/ErrorBoundary';
 
+// Mock useI18n to return French translations expected by tests
+jest.mock('@/hooks/useI18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'errorBoundary.title': "Oups ! Une erreur s'est produite",
+        'errorBoundary.description': "Une erreur inattendue s'est produite. Veuillez réessayer.",
+        'errorBoundary.details': 'Détails de l\'erreur',
+        'errorBoundary.reload': 'Recharger la page',
+        'close': 'Fermer',
+      };
+      return translations[key] || key;
+    },
+    locale: 'fr',
+    setLocale: jest.fn(),
+  }),
+}));
+
 // Component that throws an error
 const ThrowingComponent = ({ shouldThrow = true }: { shouldThrow?: boolean }) => {
   if (shouldThrow) {
@@ -337,8 +355,8 @@ describe('ErrorBoundary', () => {
         </ErrorBoundary>
       );
 
-      // Check for the icon container (red background circle)
-      const iconContainer = container.querySelector('.bg-red-100');
+      // Check for the icon container (uses destructive/10 background)
+      const iconContainer = container.querySelector('[class*="bg-destructive"]');
       expect(iconContainer).toBeInTheDocument();
     });
 

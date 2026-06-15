@@ -101,13 +101,31 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     getCurrentConversationId: jest.fn(),
     reconnect: jest.fn(),
     getConnectionDiagnostics: jest.fn(() => ({ isConnected: true })),
+    onStatusChange: jest.fn(() => jest.fn()),
   },
 }));
 
 // Mock hooks
 jest.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({
-    t: (key: string) => key,
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'authGuard.checking': "Vérification de l'authentification...",
+      };
+      return translations[key] || key;
+    },
+  }),
+}));
+
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'authGuard.checking': "Vérification de l'authentification...",
+      };
+      return translations[key] || key;
+    },
+    locale: 'fr',
   }),
 }));
 
@@ -255,6 +273,14 @@ jest.mock('../../../components/conversations/ConversationMessages', () => ({
   ConversationMessages: () => <div data-testid="conversation-messages">Messages</div>,
 }));
 
+jest.mock('../../../components/conversations/PinnedMessageBanner', () => ({
+  PinnedMessageBanner: () => null,
+}));
+
+jest.mock('../../../components/conversations/MessageSearch', () => ({
+  MessageSearch: () => null,
+}));
+
 jest.mock('../../../components/conversations/ConversationEmptyState', () => ({
   ConversationEmptyState: ({ onCreateConversation }: { onCreateConversation: () => void }) => (
     <div data-testid="empty-state">
@@ -304,6 +330,9 @@ jest.mock('@/lib/utils', () => ({
 
 jest.mock('@/utils/user-language-preferences', () => ({
   getUserLanguageChoices: () => ['en', 'fr', 'es'],
+  resolveUserPreferredLanguage: () => 'fr',
+  getUserLanguagePreferences: () => ['fr'],
+  getRequiredLanguagesForConversation: () => ['fr'],
 }));
 
 jest.mock('@/utils/token-utils', () => ({
@@ -391,7 +420,7 @@ describe('ConversationLayout', () => {
 
       render(<ConversationLayout />);
 
-      // The component has a hardcoded French string for the loading state
+      // The component renders the translated loading text
       expect(screen.getByText("Vérification de l'authentification...")).toBeInTheDocument();
     });
 

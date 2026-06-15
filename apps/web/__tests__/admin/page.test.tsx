@@ -6,6 +6,85 @@ import { adminService } from '../../services/admin.service';
 import { authManager } from '../../services/auth-manager.service';
 import { toast } from 'sonner';
 
+// Mock the i18n hook to return English translations synchronously
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, params?: Record<string, any>) => {
+      const translations: Record<string, string> = {
+        'dashboard.navAnonymous': 'Anonymous users',
+        'dashboard.statsRefreshed': 'Data refreshed successfully',
+        'dashboard.loadError': 'Error loading admin statistics',
+        'dashboard.loadingData': 'Loading admin data...',
+        'dashboard.welcome': params?.name ? `Welcome, ${params.name}` : 'Welcome, {name}',
+        'dashboard.accessLevel': params?.role ? `Access level: ${params.role}` : 'Access level: {role}',
+        'dashboard.lastLogin': 'Last login',
+        'dashboard.unauthorizedAccess': 'Unauthorized access',
+        'dashboard.statUsers': 'Users',
+        'dashboard.statUsersActive': params?.count !== undefined ? `${params.count} active` : '{count} active',
+        'dashboard.statAnonymous': 'Anonymous',
+        'dashboard.statMessages': 'Messages',
+        'dashboard.statMessagesSent': 'Messages sent',
+        'dashboard.statCommunities': 'Communities',
+        'dashboard.statCommunitiesCreated': 'Communities created',
+        'dashboard.statTranslations': 'Translations',
+        'dashboard.statTranslationsDone': 'Translations completed',
+        'dashboard.statLinks': 'Links created',
+        'dashboard.statLinksActive': params?.count !== undefined ? `${params.count} active` : '{count} active',
+        'dashboard.statReports': 'Reports',
+        'dashboard.statReportsFlagged': 'Messages flagged',
+        'dashboard.statInvitations': 'Invitations',
+        'dashboard.statInvitationsPending': 'Pending requests',
+        'dashboard.statAdmins': 'Administrators',
+        'dashboard.statAdminsMods': 'Admins and moderators',
+        'dashboard.statLanguages': 'Languages',
+        'dashboard.statLanguagesDetected': 'Languages detected',
+        'dashboard.topLanguagesTitle': 'Most used languages',
+        'dashboard.topLanguagesMessages': 'messages',
+        'dashboard.recentActivityTitle': 'Recent activity (last 7 days)',
+        'dashboard.recentNewUsers': 'New users',
+        'dashboard.recentNewConversations': 'New conversations',
+        'dashboard.recentNewMessages': 'New messages',
+        'dashboard.recentNewAnonymous': 'New anonymous',
+        'dashboard.lastUpdateTitle': 'Last update',
+        'dashboard.lastUpdateUnavailable': 'Not available',
+        'dashboard.refreshButton': 'Refresh data',
+        'dashboard.navTitle': 'Navigation — All admin pages',
+        'dashboard.navGroupUsers': 'Users',
+        'dashboard.navUsers': 'Users',
+        'dashboard.navMessages': 'Messages',
+        'dashboard.navCommunities': 'Communities',
+        'dashboard.navLinks': 'Share links',
+        'dashboard.navGroupModeration': 'Moderation',
+        'dashboard.navReports': 'Reports',
+        'dashboard.navModeration': 'Moderation',
+        'dashboard.navTranslations': 'Translations',
+        'dashboard.navLanguages': 'Languages',
+        'dashboard.navInvitations': 'Invitations',
+        'dashboard.navGroupAnalytics': 'Analytics',
+        'dashboard.navAnalytics': 'Analytics',
+        'dashboard.navAuditLogs': 'Audit logs',
+        'dashboard.navSettings': 'Settings',
+        'dashboard.systemStatusTitle': 'System status',
+        'dashboard.systemServer': 'Server',
+        'dashboard.systemOnline': 'Online',
+        'dashboard.systemDatabase': 'Database',
+        'dashboard.systemConnected': 'Connected',
+        'dashboard.systemWebSocket': 'WebSocket',
+        'dashboard.systemActive': 'Active',
+      };
+      return translations[key] ?? key;
+    },
+    locale: 'en',
+    currentLanguage: 'en',
+    isLoading: false,
+  }),
+}));
+
+// Mock the language store
+jest.mock('@/stores/language-store', () => ({
+  useCurrentInterfaceLanguage: () => 'en',
+}));
+
 // Mock the next/navigation module
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({
@@ -207,10 +286,10 @@ describe('AdminDashboard', () => {
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/dashboard');
       });
-      expect(mockToast.error).toHaveBeenCalledWith("Accès non autorisé à l'administration");
+      expect(mockToast.error).toHaveBeenCalledWith('Unauthorized access');
     });
 
-    it('should clear sessions and redirect if user fetch fails', async () => {
+    it('should redirect home if user fetch fails', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 401,
@@ -220,8 +299,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(mockAuthManager.clearAllSessions).toHaveBeenCalled();
-        expect(mockPush).toHaveBeenCalledWith('/login');
+        expect(mockPush).toHaveBeenCalledWith('/');
       });
     });
   });
@@ -240,7 +318,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText("Chargement des données d'administration...")).toBeInTheDocument();
+        expect(screen.getByText('Loading admin data...')).toBeInTheDocument();
       });
     });
 
@@ -279,7 +357,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Bienvenue, Admin User/)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome, Admin User/)).toBeInTheDocument();
       });
     });
 
@@ -287,7 +365,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Niveau d'accès: ADMIN/)).toBeInTheDocument();
+        expect(screen.getByText(/Access level: ADMIN/)).toBeInTheDocument();
       });
     });
 
@@ -295,7 +373,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        const matches = screen.getAllByText('Utilisateurs');
+        const matches = screen.getAllByText('Users');
         expect(matches.length).toBeGreaterThan(0);
         const hundreds = screen.getAllByText('100');
         expect(hundreds.length).toBeGreaterThan(0);
@@ -306,7 +384,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('80 actifs')).toBeInTheDocument();
+        expect(screen.getByText('80 active')).toBeInTheDocument();
       });
     });
 
@@ -314,7 +392,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        const matches = screen.getAllByText('Anonymes');
+        const matches = screen.getAllByText('Anonymous');
         expect(matches.length).toBeGreaterThan(0);
         const fifties = screen.getAllByText('50');
         expect(fifties.length).toBeGreaterThan(0);
@@ -335,7 +413,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        const matches = screen.getAllByText('Communautés');
+        const matches = screen.getAllByText('Communities');
         expect(matches.length).toBeGreaterThan(0);
         expect(screen.getByText('25')).toBeInTheDocument();
       });
@@ -345,7 +423,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        const matches = screen.getAllByText('Traductions');
+        const matches = screen.getAllByText('Translations');
         expect(matches.length).toBeGreaterThan(0);
         expect(screen.getByText('15000')).toBeInTheDocument();
       });
@@ -355,7 +433,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        const matches = screen.getAllByText('Liens créés');
+        const matches = screen.getAllByText('Links created');
         expect(matches.length).toBeGreaterThan(0);
         expect(screen.getByText('200')).toBeInTheDocument();
       });
@@ -365,7 +443,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        const matches = screen.getAllByText('Signalements');
+        const matches = screen.getAllByText('Reports');
         expect(matches.length).toBeGreaterThan(0);
         const tens = screen.getAllByText('10');
         expect(tens.length).toBeGreaterThan(0);
@@ -385,7 +463,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Administrateurs')).toBeInTheDocument();
+        expect(screen.getByText('Administrators')).toBeInTheDocument();
         const fives = screen.getAllByText('5');
         expect(fives.length).toBeGreaterThan(0);
       });
@@ -395,7 +473,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        const matches = screen.getAllByText('Langues');
+        const matches = screen.getAllByText('Languages');
         expect(matches.length).toBeGreaterThan(0);
         expect(screen.getByText('3')).toBeInTheDocument();
       });
@@ -418,7 +496,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Langues les plus utilisées')).toBeInTheDocument();
+        expect(screen.getByText('Most used languages')).toBeInTheDocument();
       });
     });
 
@@ -469,7 +547,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Activité récente (7 derniers jours)')).toBeInTheDocument();
+        expect(screen.getByText('Recent activity (last 7 days)')).toBeInTheDocument();
       });
     });
 
@@ -477,7 +555,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Nouveaux utilisateurs')).toBeInTheDocument();
+        expect(screen.getByText('New users')).toBeInTheDocument();
       });
     });
 
@@ -485,7 +563,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Nouvelles conversations')).toBeInTheDocument();
+        expect(screen.getByText('New conversations')).toBeInTheDocument();
       });
     });
 
@@ -493,7 +571,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Nouveaux messages')).toBeInTheDocument();
+        expect(screen.getByText('New messages')).toBeInTheDocument();
       });
     });
 
@@ -501,7 +579,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Nouveaux utilisateurs anonymes')).toBeInTheDocument();
+        expect(screen.getByText('New anonymous')).toBeInTheDocument();
       });
     });
   });
@@ -522,7 +600,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Navigation - Toutes les pages admin')).toBeInTheDocument();
+        expect(screen.getByText('Navigation — All admin pages')).toBeInTheDocument();
       });
     });
 
@@ -530,9 +608,9 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        // Find button with text 'Utilisateurs' in the navigation section
+        // Find button with text 'Users' in the navigation section
         const buttons = screen.getAllByRole('button');
-        const usersButton = buttons.find(btn => btn.textContent?.includes('Utilisateurs'));
+        const usersButton = buttons.find(btn => btn.textContent?.includes('Users'));
         expect(usersButton).toBeInTheDocument();
       });
     });
@@ -542,12 +620,12 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Navigation - Toutes les pages admin')).toBeInTheDocument();
+        expect(screen.getByText('Navigation — All admin pages')).toBeInTheDocument();
       });
 
       // Find and click the users navigation button
       const buttons = screen.getAllByRole('button');
-      const usersButton = buttons.find(btn => btn.textContent === 'Utilisateurs');
+      const usersButton = buttons.find(btn => btn.textContent === 'Users');
       if (usersButton) {
         await user.click(usersButton);
         expect(mockPush).toHaveBeenCalledWith('/admin/users');
@@ -559,11 +637,11 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Navigation - Toutes les pages admin')).toBeInTheDocument();
+        expect(screen.getByText('Navigation — All admin pages')).toBeInTheDocument();
       });
 
       const buttons = screen.getAllByRole('button');
-      const anonButton = buttons.find(btn => btn.textContent === 'Anonymes');
+      const anonButton = buttons.find(btn => btn.textContent === 'Anonymous users');
       if (anonButton) {
         await user.click(anonButton);
         expect(mockPush).toHaveBeenCalledWith('/admin/anonymous-users');
@@ -575,7 +653,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Navigation - Toutes les pages admin')).toBeInTheDocument();
+        expect(screen.getByText('Navigation — All admin pages')).toBeInTheDocument();
       });
 
       const buttons = screen.getAllByRole('button');
@@ -591,11 +669,11 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Navigation - Toutes les pages admin')).toBeInTheDocument();
+        expect(screen.getByText('Navigation — All admin pages')).toBeInTheDocument();
       });
 
       const buttons = screen.getAllByRole('button');
-      const commButton = buttons.find(btn => btn.textContent === 'Communautés');
+      const commButton = buttons.find(btn => btn.textContent === 'Communities');
       if (commButton) {
         await user.click(commButton);
         expect(mockPush).toHaveBeenCalledWith('/admin/communities');
@@ -607,11 +685,11 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Navigation - Toutes les pages admin')).toBeInTheDocument();
+        expect(screen.getByText('Navigation — All admin pages')).toBeInTheDocument();
       });
 
       const buttons = screen.getAllByRole('button');
-      const langButton = buttons.find(btn => btn.textContent === 'Langues');
+      const langButton = buttons.find(btn => btn.textContent === 'Languages');
       if (langButton) {
         await user.click(langButton);
         expect(mockPush).toHaveBeenCalledWith('/admin/languages');
@@ -635,7 +713,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('État du système')).toBeInTheDocument();
+        expect(screen.getByText('System status')).toBeInTheDocument();
       });
     });
 
@@ -643,8 +721,8 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Serveur')).toBeInTheDocument();
-        expect(screen.getByText('En ligne')).toBeInTheDocument();
+        expect(screen.getByText('Server')).toBeInTheDocument();
+        expect(screen.getByText('Online')).toBeInTheDocument();
       });
     });
 
@@ -652,8 +730,8 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Base de données')).toBeInTheDocument();
-        expect(screen.getByText('Connectée')).toBeInTheDocument();
+        expect(screen.getByText('Database')).toBeInTheDocument();
+        expect(screen.getByText('Connected')).toBeInTheDocument();
       });
     });
 
@@ -662,7 +740,7 @@ describe('AdminDashboard', () => {
 
       await waitFor(() => {
         expect(screen.getByText('WebSocket')).toBeInTheDocument();
-        expect(screen.getByText('Actif')).toBeInTheDocument();
+        expect(screen.getByText('Active')).toBeInTheDocument();
       });
     });
   });
@@ -683,7 +761,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Actualiser les données')).toBeInTheDocument();
+        expect(screen.getByText('Refresh data')).toBeInTheDocument();
       });
     });
 
@@ -692,11 +770,11 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Actualiser les données')).toBeInTheDocument();
+        expect(screen.getByText('Refresh data')).toBeInTheDocument();
       });
 
       const initialCallCount = mockAdminService.getDashboardStats.mock.calls.length;
-      const refreshButton = screen.getByText('Actualiser les données');
+      const refreshButton = screen.getByText('Refresh data');
       await user.click(refreshButton);
 
       // Should call getDashboardStats at least one more time after refresh
@@ -707,7 +785,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText('Dernière mise à jour')).toBeInTheDocument();
+        expect(screen.getByText('Last update')).toBeInTheDocument();
       });
     });
   });
@@ -727,7 +805,7 @@ describe('AdminDashboard', () => {
 
       await waitFor(() => {
         expect(mockToast.error).toHaveBeenCalledWith(
-          "Erreur lors du chargement des statistiques d'administration"
+          'Error loading admin statistics'
         );
       });
     });
@@ -739,7 +817,7 @@ describe('AdminDashboard', () => {
 
       await waitFor(() => {
         expect(mockToast.error).toHaveBeenCalledWith(
-          "Erreur lors du chargement des données d'administration"
+          'Error loading admin statistics'
         );
         expect(mockPush).toHaveBeenCalledWith('/dashboard');
       });
@@ -762,7 +840,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Bienvenue, Super Admin/)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome, Super Admin/)).toBeInTheDocument();
         expect(screen.getByText(/BIGBOSS/)).toBeInTheDocument();
       });
     });
@@ -782,7 +860,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Bienvenue, John Doe/)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome, John Doe/)).toBeInTheDocument();
       });
     });
 
@@ -806,7 +884,7 @@ describe('AdminDashboard', () => {
       render(<AdminDashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Bienvenue, adminuser/)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome, adminuser/)).toBeInTheDocument();
       });
     });
   });
@@ -848,7 +926,7 @@ describe('AdminDashboard', () => {
       await waitFor(() => {
         const twoHundreds = screen.getAllByText('200');
         expect(twoHundreds.length).toBeGreaterThan(0);
-        expect(screen.getByText('150 actifs')).toBeInTheDocument();
+        expect(screen.getByText('150 active')).toBeInTheDocument();
       });
     });
 

@@ -31,11 +31,13 @@ const userStoreState = {
 
 type Selector<T> = (state: typeof userStoreState) => T;
 
-const useUserStoreMock = (selector: Selector<unknown>) => selector(userStoreState);
-(useUserStoreMock as unknown as { getState: () => typeof userStoreState }).getState = () => userStoreState;
+const useUserStoreMock = Object.assign(
+  (selector: Selector<unknown>) => selector(userStoreState),
+  { getState: () => userStoreState }
+);
 
 jest.mock('@/stores/user-store', () => ({
-  useUserStore: (selector: (s: unknown) => unknown) => useUserStoreMock(selector),
+  get useUserStore() { return useUserStoreMock; },
 }));
 
 jest.mock('@/lib/config', () => ({
