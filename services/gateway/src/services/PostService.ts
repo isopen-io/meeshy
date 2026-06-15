@@ -488,10 +488,24 @@ export class PostService {
       throw new Error('FORBIDDEN');
     }
 
-    return this.prisma.post.update({
+    const updated = await this.prisma.post.update({
       where: { id: postId },
       data: { deletedAt: new Date() },
     });
+
+    // Soft-delete only flips `deletedAt` — the Prisma `onDelete: Cascade` relation
+    // never fires, so any share-tracking links targeting this post would keep
+    // redirecting to a dead page. Deactivate them explicitly (best-effort).
+    try {
+      await this.prisma.trackingLink.updateMany({
+        where: { targetId: postId },
+        data: { isActive: false },
+      });
+    } catch (err) {
+      log.warn('deletePost: tracking link deactivation failed', { postId, err });
+    }
+
+    return updated;
   }
 
   async likePost(postId: string, userId: string, emoji: string = '❤️') {
@@ -586,12 +600,17 @@ export class PostService {
     });
     if (!post) return null;
 
-    // Upsert to handle duplicates
-    await this.prisma.postBookmark.upsert({
-      where: { postId_userId: { postId, userId } },
-      create: { postId, userId },
-      update: {},
-    });
+    // Create + catch P2002 instead of unconditional upsert: a duplicate bookmark
+    // must NOT re-increment bookmarkCount (the previous `upsert` always ran the
+    // increment, inflating the counter on every repeat tap).
+    try {
+      await this.prisma.postBookmark.create({ data: { postId, userId } });
+    } catch (err) {
+      if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
+        return { success: true }; // already bookmarked — idempotent no-op
+      }
+      throw err;
+    }
 
     await this.prisma.post.update({
       where: { id: postId },
@@ -606,16 +625,124 @@ export class PostService {
       await this.prisma.postBookmark.delete({
         where: { postId_userId: { postId, userId } },
       });
-
-      await this.prisma.post.update({
-        where: { id: postId },
-        data: { bookmarkCount: { decrement: 1 } },
-      });
     } catch {
-      // Not bookmarked — ignore
+      // Not bookmarked — nothing to decrement.
+      return { success: true };
     }
 
+    // Guarded decrement: only when the counter is still > 0, so a drifted /
+    // already-zero counter can never go negative.
+    await this.prisma.post.updateMany({
+      where: { id: postId, bookmarkCount: { gt: 0 } },
+      data: { bookmarkCount: { decrement: 1 } },
+    });
+
     return { success: true };
+  }
+
+  /**
+   * Upsert applicatif du lien de partage tracé d'un post pour le partageur courant
+   * (LOT 6). Un partageur = un lien réutilisé par post : si le lien existe déjà,
+   * on réutilise son token SANS ré-incrémenter `shareCount`. Sinon on crée le lien
+   * + incrémente `shareCount` dans une transaction. Une collision concurrente
+   * (P2002 sur l'index unique partiel `(targetId, createdBy)`) est rattrapée :
+   * on relit le lien gagnant sans ré-incrémenter.
+   */
+  async shareWithTrackingLink(
+    postId: string,
+    userId: string,
+    opts: { baseUrl: string; platform?: string },
+  ): Promise<{ shared: boolean; shareCount: number; shortUrl: string; token: string; reused: boolean } | null> {
+    const post = await this.prisma.post.findFirst({
+      where: { id: postId, deletedAt: NOT_DELETED },
+      select: { id: true, shareCount: true },
+    });
+    if (!post) return null;
+
+    const baseUrl = opts.baseUrl.replace(/\/+$/, '');
+
+    const existing = await this.prisma.trackingLink.findFirst({
+      where: { targetId: postId, createdBy: userId },
+    });
+    if (existing) {
+      return { shared: true, shareCount: post.shareCount, token: existing.token, shortUrl: `${baseUrl}${existing.shortUrl}`, reused: true };
+    }
+
+    const token = await this.generateShareToken();
+    const shortUrl = `/l/${token}`;
+
+    try {
+      const created = await this.prisma.$transaction(async (tx) => {
+        const link = await tx.trackingLink.create({
+          data: {
+            token,
+            name: `Post ${postId.slice(0, 8)}`,
+            source: opts.platform,
+            medium: 'share',
+            originalUrl: `${baseUrl}/feeds/post/${postId}`,
+            shortUrl,
+            createdBy: userId,
+            targetType: 'POST',
+            targetId: postId,
+            isActive: true,
+            totalClicks: 0,
+            uniqueClicks: 0,
+          },
+        });
+        const updated = await tx.post.update({
+          where: { id: postId },
+          data: { shareCount: { increment: 1 } },
+          select: { shareCount: true },
+        });
+        return { link, shareCount: updated.shareCount };
+      });
+      return { shared: true, shareCount: created.shareCount, token: created.link.token, shortUrl: `${baseUrl}${created.link.shortUrl}`, reused: false };
+    } catch (err) {
+      if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
+        // Concurrent sharer won the race — reuse the winning link, no re-increment.
+        const raced = await this.prisma.trackingLink.findFirst({
+          where: { targetId: postId, createdBy: userId },
+        });
+        if (raced) {
+          return { shared: true, shareCount: post.shareCount, token: raced.token, shortUrl: `${baseUrl}${raced.shortUrl}`, reused: true };
+        }
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Analytics du lien de partage du post pour le partageur courant (LOT 6).
+   * Retourne `null` si l'utilisateur n'a pas (encore) partagé ce post.
+   */
+  async getPostShareLink(
+    postId: string,
+    userId: string,
+    baseUrl: string,
+  ): Promise<{ token: string; shortUrl: string; totalClicks: number; uniqueClicks: number; lastClickedAt: Date | null } | null> {
+    const link = await this.prisma.trackingLink.findFirst({
+      where: { targetId: postId, createdBy: userId },
+    });
+    if (!link) return null;
+    return {
+      token: link.token,
+      shortUrl: `${baseUrl.replace(/\/+$/, '')}${link.shortUrl}`,
+      totalClicks: link.totalClicks,
+      uniqueClicks: link.uniqueClicks,
+      lastClickedAt: link.lastClickedAt,
+    };
+  }
+
+  /** Génère un token de partage unique de 6 caractères (collision → re-tirage). */
+  private async generateShareToken(): Promise<string> {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      let token = '';
+      for (let i = 0; i < 6; i += 1) token += chars.charAt(Math.floor(Math.random() * chars.length));
+      const clash = await this.prisma.trackingLink.findUnique({ where: { token } });
+      if (!clash) return token;
+    }
+    throw new Error('Unable to generate unique share token');
   }
 
   /**

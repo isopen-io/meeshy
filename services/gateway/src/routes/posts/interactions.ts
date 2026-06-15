@@ -5,7 +5,6 @@ import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
-import { TrackingLinkService } from '../../services/TrackingLinkService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
 import { LikeSchema, RepostSchema, PostParams, EngagementBatchSchema } from './types';
 import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response';
@@ -24,7 +23,6 @@ export function registerInteractionRoutes(
   // argument is the default — passed explicitly so the constructor chain
   // is readable.
   const postService = new PostService(prisma, new MediaService(), orphanCleanup);
-  const trackingLinkService = new TrackingLinkService(prisma);
 
   // POST /posts/:postId/like
   fastify.post('/posts/:postId/like', {
@@ -424,42 +422,67 @@ export function registerInteractionRoutes(
       const body = (request.body as any) ?? {};
       const platform: string | undefined = body.platform;
       const generateLink: boolean = Boolean(body.generateLink);
-
-      const post = await postService.sharePost(postId, authContext.registeredUser.id, platform);
-      if (!post) {
-        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
-      }
+      const baseUrl = (process.env.FRONTEND_URL || 'https://meeshy.me').replace(/\/+$/, '');
 
       const payload: {
         shared: boolean;
         shareCount: number;
         shortUrl?: string;
         token?: string;
-      } = { shared: true, shareCount: post.shareCount };
+      } = { shared: true, shareCount: 0 };
 
       if (generateLink) {
-        const baseUrl = (process.env.FRONTEND_URL || 'https://meeshy.me').replace(/\/+$/, '');
-        try {
-          const link = await trackingLinkService.createTrackingLink({
-            originalUrl: `${baseUrl}/feeds/post/${postId}`,
-            name: `Post ${postId.slice(0, 8)}`,
-            source: platform,
-            medium: 'share',
-            createdBy: authContext.registeredUser.id,
-          });
-          payload.token = link.token;
-          payload.shortUrl = `${baseUrl}${link.shortUrl}`;
-        } catch (linkError) {
-          // Tracking link failure must not roll back the share counter —
-          // surface the issue in logs and return the share-only payload so
-          // the client can fall back to the raw post URL.
-          fastify.log.error(`[POST /posts/:postId/share] tracking link mint failed: ${linkError}`);
+        // Tracked share: upsert one link per (post, sharer). Reusing an existing
+        // link does NOT re-increment shareCount — the counter tracks unique
+        // sharers, not repeated taps of the share button.
+        const result = await postService.shareWithTrackingLink(
+          postId,
+          authContext.registeredUser.id,
+          { baseUrl, platform },
+        );
+        if (!result) {
+          return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
         }
+        payload.shareCount = result.shareCount;
+        payload.token = result.token;
+        payload.shortUrl = result.shortUrl;
+      } else {
+        // Plain share (no tracked link) — increment the counter as before.
+        const post = await postService.sharePost(postId, authContext.registeredUser.id, platform);
+        if (!post) {
+          return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+        }
+        payload.shareCount = post.shareCount;
       }
 
       return sendSuccess(reply, payload);
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/share] Error: ${error}`);
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
+    }
+  });
+
+  // GET /posts/:postId/share — Analytics of the caller's own tracked share link.
+  //
+  // Returns null data when the caller has not (yet) generated a tracked share
+  // for this post. Otherwise exposes the live click analytics so the UI can
+  // surface "your link got N clicks" without a second tracking-links call.
+  fastify.get('/posts/:postId/share', {
+    preValidation: [requiredAuth],
+  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+      }
+
+      const { postId } = request.params;
+      const baseUrl = (process.env.FRONTEND_URL || 'https://meeshy.me').replace(/\/+$/, '');
+      const link = await postService.getPostShareLink(postId, authContext.registeredUser.id, baseUrl);
+
+      return sendSuccess(reply, link);
+    } catch (error) {
+      fastify.log.error(`[GET /posts/:postId/share] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
