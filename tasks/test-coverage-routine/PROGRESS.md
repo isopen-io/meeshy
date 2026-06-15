@@ -33,7 +33,7 @@ Each item is a separate slice; run them in order. Validate via the PR's own CI r
 | 0.3 | Re-enable the disabled Python test job with a CPU-only marker split (no GB model downloads) | `.github/workflows/ci.yml:242` (`if: false`) | ☑ |
 | 0.4 | Add **ratcheting** `coverageThreshold` to web jest at the measured baseline | `apps/web/jest.config.js` | ☑ |
 | 0.5 | Stop gateway jest from silently excluding `routes/middleware/websocket/grpc` & ignoring whole test dirs; add a global threshold at baseline | `services/gateway/jest.config.json` | ☑ |
-| 0.6 | Restore translator `fail_under` toward 80 on the non-excluded set; tighten over-broad `exclude_lines` (error handling/cleanup should count) | `services/translator/pyproject.toml` | ☐ |
+| 0.6 | Restore translator `fail_under` toward 80 on the non-excluded set; tighten over-broad `exclude_lines` (error handling/cleanup should count) | `services/translator/pyproject.toml` | ☑ |
 | 0.7 | Triage & un-skip the dark `.skip` test files (or delete with justification) | `gateway: ZmqTranslationClient.test.ts.skip`, `AttachmentService.test.ts.skip`, `AuthHandler.test.ts.skip` | ☐ |
 
 > **Ratcheting rule:** thresholds are set at the *current measured* value and only ever raised.
