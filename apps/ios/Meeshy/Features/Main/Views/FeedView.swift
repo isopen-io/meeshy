@@ -687,6 +687,10 @@ struct FeedView: View {
                 )
             }
         )
+        // Marges horizontales pour aligner la carte Réel sur les posts standards
+        // (`FeedPostCard` applique `.padding(.horizontal, 16)`). Sans ça la carte
+        // était bord-à-bord, sans séparation des bords ni des boutons flottants.
+        .padding(.horizontal, 16)
         // Pas de `.equatable()` ici : le conteneur observe le coordinator (non
         // Equatable). Le court-circuit Equatable vit à l'intérieur, sur `ReelFeedCard`.
     }
