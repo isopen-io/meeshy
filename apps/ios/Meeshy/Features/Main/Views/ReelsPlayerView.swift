@@ -247,6 +247,12 @@ struct ReelPageView: View {
     // re-render on every 0.1s time tick — only `ReelScrubBar` observes the
     // manager. Used here only for the fire-and-forget `togglePlayPause()` tap.
     private let playerManager = SharedAVPlayerManager.shared
+    /// Audio-reel playback engine — SHARED between the play/scrub control
+    /// (`ReelAudioControl` → `AudioPlayerView(externalPlayer:)`) and the hero
+    /// transcript (`ReelAudioView` → `MediaTranscriptionView`) so the karaoke
+    /// highlight tracks the SAME position the user scrubs/plays. One engine per
+    /// page; only the active audio reel ever plays.
+    @StateObject private var audioPlayer = AudioPlaybackManager()
 
     private var accentColor: String { reel.authorColor }
 
@@ -331,7 +337,7 @@ struct ReelPageView: View {
                 // is tappable and fades in immersive mode. Driven by
                 // `selectedLanguage` so a flag tap plays that language's TTS.
                 if let audioMedia, isActive {
-                    ReelAudioControl(media: audioMedia, selectedLanguage: $selectedLanguage)
+                    ReelAudioControl(media: audioMedia, selectedLanguage: $selectedLanguage, player: audioPlayer)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 10)
                 }
@@ -417,7 +423,7 @@ struct ReelPageView: View {
             case .image:
                 ReelImageView(reel: reel)
             case .audio:
-                ReelAudioView(media: media, accentColor: accentColor, selectedLanguage: $selectedLanguage)
+                ReelAudioView(media: media, accentColor: accentColor, selectedLanguage: $selectedLanguage, player: audioPlayer)
             default:
                 accentBackground
             }
@@ -956,17 +962,20 @@ private struct ReelAudioView: View {
     /// Shared with the chrome: a flag tap (or the audio control's language
     /// switch) updates this and the hero transcript re-resolves. `nil` = original.
     @Binding var selectedLanguage: String?
+    /// Same engine the `ReelAudioControl` plays/scrubs (injected as its
+    /// `externalPlayer`). Observed here so the karaoke highlight + auto-scroll
+    /// track the live playback position.
+    @ObservedObject var player: AudioPlaybackManager
 
-    /// The transcript text for the currently-explored language. Reuses the SDK's
-    /// pure resolver so the hero text matches exactly what the player shows.
-    private var heroTranscript: String {
+    /// Timed segments for the currently-explored language. Reuses the SDK's pure
+    /// resolver so the hero matches exactly what the player plays.
+    private var displaySegments: [TranscriptionDisplaySegment] {
         let token = selectedLanguage ?? "orig"
-        let segments = AudioPlayerView.resolveDisplaySegments(
+        return AudioPlayerView.resolveDisplaySegments(
             selectedLanguage: token,
             transcription: media.transcription,
             translatedAudios: media.translatedAudios
         )
-        return segments.map(\.text).joined(separator: " ")
     }
 
     var body: some View {
@@ -996,7 +1005,7 @@ private struct ReelAudioView: View {
 
     @ViewBuilder
     private var heroLayer: some View {
-        if heroTranscript.isEmpty {
+        if displaySegments.isEmpty {
             // No transcript yet — keep a prominent waveform glyph as the hero so
             // the screen never reads as empty.
             Image(systemName: "waveform")
@@ -1004,25 +1013,24 @@ private struct ReelAudioView: View {
                 .foregroundColor(.white.opacity(0.92))
                 .shadow(color: .black.opacity(0.35), radius: 10)
         } else {
-            ScrollView(.vertical, showsIndicators: false) {
-                Text(heroTranscript)
-                    .font(.system(size: 27, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(6)
-                    .shadow(color: .black.opacity(0.5), radius: 6, y: 2)
-                    .padding(.horizontal, 28)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 90)
-                    // Clear the bottom chrome (control + flags + author + rail).
-                    .padding(.bottom, 280)
-                    // Cross-fade when the language (and thus the text) changes.
-                    .id(selectedLanguage ?? "orig")
-                    .transition(.opacity)
-            }
-            // The hero text must not steal the carousel-less media zone's gestures
-            // (tap / long-press live on `mediaLayer`); a ScrollView only scrolls
-            // when the transcript overflows, which is the desired affordance.
+            // Karaoke transcript: the active segment ([startTime, endTime) of the
+            // live `player.currentTime`) is highlighted + auto-scrolled to centre.
+            // Smaller, scrollable text (font 14, own ScrollView) replaces the
+            // former single 27pt joined block. `onSeek` lets a tap jump playback.
+            MediaTranscriptionView(
+                segments: displaySegments,
+                currentTime: player.currentTime,
+                accentColor: accentColor,
+                maxHeight: 360,
+                isPlaying: player.isPlaying,
+                onSeek: { time in player.seekToTime(time) }
+            )
+            .padding(.horizontal, 20)
+            // Clear the bottom chrome (control + flags + author + rail).
+            .padding(.bottom, 200)
+            // Cross-fade when the language (and thus the segments) changes.
+            .id(selectedLanguage ?? "orig")
+            .transition(.opacity)
         }
     }
 }
@@ -1040,6 +1048,9 @@ private struct ReelAudioView: View {
 private struct ReelAudioControl: View {
     let media: FeedMedia
     @Binding var selectedLanguage: String?
+    /// Shared engine (owned by `ReelPageView`) so the hero transcript
+    /// (`ReelAudioView` → `MediaTranscriptionView`) tracks the SAME playback.
+    let player: AudioPlaybackManager
 
     private var attachment: MeeshyMessageAttachment { media.toMessageAttachment() }
 
@@ -1052,7 +1063,8 @@ private struct ReelAudioControl: View {
                 translatedAudios: media.translatedAudios,
                 externalLanguage: $selectedLanguage,
                 availability: availability,
-                onDownload: onDownload
+                onDownload: onDownload,
+                externalPlayer: player
             )
         }
     }
