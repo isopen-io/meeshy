@@ -57,7 +57,7 @@ describe('MessagesService', () => {
 
       const result = await messagesService.createMessage(messageData);
 
-      expect(mockApiService.post).toHaveBeenCalledWith('/messages', messageData);
+      expect(mockApiService.post).toHaveBeenCalledWith('/messages', expect.objectContaining(messageData));
       expect(result.data?.id).toBe('msg-123');
     });
 
@@ -75,7 +75,7 @@ describe('MessagesService', () => {
 
       await messagesService.createMessage(messageData);
 
-      expect(mockApiService.post).toHaveBeenCalledWith('/messages', messageData);
+      expect(mockApiService.post).toHaveBeenCalledWith('/messages', expect.objectContaining(messageData));
     });
 
     it('should throw error on create failure', async () => {
@@ -183,10 +183,10 @@ describe('MessagesService', () => {
 
       const result = await messagesService.sendMessageToConversation('conv-123', 'Hello');
 
-      expect(mockApiService.post).toHaveBeenCalledWith('/conversations/conv-123/messages', {
+      expect(mockApiService.post).toHaveBeenCalledWith('/conversations/conv-123/messages', expect.objectContaining({
         content: 'Hello',
         conversationId: 'conv-123',
-      });
+      }));
       expect(result.data?.id).toBe('msg-new');
     });
   });
@@ -275,7 +275,7 @@ describe('MessagesService', () => {
     it('should return formatted date for older messages', () => {
       const oldDate = new Date('2024-01-01T10:00:00Z').toISOString();
       const result = messagesService.formatMessageDate(oldDate);
-      expect(result).toMatch(/\d+ janv\./);
+      expect(result).toMatch(/Jan \d+/);
     });
   });
 

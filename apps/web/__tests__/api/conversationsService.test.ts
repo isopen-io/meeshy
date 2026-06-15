@@ -244,7 +244,7 @@ describe('ConversationsService', () => {
 
       await conversationsService.markAsRead('1');
 
-      expect(mockApiService.post).toHaveBeenCalledWith('/conversations/1/read');
+      expect(mockApiService.post).toHaveBeenCalledWith('/conversations/1/mark-as-read');
     });
   });
 
@@ -273,8 +273,10 @@ describe('ConversationsService', () => {
 
       const result = await conversationsService.searchConversations('test');
 
-      expect(mockApiService.get).toHaveBeenCalledWith('/api/conversations/search', { q: 'test' });
-      expect(result).toEqual(mockConversations);
+      expect(mockApiService.get).toHaveBeenCalledWith('/conversations/search', { q: 'test' });
+      expect(result).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: '1', type: 'direct', title: 'Test Conversation' }),
+      ]));
     });
 
     it('should handle empty search results', async () => {

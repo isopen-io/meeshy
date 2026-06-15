@@ -43,9 +43,16 @@ jest.mock('@/hooks/useI18n', () => ({
         'linkSummaryModal.links': 'Links',
         'linkSummaryModal.location': 'Location',
         'linkSummaryModal.contacts': 'Contacts',
+        'linkConfiguration.successMessages.linkCopied': 'Lien copié dans le presse-papier !',
+        'linkConfiguration.errors.copyFailed': 'Erreur lors de la copie du lien',
       };
       return translations[key] || key;
     },
+    locale: 'fr',
+    setLocale: jest.fn(),
+    isLoading: false,
+    currentLanguage: 'fr',
+    tArray: jest.fn(() => []),
   }),
 }));
 

@@ -23,6 +23,92 @@ jest.mock('../../../services/admin.service', () => ({
   },
 }));
 
+// Mock useI18n to return English strings synchronously
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, params?: Record<string, any>) => {
+      const translations: Record<string, string> = {
+        'anonUsers.loading': 'Loading anonymous users...',
+        'anonUsers.loadError': 'Error loading anonymous users',
+        'anonUsers.backButton': 'Back',
+        'anonUsers.pageTitle': 'Anonymous users',
+        'anonUsers.pageSubtitle': 'Management of anonymous participants',
+        'anonUsers.statTotal': 'Total',
+        'anonUsers.statTotalDesc': 'Anonymous users',
+        'anonUsers.statActive': 'Active',
+        'anonUsers.statActiveDesc': 'Currently online',
+        'anonUsers.statMessages': 'Messages',
+        'anonUsers.statMessagesDesc': 'Messages sent',
+        'anonUsers.filtersTitle': 'Filters and search',
+        'anonUsers.searchPlaceholder': 'Search by name, email...',
+        'anonUsers.filterAll': 'All',
+        'anonUsers.filterActive': 'Active',
+        'anonUsers.filterInactive': 'Inactive',
+        'anonUsers.perPage': '{count} per page',
+        'anonUsers.searchButton': 'Search',
+        'anonUsers.listTitle': 'Anonymous users list',
+        'anonUsers.emptyTitle': 'No anonymous user found',
+        'anonUsers.messageCount': '{count} messages',
+        'anonUsers.joinedAt': 'Joined {date}',
+        'anonUsers.actionDetails': 'Details',
+        'anonUsers.conversationLabel': 'Conversation:',
+        'anonUsers.noTitle': 'No title',
+        'anonUsers.linkLabel': 'Link:',
+        'anonUsers.permissionsLabel': 'Permissions:',
+        'anonUsers.paginationInfo': 'Page {page} of {total} ({count} users)',
+        'anonUsers.prevPage': 'Previous',
+        'anonUsers.nextPage': 'Next',
+        'anonUsers.statusActive': 'Active',
+        'anonUsers.statusInactive': 'Inactive',
+        'anonUsers.statusDisabled': 'Disabled',
+        'anonUsers.detailTitle': 'Anonymous user details',
+        'anonUsers.infoGeneral': 'General information',
+        'anonUsers.labelFullName': 'Full name',
+        'anonUsers.labelUsername': 'Username',
+        'anonUsers.labelEmail': 'Email',
+        'anonUsers.labelStatus': 'Status',
+        'anonUsers.labelCountry': 'Country',
+        'anonUsers.labelLanguage': 'Language',
+        'anonUsers.labelJoinDate': 'Registration date',
+        'anonUsers.labelLastActivity': 'Last activity',
+        'anonUsers.notProvided': 'Not provided',
+        'anonUsers.never': 'Never',
+        'anonUsers.permissionsTitle': 'Permissions and rights',
+        'anonUsers.permSendMessages': 'Sending messages',
+        'anonUsers.permSendFiles': 'Sending files',
+        'anonUsers.permSendImages': 'Sending images',
+        'anonUsers.permOnline': 'Online',
+        'anonUsers.permAllowed': 'Allowed',
+        'anonUsers.permDenied': 'Denied',
+        'anonUsers.permYes': 'Yes',
+        'anonUsers.permNo': 'No',
+        'anonUsers.statsTitle': 'Message statistics',
+        'anonUsers.statsMsgSent': 'Messages sent',
+        'anonUsers.statsReactions': 'Reactions',
+        'anonUsers.statsMsgPerDay': 'Messages/day',
+        'anonUsers.shareLinkTitle': 'Share link and conversation',
+        'anonUsers.usedLink': 'Link used',
+        'anonUsers.noName': 'No name',
+        'anonUsers.joinedConversation': 'Joined conversation',
+        'anonUsers.viewConversation': 'View conversation',
+        'anonUsers.adminActions': 'Administrator actions',
+        'anonUsers.viewMessages': 'View messages',
+        'anonUsers.accessConversation': 'Access conversation',
+        'anonUsers.comingSoon': 'Feature coming soon',
+      };
+      const template = translations[key] ?? key;
+      if (params) {
+        return template.replace(/\{(\w+)\}/g, (_: string, k: string) => String(params[k] ?? `{${k}}`));
+      }
+      return template;
+    },
+    locale: 'en',
+    currentLanguage: 'en',
+    setLocale: jest.fn(),
+    isLoading: false,
+  }),
+}));
+
 // Mock sonner toast
 jest.mock('sonner', () => ({
   toast: {
@@ -168,7 +254,7 @@ describe('AdminAnonymousUsersPage', () => {
 
       render(<AdminAnonymousUsersPage />);
 
-      expect(screen.getByText('Chargement des utilisateurs anonymes...')).toBeInTheDocument();
+      expect(screen.getByText('Loading anonymous users...')).toBeInTheDocument();
     });
 
     it('should show loading animation during data fetch', () => {
@@ -221,10 +307,10 @@ describe('AdminAnonymousUsersPage', () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        const matches = screen.getAllByText('Utilisateurs anonymes');
+        const matches = screen.getAllByText('Anonymous users');
         expect(matches.length).toBeGreaterThan(0);
       });
-      expect(screen.getByText('Gestion des participants anonymes')).toBeInTheDocument();
+      expect(screen.getByText('Management of anonymous participants')).toBeInTheDocument();
     });
 
     it('should display statistics cards', async () => {
@@ -234,7 +320,7 @@ describe('AdminAnonymousUsersPage', () => {
         expect(screen.getByText('Total')).toBeInTheDocument();
       });
       expect(screen.getByText('3')).toBeInTheDocument(); // Total count
-      const actifs = screen.getAllByText('Actifs');
+      const actifs = screen.getAllByText('Active');
       expect(actifs.length).toBeGreaterThan(0);
       const messages = screen.getAllByText('Messages');
       expect(messages.length).toBeGreaterThan(0);
@@ -274,10 +360,10 @@ describe('AdminAnonymousUsersPage', () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Actif')).toBeInTheDocument(); // Active + Online user
+        expect(screen.getAllByText('Active').length).toBeGreaterThan(0); // Active + Online user
       });
-      expect(screen.getByText('Inactif')).toBeInTheDocument(); // Active but offline user
-      expect(screen.getByText('Désactivé')).toBeInTheDocument(); // Inactive user
+      expect(screen.getAllByText('Inactive').length).toBeGreaterThan(0); // Active but offline user
+      expect(screen.getByText('Disabled')).toBeInTheDocument(); // Inactive user
     });
 
     it('should display user permissions badges', async () => {
@@ -310,7 +396,7 @@ describe('AdminAnonymousUsersPage', () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Aucun utilisateur anonyme trouvé')).toBeInTheDocument();
+        expect(screen.getByText('No anonymous user found')).toBeInTheDocument();
       });
     });
   });
@@ -322,7 +408,7 @@ describe('AdminAnonymousUsersPage', () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        expect(mockToast.error).toHaveBeenCalledWith('Erreur lors du chargement des utilisateurs anonymes');
+        expect(mockToast.error).toHaveBeenCalledWith('Error loading anonymous users');
       });
     });
 
@@ -336,7 +422,7 @@ describe('AdminAnonymousUsersPage', () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Aucun utilisateur anonyme trouvé')).toBeInTheDocument();
+        expect(screen.getByText('No anonymous user found')).toBeInTheDocument();
       });
     });
   });
@@ -362,7 +448,7 @@ describe('AdminAnonymousUsersPage', () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        expect(screen.getByPlaceholderText('Rechercher par nom, email...')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('Search by name, email...')).toBeInTheDocument();
       });
     });
 
@@ -371,10 +457,10 @@ describe('AdminAnonymousUsersPage', () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        expect(screen.getByPlaceholderText('Rechercher par nom, email...')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('Search by name, email...')).toBeInTheDocument();
       });
 
-      const searchInput = screen.getByPlaceholderText('Rechercher par nom, email...');
+      const searchInput = screen.getByPlaceholderText('Search by name, email...');
       await user.type(searchInput, 'John');
 
       expect(searchInput).toHaveValue('John');
@@ -385,10 +471,10 @@ describe('AdminAnonymousUsersPage', () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        expect(screen.getByPlaceholderText('Rechercher par nom, email...')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('Search by name, email...')).toBeInTheDocument();
       });
 
-      const searchInput = screen.getByPlaceholderText('Rechercher par nom, email...');
+      const searchInput = screen.getByPlaceholderText('Search by name, email...');
       await user.type(searchInput, 'John{enter}');
 
       await waitFor(() => {
@@ -401,13 +487,13 @@ describe('AdminAnonymousUsersPage', () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Rechercher')).toBeInTheDocument();
+        expect(screen.getByText('Search')).toBeInTheDocument();
       });
 
-      const searchInput = screen.getByPlaceholderText('Rechercher par nom, email...');
+      const searchInput = screen.getByPlaceholderText('Search by name, email...');
       await user.type(searchInput, 'Test');
 
-      const searchButton = screen.getByText('Rechercher');
+      const searchButton = screen.getByText('Search');
       await user.click(searchButton);
 
       await waitFor(() => {
@@ -420,13 +506,13 @@ describe('AdminAnonymousUsersPage', () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        const matches = screen.getAllByText('Actifs');
+        const matches = screen.getAllByText('Active');
         expect(matches.length).toBeGreaterThan(0);
       });
 
-      // Find and click the "Actifs" filter button (not the card title)
+      // Find and click the "Active" filter button (not the status badge)
       const filterButtons = screen.getAllByRole('button');
-      const actifButton = filterButtons.find(btn => btn.textContent === 'Actifs');
+      const actifButton = filterButtons.find(btn => btn.textContent === 'Active');
       if (actifButton) {
         await user.click(actifButton);
       }
@@ -441,11 +527,11 @@ describe('AdminAnonymousUsersPage', () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Inactifs')).toBeInTheDocument();
+        expect(screen.getByText('Inactive')).toBeInTheDocument();
       });
 
       const filterButtons = screen.getAllByRole('button');
-      const inactifButton = filterButtons.find(btn => btn.textContent === 'Inactifs');
+      const inactifButton = filterButtons.find(btn => btn.textContent === 'Inactive');
       if (inactifButton) {
         await user.click(inactifButton);
       }
@@ -455,16 +541,16 @@ describe('AdminAnonymousUsersPage', () => {
       });
     });
 
-    it('should clear filter when clicking "Tous"', async () => {
+    it('should clear filter when clicking "All"', async () => {
       const user = userEvent.setup();
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Tous')).toBeInTheDocument();
+        expect(screen.getByText('All')).toBeInTheDocument();
       });
 
-      const tousButton = screen.getByRole('button', { name: 'Tous' });
-      await user.click(tousButton);
+      const allButton = screen.getByRole('button', { name: 'All' });
+      await user.click(allButton);
 
       await waitFor(() => {
         expect(mockAdminService.getAnonymousUsers).toHaveBeenCalledWith(0, 20, undefined, undefined);
@@ -493,7 +579,7 @@ describe('AdminAnonymousUsersPage', () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('20 par page')).toBeInTheDocument();
+        expect(screen.getByText('20 per page')).toBeInTheDocument();
       });
     });
   });
@@ -519,7 +605,7 @@ describe('AdminAnonymousUsersPage', () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Page 1 sur/)).toBeInTheDocument();
+        expect(screen.getByText(/Page 1 of/)).toBeInTheDocument();
       });
     });
 
@@ -527,38 +613,38 @@ describe('AdminAnonymousUsersPage', () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Précédent')).toBeInTheDocument();
+        expect(screen.getByText('Previous')).toBeInTheDocument();
       });
-      expect(screen.getByText('Suivant')).toBeInTheDocument();
+      expect(screen.getByText('Next')).toBeInTheDocument();
     });
 
-    it('should disable "Précédent" button on first page', async () => {
+    it('should disable "Previous" button on first page', async () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        const prevButton = screen.getByText('Précédent');
+        const prevButton = screen.getByText('Previous');
         expect(prevButton).toBeDisabled();
       });
     });
 
-    it('should enable "Suivant" button when hasMore is true', async () => {
+    it('should enable "Next" button when hasMore is true', async () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        const nextButton = screen.getByText('Suivant');
+        const nextButton = screen.getByText('Next');
         expect(nextButton).not.toBeDisabled();
       });
     });
 
-    it('should load next page when clicking "Suivant"', async () => {
+    it('should load next page when clicking "Next"', async () => {
       const user = userEvent.setup();
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Suivant')).toBeInTheDocument();
+        expect(screen.getByText('Next')).toBeInTheDocument();
       });
 
-      const nextButton = screen.getByText('Suivant');
+      const nextButton = screen.getByText('Next');
       await user.click(nextButton);
 
       await waitFor(() => {
@@ -584,15 +670,15 @@ describe('AdminAnonymousUsersPage', () => {
       });
     });
 
-    it('should navigate back to admin page when clicking "Retour"', async () => {
+    it('should navigate back to admin page when clicking "Back"', async () => {
       const user = userEvent.setup();
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Retour')).toBeInTheDocument();
+        expect(screen.getByText('Back')).toBeInTheDocument();
       });
 
-      const backButton = screen.getByText('Retour');
+      const backButton = screen.getByText('Back');
       await user.click(backButton);
 
       expect(mockPush).toHaveBeenCalledWith('/admin');
@@ -618,15 +704,15 @@ describe('AdminAnonymousUsersPage', () => {
       });
     });
 
-    it('should open details modal when clicking "Détails" button', async () => {
+    it('should open details modal when clicking "Details" button', async () => {
       const user = userEvent.setup();
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Détails')).toBeInTheDocument();
+        expect(screen.getByText('Details')).toBeInTheDocument();
       });
 
-      const detailsButton = screen.getByText('Détails');
+      const detailsButton = screen.getByText('Details');
       await user.click(detailsButton);
 
       await waitFor(() => {
@@ -639,14 +725,14 @@ describe('AdminAnonymousUsersPage', () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Détails')).toBeInTheDocument();
+        expect(screen.getByText('Details')).toBeInTheDocument();
       });
 
-      const detailsButton = screen.getByText('Détails');
+      const detailsButton = screen.getByText('Details');
       await user.click(detailsButton);
 
       await waitFor(() => {
-        expect(screen.getByText("Détails de l'utilisateur anonyme")).toBeInTheDocument();
+        expect(screen.getByText('Anonymous user details')).toBeInTheDocument();
       });
     });
   });
@@ -796,8 +882,8 @@ describe('AdminAnonymousUsersPage', () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        // The date should be formatted in French locale
-        expect(screen.getByText(/Rejoint le/)).toBeInTheDocument();
+        // The date should be formatted using the joinedAt translation key
+        expect(screen.getByText(/Joined/)).toBeInTheDocument();
       });
     });
   });
@@ -823,7 +909,7 @@ describe('AdminAnonymousUsersPage', () => {
       render(<AdminAnonymousUsersPage />);
 
       await waitFor(() => {
-        const searchInput = screen.getByPlaceholderText('Rechercher par nom, email...');
+        const searchInput = screen.getByPlaceholderText('Search by name, email...');
         expect(searchInput).toBeInTheDocument();
       });
     });

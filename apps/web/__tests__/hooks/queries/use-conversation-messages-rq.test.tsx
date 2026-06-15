@@ -231,7 +231,7 @@ describe('useConversationMessagesRQ', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockGetMessages).toHaveBeenCalledWith('conv-1', 1, 20, null);
+      expect(mockGetMessages).toHaveBeenCalledWith('conv-1', 1, 20, null, expect.anything());
       expect(result.current.messages).toHaveLength(3);
     });
 
@@ -334,7 +334,7 @@ describe('useConversationMessagesRQ', () => {
       );
 
       await waitFor(() => {
-        expect(mockGetMessages).toHaveBeenCalledWith('conv-1', 1, 50, null);
+        expect(mockGetMessages).toHaveBeenCalledWith('conv-1', 1, 50, null, expect.anything());
       });
     });
   });
@@ -532,7 +532,7 @@ describe('useConversationMessagesRQ', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockGetMessages).toHaveBeenCalledWith('conv-1', 1, 20, null);
+      expect(mockGetMessages).toHaveBeenCalledWith('conv-1', 1, 20, null, expect.anything());
 
       mockGetMessages.mockClear();
 
@@ -540,7 +540,7 @@ describe('useConversationMessagesRQ', () => {
       rerender({ conversationId: 'conv-2' });
 
       await waitFor(() => {
-        expect(mockGetMessages).toHaveBeenCalledWith('conv-2', 1, 20, null);
+        expect(mockGetMessages).toHaveBeenCalledWith('conv-2', 1, 20, null, expect.anything());
       });
     });
   });

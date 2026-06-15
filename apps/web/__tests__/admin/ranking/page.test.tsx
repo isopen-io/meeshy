@@ -231,7 +231,7 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Classements')).toBeInTheDocument();
+        expect(screen.getByText('Rankings')).toBeInTheDocument();
       });
     });
 
@@ -240,7 +240,7 @@ describe('AdminRankingPage', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText(/Classez les utilisateurs, conversations, messages et liens/)
+          screen.getByText(/Rank users, conversations, messages and links/)
         ).toBeInTheDocument();
       });
     });
@@ -249,7 +249,7 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Retour')).toBeInTheDocument();
+        expect(screen.getByText('Back')).toBeInTheDocument();
       });
     });
 
@@ -258,10 +258,10 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Retour')).toBeInTheDocument();
+        expect(screen.getByText('Back')).toBeInTheDocument();
       });
 
-      const backButton = screen.getByText('Retour');
+      const backButton = screen.getByText('Back');
       await user.click(backButton);
 
       expect(mockPush).toHaveBeenCalledWith('/admin');
@@ -280,7 +280,7 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Filtres de classement')).toBeInTheDocument();
+        expect(screen.getByText('Ranking filters')).toBeInTheDocument();
       });
     });
 
@@ -288,7 +288,7 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("Type d'entité")).toBeInTheDocument();
+        expect(screen.getByText('Entity type')).toBeInTheDocument();
       });
     });
 
@@ -296,7 +296,7 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Critère')).toBeInTheDocument();
+        expect(screen.getByText('Criterion')).toBeInTheDocument();
       });
     });
 
@@ -304,7 +304,7 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Période')).toBeInTheDocument();
+        expect(screen.getByText('Period')).toBeInTheDocument();
       });
     });
 
@@ -312,7 +312,7 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        const matches = screen.getAllByText('Nombre de résultats');
+        const matches = screen.getAllByText('Result count');
         expect(matches.length).toBeGreaterThan(0);
       });
     });
@@ -336,7 +336,7 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Classement des utilisateurs')).toBeInTheDocument();
+        expect(screen.getByText('User Rankings')).toBeInTheDocument();
       });
     });
 
@@ -344,7 +344,7 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('3 résultats')).toBeInTheDocument();
+        expect(screen.getByText('3 results')).toBeInTheDocument();
       });
     });
 
@@ -452,8 +452,8 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Visualisation - Top/)).toBeInTheDocument();
-        expect(screen.getByText(/Évolution et distribution/)).toBeInTheDocument();
+        expect(screen.getByText(/Visualization - Top/)).toBeInTheDocument();
+        expect(screen.getByText(/Performance trend and distribution/)).toBeInTheDocument();
       });
     });
   });
@@ -476,7 +476,7 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Podium des champions')).toBeInTheDocument();
+        expect(screen.getByText('Champions podium')).toBeInTheDocument();
       });
     });
 
@@ -521,7 +521,7 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Aucun résultat trouvé')).toBeInTheDocument();
+        expect(screen.getByText('No results found')).toBeInTheDocument();
       });
     });
 
@@ -534,7 +534,7 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('0 résultats')).toBeInTheDocument();
+        expect(screen.getByText('0 results')).toBeInTheDocument();
       });
     });
   });
@@ -557,7 +557,7 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Réessayer')).toBeInTheDocument();
+        expect(screen.getByText('Retry')).toBeInTheDocument();
       });
     });
 
@@ -570,10 +570,10 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Réessayer')).toBeInTheDocument();
+        expect(screen.getByText('Retry')).toBeInTheDocument();
       });
 
-      const retryButton = screen.getByText('Réessayer');
+      const retryButton = screen.getByText('Retry');
       await user.click(retryButton);
 
       expect(mockAdminService.getRankings).toHaveBeenCalledTimes(2);
@@ -615,7 +615,7 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByPlaceholderText('Filtrer les critères...')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('Filter criteria...')).toBeInTheDocument();
       });
     });
 
@@ -624,7 +624,7 @@ describe('AdminRankingPage', () => {
 
       await waitFor(() => {
         // Check that the criteria label is displayed
-        expect(screen.getByText('Critère')).toBeInTheDocument();
+        expect(screen.getByText('Criterion')).toBeInTheDocument();
       });
     });
   });
@@ -641,7 +641,7 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Période')).toBeInTheDocument();
+        expect(screen.getByText('Period')).toBeInTheDocument();
       });
     });
   });
@@ -658,7 +658,7 @@ describe('AdminRankingPage', () => {
       render(<AdminRankingPage />);
 
       await waitFor(() => {
-        const matches = screen.getAllByText('Nombre de résultats');
+        const matches = screen.getAllByText('Result count');
         expect(matches.length).toBeGreaterThan(0);
       });
     });

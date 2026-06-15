@@ -224,6 +224,16 @@ jest.mock('../../../components/auth/PhoneExistsModal', () => ({
     ) : null,
 }));
 
+// Mock Input component: preserve all types EXCEPT 'email' which is changed to 'text'
+// jsdom sanitizes input[type=email] values (rejects invalid emails), preventing onChange from firing.
+// By using 'text' for email inputs, we allow testing invalid email validation.
+// Accessibility tests that check 'type=email' should use queryByAttribute directly on the real type.
+jest.mock('@/components/ui/input', () => ({
+  Input: ({ type, ...props }: React.ComponentProps<'input'>) => (
+    <input type={type === 'email' ? 'text' : type} data-original-type={type} {...props} />
+  ),
+}));
+
 // Mock Checkbox component
 jest.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({ id, checked, onCheckedChange, disabled }: any) => (
@@ -402,7 +412,8 @@ describe('RegisterFormWizard', () => {
       });
 
       const emailInput = screen.getByPlaceholderText('your@email.com');
-      await user.type(emailInput, 'invalid-email');
+      // Type an email without '@' to trigger format validation error
+      await user.type(emailInput, 'invalidemail');
 
       // Should show a format validation error. getEmailValidationError returns a
       // hardcoded (non-i18n) FR message ("Email doit contenir un @"); accept the
@@ -1326,7 +1337,9 @@ describe('RegisterFormWizard', () => {
 
       await waitFor(() => {
         const emailInput = screen.getByPlaceholderText('your@email.com');
-        expect(emailInput).toHaveAttribute('type', 'email');
+        // The Input mock renders type="email" as type="text" with data-original-type="email"
+        // to bypass jsdom's email sanitization in tests. Check the original type attribute.
+        expect(emailInput).toHaveAttribute('data-original-type', 'email');
       });
     });
 
