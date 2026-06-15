@@ -527,6 +527,7 @@ struct PostDetailView: View {
                 NotificationToastManager.shared.activePostId = nil
             }
         }
+        .trackEngagement(postId: postId, contentType: .post, surface: .detail)
         .adaptiveOnChange(of: viewModel.post) { _, updatedPost in
             // Re-seed when post loads from network (stale → fresh). Preserve
             // optimistic state: only update if no in-flight toggle is active.
@@ -849,7 +850,8 @@ struct PostDetailView: View {
                         isTextExpanded.toggle()
                     }
                     if isTextExpanded {
-                        Task { try? await PostService.shared.viewPost(postId: postId, duration: nil) }
+                        EngagementTracker.shared.recordAction(.expandedText, surface: .detail)
+                        Task { try? await PostService.shared.viewPost(postId: postId, duration: nil) }  // viewPost stays duration-less
                     }
                 }
             }
