@@ -39,10 +39,12 @@ final class StatusBubbleController: ObservableObject {
         guard entry.userId != AuthManager.shared.currentUser?.id else { return }
         let statusId = entry.id
         Task { try? await PostService.shared.viewPost(postId: statusId) }
+        EngagementTracker.shared.begin(postId: statusId, contentType: .status, surface: .statusBubble)
     }
 
     func dismiss() {
         currentEntry = nil
+        Task { await EngagementTracker.shared.end(surface: .statusBubble) }
     }
 
     /// Déclenché quand l'utilisateur touche le CONTENU du mood affiché (pas la
@@ -52,6 +54,7 @@ final class StatusBubbleController: ObservableObject {
     func requestReply() {
         guard let entry = currentEntry else { return }
         currentEntry = nil
+        Task { await EngagementTracker.shared.end(surface: .statusBubble) }
         // On ne répond pas à son propre mood.
         guard entry.userId != AuthManager.shared.currentUser?.id else { return }
 
@@ -65,7 +68,12 @@ final class StatusBubbleController: ObservableObject {
     var isPresented: Binding<Bool> {
         Binding(
             get: { self.currentEntry != nil },
-            set: { if !$0 { self.currentEntry = nil } }
+            set: { newValue in
+                if !newValue {
+                    self.currentEntry = nil
+                    Task { await EngagementTracker.shared.end(surface: .statusBubble) }
+                }
+            }
         )
     }
 }

@@ -334,6 +334,9 @@ public actor CacheCoordinator {
         await SearchIndex.shared.clearAll()
         // No translation persist task to cancel — persistence is now incremental
         clearTranslationCacheDB()
+        // Anti cross-user: drop any pending engagement sessions (open or
+        // finalized) so user A's dwell/watch never flushes under user B.
+        await EngagementOutbox.shared.purgeAll()
 
         // Reset the search-index backfill flag so the next user's first
         // `start()` re-runs the backfill against their freshly hydrated cache.

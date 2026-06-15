@@ -90,12 +90,23 @@ struct ReelsPlayerView: View {
         }
         .offset(x: max(0, edgeDrag))
         .task { viewModel.seed(posts: seedPosts, startId: startId) }
-        .adaptiveOnChange(of: viewModel.currentId) { _, newId in
+        .adaptiveOnChange(of: viewModel.currentId) { old, newId in
+            // End the previous reel's engagement session BEFORE the next begins,
+            // pushing the watch-time captured by the shared player.
+            if old != nil {
+                let m = SharedAVPlayerManager.shared
+                let watchMs = m.currentTime.isNaN ? 0 : Int(m.currentTime * 1000)
+                let durMs = m.duration > 0 ? Int(m.duration * 1000) : nil
+                EngagementTracker.shared.attachWatch(surface: .reels, watchMs: watchMs,
+                    mediaDurationMs: durMs, completed: false, samples: [])
+                Task { await EngagementTracker.shared.end(surface: .reels) }
+            }
             guard let newId else { return }
             // Never carry immersive-hidden chrome into the next reel — the scrub
             // bar / action rail / info must reappear when you page.
             if chromeHidden { chromeHidden = false }
             HapticFeedback.light()
+            EngagementTracker.shared.begin(postId: newId, contentType: .reel, surface: .reels)
             viewModel.recordView(newId)
         }
         .sheet(item: $commentsReel) { reel in
@@ -105,6 +116,7 @@ struct ReelsPlayerView: View {
                 onCommentSent: { postId in viewModel.didSendComment(postId: postId) }
             )
         }
+        .onDisappear { Task { await EngagementTracker.shared.end(surface: .reels) } }
         .statusBarHidden(true)
     }
 
