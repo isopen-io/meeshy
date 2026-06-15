@@ -300,3 +300,38 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   4. attachmentService.ts + tusUploadService.ts coverage (0%) deferred to next slice.
 - Next slice: P0 Encryption & attachments × web (part 2): `services/attachmentService.ts`, `services/tusUploadService.ts`
 - Commit: (see branch claude/coverage/p0-encryption-web)
+
+## 2026-06-15T14:00Z — P0 Prisme Linguistique × translator (language_capabilities.py ≥92% line+branch)
+- Targeted: `src/services/language_capabilities.py` (595 lines, 160 statements, 28 branches)
+- Result: ☑ done — 100% lines / 100% branches; feature matrix P0 Prisme × translator flipped ☐→☑
+- Coverage (final run):
+  - language_capabilities.py: 100% stmts / 100% lines / 100% branches (target ≥92% both)
+- Tests added: 107 new tests in `tests/test_32_language_capabilities.py` (new file)
+  - TestEnums (2): TTSEngine + STTEngine values
+  - TestLanguageCapability (2): dataclass defaults + full construction
+  - TestLanguageCapabilityError (6): constructor, to_dict, alternatives, exception interface
+  - TestSingleton (4): same-instance, double-init guard, accessor, reset
+  - TestEuropeanLanguages (6): MMS codes, Chatterbox, voice cloning, all-stt-tts
+  - TestAsianLanguages (5): presence, MMS codes, Chatterbox vs MMS, region
+  - TestAfricanLanguages (11): MMS-TTS, VITS-Lingala, no-TTS languages, Cameroonian
+  - TestGetCapability (3): known, unknown, case-insensitive
+  - TestCanTranscribe/Synthesize/CloneVoice/Translate (10): all branches incl. null cap + false flag
+  - TestGetEngines (7): Chatterbox, MMS, VITS, unknown → NONE
+  - TestMmsCodes (5): known, no-code, unknown
+  - TestRequiresMms (7): true/false/unknown for both TTS + ASR
+  - TestRequireStt (5): success, unknown raises, stt-not-supported raises, alternatives asserted
+  - TestRequireTts (4): success, unknown raises, not-supported raises
+  - TestRequireVoiceCloning (6): success (Lingala), no-tts chain, no-clone raises, alternatives asserted
+  - TestGetSimilarLanguages (4): prefix match, no match, default limit, custom limit
+  - TestGetAllLanguages (3): list, types, count equals internal dict
+  - TestGetLanguagesByRegion (5): Europe, Africa, no match, case-insensitive, Cameroon subset
+  - TestGetLanguagesWith (4): tts, stt, voice-cloning, mms-only
+  - TestGetStats (6): keys, positive counts, subset invariants, regions
+- Reviewer: PASS (rounds: 2 — round 1: test_stt_not_supported_alternatives_list was near-tautological; fixed to assert `len > 0` + `all can_transcribe`; round 2: PASS)
+- Notes:
+  1. `make_service()` factory resets `LanguageCapabilitiesService._instance = None` before each test — singleton isolation guaranteed.
+  2. Two branches in `_add_asian_languages` (len(entry)>6/7 else-None paths) are structurally dead (all 8-tuples always satisfy both conditions). Coverage tool marks them covered via the True branches exercised during initialization. No pragma: no cover needed.
+  3. 4 tests inject capabilities directly into `svc._capabilities` to test STT/translation-unsupported scenarios not constructible through the init path — accepted by rubric for exception-path coverage.
+  4. Production bug found: `require_stt` line 464 `cap.region == cap.region` (tautology due to variable shadowing). Bug is out of scope (no production code in this slice); surfaced by the alternatives-content assertion.
+- Next slice: P0 Prisme Linguistique × web (`utils/user-language-preferences.ts`, `services/translation.service.ts`, `advanced-translation.service.ts`, `message-translation.service.ts`)
+- Commit: (see branch claude/coverage/p0-prisme-translator)
