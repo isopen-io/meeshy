@@ -358,24 +358,26 @@ struct ConversationMediaGalleryView: View {
     private func bottomMetadataOverlay(_ att: MessageAttachment) -> some View {
         let info = senderInfoMap[att.id]
         return VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
-                MeeshyAvatar(
-                    name: info?.senderName ?? "?",
-                    context: .messageBubble,
-                    accentColor: info?.senderColor ?? accentColor,
-                    avatarURL: info?.senderAvatarURL
-                )
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(info?.senderName ?? "")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
-                    if let sentAt = info?.sentAt {
-                        Text(sentAt, format: .dateTime.day().month(.abbreviated).hour().minute())
+            // Rangée auteur : affichée seulement si l'info est fournie par le call
+            // site — sinon on masque (pas d'avatar « ? » vide au-dessus des dimensions).
+            if let info {
+                HStack(spacing: 10) {
+                    MeeshyAvatar(
+                        name: info.senderName,
+                        context: .messageBubble,
+                        accentColor: info.senderColor,
+                        avatarURL: info.senderAvatarURL
+                    )
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(info.senderName)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                        Text(info.sentAt, format: .dateTime.day().month(.abbreviated).hour().minute())
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.white.opacity(0.6))
                     }
+                    Spacer()
                 }
-                Spacer()
             }
             HStack(spacing: 8) {
                 Image(systemName: att.type == .video ? "video.fill" : "photo")

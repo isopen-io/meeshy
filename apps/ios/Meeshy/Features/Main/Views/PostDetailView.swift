@@ -606,10 +606,21 @@ struct PostDetailView: View {
                 let attachments = post.media
                     .filter { $0.type == .image || $0.type == .video }
                     .map { $0.toMessageAttachment() }
+                // Infos auteur en bas de la galerie (au-dessus des dimensions),
+                // identique au chemin feed (`FeedPostCard`). Tous les médias d'un
+                // poste partagent le même auteur.
+                let senderInfo = ConversationViewModel.MediaSenderInfo(
+                    senderName: post.author,
+                    senderAvatarURL: post.authorAvatarURL,
+                    senderColor: post.authorColor,
+                    sentAt: post.timestamp
+                )
+                let senderMap = Dictionary(uniqueKeysWithValues: attachments.map { ($0.id, senderInfo) })
                 ConversationMediaGalleryView(
                     allAttachments: attachments,
                     startAttachmentId: fullscreenMediaId ?? attachments.first?.id ?? "",
-                    accentColor: accentColor
+                    accentColor: accentColor,
+                    senderInfoMap: senderMap
                 )
             }
         }
