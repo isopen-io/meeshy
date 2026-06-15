@@ -33,6 +33,7 @@ const mockEmit = jest.fn();
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     getSocket: () => mockGetSocket(),
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 

@@ -34,6 +34,7 @@ jest.mock('@meeshy/shared/utils/sender-identity', () => ({
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     setGetMessageByIdCallback: jest.fn(),
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 

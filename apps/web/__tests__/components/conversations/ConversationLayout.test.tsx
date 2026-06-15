@@ -101,6 +101,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     getCurrentConversationId: jest.fn(),
     reconnect: jest.fn(),
     getConnectionDiagnostics: jest.fn(() => ({ isConnected: true })),
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 

@@ -18,6 +18,7 @@ import { renderHook, act } from '@testing-library/react';
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     getSocket: () => null,
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 

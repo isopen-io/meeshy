@@ -38,6 +38,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     editMessage: (...args: unknown[]) => mockEditMessage(...args),
     deleteMessage: (...args: unknown[]) => mockDeleteMessage(...args),
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 

@@ -14,6 +14,7 @@ jest.mock('@/hooks/use-fix-z-index', () => ({
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     setGetMessageByIdCallback: jest.fn(),
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 

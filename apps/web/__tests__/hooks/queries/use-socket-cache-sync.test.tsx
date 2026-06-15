@@ -73,6 +73,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onPreferencesUpdated: jest.fn(() => jest.fn()),
     onConversationJoined: jest.fn(() => jest.fn()),
     onConversationLeft: jest.fn(() => jest.fn()),
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 

@@ -9,6 +9,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     getConnectionDiagnostics: jest.fn(),
     reconnect: jest.fn(),
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 

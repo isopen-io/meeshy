@@ -247,6 +247,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     emit: jest.fn(),
     on: jest.fn(),
     off: jest.fn(),
+    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 
