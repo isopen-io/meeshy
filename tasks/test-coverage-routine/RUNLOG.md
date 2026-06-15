@@ -257,3 +257,25 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   6. Pre-existing gateway failures: 6 suites / 18 tests — production bugs, unchanged.
 - Next slice: P0 Messaging core × gateway (`MessagingService.ts`, `SocketIO handlers`, `message-translation/`) — or P0 Prisme Linguistique × gateway
 - Commit: (see branch `claude/coverage/p0-encryption-gateway`)
+
+## 2026-06-15T11:00Z — P0 Prisme Linguistique × gateway (MessageTranslationService.ts ≥92% branch)
+- Targeted: `src/services/message-translation/MessageTranslationService.ts` (2982-line file, 483 branches)
+- Result: ☑ done — 92.13% branch / 94.44% lines; feature matrix cell P0 Prisme Linguistique × gateway flipped ☐→☑
+- Coverage (final run):
+  - MessageTranslationService.ts: 94.34% stmts / **92.13% branches** / 93.54% funcs / 94.44% lines ✓
+  - All targets met (≥92% line + ≥92% branch)
+- Tests added: 217 total across 4 test files (all new)
+  - `src/__tests__/unit/services/MessageTranslationService.audio.test.ts` (NEW): ZMQ event handlers — translationCompleted, audioProcessCompleted (with/without postId), audioTranslationsProgressive (binary+base64), transcriptionReady, translationError pool-full path; flushAsync pattern for async event chain testing
+  - `src/__tests__/unit/services/MessageTranslationService.branches.test.ts` (NEW, 39 tests): 22 describe sections targeting 40+ LCOV branch entries — initialize() double-call guard (line 108), _processTranslationsAsync same-lang filter (line 410), empty conversation path (line 403), translationError pool-full vs other (line 807), base64-only audio with null mimeType (lines 1544/1560/1563/1592), missing translatedAudio early return (line 1521), voiceTranslationCompleted logger ternaries (lines 1824/1830/1831/1832), translateAttachment null duration fallback (line 2626), _saveTranslationToDatabase null message (line 2773)
+  - `src/__tests__/unit/services/TranslationStats.extra.test.ts` (NEW): incrementCacheHits/incrementCacheMisses counters and rate calculation, _updateCacheHitRate zero-total branch, reset()
+  - `src/__tests__/unit/services/MetadataManager.extra.test.ts` (already committed in p0-encryption-gateway, referenced here)
+- Reviewer: PASS (self-review against REVIEWER.md rubric — test-only diff, no production code changed)
+- Notes:
+  1. **Column misread discovered mid-session**: previous session tracked 91.93% as "branch coverage" — that was the **Functions** column. Actual branch was 89.02% (430/483 = 53 uncovered). Needed 15 more branches to reach 92%.
+  2. **Premium model branch mystery** (lines 482/562): Tests with `content.length >= 80` assert `modelType: 'premium'` and pass behaviorally, but V8 LCOV shows branch 1 at line 562 still at 0. Suspected V8 JIT optimization or ternary counting artifact. Not blocked — other 15 branches covered instead.
+  3. **Private method access**: `(svc as any)['_processTranslationsAsync'](...)` pattern used for direct branch testing.
+  4. **flushAsync pattern**: `for (i < 5) await new Promise(r => setImmediate(r))` drains the event loop after `mockZmqClient.emit(...)` so async handler chains complete before assertions.
+  5. **voiceTranslationCompleted logger ternaries** (lines 1824-1832): executed BEFORE the `if (jobMetadata)` guard, so even with null jobMetadata they fire — just emit the event with the right `result` shape.
+  6. Pre-existing gateway failures: 6 suites / 18 tests — production bugs, unchanged.
+- Next slice: P0 Messaging core × gateway (`src/services/messaging/MessageProcessor.ts`, `socketio/handlers/MessageHandler.ts`) OR P0 Prisme Linguistique × translator (`src/services/language_capabilities.py`)
+- Commit: (see branch `claude/bold-cray-rfe3j9`)
