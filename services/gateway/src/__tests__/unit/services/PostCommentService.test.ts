@@ -8,6 +8,7 @@
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { PostCommentService } from '../../../services/PostCommentService';
+import { encodeCursor } from '../../../routes/posts/types';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 // ---------------------------------------------------------------------------
@@ -263,5 +264,30 @@ describe('PostCommentService.getReplies', () => {
     const r7 = result.items.find((i) => i.id === 'r-7');
     expect(r6?.currentUserReactions).toEqual(['👍']);
     expect(r7?.currentUserReactions).toEqual(['🔥']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getComments — top-level filter survives pagination
+//
+// Regression: when a cursor was present, `where.OR = [cursor clauses]` clobbered
+// the `OR: [{parentId:null},{parentId:{isSet:false}}]` top-level guard, so page
+// 2+ leaked replies (parentId set) into the top-level comment list.
+// ---------------------------------------------------------------------------
+describe('PostCommentService.getComments — pagination', () => {
+  it('garde le filtre parentId (niveau 1 only) même avec un curseur', async () => {
+    mockPostCommentFindMany.mockResolvedValue([]);
+
+    const service = new PostCommentService(mockPrisma as PrismaClient);
+    const cursor = encodeCursor(new Date('2025-01-01T00:00:00Z'), 'c-1');
+    await service.getComments('post-1', cursor, 20, 'user-1');
+
+    const where = mockPostCommentFindMany.mock.calls[0][0].where;
+    expect(where.postId).toBe('post-1');
+    // Le filtre parentId DOIT survivre à la pagination (était écrasé par where.OR).
+    expect(JSON.stringify(where.AND)).toContain('parentId');
+    // Le curseur est une clause AND distincte, pas un remplacement.
+    expect(Array.isArray(where.AND)).toBe(true);
+    expect(where.AND.length).toBe(2);
   });
 });

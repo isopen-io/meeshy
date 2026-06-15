@@ -36,6 +36,12 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     public var latitude: Double?
     public var longitude: Double?
     public var transcription: MessageTranscription?
+    /// Per-language TTS variants of an audio media (Prisme Linguistique).
+    /// Each carries the translated transcription text + the synthesized audio
+    /// URL for that language. Populated for reel/feed audio from the gateway's
+    /// `PostMedia.translations` map; empty for non-audio media or when the
+    /// translator pipeline has not produced TTS variants yet.
+    public var translatedAudios: [MessageTranslatedAudio]
 
     public init(id: String = UUID().uuidString, type: FeedMediaType, url: String? = nil,
                 thumbnailUrl: String? = nil, thumbHash: String? = nil,
@@ -43,12 +49,14 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
                 width: Int? = nil, height: Int? = nil, duration: Int? = nil,
                 fileName: String? = nil, fileSize: String? = nil, pageCount: Int? = nil,
                 locationName: String? = nil, latitude: Double? = nil, longitude: Double? = nil,
-                transcription: MessageTranscription? = nil) {
+                transcription: MessageTranscription? = nil,
+                translatedAudios: [MessageTranslatedAudio] = []) {
         self.id = id; self.type = type; self.url = url; self.thumbnailUrl = thumbnailUrl; self.thumbHash = thumbHash; self.thumbnailColor = thumbnailColor
         self.width = width; self.height = height; self.duration = duration
         self.fileName = fileName; self.fileSize = fileSize; self.pageCount = pageCount
         self.locationName = locationName; self.latitude = latitude; self.longitude = longitude
         self.transcription = transcription
+        self.translatedAudios = translatedAudios
     }
 
     public static func image(color: String = "4ECDC4") -> FeedMedia {
@@ -78,6 +86,60 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     public var durationFormatted: String? {
         guard let d = duration else { return nil }
         return String(format: "%d:%02d", d / 60, d % 60)
+    }
+
+    // Explicit Codable so a newly-added `translatedAudios` field stays
+    // backward-compatible with feed blobs persisted before it existed: a
+    // missing key decodes to `[]` instead of throwing `keyNotFound`, which
+    // would otherwise drop the whole cached feed page on cold start.
+    private enum CodingKeys: String, CodingKey {
+        case id, type, url, thumbnailUrl, thumbHash, thumbnailColor
+        case width, height, duration, fileName, fileSize, pageCount
+        case locationName, latitude, longitude, transcription, translatedAudios
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        type = try c.decode(FeedMediaType.self, forKey: .type)
+        url = try c.decodeIfPresent(String.self, forKey: .url)
+        thumbnailUrl = try c.decodeIfPresent(String.self, forKey: .thumbnailUrl)
+        thumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
+        thumbnailColor = try c.decode(String.self, forKey: .thumbnailColor)
+        width = try c.decodeIfPresent(Int.self, forKey: .width)
+        height = try c.decodeIfPresent(Int.self, forKey: .height)
+        duration = try c.decodeIfPresent(Int.self, forKey: .duration)
+        fileName = try c.decodeIfPresent(String.self, forKey: .fileName)
+        fileSize = try c.decodeIfPresent(String.self, forKey: .fileSize)
+        pageCount = try c.decodeIfPresent(Int.self, forKey: .pageCount)
+        locationName = try c.decodeIfPresent(String.self, forKey: .locationName)
+        latitude = try c.decodeIfPresent(Double.self, forKey: .latitude)
+        longitude = try c.decodeIfPresent(Double.self, forKey: .longitude)
+        transcription = try c.decodeIfPresent(MessageTranscription.self, forKey: .transcription)
+        translatedAudios = try c.decodeIfPresent([MessageTranslatedAudio].self, forKey: .translatedAudios) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(type, forKey: .type)
+        try c.encodeIfPresent(url, forKey: .url)
+        try c.encodeIfPresent(thumbnailUrl, forKey: .thumbnailUrl)
+        try c.encodeIfPresent(thumbHash, forKey: .thumbHash)
+        try c.encode(thumbnailColor, forKey: .thumbnailColor)
+        try c.encodeIfPresent(width, forKey: .width)
+        try c.encodeIfPresent(height, forKey: .height)
+        try c.encodeIfPresent(duration, forKey: .duration)
+        try c.encodeIfPresent(fileName, forKey: .fileName)
+        try c.encodeIfPresent(fileSize, forKey: .fileSize)
+        try c.encodeIfPresent(pageCount, forKey: .pageCount)
+        try c.encodeIfPresent(locationName, forKey: .locationName)
+        try c.encodeIfPresent(latitude, forKey: .latitude)
+        try c.encodeIfPresent(longitude, forKey: .longitude)
+        try c.encodeIfPresent(transcription, forKey: .transcription)
+        if !translatedAudios.isEmpty {
+            try c.encode(translatedAudios, forKey: .translatedAudios)
+        }
     }
 }
 
@@ -340,6 +402,9 @@ public struct FeedPost: Identifiable, Sendable {
     public var bookmarkCount: Int = 0
     /// Server-issued share count (every `POST /posts/:id/share` increments it).
     public var shareCount: Int = 0
+    /// Server-issued unique-view count (`Post.viewCount`). Runtime-only like the
+    /// other counters above — set via `APIPost.toFeedPost`, not cached/Codable.
+    public var viewCount: Int = 0
     public var repost: RepostContent? = nil
     public var repostAuthor: String? = nil
     public var isQuote: Bool = false

@@ -32,15 +32,29 @@ let mockStorePrefs: any = {
 };
 
 jest.mock('@/stores/conversation-preferences-store', () => ({
-  useConversationPreferencesStore: () => ({
-    preferencesMap: new Map([['conv-1', mockStorePrefs], ['conv-2', mockStorePrefs]]),
-    categories: [],
-    isLoading: false,
-    isInitialized: true,
+  useConversationPreferencesStore: jest.fn((selector: any) => {
+    const state = {
+      preferencesMap: new Map([['conv-1', mockStorePrefs], ['conv-2', mockStorePrefs]]),
+      categories: [],
+      isLoading: false,
+      isInitialized: true,
+      initialize: jest.fn(),
+      togglePin: jest.fn(),
+      toggleMute: jest.fn(),
+      toggleArchive: jest.fn(),
+    };
+    return selector ? selector(state) : state;
+  }),
+  useConversationPreference: (_id: string) => undefined,
+  useConversationCategories: () => [],
+  useConversationPreferencesActions: () => ({
     initialize: jest.fn(),
+    getPreferences: jest.fn(),
     togglePin: jest.fn(),
     toggleMute: jest.fn(),
     toggleArchive: jest.fn(),
+    setReaction: jest.fn(),
+    refreshPreferences: jest.fn(),
   }),
 }));
 

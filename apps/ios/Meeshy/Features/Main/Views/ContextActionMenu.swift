@@ -145,10 +145,12 @@ struct ContextActionButton: View {
 ///
 /// Width is intrinsic to the action count — caller measures it via
 /// `ContextActionMenu.estimatedSize` and feeds the result into
-/// `MessageOverlayLayoutEngine`. The capsule overlays the dimmed backdrop
-/// with a `.regularMaterial` blur + faint hairline border + soft drop shadow.
-/// The shadow is a documented exception to the flatten spec's "no shadows"
-/// rule — overlays modaux need elevation cues (spec §1.3 / §8.1).
+/// `MessageOverlayLayoutEngine`. The capsule rides the dimmed backdrop as
+/// native iOS 26 Liquid Glass (accent-tinted) via `adaptiveGlass`, which gates
+/// the real `glassEffect` and degrades to a tinted `.ultraThinMaterial` blur
+/// pre-iOS-26 — same atom used by the floating call pill. The drop shadows stay:
+/// they are a documented exception to the flatten spec's "no shadows" rule —
+/// overlays modaux need elevation cues (spec §1.3 / §8.1).
 struct ContextActionMenu: View {
     let actions: [ContextAction]
     let palette: ConversationColorPalette
@@ -172,37 +174,7 @@ struct ContextActionMenu: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 5)
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-        )
-        .background(
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            accent.opacity(0.18),
-                            accent.opacity(0.06)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-        )
-        .overlay(
-            Capsule()
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            accent.opacity(0.45),
-                            accent.opacity(0.15)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 0.8
-                )
-        )
+        .adaptiveGlass(in: Capsule(), tint: accent.opacity(0.18))
         .shadow(color: accent.opacity(0.20), radius: 12, x: 0, y: 4)
         .shadow(color: .black.opacity(0.18), radius: 18, x: 0, y: 8)
         .accessibilityElement(children: .contain)

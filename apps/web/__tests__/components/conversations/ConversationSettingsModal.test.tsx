@@ -135,13 +135,27 @@ jest.mock('framer-motion', () => ({
 
 // Mock conversation preferences store
 jest.mock('@/stores/conversation-preferences-store', () => ({
-  useConversationPreferencesStore: () => ({
-    preferencesMap: new Map(),
-    categories: [],
-    isLoading: false,
-    isInitialized: true,
+  useConversationPreferencesStore: jest.fn((selector: any) => {
+    const state = {
+      preferencesMap: new Map(),
+      categories: [],
+      isLoading: false,
+      isInitialized: true,
+      initialize: jest.fn(),
+      getPreferences: jest.fn(() => undefined),
+      togglePin: jest.fn(),
+      toggleMute: jest.fn(),
+      toggleArchive: jest.fn(),
+      setReaction: jest.fn(),
+      refreshPreferences: jest.fn(),
+    };
+    return selector ? selector(state) : state;
+  }),
+  useConversationPreference: (_id: string) => undefined,
+  useConversationCategories: () => [],
+  useConversationPreferencesActions: () => ({
     initialize: jest.fn(),
-    getPreferences: jest.fn(() => undefined),
+    getPreferences: jest.fn(),
     togglePin: jest.fn(),
     toggleMute: jest.fn(),
     toggleArchive: jest.fn(),

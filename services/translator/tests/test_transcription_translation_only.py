@@ -58,7 +58,7 @@ def print_info(text: str):
     print(f"{BLUE}ℹ️  {text}{RESET}")
 
 
-async def test_transcription_and_translation(audio_path: str, test_name: str, expected_speakers: int = 1):
+async def _run_transcription_and_translation(audio_path: str, test_name: str, expected_speakers: int = 1):
     """Test transcription + traduction UNIQUEMENT (sans TTS)"""
 
     print_header(f"TEST {test_name}")
@@ -201,7 +201,7 @@ async def main():
     results = {}
 
     # Test 1: Mono-locuteur
-    success_mono, errors_mono = await test_transcription_and_translation(
+    success_mono, errors_mono = await _run_transcription_and_translation(
         MONO_AUDIO,
         "MONO",
         expected_speakers=1
@@ -209,7 +209,7 @@ async def main():
     results['mono'] = {'success': success_mono, 'errors': errors_mono}
 
     # Test 2: Multi-locuteur
-    success_multi, errors_multi = await test_transcription_and_translation(
+    success_multi, errors_multi = await _run_transcription_and_translation(
         MULTI_AUDIO,
         "MULTI",
         expected_speakers=2

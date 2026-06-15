@@ -47,7 +47,13 @@ jest.mock('@/lib/encryption/adapters/web-crypto-adapter', () => ({
 }));
 
 jest.mock('@/lib/encryption/adapters/indexeddb-key-storage-adapter', () => ({
-  indexedDBKeyStorageAdapter: {},
+  indexedDBKeyStorageAdapter: {
+    getConversationKey: jest.fn().mockResolvedValue(null),
+    storeConversationKey: jest.fn().mockResolvedValue(undefined),
+    removeConversationKey: jest.fn().mockResolvedValue(undefined),
+    listConversationKeys: jest.fn().mockResolvedValue([]),
+    clearAll: jest.fn().mockResolvedValue(undefined),
+  },
 }));
 
 // Mock getEncryptionStatus from shared types

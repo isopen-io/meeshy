@@ -36,7 +36,7 @@ public struct MessageTranscription: Sendable, Codable, Equatable {
 
 // MARK: - Message Translated Audio
 
-public struct MessageTranslatedAudio: Identifiable, Sendable, Equatable {
+public struct MessageTranslatedAudio: Identifiable, Sendable, Equatable, Codable {
     public let id: String
     public let attachmentId: String
     public let targetLanguage: String

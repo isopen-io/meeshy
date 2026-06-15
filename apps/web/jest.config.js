@@ -31,6 +31,8 @@ const customJestConfig = {
     // Handle module aliases
     '^@/(.*)$': '<rootDir>/$1',
     '^@meeshy/shared/(.*)$': '<rootDir>/../../packages/shared/dist/$1',
+    // Strip .js from relative imports: shared source uses ESM .js extensions but jest needs .ts
+    '^(\\.{1,2}/.*)\\.js$': '$1',
     // Mock lucide-react to avoid ESM issues - catch both direct and modularized imports
     '^lucide-react$': '<rootDir>/__mocks__/lucide-react.js',
     '^lucide-react/dist/esm/icons/(.*)$': '<rootDir>/__mocks__/lucide-react.js',
@@ -86,6 +88,17 @@ const customJestConfig = {
     '/_archived/',
     '/e2e/',
   ],
+
+  // Ratcheting floor — Sprint 0.4 baseline (2026-06-14: 33.1% line / 25.78% branch).
+  // Only ever raise these values, never lower them.
+  coverageThreshold: {
+    global: {
+      lines: 33,
+      branches: 25,
+      statements: 32,
+      functions: 29,
+    },
+  },
 }
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async

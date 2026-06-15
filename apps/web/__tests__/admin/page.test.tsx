@@ -29,6 +29,7 @@ jest.mock('../../services/auth-manager.service', () => ({
   authManager: {
     getAuthToken: jest.fn(),
     clearAllSessions: jest.fn(),
+    registerOnClear: jest.fn(),
   },
 }));
 
