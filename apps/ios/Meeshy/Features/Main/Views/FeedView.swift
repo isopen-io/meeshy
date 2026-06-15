@@ -47,6 +47,9 @@ struct FeedView: View {
     @State private var selectedStoryUserId: String?
     @State private var storyViewerSingleGroup = false
     @StateObject var viewModel = FeedViewModel()
+    /// Élit le réel le plus centré dans le viewport et pilote sa lecture muette
+    /// (source UNIQUE de "quel réel joue"). Call-aware via son init par défaut.
+    @StateObject private var reelAutoplay = ReelFeedAutoplayCoordinator()
     /// When true, use the UIKit-backed FeedListView for high-performance scrolling.
     /// Set to false to keep the existing SwiftUI ScrollView path.
     @State private var useUIKitList = false
@@ -624,8 +627,83 @@ struct FeedView: View {
     // MARK: - Feed Post Card
     @ViewBuilder
     private func feedPostCardView(for post: FeedPost) -> some View {
+        if post.isReel {
+            reelFeedCardView(for: post)
+        } else {
+            standardFeedPostCardView(for: post)
+        }
+    }
+
+    /// Carte Réel plein-cadre. Réutilise EXACTEMENT les handlers optimistes de
+    /// `standardFeedPostCardView` (toggle cœur/repartage/signet/partage) + le
+    /// même bloc d'ouverture viewer (`ReelsPresenter.present`). Le tap média
+    /// fait d'abord le handoff (clear + pause du moteur feed) avant de présenter.
+    private func reelFeedCardView(for post: FeedPost) -> some View {
+        // `ReelFeedCardContainer` observe le coordinator et calcule `isActive` en
+        // interne : le body de FeedView ne dépend donc pas d'`activeReelId` (I1).
+        ReelFeedCardContainer(
+            coordinator: reelAutoplay,
+            post: post,
+            isDark: isDark,
+            isLiked: postLikedIds.contains(post.id),
+            displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
+            isBookmarked: postBookmarkedIds.contains(post.id),
+            displayBookmarkCount: max(0, post.bookmarkCount + (postBookmarkDelta[post.id] ?? 0)),
+            isReposted: postRepostedIds.contains(post.id),
+            displayRepostCount: max(0, post.repostCount + (postRepostDelta[post.id] ?? 0)),
+            displayShareCount: max(0, post.shareCount + (postShareDelta[post.id] ?? 0)),
+            onTapMedia: {
+                // Handoff : le viewer prend la session via son propre usage de
+                // SharedAVPlayerManager ; on stoppe d'abord la lecture muette du
+                // feed pour éviter un conflit de moteur.
+                reelAutoplay.clear()
+                SharedAVPlayerManager.shared.pause()
+                HapticFeedback.medium()
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id)
+                }
+                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+            },
+            onTapGlyph: {
+                // Le logo Réel ouvre la page détail du poste (thread complet),
+                // distinct du tap média qui présente le viewer immersif.
+                router.push(.postDetail(post.id, post))
+                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+            },
+            onLike: { _ in togglePostHeart(post: post) },
+            onComment: { _ in
+                // Les commentaires d'un réel vivent dans le viewer plein écran
+                // (interactions riches) — même handoff que le tap média : on coupe
+                // la lecture muette du feed puis on présente le viewer sur ce post.
+                reelAutoplay.clear()
+                SharedAVPlayerManager.shared.pause()
+                HapticFeedback.medium()
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id)
+                }
+                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+            },
+            onRepost: { postId in togglePostRepost(postId: postId) },
+            onBookmark: { postId in togglePostBookmark(postId: postId) },
+            onShare: { postId in sharePostWithLink(postId: postId) },
+            onTapAuthor: { authorId in
+                NotificationCenter.default.post(
+                    name: Notification.Name("openProfileSheet"),
+                    object: ["userId": authorId, "username": post.authorUsername ?? post.author]
+                )
+            }
+        )
+        // Marges horizontales pour aligner la carte Réel sur les posts standards
+        // (`FeedPostCard` applique `.padding(.horizontal, 16)`). Sans ça la carte
+        // était bord-à-bord, sans séparation des bords ni des boutons flottants.
+        .padding(.horizontal, 16)
+        // Pas de `.equatable()` ici : le conteneur observe le coordinator (non
+        // Equatable). Le court-circuit Equatable vit à l'intérieur, sur `ReelFeedCard`.
+    }
+
+    private func standardFeedPostCardView(for post: FeedPost) -> some View {
         let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
-        FeedPostCard(
+        return FeedPostCard(
             post: post,
             isCommentsExpanded: expandedComments.contains(post.id),
             isLiked: postLikedIds.contains(post.id),
@@ -717,6 +795,24 @@ struct FeedView: View {
 
     // MARK: - Feed Scroll View
     private var feedScrollView: some View {
+        // GeometryReader extérieur : fournit les bornes globales du viewport au
+        // coordinator d'autoplay. Les cartes réel publient leur frame (.global)
+        // via `reportReelFrame` ; `onPreferenceChange` les agrège et élit le réel
+        // centré. iOS 16-compatible (pas d'API scroll iOS 17).
+        GeometryReader { viewportProxy in
+            let viewportFrame = viewportProxy.frame(in: .global)
+            scrollContent
+                .onPreferenceChange(ReelVisibilityPreferenceKey.self) { frames in
+                    reelAutoplay.update(
+                        frames: frames,
+                        viewportMinY: viewportFrame.minY,
+                        viewportMaxY: viewportFrame.maxY
+                    )
+                }
+        }
+    }
+
+    private var scrollContent: some View {
         ScrollViewReader { scrollProxy in
             // Wrapper Meeshy : `.refreshable` natif iOS + indicator brand
             // anime (logo dashes + degrade indigo). Meme experience que la

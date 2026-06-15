@@ -114,6 +114,9 @@ final class MockPostService: PostServiceProviding {
     var recordImpressionsCallCount = 0
     var lastRecordImpressionPostIds: [String]?
 
+    var recordEngagementCallCount = 0
+    var lastRecordEngagementSessions: [EngagementSession]?
+
     // MARK: - Protocol Conformance
 
     func getFeed(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
@@ -287,6 +290,11 @@ final class MockPostService: PostServiceProviding {
         lastRecordImpressionPostIds = postIds
     }
 
+    func recordEngagement(_ sessions: [EngagementSession]) async throws {
+        recordEngagementCallCount += 1
+        lastRecordEngagementSessions = sessions
+    }
+
     // MARK: - Reset
 
     func reset() {
@@ -374,5 +382,8 @@ final class MockPostService: PostServiceProviding {
 
         recordImpressionsCallCount = 0
         lastRecordImpressionPostIds = nil
+
+        recordEngagementCallCount = 0
+        lastRecordEngagementSessions = nil
     }
 }
