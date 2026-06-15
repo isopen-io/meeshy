@@ -44,6 +44,9 @@ final class ReelsViewModel: ObservableObject {
     @Published private(set) var bookmarkedIds: Set<String> = []
 
     private var likeDelta: [String: Int] = [:]
+    /// Optimistic comment-count bump per post id (applied on top of the server
+    /// count) so the reel's comment counter rises the instant a comment is sent.
+    @Published private var commentDelta: [String: Int] = [:]
     private var heartInFlight: Set<String> = []
     private var bookmarkInFlight: Set<String> = []
 
@@ -172,6 +175,17 @@ final class ReelsViewModel: ObservableObject {
 
     func likeCount(_ post: FeedPost) -> Int {
         max(0, post.likes + (likeDelta[post.id] ?? 0))
+    }
+
+    /// Comment count including the optimistic bump from a just-sent comment.
+    func commentCount(_ post: FeedPost) -> Int {
+        max(0, post.commentCount + (commentDelta[post.id] ?? 0))
+    }
+
+    /// Called when the comment sheet confirms a comment was sent for `postId` —
+    /// bumps the reel's comment counter immediately (the rail reads `commentCount`).
+    func didSendComment(postId: String) {
+        commentDelta[postId, default: 0] += 1
     }
 
     // MARK: - Interactions (optimistic)

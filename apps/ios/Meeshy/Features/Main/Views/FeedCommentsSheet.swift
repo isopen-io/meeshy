@@ -144,6 +144,9 @@ struct CommentsSheetView: View {
     let accentColor: String
     var onSendComment: ((String, String, String?) -> Void)? = nil
     var onLikeComment: ((String, String) -> Void)? = nil
+    /// Fired with the post id AFTER a comment was successfully sent — lets a host
+    /// (e.g. the reels viewer) bump its own comment counter. Optional; nil = no-op.
+    var onCommentSent: ((_ postId: String) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -180,12 +183,14 @@ struct CommentsSheetView: View {
         post: FeedPost,
         accentColor: String,
         onSendComment: ((String, String, String?) -> Void)? = nil,
-        onLikeComment: ((String, String) -> Void)? = nil
+        onLikeComment: ((String, String) -> Void)? = nil,
+        onCommentSent: ((_ postId: String) -> Void)? = nil
     ) {
         self.post = post
         self.accentColor = accentColor
         self.onSendComment = onSendComment
         self.onLikeComment = onLikeComment
+        self.onCommentSent = onCommentSent
         _mentionController = StateObject(wrappedValue: MentionComposerController(
             context: .post(id: post.id)
         ))
@@ -599,10 +604,33 @@ struct CommentsSheetView: View {
                 replyingTo = nil
                 commentEffects = .none
                 commentBlurEnabled = false
+                mentionController.clearDraft()
+
+                let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
+                let effectFlags = flags > 0 ? Int(flags) : nil
+
+                // Optimistic: a top-level comment appears instantly and reconciles
+                // with the server row on success (or rolls back on failure).
+                let tempId = "tmp_\(UUID().uuidString)"
+                if parentId == nil {
+                    let me = AuthManager.shared.currentUser
+                    let optimistic = FeedComment(
+                        id: tempId,
+                        author: me?.displayName ?? me?.username ?? "",
+                        authorId: me?.id ?? "",
+                        authorAvatarURL: me?.avatar,
+                        content: text, timestamp: Date(),
+                        likes: 0, replies: 0, parentId: nil,
+                        effectFlags: effectFlags ?? 0
+                    )
+                    var current = liveComments ?? post.comments
+                    current.insert(optimistic, at: 0)
+                    liveComments = current
+                    liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
+                }
+
                 Task {
                     do {
-                        let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
-                        let effectFlags = flags > 0 ? Int(flags) : nil
                         let apiComment = try await PostService.shared.addComment(postId: post.id, content: text, parentId: parentId, effectFlags: effectFlags)
                         let feedComment = FeedComment(
                             id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
@@ -622,16 +650,26 @@ struct CommentsSheetView: View {
                                 current[idx].replies += 1
                                 liveComments = current
                             }
+                            liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
                         } else {
+                            // Reconcile the optimistic row with the server one.
                             var current = liveComments ?? post.comments
-                            if !current.contains(where: { $0.id == feedComment.id }) {
+                            if let idx = current.firstIndex(where: { $0.id == tempId }) {
+                                current[idx] = feedComment
+                            } else if !current.contains(where: { $0.id == feedComment.id }) {
                                 current.insert(feedComment, at: 0)
                             }
                             liveComments = current
                         }
-                        liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
-                        mentionController.clearDraft()
+                        onCommentSent?(post.id)
                     } catch {
+                        // Roll back the optimistic top-level row.
+                        if parentId == nil {
+                            var current = liveComments ?? post.comments
+                            current.removeAll { $0.id == tempId }
+                            liveComments = current
+                            liveCommentCount = max((liveCommentCount ?? post.comments.count) - 1, 0)
+                        }
                         FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
                     }
                 }

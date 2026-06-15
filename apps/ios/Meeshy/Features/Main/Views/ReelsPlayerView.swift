@@ -96,7 +96,11 @@ struct ReelsPlayerView: View {
             viewModel.recordView(newId)
         }
         .sheet(item: $commentsReel) { reel in
-            CommentsSheetView(post: reel, accentColor: reel.authorColor)
+            CommentsSheetView(
+                post: reel,
+                accentColor: reel.authorColor,
+                onCommentSent: { postId in viewModel.didSendComment(postId: postId) }
+            )
         }
         .statusBarHidden(true)
     }
@@ -109,13 +113,9 @@ struct ReelsPlayerView: View {
                 reel: reel,
                 isActive: viewModel.currentId == reel.id,
                 revealCompleted: revealCompleted,
-                isLiked: viewModel.isLiked(reel.id),
-                likeCount: viewModel.likeCount(reel),
-                isBookmarked: viewModel.isBookmarked(reel.id),
+                viewModel: viewModel,
                 chromeHidden: $chromeHidden,
-                onLike: { viewModel.toggleLike(reel) },
                 onComment: { commentsReel = reel },
-                onBookmark: { viewModel.toggleBookmark(reel) },
                 onShare: { viewModel.share(reel) },
                 onTapAuthorName: { openProfile(for: reel) },
                 onTapAvatar: { openAvatarDestination(for: reel) }
@@ -223,15 +223,13 @@ struct ReelPageView: View {
     let reel: FeedPost
     let isActive: Bool
     let revealCompleted: Bool
-    let isLiked: Bool
-    let likeCount: Int
-    let isBookmarked: Bool
+    /// The reels view-model — passed so the action rail can read the live
+    /// like/bookmark/comment counters reactively (the rail observes it).
+    let viewModel: ReelsViewModel
     /// Shared immersive flag (owned by `ReelsPlayerView`). Long-press hides all
     /// chrome; the next tap restores it (mirrors the Story viewer).
     @Binding var chromeHidden: Bool
-    var onLike: () -> Void
     var onComment: () -> Void
-    var onBookmark: () -> Void
     var onShare: () -> Void
     /// Author name tap → profile.
     var onTapAuthorName: () -> Void
@@ -508,28 +506,49 @@ struct ReelPageView: View {
     // MARK: Action rail
 
     private var actionRail: some View {
+        ReelActionRail(
+            viewModel: viewModel,
+            reel: reel,
+            onComment: onComment,
+            onShare: onShare
+        )
+    }
+}
+
+// MARK: - Action Rail (reactive — observes the view-model so the like / bookmark
+// / comment counters update the instant they change)
+
+private struct ReelActionRail: View {
+    @ObservedObject var viewModel: ReelsViewModel
+    let reel: FeedPost
+    var onComment: () -> Void
+    var onShare: () -> Void
+
+    var body: some View {
         VStack(spacing: 22) {
+            let isLiked = viewModel.isLiked(reel.id)
             ReelActionButton(
                 systemName: isLiked ? "heart.fill" : "heart",
                 tint: isLiked ? MeeshyColors.error : .white,
-                count: likeCount,
-                action: onLike
+                count: viewModel.likeCount(reel),
+                action: { viewModel.toggleLike(reel) }
             )
             .accessibilityLabel(String(localized: "reels.action.like", defaultValue: "J'aime", bundle: .main))
 
             ReelActionButton(
                 systemName: "bubble.right.fill",
                 tint: .white,
-                count: reel.commentCount,
+                count: viewModel.commentCount(reel),
                 action: onComment
             )
             .accessibilityLabel(String(localized: "reels.action.comment", defaultValue: "Commenter", bundle: .main))
 
+            let isBookmarked = viewModel.isBookmarked(reel.id)
             ReelActionButton(
                 systemName: isBookmarked ? "bookmark.fill" : "bookmark",
                 tint: isBookmarked ? MeeshyColors.warning : .white,
                 count: nil,
-                action: onBookmark
+                action: { viewModel.toggleBookmark(reel) }
             )
             .accessibilityLabel(String(localized: "reels.action.bookmark", defaultValue: "Enregistrer", bundle: .main))
 
