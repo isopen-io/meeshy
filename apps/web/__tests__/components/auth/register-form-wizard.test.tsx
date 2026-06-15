@@ -404,9 +404,12 @@ describe('RegisterFormWizard', () => {
       const emailInput = screen.getByPlaceholderText('your@email.com');
       await user.type(emailInput, 'invalid-email');
 
-      // Should show validation error
+      // Should show a format validation error. getEmailValidationError returns a
+      // hardcoded (non-i18n) FR message ("Email doit contenir un @"); accept the
+      // English mock message too so the assertion holds regardless of whether the
+      // shared mock is applied by the test runner.
       await waitFor(() => {
-        expect(screen.getByText(/Invalid email/i)).toBeInTheDocument();
+        expect(screen.getByText(/Invalid email|Email doit contenir un @/i)).toBeInTheDocument();
       });
     });
 

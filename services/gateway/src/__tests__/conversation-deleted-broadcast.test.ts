@@ -40,7 +40,7 @@ const buildApp = async (prisma: ReturnType<typeof buildPrismaMock>) => {
   };
 
   const app = Fastify({ logger: false });
-  app.decorate('socketIOHandler', { getManager: () => ({ io: fakeIO }) } as any);
+  app.decorate('socketIOHandler', { getManager: () => ({ getIO: () => fakeIO }) } as any);
 
   const requiredAuth = async (request: any) => {
     request.authContext = {

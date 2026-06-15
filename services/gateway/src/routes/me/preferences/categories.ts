@@ -280,7 +280,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         });
 
         if (!category) {
-          return sendNotFound(reply, 'Category not found');
+          return sendNotFound(reply, 'NOT_FOUND', { message: 'Category not found' });
         }
 
         return sendSuccess(reply, category);
@@ -419,7 +419,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         });
 
         if (!existing) {
-          return sendNotFound(reply, 'Category not found');
+          return sendNotFound(reply, 'NOT_FOUND', { message: 'Category not found' });
         }
 
         const updateData: any = {};
@@ -493,7 +493,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         });
 
         if (!existing) {
-          return sendNotFound(reply, 'Category not found');
+          return sendNotFound(reply, 'NOT_FOUND', { message: 'Category not found' });
         }
 
         // Transaction: détacher les conversations puis supprimer la catégorie

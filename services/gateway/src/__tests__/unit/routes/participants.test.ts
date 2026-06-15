@@ -116,6 +116,21 @@ function getRoute(fastify: ReturnType<typeof createMockFastify>, method: string,
   return fastify.routes.find(r => r.method === method && r.path.includes(pathPattern))!;
 }
 
+// The mutating routes resolve Socket.IO and the notification service from the
+// Fastify instance (`fastify.socketIOHandler?.getManager()?.getIO()` and
+// `fastify.notificationService`), not from `request.server`. Mirror whatever a
+// test wires onto `request.server` onto the registered Fastify instance so the
+// route's closure observes it.
+function wireServerToFastify(
+  fastify: any,
+  server?: { io?: unknown; notificationService?: unknown }
+) {
+  fastify.socketIOHandler = server?.io
+    ? { getManager: () => ({ getIO: () => server.io }) }
+    : undefined;
+  fastify.notificationService = server?.notificationService;
+}
+
 function createParticipant(overrides: Record<string, unknown> = {}) {
   return {
     id: PARTICIPANT_ID,
@@ -633,7 +648,7 @@ describe('registerParticipantsRoutes', () => {
   // =========================================================================
   describe('POST /conversations/:id/participants', () => {
     function createPostRequest(overrides: Record<string, unknown> = {}) {
-      return {
+      const request = {
         params: { id: VALID_CONV_ID },
         body: { userId: TARGET_USER_ID },
         authContext: {
@@ -646,6 +661,8 @@ describe('registerParticipantsRoutes', () => {
         },
         ...overrides,
       };
+      wireServerToFastify(mockFastify, request.server as any);
+      return request;
     }
 
     it('should return 403 when conversation ID cannot be resolved', async () => {
@@ -1059,7 +1076,7 @@ describe('registerParticipantsRoutes', () => {
   // =========================================================================
   describe('DELETE /conversations/:id/participants/:userId', () => {
     function createDeleteRequest(overrides: Record<string, unknown> = {}) {
-      return {
+      const request = {
         params: { id: VALID_CONV_ID, userId: TARGET_USER_ID },
         authContext: {
           isAuthenticated: true,
@@ -1071,6 +1088,8 @@ describe('registerParticipantsRoutes', () => {
         },
         ...overrides,
       };
+      wireServerToFastify(mockFastify, request.server as any);
+      return request;
     }
 
     function createCreatorParticipant() {
@@ -1363,7 +1382,7 @@ describe('registerParticipantsRoutes', () => {
   // =========================================================================
   describe('PATCH /conversations/:id/participants/:userId/role', () => {
     function createPatchRequest(overrides: Record<string, unknown> = {}) {
-      return {
+      const request = {
         params: { id: VALID_CONV_ID, userId: TARGET_USER_ID },
         body: { role: 'ADMIN' },
         authContext: {
@@ -1377,6 +1396,8 @@ describe('registerParticipantsRoutes', () => {
         },
         ...overrides,
       };
+      wireServerToFastify(mockFastify, request.server as any);
+      return request;
     }
 
     function createCreatorParticipant() {
@@ -1614,7 +1635,10 @@ describe('registerParticipantsRoutes', () => {
         recipientUserId: TARGET_USER_ID,
         changedByUserId: VALID_USER_ID,
         conversationId: VALID_CONV_ID,
-        newRole: 'admin',
+        // createMemberRoleChangedNotification expects the role as an uppercase
+        // enum ('ADMIN' | 'MODERATOR' | 'MEMBER'); the route uppercases newRole
+        // for the notification while the socket payload keeps the stored case.
+        newRole: 'ADMIN',
         previousRole: 'member',
       });
     });

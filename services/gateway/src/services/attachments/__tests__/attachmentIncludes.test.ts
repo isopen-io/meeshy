@@ -17,21 +17,24 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
     // against future omissions.
     const schemaKeys = new Set(Object.keys(messageAttachmentSchema.properties));
 
+    // `reactions` is a relation select, not a wire field: serializeAttachmentForSocket
+    // aggregates the rows into `reactionSummary` + `currentUserReactions` (both declared
+    // in the schema) and never serializes the raw array. It is therefore exempt from the
+    // subset check — the schema strips nothing the client expects.
+    const aggregationOnlyKeys = new Set(['reactions']);
+    const wireFieldsMissingFromSchema = (select: object) =>
+      Object.keys(select).filter((k) => !aggregationOnlyKeys.has(k) && !schemaKeys.has(k));
+
     it('attachmentMediaSelect ⊆ messageAttachmentSchema.properties', () => {
-      const missing = Object.keys(attachmentMediaSelect).filter((k) => !schemaKeys.has(k));
-      expect(missing).toEqual([]);
+      expect(wireFieldsMissingFromSchema(attachmentMediaSelect)).toEqual([]);
     });
 
     it('attachmentFullSelect ⊆ messageAttachmentSchema.properties (no stripped fields)', () => {
-      const missing = Object.keys(attachmentFullSelect).filter((k) => !schemaKeys.has(k));
-      expect(missing).toEqual([]);
+      expect(wireFieldsMissingFromSchema(attachmentFullSelect)).toEqual([]);
     });
 
     it('attachmentForwardPreviewSelect ⊆ messageAttachmentSchema.properties', () => {
-      const missing = Object.keys(attachmentForwardPreviewSelect).filter(
-        (k) => !schemaKeys.has(k),
-      );
-      expect(missing).toEqual([]);
+      expect(wireFieldsMissingFromSchema(attachmentForwardPreviewSelect)).toEqual([]);
     });
 
     it('messageAttachmentSchema explicitly declares the E2EE envelope', () => {
@@ -101,8 +104,8 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       );
     });
 
-    it('selects exactly 27 documented fields — guards against silent omission', () => {
-      const expectedKeys = [
+    it('selects exactly the 27 documented scalar fields plus the reactions relation — guards against silent omission', () => {
+      const expectedScalarKeys = [
         'id',
         'messageId',
         'fileName',
@@ -131,15 +134,28 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'transcription',
         'translations',
       ];
+      // 27 scalar Prisme/render fields + the `reactions` relation (aggregated to
+      // reactionSummary/currentUserReactions at serialization time).
+      const expectedKeys = [...expectedScalarKeys, 'reactions'];
       expect(Object.keys(attachmentMediaSelect).sort()).toEqual(expectedKeys.sort());
-      expect(Object.keys(attachmentMediaSelect)).toHaveLength(27);
+      expect(Object.keys(attachmentMediaSelect)).toHaveLength(28);
+    });
+
+    it('selects the reactions relation for per-image aggregation', () => {
+      expect(attachmentMediaSelect).toEqual(
+        expect.objectContaining({
+          reactions: { select: { emoji: true, participantId: true } },
+        }),
+      );
     });
   });
 
   describe('attachmentFullSelect — render + consumption tracking + security', () => {
     it('is a superset of attachmentMediaSelect', () => {
-      for (const key of Object.keys(attachmentMediaSelect)) {
-        expect(attachmentFullSelect).toHaveProperty(key, true);
+      // Match each media-select entry by value so the `reactions` relation
+      // (an object, not `true`) is preserved through the spread alongside scalars.
+      for (const [key, value] of Object.entries(attachmentMediaSelect)) {
+        expect(attachmentFullSelect).toHaveProperty(key, value);
       }
     });
 
