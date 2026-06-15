@@ -367,6 +367,12 @@ struct ThemedFeedOverlay: View {
                 }
                 Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
             },
+            onTapGlyph: {
+                // Le logo Réel ouvre la page détail du poste (thread complet),
+                // distinct du tap média qui présente le viewer immersif.
+                router.push(.postDetail(post.id, post))
+                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+            },
             onLike: { _ in togglePostHeart(post: post) },
             onComment: { _ in
                 // Les commentaires d'un réel vivent dans le viewer plein écran :
@@ -389,6 +395,10 @@ struct ThemedFeedOverlay: View {
                 )
             }
         )
+        // Marges horizontales pour aligner la carte Réel sur les posts standards
+        // (chemin iPhone). `FeedPostCard` applique son propre `.padding(.horizontal, 16)` ;
+        // sans ça la carte Réel était bord-à-bord sur iPhone (le fix iPad existait déjà).
+        .padding(.horizontal, 16)
     }
 
     // MARK: - Standard post card

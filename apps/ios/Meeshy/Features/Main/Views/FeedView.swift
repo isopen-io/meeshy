@@ -664,6 +664,12 @@ struct FeedView: View {
                 }
                 Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
             },
+            onTapGlyph: {
+                // Le logo Réel ouvre la page détail du poste (thread complet),
+                // distinct du tap média qui présente le viewer immersif.
+                router.push(.postDetail(post.id, post))
+                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+            },
             onLike: { _ in togglePostHeart(post: post) },
             onComment: { _ in
                 // Les commentaires d'un réel vivent dans le viewer plein écran

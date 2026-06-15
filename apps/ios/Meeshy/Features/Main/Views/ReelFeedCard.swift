@@ -23,6 +23,7 @@ struct ReelFeedCardContainer: View {
     let displayShareCount: Int
 
     let onTapMedia: () -> Void
+    let onTapGlyph: () -> Void
     let onLike: (String) -> Void
     let onComment: (String) -> Void
     let onRepost: (String) -> Void
@@ -43,6 +44,7 @@ struct ReelFeedCardContainer: View {
             displayRepostCount: displayRepostCount,
             displayShareCount: displayShareCount,
             onTapMedia: onTapMedia,
+            onTapGlyph: onTapGlyph,
             onLike: onLike,
             onComment: onComment,
             onRepost: onRepost,
@@ -56,7 +58,8 @@ struct ReelFeedCardContainer: View {
 
 /// Carte Réel plein-cadre du feed : média en fond (aspect-fill, plafond 4:5),
 /// auteur + boutons en overlay, logo Réel coin haut-droit sans texte. Autoplay
-/// muet quand `isActive`. Tap sur le média → viewer plein écran via `onTapMedia`.
+/// muet quand `isActive`. Tap sur le média → viewer plein écran via `onTapMedia` ;
+/// tap sur le logo Réel → page détail du poste via `onTapGlyph`.
 struct ReelFeedCard: View, Equatable {
     let post: FeedPost
     let isActive: Bool
@@ -73,6 +76,7 @@ struct ReelFeedCard: View, Equatable {
 
     // Callbacks (mêmes signatures que FeedPostCard)
     let onTapMedia: () -> Void
+    let onTapGlyph: () -> Void
     let onLike: (String) -> Void
     let onComment: (String) -> Void
     let onRepost: (String) -> Void
@@ -171,24 +175,31 @@ struct ReelFeedCard: View, Equatable {
         }
     }
 
-    // MARK: - Logo Réel (coin haut-droit, sans texte)
+    // MARK: - Logo Réel (coin haut-droit) — tap → page détail du poste
 
     private var reelGlyph: some View {
         VStack {
             HStack {
                 Spacer()
-                Image(systemName: "play.rectangle.on.rectangle.fill")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(8)
-                    .background(Circle().fill(.ultraThinMaterial))
-                    .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
-                    .padding(10)
-                    .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+                Button {
+                    onTapGlyph()
+                    HapticFeedback.light()
+                } label: {
+                    Image(systemName: "play.rectangle.on.rectangle.fill")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(8)
+                        .background(Circle().fill(.ultraThinMaterial))
+                        .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(10)
+                .accessibilityLabel(String(localized: "feed.reel.open_detail.a11y", defaultValue: "Ouvrir le détail du réel", bundle: .main))
             }
             Spacer()
         }
-        .accessibilityHidden(true)
     }
 
     // MARK: - Overlay bas (scrim + auteur + texte + boutons)
