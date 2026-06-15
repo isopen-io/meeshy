@@ -11,6 +11,7 @@
 		00CDA82D2AC8F3D9847F02C4 /* StatsTimelineChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA306483025A83773D87DED /* StatsTimelineChart.swift */; };
 		0135B9488688ACDA9A26DB98 /* ReplyThreadLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6004F67A016838BA122ED6E /* ReplyThreadLoaderTests.swift */; };
 		031EA7F524ECB3B634B6CFAD /* FeedViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7789A854759F389975CB9906 /* FeedViewModelTests.swift */; };
+		0CA1A0DE0000000000000001 /* ReelsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA1A0DE0000000000000002 /* ReelsViewModelTests.swift */; };
 		044D99CB3F85BD65437758B8 /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71C9C50ECED369B628670C7 /* ThreadView.swift */; };
 		05B5F79B388C9B158E00C29A /* SharePickerViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F724878269B34D64666FE22F /* SharePickerViewModelTests.swift */; };
 		07C7DC41C6D41D9141CDA4B6 /* EmailVerificationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F66FA34FBEE79DA54D82826E /* EmailVerificationView.swift */; };
@@ -426,6 +427,7 @@
 		MOCK0006000600060006001 /* MockAPIClientForApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK0006000600060006000 /* MockAPIClientForApp.swift */; };
 		MOCK0007000700070007001 /* MockStoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK0007000700070007000 /* MockStoryService.swift */; };
 		MOCK0008000800080008001 /* MockPostService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK0008000800080008000 /* MockPostService.swift */; };
+		0CA1A0DE0000000000000003 /* MockReelFeedCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA1A0DE0000000000000004 /* MockReelFeedCache.swift */; };
 		MOCK0009000900090009001 /* MockStatusService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK0009000900090009000 /* MockStatusService.swift */; };
 		MOCK000A000A000A000A001 /* MockUserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000A000A000A000A000 /* MockUserService.swift */; };
 		MOCK000B000B000B000B001 /* MockBlockService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000B000B000B000B000 /* MockBlockService.swift */; };
@@ -679,6 +681,7 @@
 		750FE2A49FB88DF459390587 /* ThemedConversationRow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ThemedConversationRow.swift; sourceTree = "<group>"; };
 		75BB3BB6E01A899FDB29E8A8 /* ConversationCommandHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationCommandHandler.swift; sourceTree = "<group>"; };
 		7789A854759F389975CB9906 /* FeedViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeedViewModelTests.swift; sourceTree = "<group>"; };
+		0CA1A0DE0000000000000002 /* ReelsViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReelsViewModelTests.swift; sourceTree = "<group>"; };
 		7A27F2AB5AC64E0CA5724730 /* MultiAttachmentSendPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiAttachmentSendPlanner.swift; sourceTree = "<group>"; };
 		7B489B1DA15CF189E770686F /* UserProfileViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UserProfileViewModel.swift; sourceTree = "<group>"; };
 		7D674426B581D850405E32AE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -1016,6 +1019,7 @@
 		MOCK0006000600060006000 /* MockAPIClientForApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAPIClientForApp.swift; sourceTree = "<group>"; };
 		MOCK0007000700070007000 /* MockStoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockStoryService.swift; sourceTree = "<group>"; };
 		MOCK0008000800080008000 /* MockPostService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockPostService.swift; sourceTree = "<group>"; };
+		0CA1A0DE0000000000000004 /* MockReelFeedCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockReelFeedCache.swift; sourceTree = "<group>"; };
 		MOCK0009000900090009000 /* MockStatusService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockStatusService.swift; sourceTree = "<group>"; };
 		MOCK000A000A000A000A000 /* MockUserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockUserService.swift; sourceTree = "<group>"; };
 		MOCK000B000B000B000B000 /* MockBlockService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBlockService.swift; sourceTree = "<group>"; };
@@ -1622,6 +1626,7 @@
 				CVAT0001000100010001F001 /* ConversationViewModelAudioTests.swift */,
 				CVOQ000F000F000F000F000 /* ConversationViewModelOfflineQueueTests.swift */,
 				7789A854759F389975CB9906 /* FeedViewModelTests.swift */,
+				0CA1A0DE0000000000000002 /* ReelsViewModelTests.swift */,
 				E5AC4E027FC1B934E44A48FD /* GlobalSearchViewModelTests.swift */,
 				E4A4562A9E8160E9EF7098B7 /* StatusViewModelTests.swift */,
 				CSVT470B470B470B470B4701 /* ConnectionStatusViewModelTests.swift */,
@@ -1912,6 +1917,7 @@
 				MCKS0005000500050005000 /* MockReportService.swift */,
 				MOCK0007000700070007000 /* MockStoryService.swift */,
 				MOCK0008000800080008000 /* MockPostService.swift */,
+				0CA1A0DE0000000000000004 /* MockReelFeedCache.swift */,
 				MOCK000C000C000C000C000 /* MockLanguageProvider.swift */,
 				MOCK0009000900090009000 /* MockStatusService.swift */,
 				MOCK000A000A000A000A000 /* MockUserService.swift */,
@@ -2737,6 +2743,7 @@
 				HLPR0005000500050005001 /* AudioTranslationMergeTests.swift in Sources */,
 				MOCK0007000700070007001 /* MockStoryService.swift in Sources */,
 				MOCK0008000800080008001 /* MockPostService.swift in Sources */,
+				0CA1A0DE0000000000000003 /* MockReelFeedCache.swift in Sources */,
 				MOCK000C000C000C000C001 /* MockLanguageProvider.swift in Sources */,
 				FOMQ000D000D000D000D001 /* FakeOfflineMessageQueue.swift in Sources */,
 				FNMN000E000E000E000E001 /* FakeNetworkMonitor.swift in Sources */,
@@ -2751,6 +2758,7 @@
 				E941B8BFDFFF2E342CA6DCCF /* ConversationViewModelTests.swift in Sources */,
 				FB41480E2ACB451CBEA4AE9B /* ConversationViewModelOtherUnreadTests.swift in Sources */,
 				031EA7F524ECB3B634B6CFAD /* FeedViewModelTests.swift in Sources */,
+				0CA1A0DE0000000000000001 /* ReelsViewModelTests.swift in Sources */,
 				34135EFA521513464A6DEE23 /* GlobalSearchViewModelTests.swift in Sources */,
 				84522147F0B370813212EA59 /* StatusViewModelTests.swift in Sources */,
 				CSVT470A470A470A470A4701 /* ConnectionStatusViewModelTests.swift in Sources */,

@@ -114,3 +114,65 @@ final class ReelsViewModelTests: XCTestCase {
         XCTAssertEqual(sut.currentId, "fresh-1")
     }
 }
+
+// MARK: - Reel Media Layout (pure classification of a reel's media surfaces)
+
+final class ReelMediaLayoutTests: XCTestCase {
+
+    private func img(_ id: String) -> FeedMedia { FeedMedia(id: id, type: .image, url: "https://x/\(id).jpg") }
+    private func aud(_ id: String) -> FeedMedia { FeedMedia(id: id, type: .audio, url: "https://x/\(id).m4a") }
+    private func vid(_ id: String) -> FeedMedia { FeedMedia(id: id, type: .video, url: "https://x/\(id).mp4") }
+    private func doc(_ id: String) -> FeedMedia { FeedMedia(id: id, type: .document, fileName: "\(id).pdf") }
+
+    func test_resolve_noMedia_isEmpty() {
+        XCTAssertEqual(ReelMediaLayout.resolve(media: []), .empty)
+    }
+
+    func test_resolve_onlyDocuments_isEmpty() {
+        // Documents and locations are not playable/visual reel surfaces.
+        XCTAssertEqual(ReelMediaLayout.resolve(media: [doc("d1")]), .empty)
+    }
+
+    func test_resolve_singleImage_isImages() {
+        XCTAssertEqual(ReelMediaLayout.resolve(media: [img("i1")]), .images([img("i1")]))
+    }
+
+    func test_resolve_multipleImages_isImages() {
+        let media = [img("i1"), img("i2"), img("i3")]
+        XCTAssertEqual(ReelMediaLayout.resolve(media: media), .images(media))
+    }
+
+    func test_resolve_singleAudio_isAudioOnly() {
+        XCTAssertEqual(ReelMediaLayout.resolve(media: [aud("a1")]), .audioOnly([aud("a1")]))
+    }
+
+    func test_resolve_multipleAudios_isAudioOnly() {
+        let media = [aud("a1"), aud("a2")]
+        XCTAssertEqual(ReelMediaLayout.resolve(media: media), .audioOnly(media))
+    }
+
+    func test_resolve_imagesPlusSingleAudio_isImagesWithAudio() {
+        let layout = ReelMediaLayout.resolve(media: [img("i1"), img("i2"), aud("a1")])
+        XCTAssertEqual(layout, .imagesWithAudio(images: [img("i1"), img("i2")], audios: [aud("a1")]))
+    }
+
+    func test_resolve_imagesPlusMultipleAudios_isImagesWithAudio() {
+        let layout = ReelMediaLayout.resolve(media: [img("i1"), aud("a1"), aud("a2")])
+        XCTAssertEqual(layout, .imagesWithAudio(images: [img("i1")], audios: [aud("a1"), aud("a2")]))
+    }
+
+    func test_resolve_videoWins_overImagesAndAudio() {
+        // Video takes priority over every other media kind (single-video reel).
+        let layout = ReelMediaLayout.resolve(media: [img("i1"), aud("a1"), vid("v1")])
+        XCTAssertEqual(layout, .video(vid("v1")))
+    }
+
+    func test_resolve_videoAlone_isVideo() {
+        XCTAssertEqual(ReelMediaLayout.resolve(media: [vid("v1")]), .video(vid("v1")))
+    }
+
+    func test_resolve_preservesOrder_ofImagesAndAudios() {
+        let layout = ReelMediaLayout.resolve(media: [img("i2"), aud("a2"), img("i1"), aud("a1")])
+        XCTAssertEqual(layout, .imagesWithAudio(images: [img("i2"), img("i1")], audios: [aud("a2"), aud("a1")]))
+    }
+}
