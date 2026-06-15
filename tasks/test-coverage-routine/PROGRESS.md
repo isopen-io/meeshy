@@ -50,6 +50,8 @@ A run targets **one (feature × app) cell**. Pick the highest-priority `☐` cel
 
 | Pri | Feature | gateway | translator | web | iOS | android | shared/SDK |
 |-----|---------|:------:|:----------:|:---:|:---:|:-------:|:----------:|
+| P0 | **Auth** (login/register/JWT/session/2FA/magic-link/pw-reset) | ☑ | ⊘ | ☑ | ☐ | ☐ | ☐ |
+| P0 | **Encryption & attachments** (E2EE, AES-GCM, encrypt-then-upload, audio attach) | ☐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P0 | **Auth** (login/register/JWT/session/2FA/magic-link/pw-reset) | ☑ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P0 | **Encryption & attachments** (E2EE, AES-GCM, encrypt-then-upload, audio attach) | ☑ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P0 | **Prisme Linguistique** (lang resolution + translation display) | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |

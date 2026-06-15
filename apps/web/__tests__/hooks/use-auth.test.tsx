@@ -12,7 +12,7 @@
  */
 
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useAuth } from '@/hooks/use-auth';
+import { useAuth, invalidateAuthCache } from '@/hooks/use-auth';
 
 // Mock next/navigation
 const mockPush = jest.fn();
@@ -525,5 +525,310 @@ describe('useAuth', () => {
         expect(mockPush).not.toHaveBeenCalled();
       });
     });
+  });
+});
+
+// ─── New coverage tests ──────────────────────────────────────────────────────
+
+const unauthState = {
+  isAuthenticated: false,
+  user: null,
+  token: null,
+  isChecking: false,
+  isAnonymous: false,
+};
+
+function sharedBeforeEach() {
+  jest.clearAllMocks();
+  localStorageMock.clear();
+  (mockIsAuthChecking as any) = false;
+  invalidateAuthCache();
+  mockPathname.mockReturnValue('/dashboard');
+  mockCheckAuthStatus.mockResolvedValue(unauthState);
+  jest.spyOn(console, 'warn').mockImplementation(() => {});
+  jest.spyOn(console, 'error').mockImplementation(() => {});
+}
+
+describe('invalidateAuthCache', () => {
+  beforeEach(sharedBeforeEach);
+  afterEach(() => jest.restoreAllMocks());
+
+  it('can be called without throwing', () => {
+    expect(() => invalidateAuthCache()).not.toThrow();
+  });
+
+  it('resets cache so next render calls checkAuthStatus again', async () => {
+    // First render populates cache
+    const { unmount } = renderHook(() => useAuth());
+    await waitFor(() => expect(mockCheckAuthStatus).toHaveBeenCalled());
+    unmount();
+
+    // Invalidate then clear call tracking (but NOT the cache)
+    invalidateAuthCache();
+    jest.clearAllMocks();
+    mockCheckAuthStatus.mockResolvedValue(unauthState);
+
+    // Second render should call checkAuthStatus again (cache was cleared)
+    renderHook(() => useAuth());
+    await waitFor(() => expect(mockCheckAuthStatus).toHaveBeenCalled());
+  });
+});
+
+describe('useAuth cache hit path', () => {
+  const cachedUser = { id: 'u1', username: 'alice', email: 'a@b.com', systemLanguage: 'en' };
+
+  beforeEach(sharedBeforeEach);
+  afterEach(() => jest.restoreAllMocks());
+
+  it('uses cached state and skips checkAuthStatus on second render', async () => {
+    mockCheckAuthStatus.mockResolvedValue({
+      isAuthenticated: true,
+      user: cachedUser as any,
+      token: 'tok-abc',
+      isChecking: false,
+      isAnonymous: false,
+    });
+
+    // First render — populates cache
+    const { unmount } = renderHook(() => useAuth());
+    await waitFor(() => expect(mockSetUser).toHaveBeenCalledWith(cachedUser));
+    unmount();
+
+    // Clear call counts but NOT the global authCache (no invalidateAuthCache call)
+    jest.clearAllMocks();
+    mockCheckAuthStatus.mockResolvedValue(unauthState);
+
+    // Second render — cache is still warm, setUser is called from cache path
+    renderHook(() => useAuth());
+    await waitFor(() => expect(mockSetUser).toHaveBeenCalled());
+
+    expect(mockCheckAuthStatus).not.toHaveBeenCalled();
+  });
+
+  it('calls setUser(null) via cache when cached state is unauthenticated', async () => {
+    // Populate cache with unauthenticated state
+    const { unmount } = renderHook(() => useAuth());
+    await waitFor(() => expect(mockSetUser).toHaveBeenCalledWith(null));
+    unmount();
+
+    jest.clearAllMocks();
+
+    renderHook(() => useAuth());
+    await waitFor(() => expect(mockSetUser).toHaveBeenCalledWith(null));
+    expect(mockCheckAuthStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe('useAuth checkAuth authenticated result', () => {
+  const authUser = { id: 'u2', username: 'bob', email: 'b@b.com', systemLanguage: 'fr' };
+
+  beforeEach(sharedBeforeEach);
+  afterEach(() => jest.restoreAllMocks());
+
+  it('sets user in store when checkAuthStatus returns authenticated state', async () => {
+    mockCheckAuthStatus.mockResolvedValue({
+      isAuthenticated: true,
+      user: authUser as any,
+      token: 'tok-xyz',
+      isChecking: false,
+      isAnonymous: false,
+    });
+
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(mockSetUser).toHaveBeenCalledWith(authUser));
+
+    expect(result.current.isAuthenticated).toBe(true);
+    expect(result.current.user).toEqual(authUser);
+  });
+
+  it('clears user in store when checkAuthStatus returns unauthenticated', async () => {
+    renderHook(() => useAuth());
+    await waitFor(() => expect(mockSetUser).toHaveBeenCalledWith(null));
+  });
+});
+
+describe('useAuth checkAuth error path', () => {
+  beforeEach(sharedBeforeEach);
+  afterEach(() => jest.restoreAllMocks());
+
+  it('catches error and sets isAuthenticated false', async () => {
+    mockCheckAuthStatus.mockRejectedValue(new Error('Server down'));
+
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.isChecking).toBe(false));
+
+    expect(result.current.isAuthenticated).toBe(false);
+    expect(result.current.user).toBeNull();
+    expect(mockSetUser).toHaveBeenCalledWith(null);
+  });
+});
+
+describe('useAuth shared chat route', () => {
+  const anonParticipant = { id: 'anon-1', username: 'anon_user' };
+
+  beforeEach(() => {
+    sharedBeforeEach();
+    mockPathname.mockReturnValue('/chat/room-abc');
+    mockGetAnonymousSession.mockReturnValue(null);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    mockCanAccessSharedConversation.mockReturnValue(true);
+    mockGetAnonymousSession.mockReturnValue(null);
+  });
+
+  it('does not redirect when anonymous_just_joined flag is set in localStorage', async () => {
+    localStorageMock.setItem('anonymous_just_joined', 'true');
+
+    renderHook(() => useAuth());
+
+    // Wait for async check to settle then verify no redirect occurred
+    await waitFor(() => expect(mockCheckAuthStatus).toHaveBeenCalled());
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockRedirectToHome).not.toHaveBeenCalled();
+  });
+
+  it('redirects to join page when anonymous user lacks session and link id is stored', async () => {
+    localStorageMock.setItem('anonymous_current_link_id', 'link-777');
+    mockCheckAuthStatus.mockResolvedValue({
+      isAuthenticated: true,
+      user: anonParticipant as any,
+      token: 'anon-tok',
+      isChecking: false,
+      isAnonymous: true,
+    });
+
+    renderHook(() => useAuth());
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/join/link-777'));
+  });
+
+  it('redirects to home when anonymous user lacks session and no link id', async () => {
+    mockCheckAuthStatus.mockResolvedValue({
+      isAuthenticated: true,
+      user: anonParticipant as any,
+      token: 'anon-tok',
+      isChecking: false,
+      isAnonymous: true,
+    });
+
+    renderHook(() => useAuth());
+
+    await waitFor(() => expect(mockRedirectToHome).toHaveBeenCalled());
+  });
+
+  it('redirects to join page when canAccessSharedConversation is false and link id exists', async () => {
+    mockCanAccessSharedConversation.mockReturnValue(false);
+    localStorageMock.setItem('anonymous_current_link_id', 'link-888');
+
+    renderHook(() => useAuth());
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/join/link-888'));
+  });
+
+  it('redirects to home when canAccessSharedConversation is false and no link id', async () => {
+    mockCanAccessSharedConversation.mockReturnValue(false);
+
+    renderHook(() => useAuth());
+
+    await waitFor(() => expect(mockRedirectToHome).toHaveBeenCalled());
+  });
+
+  it('does not redirect when anonymous user has valid session and participant', async () => {
+    mockGetAnonymousSession.mockReturnValue({ token: 'valid-session-tok' });
+    localStorageMock.setItem('anonymous_participant', JSON.stringify(anonParticipant));
+    mockCanAccessSharedConversation.mockReturnValue(true);
+    mockCheckAuthStatus.mockResolvedValue({
+      isAuthenticated: true,
+      user: anonParticipant as any,
+      token: 'anon-tok',
+      isChecking: false,
+      isAnonymous: true,
+    });
+
+    const { result } = renderHook(() => useAuth());
+
+    // Wait for auth state to settle — isAnonymous true means effect ran with full anonymous state
+    await waitFor(() => {
+      expect(result.current.isAnonymous).toBe(true);
+      expect(result.current.isChecking).toBe(false);
+    });
+
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockRedirectToHome).not.toHaveBeenCalled();
+  });
+});
+
+describe('useAuth protected route redirect', () => {
+  beforeEach(() => {
+    sharedBeforeEach();
+    mockPathname.mockReturnValue('/dashboard');
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    mockCanAccessProtectedRoute.mockReturnValue(true);
+  });
+
+  it('redirects to login with returnUrl for unauthenticated access to protected route', async () => {
+    mockCanAccessProtectedRoute.mockReturnValue(false);
+    mockCheckAuthStatus.mockResolvedValue(unauthState);
+
+    renderHook(() => useAuth());
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/login?returnUrl=%2Fdashboard');
+    });
+  });
+
+  it('calls clearAllAuthData when a stale token is detected', async () => {
+    mockCanAccessProtectedRoute.mockReturnValue(false);
+    mockCheckAuthStatus.mockResolvedValue({
+      isAuthenticated: false,
+      user: null,
+      token: 'stale-token',
+      isChecking: false,
+      isAnonymous: false,
+    });
+
+    renderHook(() => useAuth());
+
+    await waitFor(() => expect(mockClearAllAuthData).toHaveBeenCalled());
+  });
+});
+
+describe('useAuth joinAnonymously setTimeout', () => {
+  const anonParticipant = { id: 'anon-42', username: 'anon_user' };
+
+  beforeEach(() => {
+    sharedBeforeEach();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
+
+  it('removes anonymous_just_joined from localStorage after the 3-second delay', () => {
+    jest.useFakeTimers();
+
+    const { result } = renderHook(() => useAuth());
+
+    act(() => {
+      result.current.joinAnonymously(anonParticipant as any, 'anon-tok', 'share-link');
+    });
+
+    // Flag is set, removeItem not yet called for this key
+    expect(localStorageMock.setItem).toHaveBeenCalledWith('anonymous_just_joined', 'true');
+    const removedBefore = (localStorageMock.removeItem as jest.Mock).mock.calls.some(
+      (c: string[]) => c[0] === 'anonymous_just_joined'
+    );
+    expect(removedBefore).toBe(false);
+
+    // Fire the timer
+    act(() => { jest.advanceTimersByTime(3001); });
+
+    expect(localStorageMock.removeItem).toHaveBeenCalledWith('anonymous_just_joined');
   });
 });

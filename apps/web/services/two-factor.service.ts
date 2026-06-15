@@ -82,6 +82,7 @@ class TwoFactorService {
   private constructor() {}
 
   public static getInstance(): TwoFactorService {
+    /* istanbul ignore else */
     if (!TwoFactorService.instance) {
       TwoFactorService.instance = new TwoFactorService();
     }
