@@ -257,3 +257,17 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   6. Pre-existing gateway failures: 6 suites / 18 tests — production bugs, unchanged.
 - Next slice: P0 Messaging core × gateway (`MessagingService.ts`, `SocketIO handlers`, `message-translation/`) — or P0 Prisme Linguistique × gateway
 - Commit: (see branch `claude/coverage/p0-encryption-gateway`)
+
+## 2026-06-15T10:00Z–13:04Z — Web CI repair (automated run, this session)
+- Targeted: 71 pre-existing web test suite failures (blocking all future web coverage work)
+- Result: ☑ PR #682 merged to main
+- Root causes fixed:
+  1. `apps/web/__mocks__/react-syntax-highlighter/dist/esm/styles/prism.js` was not committed — blocked by `.gitignore` rule `*/**/dist`; force-added with `git add -f`
+  2. `use-i18n.test.tsx` locale mocks used `{ virtual: true }` — in CI, Jest registers virtual mocks at the literal alias path (`@/locales/en/common.json`) while dynamic imports resolve through `moduleNameMapper` to the real path (`<rootDir>/locales/en/common.json`); the key mismatch caused the real locale files to load (which have a `common:` namespace wrapper, not the flat `greeting` key the tests expected). Fixed by removing `{ virtual: true }` so mock registration goes through `moduleNameMapper` too.
+- Web CI outcome: 297 suites / 6,732 tests — 0 failures (21 skipped, all intentional)
+- Gateway CI: still 6 suites / 18 tests pre-existing failures (production bugs, untouched by this PR)
+- Notes:
+  - These were infrastructure-level test failures preventing the CI gate from being meaningful for web
+  - No coverage changes in this run — purely repair work enabling future coverage slices to land cleanly
+- Commits: `861fed5c` (force-add prism mock), `dee7239e` (remove virtual:true from locale mocks)
+- Next slice: P0 Prisme Linguistique × web (`utils/user-language-preferences.ts`, `services/translation.service.ts`, etc.) or P0 Messaging core × web
