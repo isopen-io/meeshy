@@ -168,6 +168,7 @@ describe('useWebSocket', () => {
         mockConversationId,
         'Hello',
         'en',
+        undefined,
         undefined
       );
     });
@@ -185,7 +186,8 @@ describe('useWebSocket', () => {
         mockConversationId,
         'Reply',
         'en',
-        'reply-to-id'
+        'reply-to-id',
+        undefined
       );
     });
 
@@ -228,7 +230,8 @@ describe('useWebSocket', () => {
         'Check this',
         ['attach-1'],
         'en',
-        'reply-id'
+        'reply-id',
+        undefined
       );
     });
 

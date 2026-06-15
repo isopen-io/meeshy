@@ -70,12 +70,7 @@ describe('useLiveUserStatus', () => {
     expect(result.current).toBe('online');
 
     act(() => {
-      const state = useUserStore.getState();
-      const user = state.usersMap.get('user-1');
-      if (user) {
-        (user as { lastActiveAt?: Date }).lastActiveAt = sixMinutesAgo;
-      }
-      state.triggerStatusTick();
+      useUserStore.getState().updateUserStatus('user-1', { lastActiveAt: sixMinutesAgo });
     });
 
     expect(result.current).toBe('away');

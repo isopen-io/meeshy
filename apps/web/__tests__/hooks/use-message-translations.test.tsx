@@ -16,6 +16,13 @@ import { renderHook } from '@testing-library/react';
 import { useMessageTranslations } from '@/hooks/use-message-translations';
 import type { User, Message } from '@meeshy/shared/types';
 
+// Mock device-locale so navigator.language does not interfere with language resolution tests
+jest.mock('@/lib/device-locale', () => ({
+  getDeviceLocale: () => null,
+  getDeviceLocaleHeaders: () => ({}),
+  DEVICE_LOCALE_HEADER: 'X-Device-Locale',
+}));
+
 // Type for our test user that matches the expected User interface
 type TestUser = Pick<
   User,
@@ -72,12 +79,11 @@ describe('useMessageTranslations', () => {
   }) as unknown as Message & { translations?: readonly unknown[]; originalContent?: string; location?: string };
 
   describe('resolveUserPreferredLanguage', () => {
-    it('should return customDestinationLanguage when useCustomDestination is true', () => {
+    it('should return customDestinationLanguage when no systemLanguage or regionalLanguage is set', () => {
       const user = createTestUser({
-        useCustomDestination: true,
         customDestinationLanguage: 'fr',
-        systemLanguage: 'en',
-        regionalLanguage: 'es',
+        systemLanguage: null as unknown as string,
+        regionalLanguage: null as unknown as string,
       });
 
       const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
@@ -99,12 +105,9 @@ describe('useMessageTranslations', () => {
       expect(result.current.resolveUserPreferredLanguage()).toBe('de');
     });
 
-    it('should return regionalLanguage when translateToRegionalLanguage is true', () => {
+    it('should return regionalLanguage when no systemLanguage is set', () => {
       const user = createTestUser({
-        useCustomDestination: false,
-        translateToSystemLanguage: false,
-        translateToRegionalLanguage: true,
-        systemLanguage: 'en',
+        systemLanguage: null as unknown as string,
         regionalLanguage: 'pt',
       });
 
@@ -126,17 +129,15 @@ describe('useMessageTranslations', () => {
       expect(result.current.resolveUserPreferredLanguage()).toBe('ja');
     });
 
-    it('should prioritize custom destination over system language', () => {
+    it('should prioritize systemLanguage over customDestinationLanguage', () => {
       const user = createTestUser({
-        useCustomDestination: true,
         customDestinationLanguage: 'it',
-        translateToSystemLanguage: true,
         systemLanguage: 'en',
       });
 
       const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
 
-      expect(result.current.resolveUserPreferredLanguage()).toBe('it');
+      expect(result.current.resolveUserPreferredLanguage()).toBe('en');
     });
   });
 
@@ -799,7 +800,7 @@ describe('useMessageTranslations', () => {
       expect(processed.originalContent).toBe('Original Hello');
     });
 
-    it('should default location to Paris', () => {
+    it('should preserve undefined location when not set', () => {
       const user = createTestUser({ systemLanguage: 'en' });
 
       const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
@@ -807,7 +808,7 @@ describe('useMessageTranslations', () => {
       const message = createTestMessage({ location: undefined });
 
       const processed = result.current.processMessageWithTranslations(message);
-      expect(processed.location).toBe('Paris');
+      expect(processed.location).toBeUndefined();
     });
 
     it('should preserve existing location', () => {

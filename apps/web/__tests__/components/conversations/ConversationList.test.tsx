@@ -53,6 +53,15 @@ jest.mock('@/stores/user-store', () => ({
     getUserById: jest.fn(),
     _lastStatusUpdate: 0,
   })),
+  useUserById: jest.fn(() => null),
+  useUserStatusTick: jest.fn(),
+}));
+
+jest.mock('@/hooks/use-prefetch-on-hover', () => ({
+  usePrefetchOnHover: () => ({
+    onMouseEnter: jest.fn(),
+    onMouseLeave: jest.fn(),
+  }),
 }));
 
 // Mock sonner toast
@@ -304,7 +313,7 @@ describe('ConversationList', () => {
     it('should show loading state when isLoading is true', async () => {
       render(<ConversationList {...defaultProps} isLoading={true} />);
 
-      expect(screen.getByText('Loading conversations...')).toBeInTheDocument();
+      expect(screen.getByRole('status')).toBeInTheDocument();
     });
   });
 

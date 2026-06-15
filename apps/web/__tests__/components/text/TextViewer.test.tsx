@@ -65,6 +65,26 @@ jest.mock('@/components/ui/button', () => ({
   ),
 }));
 
+// Mock useI18n hook with viewers namespace translations
+jest.mock('@/hooks/useI18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'text.disableWordWrap': 'Désactiver le retour à la ligne',
+        'text.enableWordWrap': 'Activer le retour à la ligne',
+        'text.copy': 'Copier le contenu',
+        'text.fullscreen': 'Ouvrir en plein écran',
+        'text.download': 'Télécharger',
+        'text.copied': 'Copié dans le presse-papiers',
+        'text.copyError': 'Impossible de copier',
+        'text.loadError': 'Impossible de charger le fichier',
+      };
+      return translations[key] || key;
+    },
+    isLoading: false,
+  }),
+}));
+
 // Mock clipboard API
 const mockWriteText = jest.fn();
 Object.assign(navigator, {

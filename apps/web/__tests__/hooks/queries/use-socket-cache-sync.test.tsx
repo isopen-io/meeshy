@@ -69,6 +69,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onUnreadUpdated: jest.fn(() => jest.fn()),
     onTranscription: jest.fn(() => jest.fn()),
     onAudioTranslation: jest.fn(() => jest.fn()),
+    onAttachmentStatusUpdated: jest.fn(() => jest.fn()),
     onParticipantRoleUpdated: jest.fn(() => jest.fn()),
     onPreferencesUpdated: jest.fn(() => jest.fn()),
     onConversationJoined: jest.fn(() => jest.fn()),
@@ -90,6 +91,9 @@ jest.mock('@/lib/react-query/query-keys', () => ({
       all: ['conversations'],
       lists: () => ['conversations', 'list'],
       list: (filters?: Record<string, unknown>) => ['conversations', 'list', filters],
+      infinite: () => ['conversations', 'infinite'],
+      details: () => ['conversations', 'detail'],
+      detail: (id: string) => ['conversations', 'detail', id],
     },
     notifications: {
       all: ['notifications'],

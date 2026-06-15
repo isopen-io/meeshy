@@ -155,7 +155,7 @@ describe('useVideoCall', () => {
       });
 
       expect(mockToastError).toHaveBeenCalledWith(
-        'Video calls are only available for direct conversations'
+        'Calls are only available for direct conversations'
       );
       expect(mockGetUserMedia).not.toHaveBeenCalled();
     });
