@@ -146,7 +146,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [x] Outbox-backed optimistic send: instant SENDING bubble, server-ACK swap,
       FAILED + tap-to-retry (EN/FR), WorkManager flush
 - [x] Message pagination (before-cursor, scroll-top trigger, history-safe cache prune)
-- [ ] Pending: Feed / Stories / Calls slices, reactions UI polish
+- [~] `:feature:feed` — cache-first feed (SWR), Prisme-resolved post content,
+      optimistic like toggle (`isLikedByMe`), image collage, like/comment/repost stats
+- [ ] Pending: Stories / Calls slices, feed pagination + post detail, reactions UI polish
 
 ## Phase 6 — Integration & final audit
 - [ ] Navigation graph + deep links (`meeshy://`, `https://meeshy.me`)
@@ -329,7 +331,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Accessibility for canvas elements (labels, custom delete/duplicate/reorder actions)
 
 ## F. Feed & Posts
-- [ ] Social feed: cursor-paginated post list, infinite scroll, pull-to-refresh, new-posts banner
+- [~] Social feed: cache-first SWR list + pull-to-refresh done (`PostRepository.feedStream`,
+      skeleton on cold cache, silent background revalidation) ; cursor-paginated
+      infinite scroll / new-posts banner pending
+- [x] Post reactions (heart like) — **optimistic** toggle via `PostRepository.toggleLike`
+      (flips `isLikedByMe` + count instantly, rolls back on failure). Fixes the prior
+      bug where any post liked by *others* rendered as liked-by-me (`likeCount > 0`
+      proxy removed). UI like state now reads the viewer's own `isLikedByMe`.
+- [x] Adaptive multi-image collage layouts (1–4 + overlay « +N ») in the feed card
+      (single full-width with aspect ratio, 2-col grid otherwise) — `FeedPostBuilder`
+      resolves + orders image media and resolves relative URLs against the gateway origin
+- [~] Prisme Linguistique on the feed: post content rendered in the viewer's preferred
+      language with a discreet « Traduit » indicator (`ApiPost.displayContent`/`isTranslated`
+      port of the message Prisme rules — Map-keyed translations, Rule 1 honoured) ;
+      per-post flag strip / request-missing-languages pending
+- [x] Feed card stats row: like (filled when own) + comment count + repost count,
+      mood emoji on the author line, pure `FeedPostPresentation` builder (8 builder
+      tests + 1 model Prisme test + 3 repository optimistic/rollback tests, all green)
+- [ ] Social feed: cursor-paginated post list, infinite scroll, new-posts banner
 - [ ] Feed overlay shell with draggable floating buttons + radial menu ladder
 - [ ] Create post (text, photos/videos, camera, files, location, audio+transcription, visibility, language)
 - [ ] Unified post composer (Post / Status / Story tabs)
