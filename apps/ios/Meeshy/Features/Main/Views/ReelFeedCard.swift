@@ -110,7 +110,12 @@ struct ReelFeedCard: View, Equatable {
     var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
-            let height = reelCardHeight(mediaWidth: media?.width, mediaHeight: media?.height, cardWidth: width)
+            // Hauteur dérivée de la MÊME base que le frame extérieur (l.124) pour que
+            // le ZStack remplisse EXACTEMENT son conteneur. Sinon hauteur intérieure
+            // (depuis la largeur réelle) ≠ hauteur extérieure (depuis l'estimation),
+            // le ZStack déborde le GeometryReader et chevauche la carte suivante
+            // (entremêlement). Le média est aspect-fill → aucune déformation visible.
+            let height = reelCardHeight(mediaWidth: media?.width, mediaHeight: media?.height, cardWidth: cardWidthEstimate)
             ZStack(alignment: .bottom) {
                 background(width: width, height: height)
                 bottomOverlay
