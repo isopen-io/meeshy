@@ -167,29 +167,31 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
         guard !recorder.isRecording else { return }
         hasCompleted = false
 
-        // `requestRecordPermission` invokes its completion on the
-        // `com.avaudiosession.tccserver` queue. Hopping back via
-        // `DispatchQueue.main.async` does NOT prove `@MainActor` isolation
-        // to Swift 6's runtime; calling `@MainActor`-isolated APIs from
-        // there trips `swift_task_isCurrentExecutorImpl` and crashes with
-        // `EXC_BREAKPOINT`. `Task { @MainActor in ... }` is the
-        // Swift-6-correct hop.
-        AVAudioSession.sharedInstance().requestRecordPermission { granted in
-            Task { @MainActor in
-                guard granted else {
-                    errorMessage = String(localized: "audio.recorder.micDenied", defaultValue: "Permission micro refus\u{00E9}e", bundle: .module)
-                    return
-                }
-                errorMessage = nil
-                recorder.configure(with: .story)
-                recorder.startRecording()
-                HapticFeedback.medium()
+        // `requestRecordPermission` rappelle sur la queue
+        // `com.avaudiosession.tccserver`. Sous `defaultIsolation(MainActor)`
+        // (MeeshyUI), le closure littéral fourni hérite lui-même de
+        // `@MainActor` ; son prologue (`swift_task_isCurrentExecutorImpl`)
+        // vérifie l'exécuteur À L'ENTRÉE — sur la queue TCC — et trappe
+        // (`EXC_BREAKPOINT`) AVANT même qu'un `Task { @MainActor in }` interne
+        // ne s'exécute (crash 1re demande de permission micro story, 2026-06-15).
+        // On isole donc la demande dans un helper `nonisolated` : son callback
+        // ne fait que `resume` la continuation (aucun check d'acteur), puis on
+        // traite le résultat sur le MainActor via `await`.
+        Task { @MainActor in
+            let granted = await AVAudioSession.requestMicrophonePermission()
+            guard granted else {
+                errorMessage = String(localized: "audio.recorder.micDenied", defaultValue: "Permission micro refus\u{00E9}e", bundle: .module)
+                return
+            }
+            errorMessage = nil
+            recorder.configure(with: .story)
+            recorder.startRecording()
+            HapticFeedback.medium()
 
-                phaseTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
-                    Task { @MainActor in
-                        if recorder.duration >= maxDuration {
-                            stopRecording()
-                        }
+            phaseTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
+                Task { @MainActor in
+                    if recorder.duration >= maxDuration {
+                        stopRecording()
                     }
                 }
             }

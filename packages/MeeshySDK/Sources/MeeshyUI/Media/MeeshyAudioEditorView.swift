@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 // `@preconcurrency` lets the periodic time-observer closure stay main-actor
 // isolated (it touches @State) — consistent with AudioEditorController.
 @preconcurrency import AVFoundation
@@ -46,6 +47,17 @@ public struct MeeshyAudioEditorView: View {
         self.accentColor = accentColor
         self.onConfirm = onConfirm
         self.onCancel = onCancel
+    }
+
+    /// VRAIS safe-area insets de la fenêtre. `.statusBarHidden()` (plus bas)
+    /// remet `safeAreaInsets = 0` dans l'environnement SwiftUI ; le chrome
+    /// (header, transport, dock) passerait sous la Dynamic Island / home
+    /// indicator. La fenêtre expose toujours les insets physiques réels. Même
+    /// pattern que `MeeshyVideoEditorView` / `MeeshyImageEditorView`.
+    private var deviceSafeAreaInsets: UIEdgeInsets {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets ?? .zero
     }
 
     // MARK: - Body
@@ -139,6 +151,8 @@ public struct MeeshyAudioEditorView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 28)
         }
+        .padding(.top, deviceSafeAreaInsets.top)
+        .padding(.bottom, deviceSafeAreaInsets.bottom)
     }
 
     private var bottomDock: some View {

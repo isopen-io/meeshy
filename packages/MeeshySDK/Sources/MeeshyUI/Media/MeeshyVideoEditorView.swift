@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import MeeshySDK
 
 /// Unified, immersive video editor.
@@ -32,29 +33,52 @@ public struct MeeshyVideoEditorView: View {
 
     private var accent: Color { Color(hex: viewModel.accentColor) }
 
+    /// VRAIS safe-area insets de la fenêtre — JAMAIS ceux de l'environnement
+    /// SwiftUI. Présenté depuis le composer de post, l'éditeur vit dans un
+    /// `.fullScreenCover` imbriqué (le composer est lui-même un cover) où la
+    /// présentation modale en cascade — combinée au `.statusBarHidden()` des
+    /// éditeurs frères — rapporte `safeAreaInsets = 0`. Le chrome déborderait
+    /// alors sous la Dynamic Island / home indicator. La fenêtre, elle, expose
+    /// toujours les insets physiques réels du device. Même pattern que
+    /// `StoryComposerView.safeAreaBottomInset` et `ConversationView`.
+    private var deviceSafeAreaInsets: UIEdgeInsets {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets ?? .zero
+    }
+
     public var body: some View {
-        ZStack {
-            theme.backgroundPrimary.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                topBar
-                historyRow
-                VideoEditorStage(viewModel: viewModel)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 8)
-                VideoEditorTimeline(viewModel: viewModel)
-                    .padding(.horizontal, 8)
-                bottomDock
-            }
-            .padding(.top, 8)
-
+        // On applique nous-mêmes les insets fenêtre et on neutralise la safe
+        // area de l'environnement via `.ignoresSafeArea()` (sinon double
+        // comptage quand elle est correctement renseignée). Le fond passe par
+        // `.background(...)` — jamais en enfant d'un `ZStack` : combiné au
+        // `VideoEditorStage` flexible (`maxHeight: .infinity`), un fond ZStack
+        // pleine page étirerait le VStack hors safe area.
+        let insets = deviceSafeAreaInsets
+        return VStack(spacing: 0) {
+            topBar
+            historyRow
+            VideoEditorStage(viewModel: viewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+            VideoEditorTimeline(viewModel: viewModel)
+                .padding(.horizontal, 8)
+            bottomDock
+        }
+        .padding(.top, insets.top + 8)
+        .padding(.bottom, insets.bottom)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(theme.backgroundPrimary)
+        .ignoresSafeArea()
+        .overlay(alignment: .top) {
             if let banner = viewModel.banner {
                 bannerView(banner)
             }
-
+        }
+        .overlay {
             if viewModel.isExporting || exportFailed {
                 exportOverlay
             }
