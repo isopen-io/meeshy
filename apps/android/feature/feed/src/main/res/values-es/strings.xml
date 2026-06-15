@@ -4,4 +4,12 @@
     <string name="feed_empty">Aún no hay publicaciones</string>
     <string name="feed_like">Me gusta</string>
     <string name="feed_unknown_author">Desconocido</string>
+    <string name="feed_translated">Traducido</string>
+    <string name="feed_image_description">Imagen de la publicación</string>
+    <string name="feed_comments">Comentarios</string>
+    <string name="feed_reposts">Republicaciones</string>
+    <string name="feed_unlike">Ya no me gusta</string>
+    <string name="feed_hidden_images">+%1$d</string>
+    <string name="feed_pinned">Fijado</string>
+    <string name="feed_edited">Editado</string>
 </resources>

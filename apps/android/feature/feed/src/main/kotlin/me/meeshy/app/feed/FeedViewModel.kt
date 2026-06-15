@@ -7,15 +7,20 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.session.SessionRepository
 import javax.inject.Inject
 
 data class FeedUiState(
-    val posts: List<ApiPost> = emptyList(),
+    val posts: List<FeedPostPresentation> = emptyList(),
     val isSyncing: Boolean = false,
     val showSkeleton: Boolean = false,
     val errorMessage: String? = null,
@@ -24,6 +29,8 @@ data class FeedUiState(
 @HiltViewModel
 class FeedViewModel @Inject constructor(
     private val postRepository: PostRepository,
+    private val sessionRepository: SessionRepository,
+    private val config: MeeshyConfig,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(FeedUiState())
@@ -31,15 +38,19 @@ class FeedViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            postRepository.feedStream(
-                onSyncError = { error ->
-                    _state.update {
-                        it.copy(errorMessage = error.message, isSyncing = false, showSkeleton = false)
-                    }
-                },
-            ).collect { result ->
-                _state.update { it.applyResult(result) }
-            }
+            combine(
+                postRepository.feedStream(
+                    onSyncError = { error ->
+                        _state.update {
+                            it.copy(errorMessage = error.message, isSyncing = false, showSkeleton = false)
+                        }
+                    },
+                ),
+                sessionRepository.currentUser,
+            ) { result, user -> result to user }
+                .collect { (result, user) ->
+                    _state.update { it.applyResult(result, user, config.socketUrl) }
+                }
         }
     }
 
@@ -56,10 +67,10 @@ class FeedViewModel @Inject constructor(
         }
     }
 
-    fun likePost(postId: String) {
+    fun toggleLike(postId: String) {
         viewModelScope.launch {
             try {
-                postRepository.likePost(postId)
+                postRepository.toggleLike(postId)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -69,13 +80,44 @@ class FeedViewModel @Inject constructor(
     }
 }
 
-private fun FeedUiState.applyResult(result: CacheResult<List<ApiPost>>): FeedUiState = when (result) {
-    is CacheResult.Fresh -> copy(posts = result.value, isSyncing = false, showSkeleton = false, errorMessage = null)
-    is CacheResult.Stale -> copy(posts = result.value, isSyncing = true, showSkeleton = false)
-    is CacheResult.Syncing -> copy(
-        posts = result.value ?: posts,
-        isSyncing = true,
-        showSkeleton = result.value == null && posts.isEmpty() && errorMessage == null,
-    )
-    CacheResult.Empty -> copy(posts = emptyList(), isSyncing = false, showSkeleton = errorMessage == null)
+private fun List<ApiPost>.toPresentations(
+    preferences: LanguageResolver.ContentLanguagePreferences,
+    mediaBaseUrl: String,
+): List<FeedPostPresentation> = map { FeedPostBuilder.build(it, preferences, mediaBaseUrl) }
+
+private fun FeedUiState.applyResult(
+    result: CacheResult<List<ApiPost>>,
+    user: MeeshyUser?,
+    mediaBaseUrl: String,
+): FeedUiState {
+    val prefs = user ?: EmptyContentPreferences
+    return when (result) {
+        is CacheResult.Fresh -> copy(
+            posts = result.value.toPresentations(prefs, mediaBaseUrl),
+            isSyncing = false,
+            showSkeleton = false,
+            errorMessage = null,
+        )
+        is CacheResult.Stale -> copy(
+            posts = result.value.toPresentations(prefs, mediaBaseUrl),
+            isSyncing = true,
+            showSkeleton = false,
+        )
+        is CacheResult.Syncing -> copy(
+            posts = result.value?.toPresentations(prefs, mediaBaseUrl) ?: posts,
+            isSyncing = true,
+            showSkeleton = result.value == null && posts.isEmpty() && errorMessage == null,
+        )
+        CacheResult.Empty -> copy(
+            posts = emptyList(),
+            isSyncing = false,
+            showSkeleton = errorMessage == null,
+        )
+    }
+}
+
+private object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {
+    override val systemLanguage: String? = null
+    override val regionalLanguage: String? = null
+    override val customDestinationLanguage: String? = null
 }

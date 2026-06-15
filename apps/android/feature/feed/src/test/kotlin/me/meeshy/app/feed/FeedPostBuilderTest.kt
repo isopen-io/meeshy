@@ -1,0 +1,110 @@
+package me.meeshy.app.feed
+
+import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.ApiAuthor
+import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.ApiPostMedia
+import me.meeshy.sdk.model.ApiPostTranslationEntry
+import org.junit.Test
+
+class FeedPostBuilderTest {
+
+    private data class Prefs(
+        override val systemLanguage: String? = null,
+        override val regionalLanguage: String? = null,
+        override val customDestinationLanguage: String? = null,
+    ) : LanguageResolver.ContentLanguagePreferences
+
+    private fun post(
+        content: String? = "Bonjour",
+        author: ApiAuthor? = ApiAuthor(id = "u1", username = "alice", displayName = "Alice"),
+        likeCount: Int? = 3,
+        isLikedByMe: Boolean? = false,
+        commentCount: Int? = 2,
+        repostCount: Int? = 1,
+        media: List<ApiPostMedia>? = null,
+        translations: Map<String, ApiPostTranslationEntry>? = null,
+        moodEmoji: String? = null,
+    ) = ApiPost(
+        id = "p1",
+        content = content,
+        author = author,
+        likeCount = likeCount,
+        isLikedByMe = isLikedByMe,
+        commentCount = commentCount,
+        repostCount = repostCount,
+        media = media,
+        translations = translations,
+        moodEmoji = moodEmoji,
+        originalLanguage = "fr",
+    )
+
+    @Test
+    fun build_resolvesPrismeContentAndTranslationFlag() {
+        val p = post(translations = mapOf("en" to ApiPostTranslationEntry(text = "Hello")))
+        val result = FeedPostBuilder.build(p, Prefs(systemLanguage = "en"), mediaBaseUrl = null)
+        assertThat(result.content).isEqualTo("Hello")
+        assertThat(result.isTranslated).isTrue()
+    }
+
+    @Test
+    fun build_keepsOriginalWhenNoPreferredTranslation() {
+        val p = post(translations = mapOf("en" to ApiPostTranslationEntry(text = "Hello")))
+        val result = FeedPostBuilder.build(p, Prefs(systemLanguage = "de"), mediaBaseUrl = null)
+        assertThat(result.content).isEqualTo("Bonjour")
+        assertThat(result.isTranslated).isFalse()
+    }
+
+    @Test
+    fun build_likeStateComesFromIsLikedByMeNotCount() {
+        // A post liked by others (count 3) but not by me must NOT show as liked.
+        val p = post(likeCount = 3, isLikedByMe = false)
+        assertThat(FeedPostBuilder.build(p, Prefs(), null).isLiked).isFalse()
+        assertThat(FeedPostBuilder.build(p, Prefs(), null).likeCount).isEqualTo(3)
+
+        val mine = post(likeCount = 1, isLikedByMe = true)
+        assertThat(FeedPostBuilder.build(mine, Prefs(), null).isLiked).isTrue()
+    }
+
+    @Test
+    fun build_authorNamePrefersDisplayNameThenUsername() {
+        assertThat(FeedPostBuilder.build(post(), Prefs(), null).authorName).isEqualTo("Alice")
+        val noDisplay = post(author = ApiAuthor(id = "u1", username = "bob", displayName = null))
+        assertThat(FeedPostBuilder.build(noDisplay, Prefs(), null).authorName).isEqualTo("bob")
+        val anon = post(author = null)
+        assertThat(FeedPostBuilder.build(anon, Prefs(), null).authorName).isNull()
+    }
+
+    @Test
+    fun build_filtersToImageMediaAndResolvesRelativeUrls() {
+        val media = listOf(
+            ApiPostMedia(id = "m1", mimeType = "image/jpeg", fileUrl = "/uploads/a.jpg", order = 1),
+            ApiPostMedia(id = "m2", mimeType = "video/mp4", fileUrl = "/uploads/b.mp4", order = 2),
+            ApiPostMedia(id = "m3", mimeType = "image/png", fileUrl = "https://cdn/c.png", order = 0),
+        )
+        val result = FeedPostBuilder.build(post(media = media), Prefs(), mediaBaseUrl = "https://gate.meeshy.me/")
+        // images only, ordered by `order`, relative resolved, absolute kept.
+        assertThat(result.images.map { it.url }).containsExactly(
+            "https://cdn/c.png",
+            "https://gate.meeshy.me/uploads/a.jpg",
+        ).inOrder()
+    }
+
+    @Test
+    fun build_carriesCountsAndMood() {
+        val result = FeedPostBuilder.build(post(moodEmoji = "🔥"), Prefs(), null)
+        assertThat(result.commentCount).isEqualTo(2)
+        assertThat(result.repostCount).isEqualTo(1)
+        assertThat(result.moodEmoji).isEqualTo("🔥")
+    }
+
+    @Test
+    fun build_nullCountsBecomeZero() {
+        val p = post(likeCount = null, commentCount = null, repostCount = null)
+        val result = FeedPostBuilder.build(p, Prefs(), null)
+        assertThat(result.likeCount).isEqualTo(0)
+        assertThat(result.commentCount).isEqualTo(0)
+        assertThat(result.repostCount).isEqualTo(0)
+    }
+}

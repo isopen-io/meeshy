@@ -1,11 +1,14 @@
 package me.meeshy.app.feed
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,13 +21,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -39,15 +44,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
-import me.meeshy.sdk.model.ApiPost
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -66,7 +78,13 @@ fun FeedScreen(
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.feed_title)) }) },
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(stringResource(R.string.feed_title), fontWeight = FontWeight.Bold)
+                },
+            )
+        },
         snackbarHost = { SnackbarHost(snackbar) },
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) { padding ->
@@ -80,7 +98,11 @@ fun FeedScreen(
             when {
                 state.showSkeleton -> FeedSkeleton()
                 state.posts.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(stringResource(R.string.feed_empty), style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        stringResource(R.string.feed_empty),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MeeshyTheme.tokens.textSecondary,
+                    )
                 }
                 else -> LazyColumn(
                     contentPadding = PaddingValues(MeeshySpacing.lg),
@@ -89,7 +111,7 @@ fun FeedScreen(
                     items(state.posts, key = { it.id }) { post ->
                         PostCard(
                             post = post,
-                            onLike = { viewModel.likePost(post.id) },
+                            onLike = { viewModel.toggleLike(post.id) },
                             onClick = { onPostClick(post.id) },
                         )
                     }
@@ -101,7 +123,7 @@ fun FeedScreen(
 
 @Composable
 private fun PostCard(
-    post: ApiPost,
+    post: FeedPostPresentation,
     onLike: () -> Unit,
     onClick: () -> Unit,
 ) {
@@ -109,49 +131,220 @@ private fun PostCard(
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(MeeshyRadius.xl),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MeeshyTheme.tokens.backgroundSecondary),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(MeeshySpacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AsyncImage(
-                    model = post.author?.avatar,
-                    contentDescription = post.author?.displayName ?: post.author?.username ?: unknownAuthor,
+                    model = post.authorAvatarUrl,
+                    contentDescription = post.authorName ?: unknownAuthor,
                     modifier = Modifier
                         .size(40.dp)
-                        .clip(CircleShape),
+                        .clip(CircleShape)
+                        .background(MeeshyPalette.Indigo500.copy(alpha = 0.12f)),
                 )
                 Spacer(Modifier.width(MeeshySpacing.md))
-                Column {
-                    Text(
-                        text = post.author?.displayName ?: post.author?.username ?: unknownAuthor,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    post.createdAt?.let {
-                        Text(text = it, style = MaterialTheme.typography.bodySmall)
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = post.authorName ?: unknownAuthor,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MeeshyTheme.tokens.textPrimary,
+                        )
+                        if (post.moodEmoji != null) {
+                            Text(
+                                text = post.moodEmoji,
+                                modifier = Modifier.padding(start = MeeshySpacing.xs),
+                            )
+                        }
+                    }
+                    post.createdAtIso?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MeeshyTheme.tokens.textSecondary,
+                        )
                     }
                 }
             }
-            Spacer(Modifier.height(MeeshySpacing.md))
-            SelectionContainer {
-                Text(text = post.content ?: "", style = MaterialTheme.typography.bodyMedium)
-            }
-            Spacer(Modifier.height(MeeshySpacing.sm))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onLike) {
-                    Icon(
-                        imageVector = if ((post.likeCount ?: 0) > 0) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = stringResource(R.string.feed_like),
-                        tint = if ((post.likeCount ?: 0) > 0) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+
+            if (post.content.isNotBlank()) {
+                Spacer(Modifier.height(MeeshySpacing.md))
+                SelectionContainer {
+                    Text(
+                        text = post.content,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MeeshyTheme.tokens.textPrimary,
                     )
                 }
-                Text(
-                    text = "${post.likeCount ?: 0}",
-                    style = MaterialTheme.typography.bodySmall,
-                )
             }
+
+            if (post.isTranslated) {
+                Spacer(Modifier.height(MeeshySpacing.xs))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.Translate,
+                        contentDescription = null,
+                        tint = MeeshyTheme.tokens.textSecondary,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.feed_translated),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MeeshyTheme.tokens.textSecondary,
+                        modifier = Modifier.padding(start = MeeshySpacing.xs),
+                    )
+                }
+            }
+
+            if (post.images.isNotEmpty()) {
+                Spacer(Modifier.height(MeeshySpacing.md))
+                PostImageGrid(images = post.images)
+            }
+
+            Spacer(Modifier.height(MeeshySpacing.sm))
+            PostStatsRow(post = post, onLike = onLike)
+        }
+    }
+}
+
+private const val MAX_GRID_IMAGES = 4
+
+@Composable
+private fun PostImageGrid(images: List<FeedPostImage>) {
+    val shape = RoundedCornerShape(MeeshyRadius.md)
+    if (images.size == 1) {
+        val image = images.first()
+        AsyncImage(
+            model = image.url,
+            contentDescription = stringResource(R.string.feed_image_description),
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(imageAspectRatio(image))
+                .clip(shape)
+                .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f)),
+        )
+        return
+    }
+    val visible = images.take(MAX_GRID_IMAGES)
+    val hiddenCount = images.size - visible.size
+    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+        visible.chunked(2).forEachIndexed { rowIndex, row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+                row.forEachIndexed { columnIndex, image ->
+                    val imageIndex = rowIndex * 2 + columnIndex
+                    val isLastCell = hiddenCount > 0 && imageIndex == visible.lastIndex
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(1f)
+                            .clip(shape)
+                            .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f)),
+                    ) {
+                        AsyncImage(
+                            model = image.thumbnailUrl ?: image.url,
+                            contentDescription = stringResource(R.string.feed_image_description),
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        if (isLastCell) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.45f)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.feed_hidden_images, hiddenCount),
+                                    color = MeeshyPalette.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 20.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+private fun imageAspectRatio(image: FeedPostImage): Float {
+    val width = image.width ?: return 1.4f
+    val height = image.height ?: return 1.4f
+    if (width <= 0 || height <= 0) return 1.4f
+    return (width.toFloat() / height.toFloat()).coerceIn(0.7f, 1.9f)
+}
+
+@Composable
+private fun PostStatsRow(post: FeedPostPresentation, onLike: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xl),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        val likeLabel = stringResource(if (post.isLiked) R.string.feed_unlike else R.string.feed_like)
+        StatAction(
+            icon = if (post.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+            count = post.likeCount,
+            contentDescription = likeLabel,
+            tint = if (post.isLiked) MeeshyPalette.Error else MeeshyTheme.tokens.textSecondary,
+            onClick = onLike,
+        )
+        StatAction(
+            icon = Icons.Outlined.ChatBubbleOutline,
+            count = post.commentCount,
+            contentDescription = stringResource(R.string.feed_comments),
+            tint = MeeshyTheme.tokens.textSecondary,
+            onClick = null,
+        )
+        StatAction(
+            icon = Icons.Filled.Repeat,
+            count = post.repostCount,
+            contentDescription = stringResource(R.string.feed_reposts),
+            tint = MeeshyTheme.tokens.textSecondary,
+            onClick = null,
+        )
+    }
+}
+
+@Composable
+private fun StatAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    count: Int,
+    contentDescription: String,
+    tint: Color,
+    onClick: (() -> Unit)?,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        modifier = Modifier
+            .clip(RoundedCornerShape(MeeshyRadius.pill))
+            .let { base ->
+                if (onClick == null) base
+                else base.clickable(onClick = onClick).semantics { role = Role.Button }
+            }
+            .padding(vertical = MeeshySpacing.xs)
+            .semantics { this.contentDescription = contentDescription },
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(18.dp),
+        )
+        if (count > 0) {
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
         }
     }
 }

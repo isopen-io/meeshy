@@ -4,4 +4,12 @@
     <string name="feed_empty">No posts yet</string>
     <string name="feed_like">Like</string>
     <string name="feed_unknown_author">Unknown</string>
+    <string name="feed_translated">Translated</string>
+    <string name="feed_image_description">Post image</string>
+    <string name="feed_comments">Comments</string>
+    <string name="feed_reposts">Reposts</string>
+    <string name="feed_unlike">Unlike</string>
+    <string name="feed_hidden_images">+%1$d</string>
+    <string name="feed_pinned">Pinned</string>
+    <string name="feed_edited">Edited</string>
 </resources>
