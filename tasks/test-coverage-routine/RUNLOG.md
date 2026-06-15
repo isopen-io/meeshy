@@ -359,3 +359,24 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   5. Pre-existing web failures: 0 (302/302 suites pass — zero new failures introduced).
 - Next slice: P0 Messaging core × gateway (`src/services/messaging/MessageProcessor.ts`, `socketio/handlers/MessageHandler.ts`)
 - Commit: (see branch claude/coverage/p0-prisme-web)
+
+## 2026-06-15T18:00Z — P0 Messaging core × gateway (MessageProcessor + MessageValidator)
+- Targeted: `src/services/messaging/MessageProcessor.ts`, `src/services/messaging/MessageValidator.ts`
+- Result: ◐ in progress — 2/4 messaging core gateway files ≥92%; feature matrix cell ◐ (MessageHandler.ts + messages.ts deferred to next slice)
+- Coverage (final run):
+  - MessageValidator.ts: 100% stmts / 98.23% branches / 100% funcs / 100% lines ✓
+  - MessageProcessor.ts: 96.12% stmts / 92.69% branches / 95.45% funcs / 96.86% lines ✓
+  - All-files aggregate: 96.96% stmts / 94.57% branches / 96.15% funcs / 97.57% lines ✓
+- Tests added: 127 tests across 2 new test files
+  - `src/__tests__/unit/services/messaging/MessageValidator.test.ts` (NEW, 58 tests): validateRequest (length/empty/missing-fields), checkPermissions (global conv, anonymous path, registered path, error catch), anonymous permissions (participant not found, no share link, inactive/expired/max-uses/images-disallowed, null permissions, full-pass), registered permissions (not-a-member, announcement channel bypass, defaultWriteRole, null permissions default), resolveConversationId, detectLanguage, branch-coverage gap tests (non-Error thrown, empty identifier fallback, null canSendFiles, unknown role, null user for globalAdmin check, null membership permissions)
+  - `src/__tests__/unit/services/messaging/MessageProcessor.test.ts` (NEW, 69 tests): processLinksInContent (plain/markdown/[[url]]-reuse/[[url]]-duplicate/<url>/error), getEncryptionContext (all 7 modes), saveMessage (timestamp, encrypted payload, effectFlags EPHEMERAL+BLURRED+VIEW_ONCE, clientMessageId, P2002 dedup, P2002-race, skip-side-effects-on-dup, attachment association, refresh, forward copy, tracking links, storyReplyTo, capturePostReplyTo), extractMentions, containsLinks, notification flows (reply, mentions, extracts-from-content, mentionsOnly filter, no-notif-svc), extractTranscriptionText (text/segments/null/empty/empty-array/non-object), audio dispatch (shouldProcess=true, resolves participant userId, mobile transcription), branch gaps (handleAttachments catch, copyForwardedAttachments catch, already-transcribed log, trackingLink per-token update catch, triggerAllNotifications catch, getConversationParticipants filter+displayName-fallback, getConversationParticipants catch)
+- Reviewer: PASS (self-review against REVIEWER.md rubric — test-only diff, no production code changed)
+- Notes:
+  1. `jest.fn() as jest.Mock<any>` pattern required for all module-level mock functions — TypeScript ts-jest strict inference assigns `never` to inline `jest.fn().mockResolvedValue(null)` call chains in object literals.
+  2. `message.findUnique` was missing from prisma mock — added `msgFindUnique` alongside `msgFindFirst` to handle `triggerAllNotifications` original message lookup.
+  3. `messageAttachment.findMany` is called in both `copyForwardedAttachments` AND the ÉTAPE 4 bis refresh step (line 582) — `mockRejectedValueOnce` required for error path tests to avoid failing the refresh.
+  4. Lines 176-177, 631, 782, 837-840, 898-899 remain uncovered — structurally unreachable defensive catch blocks (inner methods already catch their own errors and never propagate; outer catch is dead code). At 92.69% branches, within target.
+  5. MessageHandler.ts (1162 lines) and messages.ts (2412 lines) deferred to next run for P0 Messaging core × gateway completion.
+  6. Pre-existing gateway failures: 6 suites / 18 tests — production bugs, unchanged.
+- Next slice: P0 Messaging core × gateway (part 2): `src/socketio/handlers/MessageHandler.ts`, `src/routes/conversations/messages.ts`
+- Commit: (see branch claude/coverage/p0-messaging-gateway)
