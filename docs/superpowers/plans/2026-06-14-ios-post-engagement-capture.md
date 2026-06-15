@@ -1661,3 +1661,15 @@ git commit -m "feat(gateway): POST /posts/engagement/batch (auth, Zod, upsert id
 - **Gating consentement à `begin()`** (app), pas dans le SDK. SDK `recordEngagement` reste pur.
 - **Durées en horloge monotone** (`ProcessInfo.systemUptime` / `DispatchTime`), wall-clock seulement pour `startedAt`.
 - Swift 6 : structs `Sendable` ; pas de `deinit` isolé (finalisation explicite + boot sweep) ; `NetworkConditionMonitor.shared` lu sur `@MainActor` ; `adaptiveOnChange` (jamais `.onChange` brut) ; tests JSON `.sortedKeys`.
+
+---
+
+# PHASE 2 — Lots 5-7 (après Lots 2-4) — à détailler via writing-plans
+
+> Spécifiés dans `docs/superpowers/specs/2026-06-14-ios-post-engagement-capture-design.md` **§19-23**. Le détail TDD task-par-task de ces lots sera produit (skill `writing-plans`) **quand les Lots 2-4 seront livrés** — on ne planifie pas dans le vide une couche qui dépend de l'ingestion backend (Lot 4). Résumé d'intention :
+
+- **Lot 5 — Agrégation & affichage** (dépend du Lot 4) : compteurs dénormalisés `reelOpenCount`/`qualifiedViewCount`/`playCount` sur `Post` ; dérivation **idempotente à l'INSERT** d'une `PostEngagement` dans `recordEngagementBatch` (règle de qualification §19.3 : 2,5 s OU position adaptative 90 %/30 %) ; exposition feed ; propriétés `FeedPost` + `CodingKeys` + mapper ; rebind badge œil → `reelOpenCount` (avant tout changement sémantique) ; fix bookmark (`create`+catch P2002). Tests Vitest (qualification, idempotence insert-vs-update) + XCTest (FeedPost decode/cold-start).
+- **Lot 6 — Partage tracé par-partageur** (indépendant) : `TrackingLink.targetType/targetId` + migration `.mongodb.js` (backfill **ObjectId**, **dédup legacy avant `createIndex`**, index unique **partiel** `{targetId,createdBy}`) ; upsert par-partageur `findFirst`+`create`+catch-P2002, `shareCount` +1 à la création en transaction ; `GET /posts/:id/share` ; invalidation `TrackingLink` au soft-delete. Tests Vitest (réutilisation token, collision P2002, anonyme non-explosif, migration).
+- **Lot 7 — Deep link & redirection** (indépendant) : `GET /tracking-links/:token/resolve` (TrackingLink → fallback `ConversationShareLink`, lien expiré, schéma Fastify) ; page web `/l/[token]` intelligente (routage typé + smart-banner/fallback) ; `DeepLinkRouter` (`.trackedLink` neutre + routage async par `targetType`, cold-launch/offline, capture clic best-effort, dédup `(token,userId)`/`(token,ip,fenêtre)`). Tests Vitest (`/resolve`) + XCTest (`DeepLinkRouter` REEL, collision `/l/` invitation).
+
+**Ordre Phase 2** : Lot 5 (après Lot 4) → Lot 6 ∥ Lot 7. Bugs réels corrigés : voir spec §23.
