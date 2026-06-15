@@ -49,6 +49,7 @@ public protocol PostServiceProviding: Sendable {
     func getCommentReplies(postId: String, commentId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
     func getCommunityPosts(communityId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
     func recordImpressions(postIds: [String], source: String) async throws
+    func recordEngagement(_ sessions: [EngagementSession]) async throws
 }
 
 public final class PostService: PostServiceProviding, @unchecked Sendable {
@@ -269,6 +270,15 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: Int]> = try await api.post(
             endpoint: "/posts/impressions/batch",
             body: BatchBody(postIds: postIds, source: source)
+        )
+    }
+
+    public func recordEngagement(_ sessions: [EngagementSession]) async throws {
+        guard !sessions.isEmpty else { return }
+        struct BatchBody: Encodable { let sessions: [EngagementSession] }
+        let _: APIResponse<[String: Int]> = try await api.post(
+            endpoint: "/posts/engagement/batch",
+            body: BatchBody(sessions: sessions)
         )
     }
 }

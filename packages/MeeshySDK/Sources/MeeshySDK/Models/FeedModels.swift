@@ -402,6 +402,9 @@ public struct FeedPost: Identifiable, Sendable {
     public var bookmarkCount: Int = 0
     /// Server-issued share count (every `POST /posts/:id/share` increments it).
     public var shareCount: Int = 0
+    /// Server-issued unique-view count (`Post.viewCount`). Runtime-only like the
+    /// other counters above — set via `APIPost.toFeedPost`, not cached/Codable.
+    public var viewCount: Int = 0
     public var repost: RepostContent? = nil
     public var repostAuthor: String? = nil
     public var isQuote: Bool = false
