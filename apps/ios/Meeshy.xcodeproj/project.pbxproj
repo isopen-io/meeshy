@@ -162,6 +162,12 @@
 		ACRV0002000200020002F001 /* AudioCarouselView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACRV0001000100010001F001 /* AudioCarouselView.swift */; };
 		ACSV002A002A002A002A0002 /* ActiveSessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACSV001A001A001A001A0001 /* ActiveSessionsView.swift */; };
 		AD353A36327B0E4A819E01D3 /* BackgroundTransitionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AA21AF99ADCE48E973EBF13 /* BackgroundTransitionCoordinator.swift */; };
+		ENGTRK0001000100010001BLD /* EngagementTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENGTRK0001000100010001REF /* EngagementTracker.swift */; };
+		ENGDSP0001000100010001BLD /* EngagementDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENGDSP0001000100010001REF /* EngagementDispatcher.swift */; };
+		ENGMOD0001000100010001BLD /* TrackEngagementModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENGMOD0001000100010001REF /* TrackEngagementModifier.swift */; };
+		ENGTRT0001000100010001BLD /* EngagementTrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENGTRT0001000100010001REF /* EngagementTrackerTests.swift */; };
+		ENGDST0001000100010001BLD /* EngagementDispatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENGDST0001000100010001REF /* EngagementDispatcherTests.swift */; };
+		ENGMOT0001000100010001BLD /* TrackEngagementModifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENGMOT0001000100010001REF /* TrackEngagementModifierTests.swift */; };
 		ADBAC274D8FB25AB8EA1527A /* MessageListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AC776C95F6E4344DA967A49 /* MessageListViewController.swift */; };
 		AE4100000000002F41 /* AudioEffectsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE4100000000001F41 /* AudioEffectsPanel.swift */; };
 		AE6AF9B4AA7E4759A0A02D38 /* ThemedBackButtonTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26375B0D72C248DB90C4AE91 /* ThemedBackButtonTests.swift */; };
@@ -646,6 +652,12 @@
 		4955C8F3EA2744580E65FF10 /* ConversationCreatorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationCreatorTests.swift; sourceTree = "<group>"; };
 		4A4C90710EAD26FA6DB08A4D /* ConversationLoadingPhase.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationLoadingPhase.swift; sourceTree = "<group>"; };
 		4AA21AF99ADCE48E973EBF13 /* BackgroundTransitionCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackgroundTransitionCoordinator.swift; sourceTree = "<group>"; };
+		ENGTRK0001000100010001REF /* EngagementTracker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Services/EngagementTracker.swift; sourceTree = SOURCE_ROOT; };
+		ENGDSP0001000100010001REF /* EngagementDispatcher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Services/EngagementDispatcher.swift; sourceTree = SOURCE_ROOT; };
+		ENGMOD0001000100010001REF /* TrackEngagementModifier.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Modifiers/TrackEngagementModifier.swift; sourceTree = SOURCE_ROOT; };
+		ENGTRT0001000100010001REF /* EngagementTrackerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Services/EngagementTrackerTests.swift; sourceTree = SOURCE_ROOT; };
+		ENGDST0001000100010001REF /* EngagementDispatcherTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Services/EngagementDispatcherTests.swift; sourceTree = SOURCE_ROOT; };
+		ENGMOT0001000100010001REF /* TrackEngagementModifierTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/TrackEngagementModifierTests.swift; sourceTree = SOURCE_ROOT; };
 		4B8711AA999D4B45FFEA4492 /* BlockedTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedTab.swift; sourceTree = "<group>"; };
 		4EBB27715D5F6E39BB1259FE /* ConversationLanguagePreferences.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationLanguagePreferences.swift; sourceTree = "<group>"; };
 		4EBFCC5061B469FCAB2CE547 /* ConversationSocketHandlerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationSocketHandlerTests.swift; sourceTree = "<group>"; };
@@ -1576,6 +1588,9 @@
 				WDFL01B1B1B1B1B1B1B10002 /* WidgetActionFlusher.swift */,
 				LABR01C1C1C1C1C1C1C10002 /* LiveActivityBridge.swift */,
 				4AA21AF99ADCE48E973EBF13 /* BackgroundTransitionCoordinator.swift */,
+				ENGTRK0001000100010001REF /* EngagementTracker.swift */,
+				ENGDSP0001000100010001REF /* EngagementDispatcher.swift */,
+				ENGMOD0001000100010001REF /* TrackEngagementModifier.swift */,
 				NSEPC001 /* NSEPendingMessageConsumer.swift */,
 				5498C9E6830102135B61B0CC /* CrashlyticsReporter.swift */,
 				ANA00100010001000100F001 /* AnalyticsManager.swift */,
@@ -1840,6 +1855,7 @@
 			isa = PBXGroup;
 			children = (
 				GSTC004A3B4C5D6E7F890100 /* GuestConversationContainerTests.swift */,
+				ENGMOT0001000100010001REF /* TrackEngagementModifierTests.swift */,
 				CVLT0001000100010001000 /* ConversationViewLifecycleTests.swift */,
 				CVRC0001000100010001000 /* ConversationReplyContextTests.swift */,
 				AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */,
@@ -2092,6 +2108,8 @@
 			isa = PBXGroup;
 			children = (
 				AA7E08B0D1609D24446F93BE /* AnonymousSessionStoreTests.swift */,
+				ENGTRT0001000100010001REF /* EngagementTrackerTests.swift */,
+				ENGDST0001000100010001REF /* EngagementDispatcherTests.swift */,
 				147B06F4C6BA47BCD48D03C6 /* apps/ios/MeeshyTests/Unit/Services/PresenceManagerTests.swift */,
 				A1B893097A2EDC16D20579F8 /* ConversationLockManagerTests.swift */,
 				5F682CF63D510A2E111E7BD1 /* PresenceManagerTests.swift */,
@@ -2667,6 +2685,9 @@
 				WDFL01B1B1B1B1B1B1B10001 /* WidgetActionFlusher.swift in Sources */,
 				LABR01C1C1C1C1C1C1C10001 /* LiveActivityBridge.swift in Sources */,
 				AD353A36327B0E4A819E01D3 /* BackgroundTransitionCoordinator.swift in Sources */,
+				ENGTRK0001000100010001BLD /* EngagementTracker.swift in Sources */,
+				ENGDSP0001000100010001BLD /* EngagementDispatcher.swift in Sources */,
+				ENGMOD0001000100010001BLD /* TrackEngagementModifier.swift in Sources */,
 				NSEPC002 /* NSEPendingMessageConsumer.swift in Sources */,
 				3030AF23EF81FAEF5970931A /* CrashlyticsReporter.swift in Sources */,
 				7E4ACB96705AA96ECDF87640 /* DependencyContainer.swift in Sources */,
@@ -2760,6 +2781,9 @@
 				TFA0MK01A001A001A001A001 /* MockTwoFactorService.swift in Sources */,
 				127A142C97C0430D1BB5C01B /* ConversationLockManagerTests.swift in Sources */,
 				4BD0B3391A67AE86286F93AF /* PresenceManagerTests.swift in Sources */,
+				ENGTRT0001000100010001BLD /* EngagementTrackerTests.swift in Sources */,
+				ENGDST0001000100010001BLD /* EngagementDispatcherTests.swift in Sources */,
+				ENGMOT0001000100010001BLD /* TrackEngagementModifierTests.swift in Sources */,
 				D122AA121095AFDB22A7662F /* AuthServiceTests.swift in Sources */,
 				09B1C857CBCEAEE03639B305 /* AnonymousSessionStoreTests.swift in Sources */,
 				GSTC003A3B4C5D6E7F890100 /* GuestConversationContainerTests.swift in Sources */,
