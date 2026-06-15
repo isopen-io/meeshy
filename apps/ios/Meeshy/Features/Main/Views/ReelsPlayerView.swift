@@ -267,22 +267,49 @@ struct ReelPageView: View {
         reel.primaryReelMedia?.type == .video
     }
 
+    /// The audio media for an audio reel, else `nil`. Drives the immersive
+    /// transcript hero + the audio control + audio-language flag strip.
+    private var audioMedia: FeedMedia? {
+        guard let media = reel.primaryReelMedia, media.type == .audio else { return nil }
+        return media
+    }
+
+    /// The "original" language for the meta-row flag strip: the audio
+    /// transcription language for an audio reel, else the post's original
+    /// language. Listed first in the strip.
+    private var metaOriginalLanguage: String? {
+        if let audioMedia { return audioMedia.transcription?.language ?? reel.originalLanguage }
+        return reel.originalLanguage
+    }
+
+    /// The translation languages for the meta-row flag strip: the translated
+    /// audio (TTS) target languages for an audio reel, else the post-body
+    /// translation languages.
+    private var metaTranslationLanguages: [String] {
+        if let audioMedia { return audioMedia.translatedAudios.map(\.targetLanguage) }
+        return Array(reel.translations?.keys ?? Dictionary<String, PostTranslation>().keys)
+    }
+
     var body: some View {
         ZStack {
+            // Tap + long-press attach DIRECTLY to the media, NOT as a separate
+            // full-screen `Color.clear` sibling above it. A hit-testing overlay
+            // above the media swallowed the touch-down for an image reel's
+            // horizontal carousel (whose `ScrollView` lives INSIDE `mediaLayer`,
+            // below the overlay), so the carousel could not be swiped.
+            //   • Tap (chrome visible)  → toggle play/pause (video reels only).
+            //   • Tap (chrome hidden)   → ONLY restore chrome (Story-reader
+            //     resume-tap guard).
+            //   • Long-press            → enter immersive mode (hide chrome).
+            // `.onTapGesture` / `.onLongPressGesture` stay mutually exclusive
+            // (tap does not fire after a successful long-press) and, being
+            // `.gesture`-based, yield to the child `ScrollView` pans: a horizontal
+            // carousel swipe and the vertical reel pager both win once the drag
+            // passes the press threshold. All four gestures coexist.
             mediaLayer
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.black)
                 .clipped()
-
-            // Immersive gesture zone — fills the screen BEHIND the overlay.
-            //   • Tap (chrome visible)  → toggle play/pause (video reels only).
-            //   • Tap (chrome hidden)   → ONLY restore chrome; do NOT also
-            //     play/pause on this restoring tap (mirrors the Story reader's
-            //     resume-tap guard).
-            //   • Long-press            → enter immersive mode (hide chrome).
-            // Always present (even for image/audio reels) so long-press immersion
-            // works everywhere; play/pause is gated to video reels inside.
-            Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture { handleContentTap() }
                 .onLongPressGesture(minimumDuration: 0.3) { enterImmersive() }
@@ -297,6 +324,17 @@ struct ReelPageView: View {
 
             VStack {
                 Spacer()
+
+                // Audio reel: the play/scrub control sits in the chrome (on top
+                // of the transcript hero) just above the author/flags row, so it
+                // is tappable and fades in immersive mode. Driven by
+                // `selectedLanguage` so a flag tap plays that language's TTS.
+                if let audioMedia, isActive {
+                    ReelAudioControl(media: audioMedia, selectedLanguage: $selectedLanguage)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 10)
+                }
+
                 HStack(alignment: .bottom, spacing: 12) {
                     infoOverlay
                     Spacer(minLength: 8)
@@ -312,7 +350,9 @@ struct ReelPageView: View {
                         .padding(.top, 14)
                 }
             }
-            .padding(.bottom, 96)
+            // Sit the description / action rail / scrub lower, closer to the
+            // bottom edge (just clearing the home indicator).
+            .padding(.bottom, 44)
             // The whole chrome stack (info + rail + scrub) fades out together in
             // immersive mode and stops taking touches so the restoring tap and
             // long-press reach the content zone underneath.
@@ -321,6 +361,28 @@ struct ReelPageView: View {
             .animation(.easeInOut(duration: 0.25), value: chromeHidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear { autoSelectPreferredAudioLanguage() }
+        // Cut the previous reel's audio the moment we page away from it (the
+        // video engine is left alone — the incoming video reel drives its own).
+        .adaptiveOnChange(of: isActive) { _, active in
+            if !active { PlaybackCoordinator.shared.stopAllAudio() }
+        }
+    }
+
+    /// Prisme — for an audio reel, default to the viewer's preferred language if a
+    /// translated audio (TTS) exists for it, so the right transcript/audio is
+    /// applied automatically. No-op for text/image reels or when no TTS matches
+    /// (the user can still tap a flag). Only sets when the viewer has not already
+    /// chosen a language.
+    private func autoSelectPreferredAudioLanguage() {
+        guard selectedLanguage == nil, let audioMedia else { return }
+        let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        let targets = audioMedia.translatedAudios.map(\.targetLanguage)
+        if let match = targets.first(where: { code in
+            preferred.contains { $0.lowercased() == code.lowercased() }
+        }) {
+            selectedLanguage = match
+        }
     }
 
     // MARK: Immersive mode
@@ -354,7 +416,7 @@ struct ReelPageView: View {
             case .image:
                 ReelImageView(reel: reel)
             case .audio:
-                ReelAudioView(media: media, accentColor: accentColor)
+                ReelAudioView(media: media, accentColor: accentColor, selectedLanguage: $selectedLanguage)
             default:
                 accentBackground
             }
@@ -406,7 +468,9 @@ struct ReelPageView: View {
                 .accessibilityLabel(String(localized: "reels.author.profile", defaultValue: "Profil de l'auteur", bundle: .main))
             }
 
-            if !displayedDescription.isEmpty {
+            // Audio reels show the post caption only when it adds something
+            // beyond the transcript hero; text/image reels always show it.
+            if audioMedia == nil, !displayedDescription.isEmpty {
                 Text(displayedDescription)
                     .font(.subheadline)
                     .foregroundColor(.white)
@@ -421,20 +485,18 @@ struct ReelPageView: View {
             // timestamp, then the translate toggle, then the available-language
             // flag pills (tap a flag to read that language; the active one is
             // underlined). Inline next to the date, as in conversation bubbles.
+            // For an AUDIO reel the flags switch the AUDIO (transcript + TTS) —
+            // the original transcription language + every translated-audio target
+            // language — instead of the post-body text. For text/image reels they
+            // switch the post-body translation.
             ReelMetaRow(
                 timestamp: RelativeTimeFormatter.shortString(for: reel.timestamp),
-                originalLanguage: reel.originalLanguage,
-                translationLanguages: Array(reel.translations?.keys ?? Dictionary<String, PostTranslation>().keys),
+                originalLanguage: metaOriginalLanguage,
+                translationLanguages: metaTranslationLanguages,
                 selectedLanguage: selectedLanguage,
                 onSelectLanguage: { code in
                     withAnimation(.easeInOut(duration: 0.2)) {
                         selectedLanguage = (selectedLanguage?.lowercased() == code.lowercased()) ? nil : code
-                    }
-                },
-                onToggleTranslate: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        let orig = reel.originalLanguage
-                        selectedLanguage = (selectedLanguage?.lowercased() == orig?.lowercased()) ? nil : orig
                     }
                 }
             )
@@ -531,7 +593,6 @@ private struct ReelMetaRow: View {
     let translationLanguages: [String]
     let selectedLanguage: String?
     var onSelectLanguage: (String) -> Void
-    var onToggleTranslate: () -> Void
 
     /// Deduped, ordered (original first), capped at 4 to stay discreet.
     private var codes: [String] {
@@ -554,15 +615,8 @@ private struct ReelMetaRow: View {
                 .foregroundColor(.white.opacity(0.65))
 
             if !codes.isEmpty {
-                // Translate affordance first (stable), exactly like the bubble footer.
-                Button(action: onToggleTranslate) {
-                    Image(systemName: "translate")
-                        .font(.caption2.weight(.medium))
-                        .foregroundColor(MeeshyColors.indigo400)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "reels.translate", defaultValue: "Traduire", bundle: .main))
-
+                // Translation flags only (the translate toggle is disabled for now):
+                // tap a flag to read that language; the active one is underlined.
                 HStack(spacing: 6) {
                     ForEach(codes, id: \.self) { code in
                         let display = LanguageDisplay.from(code: code)
@@ -724,7 +778,12 @@ private struct ReelVideoView: View {
             .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
             .onAppear { drive(ready: ready) }
-            .adaptiveOnChange(of: isActive) { _, _ in drive(ready: ready) }
+            .adaptiveOnChange(of: isActive) { _, active in
+                // Page away → pause this reel's video at once (don't wait for the
+                // delayed onDisappear during paging) so its sound doesn't bleed.
+                if active { drive(ready: ready) }
+                else if isShowingThis { manager.pause() }
+            }
             .adaptiveOnChange(of: ready) { _, _ in drive(ready: ready) }
             .adaptiveOnChange(of: revealCompleted) { _, _ in drive(ready: ready) }
             .onDisappear {
@@ -837,45 +896,120 @@ private struct ReelImageView: View {
     }
 }
 
-// MARK: - Reel Audio
+// MARK: - Reel Audio (media layer — immersive transcript hero)
 
-/// Audio reel: an accent-tinted canvas with a waveform glyph and the standard
-/// feed audio player control (tap to play). Audio is not auto-started so it
-/// never collides with the shared video engine while paging.
+/// The media layer of an audio reel: the TRANSCRIPTION is the hero, rendered
+/// large and centered like spoken words over a dark accent-tinted canvas. The
+/// play/scrub control and the language-flag strip are CHROME (owned by
+/// `ReelPageView`, on top of this layer) — keeping them out of the media layer
+/// is what makes them tappable and lets the immersive long-press hide them while
+/// the transcript (the content) stays. The transcript follows `selectedLanguage`
+/// (a binding shared with the chrome flag strip + audio control) so a flag tap
+/// swaps the displayed text in lockstep with the audio that plays.
 private struct ReelAudioView: View {
     let media: FeedMedia
     let accentColor: String
+    /// Shared with the chrome: a flag tap (or the audio control's language
+    /// switch) updates this and the hero transcript re-resolves. `nil` = original.
+    @Binding var selectedLanguage: String?
 
-    private var attachment: MeeshyMessageAttachment { media.toMessageAttachment() }
+    /// The transcript text for the currently-explored language. Reuses the SDK's
+    /// pure resolver so the hero text matches exactly what the player shows.
+    private var heroTranscript: String {
+        let token = selectedLanguage ?? "orig"
+        let segments = AudioPlayerView.resolveDisplaySegments(
+            selectedLanguage: token,
+            transcription: media.transcription,
+            translatedAudios: media.translatedAudios
+        )
+        return segments.map(\.text).joined(separator: " ")
+    }
 
     var body: some View {
         ZStack {
+            // Dark immersive canvas tinted with the reel accent — matches the
+            // video/image reels' dark aesthetic rather than a bright gradient.
             LinearGradient(
-                colors: [Color(hex: accentColor), Color(hex: accentColor).opacity(0.35)],
+                colors: [
+                    Color(hex: accentColor).opacity(0.55),
+                    .black,
+                    Color(hex: accentColor).opacity(0.35)
+                ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
 
-            VStack(spacing: 28) {
-                Image(systemName: "waveform")
-                    .font(.system(size: 72, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
-                    .shadow(color: .black.opacity(0.25), radius: 8)
+            // Subtle large waveform watermark behind the transcript.
+            Image(systemName: "waveform")
+                .font(.system(size: 220, weight: .semibold))
+                .foregroundColor(.white.opacity(0.05))
+                .allowsHitTesting(false)
 
-                AudioAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
-                    AudioPlayerView(
-                        attachment: attachment,
-                        context: .feedPost,
-                        accentColor: media.thumbnailColor,
-                        transcription: media.transcription,
-                        availability: availability,
-                        onDownload: onDownload
-                    )
-                }
-                .padding(.horizontal, 28)
+            heroLayer
+        }
+    }
+
+    @ViewBuilder
+    private var heroLayer: some View {
+        if heroTranscript.isEmpty {
+            // No transcript yet — keep a prominent waveform glyph as the hero so
+            // the screen never reads as empty.
+            Image(systemName: "waveform")
+                .font(.system(size: 84, weight: .semibold))
+                .foregroundColor(.white.opacity(0.92))
+                .shadow(color: .black.opacity(0.35), radius: 10)
+        } else {
+            ScrollView(.vertical, showsIndicators: false) {
+                Text(heroTranscript)
+                    .font(.system(size: 27, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(6)
+                    .shadow(color: .black.opacity(0.5), radius: 6, y: 2)
+                    .padding(.horizontal, 28)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 90)
+                    // Clear the bottom chrome (control + flags + author + rail).
+                    .padding(.bottom, 280)
+                    // Cross-fade when the language (and thus the text) changes.
+                    .id(selectedLanguage ?? "orig")
+                    .transition(.opacity)
             }
-            .padding(.bottom, 120)
+            // The hero text must not steal the carousel-less media zone's gestures
+            // (tap / long-press live on `mediaLayer`); a ScrollView only scrolls
+            // when the transcript overflows, which is the desired affordance.
+        }
+    }
+}
+
+// MARK: - Reel Audio Control (chrome layer — play/scrub for an audio reel)
+
+/// The audio play/scrub control for an audio reel, rendered in the CHROME layer
+/// (on top of the transcript hero) so it stays tappable and fades with the rest
+/// of the chrome in immersive mode. Reuses `AudioPlayerView` in its compact form
+/// — which hides the player's own transcription card + language pills, so the
+/// reel's hero transcript and `ReelMetaRow` flag strip own those, app-side, with
+/// no duplication. `selectedLanguage` is shared with the flag strip + the hero,
+/// so switching a flag plays that language's translated audio (when a TTS variant
+/// exists) AND swaps the transcript text — mirroring the message-bubble UX.
+private struct ReelAudioControl: View {
+    let media: FeedMedia
+    @Binding var selectedLanguage: String?
+
+    private var attachment: MeeshyMessageAttachment { media.toMessageAttachment() }
+
+    var body: some View {
+        AudioAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
+            AudioPlayerView(
+                attachment: attachment,
+                context: .messageBubble,
+                accentColor: media.thumbnailColor,
+                translatedAudios: media.translatedAudios,
+                externalLanguage: $selectedLanguage,
+                availability: availability,
+                onDownload: onDownload
+            )
         }
     }
 }

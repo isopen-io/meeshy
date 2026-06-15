@@ -192,6 +192,36 @@ extension APIPost {
                     speakerCount: t.speakerCount
                 )
             }
+            // Prisme Linguistique — per-language TTS variants of an audio media.
+            // The gateway sends `PostMedia.translations` as a [lang: AudioTranslation]
+            // map (translated transcription text + synthesized audio URL + timing
+            // segments). Mirror the message-bubble mapping so a reel audio player can
+            // switch language → transcript + translated audio, exactly like a bubble.
+            let translatedAudios: [MessageTranslatedAudio] = (m.translations ?? [:]).compactMap { (lang, trans) in
+                guard let url = trans.url, !url.isEmpty else { return nil }
+                let segments = (trans.segments ?? []).map {
+                    MessageTranscriptionSegment(
+                        text: $0.text,
+                        startTime: $0.startTime,
+                        endTime: $0.endTime,
+                        speakerId: $0.speakerId
+                    )
+                }
+                return MessageTranslatedAudio(
+                    id: "\(m.id)_\(lang)",
+                    attachmentId: m.id,
+                    targetLanguage: lang,
+                    url: url,
+                    transcription: trans.transcription ?? "",
+                    durationMs: trans.durationMs ?? 0,
+                    format: trans.format ?? "mp3",
+                    cloned: trans.cloned ?? false,
+                    quality: trans.quality ?? 0,
+                    voiceModelId: trans.voiceModelId,
+                    ttsModel: trans.ttsModel ?? "xtts",
+                    segments: segments
+                )
+            }
             return FeedMedia(
                 id: m.id, type: m.mediaType, url: m.fileUrl,
                 thumbnailUrl: m.thumbnailUrl, thumbHash: m.thumbHash,
@@ -200,7 +230,8 @@ extension APIPost {
                 duration: m.duration.map { $0 / 1000 },
                 fileName: m.originalName ?? m.fileName,
                 fileSize: m.fileSize.map { formatFileSize($0) },
-                transcription: transcription
+                transcription: transcription,
+                translatedAudios: translatedAudios
             )
         }
 
