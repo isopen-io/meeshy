@@ -1377,6 +1377,8 @@ describe('PasswordResetService - Security Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    mockPrisma.$transaction.mockImplementation((callback: Function) => callback(mockPrisma));
+
     mockAxiosPost.mockResolvedValue({ data: { success: true } });
 
     mockRedis.get.mockResolvedValue(null);
@@ -1519,5 +1521,225 @@ describe('PasswordResetService - Security Tests', () => {
 
     // Should expire within 1 second of expected time
     expect(Math.abs(expiresAt.getTime() - expectedExpiry)).toBeLessThan(1000);
+  });
+
+  // Branch coverage additions — cover the 3 uncovered branches (lines 89, 471-472, 691)
+
+  it('should proceed without captcha when no captchaToken provided (relies on rate limiting)', async () => {
+    mockPrisma.user.findFirst.mockResolvedValue(mockUser);
+    mockPrisma.user.findUnique.mockResolvedValue({ lockedUntil: null });
+
+    const requestWithoutCaptcha = {
+      email: 'test@example.com',
+      ipAddress: '192.168.1.1',
+      userAgent: 'Mozilla/5.0 Test Browser',
+      deviceFingerprint: 'device-123'
+      // captchaToken intentionally omitted
+    };
+
+    const result = await service.requestPasswordReset(requestWithoutCaptcha as any);
+
+    // Should still succeed (no CAPTCHA means skip CAPTCHA check, rely on rate limiting)
+    expect(result.success).toBe(true);
+    // email was sent (user found, rate limit ok, no captcha required)
+    expect(mockEmailService.sendPasswordResetEmail).toHaveBeenCalled();
+  });
+
+  it('should bypass CAPTCHA when BYPASS_CAPTCHA env var is true', async () => {
+    const originalEnv = process.env.BYPASS_CAPTCHA;
+    process.env.BYPASS_CAPTCHA = 'true';
+
+    try {
+      mockPrisma.user.findFirst.mockResolvedValue(mockUser);
+      mockPrisma.user.findUnique.mockResolvedValue({ lockedUntil: null });
+
+      const result = await service.requestPasswordReset(validResetRequest);
+
+      // axios.post should NOT have been called (captcha bypassed)
+      expect(mockAxiosPost).not.toHaveBeenCalled();
+      expect(result.success).toBe(true);
+    } finally {
+      process.env.BYPASS_CAPTCHA = originalEnv;
+    }
+  });
+
+  it('should return true from verify2FA when DB user has no 2FA secret despite outer check', async () => {
+    // Outer token user has 2FA enabled (triggers outer if-block at line 329)
+    const tokenUserWith2FA = { ...mockUser, twoFactorEnabledAt: new Date() };
+
+    mockPrisma.passwordResetToken.findUnique.mockResolvedValue({
+      id: 'token-1',
+      userId: mockUser.id,
+      tokenHash: 'hash',
+      expiresAt: new Date(Date.now() + 900000),
+      usedAt: null,
+      isRevoked: false,
+      user: tokenUserWith2FA
+    });
+
+    // user.findUnique is called 3 times:
+    // 1. checkAccountLockout → not locked
+    // 2. verify2FA → inconsistent: no twoFactorSecret (line 691: return true)
+    // 3. detectAnomalies → no anomaly
+    mockPrisma.user.findUnique
+      .mockResolvedValueOnce({ lockedUntil: null })
+      .mockResolvedValueOnce({ twoFactorEnabledAt: null, twoFactorSecret: null })
+      .mockResolvedValueOnce({ lastLoginDevice: null, lastLoginIp: null, lastLoginLocation: null, lastActiveAt: null });
+
+    mockPrisma.passwordHistory.findMany.mockResolvedValue([]);
+    mockBcryptCompare.mockResolvedValue(false);
+    mockZxcvbn.mockReturnValue({ score: 4, feedback: { warning: '' } });
+    mockBcryptHash.mockResolvedValue('$2b$12$newhash');
+    mockPrisma.user.update.mockResolvedValue({});
+    mockPrisma.passwordHistory.create.mockResolvedValue({});
+    mockPrisma.passwordResetToken.update.mockResolvedValue({});
+    mockPrisma.userSession.updateMany.mockResolvedValue({ count: 0 });
+
+    const completionWith2FA = {
+      ...validResetCompletion,
+      twoFactorCode: '123456'
+    };
+
+    // verify2FA returns true (2FA "not enabled" in inner lookup) → reset proceeds
+    const result = await service.completePasswordReset(completionWith2FA);
+
+    expect(result.success).toBe(true);
+  });
+
+  it('should use en fallback when user systemLanguage is null in requestPasswordReset', async () => {
+    const userNoLang = { ...mockUser, systemLanguage: null };
+    mockPrisma.user.findFirst.mockResolvedValue(userNoLang);
+    mockPrisma.user.findUnique.mockResolvedValue({ lockedUntil: null });
+
+    await service.requestPasswordReset(validResetRequest);
+
+    expect(mockEmailService.sendPasswordResetEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ language: 'en' })
+    );
+  });
+
+  it('should handle null geoData, null user lookups, null systemLanguage, and no deviceFingerprint', async () => {
+    const userNoLang = { ...mockUser, systemLanguage: null };
+    mockPrisma.passwordResetToken.findUnique.mockResolvedValue({
+      id: 'token-1',
+      userId: userNoLang.id,
+      tokenHash: 'hash',
+      expiresAt: new Date(Date.now() + 900000),
+      usedAt: null,
+      isRevoked: false,
+      user: userNoLang
+    });
+    // null for all user.findUnique calls: covers line 533 (checkAccountLockout) + line 721 (detectAnomalies)
+    mockPrisma.user.findUnique.mockResolvedValue(null);
+    // null geoData covers || '' (lines 357, 359), || null (lines 394, 430), || 'Unknown' (line 439)
+    mockGeoIPService.lookup.mockResolvedValue(null);
+    mockPrisma.passwordHistory.findMany.mockResolvedValue([]);
+    mockBcryptCompare.mockResolvedValue(false);
+    mockBcryptHash.mockResolvedValue('$2b$12$newhash');
+    mockPrisma.user.update.mockResolvedValue({});
+    mockPrisma.passwordHistory.create.mockResolvedValue({});
+    mockPrisma.passwordResetToken.update.mockResolvedValue({});
+    mockPrisma.userSession.updateMany.mockResolvedValue({ count: 0 });
+
+    const result = await service.completePasswordReset({
+      ...validResetCompletion,
+      deviceFingerprint: undefined as any  // covers lines 357, 395 (|| '' and || null)
+    });
+
+    // systemLanguage null → 'en' fallback at lines 440; success path fully executes
+    expect(result.success).toBe(true);
+  });
+
+  it('should reject low-score password with no zxcvbn warning message', async () => {
+    // Covers the FALSE branch of `if (result.feedback.warning)` at line 652:
+    // score < MIN_PASSWORD_SCORE but feedback.warning is empty → only score error pushed
+    mockZxcvbn.mockReturnValue({ score: 2, feedback: { warning: '' } });
+
+    const result = await service.completePasswordReset({
+      ...validResetCompletion,
+      newPassword: 'Moderate1Passxx',
+      confirmPassword: 'Moderate1Passxx'
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('password strength score');
+    expect(result.error).not.toContain('warning');
+  });
+
+  it('should use en fallback for systemLanguage in security alert email when anomaly detected', async () => {
+    const userNoLang = { ...mockUser, systemLanguage: null };
+    mockPrisma.passwordResetToken.findUnique.mockResolvedValue({
+      id: 'token-1',
+      userId: userNoLang.id,
+      tokenHash: 'hash',
+      expiresAt: new Date(Date.now() + 900000),
+      usedAt: null,
+      isRevoked: false,
+      user: userNoLang
+    });
+    // Call 1: checkAccountLockout → not locked
+    // Call 2: detectAnomalies → impossible travel detected → enters anomaly block → line 374 covered
+    mockPrisma.user.findUnique
+      .mockResolvedValueOnce({ lockedUntil: null })
+      .mockResolvedValueOnce({
+        lastLoginLocation: 'Paris, France',
+        lastActiveAt: new Date(Date.now() - 30 * 60 * 1000)  // 30 min ago → < 1h
+      });
+    mockGeoIPService.lookup.mockResolvedValue({
+      ...mockGeoData,
+      location: 'New York, United States'
+    });
+    mockPrisma.passwordHistory.findMany.mockResolvedValue([]);
+    mockBcryptCompare.mockResolvedValue(false);
+    mockBcryptHash.mockResolvedValue('$2b$12$newhash');
+    mockPrisma.user.update.mockResolvedValue({});
+    mockPrisma.passwordHistory.create.mockResolvedValue({});
+    mockPrisma.passwordResetToken.update.mockResolvedValue({});
+    mockPrisma.userSession.updateMany.mockResolvedValue({ count: 0 });
+
+    await service.completePasswordReset(validResetCompletion);
+
+    // Anomaly detected → sendSecurityAlertEmail called with 'en' fallback (line 374)
+    expect(mockEmailService.sendSecurityAlertEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ language: 'en' })
+    );
+  });
+
+  it('should not flag anomaly when geoLocation has no country separator', async () => {
+    // Covers the FALSE branch of line 728: lastCountry && currentCountry && lastCountry !== currentCountry
+    // when split(',')[1] is undefined → lastCountry/currentCountry is undefined → condition is false
+    mockPrisma.passwordResetToken.findUnique.mockResolvedValue({
+      id: 'token-1',
+      userId: mockUser.id,
+      tokenHash: 'hash',
+      expiresAt: new Date(Date.now() + 900000),
+      usedAt: null,
+      isRevoked: false,
+      user: mockUser
+    });
+    mockPrisma.user.findUnique
+      .mockResolvedValueOnce({ lockedUntil: null })
+      .mockResolvedValueOnce({
+        lastLoginLocation: 'MetroCity',  // no comma → split(',')[1] = undefined → lastCountry = undefined
+        lastActiveAt: new Date(Date.now() - 30 * 60 * 1000)
+      });
+    // location also has no comma → currentCountry = undefined
+    mockGeoIPService.lookup.mockResolvedValue({ ...mockGeoData, location: 'Downtown' });
+    mockPrisma.passwordHistory.findMany.mockResolvedValue([]);
+    mockBcryptCompare.mockResolvedValue(false);
+    mockBcryptHash.mockResolvedValue('$2b$12$newhash');
+    mockPrisma.user.update.mockResolvedValue({});
+    mockPrisma.passwordHistory.create.mockResolvedValue({});
+    mockPrisma.passwordResetToken.update.mockResolvedValue({});
+    mockPrisma.userSession.updateMany.mockResolvedValue({ count: 0 });
+
+    const result = await service.completePasswordReset(validResetCompletion);
+
+    // No anomaly detected (country comparison short-circuited by undefined)
+    expect(result.success).toBe(true);
+    const suspiciousCall = mockPrisma.securityEvent.create.mock.calls.find(
+      (call: any) => call[0]?.data?.eventType === 'SUSPICIOUS_PASSWORD_RESET'
+    );
+    expect(suspiciousCall).toBeUndefined();
   });
 });

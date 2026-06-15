@@ -162,3 +162,23 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   4. Pre-existing gateway failures (6 suites / 18 tests) unchanged — production bugs, not touched.
 - Next slice: Sprint 1 → Feature matrix P0 cells. First target: **Auth gateway** (`src/services/AuthService.ts`, `TwoFactorService.ts`, `MagicLinkService.ts`, `PasswordResetService.ts`, `SessionService.ts`, `routes/two-factor.ts`, `middleware/auth.ts`)
 - Commit: (see branch claude/coverage/sprint0-7-gateway-skip-files)
+
+## 2026-06-15T04:35Z — P0 Auth × gateway (partial: TwoFactorService + two-factor routes + PasswordResetService)
+- Targeted: `src/services/TwoFactorService.ts`, `src/routes/two-factor.ts`, `src/services/PasswordResetService.ts`
+- Result: ◐ partial — 3 of 8 Auth gateway files covered; remaining: AuthService.ts, MagicLinkService.ts, SessionService.ts, middleware/auth.ts, admin-permissions.middleware.ts
+- Coverage:
+  - TwoFactorService.ts: 100% lines / 100% branches (all metrics 100%)
+  - routes/two-factor.ts: 100% lines / 100% branches (all metrics 100%)
+  - PasswordResetService.ts: 100% lines / 97.6% branches (up from ~87.2%)
+- Tests added: 79 new tests
+  - `src/__tests__/unit/services/TwoFactorService.test.ts` (NEW, 51 tests): all 8 public methods, backup codes, TOTP, malformed code input, DB error paths
+  - `src/__tests__/unit/routes/two-factor-routes.test.ts` (NEW, 26 tests): all 7 endpoints including 2FA challenge, service-failure, fire-and-forget notification assertions
+  - `src/__tests__/unit/services/PasswordResetService.test.ts` (MODIFIED, +8 tests): uncovered branch coverage: captcha-skip, BYPASS_CAPTCHA env, verify2FA null secret, null geoData/deviceFingerprint/systemLanguage, weak password without warning, anomaly language fallback, country-separator missing
+- Reviewer: PASS (rounds: 1, 2 non-blocking findings fixed: malformed code test + notification call assertions)
+- Notes:
+  1. `$transaction.mockImplementation(...)` added to Security Tests `beforeEach` to restore implementation after `jest.clearAllMocks()` — fixes test isolation issue where "transaction failure" test at line 1146 permanently broke subsequent tests in a sibling describe block.
+  2. Lines 366-373 remain at 1 uncovered branch each (dead code: anomaly block references `geoData?.location || null` but anomaly detection requires non-null geoData — contradiction). Acceptable at 97.6% branch (target is 92%).
+  3. Pre-existing gateway failures: 6 suites / 18 tests — production bugs, unchanged.
+  4. 78+76 = 78 PasswordResetService + 76 TwoFactor suite tests all pass.
+- Next slice: Continue P0 Auth × gateway with remaining files: `AuthService.ts` (52% coverage), `MagicLinkService.ts`, `SessionService.ts`, `middleware/auth.ts` (47%), `admin-permissions.middleware.ts` (0%)
+- Commit: (see branch claude/coverage/p0-auth-gateway)
