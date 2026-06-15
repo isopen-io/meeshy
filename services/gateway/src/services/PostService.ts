@@ -676,6 +676,146 @@ export class PostService {
     }
   }
 
+  /**
+   * Ingestion append-only des sessions d'engagement (LOT 4 + agrégation LOT 5).
+   *
+   * - Upsert sur `sessionId` → idempotent : rejouer un ACK perdu après un 200 est
+   *   un no-op (aucun double comptage).
+   * - Skip-and-continue : un post supprimé entre `begin` et `flush` est ignoré
+   *   sans faire échouer le reste du batch.
+   * - Caps défensifs (300 s) sur `dwellMs`/`watchMs`.
+   * - `userId` provient de la route (jamais du client) — anti spoofing.
+   * - Agrégation dénormalisée alimentée UNIQUEMENT à l'INSERT d'une nouvelle ligne
+   *   (jamais aux updates/retries idempotents) : `reelOpenCount`, `playCount`,
+   *   `qualifiedViewCount`. N'altère NI `viewCount` NI `PostView`.
+   *
+   * Retourne le nombre de sessions persistées (insert ou update).
+   */
+  async recordEngagementBatch(
+    sessions: Array<{
+      sessionId: string; userId?: string; postId: string; contentType: string; surface: string;
+      startedAt: string; dwellMs: number; watchMs?: number; mediaDurationMs?: number;
+      completed?: boolean; truncated?: boolean; consent?: string;
+      actions?: unknown[]; watchSamples?: unknown[];
+    }>,
+    userId: string,
+  ): Promise<number> {
+    const capped = sessions.slice(0, 50);
+    let recorded = 0;
+
+    for (const s of capped) {
+      try {
+        const post = await this.prisma.post.findFirst({
+          where: { id: s.postId, deletedAt: NOT_DELETED },
+          select: { id: true, authorId: true },
+        });
+        if (!post) continue; // skip-and-continue: post deleted between begin and flush
+
+        const dwellMs = Math.max(0, Math.min(300_000, Math.round(s.dwellMs)));
+        const watchMs = s.watchMs !== undefined
+          ? Math.max(0, Math.min(300_000, Math.round(s.watchMs)))
+          : undefined;
+        const mediaDurationMs = s.mediaDurationMs !== undefined
+          ? Math.max(0, Math.round(s.mediaDurationMs))
+          : undefined;
+
+        const completed = s.completed === true;
+        const data = {
+          postId: s.postId,
+          userId,
+          contentType: s.contentType,
+          surface: s.surface,
+          startedAt: new Date(s.startedAt),
+          dwellMs,
+          watchMs,
+          mediaDurationMs,
+          completed,
+          truncated: s.truncated === true,
+          consent: s.consent,
+          actions: (s.actions ?? []) as Prisma.InputJsonValue,
+          watchSamples: (s.watchSamples ?? []) as Prisma.InputJsonValue,
+        };
+
+        const before = await this.prisma.postEngagement.findUnique({
+          where: { sessionId: s.sessionId },
+          select: { id: true },
+        });
+        const isInsert = !before;
+
+        await this.prisma.postEngagement.upsert({
+          where: { sessionId: s.sessionId },
+          update: data,
+          create: { sessionId: s.sessionId, ...data },
+        });
+        recorded += 1;
+
+        if (isInsert) {
+          const increments = this.engagementAggregateIncrements({
+            surface: s.surface,
+            contentType: s.contentType,
+            dwellMs,
+            watchMs,
+            mediaDurationMs,
+            completed,
+            watchSamples: s.watchSamples ?? [],
+          });
+          if (Object.keys(increments).length > 0) {
+            await this.prisma.post.update({
+              where: { id: s.postId },
+              data: increments,
+            });
+          }
+        }
+      } catch {
+        continue; // never fail the whole batch on one row
+      }
+    }
+    return recorded;
+  }
+
+  /**
+   * Calcule les incréments de compteurs dénormalisés pour une NOUVELLE session
+   * (spec §19.3). Renvoie un objet `Prisma.PostUpdateInput` partiel — vide si
+   * la session ne déclenche aucun compteur.
+   */
+  private engagementAggregateIncrements(s: {
+    surface: string; contentType: string; dwellMs: number;
+    watchMs?: number; mediaDurationMs?: number; completed: boolean;
+    watchSamples: unknown[];
+  }): Prisma.PostUpdateInput {
+    const SHORT_VIDEO_MS = 8300;
+    const QUALIFY_MS = 2500;
+
+    const increments: Record<string, { increment: number }> = {};
+
+    if (s.surface === 'reels') {
+      increments.reelOpenCount = { increment: 1 };
+    }
+
+    if (s.completed) {
+      increments.playCount = { increment: 1 };
+    }
+
+    const maxPositionMs = Array.isArray(s.watchSamples)
+      ? s.watchSamples.reduce<number>((max, sample) => {
+          const pos = (sample as { positionMs?: unknown })?.positionMs;
+          return typeof pos === 'number' && pos > max ? pos : max;
+        }, 0)
+      : 0;
+
+    const duration = s.mediaDurationMs ?? 0;
+    const positionThresh = duration < SHORT_VIDEO_MS ? 0.90 : 0.30;
+    const positionQualifies = duration > 0 && (maxPositionMs / duration) >= positionThresh;
+    const watchQualifies = (s.watchMs ?? 0) >= QUALIFY_MS;
+    const dwellQualifies = s.watchMs === undefined && s.dwellMs >= QUALIFY_MS;
+
+    if (positionQualifies || watchQualifies || dwellQualifies) {
+      increments.qualifiedViewCount = { increment: 1 };
+    }
+
+    return increments as Prisma.PostUpdateInput;
+  }
+
   async sharePost(postId: string, userId: string, platform?: string) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },

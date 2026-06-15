@@ -7,8 +7,8 @@ import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
-import { LikeSchema, RepostSchema, PostParams } from './types';
-import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
+import { LikeSchema, RepostSchema, PostParams, EngagementBatchSchema } from './types';
+import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
@@ -353,6 +353,43 @@ export function registerInteractionRoutes(
       return sendSuccess(reply, { recorded: capped.length });
     } catch (error) {
       fastify.log.error(`[POST /posts/impressions/batch] Error: ${error}`);
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
+    }
+  });
+
+  // POST /posts/engagement/batch — Ingest durable engagement sessions (dwell + actions)
+  //
+  // Append-only ingestion of finalized consumption sessions captured client-side
+  // (EngagementOutbox). Idempotent on sessionId (upsert) so a lost-ACK retry is a
+  // no-op. The userId is taken from the auth context — the client-supplied
+  // session.userId is never trusted. Skips (without 400) any session whose post
+  // was deleted between begin and flush.
+  fastify.post('/posts/engagement/batch', {
+    preValidation: [requiredAuth],
+    config: { rateLimit: createPostRouteRateLimitConfig('engagement') },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+      }
+
+      const parsed = EngagementBatchSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendBadRequest(reply, 'Invalid engagement batch', { code: 'VALIDATION_ERROR' });
+      }
+
+      // Zod has validated + applied defaults at runtime; `.data.sessions` is the
+      // parsed output. The service re-normalizes defensively, so the structural
+      // assertion to its input shape is safe.
+      const sessions = parsed.data.sessions as Parameters<typeof postService.recordEngagementBatch>[0];
+      const recorded = await postService.recordEngagementBatch(
+        sessions,
+        authContext.registeredUser.id,
+      );
+      return sendSuccess(reply, { recorded });
+    } catch (error) {
+      fastify.log.error(`[POST /posts/engagement/batch] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });

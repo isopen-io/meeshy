@@ -151,7 +151,7 @@ export async function messageValidationHook(
  * - POST /posts/impressions/batch : 10/min — par lot de 50 ids max
  */
 export function createPostRouteRateLimitConfig(
-  type: 'create' | 'like' | 'view' | 'comment' | 'impression'
+  type: 'create' | 'like' | 'view' | 'comment' | 'impression' | 'engagement'
 ): object {
   const configs = {
     create: { max: 10, label: 'create' },
@@ -159,6 +159,7 @@ export function createPostRouteRateLimitConfig(
     view: { max: 60, label: 'view' },
     comment: { max: 20, label: 'comment' },
     impression: { max: 10, label: 'impression' },
+    engagement: { max: 20, label: 'engagement' },
   };
   const cfg = configs[type];
   return {
