@@ -113,3 +113,20 @@ describe('batch — langue par destinataire', () => {
     expect(byUser.get('b')).toBe('hat dich erwähnt');
   });
 });
+
+describe('login new device', () => {
+  it('titre localisé selon systemLanguage (de)', async () => {
+    const pushed: any[] = [];
+    const prisma: any = {
+      user: { findUnique: async () => ({ systemLanguage: 'de' }), findMany: async () => [] },
+      userPreferences: { findUnique: async () => null },
+      notification: { create: async (a: any) => ({ id: 'n', ...a.data, createdAt: new Date() }), count: async () => 0 },
+      conversation: { findUnique: async () => null },
+      message: { findUnique: async () => null },
+    };
+    const svc = new NotificationService(prisma as any);
+    svc.setPushNotificationService({ sendToUser: async (a: any) => { pushed.push(a.payload); } } as any);
+    await svc.createLoginNewDeviceNotification({ recipientUserId: 'r' });
+    expect(pushed[0].title).toBe('Neue Anmeldung erkannt');
+  });
+});

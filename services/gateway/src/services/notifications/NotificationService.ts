@@ -2784,6 +2784,7 @@ export class NotificationService {
       where: { id: params.recipientUserId },
       select: { systemLanguage: true }
     });
+    const lang = user?.systemLanguage ?? 'fr';
     const locale = user?.systemLanguage === 'en' ? 'en-US' : 'fr-FR';
 
     const bodyParts: string[] = [];
@@ -2795,7 +2796,7 @@ export class NotificationService {
     bodyParts.push(now.toLocaleString(locale, { timeZone: geo?.timezone || 'UTC', dateStyle: 'short', timeStyle: 'short' }));
     const content = bodyParts.join(' — ');
 
-    const title = locale.startsWith('en') ? 'New login detected' : 'Nouvelle connexion détectée';
+    const title = notificationString(lang, 'login.newDevice.title');
 
     return this.createNotification({
       userId: params.recipientUserId,
