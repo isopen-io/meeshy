@@ -10,6 +10,7 @@ import {
   canEditMessage,
   generateDefaultConversationTitle,
   getRequiredLanguages,
+  resolveUserTranslationLanguages,
 } from '../utils/conversation-helpers';
 
 describe('resolveUserLanguage', () => {
@@ -491,5 +492,35 @@ describe('resolveUserLanguagesOrdered', () => {
     expect(
       resolveUserLanguagesOrdered({}, { deviceLocale: 'ja' })
     ).toEqual(['ja']);
+  });
+});
+
+describe('resolveUserTranslationLanguages', () => {
+  it('returns systemLanguage when only systemLanguage set', () => {
+    expect(resolveUserTranslationLanguages({ systemLanguage: 'en' })).toEqual(['en']);
+  });
+
+  it('returns regionalLanguage when only regionalLanguage set', () => {
+    expect(resolveUserTranslationLanguages({ regionalLanguage: 'es' })).toEqual(['es']);
+  });
+
+  it('returns both when both are set', () => {
+    expect(
+      resolveUserTranslationLanguages({ systemLanguage: 'fr', regionalLanguage: 'es' })
+    ).toEqual(['fr', 'es']);
+  });
+
+  it("returns ['fr'] when neither is set (fallback)", () => {
+    expect(resolveUserTranslationLanguages({})).toEqual(['fr']);
+  });
+
+  it("returns ['fr'] when both are undefined", () => {
+    expect(
+      resolveUserTranslationLanguages({ systemLanguage: undefined, regionalLanguage: undefined })
+    ).toEqual(['fr']);
+  });
+
+  it('does not include empty strings', () => {
+    expect(resolveUserTranslationLanguages({ systemLanguage: '' })).toEqual(['fr']);
   });
 });

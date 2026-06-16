@@ -456,3 +456,23 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   6. Pre-existing web failures: 0 new failures introduced (305/305 suites pass).
 - Next slice: P1 Real-time × web (`socket hooks reconnect/dedup`, `notification-socketio.singleton.ts`) OR P0 Messaging core × gateway (part 3): `messages.ts` (after TS errors fixed)
 - Commit: (see branch `claude/dreamy-mayer-xc8tq4`)
+
+## 2026-06-16T13:15Z — P0 × shared (Auth, Prisme, Messaging core — TypeScript shared package)
+- Targeted: `packages/shared/utils/client-message-id.ts`, `utils/conversation-helpers.ts` (resolveUserTranslationLanguages + generateDefaultConversationTitle branch), `utils/validation.ts` (updateBannerSchema refine branches + MESSAGE_NUMBER_OVERFLOW)
+- Result: ☑ done — all 3 shared TypeScript targets ≥92% line+branch; feature matrix cells P0 Auth × shared, P0 Prisme × shared, P0 Messaging core × shared all ☐→☑ (TypeScript shared portion; MeeshySDK Swift untestable on Linux)
+- Coverage (final run, vitest, 585 tests):
+  - client-message-id.ts: 100% stmts / 100% branches / 100% funcs / 100% lines ✓
+  - conversation-helpers.ts: 98.61% lines / 92.3% branches / 100% funcs ✓ (lines 242-243: structurally unreachable `if (member)` false branch when length=1 array always has element[0])
+  - validation.ts: 99.8% lines / 93.75% branches / 52.17% funcs ✓ (lines 209-211: `noEmoji if (!val)` unreachable via Zod — framework validates type before calling refinements)
+  - Overall shared: 95.85% stmts / 92.55% branches / 83.94% funcs / 95.85% lines (up from 95.22/92.17)
+- Tests added: 30 new tests across 3 files
+  - `__tests__/utils/client-message-id.test.ts` (NEW, 14 tests): generateClientMessageId (prefix, regex match, uniqueness, lowercase hex, v4 format), isValidClientMessageId (generated, known-valid, empty, no prefix, uppercase, wrong version, arbitrary, prefix-only, ObjectId), CLIENT_MESSAGE_ID_REGEX (type, partial)
+  - `__tests__/conversation-helpers.test.ts` (+6 tests): resolveUserTranslationLanguages (systemOnly, regionalOnly, both, neither fallback='fr', both-undefined fallback, empty-string treated as falsy)
+  - `__tests__/validation.test.ts` (+10 tests): updateBannerSchema (http, https, /api/, ftp-reject, /uploads/-reject, empty-reject), SignalValidation.validateMessageNumber overflow (MAX+1 → MESSAGE_NUMBER_OVERFLOW, MAX itself → valid)
+- Reviewer: PASS (rounds: 1 — all rubric items satisfied; no production code changed)
+- Notes:
+  1. PR #691 (P0 Messaging core × web) was merged to main at start of this run — CI all green.
+  2. P0 Messaging core × gateway `messages.ts` (2412 lines, pre-existing TS errors for 3 runs): marked ⚠ blocked — 3 consecutive runs unable to test. Root cause: `import type { PrismaClient } from '@meeshy/shared/prisma/client'` (module not generated in CI env) + production TS2339 errors on `unknown` type. Requires Prisma client generation or production type fixes — not testable in current env without touching production code. Future: add `@meeshy/shared/prisma/client → @prisma/client` moduleNameMapper or use `diagnostics: { ignoreCodes }` in ts-jest, flagging for human review.
+  3. MeeshySDK (Swift) cells treated as ⊘ for Linux CI automated routine — requires macOS/Xcode. iOS column handles iOS app code; Swift SDK requires separate macOS runner.
+- Next slice: P1 Real-time × gateway (`src/socketio/handlers/StatusHandler.ts`, `ConversationHandler.ts`, etc.) — first testable P1 cell now that P0 has no remaining Linux-testable ☐ cells
+- Commit: (see branch claude/coverage/p0-shared-multi)
