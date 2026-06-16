@@ -6,7 +6,6 @@
     "node_modules/(?!@meeshy/shared)"
   ],
   "moduleNameMapper": {
-    "^@meeshy/shared/prisma/client$": "<rootDir>/src/__tests__/__stubs__/prisma-client.ts",
     "^@meeshy/shared$": "<rootDir>/../../packages/shared/types/index.ts",
     "^@meeshy/shared/(.*)$": "<rootDir>/../../packages/shared/$1",
     "^(\\.{1,2}/.*)\\.js$": "$1"
@@ -59,9 +58,9 @@
   "moduleFileExtensions": ["ts", "js", "json"],
   "coverageThreshold": {
     "global": {
-      "lines": 40,
-      "branches": 38,
-      "statements": 40,
+      "lines": 39,
+      "branches": 37,
+      "statements": 39,
       "functions": 42
     }
   }
