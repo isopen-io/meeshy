@@ -23,6 +23,8 @@ import {
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { notificationString, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import type { Server as SocketIOServer } from 'socket.io';
@@ -392,6 +394,42 @@ export class NotificationService {
     mentionsCleanup.unref?.();
     const reactionsCleanup = setInterval(() => this.cleanupOldReactions(), 120_000);
     reactionsCleanup.unref?.();
+  }
+
+  // ==============================================
+  // LANGUAGE RESOLUTION (i18n notifications)
+  // ==============================================
+
+  private readonly LANG_SELECT = {
+    systemLanguage: true,
+    regionalLanguage: true,
+    customDestinationLanguage: true,
+    deviceLocale: true,
+  } as const;
+
+  /** Langue de notification d'un destinataire (Prisme-first, fallback 'fr'). */
+  private async resolveRecipientLang(userId: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: this.LANG_SELECT,
+    });
+    if (!user) return 'fr';
+    return resolveUserLanguage(user, { deviceLocale: user.deviceLocale ?? undefined });
+  }
+
+  /** Variante batch : un seul findMany, retourne une Map userId → langue (fallback 'fr'). */
+  private async resolveRecipientLangs(userIds: readonly string[]): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    if (userIds.length === 0) return out;
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: [...new Set(userIds)] } },
+      select: { id: true, ...this.LANG_SELECT },
+    });
+    for (const u of users) {
+      out.set(u.id, resolveUserLanguage(u, { deviceLocale: u.deviceLocale ?? undefined }));
+    }
+    for (const id of userIds) if (!out.has(id)) out.set(id, 'fr');
+    return out;
   }
 
   // ==============================================
