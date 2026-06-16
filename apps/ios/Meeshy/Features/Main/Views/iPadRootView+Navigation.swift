@@ -30,6 +30,9 @@ extension iPadRootView {
     func handleDeepLink(_ deepLink: DeepLink?) {
         guard let deepLink = deepLinkRouter.consumePendingDeepLink() else { return }
         switch deepLink {
+        case .trackedLink(let token):
+            // `/l/<token>` resolved async by targetType (re-sets pendingDeepLink).
+            deepLinkRouter.resolveTrackedLink(token)
         case .joinLink(let identifier), .chatLink(let identifier):
             // iPadRootView only mounts when authenticated, so we never
             // want the anonymous join sheet here — that flow is owned by
