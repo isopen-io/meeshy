@@ -45,93 +45,21 @@ public extension SocketNotificationEvent {
         }
     }
 
-    /// Emoji carried by a reaction notification, if any.
-    private var reactionEmoji: String? {
-        if let emoji = metadata?.emoji, !emoji.isEmpty { return emoji }
-        return nil
-    }
-
-    /// Human label for the post family a social event targets.
-    private var postKindLabel: String {
-        if notificationType == .storyReaction || postType == "STORY" { return "story" }
-        if notificationType == .statusReaction || postType == "STATUS" { return "statut" }
-        if notificationType == .commentLike { return "commentaire" }
-        return "publication"
-    }
-
     // MARK: Title
 
     /// Primary (bold) line of the toast.
     ///
-    /// Conversation messages → the actor name. Everything else → a precise
-    /// action phrase so the toast is as informative as the iOS push.
+    /// Prisme Linguistique (i18n serveur) : comme le push iOS, le *titre* est
+    /// l'expéditeur (acteur) et la phrase d'action localisée vit dans le *corps*
+    /// (`content` déjà localisé par le gateway dans la langue du destinataire).
+    /// On ne reconstruit donc plus de phrase FR ici. Les événements sans acteur
+    /// retombent sur le `title` backend.
+    /// Voir docs/superpowers/specs/2026-06-16-notification-system-i18n-design.md
     var toastTitle: String {
         let actor = actorDisplayName
-
-        switch notificationType {
-        // ── Conversation messages: actor is the title, group is the subtitle.
-        case .newMessage, .legacyNewMessage,
-             .messageReply, .reply, .legacyStoryReply,
-             .userMentioned, .mention, .legacyMention:
-            return actor
-
-        // ── Reactions
-        case .messageReaction, .reaction, .legacyMessageReaction:
-            if let emoji = reactionEmoji { return "\(actor) a réagi \(emoji) à votre message" }
-            return "\(actor) a réagi à votre message"
-        case .commentReaction:
-            if let emoji = reactionEmoji { return "\(actor) a réagi \(emoji) à votre commentaire" }
-            return "\(actor) a réagi à votre commentaire"
-        case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike:
-            if let emoji = reactionEmoji { return "\(actor) a réagi \(emoji) à votre \(postKindLabel)" }
-            return "\(actor) a aimé votre \(postKindLabel)"
-
-        // ── Comments & replies (the precision the produit asks for)
-        case .postComment, .legacyPostComment:
-            return "\(actor) a commenté votre publication"
-        case .commentReply:
-            return "\(actor) a répondu à votre commentaire"
-        case .storyNewComment:
-            return "\(actor) a commenté votre story"
-        case .friendStoryComment:
-            return "\(actor) a commenté une story"
-        case .storyThreadReply:
-            return "\(actor) a répondu dans un fil de commentaires"
-        case .postRepost:
-            return "\(actor) a repartagé votre publication"
-
-        // ── Friends' new content
-        case .friendNewStory:
-            return "\(actor) a publié une nouvelle story"
-        case .friendNewPost:
-            return "\(actor) a publié une nouvelle publication"
-        case .friendNewMood:
-            return "\(actor) a partagé une humeur"
-
-        // ── Relationship
-        case .friendRequest, .contactRequest, .legacyFriendRequest:
-            return "\(actor) veut se connecter"
-        case .friendAccepted, .contactAccepted, .legacyFriendAccepted:
-            return "\(actor) a accepté votre invitation"
-
-        // ── Calls
-        case .missedCall, .callDeclined, .legacyCallMissed:
-            return "Appel manqué de \(actor)"
-        case .incomingCall, .callEnded, .legacyCallIncoming:
-            return "Appel de \(actor)"
-
-        // ── Conversation membership
-        case .newConversationDirect:
-            return "Nouvelle conversation avec \(actor)"
-        case .newConversationGroup, .communityInvite, .legacyGroupInvite,
-             .addedToConversation, .newConversation:
-            return "Invitation de \(actor)"
-
-        // ── Fallback: a non-empty backend title, else the actor name.
-        default:
-            if let title, !title.isEmpty { return title }
-            return actor
-        }
+        if actor != "Quelqu'un" { return actor }
+        if let title, !title.isEmpty { return title }
+        return actor
     }
 
     // MARK: Subtitle
@@ -147,9 +75,13 @@ public extension SocketNotificationEvent {
 
     // MARK: Body
 
-    /// Tertiary (preview) line. Message text / attachment label for messages,
-    /// comment text for comment events. `nil` when the title already conveys
-    /// everything (e.g. "X a aimé votre story").
+    /// Tertiary (preview) line.
+    ///
+    /// Conversation messages → attachment label + message preview / content.
+    /// Tous les autres événements → le `content` localisé par le gateway
+    /// (« a réagi ❤️ à votre message », « a commenté votre story » …), affiché
+    /// sous l'expéditeur exactement comme le corps du push iOS. Plus aucune
+    /// reconstruction FR côté client (Prisme-first, i18n serveur).
     var toastBody: String? {
         switch notificationType {
         // Conversation messages: attachment label + message preview / content.
@@ -164,18 +96,10 @@ public extension SocketNotificationEvent {
             }
             return nonEmptyContentPreview
 
-        // Reactions: surface the reacted-to content when available.
-        case .messageReaction, .reaction, .legacyMessageReaction:
-            return nonEmpty(messagePreview)
-
-        // Comment-family events: the comment / reply text.
-        case .postComment, .legacyPostComment, .commentReply,
-             .storyNewComment, .friendStoryComment, .storyThreadReply,
-             .commentReaction:
-            return nonEmpty(messagePreview)
-
+        // Everything else: the gateway already localized the action phrase into
+        // `content`. Display it verbatim.
         default:
-            return nil
+            return nonEmpty(content)
         }
     }
 
