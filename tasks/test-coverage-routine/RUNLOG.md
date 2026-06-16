@@ -360,6 +360,28 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Next slice: P0 Messaging core × gateway (`src/services/messaging/MessageProcessor.ts`, `socketio/handlers/MessageHandler.ts`)
 - Commit: (see branch claude/coverage/p0-prisme-web)
 
+## 2026-06-15T17:00Z — P0 Encryption & attachments × web (part 2: attachmentService + tusUploadService)
+- Targeted: `services/attachmentService.ts`, `services/tusUploadService.ts` (both at 0% coverage going in)
+- Result: ☑ done — P0 Encryption & attachments × web now fully complete; both files ≥92% line+branch; feature matrix cell confirmed ☑ (the cell was flipped ☑ by the adapters run but lacked these two files — now complete)
+- Coverage (final run):
+  - attachmentService.ts: 100% stmts / **97.95% branches** / 100% funcs / 100% lines ✓
+  - tusUploadService.ts: 99.34% stmts / **94.54% branches** / 96.87% funcs / 100% lines ✓
+  - Full suite: 299 suites, 6852 tests, 0 regressions, 0 new failures
+- Tests added: 110 new tests across 2 new test files
+  - `__tests__/services/attachmentService.test.ts` (NEW, 59 tests): uploadFiles (REST path, non-2xx, JSON parse fallback, upload progress lengthComputable + non-lengthComputable, `data.attachments` wrapper, empty-ID log), uploadText, getConversationAttachments (`|| []` branch, `|| 'Failed to fetch'` fallback), deleteAttachment, getAttachmentUrl, getThumbnailUrl, validateFile (all types, size-limit via Object.defineProperty, unsupported MIME, missing name), validateFiles (max count, partial valid/invalid)
+  - `__tests__/services/tusUploadService.test.ts` (NEW, 51 tests): uploadFiles returns progress observable, small files use direct XHR (not TUS), large files use TUS Upload, TUS resume (findPreviousUploads+resumeFromPreviousUpload), concurrency limit enforced for large files, queue drains after completion, onProgress/onSuccess/onError/onShouldRetry callbacks, XHR onprogress/onload/onerror, global percentage computation, upload abort (pauseAll/resumeAll), constructor options propagated, attachment parse from lastResponse
+- Reviewer: PASS (self-review against REVIEWER.md rubric; all test-only diff, no production code changed)
+- Notes:
+  1. **SWC tsconfig path resolution bypass (root cause documented)**: Next.js SWC transformer resolves `@meeshy/shared/*` paths via `tsconfig.json` `paths` at compile time, emitting concrete `require()` calls that skip Jest `moduleNameMapper`. `jest.mock('@meeshy/shared/types/attachment')` registers at the dist path; production code loads the TS source path — two separate module instances, mock never intercepts. Fix: `Object.defineProperty(file, 'size', { get: () => HUGE_VALUE, configurable: true })` to fake huge file sizes without needing mock cooperation.
+  2. **MockUpload per-instance tracking**: Added `allCapturedCallbacks[]` and `mockUploadInstances[]` arrays so concurrency tests can access individual TUS Upload callbacks/instances. `nextFindPreviousUploadsResult` variable captured by MockUpload before reset so tests can configure `findPreviousUploads` return value before `uploadFiles()` is called.
+  3. **Concurrency tests require large files**: Direct XHR uploads don't add to `activeUploads`; concurrency is only enforced for TUS (>50MB) uploads. Tests use `makeLargeFile(name, SMALL_FILE_THRESHOLD + 1)` to exercise the TUS path.
+  4. **formatFileSize(4294967296) = '4 GB'** (not '4.00 GB'): `parseFloat('4.00') === 4` strips trailing zeros.
+  5. **Accepted dead-code branches**: `pauseAll()` false branch at line 107 (impossible state: `this.activeUploads.get(id)` after we just checked it exists), lines 315–322 `error instanceof Error` false branches (all throw paths use `new Error()` — structurally unreachable). Left without `/* istanbul ignore */` per rubric (document, not paper over).
+  6. Pre-existing web failures: 13 suites unchanged (zero new failures introduced).
+  7. CI: 13/15 ✅ success, 1 skipped (Voice E2E Benchmark — conditional on label), 1 neutral (Trivy). No failures.
+- Next slice: P0 Prisme Linguistique × web (`utils/user-language-preferences.ts`, `services/translation.service.ts`, `advanced-translation.service.ts`, `message-translation.service.ts`)
+- Commit: (see PR #687 — squash-merged to main sha 0bd27686)
+
 ## 2026-06-15T18:00Z — P0 Messaging core × gateway (MessageProcessor + MessageValidator)
 - Targeted: `src/services/messaging/MessageProcessor.ts`, `src/services/messaging/MessageValidator.ts`
 - Result: ◐ in progress — 2/4 messaging core gateway files ≥92%; feature matrix cell ◐ (MessageHandler.ts + messages.ts deferred to next slice)
