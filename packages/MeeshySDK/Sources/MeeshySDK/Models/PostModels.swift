@@ -110,6 +110,9 @@ public struct APIPost: Decodable, Sendable {
     public let commentCount: Int?
     public let repostCount: Int?
     public let viewCount: Int?
+    public let postOpenCount: Int?
+    public let qualifiedViewCount: Int?
+    public let playCount: Int?
     public let bookmarkCount: Int?
     public let shareCount: Int?
     public let reactionSummary: [String: Int]?
@@ -319,6 +322,9 @@ extension APIPost {
         feedPost.bookmarkCount = bookmarkCount ?? 0
         feedPost.shareCount = shareCount ?? 0
         feedPost.viewCount = viewCount ?? 0
+        feedPost.postOpenCount = postOpenCount ?? 0
+        feedPost.qualifiedViewCount = qualifiedViewCount ?? 0
+        feedPost.playCount = playCount ?? 0
         return feedPost
     }
 

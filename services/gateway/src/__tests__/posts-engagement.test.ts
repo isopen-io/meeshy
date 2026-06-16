@@ -139,21 +139,29 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
     return calls.length ? (calls[calls.length - 1][0] as { data: Record<string, unknown> }).data : undefined;
   };
 
-  it('increments reelOpenCount on a NEW reels-surface session', async () => {
+  it('increments postOpenCount on a NEW reels-surface session', async () => {
     await service.recordEngagementBatch(
       [mkSession({ contentType: 'REEL', surface: 'reels', dwellMs: 1000 })],
       'u1',
     );
-    expect(lastUpdateData()).toMatchObject({ reelOpenCount: { increment: 1 } });
+    expect(lastUpdateData()).toMatchObject({ postOpenCount: { increment: 1 } });
   });
 
-  it('does NOT increment reelOpenCount on a non-reels surface', async () => {
+  it('increments postOpenCount on a NEW detail-surface session (page Detail counts too)', async () => {
     await service.recordEngagementBatch(
       [mkSession({ surface: 'detail', dwellMs: 1000 })],
       'u1',
     );
+    expect(lastUpdateData()).toMatchObject({ postOpenCount: { increment: 1 } });
+  });
+
+  it('does NOT increment postOpenCount on an ephemeral surface (story/status)', async () => {
+    await service.recordEngagementBatch(
+      [mkSession({ contentType: 'STORY', surface: 'storyViewer', dwellMs: 1000 })],
+      'u1',
+    );
     const data = lastUpdateData() ?? {};
-    expect(data).not.toHaveProperty('reelOpenCount');
+    expect(data).not.toHaveProperty('postOpenCount');
   });
 
   it('does NOT increment any counter on an UPDATE (lost-ACK retry)', async () => {

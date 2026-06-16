@@ -574,14 +574,14 @@ private struct ReelActionRail: View {
             )
             .accessibilityLabel(String(localized: "reels.action.like", defaultValue: "J'aime", bundle: .main))
 
-            // Vues du réel — indicateur informatif (non interactif) sous les cœurs.
-            if reel.viewCount > 0 {
+            // Vues totales du réel (postOpenCount) — indicateur informatif (non interactif) sous les cœurs.
+            if reel.postOpenCount > 0 {
                 VStack(spacing: 5) {
                     Image(systemName: "eye.fill")
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundColor(.white.opacity(0.9))
                         .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
-                    Text(ReelActionButton.compact(reel.viewCount))
+                    Text(ReelActionButton.compact(reel.postOpenCount))
                         .font(.caption2.weight(.semibold))
                         .foregroundColor(.white)
                         .shadow(color: .black.opacity(0.35), radius: 2)
@@ -589,7 +589,7 @@ private struct ReelActionRail: View {
                 .frame(width: 48)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(String(localized: "reels.action.views", defaultValue: "Vues", bundle: .main))
-                .accessibilityValue("\(reel.viewCount)")
+                .accessibilityValue("\(reel.postOpenCount)")
             }
 
             ReelActionButton(

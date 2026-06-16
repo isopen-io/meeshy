@@ -405,6 +405,17 @@ public struct FeedPost: Identifiable, Sendable {
     /// Server-issued unique-view count (`Post.viewCount`). Runtime-only like the
     /// other counters above — set via `APIPost.toFeedPost`, not cached/Codable.
     public var viewCount: Int = 0
+    /// Server-issued post-open count (`Post.postOpenCount`) — TOTAL full-frame
+    /// openings of this post: immersive reel player OR post Detail page (the
+    /// concept is generic to any Post, not just reels). This is what the eye
+    /// badge shows ("vues totales"). Derived server-side from PostEngagement
+    /// sessions on the `reels`/`detail` surfaces. Runtime-only.
+    public var postOpenCount: Int = 0
+    /// Server-issued qualified-view count (`Post.qualifiedViewCount`) — total
+    /// sessions reaching the 2.5s-OR-30% threshold. Runtime-only.
+    public var qualifiedViewCount: Int = 0
+    /// Server-issued playback-completion count (`Post.playCount`). Runtime-only.
+    public var playCount: Int = 0
     public var repost: RepostContent? = nil
     public var repostAuthor: String? = nil
     public var isQuote: Bool = false

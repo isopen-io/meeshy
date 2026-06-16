@@ -3,7 +3,7 @@
  *
  * The feed serves raw Post objects (postInclude uses `include`, not `select`,
  * and the route has no Fastify response schema), so every scalar Post field —
- * including reelOpenCount / qualifiedViewCount / playCount — must survive in
+ * including postOpenCount / qualifiedViewCount / playCount — must survive in
  * the JSON response. This test guards against a future `select` narrowing that
  * would silently drop the counters.
  *
@@ -18,7 +18,7 @@ const POST_WITH_COUNTERS = {
   id: '507f1f77bcf86cd799439011',
   type: 'REEL',
   content: 'hello',
-  reelOpenCount: 7,
+  postOpenCount: 7,
   qualifiedViewCount: 3,
   playCount: 12,
   viewCount: 99,
@@ -62,11 +62,11 @@ describe('GET /posts/feed — engagement counters passthrough', () => {
   beforeAll(async () => { app = await buildApp(); });
   afterAll(async () => { await app.close(); });
 
-  it('returns reelOpenCount / qualifiedViewCount / playCount on each post', async () => {
+  it('returns postOpenCount / qualifiedViewCount / playCount on each post', async () => {
     const res = await app.inject({ method: 'GET', url: '/posts/feed' });
     expect(res.statusCode).toBe(200);
     const post = res.json().data[0];
-    expect(post.reelOpenCount).toBe(7);
+    expect(post.postOpenCount).toBe(7);
     expect(post.qualifiedViewCount).toBe(3);
     expect(post.playCount).toBe(12);
     // viewCount must remain untouched by the engagement work

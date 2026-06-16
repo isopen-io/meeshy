@@ -2849,7 +2849,7 @@ model Post {
   shareCount      Int @default(0)
   /// Compteurs d'engagement dénormalisés — alimentés UNIQUEMENT à l'INSERT d'une
   /// PostEngagement (jamais aux updates/retries idempotents). N'altèrent pas viewCount.
-  reelOpenCount      Int @default(0)
+  postOpenCount      Int @default(0)
   qualifiedViewCount Int @default(0)
   playCount          Int @default(0)
 

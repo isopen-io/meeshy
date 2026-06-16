@@ -820,7 +820,7 @@ export class PostService {
    * - Caps défensifs (300 s) sur `dwellMs`/`watchMs`.
    * - `userId` provient de la route (jamais du client) — anti spoofing.
    * - Agrégation dénormalisée alimentée UNIQUEMENT à l'INSERT d'une nouvelle ligne
-   *   (jamais aux updates/retries idempotents) : `reelOpenCount`, `playCount`,
+   *   (jamais aux updates/retries idempotents) : `postOpenCount`, `playCount`,
    *   `qualifiedViewCount`. N'altère NI `viewCount` NI `PostView`.
    *
    * Retourne le nombre de sessions persistées (insert ou update).
@@ -922,8 +922,11 @@ export class PostService {
 
     const increments: Record<string, { increment: number }> = {};
 
-    if (s.surface === 'reels') {
-      increments.reelOpenCount = { increment: 1 };
+    // "Ouverture" d'un post = consommation plein-cadre : lecteur reel plein écran
+    // OU page Detail. Concept générique à tout Post (pas qu'aux reels). Les surfaces
+    // éphémères (story/status) ont leurs propres métriques et ne comptent pas ici.
+    if (s.surface === 'reels' || s.surface === 'detail') {
+      increments.postOpenCount = { increment: 1 };
     }
 
     if (s.completed) {
