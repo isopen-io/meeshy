@@ -1,10 +1,13 @@
 package me.meeshy.app.conversations
 
+import androidx.work.WorkManager
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -68,10 +71,12 @@ class ConversationListViewModelTest {
         every { currentUser } returns MutableStateFlow(null)
     }
 
+    private val workManager: WorkManager = mockk(relaxed = true)
+
     private fun viewModel(
         repo: ConversationRepository,
         connection: SocketManager = connectionSocket(),
-    ) = ConversationListViewModel(repo, socketManager(), connection, session())
+    ) = ConversationListViewModel(repo, socketManager(), workManager, connection, session())
 
     @Test
     fun fresh_result_populates_conversations_without_skeleton() = runTest(dispatcher) {
@@ -255,5 +260,75 @@ class ConversationListViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.banner).isEqualTo(ConnectionBanner.HIDDEN)
+    }
+
+    @Test
+    fun toggle_pin_flips_the_cached_state_and_schedules_a_flush() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
+        )
+        coEvery { repo.setPinnedOptimistic("c1", true) } returns true
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.togglePin("c1")
+        advanceUntilIdle()
+
+        coVerify { repo.setPinnedOptimistic("c1", true) }
+        verify { workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun toggle_pin_unpins_an_already_pinned_conversation() = runTest(dispatcher) {
+        val pinned = ApiConversation(
+            id = "c1",
+            title = "Team",
+            preferences = ApiConversationPreferences(isPinned = true),
+        )
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(pinned), ageMillis = 0)))
+        coEvery { repo.setPinnedOptimistic("c1", false) } returns true
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.togglePin("c1")
+        advanceUntilIdle()
+
+        coVerify { repo.setPinnedOptimistic("c1", false) }
+    }
+
+    @Test
+    fun toggle_archive_toggles_and_mute_toggles_independently() = runTest(dispatcher) {
+        val conv = ApiConversation(
+            id = "c1",
+            title = "Team",
+            preferences = ApiConversationPreferences(isMuted = true),
+        )
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(conv), ageMillis = 0)))
+        coEvery { repo.setArchivedOptimistic("c1", true) } returns true
+        coEvery { repo.setMutedOptimistic("c1", false) } returns true
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.toggleArchive("c1")
+        vm.toggleMute("c1")
+        advanceUntilIdle()
+
+        coVerify { repo.setArchivedOptimistic("c1", true) }
+        coVerify { repo.setMutedOptimistic("c1", false) }
+    }
+
+    @Test
+    fun a_no_op_mutation_does_not_schedule_a_flush() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)),
+        )
+        coEvery { repo.markReadOptimistic("c1") } returns false
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.markRead("c1")
+        advanceUntilIdle()
+
+        verify(exactly = 0) { workManager.enqueue(any<androidx.work.WorkRequest>()) }
     }
 }

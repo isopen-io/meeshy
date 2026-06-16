@@ -1,8 +1,9 @@
 package me.meeshy.app.conversations
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,22 +17,35 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MarkChatRead
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -135,6 +149,10 @@ fun ConversationListScreen(
                                     conversation = conversation,
                                     currentUserId = state.currentUserId,
                                     onClick = { onConversationClick(conversation.id) },
+                                    onTogglePin = { viewModel.togglePin(conversation.id) },
+                                    onToggleMute = { viewModel.toggleMute(conversation.id) },
+                                    onToggleArchive = { viewModel.toggleArchive(conversation.id) },
+                                    onMarkRead = { viewModel.markRead(conversation.id) },
                                 )
                             }
                         }
@@ -199,13 +217,76 @@ private fun ConnectionBannerStrip(banner: ConnectionBanner, modifier: Modifier =
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ConversationRow(
     conversation: ApiConversation,
     currentUserId: String?,
     onClick: () -> Unit,
+    onTogglePin: () -> Unit,
+    onToggleMute: () -> Unit,
+    onToggleArchive: () -> Unit,
+    onMarkRead: () -> Unit,
+) {
+    val prefs = conversation.preferences
+    val isPinned = prefs?.isPinned == true
+    val isMuted = prefs?.isMuted == true
+    val isArchived = prefs?.isArchived == true
+
+    // Swipe snaps back after firing the action (non-destructive) — the visual
+    // outcome is the row re-sorting/re-filtering itself once the cache mutates.
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> onTogglePin()
+                SwipeToDismissBoxValue.EndToStart -> onToggleArchive()
+                SwipeToDismissBoxValue.Settled -> Unit
+            }
+            false
+        },
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = {
+            SwipeActionBackground(
+                direction = dismissState.dismissDirection,
+                isPinned = isPinned,
+                isArchived = isArchived,
+            )
+        },
+    ) {
+        ConversationRowContent(
+            conversation = conversation,
+            currentUserId = currentUserId,
+            isPinned = isPinned,
+            isMuted = isMuted,
+            isArchived = isArchived,
+            onClick = onClick,
+            onTogglePin = onTogglePin,
+            onToggleMute = onToggleMute,
+            onToggleArchive = onToggleArchive,
+            onMarkRead = onMarkRead,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@Composable
+private fun ConversationRowContent(
+    conversation: ApiConversation,
+    currentUserId: String?,
+    isPinned: Boolean,
+    isMuted: Boolean,
+    isArchived: Boolean,
+    onClick: () -> Unit,
+    onTogglePin: () -> Unit,
+    onToggleMute: () -> Unit,
+    onToggleArchive: () -> Unit,
+    onMarkRead: () -> Unit,
 ) {
     val title = conversation.displayTitle()
+    var menuExpanded by remember { mutableStateOf(false) }
     val previewLabels = LastMessagePreviewLabels(
         photo = stringResource(R.string.conversations_preview_photo),
         video = stringResource(R.string.conversations_preview_video),
@@ -216,49 +297,213 @@ private fun ConversationRow(
         you = stringResource(R.string.conversations_preview_you),
         senderFormat = stringResource(R.string.conversations_preview_sender_format),
     )
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .semantics { role = Role.Button; contentDescription = title }
-            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        MeeshyAvatar(
-            name = title,
-            containerColor = hexColor(conversation.accentHex()),
-        )
-        Column(
+    Box {
+        Row(
             modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = MeeshySpacing.md),
+                .fillMaxWidth()
+                .background(MeeshyTheme.tokens.backgroundPrimary)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = { menuExpanded = true },
+                )
+                .semantics { role = Role.Button; contentDescription = title }
+                .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MeeshyTheme.tokens.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            MeeshyAvatar(
+                name = title,
+                containerColor = hexColor(conversation.accentHex()),
             )
-            Text(
-                text = lastMessagePreview(
-                    message = conversation.lastMessage,
-                    currentUserId = currentUserId,
-                    showSender = conversation.type != "direct",
-                    labels = previewLabels,
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = MeeshySpacing.md),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isPinned) {
+                        Icon(
+                            imageVector = Icons.Filled.PushPin,
+                            contentDescription = stringResource(R.string.conversations_badge_pinned),
+                            tint = MeeshyTheme.tokens.textSecondary,
+                            modifier = Modifier
+                                .size(14.dp)
+                                .padding(end = MeeshySpacing.xs),
+                        )
+                    }
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MeeshyTheme.tokens.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (isMuted) {
+                        Icon(
+                            imageVector = Icons.Filled.NotificationsOff,
+                            contentDescription = stringResource(R.string.conversations_badge_muted),
+                            tint = MeeshyTheme.tokens.textSecondary,
+                            modifier = Modifier
+                                .size(14.dp)
+                                .padding(start = MeeshySpacing.xs),
+                        )
+                    }
+                }
+                Text(
+                    text = lastMessagePreview(
+                        message = conversation.lastMessage,
+                        currentUserId = currentUserId,
+                        showSender = conversation.type != "direct",
+                        labels = previewLabels,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MeeshyTheme.tokens.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (conversation.unreadCount > 0) {
+                Badge { Text(conversation.unreadCount.coerceAtMost(99).toString()) }
+            }
+        }
+
+        ConversationContextMenu(
+            expanded = menuExpanded,
+            onDismiss = { menuExpanded = false },
+            isPinned = isPinned,
+            isMuted = isMuted,
+            isArchived = isArchived,
+            hasUnread = conversation.unreadCount > 0,
+            onTogglePin = onTogglePin,
+            onToggleMute = onToggleMute,
+            onToggleArchive = onToggleArchive,
+            onMarkRead = onMarkRead,
+        )
+    }
+}
+
+@Composable
+private fun ConversationContextMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    isPinned: Boolean,
+    isMuted: Boolean,
+    isArchived: Boolean,
+    hasUnread: Boolean,
+    onTogglePin: () -> Unit,
+    onToggleMute: () -> Unit,
+    onToggleArchive: () -> Unit,
+    onMarkRead: () -> Unit,
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = {
+                Text(
+                    stringResource(
+                        if (isPinned) R.string.conversations_action_unpin
+                        else R.string.conversations_action_pin,
+                    ),
+                )
+            },
+            leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
+            onClick = { onTogglePin(); onDismiss() },
+        )
+        DropdownMenuItem(
+            text = {
+                Text(
+                    stringResource(
+                        if (isMuted) R.string.conversations_action_unmute
+                        else R.string.conversations_action_mute,
+                    ),
+                )
+            },
+            leadingIcon = {
+                Icon(
+                    if (isMuted) Icons.Filled.Notifications else Icons.Filled.NotificationsOff,
+                    contentDescription = null,
+                )
+            },
+            onClick = { onToggleMute(); onDismiss() },
+        )
+        if (hasUnread) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.conversations_action_mark_read)) },
+                leadingIcon = { Icon(Icons.Filled.MarkChatRead, contentDescription = null) },
+                onClick = { onMarkRead(); onDismiss() },
             )
         }
-        if (conversation.unreadCount > 0) {
-            Badge { Text(conversation.unreadCount.coerceAtMost(99).toString()) }
+        DropdownMenuItem(
+            text = {
+                Text(
+                    stringResource(
+                        if (isArchived) R.string.conversations_action_unarchive
+                        else R.string.conversations_action_archive,
+                    ),
+                )
+            },
+            leadingIcon = { Icon(Icons.Filled.Archive, contentDescription = null) },
+            onClick = { onToggleArchive(); onDismiss() },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeActionBackground(
+    direction: SwipeToDismissBoxValue,
+    isPinned: Boolean,
+    isArchived: Boolean,
+) {
+    val (alignment, icon, description, background) = when (direction) {
+        SwipeToDismissBoxValue.StartToEnd -> SwipeActionVisual(
+            alignment = Alignment.CenterStart,
+            icon = Icons.Filled.PushPin,
+            description = stringResource(
+                if (isPinned) R.string.conversations_action_unpin
+                else R.string.conversations_action_pin,
+            ),
+            background = MeeshyPalette.Warning.copy(alpha = 0.20f),
+        )
+        SwipeToDismissBoxValue.EndToStart -> SwipeActionVisual(
+            alignment = Alignment.CenterEnd,
+            icon = Icons.Filled.Archive,
+            description = stringResource(
+                if (isArchived) R.string.conversations_action_unarchive
+                else R.string.conversations_action_archive,
+            ),
+            background = MeeshyTheme.tokens.backgroundTertiary,
+        )
+        SwipeToDismissBoxValue.Settled -> SwipeActionVisual(
+            alignment = Alignment.CenterStart,
+            icon = Icons.Filled.PushPin,
+            description = "",
+            background = Color.Transparent,
+        )
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(background)
+            .padding(horizontal = MeeshySpacing.xl),
+        contentAlignment = alignment,
+    ) {
+        if (direction != SwipeToDismissBoxValue.Settled) {
+            Icon(
+                imageVector = icon,
+                contentDescription = description,
+                tint = MeeshyTheme.tokens.textSecondary,
+            )
         }
     }
 }
+
+private data class SwipeActionVisual(
+    val alignment: Alignment,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val description: String,
+    val background: Color,
+)
 
 @Composable
 private fun SkeletonList() {

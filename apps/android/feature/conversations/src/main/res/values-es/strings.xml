@@ -28,4 +28,14 @@
     <string name="conversations_filter_channels">Canales</string>
     <string name="conversations_filter_favorites">Favoritos</string>
     <string name="conversations_filter_archived">Archivadas</string>
+    <string name="conversations_action_pin">Fijar</string>
+    <string name="conversations_action_unpin">Dejar de fijar</string>
+    <string name="conversations_action_mute">Silenciar</string>
+    <string name="conversations_action_unmute">Activar sonido</string>
+    <string name="conversations_action_archive">Archivar</string>
+    <string name="conversations_action_unarchive">Desarchivar</string>
+    <string name="conversations_action_mark_read">Marcar como leído</string>
+    <string name="conversations_action_more">Más acciones</string>
+    <string name="conversations_badge_pinned">Fijada</string>
+    <string name="conversations_badge_muted">Silenciada</string>
 </resources>

@@ -36,6 +36,8 @@ public object OutboxCoalescer {
             OutboxKind.DELETE_MESSAGE -> onDelete(incoming, sameTarget)
             OutboxKind.EDIT_MESSAGE -> replaceSameKind(incoming, sameTarget, OutboxKind.EDIT_MESSAGE)
             OutboxKind.READ_RECEIPT -> replaceSameKind(incoming, sameTarget, OutboxKind.READ_RECEIPT)
+            OutboxKind.UPDATE_CONVERSATION_PREFS ->
+                replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_CONVERSATION_PREFS)
             OutboxKind.ADD_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.REMOVE_REACTION)
             OutboxKind.REMOVE_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.ADD_REACTION)
             else -> CoalesceDecision.Enqueue(incoming)

@@ -10,6 +10,7 @@ public enum class OutboxKind {
     ADD_REACTION,
     REMOVE_REACTION,
     READ_RECEIPT,
+    UPDATE_CONVERSATION_PREFS,
     UPDATE_PROFILE,
     UPDATE_SETTINGS,
 }
@@ -37,6 +38,7 @@ public object OutboxLanes {
     public fun forMessage(conversationId: String): String = "message:$conversationId"
     public const val REACTION: String = "reaction"
     public const val READ_RECEIPT: String = "readReceipt"
+    public const val CONVERSATION_PREFS: String = "conversationPrefs"
     public const val PRESENCE: String = "presence"
     public const val SOCIAL: String = "social"
     public const val PROFILE: String = "profile"
@@ -46,6 +48,21 @@ public object OutboxLanes {
 /** Payload of an `ADD_REACTION` / `REMOVE_REACTION` outbox row. */
 @kotlinx.serialization.Serializable
 public data class ReactionPayload(val emoji: String)
+
+/**
+ * Payload of an `UPDATE_CONVERSATION_PREFS` outbox row — the full desired
+ * per-user preference snapshot at enqueue time. Carrying the complete snapshot
+ * (computed from the already-mutated cache) makes coalescing a plain
+ * latest-wins replace: a later pin+mute snapshot subsumes an earlier pin-only
+ * one without losing either field.
+ */
+@kotlinx.serialization.Serializable
+public data class ConversationPrefsPayload(
+    val isPinned: Boolean,
+    val isMuted: Boolean,
+    val isArchived: Boolean,
+    val mentionsOnly: Boolean,
+)
 
 /** Input to [OutboxRepository.enqueue] — a mutation to deliver. */
 public data class OutboxMutation(
