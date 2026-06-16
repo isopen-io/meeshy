@@ -1,4 +1,8 @@
-import { NotificationService } from '../../../services/notifications/NotificationService';
+import {
+  NotificationService,
+  formatSingleAttachmentLabelI18n,
+  buildMessageNotificationBodyI18n,
+} from '../../../services/notifications/NotificationService';
 
 function makeService(users: Record<string, any>) {
   const prisma: any = {
@@ -39,5 +43,21 @@ describe('resolveRecipientLangs (batch)', () => {
     expect(map.get('a')).toBe('en');
     expect(map.get('b')).toBe('de');
     expect(map.get('missing')).toBe('fr');
+  });
+});
+
+describe('attachments i18n', () => {
+  it('localise le label d’un attachment unique', () => {
+    expect(formatSingleAttachmentLabelI18n('en', { type: 'video', duration: 135000, fileSize: 15_000_000 }))
+      .toMatch(/^🎬 Video · /);
+    expect(formatSingleAttachmentLabelI18n('de', { type: 'image', width: 1920, height: 1080 }))
+      .toMatch(/^📷 Foto · 1920×1080/);
+  });
+  it('localise le corps message avec badges multi-fichiers', () => {
+    const body = buildMessageNotificationBodyI18n('es', {
+      attachments: [{ type: 'image' }, { type: 'audio' }, { type: 'video' }],
+    });
+    expect(body).toContain('+1🎵');
+    expect(body).toContain('📷 Foto');
   });
 });

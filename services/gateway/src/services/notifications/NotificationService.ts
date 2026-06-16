@@ -268,7 +268,7 @@ type NotificationAttachmentSummary = {
  * Detailed label for a single attachment — used as the notification body base
  * when the message carries no text. Includes dimensions/duration/size.
  */
-function formatSingleAttachmentLabel(params: {
+export function formatSingleAttachmentLabelI18n(lang: string, params: {
   type: NotificationAttachmentType;
   filename?: string | null;
   fileSize?: number | null;
@@ -282,23 +282,26 @@ function formatSingleAttachmentLabel(params: {
   if (params.type === 'audio') {
     if (params.duration) details.push(formatDuration(params.duration));
     if (params.fileSize) details.push(formatFileSize(params.fileSize));
-    return details.length > 0 ? `🎵 Audio · ${details.join(' · ')}` : '🎵 Audio';
+    const word = notificationString(lang, 'attachment.audio');
+    return details.length > 0 ? `${word} · ${details.join(' · ')}` : word;
   }
 
   if (params.type === 'video') {
     if (params.duration) details.push(formatDuration(params.duration));
     if (params.fileSize) details.push(formatFileSize(params.fileSize));
-    return details.length > 0 ? `🎬 Vidéo · ${details.join(' · ')}` : '🎬 Vidéo';
+    const word = notificationString(lang, 'attachment.video');
+    return details.length > 0 ? `${word} · ${details.join(' · ')}` : word;
   }
 
   if (params.type === 'image') {
     if (params.width && params.height) details.push(`${params.width}×${params.height}`);
     if (params.fileSize) details.push(formatFileSize(params.fileSize));
-    return details.length > 0 ? `📷 Photo · ${details.join(' · ')}` : '📷 Photo';
+    const word = notificationString(lang, 'attachment.photo');
+    return details.length > 0 ? `${word} · ${details.join(' · ')}` : word;
   }
 
   const ext = extractExtension(params.filename);
-  const docLabel = ext ? formatDocumentLabel(ext) : '📎 Document';
+  const docLabel = ext ? formatDocumentLabel(ext) : notificationString(lang, 'attachment.document');
   return params.fileSize ? `${docLabel} · ${formatFileSize(params.fileSize)}` : docLabel;
 }
 
@@ -307,23 +310,23 @@ function formatSingleAttachmentLabel(params: {
  * label (📄 PDF, 📝 Word…) when the group is homogeneous, falls back to a
  * generic paperclip count otherwise.
  */
-function formatDocumentBadge(docs: ReadonlyArray<NotificationAttachmentSummary>): string {
+function formatDocumentBadge(lang: string, docs: ReadonlyArray<NotificationAttachmentSummary>): string {
   const labels = docs.map(doc => {
     const ext = extractExtension(doc.filename);
-    return ext ? formatDocumentLabel(ext) : '📎 Document';
+    return ext ? formatDocumentLabel(ext) : notificationString(lang, 'attachment.document');
   });
   const homogeneous = labels.every(label => label === labels[0]);
   if (homogeneous) {
     return docs.length > 1 ? `${labels[0]} · ${docs.length}` : labels[0];
   }
-  return `📎 ${docs.length} fichiers`;
+  return notificationString(lang, 'attachment.files', { count: docs.length });
 }
 
 /**
  * Per-type `+N` badges for the attachments beyond the first one (the first is
  * surfaced as inline rich media). Order: images, audios, videos, documents.
  */
-function buildAttachmentBadges(rest: ReadonlyArray<NotificationAttachmentSummary>): string {
+function buildAttachmentBadges(lang: string, rest: ReadonlyArray<NotificationAttachmentSummary>): string {
   const images = rest.filter(att => att.type === 'image');
   const audios = rest.filter(att => att.type === 'audio');
   const videos = rest.filter(att => att.type === 'video');
@@ -333,16 +336,16 @@ function buildAttachmentBadges(rest: ReadonlyArray<NotificationAttachmentSummary
   if (images.length > 0) segments.push(`+${images.length}📷`);
   if (audios.length > 0) segments.push(`+${audios.length}🎵`);
   if (videos.length > 0) segments.push(`+${videos.length}🎬`);
-  if (documents.length > 0) segments.push(formatDocumentBadge(documents));
+  if (documents.length > 0) segments.push(formatDocumentBadge(lang, documents));
   return segments.join(' ');
 }
 
 /**
  * Compose the message notification body: message text (or, when absent, a
  * detailed label for the first attachment) followed by per-type `+N` badges
- * for the remaining attachments.
+ * for the remaining attachments. Localized to the recipient's language.
  */
-function buildMessageNotificationBody(params: {
+export function buildMessageNotificationBodyI18n(lang: string, params: {
   messagePreview?: string;
   attachments?: ReadonlyArray<NotificationAttachmentSummary>;
   firstAttachmentFileSize?: number | null;
@@ -356,8 +359,8 @@ function buildMessageNotificationBody(params: {
   if (attachments.length === 0) return text;
 
   const [first, ...rest] = attachments;
-  const badges = buildAttachmentBadges(rest);
-  const base = text || formatSingleAttachmentLabel({
+  const badges = buildAttachmentBadges(lang, rest);
+  const base = text || formatSingleAttachmentLabelI18n(lang, {
     type: first.type,
     filename: first.filename,
     fileSize: params.firstAttachmentFileSize,
@@ -986,7 +989,9 @@ export class NotificationService {
       return null;
     }
 
-    const content = buildMessageNotificationBody({
+    const recipientLang = await this.resolveRecipientLang(params.recipientUserId);
+
+    const content = buildMessageNotificationBodyI18n(recipientLang, {
       messagePreview: params.messagePreview,
       attachments: params.attachments,
       firstAttachmentFileSize: params.firstAttachmentFileSize,
