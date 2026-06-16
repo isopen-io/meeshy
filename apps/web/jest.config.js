@@ -89,14 +89,17 @@ const customJestConfig = {
     '/e2e/',
   ],
 
-  // Ratcheting floor — Sprint 0.4 baseline (2026-06-14: 33.1% line / 25.78% branch).
+  // Ratcheting floor — raised 2026-06-16 after P0 Messaging core × web slice.
+  // Sprint 0.4 baseline was 33.1% line / 25.78% branch.
+  // New measured: 38.3% line / 30.3% branch / 37.52% stmts / 34.69% funcs.
+  // Thresholds set 1% below local measure to absorb CI environment delta.
   // Only ever raise these values, never lower them.
   coverageThreshold: {
     global: {
-      lines: 33,
-      branches: 25,
-      statements: 32,
-      functions: 29,
+      lines: 37,
+      branches: 29,
+      statements: 36,
+      functions: 33,
     },
   },
 }
