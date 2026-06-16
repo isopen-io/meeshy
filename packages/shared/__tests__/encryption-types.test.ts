@@ -136,6 +136,15 @@ describe('canAutoTranslate', () => {
 
     expect(canAutoTranslate(conversation)).toBe(false);
   });
+
+  it('should return true for hybrid mode (server layer accessible for translation)', () => {
+    const conversation = {
+      encryptionEnabledAt: new Date('2024-01-15'),
+      encryptionMode: 'hybrid' as EncryptionMode,
+    };
+
+    expect(canAutoTranslate(conversation)).toBe(true);
+  });
 });
 
 describe('getEncryptionStatus', () => {
