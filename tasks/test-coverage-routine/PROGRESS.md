@@ -53,7 +53,7 @@ A run targets **one (feature × app) cell**. Pick the highest-priority `☐` cel
 | P0 | **Auth** (login/register/JWT/session/2FA/magic-link/pw-reset) | ☑ | ⊘ | ☑ | ☐ | ☐ | ☐ |
 | P0 | **Encryption & attachments** (E2EE, AES-GCM, encrypt-then-upload, audio attach) | ☑ | ⊘ | ☑ | ☐ | ☐ | ☐ |
 | P0 | **Prisme Linguistique** (lang resolution + translation display) | ☑ | ☑ | ☑ | ☐ | ☐ | ☐ |
-| P0 | **Messaging core** (send/recv/edit/delete/optimistic/dedup/clientMessageId) | ◐ sub: MessageHandler.ts ☑, messages.ts ⚠TS-errors | ⊘ | ☐ | ☐ | ☐ | ☐ |
+| P0 | **Messaging core** (send/recv/edit/delete/optimistic/dedup/clientMessageId) | ◐ sub: MessageHandler.ts ☑, messages.ts ⚠TS-errors | ⊘ | ☑ | ☐ | ☐ | ☐ |
 | P1 | **Real-time** (Socket.IO presence, typing, reactions, delivery, reconnect) | ☐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P1 | **Conversations & membership** (create/join/leave/participants/settings) | ☐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P1 | **Offline & sync** (outbox, failed-messages queue, reconnect flush) | ☐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
