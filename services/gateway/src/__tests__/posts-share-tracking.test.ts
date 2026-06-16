@@ -23,8 +23,8 @@ type Link = {
 
 const buildPrisma = () => {
   const post = {
-    findFirst: jest.fn<(arg?: unknown) => Promise<{ id: string; authorId: string; shareCount?: number } | null>>()
-      .mockResolvedValue({ id: POST_ID, authorId: 'author', shareCount: 0 }),
+    findFirst: jest.fn<(arg?: unknown) => Promise<{ id: string; authorId: string; shareCount?: number; type?: string } | null>>()
+      .mockResolvedValue({ id: POST_ID, authorId: 'author', shareCount: 0, type: 'POST' }),
     update: jest.fn<(arg?: unknown) => Promise<{ shareCount: number }>>().mockResolvedValue({ shareCount: 1 }),
     updateMany: jest.fn<(arg?: unknown) => Promise<{ count: number }>>().mockResolvedValue({ count: 1 }),
   };
@@ -69,12 +69,29 @@ describe('PostService.shareWithTrackingLink', () => {
     expect(prisma.post.update).toHaveBeenCalledTimes(1);
   });
 
-  it('persists targetType=POST and targetId on the new link', async () => {
+  it('derives targetType from the post type (POST stays POST) + targetId', async () => {
     await service.shareWithTrackingLink(POST_ID, USER_ID, { baseUrl: 'https://meeshy.me' });
     const data = (prisma.trackingLink.create.mock.calls[0][0] as any).data;
     expect(data.targetType).toBe('POST');
     expect(data.targetId).toBe(POST_ID);
     expect(data.createdBy).toBe(USER_ID);
+    expect(data.originalUrl).toBe(`https://meeshy.me/feeds/post/${POST_ID}`);
+  });
+
+  it('types a shared REEL as targetType=REEL', async () => {
+    prisma.post.findFirst.mockResolvedValueOnce({ id: POST_ID, authorId: 'author', shareCount: 0, type: 'REEL' });
+    await service.shareWithTrackingLink(POST_ID, USER_ID, { baseUrl: 'https://meeshy.me' });
+    const data = (prisma.trackingLink.create.mock.calls[0][0] as any).data;
+    expect(data.targetType).toBe('REEL');
+    expect(data.originalUrl).toBe(`https://meeshy.me/feeds/post/${POST_ID}`);
+  });
+
+  it('types a shared STORY as targetType=STORY with the story viewer URL', async () => {
+    prisma.post.findFirst.mockResolvedValueOnce({ id: POST_ID, authorId: 'author', shareCount: 0, type: 'STORY' });
+    await service.shareWithTrackingLink(POST_ID, USER_ID, { baseUrl: 'https://meeshy.me' });
+    const data = (prisma.trackingLink.create.mock.calls[0][0] as any).data;
+    expect(data.targetType).toBe('STORY');
+    expect(data.originalUrl).toBe(`https://meeshy.me/story/${POST_ID}`);
   });
 
   it('reuses an existing link and does NOT re-increment shareCount', async () => {

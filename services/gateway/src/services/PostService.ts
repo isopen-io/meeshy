@@ -656,7 +656,7 @@ export class PostService {
   ): Promise<{ shared: boolean; shareCount: number; shortUrl: string; token: string; reused: boolean } | null> {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      select: { id: true, shareCount: true },
+      select: { id: true, shareCount: true, type: true },
     });
     if (!post) return null;
 
@@ -672,6 +672,14 @@ export class PostService {
     const token = await this.generateShareToken();
     const shortUrl = `/l/${token}`;
 
+    // Type the link from the post's OWN type (POST/REEL/STORY/STATUS map 1:1 to
+    // TrackingTargetType) so the redirect page + DeepLinkRouter open the right
+    // surface — never blindly "POST". Stories get their dedicated viewer URL.
+    const targetType = ({ POST: 'POST', REEL: 'REEL', STORY: 'STORY', STATUS: 'STATUS' } as const)[post.type];
+    const originalUrl = post.type === 'STORY'
+      ? `${baseUrl}/story/${postId}`
+      : `${baseUrl}/feeds/post/${postId}`;
+
     try {
       const created = await this.prisma.$transaction(async (tx) => {
         const link = await tx.trackingLink.create({
@@ -680,10 +688,10 @@ export class PostService {
             name: `Post ${postId.slice(0, 8)}`,
             source: opts.platform,
             medium: 'share',
-            originalUrl: `${baseUrl}/feeds/post/${postId}`,
+            originalUrl,
             shortUrl,
             createdBy: userId,
-            targetType: 'POST',
+            targetType,
             targetId: postId,
             isActive: true,
             totalClicks: 0,
