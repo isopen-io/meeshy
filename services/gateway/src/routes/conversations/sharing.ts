@@ -544,9 +544,11 @@ export function registerSharingRoutes(
         return sendUnauthorized(reply, 'Authentification requise');
       }
 
-      // Vérifier que le lien existe et est valide
+      // Accepter linkId OU identifier : iOS partage l'`identifier`, le web le
+      // `linkId`. Querier seulement par linkId 404ait toute invitation partagée
+      // depuis iOS. Symétrique avec resolveTarget (qui accepte déjà les deux).
       const shareLink = await prisma.conversationShareLink.findFirst({
-        where: { linkId },
+        where: { OR: [{ linkId }, { identifier: linkId }] },
         include: {
           conversation: true
         }
