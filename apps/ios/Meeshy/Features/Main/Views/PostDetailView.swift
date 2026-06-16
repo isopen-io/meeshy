@@ -1178,6 +1178,24 @@ struct PostDetailView: View {
                     .foregroundColor(theme.textMuted)
             }
 
+            // Total opens (postOpenCount) — informative, non-interactive, mirrors the
+            // reel eye badge. The Detail page now both COUNTS an opening (engagement
+            // surface=detail) and SHOWS the running total.
+            if post.postOpenCount > 0 {
+                Spacer()
+                HStack(spacing: 5) {
+                    Image(systemName: "eye.fill")
+                        .font(.body)
+                        .foregroundColor(theme.textSecondary)
+                    Text("\(post.postOpenCount)")
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(theme.textMuted)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(String(localized: "reels.action.views", defaultValue: "Vues", bundle: .main))
+                .accessibilityValue("\(post.postOpenCount)")
+            }
+
             Spacer()
 
             // Repost

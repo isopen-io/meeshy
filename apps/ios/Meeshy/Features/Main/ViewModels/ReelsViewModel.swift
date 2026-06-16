@@ -186,6 +186,7 @@ final class ReelsViewModel: ObservableObject {
     /// bumps the reel's comment counter immediately (the rail reads `commentCount`).
     func didSendComment(postId: String) {
         commentDelta[postId, default: 0] += 1
+        EngagementTracker.shared.recordAction(.commented, surface: .reels)
     }
 
     // MARK: - Interactions (optimistic)
@@ -196,6 +197,7 @@ final class ReelsViewModel: ObservableObject {
         heartInFlight.insert(id)
         let wasLiked = likedIds.contains(id)
         applyLike(id: id, liked: !wasLiked)
+        if !wasLiked { EngagementTracker.shared.recordAction(.reacted, surface: .reels) }
         HapticFeedback.light()
         Task {
             do {
@@ -226,6 +228,7 @@ final class ReelsViewModel: ObservableObject {
         bookmarkInFlight.insert(id)
         let wasBookmarked = bookmarkedIds.contains(id)
         if wasBookmarked { bookmarkedIds.remove(id) } else { bookmarkedIds.insert(id) }
+        if !wasBookmarked { EngagementTracker.shared.recordAction(.bookmarked, surface: .reels) }
         HapticFeedback.light()
         Task {
             do {
@@ -239,6 +242,7 @@ final class ReelsViewModel: ObservableObject {
     }
 
     func share(_ post: FeedPost) {
+        EngagementTracker.shared.recordAction(.shared, surface: .reels)
         HapticFeedback.light()
         Task { try? await service.share(postId: post.id) }
     }
