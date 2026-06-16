@@ -381,16 +381,16 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 ## socketio/handlers  (6/12 have a test)
 
 - [~] `services/gateway/src/socketio/handlers/AdminAgentHandler.ts`
-- [ ] `services/gateway/src/socketio/handlers/AttachmentReactionHandler.ts`
+- [x] `services/gateway/src/socketio/handlers/AttachmentReactionHandler.ts`
 - [~] `services/gateway/src/socketio/handlers/AuthHandler.ts`
 - [~] `services/gateway/src/socketio/handlers/CommentReactionHandler.ts`
-- [ ] `services/gateway/src/socketio/handlers/ConversationHandler.ts`
-- [~] `services/gateway/src/socketio/handlers/LocationHandler.ts`
+- [x] `services/gateway/src/socketio/handlers/ConversationHandler.ts`
+- [x] `services/gateway/src/socketio/handlers/LocationHandler.ts`
 - [x] `services/gateway/src/socketio/handlers/MessageHandler.ts`
 - [~] `services/gateway/src/socketio/handlers/PostReactionHandler.ts`
 - [ ] `services/gateway/src/socketio/handlers/ReactionHandler.ts`
 - [~] `services/gateway/src/socketio/handlers/SocialEventsHandler.ts`
-- [ ] `services/gateway/src/socketio/handlers/StatusHandler.ts`
+- [x] `services/gateway/src/socketio/handlers/StatusHandler.ts`
 - [ ] `services/gateway/src/socketio/handlers/index.ts`
 
 ## socketio/utils  (2/5 have a test)

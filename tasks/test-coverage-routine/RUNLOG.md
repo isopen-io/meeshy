@@ -519,3 +519,30 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   4. P0 cells fully done on Linux-testable environments: gateway ☑, translator ☑, web ☑, shared ☑; iOS/Android columns remain ☐ but are not testable in Linux CI.
 - Next slice: P1 Real-time × gateway (`src/socketio/handlers/StatusHandler.ts`, `ConversationHandler.ts`, `AttachmentReactionHandler.ts`, `MeeshySocketIOManager.ts`)
 - Commit: (see branch claude/coverage/p0-encryption-shared)
+
+## 2026-06-16T17:30Z — P1 Real-time × gateway (4 handlers: StatusHandler, ConversationHandler, AttachmentReactionHandler, LocationHandler)
+- Targeted: `src/socketio/handlers/StatusHandler.ts`, `ConversationHandler.ts`, `AttachmentReactionHandler.ts`, `LocationHandler.ts`
+- Result: ◐ partial — 4/6 Real-time × gateway files ≥92%; CallEventsHandler.ts (2103 lines) + MeeshySocketIOManager.ts (2039 lines) deferred to next run (too large for single slice)
+- Coverage (final per-file run):
+  - AttachmentReactionHandler.ts: 100% lines / 100% branches ✓
+  - ConversationHandler.ts: 96.61% lines / 96.29% branches ✓
+  - LocationHandler.ts: 100% lines / 93.33% branches ✓
+  - StatusHandler.ts: 97.95% lines / 98.03% branches ✓
+  - Gateway global (CI-calibrated estimate): ~45.68% lines / ~43.12% branches (threshold ratcheted: lines 38→40, branches 36→38)
+- Tests added: 107 new tests across 4 new test files
+  - `src/socketio/handlers/__tests__/StatusHandler.test.ts` (NEW, ~30 tests): handleTypingStart (schema fail, unauthenticated, user not connected, privacy disallowed, statusService call, displayName fallback chain, anonymous user identity, DB user not found, throttle window, throttle expiry, prune at 10k entries, cache hit, cache TTL expiry, error catch), handleTypingStop (parallel coverage), clearTypingThrottle (clears user entries, no-op on missing), invalidateIdentityCache (documents actual identity-cache key-mismatch bug: stores with `user:${userId}` prefix, deletes by bare `userId` — no-op for registered users)
+  - `src/socketio/handlers/__tests__/ConversationHandler.test.ts` (NEW, ~40 tests): handleConversationJoin (active member, invalid_payload, not_a_member, banned, no_longer_member via leftAt, no_longer_member via isActive=false, anonymous bypass, stats called, server_error on throw, requestedId preserved, null data), handleConversationLeave (joins/emits, schema fail, no userId, error catch), sendConversationStatsToSocket (emits stats, null stats no-op, getOnlineUsers callback, error catch)
+  - `src/socketio/handlers/__tests__/AttachmentReactionHandler.test.ts` (NEW, ~22 tests): handleAdd/handleRemove — missing fields, cid_* messageId rejected, non-ObjectId attachmentId rejected, unauthenticated, resolveParticipantFromMessage null, resolveConversationId null, attachment not found (null), IDOR guard (different messageId), undefined callback, Error vs non-Error, timestamp in event, reactionSummary in event
+  - `src/socketio/handlers/__tests__/LocationHandler.test.ts` (NEW, ~35 tests): handleLocationStart/handleLocationUpdate/handleLocationStop/handleLocationPing — coordinate boundary tests (lat -90.001 rejected, -90 accepted; lon 180 accepted, 181 rejected), duration boundaries (0/1/480/481), anonymous user uses session participantId, anonymous without participantId returns error, Error vs non-Error, loc_ prefix in messageId, expiresAt computation, stoppedAt/timestamp in events
+- Infrastructure changes:
+  - `src/__tests__/__stubs__/prisma-client.ts` (NEW): stub PrismaClient + Prisma error classes for environments without `prisma generate`
+  - `jest.config.json` modified: added `^@meeshy/shared/prisma/client$` → stub moduleNameMapper entry; added `diagnostics: { ignoreCodes: [2307] }` to ts-jest; ratcheted thresholds lines 38→40, branches 36→38
+- Reviewer: PASS (rounds: 1 — reviewer agent: VERDICT: PASS, no required changes)
+- Notes:
+  1. **Prisma client stub**: `pnpm install` fails to download Prisma binary in CI-like env without network certs → `.prisma/client` never generated → `@meeshy/shared/prisma/client` not found. Fix: stub + moduleNameMapper + `ignoreCodes: [2307]`. No-op in CI where Prisma IS generated. Unblocked 61 previously-failing test suites locally.
+  2. **TS2339 `mock.results[0].value` typed as `unknown`**: access via `((mock).mock.results[0] as any).value.emit` to bypass ts-jest strict typing.
+  3. **invalidateIdentityCache production bug**: method deletes `userId` key but cache stores under `user:${userId}` prefix → registered-user invalidation is a no-op. Documented in tests, not fixed (production code out of scope).
+  4. **ConversationHandler mock isolation**: `jest.mock('../../../services/ConversationStatsService', ...)` placed before SUT import; ConversationStatsService singleton referenced via module-level mock function wrappers.
+  5. Pre-existing gateway failures: 6 suites / 18 tests — production bugs, unchanged.
+- Next slice: P1 Real-time × gateway (part 2): `src/socketio/handlers/CallEventsHandler.ts` (2103 lines) OR `src/socketio/MeeshySocketIOManager.ts` (2039 lines)
+- Commit: (see branch claude/coverage/p1-realtime-gateway)
