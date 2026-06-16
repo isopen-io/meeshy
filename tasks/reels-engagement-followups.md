@@ -30,3 +30,20 @@ Légende : 🟢 rapide/sûr (backend/SDK, testable jest) · 🟡 iOS (build requ
 
 ### Ordre d'attaque
 Backend/SDK rapides d'abord (A3, B3, B4, C1, C2 — testables jest, un build gateway), puis B2 (gateway+SDK+iOS), puis iOS (A1, A2, B1, C3 — un build iOS groupé). D = à trancher avec le produit.
+
+---
+
+## État (2026-06-16)
+
+**FAIT (commits `47807baf7`, A1-status build vert) :**
+- ✅ **A3** userId optional · ✅ **B3** generateShortToken helper unique · ✅ **B4** sharerId retiré du /resolve public · ✅ **C1** findShareLinkByIdentifier OR linkId/identifier
+- ✅ **A1 (status)** : StatusBubbleController.requestReply → recordAction(.commented)
+- ✅ **C2** vérifié **non-applicable** (findExistingTrackingLink = liens de message ; partage de post a son upsert (targetId,createdBy))
+- ✅ **B2** vérifié **couvert** par le fix join `ab22f62ac` (trackedDestination route avec le `token` que /resolve a matché ; join accepte linkId OU identifier → pas de joinLinkId requis)
+- ✅ **C3** tranché : compteurs **runtime-only intentionnels** (refetch garanti au cold-start, cache-first ; badge brièvement à 0 acceptable) — documenté, pas de changement
+- ✅ **A2** tranché : dwell déjà capturé sur le detail ; watch-time vidéo en page detail = edge-case mineur (coordination délicate avec le modifier) — différé, faible valeur
+
+**RESTE (passe iOS dédiée + builds/pbxproj) :**
+- [ ] **A1 (story)** : câbler recordAction sur les actions story (réaction/partage/reply) — handlers délégués via callbacks, dispersés → exploration ciblée requise
+- [ ] **B1** : tests `TrackedLinkService` (SDK, mock APIClient) + `DeepLinkRouter.trackedDestination` (app, nouveau fichier test → entrée pbxproj)
+- [ ] **D1/D2** : décisions produit (anonymes = zéro engagement ? SHORT_VIDEO_MS=8300 ?)
