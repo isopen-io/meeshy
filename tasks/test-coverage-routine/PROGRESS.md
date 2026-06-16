@@ -53,7 +53,7 @@ A run targets **one (feature × app) cell**. Pick the highest-priority `☐` cel
 | P0 | **Auth** (login/register/JWT/session/2FA/magic-link/pw-reset) | ☑ | ⊘ | ☑ | ☐ | ☐ | ☐ |
 | P0 | **Encryption & attachments** (E2EE, AES-GCM, encrypt-then-upload, audio attach) | ☑ | ⊘ | ☑ | ☐ | ☐ | ☐ |
 | P0 | **Prisme Linguistique** (lang resolution + translation display) | ☑ | ☑ | ☑ | ☐ | ☐ | ☐ |
-| P0 | **Messaging core** (send/recv/edit/delete/optimistic/dedup/clientMessageId) | ◐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
+| P0 | **Messaging core** (send/recv/edit/delete/optimistic/dedup/clientMessageId) | ◐ sub: MessageHandler.ts ☑, messages.ts ⚠TS-errors | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P1 | **Real-time** (Socket.IO presence, typing, reactions, delivery, reconnect) | ☐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P1 | **Conversations & membership** (create/join/leave/participants/settings) | ☐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P1 | **Offline & sync** (outbox, failed-messages queue, reconnect flush) | ☐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
@@ -154,7 +154,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
 | web | `pnpm --filter web test:coverage` | 33.10 | 25.77 | 2026-06-14 (re-measured after Sprint 0.2/0.3 fixes; threshold floor set at 33/25) |
-| gateway | `pnpm --filter gateway test:coverage` | 38.72 | 36.96 | 2026-06-16 (re-measured after P0 Messaging core MessageHandler.ts; threshold floor ratcheted 32→38 lines / 28→36 branches) |
+| gateway | `pnpm --filter gateway test:coverage` | 39.10 | 37.16 | 2026-06-16 (ratcheted after Messaging core × gateway part 2: MessageHandler.ts ≥92% line+branch; threshold floor raised to 39/37) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | 37.09 | n/a | 2026-06-14 (subset: no-GPU tests only; 4 files w/ import errors excluded) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |
