@@ -51,7 +51,7 @@ A run targets **one (feature × app) cell**. Pick the highest-priority `☐` cel
 | Pri | Feature | gateway | translator | web | iOS | android | shared/SDK |
 |-----|---------|:------:|:----------:|:---:|:---:|:-------:|:----------:|
 | P0 | **Auth** (login/register/JWT/session/2FA/magic-link/pw-reset) | ☑ | ⊘ | ☑ | ☐ | ☐ | ☑ (TS shared; MeeshySDK Swift ⊘ Linux env) |
-| P0 | **Encryption & attachments** (E2EE, AES-GCM, encrypt-then-upload, audio attach) | ☑ | ⊘ | ☑ | ☐ | ☐ | ☐ |
+| P0 | **Encryption & attachments** (E2EE, AES-GCM, encrypt-then-upload, audio attach) | ☑ | ⊘ | ☑ | ☐ | ☐ | ☑ (encryption-service.ts 100%/94.28%; types/encryption.ts 100%; attachment-validators.ts 100%) |
 | P0 | **Prisme Linguistique** (lang resolution + translation display) | ☑ | ☑ | ☑ | ☐ | ☐ | ☑ (TS shared; MeeshySDK Swift ⊘ Linux env) |
 | P0 | **Messaging core** (send/recv/edit/delete/optimistic/dedup/clientMessageId) | ◐ sub: MessageHandler.ts ☑, messages.ts ⚠TS-errors (3 runs blocked) | ⊘ | ☑ | ☐ | ☐ | ☑ (client-message-id.ts 100%; MeeshySDK Swift ⊘ Linux env) |
 | P1 | **Real-time** (Socket.IO presence, typing, reactions, delivery, reconnect) | ☐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
@@ -158,7 +158,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | 37.09 | n/a | 2026-06-14 (subset: no-GPU tests only; 4 files w/ import errors excluded) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |
-| shared | `pnpm --filter @meeshy/shared test:coverage` | 95.85 | 92.55 | 2026-06-16 (re-measured after P0 × shared slice; 585 tests) |
+| shared | `pnpm --filter @meeshy/shared test:coverage` | 97.92 | 94.62 | 2026-06-16 (re-measured after P0 encryption × shared slice; 599 tests; threshold floor ratcheted to lines:95/branches:92) |
 
 ### Key findings from baseline measurement
 
