@@ -380,3 +380,48 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   6. Pre-existing gateway failures: 6 suites / 18 tests — production bugs, unchanged.
 - Next slice: P0 Messaging core × gateway (part 2): `src/socketio/handlers/MessageHandler.ts`, `src/routes/conversations/messages.ts`
 - Commit: (see branch claude/coverage/p0-messaging-gateway)
+
+## 2026-06-16T01:30Z — P0 Messaging core × gateway (part 2: MessageHandler.ts)
+- Targeted: `src/socketio/handlers/MessageHandler.ts` (1162 lines)
+- Result: ◐ partial — 3/4 messaging core gateway files ≥92%; messages.ts (2412 lines, pre-existing TS errors) deferred to next run
+- Coverage (final run, all 3 MessageHandler test files combined):
+  - MessageHandler.ts: **99.08% lines / 96.01% branches** ✓ (target ≥92% both)
+  - Overall gateway: 38.72% lines / 36.96% branches (ratcheted threshold 32→38 lines / 28→36 branches)
+- Tests added: 112 new tests in `src/__tests__/unit/handlers/MessageHandler.core.test.ts` (NEW, 3301 lines)
+- Reviewer: PASS (rounds: 1)
+- Notes:
+  1. All mocks declared before SUT import to satisfy Jest hoisting.
+  2. Lines 708-710 uncovered: debug-log block in `_emitMessageNewByLanguage` only reachable when real `groupSocketsByLanguage` invokes callbacks.
+  3. jest.config.json thresholds ratcheted: lines 32→38, branches 28→36, statements 31→38, functions 34→40.
+- Next slice: P0 Messaging core × gateway (part 3): `src/routes/conversations/messages.ts`
+- Commit: (see branch claude/coverage/p0-messaging-gateway-2)
+
+## 2026-06-16T05:00Z — P0 Messaging core × gateway (part 2b): MessageHandler.ts (continued)
+- Targeted: `services/gateway/src/socketio/handlers/MessageHandler.ts` (1162 lines)
+- Result: ◐ partial (MessageHandler.ts ☑ via 2nd comprehensive test suite, messages.ts ⚠ blocked by pre-existing TS errors)
+- Coverage on targeted file: line 100%, branch 94.68%, statements 99.44%, functions 97.87%
+- Gateway global coverage ratcheted: line 39.10%, branch 37.16% (thresholds raised to 39/37)
+- Tests added: 106 tests in `src/socketio/handlers/__tests__/MessageHandler.test.ts` (NEW)
+  - Full public API coverage: handleMessageSend, handleMessageSendWithAttachments, broadcastNewMessage
+  - Gap-filling: anonymous-rate-limit, no-callback, validation-fallback, expiresAt-truthy, sender-absent, mimeType-null, translations-rejected, empty-room, null-userId loops, encryptionMetadata-null, replyToId-null, _sendResponse branches
+- Reviewer: PASS (1 round — test-only diff)
+- Notes:
+  1. V8 branch coverage on `||`/`&&`/`?.`/`??` sub-expressions required dedicated gap-filling tests to move from 84.38% → 94.68%.
+  2. Fire-and-forget (`_autoDeliverToOnlineRecipients`) requires double `setImmediate` drain.
+  3. jest.config.json thresholds ratcheted: lines 38→39, branches 36→37.
+- Next slice: P0 Messaging core × gateway (part 3): `src/routes/conversations/messages.ts` (after fixing pre-existing TS errors, or moving to P0 Messaging core × web)
+- Commit: (see branch claude/coverage/p0-messaging-gateway-2)
+
+## 2026-06-16T05:30Z — P0 Messaging core × gateway (part 2c): CI threshold calibration
+- Targeted: `services/gateway/jest.config.json` threshold calibration fix
+- Result: ☑ fix pushed — CI was failing because thresholds were set 0.01-0.27% above CI-measured values
+- Root cause: local run measured 39.10% lines / 37.16% branches; CI measures 38.73% / 36.99% (0.01-0.37% less due to environment differences); I set thresholds at 39/37 which caused gates to fail
+- Fix: calibrate thresholds to CI-measured values: lines 39→38, branches 37→36 (still a ratchet up from original 32/28)
+- CI status at push time: Quality(bun)=✓, Test web=✓, Test agent=✓, Test shared=✓, Prisma=✓, Security=✓, TTS/STT=✓, Audio Pipeline=✓; Test gateway was failing (threshold); Voice API+Python=in_progress
+- Tests added: 0 (config-only fix)
+- Reviewer: n/a (jest.config threshold only, no test logic changed)
+- Notes:
+  1. Ratcheting rule: always calibrate thresholds to what CI actually measures, not what the local run shows — environments can differ by up to 0.5%.
+  2. During conflict resolution on prior rebase, I kept the "higher" threshold (39/37) over the remote's (38/36) — but the remote had already been calibrated to CI. Correct rule: take the HIGHER of PASSING thresholds, not the higher of all thresholds.
+- Next slice: await CI pass on PR #690 → merge → P0 Messaging core × gateway (part 3): `messages.ts`
+- Commit: cc93a5f8 (branch claude/coverage/p0-messaging-gateway-2)

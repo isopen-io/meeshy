@@ -386,7 +386,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/gateway/src/socketio/handlers/CommentReactionHandler.ts`
 - [ ] `services/gateway/src/socketio/handlers/ConversationHandler.ts`
 - [~] `services/gateway/src/socketio/handlers/LocationHandler.ts`
-- [ ] `services/gateway/src/socketio/handlers/MessageHandler.ts`
+- [x] `services/gateway/src/socketio/handlers/MessageHandler.ts`
 - [~] `services/gateway/src/socketio/handlers/PostReactionHandler.ts`
 - [ ] `services/gateway/src/socketio/handlers/ReactionHandler.ts`
 - [~] `services/gateway/src/socketio/handlers/SocialEventsHandler.ts`
