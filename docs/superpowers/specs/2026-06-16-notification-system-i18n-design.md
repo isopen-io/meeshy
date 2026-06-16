@@ -1,11 +1,28 @@
 # Spec — i18n serveur des textes système de notification
 
 - **Date** : 2026-06-16
-- **Statut** : Design validé (stratégie + langues), en attente de revue spec
+- **Statut** : ✅ Implémenté (branche `feat/notification-i18n`)
 - **Périmètre** : Production. Pas de configuration APN staging.
 - **Décisions actées** :
   - Stratégie : **localisation côté serveur**, à la langue résolue du destinataire (Prisme-first).
   - Langues : **8** — `ar, de, en, es, fr, it, pt, zh-Hans`.
+  - **Fallback catalogue : `fr`** (cohérent avec `resolveUserLanguage`).
+
+## Addendum d'implémentation (écarts vs inventaire initial)
+
+L'inventaire initial (§4.1) se concentrait sur le champ `content`. La lecture du code
+pendant l'implémentation a révélé 3 ajouts (tous traités) :
+
+1. **Site 17 — réactions message** : `createReactionNotification` envoyait `content =
+   emoji` seul (le NSE reconstruisait « … a réagi … » en FR). Désormais localisé via
+   `reaction.message` ; le NSE affiche le `content`.
+2. **Subtitles batch FR** : `createStoryCommentNotificationsBatch` (« Votre story », « Story
+   de {auteur} ») et `createFriendContentNotificationsBatch` (« Nouvelle story »…) portaient
+   des subtitles FR. 4 clés ajoutées au catalogue : `comment.subtitleOwner`,
+   `comment.subtitleFrom`, `comment.subtitleBare`, `friend.subtitleNew` (+ dicts
+   `POST_NOUN_CAP`, `SUBTITLE_OWNER`, `FRIEND_SUBTITLE` pour genre/cas).
+3. **Toast in-app** : `toastTitle` reconstruisait des phrases d'action FR ; aligné sur le
+   modèle push (titre = expéditeur, corps = `content` gateway localisé).
 
 ---
 
@@ -42,8 +59,8 @@ iOS et web **affichent** le `content` localisé par le gateway au lieu de le rec
 `systemLanguage → regionalLanguage → customDestinationLanguage → deviceLocale → 'fr'`.
 
 Comme `resolveUserLanguage()` peut retourner **n'importe quel code** (l'utilisateur peut
-configurer `ja`, `ru`, …), le catalogue doit normaliser et **retomber sur `en`** pour tout
-code hors des 8 langues supportées.
+configurer `ja`, `ru`, …), le catalogue doit normaliser et **retomber sur `fr`** pour tout
+code hors des 8 langues supportées (cohérent avec le fallback Prisme `resolveUserLanguage`).
 
 ## 4. Composants
 
@@ -56,7 +73,7 @@ export const NOTIFICATION_LANGUAGES = ['ar','de','en','es','fr','it','pt','zh-Ha
 export type NotificationLanguage = typeof NOTIFICATION_LANGUAGES[number];
 
 // Normalise un code arbitraire vers une NotificationLanguage supportée.
-// 'fr-FR'→'fr', 'pt-BR'→'pt', 'zh'/'zh-CN'/'zh-Hans'→'zh-Hans', inconnu→'en'.
+// 'fr-FR'→'fr', 'pt-BR'→'pt', 'zh'/'zh-CN'/'zh-Hans'→'zh-Hans', inconnu→'fr'.
 export function normalizeNotificationLanguage(code?: string | null): NotificationLanguage;
 
 // Builder principal. Ne jette jamais ; clé inconnue → chaîne vide défensive.
@@ -187,7 +204,7 @@ Les emoji, icônes (`📷🎬🎵📄📎🔒`), noms propres et titres de conve
 
 ## 6. Gestion des erreurs / cas limites
 
-- `lang` hors des 8 → `normalizeNotificationLanguage` retombe sur `en`.
+- `lang` hors des 8 → `normalizeNotificationLanguage` retombe sur `fr`.
 - Destinataire introuvable → `'fr'` (comportement actuel).
 - Clé absente du catalogue → chaîne vide défensive (jamais d'exception, jamais de crash de notif).
 - Variantes régionales (`fr-FR`, `pt-BR`, `zh-CN`) normalisées vers la langue de base.
@@ -197,7 +214,7 @@ Les emoji, icônes (`📷🎬🎵📄📎🔒`), noms propres et titres de conve
 
 **shared — `packages/shared` :**
 - chaque `NotificationStringKey` existe dans **les 8 langues** (test de complétude itérant `NOTIFICATION_LANGUAGES`).
-- `normalizeNotificationLanguage` : `fr-FR→fr`, `pt-BR→pt`, `zh-CN→zh-Hans`, `ja→en`, `null→en`.
+- `normalizeNotificationLanguage` : `fr-FR→fr`, `pt-BR→pt`, `zh-CN→zh-Hans`, `ja→fr`, `null→fr`.
 - interpolation : placeholders correctement substitués ; emoji/titre non altérés.
 
 **gateway — `NotificationService.pushMessage.test.ts` (étendu) :**
