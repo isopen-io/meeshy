@@ -46,17 +46,26 @@
     "lcov",
     "html"
   ],
-  "setupFilesAfterEnv": ["<rootDir>/jest.setup.js"],
+  "setupFilesAfterEnv": [
+    "<rootDir>/jest.setup.js"
+  ],
   "transform": {
-    "^.+\\.ts$": ["ts-jest", {
-      "tsconfig": "tsconfig.test.json"
-    }]
+    "^.+\\.ts$": [
+      "ts-jest",
+      {
+        "tsconfig": "tsconfig.test.json"
+      }
+    ]
   },
-  "moduleFileExtensions": ["ts", "js", "json"],
+  "moduleFileExtensions": [
+    "ts",
+    "js",
+    "json"
+  ],
   "coverageThreshold": {
     "global": {
       "lines": 38,
-      "branches": 36,
+      "branches": 37,
       "statements": 38,
       "functions": 40
     }

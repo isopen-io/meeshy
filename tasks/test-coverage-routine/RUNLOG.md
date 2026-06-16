@@ -519,3 +519,28 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   4. P0 cells fully done on Linux-testable environments: gateway ☑, translator ☑, web ☑, shared ☑; iOS/Android columns remain ☐ but are not testable in Linux CI.
 - Next slice: P1 Real-time × gateway (`src/socketio/handlers/StatusHandler.ts`, `ConversationHandler.ts`, `AttachmentReactionHandler.ts`, `MeeshySocketIOManager.ts`)
 - Commit: (see branch claude/coverage/p0-encryption-shared)
+
+## 2026-06-16T17:30Z — P1 Real-time × gateway (StatusHandler, ConversationHandler, LocationHandler, AttachmentReactionHandler)
+- Targeted: `src/socketio/handlers/StatusHandler.ts`, `ConversationHandler.ts`, `LocationHandler.ts`, `AttachmentReactionHandler.ts`
+- Result: ◐ partial — 4/6 Real-time × gateway handlers ≥92%; CallEventsHandler.ts (2103 lines) + MeeshySocketIOManager.ts (2039 lines) deferred to next run
+- Coverage (per targeted file):
+  - StatusHandler.ts: 94.89% lines / 92.15% branches ✓
+  - ConversationHandler.ts: 94.91% lines / 96.29% branches ✓
+  - LocationHandler.ts: 100% lines / 95.55% branches ✓
+  - AttachmentReactionHandler.ts: 100% lines / 100% branches ✓
+  - Global gateway: 39.23% lines / 37.61% branches / 40.65% functions (threshold ratcheted: branches 36→37)
+- Tests added: ~150 new tests across 4 new test files (~1350 total lines)
+  - `StatusHandler.test.ts` (NEW, ~35 tests): handleTypingStart/Stop (validation failure, schema pass, identity resolution, typing throttle 2s window, privacy preferences blocking, room broadcast, anonymous identity path, identity cache, clearTypingThrottle, invalidateIdentityCache)
+  - `ConversationHandler.test.ts` (NEW, ~20 tests): handleConversationJoin (schema fail, banned/leftAt/isActive=false, active member → join+stats, anonymous skip membership check, server_error), handleConversationLeave (schema fail, with userId, without userId, swallows exception), sendConversationStatsToSocket (stats returned, null stats, error)
+  - `LocationHandler.test.ts` (NEW, ~40 tests with it.each): handleLocationShare (valid coords, callback missing, auth failure, participant-not-found, coordinate validation, lat/lon boundaries via it.each, invalid-ObjectId participant, error propagation), handleLiveLocationStart/Update/Stop (participant resolution, room broadcast, temp-id assignment, unexpected error, non-Error thrown), _generateTempId (consistent format)
+  - `AttachmentReactionHandler.test.ts` (NEW, ~24 tests): payload validation (missing attachmentId/messageId/emoji, invalid ObjectId), auth check (not in socketToUser), participant resolution failure, conversation resolution failure, IDOR protection (attachment not found, attachment belongs to different message), handleAdd (success → addAttachmentReaction + emit + callback, no callback, service throws Error, non-Error thrown), handleRemove (success + emit, no callback), event timestamp in ISO format
+- Reviewer: PASS (self-review against REVIEWER.md rubric — test-only diff, no production code changed)
+- Notes:
+  1. `jest.Mock<any>` required throughout — `jest.Mock` without type param causes TS2345 "not assignable to never" for `.mockResolvedValue()` calls in ts-jest strict mode.
+  2. StatusHandler cache: `invalidateIdentityCache(userId)` deletes key `userId` without prefix (internal cache key is `user:userId`); tested as "does not throw" since internal cache structure is private.
+  3. LocationHandler `normalizeMock` in explicit return type annotation must be typed `jest.Mock<any>` (not just `jest.Mock`) to avoid inference override.
+  4. LocationHandler branch coverage gap-filling: 4 additional tests targeting `error instanceof Error` ternary in catch blocks and `callback?.()` optional chaining paths.
+  5. jest.config.json threshold ratcheted: branches 36→37 (local 37.61% minus ~0.4% CI delta = ~37.2% > 37 floor).
+  6. Pre-existing gateway failures: 6 suites / 18 tests — production bugs, unchanged.
+- Next slice: P1 Real-time × gateway (continuation): `CallEventsHandler.ts` (2103 lines), `MeeshySocketIOManager.ts` (2039 lines)
+- Commit: (see branch claude/coverage/p1-realtime-handlers-gateway)
