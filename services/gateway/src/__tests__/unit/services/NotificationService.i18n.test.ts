@@ -101,3 +101,15 @@ describe('contenu localisé par destinataire', () => {
     expect(created[0].content).toBe('reacted ❤️ to your story');
   });
 });
+
+describe('batch — langue par destinataire', () => {
+  it('mentions : chaque destinataire reçoit son contenu localisé', async () => {
+    const { svc, created } = makeContentHarness({
+      a: { systemLanguage: 'en' }, b: { systemLanguage: 'de' }, x: { displayName: 'X' },
+    });
+    await svc.createPostMentionNotificationsBatch({ postId: 'p', posterId: 'x', mentionedUserIds: ['a', 'b'] });
+    const byUser = new Map(created.map((d: any) => [d.userId, d.content]));
+    expect(byUser.get('a')).toBe('mentioned you');
+    expect(byUser.get('b')).toBe('hat dich erwähnt');
+  });
+});

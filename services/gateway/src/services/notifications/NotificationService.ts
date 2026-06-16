@@ -1449,27 +1449,13 @@ export class NotificationService {
     // restauré côté NSE après la donation d'intent), le body reste le contenu
     // du commentaire.
     const postType = params.postType ?? 'STORY';
-    const NOUN: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS', string> = {
-      STORY: 'story',
-      POST: 'publication',
-      MOOD: 'humeur',
-      STATUS: 'statut',
-    };
-    const noun = NOUN[postType];
-    const ARTICLE: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS', string> = {
-      STORY: 'une',
-      POST: 'une',
-      MOOD: 'une',
-      STATUS: 'un',
-    };
-    const article = ARTICLE[postType];
     const authorName = postAuthor?.displayName?.trim()
       || postAuthor?.username?.trim()
       || '';
-    const ownerSubtitle = `Votre ${noun}`;
-    const contextSubtitle = authorName
-      ? `${noun.charAt(0).toUpperCase()}${noun.slice(1)} de ${authorName}`
-      : `${noun.charAt(0).toUpperCase()}${noun.slice(1)}`;
+    const langs = await this.resolveRecipientLangs([authorId, ...previousCommenterIds, ...friendIds]);
+    const contextSubtitleFor = (lang: string): string => authorName
+      ? notificationString(lang, 'comment.subtitleFrom', { postType, author: authorName })
+      : notificationString(lang, 'comment.subtitleBare', { postType });
 
     const commonContext = { postId: params.postId, commentId: params.commentId };
     const commonMetadata = {
@@ -1493,13 +1479,14 @@ export class NotificationService {
     //    Pour un post non-story, l'auteur est déjà notifié via post_comment
     //    (route) — bucket sauté pour ne pas le notifier deux fois.
     if (authorId !== params.commenterId && postType === 'STORY') {
+      const aLang = langs.get(authorId) ?? 'fr';
       tasks.push(
         this.createNotification({
           userId: authorId,
           type: 'story_new_comment',
           priority: 'normal',
-          content: excerpt || `a commenté votre ${noun}`,
-          subtitle: ownerSubtitle,
+          content: excerpt || notificationString(aLang, 'comment.your', { postType }),
+          subtitle: notificationString(aLang, 'comment.subtitleOwner', { postType }),
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
@@ -1510,13 +1497,14 @@ export class NotificationService {
     // 2. Previous commenters (thread participants) — skip mentioned users
     for (const recipientId of previousCommenterIds) {
       if (excludeSet.has(recipientId)) continue;
+      const rLang = langs.get(recipientId) ?? 'fr';
       tasks.push(
         this.createNotification({
           userId: recipientId,
           type: 'story_thread_reply',
           priority: 'low',
-          content: excerpt || `a répondu dans ${article} ${noun}`,
-          subtitle: contextSubtitle,
+          content: excerpt || notificationString(rLang, 'comment.repliedIn', { postType }),
+          subtitle: contextSubtitleFor(rLang),
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
@@ -1527,13 +1515,14 @@ export class NotificationService {
     // 3. Friends of the story author — skip mentioned users
     for (const recipientId of friendIds) {
       if (excludeSet.has(recipientId)) continue;
+      const rLang = langs.get(recipientId) ?? 'fr';
       tasks.push(
         this.createNotification({
           userId: recipientId,
           type: 'friend_story_comment',
           priority: 'low',
-          content: excerpt || `a commenté ${article} ${noun}`,
-          subtitle: contextSubtitle,
+          content: excerpt || notificationString(rLang, 'comment.generic', { postType }),
+          subtitle: contextSubtitleFor(rLang),
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
@@ -1654,7 +1643,7 @@ export class NotificationService {
     const excerpt = params.postExcerpt
       ? this.truncateMessage(params.postExcerpt)
       : '';
-    const content = excerpt || 'vous a mentionné';
+    const langs = await this.resolveRecipientLangs(params.mentionedUserIds);
 
     const actorInfo = {
       id: params.posterId,
@@ -1681,7 +1670,7 @@ export class NotificationService {
           userId,
           type: 'user_mentioned',
           priority: 'high',
-          content,
+          content: excerpt || notificationString(langs.get(userId) ?? 'fr', 'mention'),
           actor: actorInfo,
           context: {
             postId: params.postId,
@@ -1761,23 +1750,20 @@ export class NotificationService {
     const excludeSet = new Set(params.excludeUserIds ?? []);
     const excerpt = params.excerpt ? this.truncateMessage(params.excerpt) : '';
 
-    const fallbackContent: Record<'friend_new_story' | 'friend_new_post' | 'friend_new_mood', string> = {
-      friend_new_story: 'a publié une nouvelle story',
-      friend_new_post: 'a publié un nouveau post',
-      friend_new_mood: 'a publié une nouvelle humeur',
+    // Content : le wording « a publié une nouvelle … » est localisé par
+    // destinataire ; le subtitle typé (« Nouvelle story » …) voyage en
+    // APN-natif (restauré par le NSE) — les deux dans la langue du destinataire.
+    const contentKeyByType: Record<'friend_new_story' | 'friend_new_post' | 'friend_new_mood', NotificationStringKey> = {
+      friend_new_story: 'friend.story',
+      friend_new_post: 'friend.post',
+      friend_new_mood: 'friend.mood',
     };
-    const content = excerpt || fallbackContent[notificationType];
+    const contentKey = contentKeyByType[notificationType];
 
-    // Subtitle typé : quand le body est l'extrait du contenu, le destinataire
-    // doit quand même savoir s'il s'agit d'une story, d'une publication ou
-    // d'une humeur — le type voyage en subtitle (APN-natif, restauré par le NSE).
-    const subtitleByContentType: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS', string> = {
-      STORY: 'Nouvelle story',
-      POST: 'Nouvelle publication',
-      MOOD: 'Nouvelle humeur',
-      STATUS: 'Nouveau statut',
-    };
-    const subtitle = subtitleByContentType[params.contentType];
+    const candidateFriendIds = friendRequests
+      .map(fr => (fr.senderId === params.authorId ? fr.receiverId : fr.senderId))
+      .filter(id => id !== params.authorId && !excludeSet.has(id));
+    const langs = await this.resolveRecipientLangs(candidateFriendIds);
 
     const actorInfo = {
       id: params.authorId,
@@ -1797,13 +1783,14 @@ export class NotificationService {
       if (seenIds.has(friendId)) continue;
       seenIds.add(friendId);
 
+      const fLang = langs.get(friendId) ?? 'fr';
       tasks.push(
         this.createNotification({
           userId: friendId,
           type: notificationType,
           priority: 'normal',
-          content,
-          subtitle,
+          content: excerpt || notificationString(fLang, contentKey),
+          subtitle: notificationString(fLang, 'friend.subtitleNew', { postType: params.contentType }),
           actor: actorInfo,
           context: { postId: params.postId },
           metadata: {

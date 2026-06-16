@@ -12,8 +12,9 @@ export type NotificationLanguage = typeof NOTIFICATION_LANGUAGES[number];
 export const NOTIFICATION_STRING_KEYS = [
   'reaction.message', 'reaction.comment', 'reaction.commentVerbose', 'reaction.post',
   'comment.your', 'comment.generic', 'comment.repliedIn', 'comment.reply', 'comment.replyWithParent',
+  'comment.subtitleOwner', 'comment.subtitleFrom', 'comment.subtitleBare',
   'mention',
-  'friend.story', 'friend.post', 'friend.mood',
+  'friend.story', 'friend.post', 'friend.mood', 'friend.subtitleNew',
   'call.missed',
   'contact.request', 'contact.accepted',
   'repost',
@@ -55,10 +56,14 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.repliedIn': 'a répondu {locObj}',
     'comment.reply': 'En réponse à votre commentaire',
     'comment.replyWithParent': 'En réponse à « {preview} »',
+    'comment.subtitleOwner': '{ownerSubtitle}',
+    'comment.subtitleFrom': '{nounCap} de {author}',
+    'comment.subtitleBare': '{nounCap}',
     'mention': 'vous a mentionné',
     'friend.story': 'a publié une nouvelle story',
     'friend.post': 'a publié un nouveau post',
     'friend.mood': 'a publié une nouvelle humeur',
+    'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Appel {callLabel} manqué',
     'contact.request': 'Nouvelle demande de contact',
     'contact.accepted': 'Demande de contact acceptée',
@@ -84,10 +89,14 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.repliedIn': 'replied {locObj}',
     'comment.reply': 'Replied to your comment',
     'comment.replyWithParent': 'Replying to “{preview}”',
+    'comment.subtitleOwner': '{ownerSubtitle}',
+    'comment.subtitleFrom': '{nounCap} from {author}',
+    'comment.subtitleBare': '{nounCap}',
     'mention': 'mentioned you',
     'friend.story': 'shared a new story',
     'friend.post': 'shared a new post',
     'friend.mood': 'shared a new mood',
+    'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Missed {callLabel} call',
     'contact.request': 'New contact request',
     'contact.accepted': 'Contact request accepted',
@@ -113,10 +122,14 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.repliedIn': 'respondió {locObj}',
     'comment.reply': 'Respondió a tu comentario',
     'comment.replyWithParent': 'Respondiendo a «{preview}»',
+    'comment.subtitleOwner': '{ownerSubtitle}',
+    'comment.subtitleFrom': '{nounCap} de {author}',
+    'comment.subtitleBare': '{nounCap}',
     'mention': 'te mencionó',
     'friend.story': 'publicó una nueva historia',
     'friend.post': 'publicó una nueva publicación',
     'friend.mood': 'publicó un nuevo estado de ánimo',
+    'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Llamada {callLabel} perdida',
     'contact.request': 'Nueva solicitud de contacto',
     'contact.accepted': 'Solicitud de contacto aceptada',
@@ -142,10 +155,14 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.repliedIn': 'respondeu {locObj}',
     'comment.reply': 'Respondeu ao seu comentário',
     'comment.replyWithParent': 'Respondendo a “{preview}”',
+    'comment.subtitleOwner': '{ownerSubtitle}',
+    'comment.subtitleFrom': '{nounCap} de {author}',
+    'comment.subtitleBare': '{nounCap}',
     'mention': 'mencionou você',
     'friend.story': 'publicou uma nova story',
     'friend.post': 'publicou uma nova publicação',
     'friend.mood': 'publicou um novo humor',
+    'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Chamada {callLabel} perdida',
     'contact.request': 'Novo pedido de contato',
     'contact.accepted': 'Pedido de contato aceito',
@@ -171,10 +188,14 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.repliedIn': 'hat {locObj} geantwortet',
     'comment.reply': 'Hat auf deinen Kommentar geantwortet',
     'comment.replyWithParent': 'Antwort auf „{preview}“',
+    'comment.subtitleOwner': '{ownerSubtitle}',
+    'comment.subtitleFrom': '{nounCap} von {author}',
+    'comment.subtitleBare': '{nounCap}',
     'mention': 'hat dich erwähnt',
     'friend.story': 'hat eine neue Story geteilt',
     'friend.post': 'hat einen neuen Beitrag geteilt',
     'friend.mood': 'hat eine neue Stimmung geteilt',
+    'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Verpasster {callLabel}',
     'contact.request': 'Neue Kontaktanfrage',
     'contact.accepted': 'Kontaktanfrage angenommen',
@@ -200,10 +221,14 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.repliedIn': 'ha risposto {locObj}',
     'comment.reply': 'Ha risposto al tuo commento',
     'comment.replyWithParent': 'In risposta a «{preview}»',
+    'comment.subtitleOwner': '{ownerSubtitle}',
+    'comment.subtitleFrom': '{nounCap} di {author}',
+    'comment.subtitleBare': '{nounCap}',
     'mention': 'ti ha menzionato',
     'friend.story': 'ha pubblicato una nuova storia',
     'friend.post': 'ha pubblicato un nuovo post',
     'friend.mood': 'ha pubblicato un nuovo stato d’animo',
+    'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Chiamata {callLabel} persa',
     'contact.request': 'Nuova richiesta di contatto',
     'contact.accepted': 'Richiesta di contatto accettata',
@@ -229,10 +254,14 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.repliedIn': 'ردّ {locObj}',
     'comment.reply': 'ردّ على تعليقك',
     'comment.replyWithParent': 'ردًّا على «{preview}»',
+    'comment.subtitleOwner': '{ownerSubtitle}',
+    'comment.subtitleFrom': '{nounCap} من {author}',
+    'comment.subtitleBare': '{nounCap}',
     'mention': 'أشار إليك',
     'friend.story': 'نشر قصة جديدة',
     'friend.post': 'نشر منشورًا جديدًا',
     'friend.mood': 'شارك مزاجًا جديدًا',
+    'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} مكالمة {callLabel} فائتة',
     'contact.request': 'طلب تواصل جديد',
     'contact.accepted': 'تم قبول طلب التواصل',
@@ -258,10 +287,14 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.repliedIn': '{locObj}回复了',
     'comment.reply': '回复了你的评论',
     'comment.replyWithParent': '回复 “{preview}”',
+    'comment.subtitleOwner': '{ownerSubtitle}',
+    'comment.subtitleFrom': '{author} 的{nounCap}',
+    'comment.subtitleBare': '{nounCap}',
     'mention': '提到了你',
     'friend.story': '发布了新快拍',
     'friend.post': '发布了新帖子',
     'friend.mood': '分享了新心情',
+    'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} 未接{callLabel}',
     'contact.request': '新的联系人请求',
     'contact.accepted': '联系人请求已接受',
@@ -325,6 +358,42 @@ const LOC_OBJ: Record<NotificationLanguage, ObjMap> = {
   it: { POST: 'in un post', STORY: 'in una storia', MOOD: 'in uno stato d’animo', STATUS: 'in uno stato' },
   ar: { POST: 'في منشور', STORY: 'في قصة', MOOD: 'في مزاج', STATUS: 'في حالة' },
   'zh-Hans': { POST: '在帖子中', STORY: '在快拍中', MOOD: '在心情中', STATUS: '在状态中' },
+};
+
+// Nom capitalisé nu (subtitle "{nounCap} de {author}" / bare)
+const POST_NOUN_CAP: Record<NotificationLanguage, ObjMap> = {
+  fr: { POST: 'Publication', STORY: 'Story', MOOD: 'Humeur', STATUS: 'Statut' },
+  en: { POST: 'Post', STORY: 'Story', MOOD: 'Mood', STATUS: 'Status' },
+  es: { POST: 'Publicación', STORY: 'Historia', MOOD: 'Estado de ánimo', STATUS: 'Estado' },
+  pt: { POST: 'Publicação', STORY: 'Story', MOOD: 'Humor', STATUS: 'Status' },
+  de: { POST: 'Beitrag', STORY: 'Story', MOOD: 'Stimmung', STATUS: 'Status' },
+  it: { POST: 'Post', STORY: 'Storia', MOOD: 'Stato d’animo', STATUS: 'Stato' },
+  ar: { POST: 'منشور', STORY: 'قصة', MOOD: 'مزاج', STATUS: 'حالة' },
+  'zh-Hans': { POST: '帖子', STORY: '快拍', MOOD: '心情', STATUS: '状态' },
+};
+
+// Subtitle "Votre X" (forme nominative possessive, gérée par langue)
+const SUBTITLE_OWNER: Record<NotificationLanguage, ObjMap> = {
+  fr: { POST: 'Votre publication', STORY: 'Votre story', MOOD: 'Votre humeur', STATUS: 'Votre statut' },
+  en: { POST: 'Your post', STORY: 'Your story', MOOD: 'Your mood', STATUS: 'Your status' },
+  es: { POST: 'Tu publicación', STORY: 'Tu historia', MOOD: 'Tu estado de ánimo', STATUS: 'Tu estado' },
+  pt: { POST: 'Sua publicação', STORY: 'Sua story', MOOD: 'Seu humor', STATUS: 'Seu status' },
+  de: { POST: 'Dein Beitrag', STORY: 'Deine Story', MOOD: 'Deine Stimmung', STATUS: 'Dein Status' },
+  it: { POST: 'Il tuo post', STORY: 'La tua storia', MOOD: 'Il tuo stato d’animo', STATUS: 'Il tuo stato' },
+  ar: { POST: 'منشورك', STORY: 'قصتك', MOOD: 'مزاجك', STATUS: 'حالتك' },
+  'zh-Hans': { POST: '你的帖子', STORY: '你的快拍', MOOD: '你的心情', STATUS: '你的状态' },
+};
+
+// Subtitle "Nouvelle X" (forme avec accord de genre, gérée par langue)
+const FRIEND_SUBTITLE: Record<NotificationLanguage, ObjMap> = {
+  fr: { POST: 'Nouvelle publication', STORY: 'Nouvelle story', MOOD: 'Nouvelle humeur', STATUS: 'Nouveau statut' },
+  en: { POST: 'New post', STORY: 'New story', MOOD: 'New mood', STATUS: 'New status' },
+  es: { POST: 'Nueva publicación', STORY: 'Nueva historia', MOOD: 'Nuevo estado de ánimo', STATUS: 'Nuevo estado' },
+  pt: { POST: 'Nova publicação', STORY: 'Nova story', MOOD: 'Novo humor', STATUS: 'Novo status' },
+  de: { POST: 'Neuer Beitrag', STORY: 'Neue Story', MOOD: 'Neue Stimmung', STATUS: 'Neuer Status' },
+  it: { POST: 'Nuovo post', STORY: 'Nuova storia', MOOD: 'Nuovo stato d’animo', STATUS: 'Nuovo stato' },
+  ar: { POST: 'منشور جديد', STORY: 'قصة جديدة', MOOD: 'مزاج جديد', STATUS: 'حالة جديدة' },
+  'zh-Hans': { POST: '新帖子', STORY: '新快拍', MOOD: '新心情', STATUS: '新状态' },
 };
 
 const CALL_LABEL: Record<NotificationLanguage, CallMap> = {
@@ -391,6 +460,9 @@ export function notificationString(
     tokens.reactObj = REACT_OBJ[L][params.postType];
     tokens.indefObj = INDEF_OBJ[L][params.postType];
     tokens.locObj = LOC_OBJ[L][params.postType];
+    tokens.nounCap = POST_NOUN_CAP[L][params.postType];
+    tokens.ownerSubtitle = SUBTITLE_OWNER[L][params.postType];
+    tokens.friendSubtitle = FRIEND_SUBTITLE[L][params.postType];
   }
   if (params.callType) tokens.callLabel = CALL_LABEL[L][params.callType];
 
