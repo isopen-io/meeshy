@@ -23,6 +23,7 @@ export type TrackingTargetType =
   | 'REEL'
   | 'POST'
   | 'STORY'
+  | 'STATUS'
   | 'CONVERSATION'
   | 'PROFILE'
   | 'EXTERNAL';
@@ -45,6 +46,7 @@ const APP_TARGET_TYPES: ReadonlySet<TrackingTargetType> = new Set<TrackingTarget
   'REEL',
   'POST',
   'STORY',
+  'STATUS',
 ]);
 
 /**
@@ -58,6 +60,7 @@ export function normalizeTargetType(raw: unknown): TrackingTargetType | null {
     case 'REEL':
     case 'POST':
     case 'STORY':
+    case 'STATUS':
     case 'CONVERSATION':
     case 'PROFILE':
     case 'EXTERNAL':
@@ -93,6 +96,7 @@ export function buildAppOpenUrl(
       return `meeshy://s/${id}`;
     case 'POST':
     case 'REEL':
+    case 'STATUS':
       return `meeshy://p/${id}`;
     default:
       return null;
@@ -116,6 +120,7 @@ export function buildWebFallbackTarget(
     case 'REEL':
     case 'POST':
     case 'STORY':
+    case 'STATUS':
       return targetId ? `/feeds/post/${encodeURIComponent(targetId)}` : null;
     case 'CONVERSATION':
       return targetId ? `/conversations/${encodeURIComponent(targetId)}` : null;

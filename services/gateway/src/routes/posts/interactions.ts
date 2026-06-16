@@ -11,6 +11,7 @@ import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInterna
 import { resolveMentionedUsers } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
+import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
@@ -422,7 +423,7 @@ export function registerInteractionRoutes(
       const body = (request.body as any) ?? {};
       const platform: string | undefined = body.platform;
       const generateLink: boolean = Boolean(body.generateLink);
-      const baseUrl = (process.env.FRONTEND_URL || 'https://meeshy.me').replace(/\/+$/, '');
+      const baseUrl = resolveFrontendBaseUrl();
 
       const payload: {
         shared: boolean;
@@ -477,7 +478,7 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
-      const baseUrl = (process.env.FRONTEND_URL || 'https://meeshy.me').replace(/\/+$/, '');
+      const baseUrl = resolveFrontendBaseUrl();
       const link = await postService.getPostShareLink(postId, authContext.registeredUser.id, baseUrl);
 
       return sendSuccess(reply, link);

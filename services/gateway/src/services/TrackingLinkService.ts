@@ -6,6 +6,15 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 const logger = enhancedLogger.child({ module: 'TrackingLinkService' });
 
 /**
+ * Source UNIQUE de l'URL du frontend pour bâtir les liens `/l/<token>`.
+ * Fallback `meeshy.me` (domaine prod) — jamais localhost, qui casserait un lien
+ * partagé si `FRONTEND_URL` manquait. Utilisée par `buildTrackingUrl` ET la route share.
+ */
+export function resolveFrontendBaseUrl(): string {
+  return (process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || 'https://meeshy.me').replace(/\/+$/, '');
+}
+
+/**
  * Cible typée résolue depuis un token `/l/<token>` — sert la page de
  * redirection intelligente (web) et le DeepLinkRouter (iOS). `kind` distingue
  * un lien de tracking (partage de post/reel/story) d'une invitation conversation.
@@ -47,8 +56,7 @@ export class TrackingLinkService {
    * Utilise FRONTEND_URL de l'environnement ou fallback sur localhost
    */
   public buildTrackingUrl(token: string): string {
-    const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3100';
-    return `${frontendUrl}/l/${token}`;
+    return `${resolveFrontendBaseUrl()}/l/${token}`;
   }
 
   /**
@@ -486,7 +494,11 @@ export class TrackingLinkService {
       if (click.deviceFingerprint) uniqueFingerprints.add(click.deviceFingerprint);
     });
 
-    const uniqueClicks = Math.max(uniqueIps.size, uniqueFingerprints.size);
+    // Source unique = le compteur STOCKÉ (incrémenté à l'écriture), pour que tous
+    // les endpoints renvoient le MÊME nombre. Le recalcul max(IPs, fingerprints)
+    // divergeait du compteur lu par /posts/:id/share & /tracking-links/stats.
+    const uniqueClicks = (trackingLink as TrackingLink).uniqueClicks
+      ?? Math.max(uniqueIps.size, uniqueFingerprints.size);
 
     const confirmedClicks = clicks.filter(click => click.redirectStatus === 'confirmed').length;
 
