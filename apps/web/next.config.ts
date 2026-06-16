@@ -90,27 +90,16 @@ const nextConfig: NextConfig = {
   // `/v2/links` (protected route group).
   async rewrites() {
     return [
-      // Posts
-      {
-        source: '/feeds/post/:postId',
-        destination: '/v2/feeds/post/:postId',
-      },
-      {
-        source: '/post/:postId',
-        destination: '/v2/feeds/post/:postId',
-      },
+      // Real v1 pages now exist for /feeds/post, /post, /reel, /story, /mood
+      // (true app-router pages, NOT rewrites to /v2). Only the short aliases
+      // /p and /s are rewritten onto those real v1 pages.
       {
         source: '/p/:postId',
-        destination: '/v2/feeds/post/:postId',
-      },
-      // Stories (rendered through the post page — same identifier namespace)
-      {
-        source: '/story/:postId',
-        destination: '/v2/feeds/post/:postId',
+        destination: '/feeds/post/:postId',
       },
       {
         source: '/s/:postId',
-        destination: '/v2/feeds/post/:postId',
+        destination: '/story/:postId',
       },
       // Users (plural alias → legacy public profile page)
       {

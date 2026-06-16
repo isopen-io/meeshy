@@ -76,10 +76,11 @@ describe('buildAppOpenUrl', () => {
 });
 
 describe('buildWebFallbackTarget', () => {
-  it('routes post-family to /feeds/post/<id>', () => {
-    expect(buildWebFallbackTarget('POST', 'p1', null)).toBe('/feeds/post/p1');
-    expect(buildWebFallbackTarget('REEL', 'r1', null)).toBe('/feeds/post/r1');
-    expect(buildWebFallbackTarget('STORY', 's1', null)).toBe('/feeds/post/s1');
+  it('routes each post type to its real v1 page', () => {
+    expect(buildWebFallbackTarget('POST', 'p1', null)).toBe('/post/p1');
+    expect(buildWebFallbackTarget('REEL', 'r1', null)).toBe('/reel/r1');
+    expect(buildWebFallbackTarget('STORY', 's1', null)).toBe('/story/s1');
+    expect(buildWebFallbackTarget('STATUS', 'm1', null)).toBe('/mood/m1');
   });
 
   it('routes conversation to /conversations/<id>', () => {

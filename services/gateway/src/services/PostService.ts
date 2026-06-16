@@ -676,9 +676,9 @@ export class PostService {
     // TrackingTargetType) so the redirect page + DeepLinkRouter open the right
     // surface — never blindly "POST". Stories get their dedicated viewer URL.
     const targetType = ({ POST: 'POST', REEL: 'REEL', STORY: 'STORY', STATUS: 'STATUS' } as const)[post.type];
-    const originalUrl = post.type === 'STORY'
-      ? `${baseUrl}/story/${postId}`
-      : `${baseUrl}/feeds/post/${postId}`;
+    // Real v1 page per type: /post, /reel, /story, /mood (fallback /feeds/post).
+    const webPath = ({ POST: 'post', REEL: 'reel', STORY: 'story', STATUS: 'mood' } as const)[post.type] ?? 'feeds/post';
+    const originalUrl = `${baseUrl}/${webPath}/${postId}`;
 
     try {
       const created = await this.prisma.$transaction(async (tx) => {

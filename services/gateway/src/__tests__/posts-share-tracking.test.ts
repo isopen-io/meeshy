@@ -75,15 +75,15 @@ describe('PostService.shareWithTrackingLink', () => {
     expect(data.targetType).toBe('POST');
     expect(data.targetId).toBe(POST_ID);
     expect(data.createdBy).toBe(USER_ID);
-    expect(data.originalUrl).toBe(`https://meeshy.me/feeds/post/${POST_ID}`);
+    expect(data.originalUrl).toBe(`https://meeshy.me/post/${POST_ID}`);
   });
 
-  it('types a shared REEL as targetType=REEL', async () => {
+  it('types a shared REEL as targetType=REEL with the /reel page URL', async () => {
     prisma.post.findFirst.mockResolvedValueOnce({ id: POST_ID, authorId: 'author', shareCount: 0, type: 'REEL' });
     await service.shareWithTrackingLink(POST_ID, USER_ID, { baseUrl: 'https://meeshy.me' });
     const data = (prisma.trackingLink.create.mock.calls[0][0] as any).data;
     expect(data.targetType).toBe('REEL');
-    expect(data.originalUrl).toBe(`https://meeshy.me/feeds/post/${POST_ID}`);
+    expect(data.originalUrl).toBe(`https://meeshy.me/reel/${POST_ID}`);
   });
 
   it('types a shared STORY as targetType=STORY with the story viewer URL', async () => {

@@ -117,11 +117,15 @@ export function buildWebFallbackTarget(
   originalUrl: string | null | undefined,
 ): string | null {
   switch (targetType) {
-    case 'REEL':
+    // Real v1 page per type.
     case 'POST':
+      return targetId ? `/post/${encodeURIComponent(targetId)}` : null;
+    case 'REEL':
+      return targetId ? `/reel/${encodeURIComponent(targetId)}` : null;
     case 'STORY':
+      return targetId ? `/story/${encodeURIComponent(targetId)}` : null;
     case 'STATUS':
-      return targetId ? `/feeds/post/${encodeURIComponent(targetId)}` : null;
+      return targetId ? `/mood/${encodeURIComponent(targetId)}` : null;
     case 'CONVERSATION':
       return targetId ? `/conversations/${encodeURIComponent(targetId)}` : null;
     case 'PROFILE':
