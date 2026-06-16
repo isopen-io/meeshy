@@ -1186,6 +1186,7 @@ export class NotificationService {
 
     if (!reactor) return null;
 
+    const lang = await this.resolveRecipientLang(params.messageAuthorId);
     const messagePreview = message?.content
       ? message.content.length > 100
         ? message.content.substring(0, 100) + '…'
@@ -1196,7 +1197,7 @@ export class NotificationService {
       userId: params.messageAuthorId,
       type: 'message_reaction',
       priority: 'low',
-      content: params.reactionEmoji,
+      content: notificationString(lang, 'reaction.message', { emoji: params.reactionEmoji }),
 
       actor: {
         id: params.reactorUserId,

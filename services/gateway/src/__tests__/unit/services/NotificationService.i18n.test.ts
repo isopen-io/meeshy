@@ -130,3 +130,11 @@ describe('login new device', () => {
     expect(pushed[0].title).toBe('Neue Anmeldung erkannt');
   });
 });
+
+describe('message reaction (site 17)', () => {
+  it('message_reaction, destinataire en → "reacted ❤️ to your message"', async () => {
+    const { svc, created } = makeContentHarness({ r: { systemLanguage: 'en' } });
+    await svc.createReactionNotification({ messageAuthorId: 'r', reactorUserId: 'c', messageId: 'm', conversationId: 'cv', reactionEmoji: '❤️' });
+    expect(created[0].content).toBe('reacted ❤️ to your message');
+  });
+});
