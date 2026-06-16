@@ -61,3 +61,43 @@ describe('attachments i18n', () => {
     expect(body).toContain('📷 Foto');
   });
 });
+
+function makeContentHarness(usersById: Record<string, any>) {
+  const created: any[] = [];
+  const prisma: any = {
+    user: {
+      findUnique: async ({ where }: any) => ({
+        id: where.id, username: 'u_' + where.id, displayName: 'User ' + where.id,
+        avatar: null, ...(usersById[where.id] ?? {}),
+      }),
+      findMany: async ({ where }: any) =>
+        (where.id.in as string[]).map(id => ({ id, ...(usersById[id] ?? {}) })),
+    },
+    conversation: { findUnique: async () => null },
+    userPreferences: { findUnique: async () => null },
+    notification: {
+      create: async (args: any) => { created.push(args.data); return { id: 'n1', ...args.data, createdAt: new Date() }; },
+      count: async () => 0,
+    },
+    message: { findUnique: async () => null },
+  };
+  return { svc: new NotificationService(prisma as any), created };
+}
+
+describe('contenu localisé par destinataire', () => {
+  it('missed_call, destinataire en → "📞 Missed audio call"', async () => {
+    const { svc, created } = makeContentHarness({ r: { systemLanguage: 'en' } });
+    await svc.createMissedCallNotification({ recipientUserId: 'r', callerId: 'c', conversationId: 'cv', callSessionId: 's', callType: 'audio' });
+    expect(created[0].content).toBe('📞 Missed audio call');
+  });
+  it('friend_request, destinataire de → "Neue Kontaktanfrage"', async () => {
+    const { svc, created } = makeContentHarness({ r: { systemLanguage: 'de' } });
+    await svc.createFriendRequestNotification({ recipientUserId: 'r', requesterId: 'q', friendRequestId: 'f' });
+    expect(created[0].content).toBe('Neue Kontaktanfrage');
+  });
+  it('post_like STORY, destinataire en → "reacted ❤️ to your story"', async () => {
+    const { svc, created } = makeContentHarness({ r: { systemLanguage: 'en' } });
+    await svc.createPostLikeNotification({ actorId: 'a', postId: 'p', postAuthorId: 'r', emoji: '❤️', postType: 'STORY' });
+    expect(created[0].content).toBe('reacted ❤️ to your story');
+  });
+});

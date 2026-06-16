@@ -1259,12 +1259,13 @@ export class NotificationService {
     const reactorName = reactor.displayName?.trim()
       || reactor.username?.trim()
       || 'Quelqu’un';
-    const contextSuffix = params.postAuthorName
-      ? (params.isStory
-          ? ` sur la story de ${params.postAuthorName}`
-          : ` sur le post de ${params.postAuthorName}`)
-      : '';
-    const body = `${reactorName} a réagi ${params.reactionEmoji} à votre commentaire${contextSuffix}`;
+    const lang = await this.resolveRecipientLang(params.commentAuthorId);
+    const body = notificationString(lang, 'reaction.commentVerbose', {
+      actor: reactorName,
+      emoji: params.reactionEmoji,
+      author: params.postAuthorName,
+      isStory: params.isStory,
+    });
 
     // Subtitle (rendu sous le title côté iOS — banner riche) : un aperçu du
     // commentaire qui a reçu la réaction. Permet au destinataire de savoir
@@ -1848,13 +1849,13 @@ export class NotificationService {
     // L'extension iOS expose en plus l'avatar du caller via INSendMessageIntent
     // (missed_call est ajouté à communicationTypes côté extension dans la même PR).
     const callIcon = params.callType === 'video' ? '📹' : '📞';
-    const callLabel = params.callType === 'video' ? 'vidéo' : 'audio';
+    const lang = await this.resolveRecipientLang(params.recipientUserId);
 
     return this.createNotification({
       userId: params.recipientUserId,
       type: 'missed_call',
       priority: 'high',
-      content: `${callIcon} Appel ${callLabel} manqué`,
+      content: notificationString(lang, 'call.missed', { callIcon, callType: params.callType }),
 
       actor: {
         id: params.callerId,
@@ -1893,11 +1894,13 @@ export class NotificationService {
 
     if (!requester) return null;
 
+    const lang = await this.resolveRecipientLang(params.recipientUserId);
+
     return this.createNotification({
       userId: params.recipientUserId,
       type: 'friend_request',
       priority: 'normal',
-      content: 'Nouvelle demande de contact',
+      content: notificationString(lang, 'contact.request'),
 
       actor: {
         id: params.requesterId,
@@ -1932,11 +1935,13 @@ export class NotificationService {
 
     if (!accepter) return null;
 
+    const lang = await this.resolveRecipientLang(params.recipientUserId);
+
     return this.createNotification({
       userId: params.recipientUserId,
       type: 'friend_accepted',
       priority: 'normal',
-      content: 'Demande de contact acceptée',
+      content: notificationString(lang, 'contact.accepted'),
 
       actor: {
         id: params.accepterUserId,
@@ -2153,11 +2158,14 @@ export class NotificationService {
         ? 'status_reaction'
         : 'post_like';
 
+    const lang = await this.resolveRecipientLang(params.postAuthorId);
+    const reactPostType = params.postType === 'STORY' ? 'STORY' : params.postType === 'STATUS' ? 'STATUS' : 'POST';
+
     return this.createNotification({
       userId: params.postAuthorId,
       type,
       priority: 'normal',
-      content: `a réagi ${params.emoji} à votre ${params.postType === 'STORY' ? 'story' : params.postType === 'STATUS' ? 'statut' : 'publication'}`,
+      content: notificationString(lang, 'reaction.post', { emoji: params.emoji, postType: reactPostType }),
 
       actor: {
         id: params.actorId,
@@ -2266,12 +2274,7 @@ export class NotificationService {
     });
     if (!actor) return null;
 
-    const repostNoun: Record<'POST' | 'STORY' | 'MOOD' | 'STATUS', string> = {
-      POST: 'votre publication',
-      STORY: 'votre story',
-      MOOD: 'votre humeur',
-      STATUS: 'votre statut',
-    };
+    const lang = await this.resolveRecipientLang(params.postAuthorId);
     const trimmedPostPreview = params.postPreview?.trim() ?? '';
     const subtitle = trimmedPostPreview !== ''
       ? `« ${this.truncateMessage(trimmedPostPreview)} »`
@@ -2281,7 +2284,7 @@ export class NotificationService {
       userId: params.postAuthorId,
       type: 'post_repost',
       priority: 'normal',
-      content: `a partagé ${repostNoun[params.postType ?? 'POST']}`,
+      content: notificationString(lang, 'repost', { postType: params.postType ?? 'POST' }),
       ...(subtitle ? { subtitle } : {}),
 
       actor: {
@@ -2325,10 +2328,11 @@ export class NotificationService {
     if (!actor) return null;
 
     // Subtitle = le commentaire auquel on répond ; body = la réponse.
+    const lang = await this.resolveRecipientLang(params.commentAuthorId);
     const trimmedParent = params.parentCommentPreview?.trim() ?? '';
     const subtitle = trimmedParent !== ''
-      ? `En réponse à « ${this.truncateMessage(trimmedParent)} »`
-      : 'En réponse à votre commentaire';
+      ? notificationString(lang, 'comment.replyWithParent', { preview: this.truncateMessage(trimmedParent) })
+      : notificationString(lang, 'comment.reply');
 
     return this.createNotification({
       userId: params.commentAuthorId,
@@ -2378,6 +2382,7 @@ export class NotificationService {
     });
     if (!actor) return null;
 
+    const lang = await this.resolveRecipientLang(params.commentAuthorId);
     const trimmedPreview = params.commentPreview?.trim() ?? '';
     const subtitle = trimmedPreview !== ''
       ? `« ${this.truncateMessage(trimmedPreview)} »`
@@ -2387,7 +2392,7 @@ export class NotificationService {
       userId: params.commentAuthorId,
       type: 'comment_like',
       priority: 'low',
-      content: `a réagi ${params.emoji} à votre commentaire`,
+      content: notificationString(lang, 'reaction.comment', { emoji: params.emoji }),
       ...(subtitle ? { subtitle } : {}),
 
       actor: {
@@ -2445,9 +2450,10 @@ export class NotificationService {
       }
     }
 
+    const lang = await this.resolveRecipientLang(params.invitedUserId);
     const content = params.conversationType === 'direct'
-      ? `Nouvelle conversation avec ${actor.displayName}`
-      : `Invitation au groupe ${params.conversationTitle || 'sans nom'}`;
+      ? notificationString(lang, 'invitation.direct', { actor: actor.displayName })
+      : notificationString(lang, 'invitation.group', { title: params.conversationTitle || '' });
 
     return this.createNotification({
       userId: params.invitedUserId,
@@ -2480,11 +2486,15 @@ export class NotificationService {
       select: { title: true, type: true },
     });
 
+    const lang = await this.resolveRecipientLang(params.recipientUserId);
+
     return this.createNotification({
       userId: params.recipientUserId,
       type: 'added_to_conversation',
       priority: 'normal',
-      content: conversation?.type === 'direct' ? 'Nouveau contact' : `Ajouté au groupe ${conversation?.title || ''}`,
+      content: conversation?.type === 'direct'
+        ? notificationString(lang, 'group.newContact')
+        : notificationString(lang, 'group.added', { title: conversation?.title || '' }),
       actor: {
         id: params.addedByUserId,
         username: actor.username,
