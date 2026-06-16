@@ -91,23 +91,23 @@ struct ReelsPlayerView: View {
         .offset(x: max(0, edgeDrag))
         .task { viewModel.seed(posts: seedPosts, startId: startId) }
         .adaptiveOnChange(of: viewModel.currentId) { old, newId in
-            // End the previous reel's engagement session BEFORE the next begins,
-            // pushing the watch-time captured by the shared player.
-            if old != nil {
-                let m = SharedAVPlayerManager.shared
-                let watchMs = m.currentTime.isNaN ? 0 : Int(m.currentTime * 1000)
-                let durMs = m.duration > 0 ? Int(m.duration * 1000) : nil
-                EngagementTracker.shared.attachWatch(surface: .reels, watchMs: watchMs,
-                    mediaDurationMs: durMs, completed: false, samples: [])
-                Task { await EngagementTracker.shared.end(surface: .reels) }
-            }
-            guard let newId else { return }
             // Never carry immersive-hidden chrome into the next reel — the scrub
             // bar / action rail / info must reappear when you page.
             if chromeHidden { chromeHidden = false }
-            HapticFeedback.light()
-            EngagementTracker.shared.begin(postId: newId, contentType: .reel, surface: .reels)
-            viewModel.recordView(newId)
+            if newId != nil { HapticFeedback.light() }
+            // Order matters: finalize the PREVIOUS reel's session (real watch-time +
+            // heartbeat samples + completed) and `end` it BEFORE `begin` of the next —
+            // both in the SAME Task so `begin` never races ahead of the deferred `end`
+            // (which would drop the previous reel's qualified view).
+            Task {
+                if old != nil {
+                    finalizeReelSession()
+                    await EngagementTracker.shared.end(surface: .reels)
+                }
+                guard let newId else { return }
+                EngagementTracker.shared.begin(postId: newId, contentType: .reel, surface: .reels)
+                viewModel.recordView(newId)
+            }
         }
         .sheet(item: $commentsReel) { reel in
             CommentsSheetView(
@@ -116,8 +116,30 @@ struct ReelsPlayerView: View {
                 onCommentSent: { postId in viewModel.didSendComment(postId: postId) }
             )
         }
-        .onDisappear { Task { await EngagementTracker.shared.end(surface: .reels) } }
+        .onDisappear {
+            finalizeReelSession()
+            Task { await EngagementTracker.shared.end(surface: .reels) }
+        }
         .statusBarHidden(true)
+    }
+
+    /// Finalizes the current reel's engagement session: pushes the real watch-time,
+    /// the drained heartbeat samples (→ server's 30%/90% qualified-view rule), and
+    /// whether playback reached the end (→ playCount). Does NOT call `end` — the
+    /// caller orders `end` (and any subsequent `begin`) around it.
+    private func finalizeReelSession() {
+        let m = SharedAVPlayerManager.shared
+        let watchMs = m.currentTime.isNaN ? 0 : Int(m.currentTime * 1000)
+        let durMs = m.duration > 0 ? Int(m.duration * 1000) : nil
+        let drained = m.drainWatchSamples()
+        let maxPos = max(watchMs, drained.samples.map(\.positionMs).max() ?? 0)
+        let completed: Bool = {
+            if drained.reachedEnd { return true }
+            guard let d = durMs, d > 0 else { return false }
+            return maxPos >= Int(Double(d) * 0.95)
+        }()
+        EngagementTracker.shared.attachWatch(surface: .reels, watchMs: watchMs,
+            mediaDurationMs: durMs, completed: completed, samples: drained.samples)
     }
 
     // MARK: Pager

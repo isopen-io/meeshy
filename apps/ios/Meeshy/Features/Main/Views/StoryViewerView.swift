@@ -875,8 +875,15 @@ struct StoryViewerView: View {
         let m = SharedAVPlayerManager.shared
         let watchMs = m.currentTime.isNaN ? 0 : Int(m.currentTime * 1000)
         let durMs = m.duration > 0 ? Int(m.duration * 1000) : nil
+        let drained = m.drainWatchSamples()
+        let maxPos = max(watchMs, drained.samples.map(\.positionMs).max() ?? 0)
+        let completed: Bool = {
+            if drained.reachedEnd { return true }
+            guard let d = durMs, d > 0 else { return false }
+            return maxPos >= Int(Double(d) * 0.95)
+        }()
         EngagementTracker.shared.attachWatch(surface: .storyViewer, watchMs: watchMs,
-            mediaDurationMs: durMs, completed: false, samples: [])
+            mediaDurationMs: durMs, completed: completed, samples: drained.samples)
         Task {
             await EngagementTracker.shared.end(surface: .storyViewer)
             if let new = newStory {

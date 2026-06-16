@@ -39,6 +39,13 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// (qui reste sur `/attachments/:id/status`, plan séparé).
     public let watchSamples = PassthroughSubject<WatchSample, Never>()
     private var watchClockStart: Date?
+    /// Heartbeat samples accumulated for the CURRENT watch session, consumed by the
+    /// engagement layer via `drainWatchSamples()`. The `watchSamples` publisher
+    /// stays for any live subscriber; this buffer is what surfaces actually read.
+    private var sessionWatchSamples: [WatchSample] = []
+    /// `true` once playback reached the media end at least once this session
+    /// (drives the engagement `completed` flag → server `playCount`).
+    private var sessionReachedEnd = false
 
     private var timeObserver: Any?
     private var cancellables = Set<AnyCancellable>()
@@ -120,14 +127,26 @@ public final class SharedAVPlayerManager: ObservableObject {
         watchSamples.send(WatchSample(positionMs: positionMs, atMs: atMs))
     }
 
+    /// Drains the heartbeat samples accumulated for the current watch session and
+    /// whether playback reached the end, then resets. Called by a surface when it
+    /// finalizes an engagement session (reel switch / story advance / disappear).
+    public func drainWatchSamples() -> (samples: [WatchSample], reachedEnd: Bool) {
+        let drained = (samples: sessionWatchSamples, reachedEnd: sessionReachedEnd)
+        sessionWatchSamples.removeAll()
+        sessionReachedEnd = false
+        return drained
+    }
+
     /// Émet un sample à partir de l'horloge monotone de lecture
     /// (`watchClockStart`). No-op tant que la lecture n'a pas démarré.
     private func emitWatchSample(complete: Bool = false) {
         guard let start = watchClockStart else { return }
         let atMs = Int(Date().timeIntervalSince(start) * 1000)
         let posMs = currentTime.isNaN ? 0 : Int(currentTime * 1000)
-        watchSamples.send(WatchSample(positionMs: max(0, posMs), atMs: max(0, atMs)))
-        _ = complete
+        let sample = WatchSample(positionMs: max(0, posMs), atMs: max(0, atMs))
+        watchSamples.send(sample)
+        sessionWatchSamples.append(sample)
+        if complete { sessionReachedEnd = true }
     }
 
     public func togglePlayPause() {
