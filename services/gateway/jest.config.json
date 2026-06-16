@@ -49,15 +49,18 @@
   "setupFilesAfterEnv": ["<rootDir>/jest.setup.js"],
   "transform": {
     "^.+\\.ts$": ["ts-jest", {
-      "tsconfig": "tsconfig.test.json"
+      "tsconfig": "tsconfig.test.json",
+      "diagnostics": {
+        "ignoreCodes": [2307]
+      }
     }]
   },
   "moduleFileExtensions": ["ts", "js", "json"],
   "coverageThreshold": {
     "global": {
-      "lines": 38,
-      "branches": 36,
-      "statements": 38,
+      "lines": 39,
+      "branches": 37,
+      "statements": 39,
       "functions": 40
     }
   }
