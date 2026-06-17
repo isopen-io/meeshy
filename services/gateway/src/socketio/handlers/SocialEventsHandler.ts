@@ -177,11 +177,18 @@ export class SocialEventsHandler {
   async broadcastPostLiked(data: PostLikedEventData, postAuthorId: string): Promise<void> {
     const friendIds = await this.getFriendIds(postAuthorId);
     this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.POST_LIKED, data);
+    // Atteindre AUSSI les viewers de la post room (détail de post + reel viewer) :
+    // ils rejoignent `ROOMS.post` mais ne sont PAS dans les feed rooms des amis de
+    // l'auteur. Payload ABSOLU (likeCount + reactionSummary) → idempotent même si un
+    // socket est dans les deux rooms (la feed room ET la post room). Modèle identique
+    // à `broadcastStoryReacted`.
+    this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.POST_LIKED, data);
   }
 
   async broadcastPostUnliked(data: PostUnlikedEventData, postAuthorId: string): Promise<void> {
     const friendIds = await this.getFriendIds(postAuthorId);
     this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.POST_UNLIKED, data);
+    this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.POST_UNLIKED, data);
   }
 
   async broadcastPostReposted(data: PostRepostedEventData, authorId: string): Promise<void> {

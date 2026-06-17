@@ -407,7 +407,10 @@ export class PostService {
       : [];
     const currentUserReactions = userReactions.map((r) => r.emoji);
 
-    return { ...post, currentUserReactions };
+    // `isLikedByMe` aligné sur la table (comme le feed) : iOS lit
+    // `isLiked = isLikedByMe`. Sans ce champ, le détail de post affichait
+    // TOUJOURS « non liké » même après un like (champ absent → `?? false`).
+    return { ...post, currentUserReactions, isLikedByMe: currentUserReactions.length > 0 };
   }
 
   /// Builds the Prisma `where` fragment that enforces post visibility for a viewer.

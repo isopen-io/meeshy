@@ -221,45 +221,54 @@ export class PostCommentService {
   async likeComment(commentId: string, userId: string, emoji: string = '❤️') {
     const comment = await this.prisma.postComment.findFirst({
       where: { id: commentId, deletedAt: NOT_DELETED },
+      select: { id: true },
     });
     if (!comment) return null;
 
-    const summary = (comment.reactionSummary as Record<string, number> | null) ?? {};
-    summary[emoji] = (summary[emoji] ?? 0) + 1;
-
-    return this.prisma.postComment.update({
-      where: { id: commentId },
-      data: {
-        likeCount: { increment: 1 },
-        reactionSummary: summary as Prisma.InputJsonValue,
-      },
-      select: {
-        id: true,
-        postId: true,
-        authorId: true,
-        content: true,
-        likeCount: true,
-        reactionSummary: true,
-      },
+    // Source de vérité = table `CommentReaction` (comme le chemin socket). `upsert`
+    // sur la contrainte unique (commentId,userId,emoji) → IDEMPOTENT (un seul like
+    // par user). Ainsi le REST devient un FALLBACK sûr quand le socket échoue : pas
+    // de double-comptage même si socket + REST se déclenchent sur le même like.
+    await this.prisma.commentReaction.upsert({
+      where: { comment_user_reaction_unique: { commentId, userId, emoji } },
+      create: { commentId, userId, emoji },
+      update: {},
     });
+    return this.syncCommentLikeCounters(commentId);
   }
 
   async unlikeComment(commentId: string, userId: string, emoji: string = '❤️') {
     const comment = await this.prisma.postComment.findFirst({
       where: { id: commentId, deletedAt: NOT_DELETED },
+      select: { id: true },
     });
     if (!comment) return null;
 
-    const summary = (comment.reactionSummary as Record<string, number> | null) ?? {};
-    if (summary[emoji]) {
-      summary[emoji] = Math.max(0, summary[emoji] - 1);
-      if (summary[emoji] === 0) delete summary[emoji];
-    }
+    await this.prisma.commentReaction.deleteMany({ where: { commentId, userId, emoji } });
+    return this.syncCommentLikeCounters(commentId);
+  }
 
+  /// Recalcule les compteurs dénormalisés du commentaire DEPUIS la table (source de
+  /// vérité) : `likeCount` = `reactionCount` = nombre total de réactions, et
+  /// `reactionSummary` = comptes par emoji. Identique au chemin socket (CS1) → REST
+  /// et socket restent parfaitement cohérents, ce qui autorise le REST comme fallback.
+  private async syncCommentLikeCounters(commentId: string) {
+    const grouped = await this.prisma.commentReaction.groupBy({
+      by: ['emoji'],
+      where: { commentId },
+      _count: { emoji: true },
+    });
+    const summary: Record<string, number> = {};
+    let total = 0;
+    for (const g of grouped) {
+      summary[g.emoji] = g._count.emoji;
+      total += g._count.emoji;
+    }
     return this.prisma.postComment.update({
       where: { id: commentId },
       data: {
-        likeCount: { decrement: 1 },
+        likeCount: total,
+        reactionCount: total,
         reactionSummary: summary as Prisma.InputJsonValue,
       },
       select: {

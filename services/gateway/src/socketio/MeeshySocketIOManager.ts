@@ -337,6 +337,9 @@ export class MeeshySocketIOManager {
       postReactionService,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
+      // Unification du like : le ❤️ socket émet l'événement canonique `post:liked`
+      // via le SocialEventsHandler (feed rooms + post room), comme le REST.
+      socialEvents: this.socialEventsHandler,
     });
 
     this.conversationHandler = new ConversationHandler({
