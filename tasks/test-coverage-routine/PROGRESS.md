@@ -54,7 +54,7 @@ A run targets **one (feature × app) cell**. Pick the highest-priority `☐` cel
 | P0 | **Encryption & attachments** (E2EE, AES-GCM, encrypt-then-upload, audio attach) | ☑ | ⊘ | ☑ | ☐ | ☐ | ☑ (encryption-service.ts 100%/94.28%; types/encryption.ts 100%; attachment-validators.ts 100%) |
 | P0 | **Prisme Linguistique** (lang resolution + translation display) | ☑ | ☑ | ☑ | ☐ | ☐ | ☑ (TS shared; MeeshySDK Swift ⊘ Linux env) |
 | P0 | **Messaging core** (send/recv/edit/delete/optimistic/dedup/clientMessageId) | ◐ sub: MessageHandler.ts ☑, messages.ts ⚠TS-errors (3 runs blocked) | ⊘ | ☑ | ☐ | ☐ | ☑ (client-message-id.ts 100%; MeeshySDK Swift ⊘ Linux env) |
-| P1 | **Real-time** (Socket.IO presence, typing, reactions, delivery, reconnect) | ☑ sub: StatusHandler☑ ConversationHandler☑ AttachmentReactionHandler☑ LocationHandler☑ CallEventsHandler☑ MeeshySocketIOManager☑ | ⊘ | ☐ | ☐ | ☐ | ☐ |
+| P1 | **Real-time** (Socket.IO presence, typing, reactions, delivery, reconnect) | ☑ sub: StatusHandler☑ ConversationHandler☑ AttachmentReactionHandler☑ LocationHandler☑ CallEventsHandler☑ MeeshySocketIOManager☑ | ⊘ | ☑ sub: notification-socketio.singleton☑ use-connection-status☑ use-socketio-messaging☑ | ☐ | ☐ | ☐ |
 | P1 | **Conversations & membership** (create/join/leave/participants/settings) | ☐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P1 | **Offline & sync** (outbox, failed-messages queue, reconnect flush) | ☐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P1 | **ZMQ infra** (worker pool, connection mgr, multipart frames, dedup) | ☐ | ☐ | ⊘ | ⊘ | ⊘ | ⊘ |
