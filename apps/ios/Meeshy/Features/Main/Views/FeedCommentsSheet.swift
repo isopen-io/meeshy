@@ -979,21 +979,31 @@ struct CommentRowView: View, Equatable {
                     .accessibilityValue("\(likeCount)")
                     .accessibilityHint(String(localized: "a11y.comment.like.hint", defaultValue: "Aimer ce commentaire", bundle: .main))
 
-                    Button {
-                        onReply()
-                        HapticFeedback.light()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrowshape.turn.up.left")
-                                .font(.system(size: isReply ? 11 : 13))
-                            Text(String(localized: "feed.comments.reply", defaultValue: "Répondre", bundle: .main))
-                                .font(.system(size: 12, weight: .medium))
+                    // Max 2 levels: a reply (level 2) cannot itself be replied to,
+                    // so it shows no reply button. Top comments show "Répondre"
+                    // plus the reply count next to the glyph.
+                    if !isReply {
+                        Button {
+                            onReply()
+                            HapticFeedback.light()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrowshape.turn.up.left")
+                                    .font(.system(size: 13))
+                                Text(String(localized: "feed.comments.reply", defaultValue: "Répondre", bundle: .main))
+                                    .font(.system(size: 12, weight: .medium))
+                                if comment.replies > 0 {
+                                    Text("\(comment.replies)")
+                                        .font(.system(size: 12, weight: .semibold))
+                                }
+                            }
+                            .foregroundColor(theme.textMuted)
                         }
-                        .foregroundColor(theme.textMuted)
+                        .frame(minHeight: 44)
+                        .accessibilityLabel(String(localized: "a11y.comment.reply", defaultValue: "Répondre", bundle: .main))
+                        .accessibilityValue(comment.replies > 0 ? String(format: String(localized: "a11y.comment.replies.count", defaultValue: "%d réponses", bundle: .main), comment.replies) : "")
+                        .accessibilityHint(String(format: String(localized: "a11y.comment.reply.hint", defaultValue: "Répondre à %@", bundle: .main), comment.author))
                     }
-                    .frame(minHeight: 44)
-                    .accessibilityLabel(String(localized: "a11y.comment.reply", defaultValue: "Répondre", bundle: .main))
-                    .accessibilityHint(String(format: String(localized: "a11y.comment.reply.hint", defaultValue: "Répondre à %@", bundle: .main), comment.author))
 
                     Spacer()
 

@@ -653,29 +653,17 @@ private struct ReelActionRail: View {
             let isLiked = viewModel.isLiked(reel.id)
             ReelActionButton(
                 systemName: isLiked ? "heart.fill" : "heart",
+                outline: "heart",
                 tint: isLiked ? MeeshyColors.error : .white,
                 count: viewModel.likeCount(reel),
+                participated: isLiked,
+                accentHex: reel.authorColor,
                 action: { viewModel.toggleLike(reel) }
             )
             .accessibilityLabel(String(localized: "reels.action.like", defaultValue: "J'aime", bundle: .main))
 
-            // Vues totales du réel (postOpenCount) — indicateur informatif (non interactif) sous les cœurs.
-            if reel.postOpenCount > 0 {
-                VStack(spacing: 5) {
-                    Image(systemName: "eye.fill")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
-                        .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
-                    Text(ReelActionButton.compact(reel.postOpenCount))
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.35), radius: 2)
-                }
-                .frame(width: 48)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(String(localized: "reels.action.views", defaultValue: "Vues", bundle: .main))
-                .accessibilityValue("\(reel.postOpenCount)")
-            }
+            // Vues/impressions : désormais privées (auteur-only) dans la ligne meta
+            // sous le nom — plus de compteur de vues public ici.
 
             ReelActionButton(
                 systemName: "bubble.right.fill",
@@ -688,8 +676,11 @@ private struct ReelActionRail: View {
             let isBookmarked = viewModel.isBookmarked(reel.id)
             ReelActionButton(
                 systemName: isBookmarked ? "bookmark.fill" : "bookmark",
+                outline: "bookmark",
                 tint: isBookmarked ? MeeshyColors.warning : .white,
                 count: nil,
+                participated: isBookmarked,
+                accentHex: reel.authorColor,
                 action: { viewModel.toggleBookmark(reel) }
             )
             .accessibilityLabel(String(localized: "reels.action.bookmark", defaultValue: "Enregistrer", bundle: .main))
@@ -709,17 +700,29 @@ private struct ReelActionRail: View {
 
 private struct ReelActionButton: View {
     let systemName: String
+    /// Outline variant overlaid in the accent colour when `participated` — an
+    /// accent BORDER on the glyph (not a circle). Nil = no participation border.
+    var outline: String? = nil
     let tint: Color
     let count: Int?
+    var participated: Bool = false
+    var accentHex: String = ""
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 5) {
-                Image(systemName: systemName)
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundColor(tint)
-                    .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                ZStack {
+                    Image(systemName: systemName)
+                        .font(.system(size: 26, weight: .semibold))
+                        .foregroundColor(tint)
+                    if participated, let outline {
+                        Image(systemName: outline)
+                            .font(.system(size: 26, weight: .semibold))
+                            .foregroundColor(Color(hex: accentHex))
+                    }
+                }
+                .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
                 if let count, count > 0 {
                     Text(Self.compact(count))
                         .font(.caption2.weight(.semibold))
