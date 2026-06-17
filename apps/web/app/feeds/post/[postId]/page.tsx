@@ -28,7 +28,8 @@ import { RepostModal } from '@/components/v2/RepostModal';
 import { PageHeader, useToast } from '@/components/v2';
 import { Skeleton } from '@/components/v2/Skeleton';
 import { useAuthStore } from '@/stores/auth-store';
-import { postsService } from '@/services/posts.service';
+import { postsService, recordAnonymousView } from '@/services/posts.service';
+import { getOrCreateWebSessionKey } from '@/lib/anonymous-session';
 
 /**
  * Post detail page (v1 canonical path).
@@ -50,6 +51,7 @@ export default function PostDetailPage() {
   );
 
   const currentUser = useAuthStore((s) => s.user);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const userLanguage = usePreferredLanguage();
 
   const postQuery = usePostQuery(postId);
@@ -78,11 +80,17 @@ export default function PostDetailPage() {
   // Fire-and-forget view increment on first mount.
   // Failures are intentionally silent: an unreachable counter must not
   // block the user from reading the post.
+  // - Authentifié → parcours inscrit (viewPost → viewCount).
+  // - Anonyme (sans compte) → ping postOpenCount dédupliqué par session header
+  //   (spec 2026-06-17). On évite ainsi le 401 inutile de viewPost en anonyme.
   useEffect(() => {
-    if (postId) {
+    if (!postId) return;
+    if (isAuthenticated) {
       postsService.viewPost(postId).catch(() => {});
+    } else {
+      recordAnonymousView(postId, getOrCreateWebSessionKey());
     }
-  }, [postId]);
+  }, [postId, isAuthenticated]);
 
   if (postQuery.isLoading) {
     return (

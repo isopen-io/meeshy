@@ -1,4 +1,5 @@
 import { apiService } from './api.service';
+import { buildApiUrl } from '@/lib/config';
 import type {
   Post,
   PostComment,
@@ -280,3 +281,19 @@ export const postsService = {
     await apiService.post(`/stories/audio/${audioId}/use`);
   },
 };
+
+/**
+ * Ping de vue anonyme (fire-and-forget). N'attache PAS de JWT (parcours anonyme) :
+ * seul `x-session-token` part comme clé de dédup opaque. Le gateway no-op si un
+ * JWT est présent ou si le post n'est pas public. buildApiUrl préfixe /api/v1.
+ */
+export async function recordAnonymousView(postId: string, sessionKey: string): Promise<void> {
+  try {
+    await fetch(buildApiUrl(`/posts/${postId}/anonymous-view`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-session-token': sessionKey },
+    });
+  } catch {
+    // fire-and-forget : ne jamais bloquer le rendu
+  }
+}
