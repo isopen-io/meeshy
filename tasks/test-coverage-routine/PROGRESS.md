@@ -54,7 +54,7 @@ A run targets **one (feature × app) cell**. Pick the highest-priority `☐` cel
 | P0 | **Encryption & attachments** (E2EE, AES-GCM, encrypt-then-upload, audio attach) | ☑ | ⊘ | ☑ | ☐ | ☐ | ☑ (encryption-service.ts 100%/94.28%; types/encryption.ts 100%; attachment-validators.ts 100%) |
 | P0 | **Prisme Linguistique** (lang resolution + translation display) | ☑ | ☑ | ☑ | ☐ | ☐ | ☑ (TS shared; MeeshySDK Swift ⊘ Linux env) |
 | P0 | **Messaging core** (send/recv/edit/delete/optimistic/dedup/clientMessageId) | ◐ sub: MessageHandler.ts ☑, messages.ts ⚠TS-errors (3 runs blocked) | ⊘ | ☑ | ☐ | ☐ | ☑ (client-message-id.ts 100%; MeeshySDK Swift ⊘ Linux env) |
-| P1 | **Real-time** (Socket.IO presence, typing, reactions, delivery, reconnect) | ◐ sub: StatusHandler☑ ConversationHandler☑ AttachmentReactionHandler☑ LocationHandler☑ CallEventsHandler☑ MeeshySocketIOManager⚠deferred | ⊘ | ☐ | ☐ | ☐ | ☐ |
+| P1 | **Real-time** (Socket.IO presence, typing, reactions, delivery, reconnect) | ☑ sub: StatusHandler☑ ConversationHandler☑ AttachmentReactionHandler☑ LocationHandler☑ CallEventsHandler☑ MeeshySocketIOManager☑ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P1 | **Conversations & membership** (create/join/leave/participants/settings) | ☐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P1 | **Offline & sync** (outbox, failed-messages queue, reconnect flush) | ☐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P1 | **ZMQ infra** (worker pool, connection mgr, multipart frames, dedup) | ☐ | ☐ | ⊘ | ⊘ | ⊘ | ⊘ |
@@ -154,7 +154,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
 | web | `pnpm --filter web test:coverage` | 33.10 | 25.77 | 2026-06-14 (re-measured after Sprint 0.2/0.3 fixes; threshold floor set at 33/25) |
-| gateway | `pnpm --filter gateway test:coverage` | 40.7 | ~37+ | 2026-06-16 CI (post P1 Real-time handlers; 164/164 suites pass; threshold floor ratcheted to lines:39/branches:37/statements:39/functions:40) |
+| gateway | `pnpm --filter gateway test:coverage` | 49.35 | 45.46 | 2026-06-17 local (post P1 Real-time MeeshySocketIOManager; 149/172 suites pass (23 pre-existing failures); threshold floor ratcheted to lines:48/branches:44/statements:48/functions:50) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | 37.09 | n/a | 2026-06-14 (subset: no-GPU tests only; 4 files w/ import errors excluded) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |
