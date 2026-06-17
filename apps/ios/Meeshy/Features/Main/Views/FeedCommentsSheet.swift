@@ -143,7 +143,6 @@ struct CommentsSheetView: View {
     let post: FeedPost
     let accentColor: String
     var onSendComment: ((String, String, String?) -> Void)? = nil
-    var onLikeComment: ((String, String) -> Void)? = nil
     /// Fired with the post id AFTER a comment was successfully sent — lets a host
     /// (e.g. the reels viewer) bump its own comment counter. Optional; nil = no-op.
     var onCommentSent: ((_ postId: String) -> Void)? = nil
@@ -183,13 +182,11 @@ struct CommentsSheetView: View {
         post: FeedPost,
         accentColor: String,
         onSendComment: ((String, String, String?) -> Void)? = nil,
-        onLikeComment: ((String, String) -> Void)? = nil,
         onCommentSent: ((_ postId: String) -> Void)? = nil
     ) {
         self.post = post
         self.accentColor = accentColor
         self.onSendComment = onSendComment
-        self.onLikeComment = onLikeComment
         self.onCommentSent = onCommentSent
         _mentionController = StateObject(wrappedValue: MentionComposerController(
             context: .post(id: post.id)
@@ -211,6 +208,27 @@ struct CommentsSheetView: View {
                 .filter { $0.currentUserReactions?.contains(StoryViewerView.heartEmoji) == true }
                 .map { $0.id }
         )
+    }
+
+    /// Variante pour les commentaires domaine déjà mappés (`FeedComment`). C'est
+    /// celle réellement branchée dans la sheet : elle sème `likedIds` à partir de
+    /// `post.comments` (et des réponses chargées) qui portent désormais
+    /// `currentUserReactions` (cf. `toFeedPost` / `loadReplies`). Sans ce seeding,
+    /// tout commentaire déjà liké s'affichait cœur vide à l'ouverture.
+    static func computeLikedIds(from comments: [FeedComment]) -> Set<String> {
+        Set(
+            comments
+                .filter { $0.currentUserReactions?.contains(StoryViewerView.heartEmoji) == true }
+                .map { $0.id }
+        )
+    }
+
+    /// Sème (additif) `likedIds` depuis l'état serveur des commentaires fournis,
+    /// sans écraser les toggles optimistic/socket déjà appliqués.
+    private func seedLikedIds(from comments: [FeedComment]) {
+        let seeded = Self.computeLikedIds(from: comments)
+        guard !seeded.isEmpty else { return }
+        likedIds.formUnion(seeded)
     }
 
     var body: some View {
@@ -298,6 +316,9 @@ struct CommentsSheetView: View {
         .presentationDragIndicator(.visible)
         .onAppear {
             SocialSocketManager.shared.joinPostRoom(postId: post.id)
+            // Sème l'état "liké par moi" des commentaires top-level déjà chargés
+            // (`post.comments` porte `currentUserReactions` depuis `toFeedPost`).
+            seedLikedIds(from: comments)
         }
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: post.id)
@@ -314,7 +335,8 @@ struct CommentsSheetView: View {
                 authorAvatarURL: data.comment.author.avatar,
                 content: data.comment.content, timestamp: data.comment.createdAt,
                 likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
-                parentId: parentId
+                parentId: parentId,
+                currentUserReactions: data.comment.currentUserReactions
             )
             // The echoed event for OUR own just-sent comment: replace the optimistic
             // placeholder (same author + content) in place instead of duplicating it.
@@ -394,8 +416,10 @@ struct CommentsSheetView: View {
                 let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
                 if case .fresh(let replies, _) = cached {
                     repliesMap[comment.id] = replies
+                    seedLikedIds(from: replies)
                 } else if case .stale(let replies, _) = cached {
                     repliesMap[comment.id] = replies
+                    seedLikedIds(from: replies)
                 }
                 await loadReplies(commentId: comment.id)
             }
@@ -417,7 +441,11 @@ struct CommentsSheetView: View {
             likedIds.insert(commentId)
             likeDelta[commentId] = (likeDelta[commentId] ?? 0) + 1
         }
-        onLikeComment?(post.id, commentId)
+        // Unification du like de commentaire : la réaction socket ❤️ ci-dessous est la
+        // SOURCE UNIQUE (le gateway synchronise `likeCount = count(CommentReaction)` —
+        // CS1). On NE déclenche PLUS le callback REST `onLikeComment` (double-écriture
+        // qui incrémentait `likeCount` + `reactionSummary` une 2e fois, et n'envoyait
+        // jamais d'unlike : toujours `liked:true`). Aligne le chemin feed sur reels/détail.
 
         do {
             // A6 — hard timeout: protects against a hung SocialSocketManager
@@ -435,12 +463,30 @@ struct CommentsSheetView: View {
                 }
             }
         } catch {
-            if wasLiked {
-                likedIds.insert(commentId)
-                likeDelta[commentId] = (likeDelta[commentId] ?? 0) + 1
-            } else {
-                likedIds.remove(commentId)
-                likeDelta[commentId] = (likeDelta[commentId] ?? 0) - 1
+            // Fallback REST quand le socket échoue (timeout / déconnexion). Le endpoint
+            // REST écrit la MÊME table `CommentReaction` (idempotent, likeCount synchronisé)
+            // → le like persiste. Mutuellement exclusif avec le socket (déclenché SEULEMENT
+            // dans ce catch) : ce n'est PAS la double-écriture retirée. Miroir de
+            // `FeedView.togglePostHeart` (post). Rollback uniquement si le REST échoue aussi.
+            let restOK: Bool
+            do {
+                if wasLiked {
+                    try await PostService.shared.unlikeComment(postId: post.id, commentId: commentId)
+                } else {
+                    try await PostService.shared.likeComment(postId: post.id, commentId: commentId)
+                }
+                restOK = true
+            } catch {
+                restOK = false
+            }
+            if !restOK {
+                if wasLiked {
+                    likedIds.insert(commentId)
+                    likeDelta[commentId] = (likeDelta[commentId] ?? 0) + 1
+                } else {
+                    likedIds.remove(commentId)
+                    likeDelta[commentId] = (likeDelta[commentId] ?? 0) - 1
+                }
             }
         }
     }
@@ -478,10 +524,14 @@ struct CommentsSheetView: View {
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: commentId,
-                    originalLanguage: c.originalLanguage, translatedContent: translated
+                    originalLanguage: c.originalLanguage, translatedContent: translated,
+                    currentUserReactions: c.currentUserReactions
                 )
             }
             repliesMap[commentId] = replies
+            // Sème l'état "liké par moi" des réponses chargées (elles portent
+            // `currentUserReactions` depuis `loadReplies`/`getCommentReplies`).
+            seedLikedIds(from: replies)
             // Persist replies under "replies-{commentId}" so re-presenting the sheet
             // hydrates the auto-preview rows instantly without a round-trip.
             try? await CacheCoordinator.shared.comments.save(replies, for: "replies-\(commentId)")

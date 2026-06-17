@@ -318,13 +318,12 @@ export class PostReactionService {
     await this.prisma.$transaction(async (tx) => {
       const post = await tx.post.findUnique({
         where: { id: postId },
-        select: { reactionSummary: true, reactionCount: true }
+        select: { reactionSummary: true }
       });
 
       if (!post) return;
 
       const currentSummary = (post.reactionSummary as Record<string, number>) || {};
-      const currentCount = post.reactionCount || 0;
 
       if (action === 'add') {
         currentSummary[emoji] = (currentSummary[emoji] || 0) + count;
@@ -333,11 +332,17 @@ export class PostReactionService {
         if (currentSummary[emoji] <= 0) delete currentSummary[emoji];
       }
 
-      const newCount = action === 'add' ? currentCount + count : Math.max(0, currentCount - count);
+      // Compteur AUTORITAIRE depuis la table `PostReaction` (la ligne add/remove
+      // a déjà été appliquée par addReaction/removeReaction avant cet appel).
+      // On synchronise `reactionCount` ET `likeCount` sur ce total : ainsi le
+      // chemin SOCKET maintient `likeCount` identiquement au chemin REST
+      // (`likePost` = reactions.length), éliminant la divergence des compteurs
+      // entre surfaces. Auto-réparant (pas de dérive du compteur dénormalisé).
+      const total = await tx.postReaction.count({ where: { postId } });
 
       await tx.post.update({
         where: { id: postId },
-        data: { reactionSummary: currentSummary, reactionCount: newCount }
+        data: { reactionSummary: currentSummary, reactionCount: total, likeCount: total }
       });
     });
   }

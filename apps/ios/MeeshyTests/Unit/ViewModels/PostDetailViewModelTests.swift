@@ -102,6 +102,30 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTAssertEqual(mock.getCommentsCallCount, 1)
     }
 
+    /// C5 — le like de commentaire dans le détail de post doit s'amorcer depuis
+    /// l'état serveur : un commentaire déjà cœur-réagi (`currentUserReactions`)
+    /// apparaît "liké" (`commentLikedIds`) après chargement, les autres non.
+    func test_loadComments_seedsCommentLikedIds_fromCurrentUserReactions() async {
+        let (sut, mock) = makeSUT()
+        // postId unique : le store de cache `comments` est un singleton partagé —
+        // une clé dédiée évite qu'un autre test ne serve ses commentaires.
+        let postId = "pSeedCommentLikes"
+        let response: PaginatedAPIResponse<[APIPostComment]> = JSONStub.decode("""
+        {"success":true,"data":[
+          {"id":"cLiked","content":"x","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"a1","username":"alice"},"currentUserReactions":["\u{2764}\u{FE0F}"]},
+          {"id":"cFire","content":"y","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"a2","username":"bob"},"currentUserReactions":["\u{1F525}"]},
+          {"id":"cNone","content":"z","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"a3","username":"carol"},"currentUserReactions":[]}
+        ],"pagination":null,"error":null}
+        """)
+        mock.getCommentsResult = .success(response)
+
+        await sut.loadComments(postId)
+
+        XCTAssertTrue(sut.commentLikedIds.contains("cLiked"))
+        XCTAssertFalse(sut.commentLikedIds.contains("cFire"))
+        XCTAssertFalse(sut.commentLikedIds.contains("cNone"))
+    }
+
     func test_loadComments_error_keepsEmptyComments() async {
         let (sut, mock) = makeSUT()
         mock.getCommentsResult = .failure(NSError(domain: "test", code: 500))

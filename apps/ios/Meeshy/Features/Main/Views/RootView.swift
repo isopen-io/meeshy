@@ -1350,6 +1350,13 @@ struct RootView: View {
         reelsRevealCompleted = false
         reelsRevealMasked = true
         SharedAVPlayerManager.shared.pause()
+        // Couper aussi tout réel-AUDIO en cours : il est piloté par le moteur
+        // externe `@StateObject` de la page (pas par `SharedAVPlayerManager`), et
+        // ni `AudioPlayerView.onDisappear` (early-return pour moteur externe) ni
+        // `ReelPageView.onChange(isActive)` (la page reste active à la fermeture)
+        // ne le stoppent. `stopAllAudio()` coupe les players audio/externes en
+        // laissant le moteur vidéo (repris par la surface de fond du feed).
+        PlaybackCoordinator.shared.stopAllAudio()
         HapticFeedback.light()
         let duration: Double = reduceMotionEnabled ? 0.18 : 0.3
         withAnimation(.easeIn(duration: duration)) {

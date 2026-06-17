@@ -744,24 +744,6 @@ class FeedViewModel: ObservableObject {
         }
     }
 
-    /// Wave 1 Phase C — comment like flows through the offline outbox.
-    /// `emoji` is currently fixed to `❤️` server-side ; until the route
-    /// accepts custom emojis the parameter is ignored at the wire layer
-    /// but still threaded through here for API stability with the view.
-    func likeComment(postId: String, commentId: String, emoji: String = "❤️") async {
-        let cmid = ClientMutationId.generate()
-        let payload = ToggleLikeCommentPayload(
-            clientMutationId: cmid,
-            commentId: commentId,
-            liked: true
-        )
-        do {
-            try await offlineQueue.enqueue(.toggleLikeComment, payload: payload, conversationId: postId)
-        } catch {
-            FeedbackToastManager.shared.showError(String(localized: "feed.like.error", defaultValue: "Error liking post", bundle: .main))
-        }
-    }
-
     func repostPost(_ postId: String, content: String? = nil, isQuote: Bool = false) async {
         do {
             _ = try await postService.repost(
@@ -977,12 +959,17 @@ class FeedViewModel: ObservableObject {
             }
             .store(in: &socketCancellables)
 
-        // --- post:liked ---
+        // --- post:liked --- (compteur ABSOLU, source unique du like de post)
         socialSocket.postLiked
             .receive(on: DispatchQueue.main)
             .sink { [weak self] data in
                 guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
                 self.posts[index].likes = data.likeCount
+                // Persister `isLiked` pour l'acteur → le cache reste correct au cold
+                // start (le seeding `postLikedIds` relit `post.isLiked`).
+                if data.userId == AuthManager.shared.currentUser?.id {
+                    self.posts[index].isLiked = true
+                }
                 self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
@@ -993,6 +980,9 @@ class FeedViewModel: ObservableObject {
             .sink { [weak self] data in
                 guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
                 self.posts[index].likes = data.likeCount
+                if data.userId == AuthManager.shared.currentUser?.id {
+                    self.posts[index].isLiked = false
+                }
                 self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)

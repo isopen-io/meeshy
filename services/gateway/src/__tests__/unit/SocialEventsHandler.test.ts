@@ -188,7 +188,10 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostLiked(data, AUTHOR_ID);
 
-      expect(mockIO.to).toHaveBeenCalledTimes(3);
+      // 2 amis + auteur (feed rooms) + la post room (unification : détail/reel
+      // viewer rejoignent `ROOMS.post` et doivent recevoir le like) = 4.
+      expect(mockIO.to).toHaveBeenCalledTimes(4);
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.post(data.postId));
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.POST_LIKED, data);
     });
   });
@@ -205,7 +208,9 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostUnliked(data, AUTHOR_ID);
 
-      expect(mockIO.to).toHaveBeenCalledTimes(3);
+      // 2 amis + auteur (feed rooms) + la post room = 4 (cf. broadcastPostLiked).
+      expect(mockIO.to).toHaveBeenCalledTimes(4);
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.post(data.postId));
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.POST_UNLIKED, data);
     });
   });

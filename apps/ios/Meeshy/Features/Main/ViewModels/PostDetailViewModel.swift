@@ -21,6 +21,14 @@ class PostDetailViewModel: ObservableObject {
     @Published private(set) var _topLevelComments: [FeedComment] = []
     var topLevelComments: [FeedComment] { _topLevelComments }
 
+    // Comment-like optimistic state — socket-reaction driven, miroir exact de
+    // `CommentsSheetView`. Keyé par commentId. Semé depuis `currentUserReactions`
+    // de chaque commentaire/réponse au chargement (sans ce seeding + sans cet état,
+    // le cœur d'un commentaire restait inerte dans le détail de post).
+    @Published var commentLikedIds: Set<String> = []
+    @Published var commentLikeDelta: [String: Int] = [:]
+    @Published var commentHeartInFlightIds: Set<String> = []
+
     private var commentCursor: String?
     private let postService: PostServiceProviding
     private let socialSocket = SocialSocketManager.shared
@@ -129,9 +137,11 @@ class PostDetailViewModel: ObservableObject {
         switch cacheResult {
         case .fresh(let cached, _):
             if comments.isEmpty { comments = cached }
+            seedCommentLikes(from: cached)
             return
         case .stale(let cached, _):
             if comments.isEmpty { comments = cached }
+            seedCommentLikes(from: cached)
             await fetchCommentsFromNetwork(postId, cacheKey: cacheKey)
         case .expired, .empty:
             isLoadingComments = comments.isEmpty
@@ -164,13 +174,15 @@ class PostDetailViewModel: ObservableObject {
                         content: c.content, timestamp: c.createdAt,
                         likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: c.parentId,
-                        originalLanguage: c.originalLanguage, translatedContent: translatedContent
+                        originalLanguage: c.originalLanguage, translatedContent: translatedContent,
+                        currentUserReactions: c.currentUserReactions
                     )
                 }
             }.value
             let existingIds = Set(comments.map(\.id))
             let unique = newComments.filter { !existingIds.contains($0.id) }
             comments.append(contentsOf: unique)
+            seedCommentLikes(from: unique)
             commentCursor = response.pagination?.nextCursor
             hasMoreComments = response.pagination?.hasMore ?? false
             try? await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
@@ -229,13 +241,84 @@ class PostDetailViewModel: ObservableObject {
                         content: c.content, timestamp: c.createdAt,
                         likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: commentId,
-                        originalLanguage: c.originalLanguage, translatedContent: translated
+                        originalLanguage: c.originalLanguage, translatedContent: translated,
+                        currentUserReactions: c.currentUserReactions
                     )
                 }
             }.value
             repliesMap[commentId] = replies
+            seedCommentLikes(from: replies)
         } catch {
             expandedThreads.remove(commentId)
+        }
+    }
+
+    // MARK: - Comment Like (optimistic, socket-reaction driven)
+
+    /// Sème (additif) `commentLikedIds` depuis l'état serveur (`currentUserReactions`)
+    /// des commentaires/réponses fournis, sans écraser les toggles déjà appliqués.
+    private func seedCommentLikes(from comments: [FeedComment]) {
+        let heart = StoryViewerView.heartEmoji
+        let liked = comments
+            .filter { $0.currentUserReactions?.contains(heart) == true }
+            .map(\.id)
+        guard !liked.isEmpty else { return }
+        commentLikedIds.formUnion(liked)
+    }
+
+    /// Like/unlike d'un commentaire — optimistic + réaction socket cœur + rollback.
+    /// Miroir exact de `CommentsSheetView.toggleCommentLike` pour que le like de
+    /// commentaire dans le détail de post se comporte comme dans la sheet.
+    func toggleCommentLike(_ commentId: String, postId: String) async {
+        guard !commentHeartInFlightIds.contains(commentId) else { return }
+        commentHeartInFlightIds.insert(commentId)
+        defer { commentHeartInFlightIds.remove(commentId) }
+
+        let wasLiked = commentLikedIds.contains(commentId)
+        if wasLiked {
+            commentLikedIds.remove(commentId)
+            commentLikeDelta[commentId, default: 0] -= 1
+        } else {
+            commentLikedIds.insert(commentId)
+            commentLikeDelta[commentId, default: 0] += 1
+        }
+
+        do {
+            try await withTaskTimeout(seconds: TaskTimeoutDefaults.socialReaction) {
+                if wasLiked {
+                    _ = try await SocialSocketManager.shared.removeCommentReaction(
+                        commentId: commentId, postId: postId, emoji: StoryViewerView.heartEmoji
+                    )
+                } else {
+                    _ = try await SocialSocketManager.shared.addCommentReaction(
+                        commentId: commentId, postId: postId, emoji: StoryViewerView.heartEmoji
+                    )
+                }
+            }
+        } catch {
+            // Fallback REST quand le socket échoue (le endpoint écrit la même table
+            // CommentReaction, idempotent + likeCount synchronisé). Mutuellement exclusif
+            // avec le socket → pas de double-écriture. Rollback uniquement si REST échoue aussi.
+            let restOK: Bool
+            do {
+                if wasLiked {
+                    try await postService.unlikeComment(postId: postId, commentId: commentId)
+                } else {
+                    try await postService.likeComment(postId: postId, commentId: commentId)
+                }
+                restOK = true
+            } catch {
+                restOK = false
+            }
+            if !restOK {
+                if wasLiked {
+                    commentLikedIds.insert(commentId)
+                    commentLikeDelta[commentId, default: 0] += 1
+                } else {
+                    commentLikedIds.remove(commentId)
+                    commentLikeDelta[commentId, default: 0] -= 1
+                }
+            }
         }
     }
 
@@ -464,7 +547,8 @@ class PostDetailViewModel: ObservableObject {
                     authorAvatarURL: data.comment.author.avatar,
                     content: data.comment.content, timestamp: data.comment.createdAt,
                     likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
-                    parentId: parentId
+                    parentId: parentId,
+                    currentUserReactions: data.comment.currentUserReactions
                 )
                 if let parentId {
                     if self.expandedThreads.contains(parentId) {
@@ -483,6 +567,35 @@ class PostDetailViewModel: ObservableObject {
                     }
                 }
                 self.post?.commentCount = data.commentCount
+            }
+            .store(in: &socketCancellables)
+
+        // Réactions cœur de commentaire en temps réel (miroir de CommentsSheetView) :
+        // synchronise `commentLikedIds` (réaction du user courant) ou `commentLikeDelta`
+        // (réaction d'un tiers) sans toucher l'optimistic local déjà appliqué.
+        socialSocket.commentReactionAdded
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] event in
+                guard let self, event.emoji == StoryViewerView.heartEmoji else { return }
+                if event.userId == AuthManager.shared.currentUser?.id {
+                    self.commentLikedIds.insert(event.commentId)
+                } else {
+                    self.commentLikeDelta[event.commentId, default: 0] += 1
+                }
+            }
+            .store(in: &socketCancellables)
+
+        socialSocket.commentReactionRemoved
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] event in
+                guard let self, event.emoji == StoryViewerView.heartEmoji else { return }
+                if event.userId == AuthManager.shared.currentUser?.id {
+                    self.commentLikedIds.remove(event.commentId)
+                } else {
+                    self.commentLikeDelta[event.commentId, default: 0] -= 1
+                }
             }
             .store(in: &socketCancellables)
 

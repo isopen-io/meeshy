@@ -90,6 +90,14 @@ struct ReelsPlayerView: View {
         }
         .offset(x: max(0, edgeDrag))
         .task { viewModel.seed(posts: seedPosts, startId: startId) }
+        // Cycle de vie de la post room du réel actif (real-time du like). Idempotent
+        // côté serveur : rejoindre/quitter une room déjà (non) jointe est un no-op,
+        // donc une disparition transitoire du reveal se ré-auto-corrige. Le `leave`
+        // est fait dans le `.onDisappear` plus bas (combiné avec la finalisation
+        // d'engagement).
+        .onAppear {
+            if let id = viewModel.currentId { SocialSocketManager.shared.joinPostRoom(postId: id) }
+        }
         .adaptiveOnChange(of: viewModel.currentId) { old, newId in
             // Never carry immersive-hidden chrome into the next reel — the scrub
             // bar / action rail / info must reappear when you page.
@@ -116,7 +124,25 @@ struct ReelsPlayerView: View {
                 onCommentSent: { postId in viewModel.didSendComment(postId: postId) }
             )
         }
+        // Call-aware : un appel entrant pendant un réel ouvert doit le mettre en
+        // pause (vidéo + audio) — la session audio appartient alors à l'appel. Le
+        // viewer étant immobile, aucune `drive`-pass n'est rappelée ; on pause donc
+        // ici dès la transition inactif→actif. La garde `!isCallActive` dans `drive`
+        // empêche le redémarrage tant que l'appel dure.
+        .onReceive(
+            CallManager.shared.$callState
+                .map(\.isActive)
+                .removeDuplicates()
+                .receive(on: DispatchQueue.main)
+        ) { callActive in
+            guard callActive else { return }
+            SharedAVPlayerManager.shared.pause()
+            PlaybackCoordinator.shared.stopAllAudio()
+        }
         .onDisappear {
+            // Quitte la post room du réel actif (real-time like) + finalise la session
+            // d'engagement (watch-time + vue qualifiée) du réel courant.
+            viewModel.leaveActivePostRoom()
             finalizeReelSession()
             Task { await EngagementTracker.shared.end(surface: .reels) }
         }
@@ -904,12 +930,23 @@ private struct ReelVideoView: View {
     }
 
     private func drive(ready: Bool) {
-        guard isActive, ready else { return }
+        // Défense en profondeur call-aware (miroir de `ReelFeedVideoSurface.drive`) :
+        // ne jamais (re)lancer un réel pendant un appel — la session audio appartient
+        // à l'appel. La mise en pause immédiate au démarrage d'un appel est gérée par
+        // l'abonnement `CallManager.$callState` dans `ReelsPlayerView`.
+        guard isActive, ready, !MediaSessionCoordinator.shared.isCallActive else { return }
         if manager.activeURL != attachment.fileUrl {
             manager.attachmentId = media.id
-            manager.isMuted = false
             manager.load(urlString: attachment.fileUrl)
         }
+        // Le viewer plein écran joue TOUJOURS avec le son. `isMuted` est une
+        // préférence GLOBALE de session qui survit à `pause()`/`stop()` et que la
+        // surface de fond du feed (`ReelFeedVideoSurface`) force à `true` de façon
+        // inconditionnelle. À l'entrée depuis le feed sur la MÊME url, le
+        // court-circuit `activeURL == fileUrl` ci-dessus saute `load()`, donc le
+        // démutage DOIT être inconditionnel ici (miroir exact du feed qui mute
+        // inconditionnellement) — sinon le 1er réel joue muet.
+        manager.isMuted = false
         // Looping MUST be (re)asserted AFTER `load()`. `load()` calls
         // `cleanup()` internally, which resets `shouldLoop = false`; setting it
         // before `load()` is silently clobbered, so the very first end-of-item

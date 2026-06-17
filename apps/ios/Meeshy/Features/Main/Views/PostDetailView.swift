@@ -367,12 +367,13 @@ struct PostDetailView: View {
                 isExpanded: viewModel.expandedThreads.contains(comment.id),
                 isLoadingReplies: viewModel.loadingReplies.contains(comment.id),
                 accentColor: accentColor,
-                // PostDetailView relays comment likes straight to the server via
-                // onLikeComment and does not maintain the optimistic like state
-                // (likedIds / likeDelta / heartInFlightIds) that FeedCommentsSheet does.
-                likedIds: [],
-                likeDelta: [:],
-                heartInFlightIds: [],
+                // Like de commentaire optimiste + réaction socket cœur, porté par le
+                // ViewModel (miroir de `CommentsSheetView`). L'état est semé depuis
+                // `currentUserReactions` au chargement, donc les commentaires déjà
+                // likés s'affichent cœur plein et le tap donne un retour instantané.
+                likedIds: viewModel.commentLikedIds,
+                likeDelta: viewModel.commentLikeDelta,
+                heartInFlightIds: viewModel.commentHeartInFlightIds,
                 onReply: { target in
                     viewModel.replyingTo = target
                 },
@@ -380,9 +381,7 @@ struct PostDetailView: View {
                     Task { await viewModel.toggleThread(comment.id, postId: postId) }
                 },
                 onLikeComment: { commentId in
-                    Task {
-                        try? await PostService.shared.likeComment(postId: postId, commentId: commentId)
-                    }
+                    Task { await viewModel.toggleCommentLike(commentId, postId: postId) }
                 },
                 moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                 storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
@@ -556,6 +555,26 @@ struct PostDetailView: View {
                 postLikedIds.remove(postId)
             } else {
                 postLikeDelta[postId, default: 0] -= 1
+            }
+        }
+        // Unification du like : le ❤️ arrive désormais comme `post:liked`/`post:unliked`
+        // (compteur ABSOLU). On pose la base autoritative sur le post chargé, on purge le
+        // delta optimiste et on confirme `isLiked` pour l'acteur — aligné avec le feed et
+        // le reel viewer. Le détail rejoint déjà `ROOMS.post`, donc reçoit l'événement.
+        .onReceive(SocialSocketManager.shared.postLiked.receive(on: DispatchQueue.main)) { event in
+            guard event.postId == postId else { return }
+            viewModel.post?.likes = event.likeCount
+            postLikeDelta[postId] = nil
+            if event.userId == AuthManager.shared.currentUser?.id {
+                postLikedIds.insert(postId)
+            }
+        }
+        .onReceive(SocialSocketManager.shared.postUnliked.receive(on: DispatchQueue.main)) { event in
+            guard event.postId == postId else { return }
+            viewModel.post?.likes = event.likeCount
+            postLikeDelta[postId] = nil
+            if event.userId == AuthManager.shared.currentUser?.id {
+                postLikedIds.remove(postId)
             }
         }
         .sheet(isPresented: $showTranslationSheet) {

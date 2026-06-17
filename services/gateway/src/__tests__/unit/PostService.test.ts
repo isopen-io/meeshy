@@ -43,6 +43,11 @@ function createMockPrisma() {
       create: jest.fn(),
       update: jest.fn(),
     },
+    commentReaction: {
+      upsert: jest.fn(),
+      deleteMany: jest.fn(),
+      groupBy: jest.fn(),
+    },
     postBookmark: {
       upsert: jest.fn(),
       delete: jest.fn(),
@@ -1193,55 +1198,48 @@ describe('PostCommentService', () => {
       expect(result).toBeNull();
     });
 
-    it('increments likeCount and updates reactionSummary', async () => {
-      const comment = makeComment({ reactionSummary: {} });
-      prisma.postComment.findFirst.mockResolvedValue(comment);
-
-      const updatedComment = makeComment({ likeCount: 4, reactionSummary: { '❤️': 1 } });
+    it('upserts the reaction row (idempotent) and syncs likeCount = reactionCount = count(table)', async () => {
+      prisma.postComment.findFirst.mockResolvedValue(makeComment());
+      prisma.commentReaction.upsert.mockResolvedValue({});
+      // Après l'upsert, la table contient 4 ❤️ → likeCount/reactionCount = 4.
+      prisma.commentReaction.groupBy.mockResolvedValue([{ emoji: '❤️', _count: { emoji: 4 } }]);
+      const updatedComment = makeComment({ likeCount: 4, reactionCount: 4, reactionSummary: { '❤️': 4 } });
       prisma.postComment.update.mockResolvedValue(updatedComment);
 
       const result = await service.likeComment('comment-1', 'user-1');
 
+      // Idempotent : un seul like par (commentId,userId,emoji) via la contrainte unique.
+      expect(prisma.commentReaction.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { comment_user_reaction_unique: { commentId: 'comment-1', userId: 'user-1', emoji: '❤️' } },
+          create: { commentId: 'comment-1', userId: 'user-1', emoji: '❤️' },
+          update: {},
+        }),
+      );
+      // Compteurs AUTORITAIRES depuis la table (pas d'increment aveugle).
       expect(prisma.postComment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'comment-1' },
-          data: {
-            likeCount: { increment: 1 },
-            reactionSummary: { '❤️': 1 },
-          },
+          data: { likeCount: 4, reactionCount: 4, reactionSummary: { '❤️': 4 } },
         }),
       );
       expect(result).toEqual(updatedComment);
     });
 
-    it('increments existing emoji count in summary', async () => {
-      const comment = makeComment({ reactionSummary: { '❤️': 3 } });
-      prisma.postComment.findFirst.mockResolvedValue(comment);
-      prisma.postComment.update.mockResolvedValue(makeComment());
-
-      await service.likeComment('comment-1', 'user-1', '❤️');
-
-      expect(prisma.postComment.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            reactionSummary: { '❤️': 4 },
-          }),
-        }),
-      );
-    });
-
-    it('adds a new emoji key to the summary', async () => {
-      const comment = makeComment({ reactionSummary: { '❤️': 2 } });
-      prisma.postComment.findFirst.mockResolvedValue(comment);
+    it('rebuilds reactionSummary per emoji from the table', async () => {
+      prisma.postComment.findFirst.mockResolvedValue(makeComment());
+      prisma.commentReaction.upsert.mockResolvedValue({});
+      prisma.commentReaction.groupBy.mockResolvedValue([
+        { emoji: '❤️', _count: { emoji: 2 } },
+        { emoji: '🔥', _count: { emoji: 1 } },
+      ]);
       prisma.postComment.update.mockResolvedValue(makeComment());
 
       await service.likeComment('comment-1', 'user-1', '🔥');
 
       expect(prisma.postComment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            reactionSummary: { '❤️': 2, '🔥': 1 },
-          }),
+          data: { likeCount: 3, reactionCount: 3, reactionSummary: { '❤️': 2, '🔥': 1 } },
         }),
       );
     });
@@ -1259,71 +1257,38 @@ describe('PostCommentService', () => {
       expect(result).toBeNull();
     });
 
-    it('decrements likeCount and updates reactionSummary', async () => {
-      const comment = makeComment({ reactionSummary: { '❤️': 2 } });
-      prisma.postComment.findFirst.mockResolvedValue(comment);
-
-      const updatedComment = makeComment({ likeCount: 2, reactionSummary: { '❤️': 1 } });
+    it('deletes the reaction row and syncs counters from the table', async () => {
+      prisma.postComment.findFirst.mockResolvedValue(makeComment());
+      prisma.commentReaction.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.commentReaction.groupBy.mockResolvedValue([{ emoji: '❤️', _count: { emoji: 1 } }]);
+      const updatedComment = makeComment({ likeCount: 1, reactionCount: 1, reactionSummary: { '❤️': 1 } });
       prisma.postComment.update.mockResolvedValue(updatedComment);
 
       const result = await service.unlikeComment('comment-1', 'user-1', '❤️');
 
+      expect(prisma.commentReaction.deleteMany).toHaveBeenCalledWith({
+        where: { commentId: 'comment-1', userId: 'user-1', emoji: '❤️' },
+      });
       expect(prisma.postComment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'comment-1' },
-          data: {
-            likeCount: { decrement: 1 },
-            reactionSummary: { '❤️': 1 },
-          },
+          data: { likeCount: 1, reactionCount: 1, reactionSummary: { '❤️': 1 } },
         }),
       );
       expect(result).toEqual(updatedComment);
     });
 
-    it('removes the emoji key from summary when count reaches zero', async () => {
-      const comment = makeComment({ reactionSummary: { '❤️': 1, '🔥': 3 } });
-      prisma.postComment.findFirst.mockResolvedValue(comment);
+    it('drops the emoji key (and zeroes counters) when the table is empty', async () => {
+      prisma.postComment.findFirst.mockResolvedValue(makeComment());
+      prisma.commentReaction.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.commentReaction.groupBy.mockResolvedValue([]);
       prisma.postComment.update.mockResolvedValue(makeComment());
 
       await service.unlikeComment('comment-1', 'user-1', '❤️');
 
       expect(prisma.postComment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            reactionSummary: { '🔥': 3 },
-          }),
-        }),
-      );
-    });
-
-    it('handles unliking an emoji that has no entries in summary', async () => {
-      const comment = makeComment({ reactionSummary: { '🔥': 2 } });
-      prisma.postComment.findFirst.mockResolvedValue(comment);
-      prisma.postComment.update.mockResolvedValue(makeComment());
-
-      await service.unlikeComment('comment-1', 'user-1', '❤️');
-
-      expect(prisma.postComment.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            reactionSummary: { '🔥': 2 },
-          }),
-        }),
-      );
-    });
-
-    it('handles null reactionSummary gracefully', async () => {
-      const comment = makeComment({ reactionSummary: null });
-      prisma.postComment.findFirst.mockResolvedValue(comment);
-      prisma.postComment.update.mockResolvedValue(makeComment());
-
-      await service.unlikeComment('comment-1', 'user-1', '❤️');
-
-      expect(prisma.postComment.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            reactionSummary: {},
-          }),
+          data: { likeCount: 0, reactionCount: 0, reactionSummary: {} },
         }),
       );
     });

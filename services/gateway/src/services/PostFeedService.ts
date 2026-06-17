@@ -201,7 +201,7 @@ export class PostFeedService {
 
     return {
       items: items.map((s) => ({
-        ...this.enrichWithLikeStatus(s.post, userId),
+        ...this.enrichWithLikeStatus(s.post, userReactionsMap.get(s.post.id) ?? []),
         currentUserReactions: userReactionsMap.get(s.post.id) ?? [],
         isBookmarkedByMe: bookmarkedIds.has(s.post.id),
         isRepostedByMe: repostedIds.has(s.post.id),
@@ -258,7 +258,7 @@ export class PostFeedService {
     }
 
     return stories.map((s) => ({
-      ...this.enrichWithLikeStatus(s, userId),
+      ...this.enrichWithLikeStatus(s, userReactionsMap.get(s.id) ?? []),
       isViewedByMe: viewedSet.has(s.id),
       currentUserReactions: userReactionsMap.get(s.id) ?? [],
     }));
@@ -476,7 +476,7 @@ export class PostFeedService {
       userReactionsMap.set(r.postId, list);
     }
     return items.map((p) => ({
-      ...this.enrichWithLikeStatus(p, viewerUserId),
+      ...this.enrichWithLikeStatus(p, userReactionsMap.get(p.id) ?? []),
       currentUserReactions: userReactionsMap.get(p.id) ?? [],
     }));
   }
@@ -615,7 +615,7 @@ export class PostFeedService {
 
     return {
       items: items.map((p) => ({
-        ...this.enrichWithLikeStatus(p, viewerUserId),
+        ...this.enrichWithLikeStatus(p, userReactionsMap.get(p.id) ?? []),
         currentUserReactions: userReactionsMap.get(p.id) ?? [],
       })),
       nextCursor,
@@ -675,7 +675,7 @@ export class PostFeedService {
 
     return {
       items: items.map((p) => ({
-        ...this.enrichWithLikeStatus(p, viewerUserId),
+        ...this.enrichWithLikeStatus(p, communityReactionsMap.get(p.id) ?? []),
         currentUserReactions: communityReactionsMap.get(p.id) ?? [],
       })),
       nextCursor,
@@ -811,9 +811,12 @@ export class PostFeedService {
     }
   }
 
-  private enrichWithLikeStatus(post: any, userId: string) {
-    const reactions = (post.reactions as any[] | null) ?? [];
-    return { ...post, isLikedByMe: reactions.some((r: any) => r.userId === userId) };
+  /// `isLikedByMe` dérive de la table `PostReaction` (via `currentUserReactions`),
+  /// PAS du Json legacy `post.reactions` (jamais mis à jour par le chemin socket →
+  /// `isLikedByMe` était faux après un like socket, et iOS lit `isLiked = isLikedByMe`).
+  /// Source UNIQUE et alignée avec `currentUserReactions` que les surfaces lisent.
+  private enrichWithLikeStatus(post: any, currentUserReactions: string[]) {
+    return { ...post, isLikedByMe: currentUserReactions.length > 0 };
   }
 
   private affinityScore(authorId: string, viewerId: string, friendIds: string[]): number {

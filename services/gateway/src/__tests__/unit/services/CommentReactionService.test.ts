@@ -106,7 +106,9 @@ describe('CommentReactionService', () => {
         create: jest.fn(),
         findFirst: jest.fn(),
         findMany: jest.fn(),
-        deleteMany: jest.fn()
+        deleteMany: jest.fn(),
+        // Compteur autoritaire lu dans updateCommentReactionSummary (sync likeCount).
+        count: jest.fn().mockResolvedValue(1)
       },
       user: {
         findMany: jest.fn().mockResolvedValue([])
@@ -152,6 +154,7 @@ describe('CommentReactionService', () => {
             findUnique: mockPrisma.postComment.findUnique,
             update: mockPrisma.postComment.update,
           },
+          commentReaction: { count: mockPrisma.commentReaction.count },
         });
       });
     });
@@ -320,6 +323,7 @@ describe('CommentReactionService', () => {
             findUnique: mockPrisma.postComment.findUnique,
             update: mockPrisma.postComment.update,
           },
+          commentReaction: { count: mockPrisma.commentReaction.count },
         });
       });
     });
@@ -1026,6 +1030,7 @@ describe('CommentReactionService', () => {
             findUnique: mockPrisma.postComment.findUnique,
             update: mockPrisma.postComment.update,
           },
+          commentReaction: { count: mockPrisma.commentReaction.count },
         });
       });
     });
@@ -1086,6 +1091,7 @@ describe('CommentReactionService', () => {
             findUnique: mockPrisma.postComment.findUnique,
             update: mockPrisma.postComment.update,
           },
+          commentReaction: { count: mockPrisma.commentReaction.count },
         });
       });
     });

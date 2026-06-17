@@ -174,6 +174,7 @@ describe('PostReactionHandler', () => {
   let mockNotificationService: any;
   let connectedUsers: Map<string, unknown>;
   let socketToUser: Map<string, string>;
+  let mockSocialEvents: any;
 
   const mockValidate = validateSocketEvent as jest.Mock;
 
@@ -189,6 +190,13 @@ describe('PostReactionHandler', () => {
     mockNotificationService = createMockNotificationService();
     connectedUsers = createConnectedUsers(USER_ID);
     socketToUser = createSocketToUser(SOCKET_ID, USER_ID);
+    // Unification du like : le handler émet `post:liked` via le SocialEventsHandler
+    // pour un ❤️ sur POST/REEL. Pour les autres emojis (ici 👍), le chemin reste
+    // `post:reaction-added` (ce mock n'est alors pas sollicité).
+    mockSocialEvents = {
+      broadcastPostLiked: jest.fn(() => Promise.resolve()),
+      broadcastPostUnliked: jest.fn(() => Promise.resolve()),
+    };
 
     mockNotificationService.createPostLikeNotification.mockResolvedValue(null);
     // Default: PUBLIC post, not deleted
@@ -207,6 +215,7 @@ describe('PostReactionHandler', () => {
       postReactionService: mockReactionService,
       connectedUsers: connectedUsers as any,
       socketToUser,
+      socialEvents: mockSocialEvents,
     });
   });
 
@@ -240,6 +249,77 @@ describe('PostReactionHandler', () => {
         success: true,
         data: sampleReactionData,
       });
+    });
+
+    it('test_handleAddReaction_heartOnPost_emitsCanonicalPostLiked_notReactionAdded', async () => {
+      // Unification du like : un ❤️ sur un POST/REEL émet l'événement CANONIQUE
+      // absolu `post:liked` (feed rooms + post room, via SocialEventsHandler) — PAS
+      // `post:reaction-added` — pour aligner les 3 vues (feed, détail, reel).
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: '❤️' };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockReactionService.addReaction.mockResolvedValue({ ...sampleReactionData, emoji: '❤️' });
+      mockReactionService.createUpdateEvent.mockResolvedValue({ ...sampleUpdateEvent, emoji: '❤️' });
+      mockPrisma.post.findUnique.mockResolvedValue({
+        id: POST_ID,
+        authorId: ANOTHER_USER_ID,
+        type: 'POST',
+        visibility: 'PUBLIC',
+        visibilityUserIds: [],
+        deletedAt: null,
+        likeCount: 7,
+        reactionSummary: { '❤️': 7 },
+      });
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockSocialEvents.broadcastPostLiked).toHaveBeenCalledWith(
+        expect.objectContaining({
+          postId: POST_ID,
+          userId: USER_ID,
+          emoji: '❤️',
+          likeCount: 7,
+          reactionSummary: { '❤️': 7 },
+        }),
+        ANOTHER_USER_ID
+      );
+      // Pas de double-émission par-emoji pour le ❤️ (sinon double-comptage client).
+      expect(mockIO._toEmit).not.toHaveBeenCalledWith(
+        SERVER_EVENTS.POST_REACTION_ADDED,
+        expect.anything()
+      );
+    });
+
+    it('test_handleAddReaction_heartOnStory_keepsReactionAdded_noPostLiked', async () => {
+      // Le ❤️ sur une STORY garde le chemin par-emoji `post:reaction-added` (les
+      // stories ont leur propre broadcast — on ne bascule QUE POST/REEL sur post:liked).
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: '❤️' };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockReactionService.addReaction.mockResolvedValue({ ...sampleReactionData, emoji: '❤️' });
+      mockReactionService.createUpdateEvent.mockResolvedValue({ ...sampleUpdateEvent, emoji: '❤️' });
+      mockPrisma.post.findUnique.mockResolvedValue({
+        id: POST_ID,
+        authorId: ANOTHER_USER_ID,
+        type: 'STORY',
+        visibility: 'PUBLIC',
+        visibilityUserIds: [],
+        deletedAt: null,
+        likeCount: 1,
+        reactionSummary: { '❤️': 1 },
+      });
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockSocialEvents.broadcastPostLiked).not.toHaveBeenCalled();
+      expect(mockIO._toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.POST_REACTION_ADDED,
+        expect.objectContaining({ emoji: '❤️' })
+      );
     });
 
     it('test_handleAddReaction_invalidEmoji_callbackErrorNoBroadcast', async () => {
@@ -312,6 +392,7 @@ describe('PostReactionHandler', () => {
         postReactionService: mockReactionService,
         connectedUsers: anonConnectedUsers as any,
         socketToUser: anonSocketToUser,
+        socialEvents: mockSocialEvents,
       });
 
       const data = { postId: POST_ID, emoji: EMOJI };
@@ -382,6 +463,7 @@ describe('PostReactionHandler', () => {
         postReactionService: mockReactionService,
         connectedUsers: reactorConnectedUsers as any,
         socketToUser: reactorSocketToUser,
+        socialEvents: mockSocialEvents,
       });
 
       const socket = createMockSocket();

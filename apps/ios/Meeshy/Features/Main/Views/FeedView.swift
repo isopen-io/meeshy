@@ -745,9 +745,6 @@ struct FeedView: View {
             onSendComment: { postId, content, parentId in
                 Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
             },
-            onLikeComment: { postId, commentId in
-                Task { await viewModel.likeComment(postId: postId, commentId: commentId) }
-            },
             onSelectLanguage: { postId, language in
                 viewModel.setTranslationOverride(postId: postId, language: language)
             },
@@ -1033,6 +1030,24 @@ struct FeedView: View {
                 postLikedIds.remove(event.postId)
             } else {
                 postLikeDelta[event.postId, default: 0] -= 1
+            }
+        }
+        // Unification du like : le ❤️ arrive désormais comme `post:liked`/`post:unliked`
+        // (événement CANONIQUE absolu — le ViewModel pose `posts[i].likes = likeCount`).
+        // On réconcilie ici l'état OPTIMISTE local de la vue : le compteur absolu fait
+        // autorité → on purge le delta, et on confirme `isLiked` pour l'acteur. Source
+        // unique pour les 3 vues (feed, détail, reel). Le chemin `post:reaction-*` ci-
+        // dessus reste pour les emojis NON-❤️ (réactions riches).
+        .onReceive(SocialSocketManager.shared.postLiked.receive(on: DispatchQueue.main)) { event in
+            postLikeDelta[event.postId] = nil
+            if event.userId == AuthManager.shared.currentUser?.id {
+                postLikedIds.insert(event.postId)
+            }
+        }
+        .onReceive(SocialSocketManager.shared.postUnliked.receive(on: DispatchQueue.main)) { event in
+            postLikeDelta[event.postId] = nil
+            if event.userId == AuthManager.shared.currentUser?.id {
+                postLikedIds.remove(event.postId)
             }
         }
         .onDisappear {
