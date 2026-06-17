@@ -163,8 +163,8 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `services/gateway/src/routes/conversations/stats.ts`
 - [ ] `services/gateway/src/routes/conversations/threads.ts`
 - [ ] `services/gateway/src/routes/conversations/types.ts`
-- [~] `services/gateway/src/routes/conversations/utils/access-control.ts`
-- [ ] `services/gateway/src/routes/conversations/utils/identifier-generator.ts`
+- [x] `services/gateway/src/routes/conversations/utils/access-control.ts`
+- [x] `services/gateway/src/routes/conversations/utils/identifier-generator.ts`
 
 ## routes/links  (0/13 have a test)
 
@@ -411,7 +411,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 - [~] `services/gateway/src/utils/blocking.ts`
 - [~] `services/gateway/src/utils/circuitBreaker.ts`
-- [ ] `services/gateway/src/utils/conversation-id-cache.ts`
+- [x] `services/gateway/src/utils/conversation-id-cache.ts`
 - [~] `services/gateway/src/utils/etag.ts`
 - [~] `services/gateway/src/utils/keyed-mutex.ts`
 - [~] `services/gateway/src/utils/languages.ts`
