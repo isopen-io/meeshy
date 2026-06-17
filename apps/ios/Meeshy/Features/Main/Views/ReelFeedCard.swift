@@ -238,6 +238,7 @@ struct ReelFeedCard: View, Equatable {
                     .lineLimit(2)
                     .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
             }
+            metricsRow
             actionsRow
         }
         .padding(14)
@@ -267,6 +268,40 @@ struct ReelFeedCard: View, Equatable {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "feed.reel.author.a11y", defaultValue: "Profil de \(displayAuthor)", bundle: .main))
+    }
+
+    /// Compact count format (1.2k / 3.4M) — mirrors the reel viewer's badge.
+    static func compactCount(_ value: Int) -> String {
+        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
+        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
+        return "\(value)"
+    }
+
+    /// Informative (non-interactive) reach metrics: total opens (eye) and unique
+    /// impressions (chart). Each hidden when zero so a fresh reel stays clean.
+    private var metricsRow: some View {
+        HStack(spacing: 14) {
+            if post.postOpenCount > 0 {
+                metric(icon: "eye.fill", count: post.postOpenCount,
+                       a11yLabel: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main))
+            }
+            if post.viewCount > 0 {
+                metric(icon: "chart.bar.fill", count: post.viewCount,
+                       a11yLabel: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
+            }
+        }
+    }
+
+    private func metric(icon: String, count: Int, a11yLabel: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon).font(.system(size: 12, weight: .semibold))
+            Text(Self.compactCount(count)).font(.caption2.weight(.medium))
+        }
+        .foregroundColor(.white.opacity(0.85))
+        .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(a11yLabel)
+        .accessibilityValue("\(count)")
     }
 
     private var actionsRow: some View {
@@ -301,10 +336,17 @@ struct ReelFeedCard: View, Equatable {
         }
     }
 
+    /// Accent ring + subtle tint AROUND a single action icon the current user
+    /// has participated in (liked / reposted / bookmarked). Encircles the icon
+    /// only — never the whole card.
+    private func participationRing(_ participated: Bool) -> some View {
+        Circle()
+            .fill(participated ? Color(hex: accentHex).opacity(0.22) : .clear)
+            .overlay(Circle().strokeBorder(participated ? Color(hex: accentHex) : .clear, lineWidth: 1.5))
+    }
+
     // Bouton like dédié : cœur plein dès qu'il y a des likes (rouge si moi, blanc
-    // sinon). Quand j'ai liké, un contour `heart` en couleur d'accent se superpose
-    // au `heart.fill` pour matérialiser « moi j'ai liké ». Sans like et sans avoir
-    // liké : `heart` outline neutre.
+    // sinon). Quand j'ai liké, un anneau couleur d'accent entoure le cœur.
     private var likeButton: some View {
         let isFilled = isLiked || displayLikeCount > 0
         let fillTint: Color = isLiked ? MeeshyColors.error : .white
@@ -313,16 +355,11 @@ struct ReelFeedCard: View, Equatable {
             HapticFeedback.light()
         } label: {
             HStack(spacing: 5) {
-                ZStack {
-                    Image(systemName: isFilled ? "heart.fill" : "heart")
-                        .font(.system(size: 18))
-                        .foregroundColor(isFilled ? fillTint : .white)
-                    if isLiked {
-                        Image(systemName: "heart")
-                            .font(.system(size: 18))
-                            .foregroundColor(Color(hex: accentHex))
-                    }
-                }
+                Image(systemName: isFilled ? "heart.fill" : "heart")
+                    .font(.system(size: 18))
+                    .foregroundColor(isFilled ? fillTint : .white)
+                    .frame(width: 38, height: 38)
+                    .background(participationRing(isLiked))
                 if displayLikeCount > 0 {
                     Text("\(displayLikeCount)")
                         .font(.footnote.weight(.medium))
@@ -343,7 +380,10 @@ struct ReelFeedCard: View, Equatable {
             HapticFeedback.light()
         } label: {
             HStack(spacing: 5) {
-                Image(systemName: system).font(.system(size: 18))
+                Image(systemName: system)
+                    .font(.system(size: 18))
+                    .frame(width: 38, height: 38)
+                    .background(participationRing(isSelected))
                 if count > 0 {
                     Text("\(count)").font(.footnote.weight(.medium))
                 }
