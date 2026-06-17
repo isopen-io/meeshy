@@ -1,222 +1,95 @@
-# Réels — Likes, Audio, Commentaires : audit + corrections
+# Partage de réel — affichage + re-partage + édition (iOS d'abord)
 
-Demande user : par lecture de code, s'assurer de bout en bout que (1) on peut liker les réels
-depuis la vue réels / le feed / le détail de post, (2) le son des réels joue sans glitch,
-(3) on peut liker les commentaires et y répondre. Attaque autonome, Opus.
+> Source : rapport 2026-06-17. Bugs signalés par l'utilisateur sur le partage de réels.
 
-## Diagnostic validé dans le code réel (Phase 1+2 systematic-debugging)
+## Diagnostic (vérifié dans le code)
 
-### Audio réels
-- **A1 (HAUTE)** — 1er réel MUET à l'ouverture depuis le feed. `ReelVideoView.drive`
-  (`ReelsPlayerView.swift:874-877`) ne pose `isMuted=false` que dans `if activeURL != fileUrl`.
-  Le handoff feed→viewer fait `pause()` (pas `stop()`) → `activeURL` inchangé → bloc sauté →
-  reste muet (le feed force `isMuted=true`, `ReelFeedVideoSurface.swift:80`, et `isMuted` est
-  global persistant, non reset par `cleanup()` `SharedAVPlayerManager.swift:289`).
-- **A2 (HAUTE)** — l'audio d'un réel-audio continue après fermeture du viewer.
-  `closeReels()` (`RootView.swift:1349`) ne fait que `pause()` du moteur vidéo, jamais
-  `PlaybackCoordinator.stopAllAudio()`. Le réel-audio (moteur externe `@StateObject`) survit.
-- **A3 (MOY-HAUTE)** — viewer plein écran PAS call-aware. `ReelsPlayerView`/`ReelsViewModel`
-  n'ont AUCUNE réf à `CallManager`/`callState`. Un appel entrant pendant un réel ne le met pas en pause.
+| # | Symptôme | Cause racine | Preuve |
+|---|----------|--------------|--------|
+| 1 | Carte du réel partagé **vide** | `FeedPostCard.repostView()` n'affiche que `Text(repost.content)`, vide pour un réel (le contenu d'un réel vit dans `media` + `storyEffects`, pas `content`). Seuls les reposts de STORY ont un rendu riche (`StoryRepostEmbedCell`). | `FeedPostCard.swift:514-576`, `:262-277` ; `StoryRepostEmbedCell.swift` |
+| 2 | Re-partage d'un partage → **affiche/référence vide** | Le bouton « Repartager » envoie `post.id` (poste intermédiaire B, type POST sans média propre). Le gateway pose `repostOfId = B`, et `repostOfInclude` **n'hydrate qu'un niveau** (pas de récursion) → la carte montre B vide. `originalRepostOfId` pointe pourtant déjà sur le réel racine. | `FeedPostCard.swift:676` ; `PostService.ts:1093-1095` ; `postIncludes.ts:119-135` |
+| 3 | **Logo Réel disparaît** dans le Feed | Le Feed fait `if post.isReel → ReelFeedCard` (logo Réel haut-droit), sinon `FeedPostCard`. Un partage de réel est de **type POST** → pas de logo. | `FeedView.swift:630-633` ; `ReelFeedCard.swift:178` |
+| 4 | Édition : pas de choix langue / type | `UpdatePostSchema` n'inclut ni `originalLanguage` ni `type` (immuables). `EditPostSheet` = texte seul. SDK `update()` = `content/visibility/moodEmoji`. | `PostService.ts:452-457` ; `EditPostSheet.swift:16-18` ; `PostService.swift:27` |
 
-### Like commentaires
-- **C1 (MAJEUR)** — `likedIds` jamais semé : `CommentsSheetView.computeLikedIds`
-  (`FeedCommentsSheet.swift:208`) existe + est testé mais N'EST BRANCHÉ NULLE PART. Cœur vide à
-  l'ouverture pour les commentaires déjà likés. De plus `currentUserReactions` n'est pas propagé
-  dans `FeedComment` aux 2 sites (`PostModels.toFeedPost:245`, `FeedCommentsSheet.loadReplies:475`).
-  Gateway renvoie BIEN `currentUserReactions` (`PostCommentService.ts:131/189`).
-- **C5 (MOYEN)** — like de commentaire INERTE dans `PostDetailView` : `likedIds:[]` codé en dur
-  (`PostDetailView.swift:373-375`) → cœur ne se remplit jamais sur cette surface.
+**Backend OK** : `repostOfInclude` hydrate déjà content, media, storyEffects, audioUrl, author. Les fixes 1/3 sont 100 % côté client.
 
-### Architectural — DOCUMENTÉ, hors scope autonome (touche le gateway / design produit)
-- Like de POST : 2 systèmes temps réel disjoints (REST `/like` vs socket `post:reaction-add`).
-  Les likes FONCTIONNENT (optimistic + rollback + seed `post.isLiked`) ; seule la cohérence
-  temps réel inter-surfaces diverge.
-- Like de COMMENTAIRE : compteur `likeCount` (REST) ≠ `reactionCount` (socket). Double-écriture
-  feed. → décision produit/backend.
-
-## Plan d'exécution (TDD où il y a un seam)
-- [ ] A1 — `ReelsPlayerView.drive` : `isMuted=false` inconditionnel quand actif (sortir du `if`).
-- [ ] A2 — `RootView.closeReels` : ajouter `PlaybackCoordinator.shared.stopAllAudio()`.
-- [ ] A3 — `ReelsPlayerView` : pause vidéo + stop audio sur `CallManager.$callState` actif + garde drive.
-- [ ] C1 — propager `currentUserReactions` ; overload `computeLikedIds(from: [FeedComment])` testé ;
-      semer `likedIds` dans `CommentsSheetView`.
-- [ ] C5 — `PostDetailView`/`PostDetailViewModel` : like commentaire optimiste + socket reaction + seed.
-- [ ] Build `./apps/ios/meeshy.sh build` vert + tests ciblés verts.
-
-## Review — LIVRÉ
-
-### Corrections appliquées (build ✓ + tests ciblés ✓)
-- **A1** `ReelsPlayerView.drive` : `manager.isMuted = false` sorti du `if activeURL != fileUrl`
-  → le 1er réel n'est plus muet à l'ouverture depuis le feed. Aucun bouton mute dans le viewer
-  (seule réf `isMuted` = cette ligne) → unmute inconditionnel sûr.
-- **A2** `RootView.closeReels` : `PlaybackCoordinator.shared.stopAllAudio()` ajouté → l'audio d'un
-  réel-audio ne survit plus à la fermeture (laisse le moteur vidéo pour la reprise du feed).
-- **A3** `ReelsPlayerView` : `.onReceive(CallManager.$callState.map(\.isActive))` pause vidéo +
-  `stopAllAudio()` au démarrage d'appel ; garde `!isCallActive` dans `drive` (miroir feed).
-- **C1** `currentUserReactions` propagé dans `FeedComment` (toFeedPost SDK + loadReplies +
-  commentAdded) ; overload `CommentsSheetView.computeLikedIds(from: [FeedComment])` ; `likedIds`
-  semé dans `CommentsSheetView` (onAppear top-level + task cache + loadReplies réseau) → les
-  commentaires déjà likés s'affichent cœur plein à l'ouverture.
-- **C5** `PostDetailViewModel` : état like-commentaire optimiste (`commentLikedIds/Delta/InFlight`)
-  + `toggleCommentLike` (réaction socket cœur + rollback) + `seedCommentLikes` + listeners
-  `commentReactionAdded/Removed` ; `PostDetailView` câblé dessus → le like de commentaire dans le
-  détail de post n'est plus inerte (cœur se remplit, retour instantané, persiste).
-- **Bonus** : `StoryViewerCommentReactionTests.swift` (orphelin, absent du pbxproj — ses tests ne
-  tournaient pas) câblé dans le projet (4 entrées, UUIDs `SVCR…`). 16 tests récupérés + verts.
-
-### Vérification
-- `./apps/ios/meeshy.sh build` : Build succeeded (33s).
-- `StoryViewerCommentReactionTests` : 16/16 (dont 3 nouveaux `computeLikedIds_feedComment_*`).
-- `PostDetailViewModelTests` : 19/19 (dont `test_loadComments_seedsCommentLikedIds_…` C5).
-- `ReelsViewModelTests` + `ReelFeedAutoplayCoordinatorTests` : 11/11 (pas de régression reels).
-
-### Non corrigé (architectural — décision produit/backend, hors scope autonome)
-- Cohérence TEMPS RÉEL inter-surfaces du like de POST : viewer réels (REST `/like`, aucun listener)
-  vs feed/détail (socket `reaction-add`), deux systèmes d'événements serveur disjoints. Les likes
-  FONCTIONNENT sur les 3 surfaces (optimistic + rollback + seed `post.isLiked` à l'ouverture).
-- Compteur de like de COMMENTAIRE : `likeCount` (REST) ≠ `reactionCount` (socket reaction). Le
-  chemin socket (utilisé par sheet + détail) ne persiste pas le compteur côté serveur ; double-
-  écriture sur le chemin feed (`onLikeComment`). À trancher au niveau gateway (unifier les deux
-  mécanismes). L'état "liké par moi" (cœur), lui, est désormais correct et persistant partout.
+## Décisions produit (validées par l'utilisateur)
+1. **Plateforme** : iOS d'abord (web = lot 4 en suivi).
+2. **Re-partage** : toujours résoudre vers le **réel original** (racine via `originalRepostOfId`).
+3. **Carte de partage** : **aperçu réel riche** (vidéo + play + logo Réel + auteur + légende + compteurs), réutilise le style `ReelFeedCard`. Tap → détail du réel.
+4. **Édition** : langue → **re-traduction** (pipeline ZMQ existant) ; type éditable **POST↔RÉEL**.
 
 ---
 
-# UNIFICATION DU LIKE DE POST (3 vues) — 2026-06-17
+## Lot 1 — Affichage carte de partage de réel (fixe bugs 1 + 3) · iOS
+- [ ] **Créer `ReelRepostEmbedCell.swift`** (`apps/ios/Meeshy/Features/Main/Views/`), calqué sur `StoryRepostEmbedCell` : attribution « Repartagé de @auteur » + aperçu réel riche (poster vidéo + bouton play + **logo Réel** glyphe haut-droit + légende `storyEffects.text`/`content` + compteurs ❤/💬). Inputs primitifs/value (`FeedPost`, `preferredContentLanguages`). Tap → `onTapRepost?(repost.id)` (détail réel).
+- [ ] **Ajouter `isReelRepost`** dans `FeedPostCard` (miroir de `isStoryRepost`) : `repost?.type == "REEL"`. Brancher dans le `else` (`FeedPostCard.swift:262-277`) : `if isStoryRepost {…} else if isReelRepost { ReelRepostEmbedCell(…) } else { repostView(…) }`.
+- [ ] **Réutilisation max** : factoriser le glyphe « logo Réel » de `ReelFeedCard.swift:178` en sous-vue partagée si trivial, sinon dupliquer le seul glyphe (pas tout le card autoplay).
+- [ ] **Tests** : snapshot `ReelRepostEmbedCell` (réel avec/​sans légende) ; test pur `FeedPostCard.isReelRepost` (REEL vs STORY vs POST). RED→GREEN.
+- [ ] `./apps/ios/meeshy.sh build` vert + smoke simulateur (partage direct d'un réel affiche la carte riche + logo).
 
-Demande user : le like de post n'est pas aligné sur la même donnée entre feed / détail / reel
-viewer. Unifier EN PROD + capturer les stats + remontée temps réel sur chacune des 3 vues.
+## Lot 2 — Re-partage résout la racine (fixe bug 2) · iOS
+- [ ] **Résoudre l'ID racine à l'émission** : au call site du bouton « Repartager » (`FeedPostCard.swift:676` → `onRepost?(post.id)`), passer l'ID racine quand le poste est déjà un partage : `let shareTargetId = post.repost.map { $0.originalRepostOfId ?? $0.id } ?? post.id`. Ainsi `repostOfId` pointe directement sur le réel → carte hydratée correctement (réutilise le Lot 1).
+- [ ] Vérifier que `RepostContent.originalRepostOfId` est bien mappé (déjà confirmé `FeedModels.swift:199`).
+- [ ] **Tests** : `FeedViewModelTests` — repost d'un partage appelle `postService.repost(postId:)` avec l'ID racine (mock `MockPostService` call-count + `lastRepostPostId`). RED→GREEN.
+- [ ] Smoke : re-partager un partage de réel affiche le réel (pas une carte vide), une seule fois.
 
-## Cause racine (validée gateway + web + iOS)
-- Source de vérité = table `PostReaction` (par-user). MAIS 3 bugs serveur :
-  - **likeCount non synchronisé par le chemin socket** (`PostReactionService.updatePostReactionSummary`
-    ne touchait que reactionSummary/reactionCount). Divergence des compteurs selon le chemin.
-  - **isLikedByMe lu depuis le Json legacy `post.reactions`** (`enrichWithLikeStatus`) → faux après
-    un like SOCKET. iOS lit `feedPost.isLiked = isLikedByMe ?? false` → like socket invisible au reload.
-    `getPostById` (détail) ne renvoyait MÊME PAS isLikedByMe → détail toujours « non liké ».
-  - **Routage d'événements disjoint** : REST `/like`→`post:liked` (feed rooms) ; socket
-    `post:reaction-add`→`post:reaction-added` (post room). Jamais le même client → désync temps réel.
-- Contrainte web (préservée) : web ne reçoit QUE `post:liked` (payload absolu `{likeCount,
-  reactionSummary}`), n'émet jamais `post:join`. Ack socket `{success}` requis. Emoji `❤️`.
+## Lot 3 — Édition : langue (re-traduction) + type POST↔RÉEL
+### 3a. Gateway
+- [ ] **Étendre `UpdatePostSchema`** (`services/gateway/src/routes/posts/types.ts:200-211`) : `originalLanguage?: string`, `type?: 'POST'|'REEL'` (Zod enum restreint).
+- [ ] **`PostService.updatePost`** (`PostService.ts:452`) : accepter `originalLanguage?`, `type?`. Si `type` change → recalculer `expiresAt` via `computeExpiresAt(type)` (REEL a une expiry, `PostService.ts:29`). Garde-fou : type ∈ {POST,REEL} uniquement ; refus si le poste est un repost/story (préserver l'invariant). Auteur-only déjà en place.
+- [ ] **Re-traduction** : si `originalLanguage` change (et `content` présent), réutiliser le chemin ZMQ existant (`translateToMultipleLanguages` + handler `translations.${lang}`, `PostService.ts:242-318`) — purger les `translations` périmées puis ré-émettre la requête avec la nouvelle source. Extraire le bloc create en méthode privée réutilisable si nécessaire.
+- [ ] **Tests gateway (jest)** : updatePost change type→recalcule expiresAt ; change langue→déclenche traduction (mock ZMQ) + purge translations ; rejette type invalide ; rejette non-auteur ; rejette édition type sur un repost.
 
-## Design (full unification, backward-compatible web)
-Événement CANONIQUE absolu `post:liked`/`post:unliked` (payload `{postId,userId,emoji,likeCount,
-reactionSummary}`) émis vers feed rooms + post room, depuis les DEUX chemins d'écriture. Le ❤️ socket
-bascule de `post:reaction-added` vers `post:liked` (POST/REEL uniquement ; stories/statuses + emojis
-non-❤️ gardent leur chemin). Un seul événement par like → pas de double-comptage.
+### 3b. SDK iOS
+- [ ] **Étendre `PostServiceProviding.update` + impl** (`PostService.swift:27`, `:214`) : ajouter `originalLanguage: String? = nil`, `type: String? = nil` au body. Pas de breaking change (defaults nil).
+- [ ] **Tests SDK** : `update(...)` sérialise `originalLanguage`/`type` dans le payload quand fournis ; les omet sinon.
 
-## Implémentation GATEWAY (✓ typecheck + suite 4176 tests verts)
-- [x] S1 `PostReactionService.updatePostReactionSummary` : compteur AUTORITAIRE (count table) →
-      `reactionCount` ET `likeCount` synchronisés sur les deux chemins (auto-réparant).
-- [x] S2 `enrichWithLikeStatus(post, currentUserReactions[])` dérive isLikedByMe de la TABLE (5 sites)
-      + `getPostById` renvoie isLikedByMe.
-- [x] S3a `broadcastPostLiked/Unliked` émettent AUSSI vers `ROOMS.post` (détail + reel viewer).
-- [x] S3b `PostReactionHandler` injecte `SocialEventsHandler` ; ❤️ POST/REEL → `broadcastPostLiked`
-      (skip post:reaction-added). Wiring `MeeshySocketIOManager`.
-- [x] Tests mis à jour : PostReactionService ($transaction tx.postReaction.count), PostReactionHandler
-      (dep socialEvents + 2 nouveaux tests heart→post:liked / story→reaction-added), SocialEventsHandler
-      (4 émissions: feed×3 + post room).
+### 3c. iOS UI
+- [ ] **`EditPostSheet`** : remplacer `onSave: (String) async` par un draft `onSave: (EditPostDraft) async` (`content`, `language`, `type`). Ajouter picker langue (réutiliser `LanguagePickerSheet`/`ProfileLanguagePickerSheet`) + picker type (segmenté POST/RÉEL). Pré-remplir depuis le poste. Garder TextEditor + compteur.
+- [ ] **`PostDetailViewModel.updatePost`** (`:399`) : signature `updatePost(content:language:type:)`, optimistic update + appel SDK étendu, rollback sur échec.
+- [ ] **Tests ViewModel** : `updatePost` transmet language+type au service (mock) ; rollback sur erreur.
+- [ ] Smoke : éditer un poste → changer langue (re-traduction visible) + basculer POST↔RÉEL (re-dispatch carte/Feed).
 
-## Implémentation iOS (réconciliation base absolue + purge delta + isLiked)
-- [x] Feed : `FeedView` onReceive postLiked/postUnliked (purge delta + isLiked acteur) ; `FeedViewModel`
-      pose base absolue + persiste isLiked acteur (cache cold-start).
-- [x] Détail : `PostDetailView` onReceive postLiked/postUnliked (base `viewModel.post.likes` + purge
-      delta + isLiked). Déjà dans ROOMS.post.
-- [x] Reel viewer : `ReelsViewModel` import Combine + cancellables + subscribe postLiked/postUnliked
-      (`applyServerLike`) + currentId.didSet join/leave ROOMS.post ; `ReelsPlayerView` onAppear/onDisappear
-      lifecycle room.
-- [x] Build iOS vert (22s) + tests iOS 98/98 (Feed 74, Détail 19, Reels 5).
-
-## NOTES DE DÉPLOIEMENT PROD (user déploie)
-### Ordre recommandé : iOS d'abord, gateway ensuite (éviter un glitch transitoire)
-- **WEB** : AUCUN changement requis, fonctionnel pendant/après le rollout (payload `post:liked`
-  `{likeCount, reactionSummary}` préservé ; web ne reçoit pas la post room — pas de `post:join`).
-- **iOS first** : nouveau client iOS + ANCIEN gateway = AUCUNE régression (le ❤️ reste sur
-  `post:reaction-added` ; détail/feed gardent leurs handlers reaction-added ; seul le reel viewer
-  n'a pas encore son real-time cross-user — capacité NOUVELLE, l'optimistic marche déjà).
-- **Gateway ensuite** : tout s'aligne. ⚠️ Pendant la fenêtre où de VIEUX clients iOS (pré-update)
-  tournent avec le NOUVEAU gateway, l'acteur peut voir un **double-comptage TRANSITOIRE** de son
-  propre like dans le FEED (vieux FeedView ne purge pas le delta optimiste sur `post:liked`).
-  Cosmétique (+1), **s'auto-corrige au refresh**. Inverser l'ordre (gateway d'abord) = ce glitch
-  dès le deploy gateway.
-- Rebuild image gateway + restart. **Pas de migration Prisma** (champs likeCount/reactionCount
-  existants ; S1 auto-répare les compteurs au fil des likes). Optionnel : backfill ponctuel
-  `likeCount = count(PostReaction)` par post pour corriger l'historique d'un coup.
-- **Vérifs post-deploy** : (1) liker dans le feed → détail/reel ouverts du même post se mettent à jour
-  instantanément (et inversement) ; (2) isLikedByMe correct au reload après un like SOCKET ; (3) le
-  détail d'un post liké s'ouvre cœur PLEIN (getPostById→isLikedByMe) ; (4) likeCount == reactionCount
-  quel que soit le chemin d'écriture.
-
-## Review unification — LIVRÉ ✓
-- Gateway : S1+S2+S3a+S3b. `npx tsc --noEmit` 0 erreur sur mes fichiers ; **suite 156 suites /
-  4176 tests verts** (les 13 « failed » initiales = barrel `@meeshy/shared` non buildé, résolu).
-  Tests adaptés : PostReactionService, PostReactionHandler (+2 nouveaux), SocialEventsHandler.
-- iOS : build vert + 98 tests verts. 3 vues réconcilient depuis l'événement canonique absolu.
-- Source de vérité unique = table `PostReaction` ; un seul événement (`post:liked`) par like vers
-  les 3 surfaces ; compteurs alignés ; web intact.
-- Reste (user) : déploiement selon l'ordre ci-dessus + vérifs e2e device.
+## Lot 4 — Parité Web (suivi, hors scope immédiat)
+- [ ] `PostCard.tsx` : rendre `post.repostOf` (contenu/média/auteur) ; carte de partage de réel ; logo/badge réel.
+- [ ] `feeds/page.tsx:558` : passer `repostOf` au lieu de `post.content`/`post.media` pour les reposts.
+- [ ] `PostEditor.tsx` : pickers langue + type.
 
 ---
 
-# UNIFICATION DU LIKE DE COMMENTAIRE (socket-only) — 2026-06-17 (suite)
+## Garde-fous / pièges connus
+- iOS xcodeproj classique (objectVersion 63) : tout nouveau `.swift` = 4 entrées pbxproj + 2 UUIDs (cf. `feedback_ios_classic_pbxproj`). `ReelRepostEmbedCell.swift` à câbler.
+- Leaf views Feed : pas d'`@ObservedObject` sur singletons (cellules recyclées). Inputs `let`/primitifs.
+- `EditPostSheet.onSave` change de signature → mettre à jour TOUS les call sites (`PostDetailView.swift`).
+- TDD strict : RED avant GREEN à chaque lot. `./apps/ios/meeshy.sh test` (scheme MeeshySDK-Package pour SDK) avant commit.
+- Commits isolés par lot, sans trailer Co-Authored-By.
 
-Même problème dual que le post, appliqué aux commentaires (choix user : socket-only).
-- **CS1 (gateway ✓ 68/68 + suite 4176)** : `CommentReactionService.updateCommentReactionSummary`
-  synchronise `likeCount` = `reactionCount` = `count(CommentReaction)` (miroir de S1). Le chemin
-  socket maintient désormais `likeCount` → compteur de like de commentaire cohérent au reload.
-- **CS2 (iOS ✓ build + 90 tests)** : `CommentsSheetView.toggleCommentLike` retire la DOUBLE-écriture
-  (`onLikeComment?` REST/outbox en plus du socket) qui (a) incrémentait `likeCount`+`reactionSummary`
-  DEUX fois sur le feed, (b) envoyait toujours `liked:true` (unlike impossible). Réaction socket =
-  source unique (= web/reels/détail). Plumbing mort retiré : param `onLikeComment` de `CommentsSheetView`
-  + `FeedPostCard` + closures `FeedView`/`RootViewComponents` + méthode `FeedViewModel.likeComment`.
-- État `isLiked` du commentaire : déjà table-based (`currentUserReactions`) → correct (inchangé).
-- Compromis assumé (validé user) : perte de la durabilité OFFLINE du like de commentaire sur le feed
-  (les reels/détail ne l'avaient déjà pas ; le chemin offline était de toute façon buggé).
-- REST `/comments/:id/like` (`PostCommentService.likeComment`) reste en place mais DORMANT (web+iOS
-  socket) ; legacy à déprécier (n'écrit pas la table CommentReaction, incrément aveugle non idempotent).
-- Déploiement : même ordre que le post (iOS d'abord puis gateway).
+## Review — LOTS 1-3 LIVRÉS & VÉRIFIÉS (2026-06-17, iOS)
 
----
+### Lot 1 — Carte de partage de réel + logo (bugs 1 + 3)
+- SDK `RepostContent.isReel` + `primaryReelMedia` (miroir `FeedPost`).
+- Nouvelle vue `ReelRepostEmbedCell.swift` : poster + play + badge/logo Réel + auteur + légende + ❤.
+- `FeedPostCard.isReelRepost` + branche dispatch (`if isStoryRepost … else if isReelRepost { ReelRepostEmbedCell } else …`).
+- pbxproj câblé (UUIDs `RREMB…`).
+- ✅ Build succeeded ; SDK `RepostContent reel classification` 5/5.
 
-# FALLBACK REST DU LIKE-COMMENTAIRE — 2026-06-17 (suite, sur question user)
+### Lot 2 — Re-partage résout la racine (bug 2)
+- `FeedViewModel.resolveRepostTargetId` : un re-partage d'un partage cible le réel racine (`originalRepostOfId ?? repost.id`).
+- ✅ `FeedViewModelTests` repost résolution 4/4 (direct, chaîné, original inchangé).
 
-Question user : « en cas d'échec du socket, pas de fallback REST ? ». Réponse : exact, le socket-only
-n'avait plus de fallback (rollback seulement), incohérent vs le like de POST (`togglePostHeart` a un
-fallback REST). Ajouté proprement :
+### Lot 3 — Édition : langue (re-traduction) + type POST↔RÉEL
+- Gateway : `UpdatePostSchema` (+`originalLanguage`,`type` POST|REEL) ; `updatePost` (garde-fous 422 : repost, STORY/STATUS, REEL sans média ; re-traduction ZMQ source explicite ; purge translations) ; route 422 surfacée ; `triggerStoryTextTranslation(sourceLanguageOverride)`.
+- SDK : `PostService.update(originalLanguage:type:)` + `UpdatePostRequest`.
+- iOS : `EditPostSheet` v2 (picker langue `ProfileLanguagePickerSheet` + segmented POST/RÉEL conditionnel) → `EditPostDraft` ; `FeedViewModel`/`PostDetailViewModel.updatePost(content:language:type:)` ; 3 call-sites alignés.
+- ✅ Gateway typecheck clean + jest `updatePost` 9/9 ; iOS build + `FeedViewModelTests` updatePost 2/2 ; SDK UITests compile 1/1.
 
-- **Prérequis gateway** : `PostCommentService.likeComment/unlikeComment` réécrits → écrivent la table
-  `CommentReaction` (`upsert` sur la contrainte unique / `deleteMany`, idempotent) puis recomptent
-  `likeCount = reactionCount = count(table)` + `reactionSummary` via `groupBy`. → cohérent avec le
-  chemin socket (CS1). Le REST n'est plus un incrément aveugle → fallback SÛR (pas de double-comptage
-  même si socket ET REST se déclenchent : la table est idempotente, count() autoritaire). Route
-  `/comments/:id/like` inchangée (même forme de retour). Tests `PostService.test.ts` réécrits (6).
-- **iOS** : `CommentsSheetView.toggleCommentLike` + `PostDetailViewModel.toggleCommentLike` → socket
-  PRIMAIRE, sur échec → REST (`PostService.likeComment/unlikeComment`), rollback SEULEMENT si REST
-  échoue aussi. Mutuellement exclusif (pas la double-écriture retirée). `unlikeComment` ajouté au
-  protocole `PostServiceProviding` (SDK) + `MockPostService` (app + SDK).
-- Vérif : gateway 156 suites / 4173 verts ; iOS build vert (39s) + 109 tests verts (Feed 74, Détail 19,
-  like-commentaire 16).
-- Note : le REST `/comments/:id/like` n'est donc PLUS legacy/incohérent — il est désormais
-  table-autoritative comme le socket, et sert de fallback. (Le like de POST avait déjà ce fallback.)
+### Vérification globale
+- `./apps/ios/meeshy.sh build` : succeeded.
+- iOS tests : 98 (FeedViewModel 77+2, PostDetailViewModel) 0 échec ; SDK 5+1.
+- Gateway : `tsc --noEmit` 0 erreur ; jest PostService updatePost 9/9.
 
----
-
-# NORMALISATION SOCKET + FALLBACK REST DU LIKE — 2026-06-17 (suite)
-
-Demande user : « Reels doit utiliser les sockets aussi ! normalise l'utilisation des sockets avec
-fallback REST, un maximum ! »
-
-Audit : le SEUL chemin socket d'interaction existant = la RÉACTION (like) post + commentaire
-(`addPostReaction`/`removePostReaction`, `addCommentReaction`/`removeCommentReaction`). Bookmark,
-share, viewPost, repost n'ont AUCUNE méthode socket (REST partout par design — le socket ne fait que
-DIFFUSER ces changements). Donc « max » = le like.
-
-État AVANT : feed ✓ socket+REST, détail ✓ socket+REST, commentaires ✓ socket+REST (déjà fait),
-**REELS = REST-only** (seule surface non normalisée → cause de l'écart de compteur observé).
-
-- [x] `ReelsViewModel.toggleLike` → socket PRIMAIRE (`addPostReaction`/`removePostReaction` ❤️ avec
-      `withTaskTimeout`) + fallback REST (`service.like`/`unlike`) déclenché SEULEMENT si le socket
-      échoue ; rollback optimistic uniquement si le REST échoue aussi. Miroir exact de
-      `FeedView.togglePostHeart`. Le reels rejoint déjà `ROOMS.post` du réel actif → reçoit l'écho
-      `post:liked` → `applyServerLike` réconcilie.
-- Résultat : les 3 vues + commentaires utilisent désormais le MÊME pattern (socket primaire + fallback
-      REST) → comportement homogène. Après déploiement gateway (S1), compteurs identiques partout.
+### Reste
+- **Smoke device/simu** : rendu visuel `ReelRepostEmbedCell` + pickers `EditPostSheet` (pas d'infra snapshot dans le target app).
+- **Lot 4 (web)** : `PostCard.tsx` ignore `repostOf` — à porter (différé, iOS-first).
+- Non commité (en attente d'accord user).

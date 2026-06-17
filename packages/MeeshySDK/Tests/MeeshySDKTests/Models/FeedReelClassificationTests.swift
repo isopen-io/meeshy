@@ -67,6 +67,48 @@ struct FeedReelClassificationTests {
     }
 }
 
+@Suite("RepostContent reel classification")
+struct RepostContentReelClassificationTests {
+
+    private func repost(type: String?, media: [FeedMedia] = []) -> RepostContent {
+        RepostContent(author: "Marie", content: "", type: type, media: media)
+    }
+
+    // MARK: - isReel (mirrors FeedPost: server type is authoritative)
+
+    @Test("a REEL-typed repost is a reel")
+    func reelType() {
+        #expect(repost(type: "REEL", media: [.video(duration: 12)]).isReel)
+        #expect(repost(type: "reel").isReel) // case-insensitive
+    }
+
+    @Test("a POST repost, untyped, and story are not reels")
+    func nonReelTypes() {
+        #expect(repost(type: "POST", media: [.video(duration: 1)]).isReel == false)
+        #expect(repost(type: nil).isReel == false)
+        #expect(repost(type: "STORY", media: [.image()]).isReel == false)
+    }
+
+    // MARK: - primaryReelMedia (video > audio > image, nil when not a reel)
+
+    @Test("primary media prefers video over audio over image")
+    func primaryPrefersVideo() {
+        let r = repost(type: "REEL", media: [.image(), .audio(duration: 10), .video(duration: 20)])
+        #expect(r.primaryReelMedia?.type == .video)
+    }
+
+    @Test("primary media falls back to audio, then to image")
+    func primaryFallback() {
+        #expect(repost(type: "REEL", media: [.image(), .audio(duration: 10)]).primaryReelMedia?.type == .audio)
+        #expect(repost(type: "REEL", media: [.image(), .image()]).primaryReelMedia?.type == .image)
+    }
+
+    @Test("primary media is nil for a non-reel repost")
+    func primaryNilForNonReel() {
+        #expect(repost(type: "POST", media: [.video(duration: 1)]).primaryReelMedia == nil)
+    }
+}
+
 @Suite("ReelComposition (creation-time default type)")
 struct ReelCompositionTests {
 

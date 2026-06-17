@@ -117,11 +117,18 @@ public struct UpdatePostRequest: Encodable, Sendable {
     public let visibility: String?
     public let visibilityUserIds: [String]?
     public let moodEmoji: String?
+    /// Source language. Changing it re-runs the Prisme translation pipeline.
+    public let originalLanguage: String?
+    /// Editable only between "POST" and "REEL" (gateway enforces the rest).
+    public let type: String?
 
-    public init(content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil, moodEmoji: String? = nil) {
+    public init(content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil,
+                moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil) {
         self.content = content; self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds
         self.moodEmoji = moodEmoji
+        self.originalLanguage = originalLanguage
+        self.type = type
     }
 }
 

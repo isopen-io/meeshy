@@ -614,8 +614,12 @@ struct PostDetailView: View {
             if let post = displayPost {
                 EditPostSheet(
                     originalContent: post.content,
-                    onSave: { newContent in
-                        await viewModel.updatePost(content: newContent)
+                    originalLanguage: post.originalLanguage,
+                    originalType: post.type,
+                    canBeReel: post.hasMedia,
+                    isRepost: post.repost != nil,
+                    onSave: { draft in
+                        await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type)
                     },
                     onDismiss: { isEditing = false }
                 )

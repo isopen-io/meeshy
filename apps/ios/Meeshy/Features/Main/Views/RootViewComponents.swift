@@ -696,8 +696,12 @@ struct ThemedFeedOverlay: View {
         .sheet(item: $editingPost) { post in
             EditPostSheet(
                 originalContent: post.content,
-                onSave: { newContent in
-                    await viewModel.updatePost(post.id, content: newContent)
+                originalLanguage: post.originalLanguage,
+                originalType: post.type,
+                canBeReel: post.hasMedia,
+                isRepost: post.repost != nil,
+                onSave: { draft in
+                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type)
                 },
                 onDismiss: { editingPost = nil }
             )

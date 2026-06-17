@@ -85,6 +85,9 @@ final class MockPostService: PostServiceProviding {
 
     var updateCallCount = 0
     var lastUpdatePostId: String?
+    var lastUpdateContent: String?
+    var lastUpdateOriginalLanguage: String?
+    var lastUpdateType: String?
 
     var viewPostCallCount = 0
     var lastViewPostId: String?
@@ -237,9 +240,12 @@ final class MockPostService: PostServiceProviding {
 
     func unpinPost(postId: String) async throws {}
 
-    func update(postId: String, content: String?, visibility: String?, moodEmoji: String?) async throws -> APIPost {
+    func update(postId: String, content: String?, visibility: String?, moodEmoji: String?, originalLanguage: String?, type: String?) async throws -> APIPost {
         updateCallCount += 1
         lastUpdatePostId = postId
+        lastUpdateContent = content
+        lastUpdateOriginalLanguage = originalLanguage
+        lastUpdateType = type
         return try createResult.get()
     }
 
@@ -373,6 +379,9 @@ final class MockPostService: PostServiceProviding {
 
         updateCallCount = 0
         lastUpdatePostId = nil
+        lastUpdateContent = nil
+        lastUpdateOriginalLanguage = nil
+        lastUpdateType = nil
         viewPostCallCount = 0
         lastViewPostId = nil
         getPostViewsCallCount = 0

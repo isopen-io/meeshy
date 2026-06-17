@@ -81,6 +81,15 @@ struct FeedPostCard: View {
         return postType == "POST" && repostType == "STORY"
     }
 
+    /// True when the post is a feed POST that reposts a REEL — the cell then
+    /// renders a rich reel preview (poster + reel badge + caption) via
+    /// `ReelRepostEmbedCell` instead of the empty text-only quote block. A
+    /// reel's content lives in `media`/caption, never in `content`.
+    private var isReelRepost: Bool {
+        let postType = (post.type ?? "").uppercased()
+        return postType == "POST" && (post.repost?.isReel ?? false)
+    }
+
     private var truncatedContent: (text: String, isTruncated: Bool) {
         let words = effectiveContent.split(separator: " ", omittingEmptySubsequences: true)
         if words.count <= 20 { return (effectiveContent, false) }
@@ -263,6 +272,14 @@ struct FeedPostCard: View {
                     StoryRepostEmbedCell(
                         post: post,
                         preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages
+                    )
+                } else if isReelRepost {
+                    // Repost-of-REEL: a reel's content lives in media/caption, never
+                    // in `content`, so the legacy quote block rendered blank (and the
+                    // POST card drops the reel badge). Render a rich reel preview.
+                    ReelRepostEmbedCell(
+                        post: post,
+                        onTap: { post.repost.map { onTapRepost?($0.id) } }
                     )
                 } else {
                     // Media preview (outside nav tap target — has its own fullscreen gesture)

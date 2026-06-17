@@ -279,6 +279,27 @@ extension RepostContent: Codable {
     }
 }
 
+// MARK: - Repost Reel Classification
+
+public extension RepostContent {
+    /// True when the reposted content is a reel (server-side `REEL` type is the
+    /// single source of truth, mirroring `FeedPost.isReel`). Lets the feed cell
+    /// render a rich reel preview instead of the empty text-only quote block.
+    var isReel: Bool {
+        (type ?? "").uppercased() == "REEL"
+    }
+
+    /// Media surfaced first when previewing a reposted reel: the first video,
+    /// else the first audio, else the first image. `nil` when the repost is not a
+    /// reel or carries no playable/visual media. Mirrors `FeedPost.primaryReelMedia`.
+    var primaryReelMedia: FeedMedia? {
+        guard isReel else { return nil }
+        if let video = media.first(where: { $0.type == .video }) { return video }
+        if let audio = media.first(where: { $0.type == .audio }) { return audio }
+        return media.first(where: { $0.type == .image })
+    }
+}
+
 // MARK: - Feed Comment Model
 public struct FeedComment: Identifiable, Sendable {
     public let id: String

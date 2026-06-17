@@ -782,6 +782,69 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertNil(postService.lastRepostContent)
     }
 
+    /// Re-sharing a SHARE of a reel must reference the original reel (root), not
+    /// the intermediate share — otherwise the new post embeds an empty card.
+    func test_repostPost_ofAShareOfReel_resolvesToRootReel() async {
+        let (sut, _, _, postService) = makeSUT()
+        var share = Self.makeFeedPost(id: "share-1")
+        share.repost = RepostContent(id: "reel-root", author: "marie", content: "", type: "REEL")
+        sut.posts = [share]
+
+        await sut.repostPost("share-1")
+
+        XCTAssertEqual(postService.lastRepostPostId, "reel-root")
+    }
+
+    /// A deeper chain collapses to the recorded root via `originalRepostOfId`.
+    func test_repostPost_ofChainedShare_resolvesToOriginalRoot() async {
+        let (sut, _, _, postService) = makeSUT()
+        var share = Self.makeFeedPost(id: "share-2")
+        share.repost = RepostContent(
+            id: "intermediate", author: "bob", content: "", type: "REEL",
+            originalRepostOfId: "deep-root"
+        )
+        sut.posts = [share]
+
+        await sut.repostPost("share-2")
+
+        XCTAssertEqual(postService.lastRepostPostId, "deep-root")
+    }
+
+    /// An original (non-share) post reposts with its own id, unchanged.
+    func test_repostPost_ofOriginalPost_usesItsOwnId() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+
+        await sut.repostPost("p1")
+
+        XCTAssertEqual(postService.lastRepostPostId, "p1")
+    }
+
+    // MARK: - updatePost()
+
+    func test_updatePost_forwardsLanguageAndTypeToService() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+
+        await sut.updatePost("p1", content: "new body", language: "fr", type: "REEL")
+
+        XCTAssertEqual(postService.lastUpdatePostId, "p1")
+        XCTAssertEqual(postService.lastUpdateContent, "new body")
+        XCTAssertEqual(postService.lastUpdateOriginalLanguage, "fr")
+        XCTAssertEqual(postService.lastUpdateType, "REEL")
+    }
+
+    func test_updatePost_contentOnly_passesNilLanguageAndType() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+
+        await sut.updatePost("p1", content: "just text")
+
+        XCTAssertEqual(postService.lastUpdateContent, "just text")
+        XCTAssertNil(postService.lastUpdateOriginalLanguage)
+        XCTAssertNil(postService.lastUpdateType)
+    }
+
     // MARK: - refresh()
 
     func test_refresh_resetsNewPostsCountAndReloads() async {

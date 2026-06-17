@@ -747,7 +747,7 @@ class FeedViewModel: ObservableObject {
     func repostPost(_ postId: String, content: String? = nil, isQuote: Bool = false) async {
         do {
             _ = try await postService.repost(
-                postId: postId,
+                postId: resolveRepostTargetId(postId),
                 targetType: nil,           // nil = server defaults to original post type
                 content: isQuote ? content : nil,
                 isQuote: isQuote ? (content != nil) : false
@@ -755,6 +755,16 @@ class FeedViewModel: ObservableObject {
         } catch {
             FeedbackToastManager.shared.showError(String(localized: "feed.repost.error", defaultValue: "Error reposting", bundle: .main))
         }
+    }
+
+    /// Re-sharing a SHARE must reference the ORIGINAL reel/post (root), never the
+    /// intermediate share — otherwise the new post embeds an empty share card
+    /// (the gateway hydrates `repostOf` only one level deep). When `postId` is
+    /// itself a repost, resolve to its recorded root (`originalRepostOfId`, else
+    /// the directly reposted content's id). Non-shares repost with their own id.
+    private func resolveRepostTargetId(_ postId: String) -> String {
+        guard let repost = posts.first(where: { $0.id == postId })?.repost else { return postId }
+        return repost.originalRepostOfId ?? repost.id
     }
 
     /// Server-side payload returned by `POST /posts/:postId/share`. The
@@ -829,11 +839,12 @@ class FeedViewModel: ObservableObject {
     /// are cleared (the gateway re-translates in background and pushes
     /// `post:updated` via socket). Rolls back the snapshot on API failure.
     /// No-op if the post isn't found in the current feed.
-    func updatePost(_ postId: String, content: String) async {
+    func updatePost(_ postId: String, content: String, language: String? = nil, type: String? = nil) async {
         guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = posts[idx]
         // Apply optimistic mutation: new content + clear translations so the
-        // bubble re-renders with the new source text immediately.
+        // bubble re-renders with the new source text immediately. A language
+        // change re-runs translation server-side, so the stale map is dropped.
         var optimistic = snapshot
         optimistic.content = content
         optimistic.translatedContent = nil
@@ -841,7 +852,7 @@ class FeedViewModel: ObservableObject {
         posts[idx] = optimistic
         debouncedCacheSave()
         do {
-            let updated = try await postService.update(postId: postId, content: content, visibility: nil, moodEmoji: nil)
+            let updated = try await postService.update(postId: postId, content: content, visibility: nil, moodEmoji: nil, originalLanguage: language, type: type)
             // Re-hydrate from the server response so the gateway-authoritative
             // fields (updatedAt, isEdited, sanitized content, …) replace the
             // optimistic in-memory copy. Preserves the resolved translation
