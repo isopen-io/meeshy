@@ -47,6 +47,10 @@ Backend/SDK rapides d'abord (A3, B3, B4, C1, C2 — testables jest, un build gat
 - ✅ **A1 (story)** : `EngagementTracker.recordAction` câblé sur 4 funnels du StoryViewer — `.reacted` (sendReaction), `.commented` (sendComment in-story + réponse DM onReplyToStory), `.shared` (bouton « Envoyer »). Export auteur-only exclu (jamais backend, pas un partage social).
 - ✅ **B1** : `TrackedLinkServiceTests` (SDK, mock APIClient — commit `a8840ec5c`) + `DeepLinkRouterTrackedDestinationTests` (app, 8 tests, commit `c249ed74a`, pbxproj UUIDs DLRTD…REF/BLD).
 
+**FAIT — D1/D2 (branche `feat/anonymous-post-view-count`) :**
+- ✅ **D2** déjà en place dans le code : `SHORT_VIDEO_MS = 8300` + seuils 90%/30% (`PostService.ts:926/950`), tests présents. Aucune action.
+- ✅ **D1** tranché « compter aussi les vues anonymes » → implémenté en **v1 simple** (spec `docs/superpowers/specs/2026-06-17-anonymous-post-view-count-design.md`, plan `docs/superpowers/plans/2026-06-17-anonymous-post-view-count.md`). Modèle Prisma `AnonymousPostOpen` + `PostService.recordAnonymousOpen` (tests jest verts) + route `POST /posts/:id/anonymous-view` + helper web `getOrCreateWebSessionKey` + ping au montage des pages post. Identité = session header (faible, failles documentées). **Reste** : `prisma db push` (index unique) + vérifs live (gateway/web/MongoDB non lancés dans l'env de dev), et **Task 6 iOS différée** (optionnelle/marginale, YAGNI).
+
 **RESTE :**
-- [ ] **D1/D2** : décisions produit (anonymes = zéro engagement ? SHORT_VIDEO_MS=8300 ?)
+- [ ] **D1 — runtime** : `prisma db push` (crée l'index unique `(postId, sessionKey)`) + vérifs e2e quand gateway/web/MongoDB tournent.
 - [ ] **Validation ⌘U** : lancer la suite MeeshyTests dans Xcode (le build CLI deadlock tant que Xcode est ouvert sur le projet — DerivedData workspace-relative partagé).
