@@ -644,3 +644,26 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   4. Pre-existing gateway failures: 26 suites (all pre-existing production bugs unrelated to this diff — baseline on main before changes was same 26).
 - Next slice: P1 Conversations & membership × gateway OR P1 ZMQ infra × gateway (next highest-priority ☐ cell)
 - Commit: (see branch claude/coverage/p1-realtime-gateway-manager)
+
+## 2026-06-17T10:00Z — P1 Real-time × web (notification-socketio.singleton, use-connection-status, use-socketio-messaging)
+- Targeted: `apps/web/services/notification-socketio.singleton.ts`, `apps/web/hooks/use-connection-status.ts`, `apps/web/hooks/use-socketio-messaging.ts`
+- Result: ☑ done — all 3 files ≥92% line+branch; P1 Real-time × web cell flipped ☐→☑
+- Coverage (per-file):
+  - notification-socketio.singleton.ts: 98.94% stmts / 96.42% branches / 100% funcs / 100% lines ✓
+  - use-connection-status.ts: 100% stmts / 100% branches / 100% funcs / 100% lines ✓
+  - use-socketio-messaging.ts: 100% stmts / 100% branches / 100% funcs / 100% lines ✓
+  - Web global: 38.81% lines / 30.99% branches / 38.02% stmts / 35.13% funcs (thresholds ratcheted: lines 37→38, branches 29→30, statements 36→38, functions 33→35)
+- Tests added: ~125 new tests across 3 new files
+  - `__tests__/services/notification-socketio.singleton.test.ts` (NEW, ~760 lines, 50+ tests): singleton lifecycle, connect/disconnect, all Socket.IO event handlers (NOTIFICATION_NEW, NOTIFICATION_UPDATED, NOTIFICATION_READ, NOTIFICATION_ALL_READ, NOTIFICATION_DELETED, NOTIFICATION_STATS_UPDATED, connect, disconnect, connect_error), onStatusChange, onNotification, onStats, reconnect, getConnectionDiagnostics, reset, multi-subscriber fan-out, unsubscribe, guard paths (no listeners, no socket)
+  - `__tests__/hooks/use-connection-status.test.ts` (NEW, 359 lines, 23 tests): initial state variants, online/offline window events, socket status change via onStatusChange, stable reference optimization, cleanup on unmount, useIsOnline sugar
+  - `__tests__/hooks/use-socketio-messaging-branches.test.tsx` (NEW, 594 lines, 39+ tests): ÉTAPE 1A (mount reconnect with/without tokens), ÉTAPE 1B (setCurrentUser), ÉTAPE 1C tryReconnectIfTokensAvailable (5 scenarios including 1500ms timeout cleanup), ÉTAPE 2 joinConversation/leaveConversation, ÉTAPE 3 all listener branches (onTranslation spread, displayName||username, onUserStatus, onConversationStats, onConversationOnlineStats), ÉTAPE 4 status-change stable-reference optimization, ÉTAPE 5 startTyping/stopTyping no-op when no conversationId
+- Production files modified (istanbul ignore only):
+  - `apps/web/hooks/use-connection-status.ts`: 3 `/* istanbul ignore next */` on SSR false-arms (typeof navigator, typeof window in getInitialStatus, typeof window in useEffect)
+  - `apps/web/hooks/use-socketio-messaging.ts`: 1 `/* istanbul ignore next */` on SSR false-arm (typeof window in tryReconnectIfTokensAvailable)
+- Reviewer: PASS (rounds: 1 — 3 findings resolved: A1 comment wording, H3 SERVER_EVENTS mock removed in favor of real module, F1 redundant afterEach removed)
+- Notes:
+  1. `@meeshy/shared/types/socketio-events` is NOT mocked — real module resolves via moduleNameMapper → `packages/shared/dist/types/socketio-events.js`. CLAUDE.md rule: "Use real schemas/types in tests, never redefine them."
+  2. notification-socketio.singleton.ts line 73 (`if (!this.socket) return;` in private method) structurally unreachable — private method only called after socket is set in connect(). 98.94% still exceeds 92% target. No istanbul ignore added (not worth the noise).
+  3. Pre-existing flaky test in use-bot-protection.test.tsx (timeElapsed expected 0 got 1) — unrelated to this diff; present on main before changes.
+- Next slice: P1 Conversations & membership × web OR P1 Real-time × shared/SDK (next highest-priority ☐ cell)
+- Commit: (see branch claude/coverage/p1-realtime-web)
