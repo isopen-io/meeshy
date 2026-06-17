@@ -820,6 +820,40 @@ export class PostService {
   }
 
   /**
+   * Compte une ouverture ANONYME (sans compte) d'un post. v1 "comptage bête" :
+   * dédup faible par `sessionKey` (chaîne opaque du header X-Session-Token).
+   * Retourne `true` UNIQUEMENT au 1ᵉʳ insert d'un (postId, sessionKey) — ce qui
+   * incrémente `postOpenCount`. Doublon (P2002) ou post non public → `false`.
+   * Failles connues : voir la section Sécurité de la spec 2026-06-17.
+   */
+  async recordAnonymousOpen(postId: string, sessionKey: string): Promise<boolean> {
+    try {
+      // Un anonyme ne voit que du PUBLIC — réutilise la source de vérité de visibilité.
+      const visibilityFilter = await this.buildVisibilityFilter(undefined);
+      const post = await this.prisma.post.findFirst({
+        where: { id: postId, deletedAt: NOT_DELETED, ...visibilityFilter },
+        select: { id: true },
+      });
+      if (!post) return false;
+
+      // Dédup INSERT-only : l'unicité (postId, sessionKey) fait lever P2002 sur doublon.
+      try {
+        await this.prisma.anonymousPostOpen.create({ data: { postId, sessionKey } });
+      } catch {
+        return false; // déjà compté pour cette session (ou insert en échec) → no-op
+      }
+
+      await this.prisma.post.update({
+        where: { id: postId },
+        data: { postOpenCount: { increment: 1 } },
+      });
+      return true;
+    } catch {
+      return false; // fire-and-forget : un compteur ne doit jamais casser une requête
+    }
+  }
+
+  /**
    * Ingestion append-only des sessions d'engagement (LOT 4 + agrégation LOT 5).
    *
    * - Upsert sur `sessionId` → idempotent : rejouer un ACK perdu après un 200 est
