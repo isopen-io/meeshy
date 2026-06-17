@@ -360,6 +360,29 @@ describe('FailedMessagesStore', () => {
     });
   });
 
+  describe('clearAllFailedMessages — window guard', () => {
+    it('should still clear state when window is undefined (SSR context)', () => {
+      const mockMessage = createMockFailedMessage();
+      act(() => {
+        useFailedMessagesStore.getState().addFailedMessage(mockMessage);
+      });
+
+      // Temporarily remove window to simulate SSR
+      const savedWindow = global.window;
+      // @ts-expect-error simulating SSR
+      delete global.window;
+
+      act(() => {
+        useFailedMessagesStore.getState().clearAllFailedMessages();
+      });
+
+      // Restore window
+      global.window = savedWindow;
+
+      expect(useFailedMessagesStore.getState().failedMessages).toHaveLength(0);
+    });
+  });
+
   describe('Persistence', () => {
     it('should persist only last 10 messages', () => {
       // The store partializes to only persist last 10 messages

@@ -1071,58 +1071,70 @@ private struct ReelImageView: View {
                     .frame(width: 6, height: 6)
             }
         }
+        // Decorative dots → expose the position to VoiceOver ("2 / 5") instead of
+        // announcing each anonymous circle.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "reels.carousel.image", defaultValue: "Image", bundle: .main))
+        .accessibilityValue("\((images.firstIndex { $0.id == currentImageId } ?? 0) + 1) / \(images.count)")
     }
 }
 
-/// One carousel page, pinned to the exact viewport via `GeometryReader` so the
-/// paging stride equals the page width (clean snap) and the image is centred.
-/// A ~9:16 image fills the screen (its `.fit` foreground covers the backdrop);
-/// any other ratio shows the WHOLE image centred over a blurred backdrop of
-/// itself — never black bars, never a cropped/off-centre image.
+/// One carousel page: the whole image, centred (`.fit`), over a blurred ambient
+/// backdrop of itself. A ~9:16 image fills the screen (its `.fit` foreground
+/// covers the backdrop); any other ratio shows the WHOLE image centred over the
+/// blurred backdrop — never black bars, never a cropped/off-centre image.
+///
+/// The page is already sized to the viewport by the pager (one
+/// `.ignoresSafeArea()` + `fillVertical`), so the image is fit/filled with a
+/// plain `.frame(maxWidth/maxHeight: .infinity)` — no per-cell `GeometryReader`
+/// (which under the iOS 16 `TabView` fallback can report `.zero` on the first
+/// pass). Mirrors `ConversationMediaGalleryView` / `ReelPoster`.
 private struct ReelImageCell: View {
     let media: FeedMedia
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                ReelImageBackdrop(media: media)
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .clipped()
+        ZStack {
+            ReelImageBackdrop(media: media)
 
-                ProgressiveCachedImage(
-                    thumbHash: media.thumbHash,
-                    thumbnailUrl: media.thumbnailUrl ?? media.url,
-                    fullUrl: media.url ?? media.thumbnailUrl,
-                    autoLoad: true
-                ) {
-                    Color.clear
-                }
-                .aspectRatio(contentMode: .fit)
-                .frame(width: geo.size.width, height: geo.size.height)
+            ProgressiveCachedImage(
+                thumbHash: media.thumbHash,
+                thumbnailUrl: media.thumbnailUrl ?? media.url,
+                fullUrl: media.url ?? media.thumbnailUrl,
+                autoLoad: true
+            ) {
+                Color.clear
             }
-            .frame(width: geo.size.width, height: geo.size.height)
-            .clipped()
+            .aspectRatio(contentMode: .fit)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
     }
 }
 
-/// Ambient blurred fill behind a `.fit` carousel image — its own image scaled to
-/// fill, blurred and slightly dimmed. Falls back to the media's tint colour.
+/// Ambient blurred fill behind a `.fit` carousel image — the media's small
+/// thumbnail (or its thumbHash when there is no thumbnail) scaled to fill,
+/// blurred and slightly dimmed. NEVER loads the full image (`fullUrl: nil`): a
+/// 28pt blur hides the low resolution, and the full image is already fetched by
+/// the `.fit` foreground — loading it twice would double the fullscreen network
+/// + bitmap cost. Falls back to the media's tint colour.
 private struct ReelImageBackdrop: View {
     let media: FeedMedia
 
     var body: some View {
         ProgressiveCachedImage(
             thumbHash: media.thumbHash,
-            thumbnailUrl: media.thumbnailUrl ?? media.url,
-            fullUrl: media.url ?? media.thumbnailUrl,
+            thumbnailUrl: media.thumbnailUrl,
+            fullUrl: nil,
             autoLoad: true
         ) {
             Color(hex: media.thumbnailColor)
         }
         .aspectRatio(contentMode: .fill)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .scaleEffect(1.15)
         .blur(radius: 28)
+        .clipped()
         .overlay(Color.black.opacity(0.22))
     }
 }
@@ -1253,8 +1265,9 @@ private struct ReelAudioControl: View {
 
 // MARK: - Reel Poster
 
-/// Edge-to-edge progressive image used as a video poster and as the image-reel
-/// content. Falls back to a tinted fill while loading.
+/// Edge-to-edge progressive image used as the video poster. Falls back to a
+/// tinted fill while loading. (Image reels now use `ReelImageCell`, which fits
+/// the image over a blurred backdrop rather than cropping it full-bleed.)
 /// `internal` (not `private`) so the feed-card surface (`ReelFeedVideoSurface`)
 /// can reuse it as the muted-video poster.
 struct ReelPoster: View {

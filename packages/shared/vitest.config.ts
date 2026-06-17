@@ -20,10 +20,10 @@ export default defineConfig({
       ],
       exclude: ['**/*.d.ts', '**/index.ts', '**/signal-store-interface.ts'],
       thresholds: {
-        branches: 80,
+        branches: 92,
         functions: 80,
-        lines: 80,
-        statements: 80,
+        lines: 95,
+        statements: 95,
       },
     },
   },
