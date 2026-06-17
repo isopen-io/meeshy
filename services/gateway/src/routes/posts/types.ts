@@ -246,7 +246,10 @@ export const WatchSampleSchema = z.object({
 
 export const EngagementSessionSchema = z.object({
   sessionId: z.string().uuid(),
-  userId: z.string(),
+  // Champ informatif côté client uniquement : la route IGNORE ce userId et
+  // prend l'identité du token auth (anti-spoof). Optionnel pour refléter
+  // qu'il n'est pas fiable côté serveur.
+  userId: z.string().optional(),
   postId: z.string().regex(/^[0-9a-fA-F]{24}$/),
   contentType: z.enum(['POST', 'REEL', 'STORY', 'STATUS']),
   surface: z.string().max(40),

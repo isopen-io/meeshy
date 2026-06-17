@@ -1,4 +1,4 @@
-import { randomInt } from 'crypto';
+import { generateShortToken } from './TrackingLinkService';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
@@ -750,10 +750,8 @@ export class PostService {
    * rate-limiting de `/l/:token` (contenu partagé déjà public).
    */
   private async generateShareToken(): Promise<string> {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      let token = '';
-      for (let i = 0; i < 6; i += 1) token += chars.charAt(randomInt(0, chars.length));
+      const token = generateShortToken(6);
       const clash = await this.prisma.trackingLink.findUnique({ where: { token } });
       if (!clash) return token;
     }

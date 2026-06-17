@@ -14,6 +14,20 @@ export function resolveFrontendBaseUrl(): string {
   return (process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || 'https://meeshy.me').replace(/\/+$/, '');
 }
 
+const SHORT_TOKEN_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+/**
+ * Génère un token court via CSPRNG (`crypto.randomInt`) — JAMAIS `Math.random()`
+ * (un PRNG prédictible laisserait deviner les tokens d'autres partageurs). Source
+ * UNIQUE partagée par TrackingLinkService et PostService (collision → re-tirage
+ * géré par l'appelant). 6 chars suffisent face au brute-force grâce au rate-limit.
+ */
+export function generateShortToken(length = 6): string {
+  let token = '';
+  for (let i = 0; i < length; i += 1) token += SHORT_TOKEN_CHARS.charAt(randomInt(0, SHORT_TOKEN_CHARS.length));
+  return token;
+}
+
 /**
  * Cible typée résolue depuis un token `/l/<token>` — sert la page de
  * redirection intelligente (web) et le DeepLinkRouter (iOS). `kind` distingue
@@ -43,12 +57,7 @@ export class TrackingLinkService {
    * Génère un token unique de 6 caractères
    */
   private generateToken(): string {
-    const characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let token = '';
-    for (let i = 0; i < 6; i++) {
-      token += characters.charAt(randomInt(0, characters.length));
-    }
-    return token;
+    return generateShortToken(6);
   }
 
   /**
