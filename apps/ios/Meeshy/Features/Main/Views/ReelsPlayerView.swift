@@ -885,13 +885,18 @@ private struct ReelVideoView: View {
         // video width and pushed the action rail / info / scrub bar off-screen.
         GeometryReader { geo in
             ZStack {
-                ReelPoster(thumbHash: media.thumbHash, url: media.thumbnailUrl ?? media.url, color: media.thumbnailColor)
+                // Blurred ambient fill behind the `.fit` poster/video so the WHOLE
+                // reel is visible (letterboxed), never cropped and never black
+                // bars — mirrors the `.fit` image carousel (`ReelImageBackdrop`).
+                ReelImageBackdrop(media: media)
+
+                ReelPoster(thumbHash: media.thumbHash, url: media.thumbnailUrl ?? media.url, color: media.thumbnailColor, contentMode: .fit)
 
                 // Tap-to-pause is handled by the page-level tap zone (ReelPageView),
                 // so this surface stays gesture-free to avoid swallowing scrub/rail
                 // touches.
                 if isActive, ready, isShowingThis, let player = manager.player {
-                    ReelVideoSurface(player: player)
+                    ReelVideoSurface(player: player, videoGravity: .resizeAspect)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
                 } else if isActive, !ready {
@@ -971,18 +976,28 @@ private struct ReelVideoView: View {
 /// can reuse the same chrome-free render path for muted background playback.
 struct ReelVideoSurface: UIViewRepresentable {
     let player: AVPlayer
+    /// `.resizeAspectFill` (default) crops the video edge-to-edge — kept for the
+    /// feed-card surface. The fullscreen viewer passes `.resizeAspect` so the
+    /// WHOLE video is visible, letterboxed over the blurred ambient backdrop
+    /// (mirrors the `.fit` image carousel — never a cropped reel).
+    var videoGravity: AVLayerVideoGravity = .resizeAspectFill
 
     func makeUIView(context: Context) -> ReelPlayerLayerView {
         let view = ReelPlayerLayerView()
-        view.backgroundColor = .black
+        // Transparent (was black): under `.resizeAspect` the letterbox bars must
+        // reveal the blurred backdrop behind the surface, not a black band.
+        view.backgroundColor = .clear
         view.playerLayer.player = player
-        view.playerLayer.videoGravity = .resizeAspectFill
+        view.playerLayer.videoGravity = videoGravity
         return view
     }
 
     func updateUIView(_ view: ReelPlayerLayerView, context: Context) {
         if view.playerLayer.player !== player {
             view.playerLayer.player = player
+        }
+        if view.playerLayer.videoGravity != videoGravity {
+            view.playerLayer.videoGravity = videoGravity
         }
     }
 
@@ -1311,6 +1326,10 @@ struct ReelPoster: View {
     let thumbHash: String?
     let url: String?
     let color: String
+    /// `.fill` (default) crops edge-to-edge for the feed card. The fullscreen
+    /// viewer passes `.fit` so the poster matches the `.resizeAspect` video it
+    /// sits under — same framing during the poster→first-frame handoff.
+    var contentMode: ContentMode = .fill
 
     var body: some View {
         ProgressiveCachedImage(
@@ -1321,7 +1340,7 @@ struct ReelPoster: View {
         ) {
             Color(hex: color).shimmer()
         }
-        .aspectRatio(contentMode: .fill)
+        .aspectRatio(contentMode: contentMode)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
         .ignoresSafeArea()
