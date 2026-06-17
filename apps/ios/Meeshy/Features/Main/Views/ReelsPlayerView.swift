@@ -503,6 +503,47 @@ struct ReelPageView: View {
 
     // MARK: Info overlay (author + description + timestamp + language flags)
 
+    /// True when the signed-in user authored this reel — gates the private reach
+    /// stats (impressions + views) shown only to the author.
+    private var isAuthor: Bool {
+        guard let me = AuthManager.shared.currentUser?.id else { return false }
+        return me == reel.authorId
+    }
+
+    /// Username, then (AUTHOR ONLY) impressions then views, middle-dot separated:
+    /// "@pseudo · 📊 1.2k · 👁 3.4k". Mirrors the feed reel card.
+    @ViewBuilder
+    private var authorMetaLine: some View {
+        HStack(spacing: 5) {
+            if let username = reel.authorUsername, !username.isEmpty {
+                Text("@\(username)").font(.caption).foregroundColor(.white.opacity(0.7))
+            }
+            if isAuthor {
+                if reel.authorUsername?.isEmpty == false { metaDot }
+                statInline(icon: "chart.bar.fill", count: reel.viewCount,
+                           a11yLabel: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
+                metaDot
+                statInline(icon: "eye.fill", count: reel.postOpenCount,
+                           a11yLabel: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main))
+            }
+        }
+    }
+
+    private var metaDot: some View {
+        Text("·").font(.caption).foregroundColor(.white.opacity(0.55))
+    }
+
+    private func statInline(icon: String, count: Int, a11yLabel: String) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon).font(.system(size: 10, weight: .semibold))
+            Text(ReelActionButton.compact(count)).font(.caption2.weight(.medium))
+        }
+        .foregroundColor(.white.opacity(0.85))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(a11yLabel)
+        .accessibilityValue("\(count)")
+    }
+
     private var infoOverlay: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
@@ -524,11 +565,7 @@ struct ReelPageView: View {
                         Text(reel.author)
                             .font(.subheadline.weight(.bold))
                             .foregroundColor(.white)
-                        if let username = reel.authorUsername, !username.isEmpty {
-                            Text("@\(username)")
-                                .font(.caption)
-                                .foregroundColor(.white.opacity(0.7))
-                        }
+                        authorMetaLine
                     }
                 }
                 .buttonStyle(.plain)
@@ -1145,23 +1182,51 @@ private struct ReelImageView: View {
 private struct ReelImageCell: View {
     let media: FeedMedia
 
-    var body: some View {
-        ZStack {
-            ReelImageBackdrop(media: media)
+    /// Explicit ratio from the media dimensions so `.fit` actually constrains the
+    /// frame (ProgressiveCachedImage has no intrinsic ratio at first render — its
+    /// placeholder is `Color.clear` — so a `.aspectRatio(contentMode:)` alone
+    /// established a full-screen frame and the loaded image then stretched/filled
+    /// it). With an explicit ratio the whole image shows, letterboxed over the
+    /// blurred backdrop. Falls back to 9:16 when dimensions are missing.
+    private var mediaAspect: CGFloat {
+        guard let w = media.width, let h = media.height, w > 0, h > 0 else { return 9.0 / 16.0 }
+        return CGFloat(w) / CGFloat(h)
+    }
 
-            ProgressiveCachedImage(
-                thumbHash: media.thumbHash,
-                thumbnailUrl: media.thumbnailUrl ?? media.url,
-                fullUrl: media.url ?? media.thumbnailUrl,
-                autoLoad: true
-            ) {
-                Color.clear
+    var body: some View {
+        GeometryReader { geo in
+            // Exact fitted size from the media ratio — bulletproof: the image is
+            // framed to its computed fit box (≤ viewport in both axes), so it can
+            // NEVER overflow the viewport. The blurred backdrop fills behind.
+            let fit = fittedSize(in: geo.size)
+            ZStack {
+                ReelImageBackdrop(media: media)
+
+                ProgressiveCachedImage(
+                    thumbHash: media.thumbHash,
+                    thumbnailUrl: media.thumbnailUrl ?? media.url,
+                    fullUrl: media.url ?? media.thumbnailUrl,
+                    autoLoad: true
+                ) {
+                    Color.clear
+                }
+                .frame(width: fit.width, height: fit.height)
             }
-            .aspectRatio(contentMode: .fit)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipped()
+    }
+
+    /// Largest box with `mediaAspect` that fits inside `container` (letterbox).
+    /// Guards a zero container (first layout pass) by returning it unchanged.
+    private func fittedSize(in container: CGSize) -> CGSize {
+        guard container.width > 0, container.height > 0 else { return container }
+        let containerAspect = container.width / container.height
+        if mediaAspect > containerAspect {
+            return CGSize(width: container.width, height: container.width / mediaAspect)
+        } else {
+            return CGSize(width: container.height * mediaAspect, height: container.height)
+        }
     }
 }
 

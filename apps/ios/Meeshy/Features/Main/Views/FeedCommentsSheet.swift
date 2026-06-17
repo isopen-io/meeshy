@@ -239,7 +239,18 @@ struct CommentsSheetView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                theme.backgroundGradient.ignoresSafeArea()
+                // Translucent sheet: no opaque fill on 16.4+ (the translucent
+                // `presentationBackground` lets the reel/video show through, in
+                // light AND dark). Pre-16.4 keeps the opaque gradient (no
+                // presentation-background API).
+                Group {
+                    if #available(iOS 16.4, *) {
+                        Color.clear
+                    } else {
+                        theme.backgroundGradient
+                    }
+                }
+                .ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     ScrollView(showsIndicators: false) {
@@ -321,6 +332,7 @@ struct CommentsSheetView: View {
         }
         .presentationDetents([.large, .medium])
         .presentationDragIndicator(.visible)
+        .modifier(TranslucentSheetBackground())
         .onAppear {
             SocialSocketManager.shared.joinPostRoom(postId: post.id)
             // Sème l'état "liké par moi" des commentaires top-level déjà chargés
@@ -1031,5 +1043,18 @@ struct FeedCard: View {
         FeedPostCard(
             post: FeedPost(author: item.author, content: item.content, timestamp: item.timestamp, likes: item.likes)
         )
+    }
+}
+
+/// Makes a sheet's backdrop translucent (`.ultraThinMaterial`) so the reel /
+/// post media shows through behind the comments, in light AND dark. No-op
+/// before iOS 16.4 (the `presentationBackground` API is unavailable there).
+private struct TranslucentSheetBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.4, *) {
+            content.presentationBackground(.ultraThinMaterial)
+        } else {
+            content
+        }
     }
 }
