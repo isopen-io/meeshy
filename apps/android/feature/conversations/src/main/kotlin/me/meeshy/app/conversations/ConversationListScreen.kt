@@ -63,6 +63,7 @@ fun ConversationListScreen(
     onConversationClick: (String) -> Unit,
     onLogout: () -> Unit,
     viewModel: ConversationListViewModel = hiltViewModel(),
+    header: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -103,6 +104,7 @@ fun ConversationListScreen(
                 .padding(padding),
         ) {
             ConnectionBannerStrip(state.banner)
+            header()
             ConversationFilterBar(
                 selected = state.selectedFilter,
                 onSelect = viewModel::selectFilter,

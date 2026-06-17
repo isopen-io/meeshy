@@ -1,0 +1,215 @@
+package me.meeshy.app.stories
+
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
+import me.meeshy.feature.stories.R
+import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.hexColor
+
+private const val SLIDE_DURATION_MS = 5000
+
+/**
+ * Minimal but real story viewer: segmented progress, tap-to-advance/dismiss,
+ * timed auto-advance gated on the slide, Prisme-resolved text and the slide's
+ * background media. Android port of the core `StoryViewerView` loop.
+ */
+@Composable
+fun StoryViewerScreen(
+    onClose: () -> Unit,
+    viewModel: StoryViewerViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val slide = state.current
+    val accent = remember(slide?.accentHex) { slide?.accentHex ?: "1A1A2E" }
+
+    val progress = remember { Animatable(0f) }
+
+    androidx.compose.runtime.LaunchedEffect(state.index, state.slides.size) {
+        if (state.slides.isEmpty()) return@LaunchedEffect
+        viewModel.markCurrentViewed()
+        progress.snapTo(0f)
+        progress.animateTo(1f, tween(durationMillis = SLIDE_DURATION_MS, easing = LinearEasing))
+        if (state.hasNext) viewModel.advance() else onClose()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(hexColor(accent))
+            .pointerInput(state.index, state.slides.size) {
+                detectTapGestures { offset ->
+                    if (offset.x < size.width / 2f) {
+                        viewModel.back()
+                    } else if (state.hasNext) {
+                        viewModel.advance()
+                    } else {
+                        onClose()
+                    }
+                }
+            },
+    ) {
+        if (slide?.imageUrl != null) {
+            AsyncImage(
+                model = slide.imageUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else if (slide != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(hexColor(slide.accentHex), Color.Black),
+                        ),
+                    ),
+            )
+        }
+
+        if (slide != null && slide.text.isNotBlank()) {
+            Text(
+                text = slide.text,
+                color = MeeshyPalette.White,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(MeeshySpacing.xl),
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.sm),
+        ) {
+            SegmentedProgress(
+                count = state.slides.size,
+                index = state.index,
+                currentProgress = progress.value,
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = MeeshySpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = state.authorName,
+                    color = MeeshyPalette.White,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = MeeshySpacing.xs),
+                )
+                if (slide?.isTranslated == true) {
+                    TranslatedBadge()
+                }
+                IconButton(onClick = onClose) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = stringResource(R.string.stories_viewer_close),
+                        tint = MeeshyPalette.White,
+                    )
+                }
+            }
+        }
+
+        if (state.slides.isEmpty() && !state.isLoading) {
+            Text(
+                text = stringResource(R.string.stories_empty),
+                color = MeeshyPalette.White,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SegmentedProgress(count: Int, index: Int, currentProgress: Float) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        repeat(count) { i ->
+            val fill = when {
+                i < index -> 1f
+                i == index -> currentProgress
+                else -> 0f
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(3.dp)
+                    .clip(CircleShape)
+                    .background(MeeshyPalette.White.copy(alpha = 0.3f)),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(fill)
+                        .clip(CircleShape)
+                        .background(MeeshyPalette.White),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TranslatedBadge() {
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.4f))
+            .padding(horizontal = MeeshySpacing.sm, vertical = 2.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.stories_translated),
+            color = MeeshyPalette.White,
+            style = MaterialTheme.typography.labelSmall,
+        )
+    }
+}

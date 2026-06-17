@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_my_story">Your story</string>
+    <string name="stories_add">Add</string>
+    <string name="stories_open">Open %1$s\'s story</string>
+    <string name="stories_viewer_close">Close</string>
+    <string name="stories_viewer_next">Next story</string>
+    <string name="stories_viewer_previous">Previous story</string>
+    <string name="stories_translated">Translated</string>
+    <string name="stories_empty">No story to show</string>
+</resources>

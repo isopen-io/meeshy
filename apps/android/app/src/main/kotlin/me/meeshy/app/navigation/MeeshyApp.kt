@@ -43,6 +43,9 @@ import me.meeshy.app.feed.FeedScreen
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.profile.ProfileScreen
 import me.meeshy.app.settings.SettingsScreen
+import me.meeshy.app.stories.StoryTray
+import me.meeshy.app.stories.StoryViewerScreen
+import me.meeshy.app.stories.StoryViewerViewModel
 
 object Routes {
     const val LOGIN = "login"
@@ -59,9 +62,12 @@ object Routes {
     const val SETTINGS = "settings"
     const val PROFILE_USER = "profile/{userId}"
     const val PROFILE_DEEP_LINK = "meeshy://$PROFILE_USER"
+    const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}"
+    const val STORY_DEEP_LINK = "meeshy://$STORY_VIEWER"
 
     fun chat(conversationId: String): String = "chat/$conversationId"
     fun profile(userId: String): String = "profile/$userId"
+    fun story(userId: String): String = "story/$userId"
 }
 
 private data class TabItem(
@@ -179,6 +185,11 @@ fun MeeshyApp() {
                             popUpTo(Routes.CONVERSATIONS) { inclusive = true }
                         }
                     },
+                    header = {
+                        StoryTray(
+                            onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
+                        )
+                    },
                 )
             }
             composable(
@@ -226,6 +237,15 @@ fun MeeshyApp() {
                 ),
             ) {
                 ProfileScreen(onBack = { navController.popBackStack() })
+            }
+            composable(
+                route = Routes.STORY_VIEWER,
+                arguments = listOf(navArgument(StoryViewerViewModel.USER_ID_ARG) { type = NavType.StringType }),
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = Routes.STORY_DEEP_LINK },
+                ),
+            ) {
+                StoryViewerScreen(onClose = { navController.popBackStack() })
             }
         }
     }
