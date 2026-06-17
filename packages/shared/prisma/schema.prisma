@@ -2874,6 +2874,7 @@ model Post {
   media     PostMedia[]
   comments  PostComment[]
   views       PostView[]
+  anonymousOpens AnonymousPostOpen[]
   impressions PostImpression[]
   bookmarks   PostBookmark[]
   engagements PostEngagement[]
@@ -2888,6 +2889,22 @@ model Post {
   @@index([expiresAt])
   @@index([type, createdAt])
   @@index([originalRepostOfId])
+}
+
+/// Déduplication des ouvertures ANONYMES d'un post (v1 "comptage bête").
+/// `sessionKey` = chaîne opaque issue du header X-Session-Token (token de
+/// session iOS anonyme OU token persisté par le navigateur). Identifiant
+/// FAIBLE — voir la section Sécurité de la spec 2026-06-17. INSERT-only :
+/// le 1ᵉʳ insert d'un (postId, sessionKey) incrémente Post.postOpenCount.
+model AnonymousPostOpen {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  postId     String   @db.ObjectId
+  sessionKey String
+  createdAt  DateTime @default(now())
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, sessionKey])
+  @@index([postId])
 }
 
 /// Bibliothèque de sons d'arrière-plan pour les stories
