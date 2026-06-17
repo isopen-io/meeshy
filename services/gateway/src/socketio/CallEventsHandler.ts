@@ -137,6 +137,7 @@ export class CallEventsHandler {
     return null;
   }
 
+  /* istanbul ignore next -- dead code: Socket.IO RemoteSocket proxies don't embed custom props; use getUserId() callback instead */
   private getSocketUserId(sock: any): string | undefined {
     return sock.userId || sock.data?.userId;
   }
@@ -584,6 +585,7 @@ export class CallEventsHandler {
             // Push notification for offline callees. The whole pipeline
             // (createMissedCallNotifications) was already wired but never
             // called from this path before audit 2026-05-11.
+            /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
             await this.handleMissedCall(callSession.id).catch((err: any) => {
               logger.error('handleMissedCall failed for ringing timeout', {
                 callId: callSession.id, err: err?.message
@@ -994,6 +996,7 @@ export class CallEventsHandler {
             // timeout so the UX is identical (push notification + in-app
             // banner) regardless of whether the call was cancelled by the
             // initiator or timed out server-side.
+            /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
             this.handleMissedCall(callSession.id).catch((err) => {
               logger.error('❌ handleMissedCall failed after leave', { callId: data.callId, err });
             });

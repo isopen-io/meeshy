@@ -192,7 +192,7 @@ describe('TrackingLinkPage routing by targetType', () => {
       jest.useRealTimers();
     });
 
-    it('POST attempts native app-open then falls back to /feeds/post/<id>', async () => {
+    it('POST attempts native app-open then falls back to /post/<id>', async () => {
       global.fetch = mockFetch({
         click: { data: { clickId: 'c1' } },
         resolve: { data: { targetType: 'POST', targetId: 'post7', isActive: true } },
@@ -210,7 +210,7 @@ describe('TrackingLinkPage routing by targetType', () => {
       act(() => {
         jest.advanceTimersByTime(1600);
       });
-      expect(replaceSpy).toHaveBeenCalledWith('/feeds/post/post7');
+      expect(replaceSpy).toHaveBeenCalledWith('/post/post7');
     });
 
     it('STORY uses the meeshy://s/<id> scheme', async () => {
