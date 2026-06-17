@@ -519,6 +519,7 @@
 		SVET0001000100010001B001 /* StoryVideoExportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SVET0001000100010001F001 /* StoryVideoExportServiceTests.swift */; };
 		SVLO0001000100010001002 /* StoryViewerLanguageOverrideTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SVLO0001000100010001001 /* StoryViewerLanguageOverrideTests.swift */; };
 		SVRF0001000100010001002 /* StoryViewerReactionFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SVRF0001000100010001001 /* StoryViewerReactionFlowTests.swift */; };
+		SVCR0001000100010001002 /* StoryViewerCommentReactionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SVCR0001000100010001001 /* StoryViewerCommentReactionTests.swift */; };
 		TD6001A001A001A001A00001 /* TrackingLinkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TD6002A002A002A002A00002 /* TrackingLinkDetailView.swift */; };
 		TDTH0001000100010001001 /* TypingDotTimerHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = TDTH0001000100010001000 /* TypingDotTimerHarness.swift */; };
 		TFA0MK01A001A001A001A001 /* MockTwoFactorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = TFA0MK01B001B001B001B001 /* MockTwoFactorService.swift */; };
@@ -1109,6 +1110,7 @@
 		SVET0001000100010001F001 /* StoryVideoExportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryVideoExportServiceTests.swift; sourceTree = "<group>"; };
 		SVLO0001000100010001001 /* StoryViewerLanguageOverrideTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerLanguageOverrideTests.swift; sourceTree = "<group>"; };
 		SVRF0001000100010001001 /* StoryViewerReactionFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerReactionFlowTests.swift; sourceTree = "<group>"; };
+		SVCR0001000100010001001 /* StoryViewerCommentReactionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerCommentReactionTests.swift; sourceTree = "<group>"; };
 		TD6002A002A002A002A00002 /* TrackingLinkDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingLinkDetailView.swift; sourceTree = "<group>"; };
 		TDTH0001000100010001000 /* TypingDotTimerHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingDotTimerHarness.swift; sourceTree = "<group>"; };
 		TFA0MK01B001B001B001B001 /* MockTwoFactorService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MockTwoFactorService.swift; sourceTree = "<group>"; };
@@ -2061,6 +2063,7 @@
 				TSTRN0001000100010001000 /* Notifications */,
 				SGDT0001000100010001001 /* StoryGestureDecisionsTests.swift */,
 				SVRF0001000100010001001 /* StoryViewerReactionFlowTests.swift */,
+				SVCR0001000100010001001 /* StoryViewerCommentReactionTests.swift */,
 				SVLO0001000100010001001 /* StoryViewerLanguageOverrideTests.swift */,
 			);
 			path = Stories;
@@ -2857,6 +2860,7 @@
 				STAB0001000100010001002 /* StoryActiveBridgeTests.swift in Sources */,
 				SGDT0001000100010001002 /* StoryGestureDecisionsTests.swift in Sources */,
 				SVRF0001000100010001002 /* StoryViewerReactionFlowTests.swift in Sources */,
+				SVCR0001000100010001002 /* StoryViewerCommentReactionTests.swift in Sources */,
 				SVLO0001000100010001002 /* StoryViewerLanguageOverrideTests.swift in Sources */,
 				CLRT0001000100010001002 /* ComposerLanguageResolverTests.swift in Sources */,
 				AE6AF9B4AA7E4759A0A02D38 /* ThemedBackButtonTests.swift in Sources */,

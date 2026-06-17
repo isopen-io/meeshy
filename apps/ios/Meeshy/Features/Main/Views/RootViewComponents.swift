@@ -471,9 +471,6 @@ struct ThemedFeedOverlay: View {
             onSendComment: { postId, content, parentId in
                 Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
             },
-            onLikeComment: { postId, commentId in
-                Task { await viewModel.likeComment(postId: postId, commentId: commentId) }
-            },
             onTapPost: { post in
                 router.push(.postDetail(post.id, post))
             },

@@ -76,6 +76,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         throw NSError(domain: "mock", code: -1)
     }
     func likeComment(postId: String, commentId: String) async throws {}
+    func unlikeComment(postId: String, commentId: String) async throws {}
     func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool) async throws -> APIPost {
         throw NSError(domain: "mock", code: -1)
     }

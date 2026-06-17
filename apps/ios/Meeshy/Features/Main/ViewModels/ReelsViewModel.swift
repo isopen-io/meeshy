@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import MeeshySDK
 import MeeshyUI
 
@@ -36,7 +37,17 @@ struct CacheCoordinatorReelFeedCache: ReelFeedCacheReading {
 @MainActor
 final class ReelsViewModel: ObservableObject {
     @Published private(set) var reels: [FeedPost] = []
-    @Published var currentId: String?
+    /// Réel actuellement visible. Le `didSet` gère l'appartenance à la post room
+    /// (`ROOMS.post`) du réel actif : on quitte l'ancienne, on rejoint la nouvelle.
+    /// C'est ce qui rend le like du reel viewer cohérent en TEMPS RÉEL avec le feed
+    /// et le détail (le gateway émet `post:liked` vers la post room — unification).
+    @Published var currentId: String? {
+        didSet {
+            guard oldValue != currentId else { return }
+            if let old = oldValue { SocialSocketManager.shared.leavePostRoom(postId: old) }
+            if let new = currentId { SocialSocketManager.shared.joinPostRoom(postId: new) }
+        }
+    }
     @Published private(set) var isLoadingMore = false
     @Published private(set) var hasLoadedOnce = false
 
@@ -54,6 +65,7 @@ final class ReelsViewModel: ObservableObject {
     private var hasMore = true
     private var isFetching = false
     private var coldStartTask: Task<Void, Never>?
+    private var cancellables = Set<AnyCancellable>()
     private let service: PostServiceProviding
     private let cache: ReelFeedCacheReading
 
@@ -67,6 +79,36 @@ final class ReelsViewModel: ObservableObject {
     ) {
         self.service = service
         self.cache = cache
+        subscribeToLikeEvents()
+    }
+
+    /// S'abonne à l'événement CANONIQUE absolu `post:liked`/`post:unliked` (le ❤️
+    /// du reel viewer y passe désormais, comme le feed et le détail). Le compteur
+    /// `likeCount` fait autorité : on pose la base, on purge le delta optimiste et
+    /// on confirme `isLiked` pour l'acteur.
+    private func subscribeToLikeEvents() {
+        SocialSocketManager.shared.postLiked
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.applyServerLike($0.postId, likeCount: $0.likeCount, userId: $0.userId, liked: true) }
+            .store(in: &cancellables)
+        SocialSocketManager.shared.postUnliked
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.applyServerLike($0.postId, likeCount: $0.likeCount, userId: $0.userId, liked: false) }
+            .store(in: &cancellables)
+    }
+
+    private func applyServerLike(_ postId: String, likeCount: Int, userId: String, liked: Bool) {
+        guard let index = reels.firstIndex(where: { $0.id == postId }) else { return }
+        reels[index].likes = likeCount
+        likeDelta[postId] = nil
+        guard userId == AuthManager.shared.currentUser?.id else { return }
+        reels[index].isLiked = liked
+        if liked { likedIds.insert(postId) } else { likedIds.remove(postId) }
+    }
+
+    /// À appeler quand le viewer se ferme : quitte la post room du réel actif.
+    func leaveActivePostRoom() {
+        if let id = currentId { SocialSocketManager.shared.leavePostRoom(postId: id) }
     }
 
     var currentIndex: Int? {
@@ -199,10 +241,35 @@ final class ReelsViewModel: ObservableObject {
         HapticFeedback.light()
         Task {
             do {
-                if wasLiked { try await service.unlike(postId: id) }
-                else { try await service.like(postId: id) }
+                // Socket PRIMAIRE (réaction ❤️) — NORMALISE le reels sur le feed et le
+                // détail (qui écrivaient déjà via socket). Le serveur émet l'événement
+                // canonique `post:liked` → `applyServerLike` réconcilie base + delta.
+                // Timeout dur : protège contre un SocialSocketManager bloqué (heartInFlight
+                // resterait verrouillé). Miroir de `FeedView.togglePostHeart`.
+                try await withTaskTimeout(seconds: TaskTimeoutDefaults.socialReaction) {
+                    if wasLiked {
+                        _ = try await SocialSocketManager.shared.removePostReaction(
+                            postId: id, emoji: StoryViewerView.heartEmoji
+                        )
+                    } else {
+                        _ = try await SocialSocketManager.shared.addPostReaction(
+                            postId: id, emoji: StoryViewerView.heartEmoji
+                        )
+                    }
+                }
             } catch {
-                applyLike(id: id, liked: wasLiked)
+                // Fallback REST (mutuellement exclusif avec le socket : déclenché SEULEMENT
+                // si le socket échoue). Rollback de l'optimistic UNIQUEMENT si le REST
+                // échoue aussi — sinon le like est persisté côté serveur.
+                let restOK: Bool
+                do {
+                    if wasLiked { try await service.unlike(postId: id) }
+                    else { try await service.like(postId: id) }
+                    restOK = true
+                } catch {
+                    restOK = false
+                }
+                if !restOK { applyLike(id: id, liked: wasLiked) }
             }
             heartInFlight.remove(id)
         }

@@ -248,7 +248,8 @@ extension APIPost {
                         content: c.content,
                         timestamp: c.createdAt, likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
-                        originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent)
+                        originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent,
+                        currentUserReactions: c.currentUserReactions)
         }
 
         var repost: RepostContent?
