@@ -942,7 +942,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/web/hooks/use-bot-protection.ts`
 - [~] `apps/web/hooks/use-call-duration.ts`
 - [ ] `apps/web/hooks/use-call-quality.ts`
-- [ ] `apps/web/hooks/use-connection-status.ts`
+- [x] `apps/web/hooks/use-connection-status.ts`
 - [ ] `apps/web/hooks/use-contacts-actions.ts`
 - [ ] `apps/web/hooks/use-contacts-data.ts`
 - [~] `apps/web/hooks/use-contacts-filtering.ts`
@@ -1001,7 +1001,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/hooks/use-registration-wizard.ts`
 - [~] `apps/web/hooks/use-resolved-theme.ts`
 - [ ] `apps/web/hooks/use-single-tap.ts`
-- [~] `apps/web/hooks/use-socketio-messaging.ts`
+- [x] `apps/web/hooks/use-socketio-messaging.ts`
 - [ ] `apps/web/hooks/use-stream-messages.ts`
 - [ ] `apps/web/hooks/use-stream-socket.ts`
 - [ ] `apps/web/hooks/use-stream-translation.ts`
@@ -1241,7 +1241,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/services/message.service.ts`
 - [~] `apps/web/services/messages.service.ts`
 - [ ] `apps/web/services/monitoring.service.ts`
-- [ ] `apps/web/services/notification-socketio.singleton.ts`
+- [x] `apps/web/services/notification-socketio.singleton.ts`
 - [~] `apps/web/services/notification.service.ts`
 - [ ] `apps/web/services/password-reset.service.ts`
 - [~] `apps/web/services/permissions.service.ts`
