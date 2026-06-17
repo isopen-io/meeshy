@@ -16,7 +16,7 @@ export class PrismaClient {
   [key: string]: any;
 }
 
-// Enum stubs that some services reference
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const Prisma = {
   PrismaClientKnownRequestError: class extends Error {
     code: string;
@@ -26,5 +26,8 @@ export const Prisma = {
     }
   },
   PrismaClientValidationError: class extends Error {},
+  // Runtime identity function — Prisma.validator<T>() returns (v: T) => T
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  validator: () => (value: any) => value,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } as any;
