@@ -698,6 +698,8 @@ struct UniversalComposerBar: View {
                     .contentShape(Circle())
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.5), value: textAnalyzer.sentiment)
+            .accessibilityLabel(String(localized: "a11y.composer.sentiment", defaultValue: "Tonalité du message", bundle: .main))
+            .accessibilityValue(textAnalyzer.sentiment.emoji)
 
             // Language selector
             languageSelectorPill
@@ -764,6 +766,9 @@ struct UniversalComposerBar: View {
                     : Color(hex: accentColor)
             )
         }
+        .accessibilityLabel(String(localized: "a11y.composer.language", defaultValue: "Langue du message", bundle: .main))
+        .accessibilityValue(currentLangOption.name)
+        .accessibilityHint(String(localized: "a11y.composer.language.hint", defaultValue: "Choisir la langue d'envoi du message", bundle: .main))
     }
 
     // ========================================================================

@@ -342,12 +342,34 @@ struct BubbleStandardLayout: View {
 
     private var reactionSummaries: [ReactionSummary] { content.reactions }
 
+    /// VoiceOver phrasing for the quoted-reply context of this bubble, injected
+    /// between the sender name and the body so the reading order is
+    /// expediteur -> [reponse a...] -> contenu. Returns nil when the bubble is
+    /// not a reply. The combined bubble element flattens the visual quote card's
+    /// own sub-views, so this is the only way the reply reaches VoiceOver.
+    private var replyAccessibilityLabel: String? {
+        guard let reply = content.reply?.reference else { return nil }
+        let author: String = reply.isMe
+            ? String(localized: "a11y.bubble.replyTo.you", defaultValue: "vous-m\u{00EA}me", bundle: .main)
+            : (reply.authorName.isEmpty
+                ? String(localized: "a11y.bubble.replyTo.unknown", defaultValue: "un message", bundle: .main)
+                : reply.authorName)
+        let excerpt = reply.previewText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if excerpt.isEmpty {
+            return String(format: String(localized: "a11y.bubble.replyTo", defaultValue: "En r\u{00E9}ponse \u{00E0} %@", bundle: .main), author)
+        }
+        return String(format: String(localized: "a11y.bubble.replyTo.excerpt", defaultValue: "En r\u{00E9}ponse \u{00E0} %@\u{00A0}: %@", bundle: .main), author, excerpt)
+    }
+
     private var messageAccessibilityLabel: String {
         var parts: [String] = []
         if !content.isMe, let senderName = content.senderName {
             parts.append(senderName)
         } else if !content.isMe {
             parts.append("Inconnu")
+        }
+        if let replyLabel = replyAccessibilityLabel {
+            parts.append(replyLabel)
         }
         if let raw = content.text?.raw, !raw.isEmpty {
             parts.append(raw)

@@ -72,6 +72,17 @@ struct FeedPostCard: View {
     var accentColor: String { post.authorColor }
     private var topComments: [FeedComment] { Array(post.comments.sorted { $0.likes > $1.likes }.prefix(3)) }
 
+    /// VoiceOver label for the tappable media preview. Distinguishes a video
+    /// from an image (and falls back to a generic "media" wording for mixed or
+    /// other types) and attributes it to the post author.
+    private var mediaAccessibilityLabel: String {
+        let isVideo = post.media.contains { $0.type == .video }
+        if isVideo {
+            return String(format: String(localized: "a11y.feed.post.media.video", defaultValue: "Vidéo partagée par %@", bundle: .main), post.author)
+        }
+        return String(format: String(localized: "a11y.feed.post.media.image", defaultValue: "Image partagée par %@", bundle: .main), post.author)
+    }
+
     /// True when the post is a feed POST that reposts a STORY — the cell then
     /// renders the embedded story canvas via `StoryRepostEmbedCell` instead of
     /// the standard media preview + quote-style repost block. Phase C.3.
@@ -195,6 +206,8 @@ struct FeedPostCard: View {
                             .font(.subheadline)
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(nil)
+                            .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
+                            .accessibilityAction { onTapPost?(post) }
 
                         Text(String(localized: "feed.post.see_less", defaultValue: "voir moins", bundle: .main))
                             .font(.subheadline.weight(.medium))
@@ -204,11 +217,15 @@ struct FeedPostCard: View {
                                     isTextExpanded = false
                                 }
                             }
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityHint(String(localized: "a11y.feed.post.see_less.hint", defaultValue: "Réduit le texte", bundle: .main))
                     } else {
                         Text(truncation.text + (truncation.isTruncated ? "..." : ""))
                             .font(.subheadline)
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(nil)
+                            .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
+                            .accessibilityAction { onTapPost?(post) }
 
                         if truncation.isTruncated {
                             Text(String(localized: "feed.post.see_more", defaultValue: "voir plus", bundle: .main))
@@ -219,6 +236,8 @@ struct FeedPostCard: View {
                                         isTextExpanded = true
                                     }
                                 }
+                                .accessibilityAddTraits(.isButton)
+                                .accessibilityHint(String(localized: "a11y.feed.post.see_more.hint", defaultValue: "Affiche le texte complet", bundle: .main))
                         }
                     }
 
@@ -255,6 +274,8 @@ struct FeedPostCard: View {
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
                         .transition(.opacity.combined(with: .move(edge: .top)))
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel(String(format: String(localized: "a11y.feed.post.translation", defaultValue: "Traduction : %@", bundle: .main), content))
                     }
 
                 }
@@ -285,6 +306,9 @@ struct FeedPostCard: View {
                     // Media preview (outside nav tap target — has its own fullscreen gesture)
                     if post.hasMedia {
                         mediaPreview
+                            .accessibilityElement(children: .contain)
+                            .accessibilityLabel(mediaAccessibilityLabel)
+                            .accessibilityHint(String(localized: "a11y.feed.post.media.hint", defaultValue: "Ouvre le média en plein écran", bundle: .main))
                     }
 
                     // Reposted content (outside parent tap target so its own Button works)
@@ -392,6 +416,8 @@ struct FeedPostCard: View {
                     }
                 ]
             )
+            .accessibilityLabel(String(format: String(localized: "a11y.feed.post.author_avatar", defaultValue: "Profil de %@", bundle: .main), post.author))
+            .accessibilityHint(String(localized: "a11y.feed.post.author_avatar.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
 
             VStack(alignment: .leading, spacing: 2) {
                 // Author name with repost indicator
@@ -642,7 +668,9 @@ struct FeedPostCard: View {
             }
             .disabled(isHeartInFlight)
             .animation(.easeOut(duration: 0.2), value: effectiveIsLiked)
-            .accessibilityLabel(String(localized: "feed.post.likes_count", defaultValue: "\(effectiveLikeCount) j'aime", bundle: .main))
+            .accessibilityLabel(String(localized: "a11y.feed.post.like", defaultValue: "Aimer", bundle: .main))
+            .accessibilityValue(String(format: String(localized: "a11y.feed.post.like.value", defaultValue: "%d j'aime", bundle: .main), effectiveLikeCount))
+            .accessibilityAddTraits(effectiveIsLiked ? .isSelected : [])
 
             Spacer()
 
@@ -689,6 +717,9 @@ struct FeedPostCard: View {
             }
             .disabled(isRepostInFlight)
             .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
+            .accessibilityValue(String(format: String(localized: "a11y.feed.post.repost.value", defaultValue: "%d repartages", bundle: .main), displayRepostCount ?? post.repostCount))
+            .accessibilityHint(String(localized: "a11y.feed.post.repost.hint", defaultValue: "Repartage ou cite cette publication", bundle: .main))
+            .accessibilityAddTraits(isReposted ? .isSelected : [])
             .confirmationDialog(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
                 Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) { onRepost?(post.id) }
                 Button(String(localized: "feed.post.quote", defaultValue: "Citer", bundle: .main)) { onQuote?(post.id) }
@@ -719,6 +750,9 @@ struct FeedPostCard: View {
             }
             .disabled(isBookmarkInFlight)
             .accessibilityLabel(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main))
+            .accessibilityValue(String(format: String(localized: "a11y.feed.post.save.value", defaultValue: "%d enregistrements", bundle: .main), displayBookmarkCount ?? post.bookmarkCount))
+            .accessibilityHint(String(localized: "a11y.feed.post.save.hint", defaultValue: "Enregistre la publication dans vos favoris", bundle: .main))
+            .accessibilityAddTraits(isBookmarked ? .isSelected : [])
 
             Spacer()
 
@@ -750,6 +784,8 @@ struct FeedPostCard: View {
             }
             .disabled(isShareInFlight)
             .accessibilityLabel(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main))
+            .accessibilityValue(String(format: String(localized: "a11y.feed.post.share.value", defaultValue: "%d partages", bundle: .main), displayShareCount ?? post.shareCount))
+            .accessibilityHint(String(localized: "a11y.feed.post.share.hint", defaultValue: "Partage cette publication via un lien", bundle: .main))
         }
         .padding(.top, 4)
     }

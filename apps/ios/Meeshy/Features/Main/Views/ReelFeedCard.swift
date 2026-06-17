@@ -253,22 +253,28 @@ struct ReelFeedCard: View, Equatable {
             reelButton(system: "bubble.right",
                        tint: .white,
                        count: post.commentCount,
-                       label: String(localized: "feed.post.comments_count", defaultValue: "\(post.commentCount) commentaires", bundle: .main)) { onComment(post.id) }
+                       label: String(localized: "feed.post.comments_count", defaultValue: "\(post.commentCount) commentaires", bundle: .main),
+                       hint: String(localized: "a11y.feed.reel.comments.hint", defaultValue: "Ouvre les commentaires du réel", bundle: .main)) { onComment(post.id) }
             Spacer()
             reelButton(system: isReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath",
                        tint: isReposted ? MeeshyColors.success : .white,
                        count: displayRepostCount,
-                       label: String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) { onRepost(post.id) }
+                       label: String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main),
+                       hint: String(localized: "a11y.feed.post.repost.hint", defaultValue: "Repartage ou cite cette publication", bundle: .main),
+                       isSelected: isReposted) { onRepost(post.id) }
             Spacer()
             reelButton(system: isBookmarked ? "bookmark.fill" : "bookmark",
                        tint: isBookmarked ? MeeshyColors.warning : .white,
                        count: displayBookmarkCount,
-                       label: String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main)) { onBookmark(post.id) }
+                       label: String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
+                       hint: String(localized: "a11y.feed.post.save.hint", defaultValue: "Enregistre la publication dans vos favoris", bundle: .main),
+                       isSelected: isBookmarked) { onBookmark(post.id) }
             Spacer()
             reelButton(system: "square.and.arrow.up",
                        tint: .white,
                        count: displayShareCount,
-                       label: String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main)) { onShare(post.id) }
+                       label: String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main),
+                       hint: String(localized: "a11y.feed.post.share.hint", defaultValue: "Partage cette publication via un lien", bundle: .main)) { onShare(post.id) }
         }
     }
 
@@ -303,10 +309,12 @@ struct ReelFeedCard: View, Equatable {
             .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "feed.post.likes_count", defaultValue: "\(displayLikeCount) j'aime", bundle: .main))
+        .accessibilityLabel(String(localized: "a11y.feed.post.like", defaultValue: "Aimer", bundle: .main))
+        .accessibilityValue(String(format: String(localized: "a11y.feed.post.like.value", defaultValue: "%d j'aime", bundle: .main), displayLikeCount))
+        .accessibilityAddTraits(isLiked ? .isSelected : [])
     }
 
-    private func reelButton(system: String, tint: Color, count: Int, label: String, action: @escaping () -> Void) -> some View {
+    private func reelButton(system: String, tint: Color, count: Int, label: String, hint: String? = nil, isSelected: Bool = false, action: @escaping () -> Void) -> some View {
         Button {
             action()
             HapticFeedback.light()
@@ -322,5 +330,7 @@ struct ReelFeedCard: View, Equatable {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+        .accessibilityHint(hint ?? "")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

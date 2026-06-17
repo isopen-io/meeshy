@@ -591,6 +591,25 @@ public extension FeedPost {
         return media.first(where: { $0.type == .image })
     }
 
+    /// Media to RENDER on a reel surface. A reel REPOST carries no media on the
+    /// outer post — the content lives in the reposted reel — so fall back to the
+    /// reposted reel's media. Without this, `ReelFeedCard` / the immersive viewer
+    /// render the empty outer post and a republished reel shows blank.
+    var reelDisplayMedia: [FeedMedia] {
+        if media.isEmpty, let repost, !repost.media.isEmpty { return repost.media }
+        return media
+    }
+
+    /// First playable/visual media for a reel surface (video > audio > image),
+    /// resolved from `reelDisplayMedia` so reel reposts surface the original
+    /// content instead of the empty outer post.
+    var primaryReelDisplayMedia: FeedMedia? {
+        let list = reelDisplayMedia
+        if let video = list.first(where: { $0.type == .video }) { return video }
+        if let audio = list.first(where: { $0.type == .audio }) { return audio }
+        return list.first(where: { $0.type == .image })
+    }
+
     /// Filters a feed page down to the reels, preserving order. Seeds the reel
     /// pager from the already-loaded feed.
     static func reels(from posts: [FeedPost]) -> [FeedPost] {

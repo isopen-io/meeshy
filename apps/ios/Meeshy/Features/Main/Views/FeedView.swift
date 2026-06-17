@@ -487,6 +487,7 @@ struct FeedView: View {
                     .font(.headline.weight(.bold))
                     .foregroundColor(.white)
             }
+            .accessibilityHidden(true)
 
             // Text input placeholder
             Button(action: {
@@ -516,6 +517,8 @@ struct FeedView: View {
                 )
             }
             .buttonStyle(PlainButtonStyle())
+            .accessibilityLabel(String(localized: "a11y.feed.compose.open", defaultValue: "Partager quelque chose", bundle: .main))
+            .accessibilityHint(String(localized: "a11y.feed.compose.open.hint", defaultValue: "Ouvre l'éditeur de publication", bundle: .main))
 
             // Add content button (+)
             Menu {
@@ -941,6 +944,8 @@ struct FeedView: View {
                         )
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel(String(format: String(localized: "a11y.feed.new_posts.label", defaultValue: "%d nouveaux posts", bundle: .main), viewModel.newPostsCount))
+                    .accessibilityHint(String(localized: "a11y.feed.new_posts.hint", defaultValue: "Remonte en haut du fil pour les voir", bundle: .main))
                     .padding(.top, 120)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .animation(.spring(response: 0.4, dampingFraction: 0.75), value: viewModel.newPostsCount)
@@ -1127,12 +1132,15 @@ struct FeedView: View {
                             .font(.subheadline.weight(.medium))
                             .foregroundColor(theme.textSecondary)
                     }
+                    .accessibilityLabel(String(localized: "a11y.feed.compose.cancel", defaultValue: "Annuler", bundle: .main))
+                    .accessibilityHint(String(localized: "a11y.feed.compose.cancel.hint", defaultValue: "Ferme l'éditeur sans publier", bundle: .main))
 
                     Spacer()
 
                     Text(String(localized: "Nouveau post", defaultValue: "Nouveau post"))
                         .font(.headline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
+                        .accessibilityAddTraits(.isHeader)
 
                     Spacer()
 
@@ -1150,6 +1158,15 @@ struct FeedView: View {
                         }
                     }
                     .disabled(!composerHasContent || isUploading)
+                    .accessibilityLabel(String(localized: "a11y.feed.compose.publish", defaultValue: "Publier", bundle: .main))
+                    .accessibilityHint(String(localized: "a11y.feed.compose.publish.hint", defaultValue: "Publie votre message dans le fil", bundle: .main))
+                    .accessibilityValue(
+                        isUploading
+                            ? String(localized: "a11y.feed.compose.publish.uploading", defaultValue: "Envoi en cours", bundle: .main)
+                            : (composerHasContent
+                                ? ""
+                                : String(localized: "a11y.feed.compose.publish.disabled", defaultValue: "Indisponible, ajoutez du contenu", bundle: .main))
+                    )
                 }
                 .padding(16)
                 .background(theme.backgroundSecondary)
@@ -1163,6 +1180,7 @@ struct FeedView: View {
                         context: .feedComposer,
                         avatarURL: AuthManager.shared.currentUser?.avatar
                     )
+                    .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(getUserDisplayName(AuthManager.shared.currentUser, fallback: String(localized: "feed.composer.me", defaultValue: "Moi", bundle: .main)))

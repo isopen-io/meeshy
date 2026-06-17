@@ -58,6 +58,9 @@ extension UniversalComposerBar {
                     .padding(.vertical, 12)
                     .lineLimit(1...5)
                     .font(.callout)
+                    .accessibilityLabel(String(localized: "a11y.composer.textField", defaultValue: "Champ de message", bundle: .main))
+                    .accessibilityValue(text.isEmpty ? resolvedPlaceholder : text)
+                    .accessibilityIdentifier(MeeshyA11yID.composerTextField)
                     .adaptiveOnChange(of: text) { _, newValue in
                         if let maxLen = resolvedMaxLength, newValue.count > maxLen {
                             text = String(newValue.prefix(maxLen))

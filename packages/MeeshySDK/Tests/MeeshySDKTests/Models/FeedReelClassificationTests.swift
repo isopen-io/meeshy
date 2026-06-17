@@ -67,6 +67,49 @@ struct FeedReelClassificationTests {
     }
 }
 
+@Suite("FeedPost reel display media (repost-aware)")
+struct FeedPostReelDisplayMediaTests {
+
+    private func post(type: String?, media: [FeedMedia] = []) -> FeedPost {
+        FeedPost(author: "Alice", type: type, content: "hi", media: media, mediaUrl: nil)
+    }
+
+    @Test("a non-repost reel uses its own media")
+    func ownMedia() {
+        let p = post(type: "REEL", media: [.video(duration: 3)])
+        #expect(p.reelDisplayMedia.count == 1)
+        #expect(p.primaryReelDisplayMedia?.type == .video)
+    }
+
+    @Test("a reel repost with empty outer media falls back to the reposted reel media")
+    func repostFallback() {
+        var p = post(type: "REEL", media: [])
+        p.repost = RepostContent(author: "Marie", content: "", type: "REEL",
+                                 media: [.image(), .video(duration: 9)])
+        #expect(p.reelDisplayMedia.count == 2)
+        #expect(p.primaryReelDisplayMedia?.type == .video) // video preferred
+    }
+
+    @Test("image-only reel repost surfaces the first image")
+    func repostImageOnly() {
+        var p = post(type: "REEL", media: [])
+        p.repost = RepostContent(author: "Marie", content: "", type: "REEL", media: [.image(), .image()])
+        #expect(p.primaryReelDisplayMedia?.type == .image)
+    }
+
+    @Test("outer media wins when present even if a repost exists")
+    func outerWins() {
+        var p = post(type: "REEL", media: [.video(duration: 1)])
+        p.repost = RepostContent(author: "Marie", content: "", type: "REEL", media: [.image()])
+        #expect(p.primaryReelDisplayMedia?.type == .video)
+    }
+
+    @Test("no media anywhere returns nil")
+    func empty() {
+        #expect(post(type: "REEL", media: []).primaryReelDisplayMedia == nil)
+    }
+}
+
 @Suite("RepostContent reel classification")
 struct RepostContentReelClassificationTests {
 

@@ -134,6 +134,11 @@ struct ThreadedCommentSection: View {
             .padding(.leading, 36)
             .padding(.vertical, 6)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(isExpanded
+            ? String(localized: "a11y.comment.hide_replies", defaultValue: "Masquer les réponses", bundle: .main)
+            : String(format: String(localized: "a11y.comment.show_replies", defaultValue: "Voir %d réponses", bundle: .main), remainingRepliesCount))
     }
 }
 
@@ -297,6 +302,7 @@ struct CommentsSheetView: View {
                     Text(String(localized: "feed.comments.count", defaultValue: "\(commentCount) commentaires", bundle: .main))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
+                        .accessibilityAddTraits(.isHeader)
                 }
 
                 ToolbarItem(placement: .topBarLeading) {
@@ -309,6 +315,7 @@ struct CommentsSheetView: View {
                             .frame(width: 32, height: 32)
                             .background(Circle().fill(theme.inputBackground))
                     }
+                    .accessibilityLabel(String(localized: "a11y.comment.close", defaultValue: "Fermer", bundle: .main))
                 }
             }
         }
@@ -636,6 +643,8 @@ struct CommentsSheetView: View {
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
             }
+            .accessibilityLabel(String(localized: "a11y.comment.cancel_reply", defaultValue: "Annuler la réponse", bundle: .main))
+            .meeshyTapTarget(44)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -829,6 +838,7 @@ struct CommentRowView: View, Equatable {
                     }
                 ]
             )
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: isReply ? 4 : 6) {
                 HStack(spacing: 4) {
@@ -839,6 +849,9 @@ struct CommentRowView: View, Equatable {
                             HapticFeedback.light()
                             selectedProfileUser = .from(feedComment: comment)
                         }
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel(String(format: String(localized: "a11y.comment.author_profile", defaultValue: "Profil de %@", bundle: .main), comment.author))
+                        .accessibilityHint(String(localized: "a11y.comment.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
 
                     if hasTranslation {
                         Text("\u{00B7}").font(.system(size: 12)).foregroundColor(theme.textMuted)
@@ -862,6 +875,11 @@ struct CommentRowView: View, Equatable {
                             }
                             HapticFeedback.light()
                         }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel(String(format: String(localized: "a11y.comment.show_language", defaultValue: "Afficher en %@", bundle: .main), origDisplay?.name ?? (comment.originalLanguage ?? "")))
+                        .accessibilityValue(isOrigActive ? String(localized: "a11y.comment.language_shown", defaultValue: "Affichée", bundle: .main) : "")
+                        .meeshyTapTarget(44)
 
                         let userLangs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
                         let targetLang = userLangs.first?.lowercased() ?? "fr"
@@ -884,17 +902,25 @@ struct CommentRowView: View, Equatable {
                             }
                             HapticFeedback.light()
                         }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel(String(format: String(localized: "a11y.comment.show_language", defaultValue: "Afficher en %@", bundle: .main), targetDisplay?.name ?? targetLang))
+                        .accessibilityValue(isTransActive ? String(localized: "a11y.comment.language_shown", defaultValue: "Affichée", bundle: .main) : "")
+                        .meeshyTapTarget(44)
 
                         Image(systemName: "translate")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(MeeshyColors.indigo400)
+                            .accessibilityHidden(true)
                     }
 
                     Text("\u{00B7}").font(.system(size: 12)).foregroundColor(theme.textMuted)
+                        .accessibilityHidden(true)
 
                     Text(RelativeTimeFormatter.shortString(for: comment.timestamp))
                         .font(.system(size: 12))
                         .foregroundColor(theme.textMuted)
+                        .accessibilityHidden(true)
                 }
 
                 Text(effectiveCommentContent)
@@ -903,6 +929,7 @@ struct CommentRowView: View, Equatable {
                     .fixedSize(horizontal: false, vertical: true)
                     .animation(.easeInOut(duration: 0.2), value: showOriginal)
                     .messageEffects(comment.effects, hasPlayedAppearance: hasPlayedAppearanceEffect)
+                    .accessibilityLabel(String(format: String(localized: "a11y.comment.body", defaultValue: "%1$@ : %2$@", bundle: .main), RelativeTimeFormatter.shortString(for: comment.timestamp), effectiveCommentContent))
                     .onAppear {
                         if comment.effects.hasAnyEffect && !hasPlayedAppearanceEffect {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -932,6 +959,13 @@ struct CommentRowView: View, Equatable {
                     }
                     .disabled(isInFlight)
                     .frame(minHeight: 44)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(isLiked
+                        ? String(localized: "a11y.comment.unlike", defaultValue: "Je n'aime plus", bundle: .main)
+                        : String(localized: "a11y.comment.like", defaultValue: "J'aime", bundle: .main))
+                    .accessibilityValue("\(likeCount)")
+                    .accessibilityHint(String(localized: "a11y.comment.like.hint", defaultValue: "Aimer ce commentaire", bundle: .main))
 
                     Button {
                         onReply()
@@ -946,6 +980,8 @@ struct CommentRowView: View, Equatable {
                         .foregroundColor(theme.textMuted)
                     }
                     .frame(minHeight: 44)
+                    .accessibilityLabel(String(localized: "a11y.comment.reply", defaultValue: "Répondre", bundle: .main))
+                    .accessibilityHint(String(format: String(localized: "a11y.comment.reply.hint", defaultValue: "Répondre à %@", bundle: .main), comment.author))
 
                     Spacer()
 
@@ -956,6 +992,8 @@ struct CommentRowView: View, Equatable {
                             .font(.system(size: isReply ? 12 : 14))
                             .foregroundColor(theme.textMuted)
                     }
+                    .accessibilityLabel(String(localized: "a11y.comment.more_options", defaultValue: "Plus d'options", bundle: .main))
+                    .meeshyTapTarget(44)
                 }
                 .padding(.top, isReply ? 2 : 4)
             }

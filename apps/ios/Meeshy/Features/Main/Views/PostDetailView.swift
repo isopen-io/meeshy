@@ -668,6 +668,7 @@ struct PostDetailView: View {
                         accentColor: post.authorColor,
                         avatarURL: post.authorAvatarURL
                     )
+                    .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(post.author)
                             .font(.subheadline.weight(.bold))
@@ -680,6 +681,10 @@ struct PostDetailView: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(String(format: String(localized: "a11y.post.author_profile", defaultValue: "Profil de %@", bundle: .main), post.author))
+            .accessibilityHint(String(localized: "a11y.post.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
 
             // Détails de langue insérés dans le header (miroir du bloc auteur inline) :
             // drapeaux tappables + icône translate. Hors du Button profil pour que les
@@ -702,6 +707,11 @@ struct PostDetailView: View {
                         }
                         .animation(.easeInOut(duration: 0.2), value: isActive)
                         .onTapGesture { handleFlagTap(code) }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel(String(format: String(localized: "a11y.post.show_language", defaultValue: "Afficher en %@", bundle: .main), display?.name ?? code))
+                        .accessibilityValue(isActive ? String(localized: "a11y.post.language_shown", defaultValue: "Affichée", bundle: .main) : "")
+                        .meeshyTapTarget(44)
                     }
                     if post.translations != nil, !post.translations!.isEmpty {
                         Image(systemName: "translate")
@@ -711,6 +721,10 @@ struct PostDetailView: View {
                                 HapticFeedback.light()
                                 showTranslationSheet = true
                             }
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityLabel(String(localized: "a11y.post.translations", defaultValue: "Traductions", bundle: .main))
+                            .accessibilityHint(String(localized: "a11y.post.translations.hint", defaultValue: "Affiche les langues disponibles", bundle: .main))
+                            .meeshyTapTarget(44)
                     }
                 }
             }
@@ -751,6 +765,8 @@ struct PostDetailView: View {
                 .frame(width: 36, height: 36)
                 .background(Circle().fill(theme.inputBackground.opacity(0.6)))
         }
+        .accessibilityLabel(String(localized: "a11y.post.more_options", defaultValue: "Plus d'options", bundle: .main))
+        .accessibilityHint(String(localized: "a11y.post.more_options.hint", defaultValue: "Copier le lien, partager, signaler", bundle: .main))
     }
 
     private func postDetailHeader(_ post: FeedPost) -> some View {
@@ -788,6 +804,7 @@ struct PostDetailView: View {
                         }
                     ]
                 )
+                .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(post.author)
@@ -796,6 +813,9 @@ struct PostDetailView: View {
                         .onTapGesture {
                             selectedProfileUser = .from(feedPost: post)
                         }
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel(String(format: String(localized: "a11y.post.author_profile", defaultValue: "Profil de %@", bundle: .main), post.author))
+                        .accessibilityHint(String(localized: "a11y.post.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
 
                     HStack(spacing: 4) {
                         Text(post.timestamp, style: .relative)
@@ -821,6 +841,11 @@ struct PostDetailView: View {
                                 }
                                 .animation(.easeInOut(duration: 0.2), value: isActive)
                                 .onTapGesture { handleFlagTap(code) }
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityAddTraits(.isButton)
+                                .accessibilityLabel(String(format: String(localized: "a11y.post.show_language", defaultValue: "Afficher en %@", bundle: .main), display?.name ?? code))
+                                .accessibilityValue(isActive ? String(localized: "a11y.post.language_shown", defaultValue: "Affichée", bundle: .main) : "")
+                                .meeshyTapTarget(44)
                             }
 
                             if post.translations != nil, !post.translations!.isEmpty {
@@ -831,6 +856,10 @@ struct PostDetailView: View {
                                         HapticFeedback.light()
                                         showTranslationSheet = true
                                     }
+                                    .accessibilityAddTraits(.isButton)
+                                    .accessibilityLabel(String(localized: "a11y.post.translations", defaultValue: "Traductions", bundle: .main))
+                                    .accessibilityHint(String(localized: "a11y.post.translations.hint", defaultValue: "Affiche les langues disponibles", bundle: .main))
+                                    .meeshyTapTarget(44)
                             }
                         }
                     }
@@ -912,6 +941,8 @@ struct PostDetailView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 6)
                 .transition(.opacity.combined(with: .move(edge: .top)))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(String(format: String(localized: "a11y.post.secondary_translation", defaultValue: "Traduction en %1$@ : %2$@", bundle: .main), display?.name ?? code, content))
             }
         }
     }
@@ -938,6 +969,7 @@ struct PostDetailView: View {
                         accentColor: repost.authorColor,
                         avatarURL: repost.authorAvatarURL
                     )
+                    .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(repost.author)
                             .font(.footnote.weight(.semibold))
@@ -949,6 +981,7 @@ struct PostDetailView: View {
                             // Language flags for repost translations
                             if let translations = repost.translations, !translations.isEmpty {
                                 repostLanguageFlags(repost)
+                                    .accessibilityHidden(true)
                             }
                         }
                     }
@@ -959,6 +992,10 @@ struct PostDetailView: View {
             .padding(.horizontal, 12)
             .padding(.top, 10)
             .padding(.bottom, 6)
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(String(format: String(localized: "a11y.post.repost_author", defaultValue: "Publication repartagée de %@", bundle: .main), repost.author))
+            .accessibilityHint(String(localized: "a11y.post.repost_author.hint", defaultValue: "Ouvre la publication d'origine", bundle: .main))
 
             // Text content with translation support
             if !repost.content.isEmpty {
@@ -971,6 +1008,7 @@ struct PostDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 6)
+                    .accessibilityLabel(String(format: String(localized: "a11y.post.repost_content", defaultValue: "Contenu repartagé : %@", bundle: .main), repostDisplayContent))
 
                 // Inline secondary translation for repost
                 if let code = repostSecondaryLangCode,
@@ -1065,6 +1103,9 @@ struct PostDetailView: View {
                             .font(.caption2.weight(.medium))
                     }
                     .foregroundColor(theme.accentText(repost.authorColor).opacity(0.7))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(String(localized: "a11y.post.like", defaultValue: "J'aime", bundle: .main))
+                    .accessibilityValue("\(repost.likes)")
                 }
                 Spacer()
             }
@@ -1189,6 +1230,13 @@ struct PostDetailView: View {
                 }
             }
             .disabled(postHeartInFlightIds.contains(postId))
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(detailIsLiked
+                ? String(localized: "a11y.post.unlike", defaultValue: "Je n'aime plus", bundle: .main)
+                : String(localized: "a11y.post.like", defaultValue: "J'aime", bundle: .main))
+            .accessibilityValue("\(detailLikeCount)")
+            .accessibilityHint(String(localized: "a11y.post.like.hint", defaultValue: "Aimer cette publication", bundle: .main))
 
             Spacer()
 
@@ -1200,6 +1248,9 @@ struct PostDetailView: View {
                     .font(.caption.weight(.medium))
                     .foregroundColor(theme.textMuted)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "a11y.post.comments", defaultValue: "Commentaires", bundle: .main))
+            .accessibilityValue("\(post.commentCount)")
 
             // Total opens (postOpenCount) — informative, non-interactive, mirrors the
             // reel eye badge. The Detail page now both COUNTS an opening (engagement
@@ -1234,6 +1285,9 @@ struct PostDetailView: View {
                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
             }
             .disabled(isRepostInFlight)
+            .accessibilityLabel(String(localized: "a11y.post.repost", defaultValue: "Republier", bundle: .main))
+            .accessibilityValue(isPostReposted ? String(localized: "a11y.post.reposted", defaultValue: "Republié", bundle: .main) : "")
+            .accessibilityHint(String(localized: "a11y.post.repost.hint", defaultValue: "Republier ou citer cette publication", bundle: .main))
             .confirmationDialog("Repartager", isPresented: $showRepostOptions) {
                 Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) {
                     toggleDetailRepost(quote: false)
@@ -1259,6 +1313,10 @@ struct PostDetailView: View {
                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
             }
             .disabled(isBookmarkInFlight)
+            .accessibilityLabel(isPostBookmarked
+                ? String(localized: "a11y.post.bookmark_remove", defaultValue: "Retirer des favoris", bundle: .main)
+                : String(localized: "a11y.post.bookmark_add", defaultValue: "Ajouter aux favoris", bundle: .main))
+            .accessibilityHint(String(localized: "a11y.post.bookmark.hint", defaultValue: "Enregistrer cette publication", bundle: .main))
 
             Spacer()
 
@@ -1281,6 +1339,8 @@ struct PostDetailView: View {
                 .animation(.easeInOut(duration: 0.2), value: isShareInFlight)
             }
             .disabled(isShareInFlight)
+            .accessibilityLabel(String(localized: "a11y.post.share", defaultValue: "Partager", bundle: .main))
+            .accessibilityHint(String(localized: "a11y.post.share.hint", defaultValue: "Partager cette publication", bundle: .main))
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
@@ -1340,6 +1400,10 @@ struct PostDetailView: View {
             .frame(maxWidth: .infinity, maxHeight: 400)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .onTapGesture { openMediaFullscreen(media) }
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(String(localized: "a11y.post.media.image", defaultValue: "Image partagée", bundle: .main))
+            .accessibilityHint(String(localized: "a11y.post.media.open.hint", defaultValue: "Ouvrir en plein écran", bundle: .main))
 
         case .video:
             let attachment = media.toMessageAttachment()
@@ -1406,6 +1470,8 @@ struct PostDetailView: View {
                     .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1))
             )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(String(format: String(localized: "a11y.post.media.document", defaultValue: "Document : %@", bundle: .main), media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main)))
 
         case .location:
             HStack(spacing: 14) {
@@ -1435,6 +1501,8 @@ struct PostDetailView: View {
                     .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1))
             )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(String(format: String(localized: "a11y.post.media.location", defaultValue: "Position : %@", bundle: .main), media.locationName ?? String(localized: "feed.post.detail.location", defaultValue: "Location", bundle: .main)))
         }
     }
 
@@ -1482,6 +1550,12 @@ struct PostDetailView: View {
                             }
                             .contentShape(Rectangle())
                             .onTapGesture { openMediaFullscreen(visualMedia[3]) }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityLabel(count > 4
+                                ? String(format: String(localized: "a11y.post.media.more", defaultValue: "Voir les %d médias", bundle: .main), count)
+                                : String(localized: "a11y.post.media.image", defaultValue: "Image partagée", bundle: .main))
+                            .accessibilityHint(String(localized: "a11y.post.media.open.hint", defaultValue: "Ouvrir en plein écran", bundle: .main))
                         }
                     }
                 }
@@ -1519,6 +1593,12 @@ struct PostDetailView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { openMediaFullscreen(media) }
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(media.type == .video
+            ? String(localized: "a11y.post.media.video", defaultValue: "Vidéo partagée", bundle: .main)
+            : String(localized: "a11y.post.media.image", defaultValue: "Image partagée", bundle: .main))
+        .accessibilityHint(String(localized: "a11y.post.media.open.hint", defaultValue: "Ouvrir en plein écran", bundle: .main))
     }
 
     private func openMediaFullscreen(_ media: FeedMedia) {
@@ -1549,6 +1629,10 @@ struct PostDetailView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityLabel(String(localized: "a11y.comment.section_header", defaultValue: "Commentaires", bundle: .main))
+        .accessibilityValue("\(displayPost?.commentCount ?? 0)")
     }
 
     // MARK: - Composer
@@ -1585,6 +1669,8 @@ struct PostDetailView: View {
                         .frame(width: 24, height: 24)
                         .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
                 }
+                .accessibilityLabel(String(localized: "a11y.comment.cancel_reply", defaultValue: "Annuler la réponse", bundle: .main))
+                .meeshyTapTarget(44)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

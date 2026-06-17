@@ -1406,6 +1406,14 @@ struct RootView: View {
                 router.push(.settings)
             },
             isSearchBarVisible: !isScrollingDown,
+            leftA11yLabel: String(localized: "a11y.floating.feed", defaultValue: "Flux", bundle: .main),
+            leftA11yHint: String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité", bundle: .main),
+            rightA11yLabel: String(localized: "a11y.floating.menu", defaultValue: "Menu", bundle: .main),
+            rightA11yHint: String(localized: "a11y.floating.menu.hint", defaultValue: "Ouvre le menu de navigation", bundle: .main),
+            rightA11yValue: notificationManager.unreadCount > 0
+                ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationManager.unreadCount)
+                : nil,
+            rightA11yActionName: String(localized: "a11y.floating.menu.settings-action", defaultValue: "Réglages", bundle: .main),
             leftContent: {
                 // Feed button content
                 ZStack {
