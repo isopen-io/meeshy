@@ -52,7 +52,7 @@
     "^.+\\.ts$": ["ts-jest", {
       "tsconfig": "tsconfig.test.json",
       "diagnostics": {
-        "ignoreCodes": [2307, 2339]
+        "ignoreCodes": [2307, 2339, 2345]
       }
     }]
   },
