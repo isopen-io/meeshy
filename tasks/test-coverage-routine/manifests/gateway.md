@@ -372,7 +372,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 ## socketio  (3/6 have a test)
 
 - [~] `services/gateway/src/socketio/AgentAdminRelay.ts`
-- [ ] `services/gateway/src/socketio/CallEventsHandler.ts`
+- [x] `services/gateway/src/socketio/CallEventsHandler.ts`
 - [ ] `services/gateway/src/socketio/MeeshySocketIOHandler.ts`
 - [ ] `services/gateway/src/socketio/MeeshySocketIOManager.ts`
 - [~] `services/gateway/src/socketio/emitAttachmentUpdated.ts`
