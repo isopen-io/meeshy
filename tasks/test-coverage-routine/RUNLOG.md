@@ -735,3 +735,25 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   3. Pre-existing 25 failing suites (TS errors unrelated to this diff) unchanged.
 - Next slice: P1 Conversations & membership × gateway route files (core.ts 1390L, messages-advanced.ts 1329L, sharing.ts 887L) OR P1 Conversations & membership × web
 - Commit: bcaa2ea1 + 7e0f6275 (2 commits squash-merged as PR #701 → main sha 62adb0c4)
+
+## 2026-06-17T22:16Z — P1 Conversations & membership × gateway (routes sub-slice: sharing.ts)
+- Targeted: `src/routes/conversations/sharing.ts` (887 lines)
+- Result: ◐ partial — sharing.ts☑ (tests written, reviewer PASS, PR #702 open); merge blocked on CI (Test Python translator still in_progress); remaining: core.ts, messages-advanced.ts
+- Coverage (per-file):
+  - sharing.ts: 100% stmts / 99.25% branches / 100% funcs / 100% lines ✓
+  - Only uncovered branch: line 107 `request.body || {}` — Fastify always provides body, structurally unreachable
+- Tests added: 66 tests in `src/__tests__/unit/routes/conversation-sharing.test.ts` (NEW, 1109 lines)
+  - POST /conversations/:id/new-link: resolveConversationId null→forbidden, conv/membership/user not found, direct-conv guard, global+non-BIGBOSS guard, BIGBOSS allowed for global, name/description/generated identifiers, expiresAt ternary both branches, create+update linkId flow, internalError catch
+  - PATCH /conversations/:id: unauthenticated, resolveConversationId null, not-a-member, type-change role guards (admin/BIGBOSS/creator/member), title+description update, P2002→conflict/P2025→notFound/P2003→badRequest, ValidationError, unknown error→internalError
+  - GET /conversations/:conversationId/links: not-a-member→forbidden, moderator/creator/admin no creatorId filter, regular member creatorId filter, isModerator field (true/false)
+  - POST /conversations/join/:linkId: null authContext→unauthorized, link not found/inactive/expired, valid future expiresAt, already-member→success, new join (create+increment), displayName/username/"User" fallback, notif to self+admins, username-only notif branch, no-notif-service no-op, notif error non-blocking, joiningUser null skip, internalError catch
+  - POST /conversations/:id/invite: null authContext/unauthenticated/no-registeredUser→unauthorized, conv not found, inviter not member→forbidden, insufficient role (member)→forbidden, admin/BIGBOSS/creator allowed, target user not found→404, already member→badRequest, participant.create+response shape, notif with/without service, inviter not found (skip notif), notif error non-blocking, mentionService cache invalidation, cache error non-blocking, internalError catch
+- Reviewer: PASS (self-review, rounds: 1 — test-only diff, no production code changed)
+- CI status at end of run: 14/15 checks complete (all green/skipped/neutral); Test Python (translator) still in_progress (started 22:18:24Z, running 60+ min — normal for PyTorch CPU install + test suite). Build (bun) completed green at 22:24:47Z.
+- Notes:
+  1. **invite route uses fastify.prisma (decorator), not the prisma parameter** — required `fastify.prisma = prisma` override in setup() to share the mock instance.
+  2. **GET /links uses raw reply.send()** (not sendSuccess) to include isModerator at root level — `reply.send.mockImplementation(body => { reply._body = body; return reply; })` in makeReply() required.
+  3. **Next run action**: check if PR #702 CI is complete (Python translator job); if green, squash-merge PR #702 to main, then proceed to next slice: core.ts (1390L) or messages-advanced.ts (1329L).
+  4. Pre-existing 25 failing suites (TS errors in MessageReadStatusService.ts, unrelated to diff) unchanged.
+- Next slice (when PR #702 merges): P1 Conversations & membership × gateway — core.ts (1390L) [too large, split into sub-units] OR messages-advanced.ts (1329L)
+- Commit: 4e2da39f (branch claude/coverage/p1-conversations-gateway-sharing → PR #702 open, awaiting CI)
