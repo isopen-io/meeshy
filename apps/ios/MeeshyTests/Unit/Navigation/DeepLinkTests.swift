@@ -228,13 +228,15 @@ final class DeepLinkParserTests: XCTestCase {
         XCTAssertEqual(id, "inv123")
     }
 
-    func test_parse_webUrl_legacyJoinL_returnsJoinLink() {
+    func test_parse_webUrl_trackedShareLink_returnsTrackedLink() {
+        // `/l/<token>` is a tracked share link resolved async by targetType
+        // (fix collision tracking↔invitation), no longer assumed to be a join.
         let url = URL(string: "https://meeshy.me/l/shortcode")!
-        guard case .joinLink(let id) = DeepLinkParser.parse(url) else {
-            XCTFail("Expected .joinLink")
+        guard case .trackedLink(let token) = DeepLinkParser.parse(url) else {
+            XCTFail("Expected .trackedLink")
             return
         }
-        XCTAssertEqual(id, "shortcode")
+        XCTAssertEqual(token, "shortcode")
     }
 
     func test_parse_webUrl_chat_returnsChatLink() {
@@ -473,14 +475,18 @@ final class DeepLinkRouterTests: XCTestCase {
         XCTAssertEqual(sut.pendingDeepLink, .joinLink(identifier: "inv123"))
     }
 
-    func test_handle_joinLink_shortPath_setsPendingDeepLink() {
+    func test_handle_trackedShareLink_isClaimedAndResolvedAsync() {
         let sut = makeSUT()
         let url = URL(string: "https://meeshy.me/l/shortcode")!
 
         let handled = sut.handle(url: url)
 
+        // `/l/<token>` is claimed as a Meeshy deep link (so it never bounces to
+        // Safari) but its destination is resolved ASYNC by targetType — it is
+        // not set synchronously. Typed resolution is covered by
+        // DeepLinkRouterTrackedDestinationTests.
         XCTAssertTrue(handled)
-        XCTAssertEqual(sut.pendingDeepLink, .joinLink(identifier: "shortcode"))
+        XCTAssertNil(sut.pendingDeepLink)
     }
 
     func test_handle_conversationLink_setsPendingDeepLink() {
