@@ -1888,6 +1888,11 @@ struct StoryActionButton: View {
     var isActive: Bool = false
     var activeColor: Color = .white
     var activeGlow: Color? = nil
+    /// Outline symbol overlaid in `accentOutlineColor` over the glyph when the
+    /// current user has participated (e.g. already reacted) — an accent BORDER
+    /// on the glyph, matching the feed/reel participation indicator.
+    var accentOutline: String? = nil
+    var accentOutlineColor: Color = .clear
     let action: () -> Void
 
     var body: some View {
@@ -1921,6 +1926,12 @@ struct StoryActionButton: View {
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(isActive ? activeColor : .white)
                         .adaptiveSymbolBounce(value: isActive)
+                    // Accent border on the glyph when the current user participated.
+                    if let accentOutline {
+                        Image(systemName: accentOutline)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(accentOutlineColor)
+                    }
                 }
                 // Halo sombre sous l'icône — lisibilité garantie sur N'IMPORTE QUEL
                 // fond de story (clair comme foncé), sans voile ni gros cartouche

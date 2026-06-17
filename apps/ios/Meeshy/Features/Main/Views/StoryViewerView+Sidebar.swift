@@ -107,7 +107,9 @@ struct StoryActionSidebarView: View {
                     label: storyReactionCount > 0 ? "\(storyReactionCount)" : "React",
                     isActive: showEmojiStrip || storyCurrentUserHasReacted,
                     activeColor: MeeshyColors.indigo500,
-                    activeGlow: MeeshyColors.indigo500
+                    activeGlow: MeeshyColors.indigo500,
+                    accentOutline: storyCurrentUserHasReacted ? "heart" : nil,
+                    accentOutlineColor: Color(hex: currentGroup?.avatarColor ?? "FF2D55")
                 ) {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         showEmojiStrip.toggle()
