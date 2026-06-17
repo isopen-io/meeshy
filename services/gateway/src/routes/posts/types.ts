@@ -230,6 +230,47 @@ export const TranslatePostSchema = z.object({
   targetLanguage: z.string().min(2).max(5),
 });
 
+// ============================================
+// ENGAGEMENT CAPTURE (LOT 4 — ingestion)
+// ============================================
+
+export const EngagementActionSchema = z.object({
+  type: z.string().max(40),
+  atMs: z.number().int().min(0),
+});
+
+export const WatchSampleSchema = z.object({
+  positionMs: z.number().int().min(0),
+  atMs: z.number().int().min(0),
+});
+
+export const EngagementSessionSchema = z.object({
+  sessionId: z.string().uuid(),
+  // Champ informatif côté client uniquement : la route IGNORE ce userId et
+  // prend l'identité du token auth (anti-spoof). Optionnel pour refléter
+  // qu'il n'est pas fiable côté serveur.
+  userId: z.string().optional(),
+  postId: z.string().regex(/^[0-9a-fA-F]{24}$/),
+  contentType: z.enum(['POST', 'REEL', 'STORY', 'STATUS']),
+  surface: z.string().max(40),
+  startedAt: z.string(),
+  dwellMs: z.number().int().min(0),
+  watchMs: z.number().int().min(0).optional(),
+  mediaDurationMs: z.number().int().min(0).optional(),
+  completed: z.boolean().default(false),
+  truncated: z.boolean().default(false),
+  consent: z.string().max(40).optional(),
+  actions: z.array(EngagementActionSchema).max(200).default([]),
+  watchSamples: z.array(WatchSampleSchema).max(500).default([]),
+});
+
+export const EngagementBatchSchema = z.object({
+  sessions: z.array(EngagementSessionSchema).min(1).max(50),
+});
+
+export type EngagementBatch = z.infer<typeof EngagementBatchSchema>;
+export type EngagementSessionInput = z.infer<typeof EngagementSessionSchema>;
+
 export const FeedQuerySchema = z.object({
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),

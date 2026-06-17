@@ -159,6 +159,7 @@ struct StoryActionSidebarView: View {
                 ) {
                     HapticFeedback.light()
                     guard let story = currentStory, let group = currentGroup else { return }
+                    EngagementTracker.shared.recordAction(.commented, surface: .storyViewer)
                     let preview = story.content?.prefix(80).description ?? "Story"
                     let thumbUrl = story.media.first?.thumbnailUrl ?? story.media.first?.url
                     onReplyToStory?(.story(
@@ -185,6 +186,7 @@ struct StoryActionSidebarView: View {
                 HapticFeedback.light()
                 pauseTimer()
                 if let story = currentStory, let group = currentGroup {
+                    EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
                     sharedContentWrapper = SharedContentWrapper(content: .story(item: story, authorName: group.username))
                 }
             }

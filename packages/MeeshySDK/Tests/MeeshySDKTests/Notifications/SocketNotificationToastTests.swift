@@ -62,102 +62,99 @@ final class SocketNotificationToastTests: XCTestCase {
         XCTAssertEqual(event.toastBody, "\u{1F4F7} Photo")
     }
 
-    // MARK: - Precise action phrases
+    // MARK: - Prisme i18n : titre = acteur, corps = content gateway localisé
 
-    func test_commentReply_isPrecise() throws {
+    func test_commentReply_titleActor_bodyGatewayContent() throws {
         let event = try makeEvent("""
         {
             "id": "n4", "userId": "u1", "type": "comment_reply",
-            "content": "",
+            "content": "Bien vu !",
             "actor": { "id": "a1", "displayName": "Charlie" },
-            "context": { "postId": "p1", "commentId": "cm1" },
-            "metadata": { "commentPreview": "Bien vu !" }
+            "context": { "postId": "p1", "commentId": "cm1" }
         }
         """)
 
-        XCTAssertEqual(event.toastTitle, "Charlie a répondu à votre commentaire")
+        XCTAssertEqual(event.toastTitle, "Charlie")
         XCTAssertEqual(event.toastBody, "Bien vu !")
         XCTAssertNil(event.toastSubtitle)
     }
 
-    func test_postComment_isPrecise() throws {
+    func test_postComment_titleActor_bodyGatewayContent() throws {
         let event = try makeEvent("""
         {
             "id": "n5", "userId": "u1", "type": "post_comment",
-            "content": "",
-            "actor": { "id": "a1", "displayName": "Dana" },
-            "metadata": { "commentPreview": "Superbe photo" }
+            "content": "Superbe photo",
+            "actor": { "id": "a1", "displayName": "Dana" }
         }
         """)
 
-        XCTAssertEqual(event.toastTitle, "Dana a commenté votre publication")
+        XCTAssertEqual(event.toastTitle, "Dana")
         XCTAssertEqual(event.toastBody, "Superbe photo")
     }
 
-    func test_storyComment_isPrecise() throws {
+    func test_storyComment_titleActor_bodyGatewayContent() throws {
         let event = try makeEvent("""
         {
             "id": "n6", "userId": "u1", "type": "story_new_comment",
-            "content": "",
-            "actor": { "id": "a1", "displayName": "Eve" },
-            "metadata": { "commentPreview": "Magnifique" }
+            "content": "a commenté votre story",
+            "actor": { "id": "a1", "displayName": "Eve" }
         }
         """)
 
-        XCTAssertEqual(event.toastTitle, "Eve a commenté votre story")
-        XCTAssertEqual(event.toastBody, "Magnifique")
+        XCTAssertEqual(event.toastTitle, "Eve")
+        XCTAssertEqual(event.toastBody, "a commenté votre story")
     }
 
-    func test_statusReaction_usesStatusLabelAndEmoji() throws {
+    func test_statusReaction_titleActor_bodyGatewayContent() throws {
         let event = try makeEvent("""
         {
             "id": "n7", "userId": "u1", "type": "status_reaction",
-            "content": "",
-            "actor": { "id": "a1", "displayName": "Frank" },
-            "metadata": { "emoji": "\u{2764}\u{FE0F}", "postType": "STATUS" }
+            "content": "a réagi \u{2764}\u{FE0F} à votre statut",
+            "actor": { "id": "a1", "displayName": "Frank" }
         }
         """)
 
-        XCTAssertEqual(event.toastTitle, "Frank a réagi \u{2764}\u{FE0F} à votre statut")
+        XCTAssertEqual(event.toastTitle, "Frank")
+        XCTAssertEqual(event.toastBody, "a réagi \u{2764}\u{FE0F} à votre statut")
     }
 
-    func test_messageReaction_isPrecise() throws {
+    func test_messageReaction_titleActor_bodyGatewayContent() throws {
         let event = try makeEvent("""
         {
             "id": "n8", "userId": "u1", "type": "message_reaction",
-            "content": "",
-            "actor": { "id": "a1", "displayName": "Grace" },
-            "metadata": { "emoji": "\u{1F525}", "commentPreview": "mon message" }
+            "content": "a réagi \u{1F525} à votre message",
+            "actor": { "id": "a1", "displayName": "Grace" }
         }
         """)
 
-        XCTAssertEqual(event.toastTitle, "Grace a réagi \u{1F525} à votre message")
-        XCTAssertEqual(event.toastBody, "mon message")
+        XCTAssertEqual(event.toastTitle, "Grace")
+        XCTAssertEqual(event.toastBody, "a réagi \u{1F525} à votre message")
     }
 
-    func test_postRepost_isPrecise() throws {
+    func test_postRepost_titleActor_bodyGatewayContent() throws {
         let event = try makeEvent("""
         {
             "id": "n9", "userId": "u1", "type": "post_repost",
-            "content": "",
+            "content": "a partagé votre publication",
             "actor": { "id": "a1", "displayName": "Heidi" }
         }
         """)
 
-        XCTAssertEqual(event.toastTitle, "Heidi a repartagé votre publication")
-        XCTAssertNil(event.toastBody)
+        XCTAssertEqual(event.toastTitle, "Heidi")
+        XCTAssertEqual(event.toastBody, "a partagé votre publication")
     }
 
-    func test_friendNewStory_isPrecise() throws {
+    func test_friendNewStory_titleActor_bodyGatewayContent() throws {
         let event = try makeEvent("""
         {
             "id": "n10", "userId": "u1", "type": "friend_new_story",
-            "content": "",
+            "content": "a publié une nouvelle story",
             "actor": { "id": "a1", "displayName": "Ivan" }
         }
         """)
 
-        XCTAssertEqual(event.toastTitle, "Ivan a publié une nouvelle story")
+        XCTAssertEqual(event.toastTitle, "Ivan")
+        XCTAssertEqual(event.toastBody, "a publié une nouvelle story")
     }
 
     // MARK: - Avatar fallback

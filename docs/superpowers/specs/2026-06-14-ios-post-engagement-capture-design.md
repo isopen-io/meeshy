@@ -1,9 +1,10 @@
 # iOS — Capture d'engagement des posts (story / status / reel / post)
 
-- **Date** : 2026-06-14
-- **Statut** : Design validé — prêt pour plan d'implémentation
-- **Périmètre** : iOS d'abord. Capture seule (instrumentation + envoi durable). Web + agrégation/tendances = phases ultérieures.
-- **Contrainte produit** : ne pas modifier les structures de données existantes (`Post`, `PostView`, `PostImpression` restent intacts).
+- **Date** : 2026-06-14 (rev. 2026-06-15 — fusion de la spec « Reels métriques/partage »)
+- **Statut** : Phase 1 (capture) — Lot 1 SDK **livré sur `main`** ; Lots 2-4 à faire. Phase 2 (agrégation + affichage + partage tracé + deep link) **spécifiée §19-22**, à exécuter APRÈS les Lots 2-4.
+- **Périmètre Phase 1** : iOS d'abord. Capture seule (instrumentation + envoi durable). `Post`/`PostView`/`PostImpression` intacts.
+- **Périmètre Phase 2 (2026-06-15)** : agrégation des compteurs (vues totales/qualifiées, complétions), badge œil, partage tracé **par-partageur** (`/l/<token>`), deep link & page de redirection intelligente. Cette phase **lève** la contrainte « ne rien toucher à `Post` » (ajout de compteurs dénormalisés dérivés) — voir §19.
+- **Décision de fusion (2026-06-15)** : la spec autonome `2026-06-15-reels-engagement-playback-metrics-design.md` (proposait `PostPlaybackSession`/`/posts/:id/playback`, **doublon** d'`EngagementSession`) est **abandonnée** ; son contenu de valeur (agrégation, partage tracé, deep link, fixes de bugs) est fusionné ici en §19-22.
 
 ---
 
@@ -288,3 +289,175 @@ Chaque lot laisse le code dans un état fonctionnel et testable (`./apps/ios/mee
 **App** : `apps/ios/Meeshy/MeeshyApp.swift` (scenePhase `adaptiveOnChange`), `…/Services/BackgroundTransitionCoordinator.swift` (`resumeFromBackground` flush), `…/Services/OutboxDispatcher.swift` (pattern `OutboxFlushTrigger`/`OutboxRetryScheduler`), surfaces `…/Views/PostDetailView.swift`, `…/Views/ReelsPlayerView.swift`, `…/Features/Story/…/StoryViewerView.swift`, `…/Services/StatusBubbleController.swift`, `…/Views/FeedView.swift` (inchangé — impressions), nouveaux `EngagementTracker.swift` / `TrackEngagementModifier.swift`. **DI** : `DependencyContainer` (2ᵉ pool), `CacheCoordinator` (reset purge engagement).
 
 **Backend** : `packages/shared/prisma/schema.prisma` (`PostEngagement`), `services/gateway/src/routes/posts/interactions.ts` (endpoint batch), `services/gateway/src/services/PostService.ts` (persistance).
+
+---
+
+# PHASE 2 — Agrégation, affichage & partage tracé (extension 2026-06-15)
+
+> **Prérequis** : Lots 2-4 (capture) livrés. La Phase 2 **dérive** des compteurs depuis `PostEngagement` (déjà ingéré) et `PostImpression` (existant), et ajoute le partage tracé + deep link (indépendants de la capture). À exécuter **après** les Lots 2-4. Cette phase ajoute des **compteurs dénormalisés sur `Post`** (dérivés) — la contrainte « ne rien toucher à `Post` » de Phase 1 est levée ici.
+
+## 19. Agrégation des compteurs & affichage
+
+### 19.1 Taxonomie — vocabulaire produit ↔ noms techniques
+
+⚠️ **Collision de nommage à connaître** : le code a **déjà** `Post.impressionCount`/`PostImpression` = apparitions **feed** (scroll). Le produit appelle ça « listingCount ». Le produit appelle « impressionCount » les apparitions **plein écran** — qui sont un **autre** compteur. Pour éviter l'ambiguïté on fige des noms techniques distincts ; le mapping est explicite (nom produit **à confirmer**).
+
+| Produit (mots de l'utilisateur) | Nom technique (spec) | +1 quand | Source de données | Affiché |
+|---|---|---|---|---|
+| listingCount | `impressionCount` **existant** (`PostImpression`) | apparition dans le viewport du feed | inchangé (`POST /posts/impressions/batch`, `FeedView`) | analytics auteur |
+| **impressionCount** | 🆕 `reelOpenCount` (dénormalisé dérivé) | apparition plein écran (page active du lecteur reel) | count `PostEngagement` `surface=reels` | **badge œil plein écran** |
+| viewCount (total qualifié) | 🆕 `qualifiedViewCount` (dénormalisé dérivé) | session qualifiée (règle §19.3) | `PostEngagement` qualifiées | analytics auteur |
+| (vues uniques — inchangé) | `viewCount` **existant** (`PostView`) | 1ʳᵉ ouverture par user | `viewPost` **inchangé** (cf. spec §10) | viewers list / stories |
+| playCount | 🆕 `playCount` (dénormalisé dérivé) | complétion lecture (chaque fin/boucle) | `PostEngagement.watchSamples`/`completed` | analytics auteur |
+
+> **Choix clé (résout le blast-radius)** : on **ne resémantise PAS** `viewCount` (il reste les vues uniques `PostView`, intactes — conforme à Phase 1 §10). Les « vues totales » deviennent des **nouveaux** compteurs dénormalisés explicites. Cela évite de casser tout consommateur de `viewCount`, et évite de toucher `PostView`/`viewPost` (donc pas de problème d'anonymes sur `PostView`).
+
+### 19.2 Dérivation (à l'ingestion, idempotente)
+
+Les compteurs dénormalisés sont mis à jour **à l'ingestion d'une nouvelle `PostEngagement`**, dans `recordEngagementBatch` (Lot 4) :
+
+- L'upsert d'engagement est keyé `sessionId` (immuable une fois finalisée). On incrémente les compteurs du `Post` **uniquement à l'INSERT** (pas aux updates/retries) → idempotent. Implémentation : différencier insert vs update **dans la transaction** (ex. `create`-puis-catch-P2002, ou comparer `modifiedCount`/`upsertedId`), incrémenter seulement sur insert réel.
+- À l'insert d'une session : `reelOpenCount += 1` si `surface=reels` ; `playCount += completions` (cf. §19.3) ; `qualifiedViewCount += 1` si `qualifiedView` (§19.3).
+- Pas de delta cumulatif (les sessions sont immuables → pas le bug de double-comptage par delta de l'ancienne proposition `PostPlaybackSession`).
+
+### 19.3 Règle de qualification serveur (`qualifiedView`) & `completions`
+
+Calculées depuis la session reçue (`watchMs`, `watchSamples`, `mediaDurationMs`, `dwellMs`, `mediaType`) :
+
+```
+maxPositionMs   = max(watchSamples.positionMs) ou 0
+SHORT_VIDEO_MS  = 8300   // pivot 30%↔2,5s (tunable, à confirmer produit)
+positionThresh  = (mediaDurationMs > 0 && mediaDurationMs < SHORT_VIDEO_MS) ? 0.90 : 0.30
+qualifiedView   = (mediaDurationMs > 0 && maxPositionMs / mediaDurationMs >= positionThresh)   // média temporel
+              ||  (isVideoOrAudio && (watchMs ?? 0) >= 2500)
+              ||  (!isVideoOrAudio && dwellMs >= 2500)                                          // contenu direct
+completions     = nombre de fins de lecture de la session (depuis watchSamples `complete`/boucles)
+```
+
+- **Seuil de position adaptatif** : courtes vidéos (`< SHORT_VIDEO_MS`) → 90 % (anti scrub-éclair) ; longues → 30 % (où `watchMs ≥ 2,5 s` domine en lecture normale).
+- `mediaDurationMs` null/0 → seule la branche temps (2,5 s) s'applique.
+- **TOTAL** : chaque session qualifiée compte (pas de dédup par user) ; les viewers uniques restent `PostView`.
+- Le seuil client D8 (spec §3, `dwell≥1000`/`watch≥2000`/`completed`) reste un **plancher d'envoi** (anti-bruit) — distinct de la qualification serveur.
+
+### 19.4 Compteurs Prisma & transport
+
+```prisma
+model Post {
+  // ... existant : viewCount, impressionCount, ...
+  reelOpenCount     Int @default(0)   // 🆕 apparitions plein écran (badge œil)
+  qualifiedViewCount Int @default(0)  // 🆕 vues totales qualifiées
+  playCount         Int @default(0)   // 🆕 complétions de lecture
+}
+```
+
+- Exposer ces 3 compteurs dans `GET /posts/feed` (route sans `response` schema → pas de strip ; vérifier qu'ils sont bien dans le `select`/`include` de `PostFeedService`).
+- **iOS `FeedPost`** : ajouter `reelOpenCount`/`qualifiedViewCount`/`playCount` comme **propriétés** (n'existent pas) **+ aux `CodingKeys`** (corrige aussi le cold-start des compteurs existants `repostCount/bookmarkCount/shareCount/viewCount`, absents des `CodingKeys`). Mapper dans `APIPost.toFeedPost`.
+- **Badge œil** (`ReelActionRail`, `ReelsPlayerView`) : rebind sur **`reelOpenCount`** (aujourd'hui lit `reel.viewCount`). Faire ce rebind **avant** tout changement sémantique pour ne pas changer le nombre affiché en silence.
+
+### 19.5 Fixes connexes (indépendants, à faire dans cette phase)
+
+- **Bug bookmark** : `bookmarkCount` incrémenté sur upsert **inconditionnel** (`PostService.ts` `bookmarkPost`) → remplacer par **`create` + catch P2002** (l'`upsert` Prisma ne distingue pas créé/maj). Décrément `unbookmark` : guard `≥ 0` (ou recount autoritatif `bookmarkCount = count(PostBookmark)` comme `likeCount`).
+
+## 20. Partage tracé par-partageur
+
+### 20.1 Modèle — `TrackingLink` cible typée + index unique PARTIEL
+
+```prisma
+enum TrackingTargetType { POST REEL STORY STATUS CONVERSATION PROFILE EXTERNAL }
+
+model TrackingLink {
+  // ... existant (token, originalUrl, createdBy, totalClicks, uniqueClicks, expiresAt, isActive, ...)
+  targetType TrackingTargetType @default(EXTERNAL)  // 🆕
+  targetId   String?            @db.ObjectId         // 🆕 postId / conversationId / userId
+  // PAS de @@unique Prisma (champs nullables → index Mongo non-partiel interdit, cf. clientMessageId schema.prisma)
+}
+```
+
+**Unicité « 1 lien par (cible × partageur) » = index unique PARTIEL** créé en migration `.mongodb.js` (modèle `2026-05-09-message-client-id.mongodb.js`) :
+
+```js
+db.TrackingLink.createIndex(
+  { targetId: 1, createdBy: 1 },                                  // clé SANS targetType (déterminé par targetId)
+  { unique: true, partialFilterExpression: {
+      targetId:  { $type: 'objectId' },
+      createdBy: { $type: 'objectId' } } }
+);
+```
+
+- **Clé `{targetId, createdBy}`** (pas `targetType`) : `targetId` détermine déjà le post → évite qu'un post changeant de type (REEL↔POST) crée un 2ᵉ lien (BUG 3.1).
+- Filtre `$type:'objectId'` (pas `'string'`) : le backfill **doit** écrire des `ObjectId` BSON, pas des strings, sinon hors index (BUG 3.3).
+- Anonymes (`createdBy null`) : non indexés → **lien attribué = compte requis** ; les anonymes obtiennent un lien `EXTERNAL` non réutilisé (ne JAMAIS `findFirst({createdBy:null})` → attribution croisée).
+
+### 20.2 Création / réutilisation (`POST /posts/:id/share`)
+
+- résout `targetType` depuis le `Post` (REEL/POST/STORY/STATUS), `targetId=postId`, `createdBy=sharerId`.
+- **upsert applicatif en transaction** : `findFirst({targetId,createdBy})` → réutilise le token ; sinon `create` (token 6 chars) **puis `shareCount += 1` dans la même transaction** ; **catch P2002** (race) → re-`findFirst`, **pas** de ré-incrément (BUG 4.1).
+- `shareCount` = dénormalisé, +1 **uniquement à la création** d'un lien (1ʳᵉ fois par partageur distinct) — réutilise le pattern du fix bookmark. Décrément éventuel : guard `≥ 0`.
+
+### 20.3 Stats renvoyées au partageur
+
+`GET /posts/:id/share` (ou réponse du POST) → `{ shortUrl, token, totalClicks, uniqueClicks, lastClickedAt }` du lien du **partageur courant** (déjà tous sur `TrackingLink`). Déclarer `additionalProperties:true` ou les champs explicitement (anti-strip Fastify).
+
+### 20.4 Cycle de vie
+
+- Suppression de post = **soft-delete** (`deletedAt`) → `onDelete: Cascade` ne se déclenche **pas**. Invalider (`isActive=false`) les `TrackingLink` du post **explicitement dans `deletePost`** (BUG 12.4). Idem `PostEngagement` : la cascade est cosmétique sous soft-delete (documenter).
+
+## 21. Deep link, résolution & page de redirection intelligente
+
+### 21.1 BUG existant à corriger — collision `/l/<token>` (tracking ↔ invitation)
+
+Aujourd'hui : `/l/<x>` sert **deux** espaces sans désambiguïsation — `TrackingLink.token` (partage de post, `shortUrl=/l/<token>`) ET `ConversationShareLink.linkId` (invitation). L'AASA déclare `/l/*` ; iOS `DeepLinkRouter` route `/l/` → **toujours** `.joinLink`. ⇒ **un partage de reel ouvert dans l'app iOS lance le flux join → 404, le reel ne s'ouvre jamais, le clic n'est pas tracé** (bug actif en prod).
+
+**Fix** : résolution **serveur** unifiée + routage iOS **asynchrone par type**.
+
+### 21.2 Résolution serveur — `GET /tracking-links/:token/resolve`
+
+Renvoie `{ kind, targetType, targetId, originalUrl, sharerId, isActive, expiresAt }` sans rediriger :
+- tente **`TrackingLink`** par `token` ; sinon **fallback `ConversationShareLink`** par `linkId`/`identifier` → `kind=conversation`.
+- lien **expiré/inactif** → `{ isActive:false }` (HTTP 200, pas 404 silencieux) ; la page/app affiche « lien expiré » + fallback `originalUrl`.
+- **Déclarer tous les champs** dans le `response` schema Fastify (`sharerId` est nouveau → fort risque de strip).
+
+### 21.3 Page de redirection intelligente (web `/l/[token]`)
+
+Fait évoluer la page existante (capture déjà les **35 champs** `collectBrowserData` + `detectSocialSource`) :
+1. **capture** max + `POST /tracking-links/:token/click` (attribution `sharerId`).
+2. **résout** via `/resolve`.
+3. **route** par `targetType` : REEL/POST/STORY → ouverture app (Universal Link iOS, sinon `meeshy://p/<id>`/`meeshy://s/<id>`), **fallback web** `/feeds/post/<id>` ; CONVERSATION → `/c/<id>` (ou flux join existant) ; PROFILE → `/u/<username>` ; EXTERNAL → `originalUrl`.
+4. **smart-banner / app-open + fallback** après timeout.
+
+### 21.4 Capture côté app iOS (parité tracking) + dédup
+
+- iOS ne parse plus `/l/<x>` en `.joinLink` localement : pose un `pendingDeepLink = .trackedLink(token)` **neutre**, résolu via `/resolve`, et **seul `targetType` décide** (reel viewer / postDetail / story / join conversation). Les invitations restent `.joinLink` **via la résolution** (`kind=conversation`).
+- **Enregistre le clic** (`POST /tracking-links/:token/click`) avec la capture device iOS disponible (UA app, `Locale`, modèle, timezone, langue(s), résolution, connexion). **Best-effort, non bloquant** pour la navigation.
+- **Cold-launch / offline (M7)** : machine d'état — pose le `pendingTrackedLink` ; après `hasCheckedSession`, résout (retry + file offline) ; `/click` fire-and-forget ; échec `/resolve` offline → garder le pending, réessayer au prochain `.active` ; navigation reel attend le `targetType` (spinner court + timeout → fallback web). Le chemin **non-authentifié** cold-launch doit gérer REEL/POST/STORY (aujourd'hui `handleGuestDeepLink` ne gère que join/chat/magic).
+- **Dédup clic app/web (M9, BUG 12.3)** : le `deviceFingerprint` app ≠ web (inputs différents) → **ne pas** prétendre dédupliquer app↔web par fingerprint. Dédup : `(token, userId)` si authentifié (cas app) ; sinon `(token, ipAddress, fenêtre)`. Assumer que app-intercept et page-web restent comptés séparément (cas Handoff rare).
+
+### 21.5 Parité de capture (M8) — limite assumée
+
+Quand iOS **intercepte** le Universal Link, la page web (35 champs `navigator.*`) **n'est jamais chargée** → la capture app est un **sous-ensemble** nommé (pas de `navigator.*`/referrer social/fingerprint web). L'objectif « capture maximale » est **structurellement dégradé** pour les liens ouverts in-app (majorité mobile) — l'**assumer** explicitement et ne pas comparer naïvement volumes web vs app en analytics.
+
+## 22. Lots d'implémentation Phase 2 (après Lots 2-4)
+
+- **Lot 5 — Agrégation & affichage** : compteurs `reelOpenCount/qualifiedViewCount/playCount` (Prisma + dérivation idempotente dans `recordEngagementBatch` + règle §19.3), exposition feed, propriétés `FeedPost` + CodingKeys + mapper, rebind badge œil. Fix bookmark. + tests.
+- **Lot 6 — Partage tracé par-partageur** : `TrackingLink.targetType/targetId` + migration `.mongodb.js` (backfill `ObjectId` + **dédup legacy avant `createIndex`** + index partiel), upsert par-partageur (catch P2002, `shareCount` à la création), `GET /posts/:id/share`, invalidation au soft-delete. + tests.
+- **Lot 7 — Deep link & redirection** : `GET /tracking-links/:token/resolve` (TrackingLink + fallback ConversationShareLink), page `/l/[token]` intelligente (routage typé + smart-banner/fallback), `DeepLinkRouter` (`.trackedLink` + routage async par `targetType`, cold-launch/offline, capture clic), dédup `/click`. + tests.
+
+Ordre : **Lots 2-4 (capture) → Lot 5 → (Lot 6 ∥ Lot 7)**. Lot 6 et Lot 7 sont indépendants de la capture (peuvent démarrer dès que prioritaire), mais le badge (Lot 5) dépend du Lot 4 (backend ingestion).
+
+## 23. Bugs réels corrigés par cette phase (synthèse review Opus 2026-06-15)
+
+| Bug | Statut |
+|---|---|
+| Double-comptage delta (ancienne `PostPlaybackSession`) | ✅ éliminé — `EngagementSession` immuable + dérivation à l'insert |
+| `@@unique` sur nullables MongoDB | ✅ index **partiel** `{targetId,createdBy}` |
+| Migration legacy doublons → `createIndex` plante | ✅ dédup legacy avant index (l'ancien `/share` mint un token par partage) |
+| `upsert` bookmark ne distingue créé/maj | ✅ `create`+catch P2002 |
+| `shareCount` non atomique | ✅ +1 dans la transaction du create |
+| `PostView.userId` non-nullable / anonymes | ✅ moot — `viewCount`/`PostView` non touchés |
+| `/view` partagé stories | ✅ moot — `viewPost` inchangé (Phase 1 §10) |
+| Collision `/l/<token>` tracking↔invitation | ✅ `/resolve` unifié + routage async par type |
+| Badge œil = `viewCount` (mauvais sens) | ✅ rebind `reelOpenCount`, ordre avant resémantisation |
+| Dédup clic app/web par fingerprint | ✅ dédup par `(token,userId)`/`(token,ip,fenêtre)` |
+| Decrement négatif, cascade soft-delete, strip Fastify, STATUS targetType | ✅ traités §19.5/§20.2/§20.4/§21.2 |
+
+**Décisions ouvertes (à confirmer produit)** : (1) nom « impressionCount » produit = `reelOpenCount` technique (collision avec l'`impressionCount` feed existant) ; (2) `SHORT_VIDEO_MS = 8300` ; (3) seuil/fenêtre de dédup `/click`.

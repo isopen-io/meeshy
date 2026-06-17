@@ -526,6 +526,7 @@ struct PostDetailView: View {
                 NotificationToastManager.shared.activePostId = nil
             }
         }
+        .trackEngagement(postId: postId, contentType: .post, surface: .detail)
         .adaptiveOnChange(of: viewModel.post) { _, updatedPost in
             // Re-seed when post loads from network (stale → fresh). Preserve
             // optimistic state: only update if no in-flight toggle is active.
@@ -868,7 +869,8 @@ struct PostDetailView: View {
                         isTextExpanded.toggle()
                     }
                     if isTextExpanded {
-                        Task { try? await PostService.shared.viewPost(postId: postId, duration: nil) }
+                        EngagementTracker.shared.recordAction(.expandedText, surface: .detail)
+                        Task { try? await PostService.shared.viewPost(postId: postId, duration: nil) }  // viewPost stays duration-less
                     }
                 }
             }
@@ -1193,6 +1195,24 @@ struct PostDetailView: View {
                 Text("\(post.commentCount)")
                     .font(.caption.weight(.medium))
                     .foregroundColor(theme.textMuted)
+            }
+
+            // Total opens (postOpenCount) — informative, non-interactive, mirrors the
+            // reel eye badge. The Detail page now both COUNTS an opening (engagement
+            // surface=detail) and SHOWS the running total.
+            if post.postOpenCount > 0 {
+                Spacer()
+                HStack(spacing: 5) {
+                    Image(systemName: "eye.fill")
+                        .font(.body)
+                        .foregroundColor(theme.textSecondary)
+                    Text("\(post.postOpenCount)")
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(theme.textMuted)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(String(localized: "reels.action.views", defaultValue: "Vues", bundle: .main))
+                .accessibilityValue("\(post.postOpenCount)")
             }
 
             Spacer()

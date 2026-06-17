@@ -33,6 +33,20 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     public var attachmentId: String?
 
+    /// Heartbeat seam pour la capture d'engagement (LOT 2). Émet un
+    /// `WatchSample` (position + offset monotone depuis le début de lecture)
+    /// sur play / tick ~10s / pause / fin. Découplé de `reportWatchProgress`
+    /// (qui reste sur `/attachments/:id/status`, plan séparé).
+    public let watchSamples = PassthroughSubject<WatchSample, Never>()
+    private var watchClockStart: Date?
+    /// Heartbeat samples accumulated for the CURRENT watch session, consumed by the
+    /// engagement layer via `drainWatchSamples()`. The `watchSamples` publisher
+    /// stays for any live subscriber; this buffer is what surfaces actually read.
+    private var sessionWatchSamples: [WatchSample] = []
+    /// `true` once playback reached the media end at least once this session
+    /// (drives the engagement `completed` flag → server `playCount`).
+    private var sessionReachedEnd = false
+
     private var timeObserver: Any?
     private var cancellables = Set<AnyCancellable>()
     private var pipController: AVPictureInPictureController?
@@ -95,12 +109,44 @@ public final class SharedAVPlayerManager: ObservableObject {
         player.rate = Float(playbackSpeed.rawValue)
         isPlaying = true
         if watchStartTime == nil { watchStartTime = Date() }
+        if watchClockStart == nil { watchClockStart = Date() }
+        emitWatchSample()
     }
 
     public func pause() {
+        emitWatchSample()
         reportWatchProgress(complete: false)
         player?.pause()
         isPlaying = false
+    }
+
+    // MARK: - Engagement watch sample seam
+
+    /// Test seam — émet directement un `WatchSample` sur le publisher.
+    public func emitWatchSampleForTesting(positionMs: Int, atMs: Int) {
+        watchSamples.send(WatchSample(positionMs: positionMs, atMs: atMs))
+    }
+
+    /// Drains the heartbeat samples accumulated for the current watch session and
+    /// whether playback reached the end, then resets. Called by a surface when it
+    /// finalizes an engagement session (reel switch / story advance / disappear).
+    public func drainWatchSamples() -> (samples: [WatchSample], reachedEnd: Bool) {
+        let drained = (samples: sessionWatchSamples, reachedEnd: sessionReachedEnd)
+        sessionWatchSamples.removeAll()
+        sessionReachedEnd = false
+        return drained
+    }
+
+    /// Émet un sample à partir de l'horloge monotone de lecture
+    /// (`watchClockStart`). No-op tant que la lecture n'a pas démarré.
+    private func emitWatchSample(complete: Bool = false) {
+        guard let start = watchClockStart else { return }
+        let atMs = Int(Date().timeIntervalSince(start) * 1000)
+        let posMs = currentTime.isNaN ? 0 : Int(currentTime * 1000)
+        let sample = WatchSample(positionMs: max(0, posMs), atMs: max(0, atMs))
+        watchSamples.send(sample)
+        sessionWatchSamples.append(sample)
+        if complete { sessionReachedEnd = true }
     }
 
     public func togglePlayPause() {
@@ -218,9 +264,15 @@ public final class SharedAVPlayerManager: ObservableObject {
         player.isMuted = isMuted
 
         let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+        var lastHeartbeat: Double = 0
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             Task { @MainActor [weak self] in
-                self?.currentTime = time.seconds.isNaN ? 0 : time.seconds
+                guard let self else { return }
+                self.currentTime = time.seconds.isNaN ? 0 : time.seconds
+                if self.isPlaying, self.currentTime - lastHeartbeat >= 10 {
+                    lastHeartbeat = self.currentTime
+                    self.emitWatchSample()
+                }
             }
         }
 
@@ -248,6 +300,8 @@ public final class SharedAVPlayerManager: ObservableObject {
             .sink { [weak self] _ in
                 guard let self else { return }
                 self.reportWatchProgress(complete: true)
+                self.emitWatchSample(complete: true)
+                self.watchClockStart = self.shouldLoop ? Date() : nil
                 if self.shouldLoop {
                     // Loop fullscreen : seek + replay, on garde le player +
                     // activeURL + audio session. Reset watchStartTime pour que
@@ -282,6 +336,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         duration = 0
         playbackSpeed = .x1_0
         watchStartTime = nil
+        watchClockStart = nil
         attachmentId = nil
         pipController = nil
         pipDelegate = nil

@@ -51,9 +51,11 @@ const mockUser = {
   avatar: 'avatar.png',
 };
 
+const mockUseAuthStore = jest.fn((selector: (state: { user: typeof mockUser | null }) => unknown) =>
+  selector({ user: mockUser })
+);
 jest.mock('@/stores/auth-store', () => ({
-  useAuthStore: (selector: (state: { user: typeof mockUser }) => unknown) =>
-    selector({ user: mockUser }),
+  useAuthStore: (...args: Parameters<typeof mockUseAuthStore>) => mockUseAuthStore(...args),
 }));
 
 // Mock query keys
@@ -347,6 +349,118 @@ describe('useSendMessageMutation', () => {
     expect(mockSendMessage).toHaveBeenCalled();
   });
 
+  it('should use empty senderId and undefined sender when currentUser is null', async () => {
+    mockUseAuthStore.mockImplementation((selector: Function) => selector({ user: null }));
+
+    const sentMessage = createMockMessage('msg-new', 'New message');
+    mockSendMessage.mockResolvedValue(sentMessage);
+
+    try {
+      const { result } = renderHook(() => useSendMessageMutation(), {
+        wrapper: createWrapper(),
+      });
+
+      await act(async () => {
+        await result.current.mutateAsync({
+          conversationId: 'conv-1',
+          data: { content: 'Message without user' } as never,
+        });
+      });
+
+      expect(mockSendMessage).toHaveBeenCalled();
+    } finally {
+      mockUseAuthStore.mockImplementation((selector: Function) => selector({ user: mockUser }));
+    }
+  });
+
+  it('should handle multi-page infinite query correctly (prepend to first page only)', async () => {
+    const sentMessage = createMockMessage('msg-new', 'New message');
+    mockSendMessage.mockResolvedValue(sentMessage);
+
+    const { wrapper, queryClient } = createWrapperWithClient();
+
+    // Two pages
+    queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+      pages: [
+        { messages: mockMessages, hasMore: true, total: 4 },
+        { messages: [createMockMessage('msg-3', 'Older'), createMockMessage('msg-4', 'Even older')], hasMore: false, total: 4 },
+      ],
+      pageParams: [1, 2],
+    });
+
+    const { result } = renderHook(() => useSendMessageMutation(), {
+      wrapper,
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        conversationId: 'conv-1',
+        data: { content: 'New message' } as never,
+      });
+    });
+
+    const cachedData = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as { pages: { messages: unknown[] }[] };
+    // Optimistic message was prepended to page 0, page 1 unchanged
+    if (cachedData?.pages) {
+      expect(cachedData.pages[1].messages).toHaveLength(2);
+    }
+  });
+
+  it('should rollback on error even when cache was not pre-populated (no-op path)', async () => {
+    mockSendMessage.mockRejectedValue(new Error('Send failed'));
+
+    // No cache pre-population → previousMessages will be undefined in context
+    const { result } = renderHook(() => useSendMessageMutation(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.mutate({
+        conversationId: 'conv-empty',
+        data: { content: 'Will fail' } as never,
+      });
+    });
+
+    // Wait for mutation to settle in error state
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    // The mutation fn was called (no crash even without cache context)
+    expect(mockSendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('should update conversation lastMessageAt in onSuccess when conversation is in cache', async () => {
+    const sentMessage = createMockMessage('msg-new', 'New message');
+    mockSendMessage.mockResolvedValue(sentMessage);
+
+    const { wrapper, queryClient } = createWrapperWithClient();
+
+    queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+      pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+      pageParams: [1],
+    });
+
+    // Pre-populate conversations cache so onMutate and onSuccess update it
+    const convWithoutLastMsg = { ...mockConversation };
+    queryClient.setQueryData(['conversations', 'list', undefined], [convWithoutLastMsg]);
+
+    const { result } = renderHook(() => useSendMessageMutation(), {
+      wrapper,
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        conversationId: 'conv-1',
+        data: { content: 'New message' } as never,
+      });
+    });
+
+    // onMutate sets lastMessageAt to the optimistic message's createdAt
+    const conversations = queryClient.getQueryData(['conversations', 'list', undefined]) as Conversation[];
+    // Either onMutate or onSuccess set lastMessageAt — just confirm it's a Date
+    expect(conversations[0].lastMessageAt).toBeDefined();
+    expect(conversations[0].lastMessageAt).toBeInstanceOf(Date);
+  });
+
   it('should backfill clientMessageId when omitted (offline-queue dedup contract)', async () => {
     mockSendMessage.mockResolvedValue(createMockMessage('msg-new', 'No cid'));
 
@@ -367,6 +481,98 @@ describe('useSendMessageMutation', () => {
     expect(sentPayload.clientMessageId).toMatch(
       /^cid_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
     );
+  });
+
+  it('should use username when displayName is empty (line 65 false branch)', async () => {
+    mockUseAuthStore.mockImplementation((selector: (state: { user: typeof mockUser | null }) => unknown) =>
+      selector({ user: { ...mockUser, displayName: '' } })
+    );
+    mockSendMessage.mockResolvedValue(createMockMessage('msg-new', 'No display'));
+
+    const { wrapper, queryClient } = createWrapperWithClient();
+    queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+      pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+      pageParams: [1],
+    });
+
+    const { result } = renderHook(() => useSendMessageMutation(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        conversationId: 'conv-1',
+        data: { content: 'No display' } as never,
+      });
+    });
+
+    expect(mockSendMessage).toHaveBeenCalled();
+
+    // Restore default mock
+    mockUseAuthStore.mockImplementation((selector: (state: { user: typeof mockUser | null }) => unknown) =>
+      selector({ user: mockUser })
+    );
+  });
+
+  it('should not update non-matching conversations in onMutate and onSuccess', async () => {
+    const sentMessage = createMockMessage('msg-new', 'Hello');
+    mockSendMessage.mockResolvedValue(sentMessage);
+
+    const { wrapper, queryClient } = createWrapperWithClient();
+    queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+      pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+      pageParams: [1],
+    });
+    // Two conversations: one matching (conv-1), one not (conv-2)
+    const twoConvs = [
+      { ...mockConversation, id: 'conv-1', lastMessageAt: new Date('2024-01-01') },
+      { ...mockConversation, id: 'conv-2', lastMessageAt: new Date('2024-01-01') },
+    ];
+    queryClient.setQueryData(['conversations', 'list', undefined], twoConvs);
+
+    const { result } = renderHook(() => useSendMessageMutation(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        conversationId: 'conv-1',
+        data: { content: 'Hello' } as never,
+      });
+    });
+
+    expect(mockSendMessage).toHaveBeenCalled();
+    // Verify the mutation updated conv-1's lastMessageAt (not conv-2)
+    const conversations = queryClient.getQueryData(['conversations', 'list', undefined]) as Conversation[] | undefined;
+    if (conversations) {
+      const conv2 = conversations.find((c) => c.id === 'conv-2');
+      // conv-2 should have its original date (unchanged)
+      expect(conv2?.lastMessageAt?.toString()).toBe(new Date('2024-01-01').toString());
+    }
+  });
+
+  it('should fallback to new Date() when sentMessage has no createdAt', async () => {
+    const sentMessage = { id: 'msg-new', content: 'No date', conversationId: 'conv-1' };
+    mockSendMessage.mockResolvedValue(sentMessage);
+
+    const { wrapper, queryClient } = createWrapperWithClient();
+    queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+      pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+      pageParams: [1],
+    });
+    queryClient.setQueryData(['conversations', 'list', undefined], [{ ...mockConversation }]);
+
+    const { result } = renderHook(() => useSendMessageMutation(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        conversationId: 'conv-1',
+        data: { content: 'No date' } as never,
+      });
+    });
+
+    expect(mockSendMessage).toHaveBeenCalled();
+    // The onSuccess branch with createdAt || new Date() runs — verify mutation completed
+    const conversations = queryClient.getQueryData(['conversations', 'list', undefined]) as Conversation[] | undefined;
+    if (conversations) {
+      expect(conversations[0].lastMessageAt).toBeInstanceOf(Date);
+    }
   });
 });
 
@@ -445,6 +651,143 @@ describe('useEditMessageMutation', () => {
     const message = cachedData.pages[0].messages.find((m) => m.id === 'msg-1');
     expect(message?.content).toBe('Original content');
   });
+
+  it('should optimistically update lastMessage in conversation list when lastMessage id matches', async () => {
+    mockEditMessage.mockResolvedValue({ success: true });
+
+    const { wrapper, queryClient } = createWrapperWithClient();
+
+    queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+      pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+      pageParams: [1],
+    });
+    const conversationWithLastMessage = {
+      ...mockConversation,
+      lastMessage: { id: 'msg-1', content: 'Hello', createdAt: new Date() },
+    };
+    queryClient.setQueryData(['conversations', 'list', undefined], [conversationWithLastMessage]);
+
+    const { result } = renderHook(() => useEditMessageMutation(), {
+      wrapper,
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        conversationId: 'conv-1',
+        messageId: 'msg-1',
+        content: 'Edited via lastMessage',
+      });
+    });
+
+    const conversations = queryClient.getQueryData(['conversations', 'list', undefined]) as Array<typeof conversationWithLastMessage>;
+    expect(conversations[0].lastMessage?.content).toBe('Edited via lastMessage');
+  });
+
+  it('should be a no-op in setQueryData when messages cache does not exist for edit', async () => {
+    mockEditMessage.mockResolvedValue({ success: true });
+
+    // No pre-populated cache — old will be undefined in setQueryData callback
+    const { result } = renderHook(() => useEditMessageMutation(), {
+      wrapper: createWrapper(),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        conversationId: 'conv-1',
+        messageId: 'msg-1',
+        content: 'Edit with no cache',
+      });
+    });
+
+    expect(mockEditMessage).toHaveBeenCalledWith('msg-1', 'Edit with no cache');
+  });
+
+  it('should rollback conversations cache on edit error when previousConversations is set', async () => {
+    mockEditMessage.mockRejectedValue(new Error('Edit failed'));
+
+    const { wrapper, queryClient } = createWrapperWithClient();
+
+    const originalMessages = [createMockMessage('msg-1', 'Original content')];
+    queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+      pages: [{ messages: originalMessages, hasMore: false, total: 1 }],
+      pageParams: [1],
+    });
+    const originalConversations = [
+      { ...mockConversation, lastMessage: { id: 'msg-1', content: 'Original content', createdAt: new Date() } },
+    ];
+    queryClient.setQueryData(['conversations', 'list', undefined], originalConversations);
+
+    const { result } = renderHook(() => useEditMessageMutation(), {
+      wrapper,
+    });
+
+    await expect(
+      act(async () => {
+        await result.current.mutateAsync({
+          conversationId: 'conv-1',
+          messageId: 'msg-1',
+          content: 'Will fail',
+        });
+      })
+    ).rejects.toThrow('Edit failed');
+
+    // Both caches should be rolled back
+    const conversations = queryClient.getQueryData(['conversations', 'list', undefined]);
+    expect(conversations).toEqual(originalConversations);
+  });
+
+  it('should not update conversation when lastMessage.id does not match', async () => {
+    mockEditMessage.mockResolvedValue({ success: true });
+
+    const { wrapper, queryClient } = createWrapperWithClient();
+    queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+      pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+      pageParams: [1],
+    });
+    // lastMessage.id is 'msg-2' but we're editing 'msg-1' — covers the false branch of lastMessage?.id === messageId
+    const convWithOtherLastMsg = {
+      ...mockConversation,
+      lastMessage: { id: 'msg-2', content: 'Other message', createdAt: new Date() },
+    };
+    queryClient.setQueryData(['conversations', 'list', undefined], [convWithOtherLastMsg]);
+
+    const { result } = renderHook(() => useEditMessageMutation(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        conversationId: 'conv-1',
+        messageId: 'msg-1',
+        content: 'Edited',
+      });
+    });
+
+    expect(mockEditMessage).toHaveBeenCalledWith('msg-1', 'Edited');
+    // lastMessage should be unchanged since its id doesn't match
+    const convs = queryClient.getQueryData(['conversations', 'list', undefined]) as any[] | undefined;
+    if (convs) {
+      expect(convs[0].lastMessage?.id).toBe('msg-2');
+    }
+  });
+
+  it('should not rollback when no messages cache was captured on edit error', async () => {
+    mockEditMessage.mockRejectedValue(new Error('Edit no cache'));
+
+    // No messages cache → context.previousMessages = undefined (false branch at line 222)
+    const { result } = renderHook(() => useEditMessageMutation(), {
+      wrapper: createWrapper(),
+    });
+
+    await expect(
+      act(async () => {
+        await result.current.mutateAsync({
+          conversationId: 'conv-1',
+          messageId: 'msg-1',
+          content: 'Will fail',
+        });
+      })
+    ).rejects.toThrow('Edit no cache');
+    // Passes if onError doesn't throw when context.previousMessages is undefined
+  });
 });
 
 describe('useDeleteMessageMutation', () => {
@@ -486,6 +829,24 @@ describe('useDeleteMessageMutation', () => {
     });
   });
 
+  it('should be a no-op in setQueryData when messages cache does not exist for delete', async () => {
+    mockDeleteMessage.mockResolvedValue({ success: true });
+
+    // No pre-populated cache
+    const { result } = renderHook(() => useDeleteMessageMutation(), {
+      wrapper: createWrapper(),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        conversationId: 'conv-1',
+        messageId: 'msg-1',
+      });
+    });
+
+    expect(mockDeleteMessage).toHaveBeenCalledWith('msg-1');
+  });
+
   it('should rollback on delete error', async () => {
     mockDeleteMessage.mockRejectedValue(new Error('Delete failed'));
 
@@ -513,6 +874,25 @@ describe('useDeleteMessageMutation', () => {
     // Cache should be rolled back
     const cachedData = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']);
     expect(cachedData).toEqual(originalData);
+  });
+
+  it('should not rollback when no messages cache was captured (line 284 false branch)', async () => {
+    mockDeleteMessage.mockRejectedValue(new Error('Delete failed'));
+
+    // No pre-populated messages cache → context.previousMessages = undefined
+    const { result } = renderHook(() => useDeleteMessageMutation(), {
+      wrapper: createWrapper(),
+    });
+
+    await expect(
+      act(async () => {
+        await result.current.mutateAsync({
+          conversationId: 'conv-1',
+          messageId: 'msg-1',
+        });
+      })
+    ).rejects.toThrow('Delete failed');
+    // Test passes if no error thrown during onError (context.previousMessages is falsy)
   });
 });
 

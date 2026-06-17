@@ -25,7 +25,7 @@ final class PostServiceTests: XCTestCase {
             id: id, type: "POST", visibility: "PUBLIC", content: "Hello world",
             originalLanguage: "en", createdAt: Date(), updatedAt: nil, expiresAt: nil,
             author: APIAuthor(id: "author1", username: "alice", displayName: "Alice", avatar: nil),
-            likeCount: 10, commentCount: 2, repostCount: 1, viewCount: 100,
+            likeCount: 10, commentCount: 2, repostCount: 1, viewCount: 100, postOpenCount: nil, qualifiedViewCount: nil, playCount: nil,
             bookmarkCount: 3, shareCount: 0, reactionSummary: nil, isPinned: false,
             isEdited: false, media: nil, comments: nil, repostOf: nil,
             originalRepostOfId: nil, isQuote: nil,

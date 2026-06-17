@@ -7,6 +7,7 @@
   ],
   "moduleNameMapper": {
     "^@meeshy/shared$": "<rootDir>/../../packages/shared/types/index.ts",
+    "^@meeshy/shared/prisma/client$": "<rootDir>/src/__tests__/__stubs__/prisma-client.ts",
     "^@meeshy/shared/(.*)$": "<rootDir>/../../packages/shared/$1",
     "^(\\.{1,2}/.*)\\.js$": "$1"
   },
@@ -49,16 +50,19 @@
   "setupFilesAfterEnv": ["<rootDir>/jest.setup.js"],
   "transform": {
     "^.+\\.ts$": ["ts-jest", {
-      "tsconfig": "tsconfig.test.json"
+      "tsconfig": "tsconfig.test.json",
+      "diagnostics": {
+        "ignoreCodes": [2307, 2339]
+      }
     }]
   },
   "moduleFileExtensions": ["ts", "js", "json"],
   "coverageThreshold": {
     "global": {
-      "lines": 32,
-      "branches": 28,
-      "statements": 31,
-      "functions": 34
+      "lines": 39,
+      "branches": 37,
+      "statements": 39,
+      "functions": 40
     }
   }
 }

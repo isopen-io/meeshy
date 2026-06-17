@@ -681,6 +681,7 @@ extension StoryViewerView {
 
     func sendComment(text: String, effectFlags: Int? = nil, parentId: String? = nil) {
         guard !text.isEmpty, let story = currentStory else { return }
+        EngagementTracker.shared.recordAction(.commented, surface: .storyViewer)
 
         // Optimistic local insert. Reply nesting is currently flat in the UI
         // (Threads-style max-1-niveau pour MVP) — the parentId is forwarded
@@ -740,6 +741,7 @@ extension StoryViewerView {
 
     func sendReaction(emoji: String) {
         guard let story = currentStory else { return }
+        EngagementTracker.shared.recordAction(.reacted, surface: .storyViewer)
 
         // Fire & forget like
         Task {

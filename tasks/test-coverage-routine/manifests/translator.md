@@ -41,7 +41,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/translator/src/services/database_service.py`
 - [ ] `services/translator/src/services/diarization_service.py`
 - [ ] `services/translator/src/services/diarization_speechbrain.py`
-- [ ] `services/translator/src/services/language_capabilities.py`
+- [x] `services/translator/src/services/language_capabilities.py`
 - [ ] `services/translator/src/services/model_manager.py`
 - [~] `services/translator/src/services/redis_service.py`
 - [~] `services/translator/src/services/segment_serialization.py`

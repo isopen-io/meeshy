@@ -213,9 +213,11 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       const clientIP = request.ip || (request.headers['x-forwarded-for'] as string) || '127.0.0.1';
 
 
-      // 1. Verifier que le lien existe et est valide
-      const shareLink = await fastify.prisma.conversationShareLink.findUnique({
-        where: { linkId },
+      // 1. Verifier que le lien existe et est valide.
+      // Accepter linkId OU identifier (iOS partage l'identifier, web le linkId)
+      // — sinon toute invitation anonyme partagée depuis iOS tombait en 404.
+      const shareLink = await fastify.prisma.conversationShareLink.findFirst({
+        where: { OR: [{ linkId }, { identifier: linkId }] },
         include: {
           conversation: {
             select: { id: true, title: true, type: true }

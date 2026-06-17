@@ -92,18 +92,30 @@ struct ReelsPlayerView: View {
         .task { viewModel.seed(posts: seedPosts, startId: startId) }
         // Cycle de vie de la post room du réel actif (real-time du like). Idempotent
         // côté serveur : rejoindre/quitter une room déjà (non) jointe est un no-op,
-        // donc une disparition transitoire du reveal se ré-auto-corrige.
+        // donc une disparition transitoire du reveal se ré-auto-corrige. Le `leave`
+        // est fait dans le `.onDisappear` plus bas (combiné avec la finalisation
+        // d'engagement).
         .onAppear {
             if let id = viewModel.currentId { SocialSocketManager.shared.joinPostRoom(postId: id) }
         }
-        .onDisappear { viewModel.leaveActivePostRoom() }
-        .adaptiveOnChange(of: viewModel.currentId) { _, newId in
-            guard let newId else { return }
+        .adaptiveOnChange(of: viewModel.currentId) { old, newId in
             // Never carry immersive-hidden chrome into the next reel — the scrub
             // bar / action rail / info must reappear when you page.
             if chromeHidden { chromeHidden = false }
-            HapticFeedback.light()
-            viewModel.recordView(newId)
+            if newId != nil { HapticFeedback.light() }
+            // Order matters: finalize the PREVIOUS reel's session (real watch-time +
+            // heartbeat samples + completed) and `end` it BEFORE `begin` of the next —
+            // both in the SAME Task so `begin` never races ahead of the deferred `end`
+            // (which would drop the previous reel's qualified view).
+            Task {
+                if old != nil {
+                    finalizeReelSession()
+                    await EngagementTracker.shared.end(surface: .reels)
+                }
+                guard let newId else { return }
+                EngagementTracker.shared.begin(postId: newId, contentType: .reel, surface: .reels)
+                viewModel.recordView(newId)
+            }
         }
         .sheet(item: $commentsReel) { reel in
             CommentsSheetView(
@@ -127,7 +139,33 @@ struct ReelsPlayerView: View {
             SharedAVPlayerManager.shared.pause()
             PlaybackCoordinator.shared.stopAllAudio()
         }
+        .onDisappear {
+            // Quitte la post room du réel actif (real-time like) + finalise la session
+            // d'engagement (watch-time + vue qualifiée) du réel courant.
+            viewModel.leaveActivePostRoom()
+            finalizeReelSession()
+            Task { await EngagementTracker.shared.end(surface: .reels) }
+        }
         .statusBarHidden(true)
+    }
+
+    /// Finalizes the current reel's engagement session: pushes the real watch-time,
+    /// the drained heartbeat samples (→ server's 30%/90% qualified-view rule), and
+    /// whether playback reached the end (→ playCount). Does NOT call `end` — the
+    /// caller orders `end` (and any subsequent `begin`) around it.
+    private func finalizeReelSession() {
+        let m = SharedAVPlayerManager.shared
+        let watchMs = m.currentTime.isNaN ? 0 : Int(m.currentTime * 1000)
+        let durMs = m.duration > 0 ? Int(m.duration * 1000) : nil
+        let drained = m.drainWatchSamples()
+        let maxPos = max(watchMs, drained.samples.map(\.positionMs).max() ?? 0)
+        let completed: Bool = {
+            if drained.reachedEnd { return true }
+            guard let d = durMs, d > 0 else { return false }
+            return maxPos >= Int(Double(d) * 0.95)
+        }()
+        EngagementTracker.shared.attachWatch(surface: .reels, watchMs: watchMs,
+            mediaDurationMs: durMs, completed: completed, samples: drained.samples)
     }
 
     // MARK: Pager
@@ -584,14 +622,14 @@ private struct ReelActionRail: View {
             )
             .accessibilityLabel(String(localized: "reels.action.like", defaultValue: "J'aime", bundle: .main))
 
-            // Vues du réel — indicateur informatif (non interactif) sous les cœurs.
-            if reel.viewCount > 0 {
+            // Vues totales du réel (postOpenCount) — indicateur informatif (non interactif) sous les cœurs.
+            if reel.postOpenCount > 0 {
                 VStack(spacing: 5) {
                     Image(systemName: "eye.fill")
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundColor(.white.opacity(0.9))
                         .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
-                    Text(ReelActionButton.compact(reel.viewCount))
+                    Text(ReelActionButton.compact(reel.postOpenCount))
                         .font(.caption2.weight(.semibold))
                         .foregroundColor(.white)
                         .shadow(color: .black.opacity(0.35), radius: 2)
@@ -599,7 +637,7 @@ private struct ReelActionRail: View {
                 .frame(width: 48)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(String(localized: "reels.action.views", defaultValue: "Vues", bundle: .main))
-                .accessibilityValue("\(reel.viewCount)")
+                .accessibilityValue("\(reel.postOpenCount)")
             }
 
             ReelActionButton(

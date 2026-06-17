@@ -1,3 +1,4 @@
+import { generateShortToken } from './TrackingLinkService';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
@@ -491,10 +492,24 @@ export class PostService {
       throw new Error('FORBIDDEN');
     }
 
-    return this.prisma.post.update({
+    const updated = await this.prisma.post.update({
       where: { id: postId },
       data: { deletedAt: new Date() },
     });
+
+    // Soft-delete only flips `deletedAt` — the Prisma `onDelete: Cascade` relation
+    // never fires, so any share-tracking links targeting this post would keep
+    // redirecting to a dead page. Deactivate them explicitly (best-effort).
+    try {
+      await this.prisma.trackingLink.updateMany({
+        where: { targetId: postId },
+        data: { isActive: false },
+      });
+    } catch (err) {
+      log.warn('deletePost: tracking link deactivation failed', { postId, err });
+    }
+
+    return updated;
   }
 
   async likePost(postId: string, userId: string, emoji: string = '❤️') {
@@ -589,12 +604,17 @@ export class PostService {
     });
     if (!post) return null;
 
-    // Upsert to handle duplicates
-    await this.prisma.postBookmark.upsert({
-      where: { postId_userId: { postId, userId } },
-      create: { postId, userId },
-      update: {},
-    });
+    // Create + catch P2002 instead of unconditional upsert: a duplicate bookmark
+    // must NOT re-increment bookmarkCount (the previous `upsert` always ran the
+    // increment, inflating the counter on every repeat tap).
+    try {
+      await this.prisma.postBookmark.create({ data: { postId, userId } });
+    } catch (err) {
+      if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
+        return { success: true }; // already bookmarked — idempotent no-op
+      }
+      throw err;
+    }
 
     await this.prisma.post.update({
       where: { id: postId },
@@ -609,16 +629,136 @@ export class PostService {
       await this.prisma.postBookmark.delete({
         where: { postId_userId: { postId, userId } },
       });
-
-      await this.prisma.post.update({
-        where: { id: postId },
-        data: { bookmarkCount: { decrement: 1 } },
-      });
     } catch {
-      // Not bookmarked — ignore
+      // Not bookmarked — nothing to decrement.
+      return { success: true };
     }
 
+    // Guarded decrement: only when the counter is still > 0, so a drifted /
+    // already-zero counter can never go negative.
+    await this.prisma.post.updateMany({
+      where: { id: postId, bookmarkCount: { gt: 0 } },
+      data: { bookmarkCount: { decrement: 1 } },
+    });
+
     return { success: true };
+  }
+
+  /**
+   * Upsert applicatif du lien de partage tracé d'un post pour le partageur courant
+   * (LOT 6). Un partageur = un lien réutilisé par post : si le lien existe déjà,
+   * on réutilise son token SANS ré-incrémenter `shareCount`. Sinon on crée le lien
+   * + incrémente `shareCount` dans une transaction. Une collision concurrente
+   * (P2002 sur l'index unique partiel `(targetId, createdBy)`) est rattrapée :
+   * on relit le lien gagnant sans ré-incrémenter.
+   */
+  async shareWithTrackingLink(
+    postId: string,
+    userId: string,
+    opts: { baseUrl: string; platform?: string },
+  ): Promise<{ shared: boolean; shareCount: number; shortUrl: string; token: string; reused: boolean } | null> {
+    const post = await this.prisma.post.findFirst({
+      where: { id: postId, deletedAt: NOT_DELETED },
+      select: { id: true, shareCount: true, type: true },
+    });
+    if (!post) return null;
+
+    const baseUrl = opts.baseUrl.replace(/\/+$/, '');
+
+    const existing = await this.prisma.trackingLink.findFirst({
+      where: { targetId: postId, createdBy: userId },
+    });
+    if (existing) {
+      return { shared: true, shareCount: post.shareCount, token: existing.token, shortUrl: `${baseUrl}${existing.shortUrl}`, reused: true };
+    }
+
+    const token = await this.generateShareToken();
+    const shortUrl = `/l/${token}`;
+
+    // Type the link from the post's OWN type (POST/REEL/STORY/STATUS map 1:1 to
+    // TrackingTargetType) so the redirect page + DeepLinkRouter open the right
+    // surface — never blindly "POST". Stories get their dedicated viewer URL.
+    const targetType = ({ POST: 'POST', REEL: 'REEL', STORY: 'STORY', STATUS: 'STATUS' } as const)[post.type];
+    // Real v1 page per type: /post, /reel, /story, /mood (fallback /feeds/post).
+    const webPath = ({ POST: 'post', REEL: 'reel', STORY: 'story', STATUS: 'mood' } as const)[post.type] ?? 'feeds/post';
+    const originalUrl = `${baseUrl}/${webPath}/${postId}`;
+
+    try {
+      const created = await this.prisma.$transaction(async (tx) => {
+        const link = await tx.trackingLink.create({
+          data: {
+            token,
+            name: `Post ${postId.slice(0, 8)}`,
+            source: opts.platform,
+            medium: 'share',
+            originalUrl,
+            shortUrl,
+            createdBy: userId,
+            targetType,
+            targetId: postId,
+            isActive: true,
+            totalClicks: 0,
+            uniqueClicks: 0,
+          },
+        });
+        const updated = await tx.post.update({
+          where: { id: postId },
+          data: { shareCount: { increment: 1 } },
+          select: { shareCount: true },
+        });
+        return { link, shareCount: updated.shareCount };
+      });
+      return { shared: true, shareCount: created.shareCount, token: created.link.token, shortUrl: `${baseUrl}${created.link.shortUrl}`, reused: false };
+    } catch (err) {
+      if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
+        // Concurrent sharer won the race — reuse the winning link, no re-increment.
+        const raced = await this.prisma.trackingLink.findFirst({
+          where: { targetId: postId, createdBy: userId },
+        });
+        if (raced) {
+          return { shared: true, shareCount: post.shareCount, token: raced.token, shortUrl: `${baseUrl}${raced.shortUrl}`, reused: true };
+        }
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Analytics du lien de partage du post pour le partageur courant (LOT 6).
+   * Retourne `null` si l'utilisateur n'a pas (encore) partagé ce post.
+   */
+  async getPostShareLink(
+    postId: string,
+    userId: string,
+    baseUrl: string,
+  ): Promise<{ token: string; shortUrl: string; totalClicks: number; uniqueClicks: number; lastClickedAt: Date | null } | null> {
+    const link = await this.prisma.trackingLink.findFirst({
+      where: { targetId: postId, createdBy: userId },
+    });
+    if (!link) return null;
+    return {
+      token: link.token,
+      shortUrl: `${baseUrl.replace(/\/+$/, '')}${link.shortUrl}`,
+      totalClicks: link.totalClicks,
+      uniqueClicks: link.uniqueClicks,
+      lastClickedAt: link.lastClickedAt,
+    };
+  }
+
+  /**
+   * Génère un token de partage unique de 6 caractères (collision → re-tirage).
+   * Utilise un CSPRNG (`crypto.randomInt`) — JAMAIS `Math.random()` : un PRNG
+   * prédictible laisserait deviner les tokens d'autres partageurs (énumération,
+   * usurpation d'attribution). 6 chars suffisent face au brute-force grâce au
+   * rate-limiting de `/l/:token` (contenu partagé déjà public).
+   */
+  private async generateShareToken(): Promise<string> {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const token = generateShortToken(6);
+      const clash = await this.prisma.trackingLink.findUnique({ where: { token } });
+      if (!clash) return token;
+    }
+    throw new Error('Unable to generate unique share token');
   }
 
   /**
@@ -677,6 +817,149 @@ export class PostService {
       // Ignore race conditions
       return false;
     }
+  }
+
+  /**
+   * Ingestion append-only des sessions d'engagement (LOT 4 + agrégation LOT 5).
+   *
+   * - Upsert sur `sessionId` → idempotent : rejouer un ACK perdu après un 200 est
+   *   un no-op (aucun double comptage).
+   * - Skip-and-continue : un post supprimé entre `begin` et `flush` est ignoré
+   *   sans faire échouer le reste du batch.
+   * - Caps défensifs (300 s) sur `dwellMs`/`watchMs`.
+   * - `userId` provient de la route (jamais du client) — anti spoofing.
+   * - Agrégation dénormalisée alimentée UNIQUEMENT à l'INSERT d'une nouvelle ligne
+   *   (jamais aux updates/retries idempotents) : `postOpenCount`, `playCount`,
+   *   `qualifiedViewCount`. N'altère NI `viewCount` NI `PostView`.
+   *
+   * Retourne le nombre de sessions persistées (insert ou update).
+   */
+  async recordEngagementBatch(
+    sessions: Array<{
+      sessionId: string; userId?: string; postId: string; contentType: string; surface: string;
+      startedAt: string; dwellMs: number; watchMs?: number; mediaDurationMs?: number;
+      completed?: boolean; truncated?: boolean; consent?: string;
+      actions?: unknown[]; watchSamples?: unknown[];
+    }>,
+    userId: string,
+  ): Promise<number> {
+    const capped = sessions.slice(0, 50);
+    let recorded = 0;
+
+    for (const s of capped) {
+      try {
+        const post = await this.prisma.post.findFirst({
+          where: { id: s.postId, deletedAt: NOT_DELETED },
+          select: { id: true, authorId: true },
+        });
+        if (!post) continue; // skip-and-continue: post deleted between begin and flush
+
+        const dwellMs = Math.max(0, Math.min(300_000, Math.round(s.dwellMs)));
+        const watchMs = s.watchMs !== undefined
+          ? Math.max(0, Math.min(300_000, Math.round(s.watchMs)))
+          : undefined;
+        const mediaDurationMs = s.mediaDurationMs !== undefined
+          ? Math.max(0, Math.round(s.mediaDurationMs))
+          : undefined;
+
+        const completed = s.completed === true;
+        const data = {
+          postId: s.postId,
+          userId,
+          contentType: s.contentType,
+          surface: s.surface,
+          startedAt: new Date(s.startedAt),
+          dwellMs,
+          watchMs,
+          mediaDurationMs,
+          completed,
+          truncated: s.truncated === true,
+          consent: s.consent,
+          actions: (s.actions ?? []) as Prisma.InputJsonValue,
+          watchSamples: (s.watchSamples ?? []) as Prisma.InputJsonValue,
+        };
+
+        const before = await this.prisma.postEngagement.findUnique({
+          where: { sessionId: s.sessionId },
+          select: { id: true },
+        });
+        const isInsert = !before;
+
+        await this.prisma.postEngagement.upsert({
+          where: { sessionId: s.sessionId },
+          update: data,
+          create: { sessionId: s.sessionId, ...data },
+        });
+        recorded += 1;
+
+        if (isInsert) {
+          const increments = this.engagementAggregateIncrements({
+            surface: s.surface,
+            contentType: s.contentType,
+            dwellMs,
+            watchMs,
+            mediaDurationMs,
+            completed,
+            watchSamples: s.watchSamples ?? [],
+          });
+          if (Object.keys(increments).length > 0) {
+            await this.prisma.post.update({
+              where: { id: s.postId },
+              data: increments,
+            });
+          }
+        }
+      } catch {
+        continue; // never fail the whole batch on one row
+      }
+    }
+    return recorded;
+  }
+
+  /**
+   * Calcule les incréments de compteurs dénormalisés pour une NOUVELLE session
+   * (spec §19.3). Renvoie un objet `Prisma.PostUpdateInput` partiel — vide si
+   * la session ne déclenche aucun compteur.
+   */
+  private engagementAggregateIncrements(s: {
+    surface: string; contentType: string; dwellMs: number;
+    watchMs?: number; mediaDurationMs?: number; completed: boolean;
+    watchSamples: unknown[];
+  }): Prisma.PostUpdateInput {
+    const SHORT_VIDEO_MS = 8300;
+    const QUALIFY_MS = 2500;
+
+    const increments: Record<string, { increment: number }> = {};
+
+    // "Ouverture" d'un post = consommation plein-cadre : lecteur reel plein écran
+    // OU page Detail. Concept générique à tout Post (pas qu'aux reels). Les surfaces
+    // éphémères (story/status) ont leurs propres métriques et ne comptent pas ici.
+    if (s.surface === 'reels' || s.surface === 'detail') {
+      increments.postOpenCount = { increment: 1 };
+    }
+
+    if (s.completed) {
+      increments.playCount = { increment: 1 };
+    }
+
+    const maxPositionMs = Array.isArray(s.watchSamples)
+      ? s.watchSamples.reduce<number>((max, sample) => {
+          const pos = (sample as { positionMs?: unknown })?.positionMs;
+          return typeof pos === 'number' && pos > max ? pos : max;
+        }, 0)
+      : 0;
+
+    const duration = s.mediaDurationMs ?? 0;
+    const positionThresh = duration < SHORT_VIDEO_MS ? 0.90 : 0.30;
+    const positionQualifies = duration > 0 && (maxPositionMs / duration) >= positionThresh;
+    const watchQualifies = (s.watchMs ?? 0) >= QUALIFY_MS;
+    const dwellQualifies = s.watchMs === undefined && s.dwellMs >= QUALIFY_MS;
+
+    if (positionQualifies || watchQualifies || dwellQualifies) {
+      increments.qualifiedViewCount = { increment: 1 };
+    }
+
+    return increments as Prisma.PostUpdateInput;
   }
 
   async sharePost(postId: string, userId: string, platform?: string) {

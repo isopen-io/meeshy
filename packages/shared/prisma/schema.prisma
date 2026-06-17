@@ -281,6 +281,7 @@ model User {
   postViews          PostView[]        @relation("UserPostViews")
   postImpressions    PostImpression[]  @relation("UserPostImpressions")
   postBookmarks      PostBookmark[]    @relation("UserPostBookmarks")
+  postEngagements    PostEngagement[]  @relation("UserPostEngagements")
 
   // Story audio library
   storyAudioUploads StoryBackgroundAudio[] @relation("StoryAudioUploads")
@@ -1445,9 +1446,34 @@ model AffiliateRelation {
 }
 
 /// Lien de tracking pour compter les clics sur les liens partagés
+/// Nature de la cible d'un lien de tracking. EXTERNAL par défaut (lien web brut).
+/// Les liens de partage de post/reel/story/status/conversation/profil portent une
+/// cible interne typée, permettant la résolution deep-link via /resolve.
+enum TrackingTargetType {
+  POST
+  REEL
+  STORY
+  STATUS
+  CONVERSATION
+  PROFILE
+  EXTERNAL
+}
+
 model TrackingLink {
   id             String    @id @default(auto()) @map("_id") @db.ObjectId
   token          String    @unique // Token de 6 caractères (ex: "a1b2c3")
+  /// Type de cible interne (post, reel, story, …) — EXTERNAL pour un lien web brut.
+  targetType     TrackingTargetType @default(EXTERNAL)
+  /// ObjectId de la cible interne (postId, conversationId, userId…). null si EXTERNAL.
+  ///
+  /// Unicité applicative sur `(targetId, createdBy)` (un partageur = un lien réutilisé
+  /// par cible) garantie par un index unique PARTIEL défini manuellement dans
+  /// `prisma/migrations/2026-06-14-tracking-link-target.mongodb.js`. On NE déclare
+  /// PAS `@@unique([targetId, createdBy])` ici : le connecteur MongoDB de Prisma
+  /// émet un index unique NON partiel qui traiterait tous les `null` comme égaux et
+  /// casserait la création de liens EXTERNAL multiples (même précédent que
+  /// `Message.clientMessageId`).
+  targetId       String?   @db.ObjectId
   name           String? // Nom du lien (max 32 caractères)
   campaign       String? // UTM campaign name
   source         String? // UTM source (e.g., facebook, newsletter)
@@ -2821,6 +2847,11 @@ model Post {
   impressionCount Int @default(0)
   bookmarkCount   Int @default(0)
   shareCount      Int @default(0)
+  /// Compteurs d'engagement dénormalisés — alimentés UNIQUEMENT à l'INSERT d'une
+  /// PostEngagement (jamais aux updates/retries idempotents). N'altèrent pas viewCount.
+  postOpenCount      Int @default(0)
+  qualifiedViewCount Int @default(0)
+  playCount          Int @default(0)
 
   // ============================================
   // FLAGS
@@ -2845,6 +2876,7 @@ model Post {
   views       PostView[]
   impressions PostImpression[]
   bookmarks   PostBookmark[]
+  engagements PostEngagement[]
   /// Réactions table (Phase 3 — source de vérité moderne, remplace progressivement reactions: Json[])
   postReactions PostReaction[] @relation("PostReactionsTable")
   /// Mentions dans le corps du post
@@ -3035,6 +3067,34 @@ model PostImpression {
   @@index([userId])
   @@index([postId, userId])
   @@index([createdAt])
+}
+
+/// Session d'engagement append-only (temps + actions). N'altère NI PostView NI viewCount.
+/// Idempotence garantie par `sessionId @unique` (rejouer un ACK perdu = no-op via upsert).
+model PostEngagement {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  sessionId       String   @unique
+  postId          String   @db.ObjectId
+  userId          String   @db.ObjectId
+  contentType     String
+  surface         String
+  startedAt       DateTime
+  dwellMs         Int
+  watchMs         Int?
+  mediaDurationMs Int?
+  completed       Boolean  @default(false)
+  truncated       Boolean  @default(false)
+  consent         String?
+  actions         Json     @default("[]")
+  watchSamples    Json     @default("[]")
+  createdAt       DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation("UserPostEngagements", fields: [userId], references: [id])
+
+  @@index([postId])
+  @@index([userId])
+  @@index([postId, createdAt])
 }
 
 /// Bookmark/sauvegarde d'un post

@@ -110,6 +110,13 @@ public struct APIPost: Decodable, Sendable {
     public let commentCount: Int?
     public let repostCount: Int?
     public let viewCount: Int?
+    // Compteurs d'engagement optionnels (server-augmented). Défaut memberwise
+    // `= nil` : permet la construction runtime/test sans les fournir explicitement.
+    // Décodage INCHANGÉ — `Decodable` synthétisé lit ces clés via `decodeIfPresent`
+    // (le défaut ne sert qu'à l'init memberwise, pas au décodage).
+    public var postOpenCount: Int? = nil
+    public var qualifiedViewCount: Int? = nil
+    public var playCount: Int? = nil
     public let bookmarkCount: Int?
     public let shareCount: Int?
     public let reactionSummary: [String: Int]?
@@ -320,6 +327,9 @@ extension APIPost {
         feedPost.bookmarkCount = bookmarkCount ?? 0
         feedPost.shareCount = shareCount ?? 0
         feedPost.viewCount = viewCount ?? 0
+        feedPost.postOpenCount = postOpenCount ?? 0
+        feedPost.qualifiedViewCount = qualifiedViewCount ?? 0
+        feedPost.playCount = playCount ?? 0
         return feedPost
     }
 

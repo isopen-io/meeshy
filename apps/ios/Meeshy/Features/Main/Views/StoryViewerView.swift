@@ -419,6 +419,7 @@ struct StoryViewerView: View {
             triggerInitialActionIfNeeded()
             if let story = currentStory {
                 SocialSocketManager.shared.joinPostRoom(postId: story.id)
+                EngagementTracker.shared.begin(postId: story.id, contentType: .story, surface: .storyViewer)
             }
         }
         .task(id: currentStory?.id) {
@@ -442,6 +443,7 @@ struct StoryViewerView: View {
             if let story = currentStory {
                 SocialSocketManager.shared.leavePostRoom(postId: story.id)
             }
+            Task { await EngagementTracker.shared.end(surface: .storyViewer) }
         }
         .adaptiveOnChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
@@ -490,6 +492,7 @@ struct StoryViewerView: View {
                 group.stories.indices.contains(oldValue) ? group.stories[oldValue] : nil
             }
             transitionPostRoom(from: previousStory, to: currentStory)
+            transitionEngagement(to: currentStory)
         }
         .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
             skipExpiredStoriesIfNeeded()
@@ -500,6 +503,7 @@ struct StoryViewerView: View {
                 ? groups[oldValue].stories[currentStoryIndex]
                 : nil
             transitionPostRoom(from: previousStory, to: currentStory)
+            transitionEngagement(to: currentStory)
         }
         .onReceive(SocialSocketManager.shared.commentReactionAdded.receive(on: DispatchQueue.main)) { event in
             applyCommentReactionEvent(event)
@@ -860,6 +864,31 @@ struct StoryViewerView: View {
         }
         if let new = newStory, new.id != oldStory?.id {
             SocialSocketManager.shared.joinPostRoom(postId: new.id)
+        }
+    }
+
+    /// Finalizes the open `.storyViewer` engagement session and begins one for
+    /// `newStory`. The viewer reuses a single surface, so each story switch ends
+    /// the previous session (pushing video watch-time when present) before the
+    /// next begins. `end` is idempotent when no session is open.
+    private func transitionEngagement(to newStory: StoryItem?) {
+        let m = SharedAVPlayerManager.shared
+        let watchMs = m.currentTime.isNaN ? 0 : Int(m.currentTime * 1000)
+        let durMs = m.duration > 0 ? Int(m.duration * 1000) : nil
+        let drained = m.drainWatchSamples()
+        let maxPos = max(watchMs, drained.samples.map(\.positionMs).max() ?? 0)
+        let completed: Bool = {
+            if drained.reachedEnd { return true }
+            guard let d = durMs, d > 0 else { return false }
+            return maxPos >= Int(Double(d) * 0.95)
+        }()
+        EngagementTracker.shared.attachWatch(surface: .storyViewer, watchMs: watchMs,
+            mediaDurationMs: durMs, completed: completed, samples: drained.samples)
+        Task {
+            await EngagementTracker.shared.end(surface: .storyViewer)
+            if let new = newStory {
+                EngagementTracker.shared.begin(postId: new.id, contentType: .story, surface: .storyViewer)
+            }
         }
     }
 

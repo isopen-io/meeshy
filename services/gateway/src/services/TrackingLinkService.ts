@@ -1,8 +1,47 @@
+import { randomInt } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { TrackingLink, TrackingLinkClick } from '@meeshy/shared/types/tracking-link';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'TrackingLinkService' });
+
+/**
+ * Source UNIQUE de l'URL du frontend pour bâtir les liens `/l/<token>`.
+ * Fallback `meeshy.me` (domaine prod) — jamais localhost, qui casserait un lien
+ * partagé si `FRONTEND_URL` manquait. Utilisée par `buildTrackingUrl` ET la route share.
+ */
+export function resolveFrontendBaseUrl(): string {
+  return (process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || 'https://meeshy.me').replace(/\/+$/, '');
+}
+
+const SHORT_TOKEN_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+/**
+ * Génère un token court via CSPRNG (`crypto.randomInt`) — JAMAIS `Math.random()`
+ * (un PRNG prédictible laisserait deviner les tokens d'autres partageurs). Source
+ * UNIQUE partagée par TrackingLinkService et PostService (collision → re-tirage
+ * géré par l'appelant). 6 chars suffisent face au brute-force grâce au rate-limit.
+ */
+export function generateShortToken(length = 6): string {
+  let token = '';
+  for (let i = 0; i < length; i += 1) token += SHORT_TOKEN_CHARS.charAt(randomInt(0, SHORT_TOKEN_CHARS.length));
+  return token;
+}
+
+/**
+ * Cible typée résolue depuis un token `/l/<token>` — sert la page de
+ * redirection intelligente (web) et le DeepLinkRouter (iOS). `kind` distingue
+ * un lien de tracking (partage de post/reel/story) d'une invitation conversation.
+ */
+export type ResolvedLinkTarget = {
+  kind: 'tracking' | 'conversation';
+  targetType: string;
+  targetId: string | null;
+  originalUrl: string | null;
+  sharerId: string | null;
+  isActive: boolean;
+  expiresAt: Date | null;
+};
 
 /**
  * Service pour gérer les liens de tracking
@@ -18,12 +57,7 @@ export class TrackingLinkService {
    * Génère un token unique de 6 caractères
    */
   private generateToken(): string {
-    const characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let token = '';
-    for (let i = 0; i < 6; i++) {
-      token += characters.charAt(Math.floor(Math.random() * characters.length));
-    }
-    return token;
+    return generateShortToken(6);
   }
 
   /**
@@ -31,8 +65,7 @@ export class TrackingLinkService {
    * Utilise FRONTEND_URL de l'environnement ou fallback sur localhost
    */
   public buildTrackingUrl(token: string): string {
-    const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3100';
-    return `${frontendUrl}/l/${token}`;
+    return `${resolveFrontendBaseUrl()}/l/${token}`;
   }
 
   /**
@@ -132,6 +165,51 @@ export class TrackingLinkService {
     });
 
     return trackingLink as TrackingLink | null;
+  }
+
+  /**
+   * Résout un token `/l/<token>` vers sa cible typée. Tente d'abord un
+   * TrackingLink (partage de post/reel/story), puis tombe en fallback sur un
+   * ConversationShareLink (invitation). Un lien expiré ou désactivé est résolu
+   * mais marqué `isActive: false` (la page/app décide). Renvoie `null` si aucun
+   * lien ne correspond (→ 404 côté route).
+   */
+  async resolveTarget(token: string): Promise<ResolvedLinkTarget | null> {
+    const link = await this.prisma.trackingLink.findUnique({ where: { token } });
+    if (link) {
+      return {
+        kind: 'tracking',
+        targetType: link.targetType,
+        targetId: link.targetId ?? null,
+        originalUrl: link.originalUrl ?? null,
+        sharerId: link.createdBy ?? null,
+        isActive: this.isLinkActive(link.isActive, link.expiresAt ?? null),
+        expiresAt: link.expiresAt ?? null,
+      };
+    }
+
+    const invitation = await this.prisma.conversationShareLink.findFirst({
+      where: { OR: [{ linkId: token }, { identifier: token }] }
+    });
+    if (invitation) {
+      return {
+        kind: 'conversation',
+        targetType: 'CONVERSATION',
+        targetId: invitation.conversationId,
+        originalUrl: null,
+        sharerId: invitation.createdBy ?? null,
+        isActive: this.isLinkActive(invitation.isActive, invitation.expiresAt ?? null),
+        expiresAt: invitation.expiresAt ?? null,
+      };
+    }
+
+    return null;
+  }
+
+  private isLinkActive(isActive: boolean, expiresAt: Date | null): boolean {
+    if (!isActive) return false;
+    if (expiresAt && expiresAt.getTime() <= Date.now()) return false;
+    return true;
   }
 
   /**
@@ -425,7 +503,11 @@ export class TrackingLinkService {
       if (click.deviceFingerprint) uniqueFingerprints.add(click.deviceFingerprint);
     });
 
-    const uniqueClicks = Math.max(uniqueIps.size, uniqueFingerprints.size);
+    // Source unique = le compteur STOCKÉ (incrémenté à l'écriture), pour que tous
+    // les endpoints renvoient le MÊME nombre. Le recalcul max(IPs, fingerprints)
+    // divergeait du compteur lu par /posts/:id/share & /tracking-links/stats.
+    const uniqueClicks = (trackingLink as TrackingLink).uniqueClicks
+      ?? Math.max(uniqueIps.size, uniqueFingerprints.size);
 
     const confirmedClicks = clicks.filter(click => click.redirectStatus === 'confirmed').length;
 

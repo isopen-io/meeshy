@@ -88,14 +88,11 @@ describe('ParticipantPresenceIndicator', () => {
     expect(screen.getByTitle('En ligne')).toBeInTheDocument();
 
     act(() => {
-      const state = useUserStore.getState();
-      const user = state.usersMap.get('user-1');
-      if (user) {
-        // Simule le temps qui passe sans event socket : la mutation directe de la map
-        // ne notifie pas — seul le tick périodique déclenche le recalcul.
-        (user as { lastActiveAt?: Date }).lastActiveAt = sixMinutesAgo;
-      }
-      state.triggerStatusTick();
+      // updateUserStatus creates a new user object + new Map reference, which
+      // guarantees Zustand notifies all selectors watching this user's data.
+      // Direct mutation of the map object is unreliable (same reference → selector
+      // equality check in useSyncExternalStore skips re-render).
+      useUserStore.getState().updateUserStatus('user-1', { lastActiveAt: sixMinutesAgo });
     });
 
     expect(screen.getByTitle('Inactif')).toBeInTheDocument();
