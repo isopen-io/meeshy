@@ -691,5 +691,6 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   3. ConversationStatsService.ts `(service as any).instance = null` singleton reset justified: only way to rebind `setInterval` to fake timers without modifying production code.
   4. `findUnique` call-count in invalidation tests: called 3× (getStats + onNewMessage/edited/deleted internal read + getStats-after-invalidate) — correct behavior verified.
   5. Pre-existing gateway failures: 23 suites (production bugs, unchanged by this diff).
+- Threshold calibration note: local measured 50.29% lines; CI measured 45.72% lines (large gap due to CI running all 176 suites including 25 PostService-related suites that fail locally with TS2322, which load additional tracked production files into the denominator). Ratcheted to CI-calibrated values: lines 44→45, branches 42→43, statements 44→45, functions 45→46 (all above previous floor; see also 2026-06-16T05:30Z note on CI vs local threshold calibration).
 - Next slice: P1 Conversations & membership × gateway (remaining: core.ts, messages-advanced.ts, sharing.ts) OR P1 Conversations & membership × web
 - Commit: (see branch claude/coverage/p1-conversations-gateway)
