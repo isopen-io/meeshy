@@ -72,6 +72,20 @@ struct FeedPostCard: View {
     var accentColor: String { post.authorColor }
     private var topComments: [FeedComment] { Array(post.comments.sorted { $0.likes > $1.likes }.prefix(3)) }
 
+    /// True when the signed-in user authored this post — gates the private reach
+    /// stats (impressions + views) shown only to the author.
+    private var isAuthor: Bool {
+        guard let me = AuthManager.shared.currentUser?.id else { return false }
+        return me == post.authorId
+    }
+
+    /// Compact count (1.2k / 3.4M).
+    static func compactCount(_ value: Int) -> String {
+        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
+        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
+        return "\(value)"
+    }
+
     /// VoiceOver label for the tappable media preview. Distinguishes a video
     /// from an image (and falls back to a generic "media" wording for mixed or
     /// other types) and attributes it to the post author.
@@ -483,6 +497,23 @@ struct FeedPostCard: View {
                                 .accessibilityAddTraits(.isButton)
                         }
                     }
+
+                    // Reach stats (impressions · views) — visible ONLY to the
+                    // post's author, after the meta row (private analytics).
+                    if isAuthor {
+                        Text("·").font(.caption).foregroundColor(theme.textMuted)
+                        HStack(spacing: 3) {
+                            Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
+                            Text(Self.compactCount(post.viewCount)).font(.caption2.weight(.medium))
+                            Text("·").font(.caption2)
+                            Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
+                            Text(Self.compactCount(post.postOpenCount)).font(.caption2.weight(.medium))
+                        }
+                        .foregroundColor(theme.textMuted)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
+                        .accessibilityValue("\(post.viewCount) · \(post.postOpenCount)")
+                    }
                 }
             }
 
@@ -658,6 +689,14 @@ struct FeedPostCard: View {
                             .scaleEffect(likeAnimating ? 1.3 : (effectiveIsLiked ? 1.1 : 1.0))
                             .rotationEffect(.degrees(likeAnimating ? -15 : 0))
                             .opacity(isHeartInFlight ? 0.5 : 1.0)
+                        // Accent BORDER on the glyph when the current user liked.
+                        if effectiveIsLiked {
+                            Image(systemName: "heart")
+                                .font(.system(size: 18))
+                                .foregroundColor(Color(hex: accentColor))
+                                .scaleEffect(likeAnimating ? 1.3 : 1.1)
+                                .rotationEffect(.degrees(likeAnimating ? -15 : 0))
+                        }
                     }
 
                     Text("\(effectiveLikeCount)")
@@ -701,9 +740,17 @@ struct FeedPostCard: View {
                 HapticFeedback.light()
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: isReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
-                        .font(.system(size: 17))
-                        .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
+                    ZStack {
+                        Image(systemName: isReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
+                            .font(.system(size: 17))
+                            .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
+                        // Accent BORDER on the glyph when the current user reposted.
+                        if isReposted {
+                            Image(systemName: "arrow.2.squarepath.circle")
+                                .font(.system(size: 17))
+                                .foregroundColor(Color(hex: accentColor))
+                        }
+                    }
                     let count = displayRepostCount ?? post.repostCount
                     if count > 0 {
                         Text("\(count)")
@@ -734,9 +781,17 @@ struct FeedPostCard: View {
                 HapticFeedback.light()
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
-                        .font(.system(size: 17))
-                        .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
+                    ZStack {
+                        Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
+                            .font(.system(size: 17))
+                            .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
+                        // Accent BORDER on the glyph when the current user bookmarked.
+                        if isBookmarked {
+                            Image(systemName: "bookmark")
+                                .font(.system(size: 17))
+                                .foregroundColor(Color(hex: accentColor))
+                        }
+                    }
                     let count = displayBookmarkCount ?? post.bookmarkCount
                     if count > 0 {
                         Text("\(count)")
