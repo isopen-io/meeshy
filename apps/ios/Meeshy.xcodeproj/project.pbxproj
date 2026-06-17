@@ -168,6 +168,7 @@
 		ENGMOD0001000100010001BLD /* TrackEngagementModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENGMOD0001000100010001REF /* TrackEngagementModifier.swift */; };
 		ENGTRT0001000100010001BLD /* EngagementTrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENGTRT0001000100010001REF /* EngagementTrackerTests.swift */; };
 		ENGDST0001000100010001BLD /* EngagementDispatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENGDST0001000100010001REF /* EngagementDispatcherTests.swift */; };
+		DLRTD0001000100010001BLD /* DeepLinkRouterTrackedDestinationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DLRTD0001000100010001REF /* DeepLinkRouterTrackedDestinationTests.swift */; };
 		ENGMOT0001000100010001BLD /* TrackEngagementModifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENGMOT0001000100010001REF /* TrackEngagementModifierTests.swift */; };
 		ADBAC274D8FB25AB8EA1527A /* MessageListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AC776C95F6E4344DA967A49 /* MessageListViewController.swift */; };
 		AE4100000000002F41 /* AudioEffectsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE4100000000001F41 /* AudioEffectsPanel.swift */; };
@@ -659,6 +660,7 @@
 		ENGMOD0001000100010001REF /* TrackEngagementModifier.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Modifiers/TrackEngagementModifier.swift; sourceTree = SOURCE_ROOT; };
 		ENGTRT0001000100010001REF /* EngagementTrackerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Services/EngagementTrackerTests.swift; sourceTree = SOURCE_ROOT; };
 		ENGDST0001000100010001REF /* EngagementDispatcherTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Services/EngagementDispatcherTests.swift; sourceTree = SOURCE_ROOT; };
+		DLRTD0001000100010001REF /* DeepLinkRouterTrackedDestinationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Services/DeepLinkRouterTrackedDestinationTests.swift; sourceTree = SOURCE_ROOT; };
 		ENGMOT0001000100010001REF /* TrackEngagementModifierTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/TrackEngagementModifierTests.swift; sourceTree = SOURCE_ROOT; };
 		4B8711AA999D4B45FFEA4492 /* BlockedTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedTab.swift; sourceTree = "<group>"; };
 		4EBB27715D5F6E39BB1259FE /* ConversationLanguagePreferences.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationLanguagePreferences.swift; sourceTree = "<group>"; };
@@ -2116,6 +2118,7 @@
 				AA7E08B0D1609D24446F93BE /* AnonymousSessionStoreTests.swift */,
 				ENGTRT0001000100010001REF /* EngagementTrackerTests.swift */,
 				ENGDST0001000100010001REF /* EngagementDispatcherTests.swift */,
+				DLRTD0001000100010001REF /* DeepLinkRouterTrackedDestinationTests.swift */,
 				147B06F4C6BA47BCD48D03C6 /* apps/ios/MeeshyTests/Unit/Services/PresenceManagerTests.swift */,
 				A1B893097A2EDC16D20579F8 /* ConversationLockManagerTests.swift */,
 				5F682CF63D510A2E111E7BD1 /* PresenceManagerTests.swift */,
@@ -2791,6 +2794,7 @@
 				4BD0B3391A67AE86286F93AF /* PresenceManagerTests.swift in Sources */,
 				ENGTRT0001000100010001BLD /* EngagementTrackerTests.swift in Sources */,
 				ENGDST0001000100010001BLD /* EngagementDispatcherTests.swift in Sources */,
+				DLRTD0001000100010001BLD /* DeepLinkRouterTrackedDestinationTests.swift in Sources */,
 				ENGMOT0001000100010001BLD /* TrackEngagementModifierTests.swift in Sources */,
 				D122AA121095AFDB22A7662F /* AuthServiceTests.swift in Sources */,
 				09B1C857CBCEAEE03639B305 /* AnonymousSessionStoreTests.swift in Sources */,
