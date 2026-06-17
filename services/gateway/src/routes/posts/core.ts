@@ -262,6 +262,11 @@ export function registerCoreRoutes(
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Not authorized to edit this post', { code: 'FORBIDDEN' });
       }
+      // Business-rule rejections from updatePost (invalid type switch, reel
+      // without media, type change on a repost) carry a 422 statusCode.
+      if (error instanceof Error && (error as { statusCode?: number }).statusCode === 422) {
+        return sendBadRequest(reply, error.message, { code: 'INVALID_POST_UPDATE' });
+      }
       fastify.log.error(`[PUT /posts/:postId] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }

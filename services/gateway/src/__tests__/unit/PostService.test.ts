@@ -1003,6 +1003,79 @@ describe('PostService', () => {
       expect(result).toEqual(deletedPost);
     });
   });
+
+  describe('updatePost', () => {
+    it('returns null when the post does not exist', async () => {
+      prisma.post.findFirst.mockResolvedValue(null);
+      const result = await service.updatePost('missing', 'user-1', { content: 'x' });
+      expect(result).toBeNull();
+    });
+
+    it('throws FORBIDDEN when the user is not the author', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'other', media: [] }));
+      await expect(service.updatePost('post-1', 'user-1', { content: 'x' })).rejects.toThrow('FORBIDDEN');
+      expect(prisma.post.update).not.toHaveBeenCalled();
+    });
+
+    it('switches a POST to a REEL when it carries media', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [{ id: 'm1' }] }));
+      prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
+
+      await service.updatePost('post-1', 'user-1', { type: PostType.REEL });
+
+      expect(prisma.post.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ type: PostType.REEL }) }),
+      );
+    });
+
+    it('rejects switching to REEL without media (422)', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [] }));
+      await expect(service.updatePost('post-1', 'user-1', { type: PostType.REEL }))
+        .rejects.toMatchObject({ statusCode: 422 });
+      expect(prisma.post.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a STORY -> POST type change (422)', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [{ id: 'm1' }] }));
+      await expect(service.updatePost('post-1', 'user-1', { type: PostType.POST }))
+        .rejects.toMatchObject({ statusCode: 422 });
+    });
+
+    it('rejects a type change on a repost (422)', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', repostOfId: 'orig-1', media: [{ id: 'm1' }] }));
+      await expect(service.updatePost('post-1', 'user-1', { type: PostType.REEL }))
+        .rejects.toMatchObject({ statusCode: 422 });
+    });
+
+    it('does not write type when it is unchanged', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [] }));
+      prisma.post.update.mockResolvedValue(makePost());
+      await service.updatePost('post-1', 'user-1', { type: PostType.POST });
+      expect(prisma.post.update.mock.calls[0][0].data.type).toBeUndefined();
+    });
+
+    it('updates originalLanguage and clears stale translations on language change', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', originalLanguage: 'en', content: 'hello', media: [] }));
+      prisma.post.update.mockResolvedValue(makePost());
+
+      await service.updatePost('post-1', 'user-1', { originalLanguage: 'fr' });
+
+      expect(prisma.post.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ originalLanguage: 'fr', translations: {} }),
+        }),
+      );
+    });
+
+    it('does not touch originalLanguage/translations when language is unchanged', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', originalLanguage: 'en', media: [] }));
+      prisma.post.update.mockResolvedValue(makePost());
+      await service.updatePost('post-1', 'user-1', { originalLanguage: 'en', content: 'updated' });
+      const call = prisma.post.update.mock.calls[0][0];
+      expect(call.data.originalLanguage).toBeUndefined();
+      expect(call.data.translations).toBeUndefined();
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

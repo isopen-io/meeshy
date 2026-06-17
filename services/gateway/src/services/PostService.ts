@@ -216,7 +216,7 @@ export class PostService {
     return refreshed ?? post;
   }
 
-  private async triggerStoryTextTranslation(postId: string, content: string, authorId: string): Promise<void> {
+  private async triggerStoryTextTranslation(postId: string, content: string, authorId: string, sourceLanguageOverride?: string): Promise<void> {
     try {
       // 1. Résoudre les langues cibles depuis les contacts de l'auteur
       const contacts = await this.prisma.participant.findMany({
@@ -247,7 +247,9 @@ export class PostService {
       }
 
       const storyMessageId = `story:${postId}`;
-      const sourceLanguage = detectLanguage(content);
+      // An explicit source (e.g. the language chosen when editing a post) wins
+      // over the heuristic detector, which only guesses from word patterns.
+      const sourceLanguage = sourceLanguageOverride ?? detectLanguage(content);
 
       log.info('StoryTranslation: sending ZMQ request', { postId, sourceLanguage, targetLanguages });
 
@@ -455,9 +457,12 @@ export class PostService {
     visibilityUserIds?: string[];
     storyEffects?: Record<string, unknown>;
     moodEmoji?: string;
+    originalLanguage?: string;
+    type?: PostType;
   }) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
+      include: { media: { select: { id: true }, take: 1 } },
     });
 
     if (!post) return null;
@@ -465,8 +470,12 @@ export class PostService {
       throw new Error('FORBIDDEN');
     }
 
+    // The two edit-only fields are handled explicitly below; keep them out of
+    // the blind spread so they are never written unconditionally.
+    const { type: requestedType, originalLanguage: requestedLanguage, ...rest } = data;
+
     const updateData: any = {
-      ...data,
+      ...rest,
       visibility: data.visibility,
       storyEffects: (data.storyEffects as any) ?? undefined,
       isEdited: true,
@@ -475,11 +484,55 @@ export class PostService {
       updateData.visibilityUserIds = data.visibilityUserIds;
     }
 
-    return this.prisma.post.update({
+    // Type switch is limited to POST <-> REEL on the author's OWN original post:
+    // never on a repost (it mirrors its source) and never to/from STORY/STATUS
+    // (their expiry/lifecycle is not managed by the edit flow). Switching to a
+    // REEL requires media — a text-only reel has nothing to show on the
+    // immersive surface.
+    if (requestedType !== undefined && requestedType !== post.type) {
+      const switchable: PostType[] = [PostType.POST, PostType.REEL];
+      if (!switchable.includes(post.type) || !switchable.includes(requestedType)) {
+        const err: any = new Error('Only POST <-> REEL type changes are allowed');
+        err.statusCode = 422;
+        throw err;
+      }
+      if (post.repostOfId) {
+        const err: any = new Error('Cannot change the type of a repost');
+        err.statusCode = 422;
+        throw err;
+      }
+      if (requestedType === PostType.REEL && post.media.length === 0) {
+        const err: any = new Error('A reel requires at least one media');
+        err.statusCode = 422;
+        throw err;
+      }
+      updateData.type = requestedType;
+    }
+
+    // A language change re-runs the Prisme translation pipeline from the new
+    // source language and discards the now-stale translations. Fire-and-forget
+    // like the create path; the client re-hydrates as ZMQ results land.
+    const languageChanged =
+      requestedLanguage !== undefined && requestedLanguage !== post.originalLanguage;
+    if (languageChanged) {
+      updateData.originalLanguage = requestedLanguage;
+      updateData.translations = {};
+    }
+
+    const updated = await this.prisma.post.update({
       where: { id: postId },
       data: updateData,
       include: postInclude,
     });
+
+    if (languageChanged) {
+      const content = data.content ?? post.content;
+      if (content) {
+        this.triggerStoryTextTranslation(postId, content, userId, requestedLanguage).catch(() => {});
+      }
+    }
+
+    return updated;
   }
 
   async deletePost(postId: string, userId: string) {

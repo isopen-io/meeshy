@@ -203,6 +203,12 @@ export const UpdatePostSchema = z.object({
   visibilityUserIds: z.array(z.string()).max(500).optional(),
   storyEffects: StoryEffectsSchema.optional(),
   moodEmoji: z.string().max(10).optional(),
+  // ISO 639-1 (or BCP-47) source language. Changing it re-runs the Prisme
+  // translation pipeline from the new source and discards stale translations.
+  originalLanguage: z.string().min(2).max(16).optional(),
+  // Type is editable only between POST and REEL (service enforces the rest:
+  // no repost, no STORY/STATUS, reel requires media).
+  type: z.enum(['POST', 'REEL']).optional(),
 }).refine((data) => {
   if ((data.visibility === 'EXCEPT' || data.visibility === 'ONLY') && (!data.visibilityUserIds || data.visibilityUserIds.length === 0)) {
     return false;
