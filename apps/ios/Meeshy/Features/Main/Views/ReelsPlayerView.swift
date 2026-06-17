@@ -331,13 +331,13 @@ struct ReelPageView: View {
     /// True when this active reel is a video so the scrub bar shows only where
     /// there is a seekable timeline (images/audio reels have none here).
     private var isVideoReel: Bool {
-        reel.primaryReelMedia?.type == .video
+        reel.primaryReelDisplayMedia?.type == .video
     }
 
     /// The audio media for an audio reel, else `nil`. Drives the immersive
     /// transcript hero + the audio control + audio-language flag strip.
     private var audioMedia: FeedMedia? {
-        guard let media = reel.primaryReelMedia, media.type == .audio else { return nil }
+        guard let media = reel.primaryReelDisplayMedia, media.type == .audio else { return nil }
         return media
     }
 
@@ -476,7 +476,7 @@ struct ReelPageView: View {
 
     @ViewBuilder
     private var mediaLayer: some View {
-        if let media = reel.primaryReelMedia {
+        if let media = reel.primaryReelDisplayMedia {
             switch media.type {
             case .video:
                 ReelVideoView(media: media, isActive: isActive, revealCompleted: revealCompleted)
@@ -1091,7 +1091,8 @@ private struct ReelImageView: View {
 
     init(reel: FeedPost) {
         self.reel = reel
-        let imgs = reel.media.filter { $0.type == .image }
+        // Repost-aware: a republished reel's images live on the reposted reel.
+        let imgs = reel.reelDisplayMedia.filter { $0.type == .image }
         self.images = imgs
         _currentImageId = State(initialValue: imgs.first?.id)
     }

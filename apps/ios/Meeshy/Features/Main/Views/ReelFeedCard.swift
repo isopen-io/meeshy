@@ -100,8 +100,24 @@ struct ReelFeedCard: View, Equatable {
             && lhs.post.translatedContent == rhs.post.translatedContent
     }
 
-    private var media: FeedMedia? { post.primaryReelMedia }
+    // Repost-aware: a republished reel has no media on the outer post — resolve
+    // from the reposted reel so the card shows the original content, not blank.
+    private var media: FeedMedia? { post.primaryReelDisplayMedia }
     private var accentHex: String { post.authorColor }
+
+    /// Non-nil when this card displays a REPUBLISHED reel: the outer post has no
+    /// media (content sourced from the reposted reel). Drives author attribution
+    /// + caption so the card shows the ORIGINAL author, not just the re-poster.
+    private var repostedReel: RepostContent? {
+        guard post.media.isEmpty, let reposted = post.repost, !reposted.media.isEmpty else { return nil }
+        return reposted
+    }
+    private var displayAuthor: String { repostedReel?.author ?? post.author }
+    private var displayAuthorColor: String { repostedReel?.authorColor ?? accentHex }
+    private var displayAvatarURL: String? { repostedReel?.authorAvatarURL ?? post.authorAvatarURL }
+    private var displayCaption: String {
+        post.content.isEmpty ? (repostedReel?.content ?? "") : post.displayContent
+    }
 
     private var kind: ReelMediaKind {
         switch media?.type {
@@ -133,7 +149,7 @@ struct ReelFeedCard: View, Equatable {
         .frame(height: reelCardHeight(mediaWidth: media?.width, mediaHeight: media?.height, cardWidth: cardWidthEstimate))
         .reportReelFrame(id: post.id, kind: kind)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(String(localized: "feed.reel.card.a11y", defaultValue: "Réel de \(post.author)", bundle: .main))
+        .accessibilityLabel(String(localized: "feed.reel.card.a11y", defaultValue: "Réel de \(displayAuthor)", bundle: .main))
     }
 
     // Largeur de contenu du feed (le GeometryReader donne la vraie ; estimation
@@ -207,9 +223,16 @@ struct ReelFeedCard: View, Equatable {
     private var bottomOverlay: some View {
         VStack(alignment: .leading, spacing: 10) {
             Spacer()
+            if repostedReel != nil {
+                Label(String(localized: "feed.reel.republished.by", defaultValue: "Republié par \(post.author)", bundle: .main),
+                      systemImage: "arrow.2.squarepath")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.white.opacity(0.85))
+                    .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+            }
             authorRow
-            if !post.content.isEmpty {
-                Text(post.displayContent)
+            if !displayCaption.isEmpty {
+                Text(displayCaption)
                     .font(.subheadline)
                     .foregroundColor(.white)
                     .lineLimit(2)
@@ -228,22 +251,22 @@ struct ReelFeedCard: View, Equatable {
     }
 
     private var authorRow: some View {
-        Button { onTapAuthor(post.authorId) } label: {
+        Button { onTapAuthor(repostedReel?.authorId ?? post.authorId) } label: {
             HStack(spacing: 8) {
                 MeeshyAvatar(
-                    name: post.author,
+                    name: displayAuthor,
                     context: .custom(34),
-                    accentColor: accentHex,
-                    avatarURL: post.authorAvatarURL
+                    accentColor: displayAuthorColor,
+                    avatarURL: displayAvatarURL
                 )
-                Text(post.author)
+                Text(displayAuthor)
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.white)
                     .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "feed.reel.author.a11y", defaultValue: "Profil de \(post.author)", bundle: .main))
+        .accessibilityLabel(String(localized: "feed.reel.author.a11y", defaultValue: "Profil de \(displayAuthor)", bundle: .main))
     }
 
     private var actionsRow: some View {
