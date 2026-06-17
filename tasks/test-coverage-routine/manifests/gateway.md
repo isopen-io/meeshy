@@ -150,21 +150,21 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## routes/conversations  (2/15 have a test)
 
-- [ ] `services/gateway/src/routes/conversations/ban.ts`
+- [x] `services/gateway/src/routes/conversations/ban.ts`
 - [ ] `services/gateway/src/routes/conversations/core.ts`
-- [ ] `services/gateway/src/routes/conversations/delete-for-me.ts`
+- [x] `services/gateway/src/routes/conversations/delete-for-me.ts`
 - [ ] `services/gateway/src/routes/conversations/index.ts`
-- [ ] `services/gateway/src/routes/conversations/leave.ts`
+- [x] `services/gateway/src/routes/conversations/leave.ts`
 - [ ] `services/gateway/src/routes/conversations/messages-advanced.ts`
 - [ ] `services/gateway/src/routes/conversations/messages.ts`
 - [~] `services/gateway/src/routes/conversations/participants.ts`
 - [ ] `services/gateway/src/routes/conversations/search.ts`
 - [ ] `services/gateway/src/routes/conversations/sharing.ts`
-- [ ] `services/gateway/src/routes/conversations/stats.ts`
+- [x] `services/gateway/src/routes/conversations/stats.ts`
 - [ ] `services/gateway/src/routes/conversations/threads.ts`
 - [ ] `services/gateway/src/routes/conversations/types.ts`
-- [~] `services/gateway/src/routes/conversations/utils/access-control.ts`
-- [ ] `services/gateway/src/routes/conversations/utils/identifier-generator.ts`
+- [x] `services/gateway/src/routes/conversations/utils/access-control.ts`
+- [x] `services/gateway/src/routes/conversations/utils/identifier-generator.ts`
 
 ## routes/links  (0/13 have a test)
 
@@ -247,8 +247,8 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/services/CaptchaService.ts`
 - [~] `services/gateway/src/services/CommentReactionService.ts`
 - [ ] `services/gateway/src/services/ConsentValidationService.ts`
-- [ ] `services/gateway/src/services/ConversationMessageStatsService.ts`
-- [~] `services/gateway/src/services/ConversationStatsService.ts`
+- [x] `services/gateway/src/services/ConversationMessageStatsService.ts`
+- [x] `services/gateway/src/services/ConversationStatsService.ts`
 - [~] `services/gateway/src/services/EmailService.ts`
 - [~] `services/gateway/src/services/EncryptionService.ts`
 - [~] `services/gateway/src/services/ExpiredStoriesCleanupService.ts`
@@ -411,7 +411,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 - [~] `services/gateway/src/utils/blocking.ts`
 - [~] `services/gateway/src/utils/circuitBreaker.ts`
-- [ ] `services/gateway/src/utils/conversation-id-cache.ts`
+- [x] `services/gateway/src/utils/conversation-id-cache.ts`
 - [~] `services/gateway/src/utils/etag.ts`
 - [~] `services/gateway/src/utils/keyed-mutex.ts`
 - [~] `services/gateway/src/utils/languages.ts`
