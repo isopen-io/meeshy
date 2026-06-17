@@ -36,6 +36,8 @@ import { UserLanguageSection } from '@/components/admin/user-detail/UserLanguage
 import { UserSecuritySection } from '@/components/admin/user-detail/UserSecuritySection';
 import { UserGeolocationSection } from '@/components/admin/user-detail/UserGeolocationSection';
 import { UserActivitySection } from '@/components/admin/user-detail/UserActivitySection';
+import { UserConversationsSection } from '@/components/admin/user-detail/UserConversationsSection';
+import { UserPostsSection } from '@/components/admin/user-detail/UserPostsSection';
 
 interface AdminApiResponse<T> {
   success: boolean;
@@ -307,6 +309,10 @@ export default function UserDetailPage() {
             <UserGeolocationSection user={user} />
 
             <UserActivitySection userId={userId} />
+
+            <UserConversationsSection userId={userId} />
+
+            <UserPostsSection userId={userId} />
 
             {/* Gestion du rôle */}
             <Card className="dark:bg-gray-900 dark:border-gray-800">

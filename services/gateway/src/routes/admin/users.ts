@@ -1111,4 +1111,87 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user activity' });
     }
   });
+
+  /**
+   * GET /admin/users/:userId/conversations - List conversations a user participates in (admin view).
+   * Metadata only (no message content); the target user's membership (role/joinedAt) is flattened
+   * onto each conversation. Requires canViewUsers permission.
+   */
+  fastify.get<{
+    Params: { userId: string };
+    Querystring: { offset?: string; limit?: string; type?: string };
+  }>('/admin/users/:userId/conversations', {
+    preHandler: [fastify.authenticate, requireUserViewAccess]
+  }, async (request, reply) => {
+    try {
+      const { userId } = request.params;
+      const { offset = '0', limit, type } = request.query;
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
+
+      const userExists = await fastify.prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true }
+      });
+      if (!userExists) {
+        return sendNotFound(reply, 'Utilisateur non trouvé');
+      }
+
+      const where: any = {
+        participants: {
+          some: { userId, isActive: true }
+        }
+      };
+      if (type) {
+        where.type = type;
+      }
+
+      const [conversations, total] = await Promise.all([
+        fastify.prisma.conversation.findMany({
+          where,
+          select: {
+            id: true,
+            identifier: true,
+            title: true,
+            type: true,
+            avatar: true,
+            isActive: true,
+            memberCount: true,
+            communityId: true,
+            createdAt: true,
+            lastMessageAt: true,
+            participants: {
+              where: { userId },
+              take: 1,
+              select: {
+                role: true,
+                joinedAt: true,
+                isActive: true,
+                nickname: true
+              }
+            }
+          },
+          orderBy: { lastMessageAt: 'desc' },
+          skip: offsetNum,
+          take: limitNum
+        }),
+        fastify.prisma.conversation.count({ where })
+      ]);
+
+      const data = conversations.map((conv) => {
+        const { participants, ...rest } = conv as Record<string, unknown> & { participants?: Array<Record<string, unknown>> };
+        const membership = (participants ?? [])[0] ?? null;
+        return { ...rest, membership };
+      });
+
+      return sendPaginatedSuccess(reply, data, {
+        total,
+        offset: offsetNum,
+        limit: limitNum,
+        hasMore: offsetNum + conversations.length < total
+      });
+    } catch (error) {
+      fastify.log.error({ err: error }, 'Error fetching user conversations');
+      return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user conversations' });
+    }
+  });
 }
