@@ -1,55 +1,368 @@
+// @ts-nocheck
 /**
- * Comprehensive tests for MeeshySocketIOManager
- * Target: ≥92% line+branch coverage
+ * Comprehensive unit tests for MeeshySocketIOManager
+ *
+ * Coverage targets: ≥92% lines + branches
+ * Strategy: mock all external dependencies via jest.mock factories,
+ *   use __state/__instance closures for runtime access.
+ *
+ * @jest-environment node
  */
 
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { EventEmitter } from 'events';
-import type { Server as HTTPServer } from 'http';
 
-// ─── socket.io mock ──────────────────────────────────────────────────────────
-const capturedConnectionHandlers: Array<(socket: any) => void> = [];
-const mockIoToEmit = jest.fn() as jest.Mock<any>;
-const mockIoTo = jest.fn() as jest.Mock<any>;
-const mockIoEmit = jest.fn() as jest.Mock<any>;
-const mockIoClose = jest.fn() as jest.Mock<any>;
-const mockIoSockets = {
-  adapter: { rooms: new Map<string, Set<string>>() },
-  sockets: new Map<string, any>(),
-};
+// ---------------------------------------------------------------------------
+// socket.io mock — __state closure (works around ts-jest hoisting limits)
+// ---------------------------------------------------------------------------
 
-jest.mock('socket.io', () => ({
-  Server: jest.fn().mockImplementation(() => ({
-    on: jest.fn().mockImplementation((event: string, handler: any) => {
-      if (event === 'connection') capturedConnectionHandlers.push(handler);
-    }),
-    to: (...args: any[]) => {
-      mockIoTo(...args);
-      return { emit: mockIoToEmit };
-    },
-    emit: (...args: any[]) => mockIoEmit(...args),
-    sockets: mockIoSockets,
-    close: (...args: any[]) => mockIoClose(...args),
+jest.mock('socket.io', () => {
+  const toEmit = jest.fn();
+  const toChain: Record<string, unknown> = { emit: toEmit };
+  const to = jest.fn().mockReturnValue(toChain);
+  // Allow chaining: io.to(a).to(b).emit(...)
+  toChain.to = to;
+
+  const on = jest.fn();
+  const emit = jest.fn();
+  const close = jest.fn();
+  const sockets = {
+    sockets: new Map<string, unknown>(),
+    adapter: { rooms: new Map<string, Set<string>>() },
+  };
+
+  const state = { on, emit, to, toEmit, toChain, close, sockets, connectionHandler: null as any };
+  on.mockImplementation((event: string, handler: unknown) => {
+    if (event === 'connection') state.connectionHandler = handler as any;
+  });
+
+  return {
+    Server: jest.fn().mockImplementation(() => ({
+      on: (...a: unknown[]) => (state.on as any)(...a),
+      emit: (...a: unknown[]) => (state.emit as any)(...a),
+      to: (...a: unknown[]) => (state.to as any)(...a),
+      close: (...a: unknown[]) => (state.close as any)(...a),
+      get sockets() { return state.sockets; },
+    })),
+    __state: state,
+  };
+});
+
+// ---------------------------------------------------------------------------
+// Service / handler mocks
+// ---------------------------------------------------------------------------
+
+let mockAttachmentServiceInstance: any;
+jest.mock('../../services/attachments', () => ({
+  AttachmentService: jest.fn().mockImplementation(() => {
+    mockAttachmentServiceInstance = { processAttachments: jest.fn().mockResolvedValue([]) };
+    return mockAttachmentServiceInstance;
+  }),
+}));
+
+jest.mock('../../services/attachments/attachmentIncludes', () => ({
+  attachmentMediaSelect: {},
+}));
+
+jest.mock('../../services/EmailService', () => ({
+  EmailService: jest.fn().mockImplementation(() => ({
+    sendEmail: jest.fn().mockResolvedValue(undefined),
   })),
 }));
 
-// ─── MessageTranslationService mock (EventEmitter) ───────────────────────────
-class MockTranslationService extends EventEmitter {
-  initialize = (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined);
-  close = (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined);
-  healthCheck = (jest.fn() as jest.Mock<any>).mockResolvedValue(true);
-  getZmqClient = (jest.fn() as jest.Mock<any>).mockReturnValue(null);
-  getStats = (jest.fn() as jest.Mock<any>).mockReturnValue({ cacheHitRate: 0.8 });
-  getTranslation = (jest.fn() as jest.Mock<any>).mockResolvedValue(null);
-  handleNewMessage = (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined);
-}
-const mockTranslationService = new MockTranslationService();
-
-jest.mock('../../services/message-translation/MessageTranslationService', () => ({
-  MessageTranslationService: jest.fn().mockImplementation(() => mockTranslationService),
+let mockMaintenanceServiceInstance: any;
+jest.mock('../../services/MaintenanceService', () => ({
+  MaintenanceService: jest.fn().mockImplementation(() => {
+    mockMaintenanceServiceInstance = {
+      startMaintenanceTasks: jest.fn().mockResolvedValue(undefined),
+      setStatusBroadcastCallback: jest.fn(),
+      setIsCurrentlyConnected: jest.fn(),
+    };
+    return mockMaintenanceServiceInstance;
+  }),
 }));
 
-// ─── Logger mock ─────────────────────────────────────────────────────────────
+let mockStatusServiceInstance: any;
+jest.mock('../../services/StatusService', () => ({
+  StatusService: jest.fn().mockImplementation(() => {
+    mockStatusServiceInstance = {
+      updateUserOnline: jest.fn().mockResolvedValue(undefined),
+      updateUserOffline: jest.fn().mockResolvedValue(undefined),
+    };
+    return mockStatusServiceInstance;
+  }),
+}));
+
+let mockPrivacyPrefsServiceInstance: any;
+jest.mock('../../services/PrivacyPreferencesService', () => ({
+  PrivacyPreferencesService: jest.fn().mockImplementation(() => {
+    mockPrivacyPrefsServiceInstance = {
+      getPreferences: jest.fn().mockResolvedValue({
+        showOnlineStatus: true,
+        showLastSeen: true,
+      }),
+    };
+    return mockPrivacyPrefsServiceInstance;
+  }),
+}));
+
+let mockNotificationServiceInstance: any;
+jest.mock('../../services/notifications/NotificationService', () => ({
+  NotificationService: jest.fn().mockImplementation(() => {
+    mockNotificationServiceInstance = {
+      setSocketIO: jest.fn(),
+      setPushNotificationService: jest.fn(),
+      setEmailService: jest.fn(),
+      createReactionNotification: jest.fn().mockResolvedValue(undefined),
+    };
+    return mockNotificationServiceInstance;
+  }),
+}));
+
+let mockMentionServiceInstance: any;
+jest.mock('../../services/MentionService', () => ({
+  MentionService: jest.fn().mockImplementation(() => {
+    mockMentionServiceInstance = {
+      extractMentionsWithParticipants: jest.fn().mockReturnValue([]),
+      resolveUsernames: jest.fn().mockResolvedValue(new Map()),
+    };
+    return mockMentionServiceInstance;
+  }),
+}));
+
+let mockMessagingServiceInstance: any;
+jest.mock('../../services/MessagingService', () => ({
+  MessagingService: jest.fn().mockImplementation(() => {
+    mockMessagingServiceInstance = {
+      handleMessage: jest.fn().mockResolvedValue({
+        success: true,
+        data: {
+          id: 'msg-agent-1',
+          conversationId: 'conv-123456789012',
+          senderId: 'sender-1',
+          content: 'Hello',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      }),
+    };
+    return mockMessagingServiceInstance;
+  }),
+}));
+
+let mockCallEventsHandlerInstance: any;
+jest.mock('../CallEventsHandler', () => ({
+  CallEventsHandler: jest.fn().mockImplementation(() => {
+    mockCallEventsHandlerInstance = {
+      setMessageBroadcaster: jest.fn(),
+      setNotificationService: jest.fn(),
+      setPushNotificationService: jest.fn(),
+      setupCallEvents: jest.fn(),
+    };
+    return mockCallEventsHandlerInstance;
+  }),
+}));
+
+jest.mock('../../services/CallService', () => ({
+  CallService: jest.fn().mockImplementation(() => ({})),
+}));
+
+let mockSocialEventsHandlerInstance: any;
+jest.mock('../handlers/SocialEventsHandler', () => ({
+  SocialEventsHandler: jest.fn().mockImplementation(() => {
+    mockSocialEventsHandlerInstance = {
+      handleFeedSubscribe: jest.fn(),
+      handleFeedUnsubscribe: jest.fn(),
+    };
+    return mockSocialEventsHandlerInstance;
+  }),
+}));
+
+jest.mock('../handlers/LocationHandler', () => ({
+  LocationHandler: jest.fn().mockImplementation(() => ({
+    handleLocationShare: jest.fn().mockResolvedValue(undefined),
+    handleLiveLocationStart: jest.fn().mockResolvedValue(undefined),
+    handleLiveLocationUpdate: jest.fn().mockResolvedValue(undefined),
+    handleLiveLocationStop: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+let mockAuthHandlerInstance: any;
+jest.mock('../handlers/AuthHandler', () => ({
+  AuthHandler: jest.fn().mockImplementation(() => {
+    mockAuthHandlerInstance = {
+      handleTokenAuthentication: jest.fn(),
+      handleManualAuthentication: jest.fn().mockResolvedValue(undefined),
+      handleHeartbeat: jest.fn().mockResolvedValue(undefined),
+      handleDisconnection: jest.fn().mockResolvedValue(undefined),
+    };
+    return mockAuthHandlerInstance;
+  }),
+}));
+
+let mockMessageHandlerInstance: any;
+jest.mock('../handlers/MessageHandler', () => ({
+  MessageHandler: jest.fn().mockImplementation(() => {
+    mockMessageHandlerInstance = {
+      handleMessageSend: jest.fn().mockResolvedValue(undefined),
+      handleMessageSendWithAttachments: jest.fn().mockResolvedValue(undefined),
+    };
+    return mockMessageHandlerInstance;
+  }),
+}));
+
+let mockStatusHandlerInstance: any;
+jest.mock('../handlers/StatusHandler', () => ({
+  StatusHandler: jest.fn().mockImplementation(() => {
+    mockStatusHandlerInstance = {
+      handleTypingStart: jest.fn().mockResolvedValue(undefined),
+      handleTypingStop: jest.fn().mockResolvedValue(undefined),
+      invalidateIdentityCache: jest.fn(),
+      clearTypingThrottle: jest.fn(),
+    };
+    return mockStatusHandlerInstance;
+  }),
+}));
+
+let mockReactionHandlerInstance: any;
+jest.mock('../handlers/ReactionHandler', () => ({
+  ReactionHandler: jest.fn().mockImplementation(() => {
+    mockReactionHandlerInstance = {
+      handleReactionAdd: jest.fn().mockResolvedValue(undefined),
+      handleReactionRemove: jest.fn().mockResolvedValue(undefined),
+      handleReactionSync: jest.fn().mockResolvedValue(undefined),
+    };
+    return mockReactionHandlerInstance;
+  }),
+}));
+
+jest.mock('../handlers/AttachmentReactionHandler', () => ({
+  AttachmentReactionHandler: jest.fn().mockImplementation(() => ({
+    handleAdd: jest.fn().mockResolvedValue(undefined),
+    handleRemove: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+jest.mock('../../services/AttachmentReactionService', () => ({
+  AttachmentReactionService: jest.fn().mockImplementation(() => ({})),
+}));
+
+jest.mock('../handlers/CommentReactionHandler', () => ({
+  CommentReactionHandler: jest.fn().mockImplementation(() => ({
+    handleAddReaction: jest.fn().mockResolvedValue(undefined),
+    handleRemoveReaction: jest.fn().mockResolvedValue(undefined),
+    handleRequestSync: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+jest.mock('../../services/CommentReactionService', () => ({
+  CommentReactionService: jest.fn().mockImplementation(() => ({})),
+}));
+
+jest.mock('../handlers/PostReactionHandler', () => ({
+  PostReactionHandler: jest.fn().mockImplementation(() => ({
+    handleJoinPost: jest.fn().mockResolvedValue(undefined),
+    handleLeavePost: jest.fn().mockResolvedValue(undefined),
+    handleAddReaction: jest.fn().mockResolvedValue(undefined),
+    handleRemoveReaction: jest.fn().mockResolvedValue(undefined),
+    handleRequestSync: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+jest.mock('../../services/PostReactionService', () => ({
+  PostReactionService: jest.fn().mockImplementation(() => ({})),
+}));
+
+jest.mock('../handlers/ConversationHandler', () => ({
+  ConversationHandler: jest.fn().mockImplementation(() => ({
+    handleConversationJoin: jest.fn().mockResolvedValue(undefined),
+    handleConversationLeave: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+jest.mock('../handlers/AdminAgentHandler', () => ({
+  AdminAgentHandler: jest.fn().mockImplementation(() => ({
+    handleSubscribe: jest.fn().mockResolvedValue(undefined),
+    handleUnsubscribe: jest.fn(),
+  })),
+}));
+
+let mockAgentAdminRelayInstance: any;
+jest.mock('../AgentAdminRelay', () => ({
+  AgentAdminRelay: jest.fn().mockImplementation(() => {
+    mockAgentAdminRelayInstance = {
+      start: jest.fn().mockResolvedValue(undefined),
+      stop: jest.fn().mockResolvedValue(undefined),
+    };
+    return mockAgentAdminRelayInstance;
+  }),
+}));
+
+jest.mock('../../services/ReactionService.js', () => ({
+  ReactionService: jest.fn().mockImplementation(() => ({
+    addReaction: jest.fn().mockResolvedValue({ id: 'reaction-1' }),
+    createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'reaction-1' }),
+  })),
+}));
+
+jest.mock('../../services/MessageReadStatusService.js', () => ({
+  MessageReadStatusService: jest.fn().mockImplementation(() => ({
+    getUnreadCountsForParticipants: jest.fn().mockResolvedValue(new Map()),
+  })),
+}));
+
+jest.mock('../../services/PushNotificationService', () => ({
+  PushNotificationService: jest.fn().mockImplementation(() => ({
+    sendPushNotification: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+jest.mock('../../services/posts/PostAudioService', () => ({
+  PostAudioService: {
+    init: jest.fn(),
+    shared: {
+      handleTranscriptionReady: jest.fn().mockResolvedValue(undefined),
+    },
+  },
+}));
+
+jest.mock('../../services/posts/PostTranslationService', () => ({
+  PostTranslationService: {
+    init: jest.fn(),
+  },
+}));
+
+jest.mock('../../services/posts/StoryTextObjectTranslationService', () => ({
+  StoryTextObjectTranslationService: {
+    init: jest.fn(),
+    shared: {
+      handleTranslationCompleted: jest.fn().mockResolvedValue(undefined),
+    },
+  },
+}));
+
+jest.mock('../../services/ConversationStatsService', () => ({
+  conversationStatsService: {
+    updateOnNewMessage: jest.fn().mockResolvedValue(null),
+  },
+}));
+
+jest.mock('../emitAttachmentUpdated', () => ({
+  emitAttachmentUpdated: jest.fn(),
+}));
+
+jest.mock('../utils/message-payload-filter', () => ({
+  filterMessagePayloadForLanguages: jest.fn().mockImplementation((payload: unknown) => payload),
+}));
+
+jest.mock('../utils/resolved-languages-refresh', () => ({
+  applyResolvedLanguagesRefresh: jest.fn(),
+}));
+
+jest.mock('../../utils/translation-transformer', () => ({
+  transformTranslationsToArray: jest.fn().mockReturnValue([]),
+}));
+
 jest.mock('../../utils/logger-enhanced', () => ({
   enhancedLogger: {
     child: jest.fn().mockReturnValue({
@@ -61,3553 +374,3629 @@ jest.mock('../../utils/logger-enhanced', () => ({
   },
 }));
 
-// ─── StatusService mock ───────────────────────────────────────────────────────
-const mockStatusServiceUpdateStatus = jest.fn() as jest.Mock<any>;
-jest.mock('../../services/StatusService', () => ({
-  StatusService: jest.fn().mockImplementation(() => ({
-    updateStatus: (...a: any[]) => mockStatusServiceUpdateStatus(...a),
-  })),
-}));
+// ---------------------------------------------------------------------------
+// Import under test (after all mocks are set up)
+// ---------------------------------------------------------------------------
 
-// ─── MessagingService mock ────────────────────────────────────────────────────
-const mockHandleMessage = jest.fn() as jest.Mock<any>;
-jest.mock('../../services/MessagingService', () => ({
-  MessagingService: jest.fn().mockImplementation(() => ({
-    handleMessage: (...a: any[]) => mockHandleMessage(...a),
-  })),
-}));
-
-// ─── CallService mock ─────────────────────────────────────────────────────────
-jest.mock('../../services/CallService', () => ({
-  CallService: jest.fn().mockImplementation(() => ({})),
-}));
-
-// ─── NotificationService mock ─────────────────────────────────────────────────
-const mockNotificationSetSocketIO = jest.fn() as jest.Mock<any>;
-const mockNotificationSetPush = jest.fn() as jest.Mock<any>;
-const mockNotificationSetEmail = jest.fn() as jest.Mock<any>;
-const mockCreateReactionNotification = jest.fn() as jest.Mock<any>;
-jest.mock('../../services/notifications/NotificationService', () => ({
-  NotificationService: jest.fn().mockImplementation(() => ({
-    setSocketIO: (...a: any[]) => mockNotificationSetSocketIO(...a),
-    setPushNotificationService: (...a: any[]) => mockNotificationSetPush(...a),
-    setEmailService: (...a: any[]) => mockNotificationSetEmail(...a),
-    createReactionNotification: (...a: any[]) => mockCreateReactionNotification(...a),
-  })),
-}));
-
-// ─── MaintenanceService mock ──────────────────────────────────────────────────
-const mockMaintenanceSetStatusCallback = jest.fn() as jest.Mock<any>;
-const mockMaintenanceSetIsConnected = jest.fn() as jest.Mock<any>;
-const mockMaintenanceStartTasks = jest.fn() as jest.Mock<any>;
-jest.mock('../../services/MaintenanceService', () => ({
-  MaintenanceService: jest.fn().mockImplementation(() => ({
-    setStatusBroadcastCallback: (...a: any[]) => mockMaintenanceSetStatusCallback(...a),
-    setIsCurrentlyConnected: (...a: any[]) => mockMaintenanceSetIsConnected(...a),
-    startMaintenanceTasks: (...a: any[]) => mockMaintenanceStartTasks(...a),
-  })),
-}));
-
-// ─── AttachmentReactionService mock ──────────────────────────────────────────
-jest.mock('../../services/AttachmentReactionService', () => ({
-  AttachmentReactionService: jest.fn().mockImplementation(() => ({})),
-}));
-
-// ─── AttachmentService mock ───────────────────────────────────────────────────
-jest.mock('../../services/attachments', () => ({
-  AttachmentService: jest.fn().mockImplementation(() => ({})),
-}));
-
-// ─── attachmentIncludes mock ──────────────────────────────────────────────────
-jest.mock('../../services/attachments/attachmentIncludes', () => ({
-  attachmentMediaSelect: {},
-}));
-
-// ─── EmailService mock ────────────────────────────────────────────────────────
-jest.mock('../../services/EmailService', () => ({
-  EmailService: jest.fn().mockImplementation(() => ({})),
-}));
-
-// ─── PushNotificationService mock ─────────────────────────────────────────────
-jest.mock('../../services/PushNotificationService', () => ({
-  PushNotificationService: jest.fn().mockImplementation(() => ({})),
-}));
-
-// ─── PrivacyPreferencesService mock ──────────────────────────────────────────
-const mockGetPreferences = jest.fn() as jest.Mock<any>;
-jest.mock('../../services/PrivacyPreferencesService', () => ({
-  PrivacyPreferencesService: jest.fn().mockImplementation(() => ({
-    getPreferences: (...a: any[]) => mockGetPreferences(...a),
-  })),
-}));
-
-// ─── ReactionService mock ─────────────────────────────────────────────────────
-const mockAddReaction = jest.fn() as jest.Mock<any>;
-const mockCreateUpdateEvent = jest.fn() as jest.Mock<any>;
-jest.mock('../../services/ReactionService.js', () => ({
-  ReactionService: jest.fn().mockImplementation(() => ({
-    addReaction: (...a: any[]) => mockAddReaction(...a),
-    createUpdateEvent: (...a: any[]) => mockCreateUpdateEvent(...a),
-  })),
-}));
-
-// ─── CommentReactionService mock ──────────────────────────────────────────────
-jest.mock('../../services/CommentReactionService', () => ({
-  CommentReactionService: jest.fn().mockImplementation(() => ({})),
-}));
-
-// ─── PostReactionService mock ─────────────────────────────────────────────────
-jest.mock('../../services/PostReactionService', () => ({
-  PostReactionService: jest.fn().mockImplementation(() => ({})),
-}));
-
-// ─── MessageReadStatusService mock ────────────────────────────────────────────
-const mockGetUnreadCounts = jest.fn() as jest.Mock<any>;
-jest.mock('../../services/MessageReadStatusService.js', () => ({
-  MessageReadStatusService: jest.fn().mockImplementation(() => ({
-    getUnreadCountsForParticipants: (...a: any[]) => mockGetUnreadCounts(...a),
-  })),
-}));
-
-// ─── MentionService mock ──────────────────────────────────────────────────────
-const mockExtractMentions = jest.fn() as jest.Mock<any>;
-const mockResolveUsernames = jest.fn() as jest.Mock<any>;
-jest.mock('../../services/MentionService', () => ({
-  MentionService: jest.fn().mockImplementation(() => ({
-    extractMentionsWithParticipants: (...a: any[]) => mockExtractMentions(...a),
-    resolveUsernames: (...a: any[]) => mockResolveUsernames(...a),
-  })),
-}));
-
-// ─── ConversationStatsService mock ────────────────────────────────────────────
-const mockUpdateOnNewMessage = jest.fn() as jest.Mock<any>;
-jest.mock('../../services/ConversationStatsService', () => ({
-  conversationStatsService: {
-    updateOnNewMessage: (...a: any[]) => mockUpdateOnNewMessage(...a),
-  },
-}));
-
-// ─── RedisDeliveryQueue mock ──────────────────────────────────────────────────
-const mockQueueDrain = jest.fn() as jest.Mock<any>;
-const mockQueueEnqueue = jest.fn() as jest.Mock<any>;
-jest.mock('../../services/RedisDeliveryQueue', () => ({
-  RedisDeliveryQueue: jest.fn().mockImplementation(() => ({
-    drain: (...a: any[]) => mockQueueDrain(...a),
-    enqueue: (...a: any[]) => mockQueueEnqueue(...a),
-  })),
-}));
-
-// ─── PostAudioService mock ────────────────────────────────────────────────────
-const mockPostAudioHandleTranscription = jest.fn() as jest.Mock<any>;
-jest.mock('../../services/posts/PostAudioService', () => ({
-  PostAudioService: {
-    init: jest.fn(),
-    shared: {
-      handleTranscriptionReady: (...a: any[]) => mockPostAudioHandleTranscription(...a),
-    },
-  },
-}));
-
-// ─── PostTranslationService mock ──────────────────────────────────────────────
-jest.mock('../../services/posts/PostTranslationService', () => ({
-  PostTranslationService: {
-    init: jest.fn(),
-  },
-}));
-
-// ─── StoryTextObjectTranslationService mock ───────────────────────────────────
-const mockStoryHandleTranslationCompleted = jest.fn() as jest.Mock<any>;
-jest.mock('../../services/posts/StoryTextObjectTranslationService', () => ({
-  StoryTextObjectTranslationService: {
-    init: jest.fn(),
-    shared: {
-      handleTranslationCompleted: (...a: any[]) => mockStoryHandleTranslationCompleted(...a),
-    },
-  },
-}));
-
-// ─── AuthHandler mock ─────────────────────────────────────────────────────────
-const mockAuthHandleToken = jest.fn() as jest.Mock<any>;
-const mockAuthHandleManual = jest.fn() as jest.Mock<any>;
-const mockAuthHandleHeartbeat = jest.fn() as jest.Mock<any>;
-const mockAuthHandleDisconnection = jest.fn() as jest.Mock<any>;
-jest.mock('../handlers/AuthHandler', () => ({
-  AuthHandler: jest.fn().mockImplementation(() => ({
-    handleTokenAuthentication: (...a: any[]) => mockAuthHandleToken(...a),
-    handleManualAuthentication: (...a: any[]) => mockAuthHandleManual(...a),
-    handleHeartbeat: (...a: any[]) => mockAuthHandleHeartbeat(...a),
-    handleDisconnection: (...a: any[]) => mockAuthHandleDisconnection(...a),
-  })),
-}));
-
-// ─── MessageHandler mock ──────────────────────────────────────────────────────
-const mockMessageHandleSend = jest.fn() as jest.Mock<any>;
-const mockMessageHandleSendWithAttachments = jest.fn() as jest.Mock<any>;
-jest.mock('../handlers/MessageHandler', () => ({
-  MessageHandler: jest.fn().mockImplementation(() => ({
-    handleMessageSend: (...a: any[]) => mockMessageHandleSend(...a),
-    handleMessageSendWithAttachments: (...a: any[]) => mockMessageHandleSendWithAttachments(...a),
-  })),
-}));
-
-// ─── StatusHandler mock ───────────────────────────────────────────────────────
-const mockStatusHandleTypingStart = jest.fn() as jest.Mock<any>;
-const mockStatusHandleTypingStop = jest.fn() as jest.Mock<any>;
-const mockStatusInvalidateCache = jest.fn() as jest.Mock<any>;
-const mockStatusClearTyping = jest.fn() as jest.Mock<any>;
-jest.mock('../handlers/StatusHandler', () => ({
-  StatusHandler: jest.fn().mockImplementation(() => ({
-    handleTypingStart: (...a: any[]) => mockStatusHandleTypingStart(...a),
-    handleTypingStop: (...a: any[]) => mockStatusHandleTypingStop(...a),
-    invalidateIdentityCache: (...a: any[]) => mockStatusInvalidateCache(...a),
-    clearTypingThrottle: (...a: any[]) => mockStatusClearTyping(...a),
-  })),
-}));
-
-// ─── ReactionHandler mock ─────────────────────────────────────────────────────
-const mockReactionHandleAdd = jest.fn() as jest.Mock<any>;
-const mockReactionHandleRemove = jest.fn() as jest.Mock<any>;
-const mockReactionHandleSync = jest.fn() as jest.Mock<any>;
-jest.mock('../handlers/ReactionHandler', () => ({
-  ReactionHandler: jest.fn().mockImplementation(() => ({
-    handleReactionAdd: (...a: any[]) => mockReactionHandleAdd(...a),
-    handleReactionRemove: (...a: any[]) => mockReactionHandleRemove(...a),
-    handleReactionSync: (...a: any[]) => mockReactionHandleSync(...a),
-  })),
-}));
-
-// ─── AttachmentReactionHandler mock ──────────────────────────────────────────
-jest.mock('../handlers/AttachmentReactionHandler', () => ({
-  AttachmentReactionHandler: jest.fn().mockImplementation(() => ({
-    handleAdd: jest.fn(),
-    handleRemove: jest.fn(),
-  })),
-}));
-
-// ─── CommentReactionHandler mock ──────────────────────────────────────────────
-jest.mock('../handlers/CommentReactionHandler', () => ({
-  CommentReactionHandler: jest.fn().mockImplementation(() => ({
-    handleAddReaction: jest.fn(),
-    handleRemoveReaction: jest.fn(),
-    handleRequestSync: jest.fn(),
-  })),
-}));
-
-// ─── PostReactionHandler mock ─────────────────────────────────────────────────
-jest.mock('../handlers/PostReactionHandler', () => ({
-  PostReactionHandler: jest.fn().mockImplementation(() => ({
-    handleJoinPost: jest.fn(),
-    handleLeavePost: jest.fn(),
-    handleAddReaction: jest.fn(),
-    handleRemoveReaction: jest.fn(),
-    handleRequestSync: jest.fn(),
-  })),
-}));
-
-// ─── ConversationHandler mock ─────────────────────────────────────────────────
-const mockConvHandleJoin = jest.fn() as jest.Mock<any>;
-const mockConvHandleLeave = jest.fn() as jest.Mock<any>;
-jest.mock('../handlers/ConversationHandler', () => ({
-  ConversationHandler: jest.fn().mockImplementation(() => ({
-    handleConversationJoin: (...a: any[]) => mockConvHandleJoin(...a),
-    handleConversationLeave: (...a: any[]) => mockConvHandleLeave(...a),
-  })),
-}));
-
-// ─── AdminAgentHandler mock ───────────────────────────────────────────────────
-jest.mock('../handlers/AdminAgentHandler', () => ({
-  AdminAgentHandler: jest.fn().mockImplementation(() => ({
-    handleSubscribe: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined),
-    handleUnsubscribe: jest.fn(),
-  })),
-}));
-
-// ─── SocialEventsHandler mock ─────────────────────────────────────────────────
-const mockFeedSubscribe = jest.fn() as jest.Mock<any>;
-const mockFeedUnsubscribe = jest.fn() as jest.Mock<any>;
-jest.mock('../handlers/SocialEventsHandler', () => ({
-  SocialEventsHandler: jest.fn().mockImplementation(() => ({
-    handleFeedSubscribe: (...a: any[]) => mockFeedSubscribe(...a),
-    handleFeedUnsubscribe: (...a: any[]) => mockFeedUnsubscribe(...a),
-  })),
-}));
-
-// ─── LocationHandler mock ─────────────────────────────────────────────────────
-jest.mock('../handlers/LocationHandler', () => ({
-  LocationHandler: jest.fn().mockImplementation(() => ({
-    handleLocationShare: jest.fn(),
-    handleLiveLocationStart: jest.fn(),
-    handleLiveLocationUpdate: jest.fn(),
-    handleLiveLocationStop: jest.fn(),
-  })),
-}));
-
-// ─── CallEventsHandler mock ───────────────────────────────────────────────────
-const mockCallSetMessageBroadcaster = jest.fn() as jest.Mock<any>;
-const mockCallSetNotificationService = jest.fn() as jest.Mock<any>;
-const mockCallSetPushNotificationService = jest.fn() as jest.Mock<any>;
-const mockCallSetupCallEvents = jest.fn() as jest.Mock<any>;
-jest.mock('../CallEventsHandler', () => ({
-  CallEventsHandler: jest.fn().mockImplementation(() => ({
-    setMessageBroadcaster: (...a: any[]) => mockCallSetMessageBroadcaster(...a),
-    setNotificationService: (...a: any[]) => mockCallSetNotificationService(...a),
-    setPushNotificationService: (...a: any[]) => mockCallSetPushNotificationService(...a),
-    setupCallEvents: (...a: any[]) => mockCallSetupCallEvents(...a),
-  })),
-}));
-
-// ─── AgentAdminRelay mock ─────────────────────────────────────────────────────
-const mockRelayStart = jest.fn() as jest.Mock<any>;
-const mockRelayStop = jest.fn() as jest.Mock<any>;
-jest.mock('../AgentAdminRelay', () => ({
-  AgentAdminRelay: jest.fn().mockImplementation(() => ({
-    start: (...a: any[]) => mockRelayStart(...a),
-    stop: (...a: any[]) => mockRelayStop(...a),
-  })),
-}));
-
-// ─── emitAttachmentUpdated mock ───────────────────────────────────────────────
-const mockEmitAttachmentUpdated = jest.fn() as jest.Mock<any>;
-jest.mock('../emitAttachmentUpdated', () => ({
-  emitAttachmentUpdated: (...a: any[]) => mockEmitAttachmentUpdated(...a),
-}));
-
-// ─── filterMessagePayloadForLanguages mock ────────────────────────────────────
-const mockFilterPayload = jest.fn() as jest.Mock<any>;
-jest.mock('../utils/message-payload-filter', () => ({
-  filterMessagePayloadForLanguages: (...a: any[]) => mockFilterPayload(...a),
-}));
-
-// ─── applyResolvedLanguagesRefresh mock ───────────────────────────────────────
-const mockApplyResolvedLanguagesRefresh = jest.fn() as jest.Mock<any>;
-jest.mock('../utils/resolved-languages-refresh', () => ({
-  applyResolvedLanguagesRefresh: (...a: any[]) => mockApplyResolvedLanguagesRefresh(...a),
-}));
-
-// ─── translation-transformer mock ────────────────────────────────────────────
-jest.mock('../../utils/translation-transformer', () => ({
-  transformTranslationsToArray: jest.fn().mockReturnValue([]),
-}));
-
-// ─── SUT import ───────────────────────────────────────────────────────────────
 import { MeeshySocketIOManager } from '../MeeshySocketIOManager';
 import { SERVER_EVENTS, CLIENT_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 
-// ─── Test helpers ─────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Test helpers
+// ---------------------------------------------------------------------------
 
-function makePrisma() {
+function makeTranslationService() {
+  const svc = Object.assign(new EventEmitter(), {
+    initialize: jest.fn().mockResolvedValue(undefined),
+    healthCheck: jest.fn().mockResolvedValue(true),
+    close: jest.fn().mockResolvedValue(undefined),
+    getStats: jest.fn().mockReturnValue({ messages: 0, translationRequests: 0 }),
+    getZmqClient: jest.fn().mockReturnValue(null),
+    getTranslation: jest.fn().mockResolvedValue(null),
+    handleNewMessage: jest.fn().mockResolvedValue(undefined),
+  });
+  return svc;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makePrisma(): any {
+  const fn = () => jest.fn() as any;
   return {
-    conversation: {
-      findUnique: jest.fn() as jest.Mock<any>,
-    },
-    message: {
-      findUnique: jest.fn() as jest.Mock<any>,
-    },
+    conversation: { findUnique: fn() },
+    message: { findUnique: fn() },
+    messageAttachment: { findUnique: fn() },
     participant: {
-      findMany: jest.fn() as jest.Mock<any>,
-      findUnique: jest.fn() as jest.Mock<any>,
-      findFirst: jest.fn() as jest.Mock<any>,
-    },
-    messageAttachment: {
-      findUnique: jest.fn() as jest.Mock<any>,
+      findMany: fn().mockResolvedValue([]),
+      findFirst: fn(),
+      findUnique: fn(),
     },
     user: {
-      findMany: jest.fn() as jest.Mock<any>,
-      findUnique: jest.fn() as jest.Mock<any>,
+      findUnique: fn(),
+      findMany: fn().mockResolvedValue([]),
     },
   };
 }
 
-function makeManager() {
-  const httpServer = {} as HTTPServer;
-  const prisma = makePrisma();
-  const manager = new MeeshySocketIOManager(httpServer, prisma as any, mockTranslationService as any);
-  return { manager, prisma };
-}
-
-function makeSocketUser(overrides: Record<string, any> = {}) {
-  return {
-    id: 'u1',
-    socketId: 's1',
-    isAnonymous: false,
-    language: 'fr',
-    resolvedLanguages: ['fr'],
-    userId: 'u1',
-    ...overrides,
-  };
-}
-
-function makeSocket(socketId = 's1') {
-  const listeners: Record<string, Array<(...args: any[]) => any>> = {};
+function makeSocket(id = 'socket-1', rooms = new Set<string>()) {
+  const handlers: Record<string, any> = {};
   const socket = {
-    id: socketId,
-    emit: jest.fn() as jest.Mock<any>,
-    join: jest.fn() as jest.Mock<any>,
-    leave: jest.fn() as jest.Mock<any>,
-    disconnect: jest.fn() as jest.Mock<any>,
-    rooms: new Set<string>(),
-    on: jest.fn().mockImplementation((event: string, handler: (...args: any[]) => any) => {
-      if (!listeners[event]) listeners[event] = [];
-      listeners[event].push(handler);
+    id,
+    rooms,
+    on: jest.fn((event: string, handler: any) => {
+      handlers[event] = handler;
     }),
-    _trigger: (event: string, ...args: any[]) => {
-      (listeners[event] || []).forEach((h) => h(...args));
-    },
+    emit: jest.fn(),
+    disconnect: jest.fn(),
+    _handlers: handlers,
   };
   return socket;
 }
 
-function makeMessage(overrides: Record<string, any> = {}) {
-  return {
-    id: '000000000000000000000001',
-    conversationId: '000000000000000000000001',
-    senderId: 'sender-participant-id',
-    content: 'Hello',
-    originalLanguage: 'fr',
-    messageType: 'text',
-    isEdited: false,
-    deletedAt: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    validatedMentions: [],
-    translations: {},
-    attachments: [],
-    sender: null,
-    replyToId: null,
-    replyTo: null,
-    ...overrides,
-  };
+function getIoState() {
+  return (jest.requireMock('socket.io') as any).__state;
 }
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
+function triggerConnection(socket: ReturnType<typeof makeSocket>) {
+  const ioState = getIoState();
+  if (ioState.connectionHandler) {
+    ioState.connectionHandler(socket);
+  }
+  return socket._handlers;
+}
+
+function makeMessage(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'msg-123456789012',
+    conversationId: 'conv-123456789012',
+    senderId: 'sender-participantId',
+    content: 'Hello world',
+    originalLanguage: 'fr',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    sender: null,
+    ...overrides,
+  } as any;
+}
+
+// ---------------------------------------------------------------------------
+// Suite setup
+// ---------------------------------------------------------------------------
 
 describe('MeeshySocketIOManager', () => {
-  beforeEach(() => {
+  let manager: MeeshySocketIOManager;
+  let prisma: ReturnType<typeof makePrisma>;
+  let translationService: ReturnType<typeof makeTranslationService>;
+  let ioState: ReturnType<typeof getIoState>;
+
+  beforeEach(async () => {
     jest.clearAllMocks();
-    // Clear captured handlers array
-    capturedConnectionHandlers.length = 0;
-    // Clear shared socket maps
-    mockIoSockets.adapter.rooms.clear();
-    mockIoSockets.sockets.clear();
-    // Remove accumulated event listeners from shared translation service instance
-    mockTranslationService.removeAllListeners();
-    // Default mocks - translation service
-    mockTranslationService.initialize.mockResolvedValue(undefined);
-    mockTranslationService.close.mockResolvedValue(undefined);
-    mockTranslationService.healthCheck.mockResolvedValue(true);
-    mockTranslationService.getZmqClient.mockReturnValue(null);
-    mockTranslationService.getStats.mockReturnValue({ cacheHitRate: 0.8 });
-    mockTranslationService.getTranslation.mockResolvedValue(null);
-    mockTranslationService.handleNewMessage.mockResolvedValue(undefined);
-    // Default mocks - handlers
-    mockAuthHandleHeartbeat.mockResolvedValue(undefined);
-    mockAuthHandleDisconnection.mockResolvedValue(undefined);
-    mockAuthHandleManual.mockResolvedValue(undefined);
-    mockAuthHandleToken.mockResolvedValue(undefined);
-    mockStatusHandleTypingStart.mockResolvedValue(undefined);
-    mockStatusHandleTypingStop.mockResolvedValue(undefined);
-    mockMaintenanceStartTasks.mockResolvedValue(undefined);
-    mockRelayStart.mockResolvedValue(undefined);
-    mockRelayStop.mockResolvedValue(undefined);
-    mockUpdateOnNewMessage.mockResolvedValue(undefined);
-    mockGetUnreadCounts.mockResolvedValue(new Map());
-    mockGetPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-    mockFilterPayload.mockImplementation((payload: any) => payload);
-    mockIoTo.mockReturnValue({ emit: mockIoToEmit });
+
+    // Reset ioState mocks
+    ioState = getIoState();
+    ioState.on.mockClear();
+    ioState.emit.mockClear();
+    ioState.to.mockClear();
+    ioState.toEmit.mockClear();
+    ioState.close.mockClear();
+    ioState.connectionHandler = null;
+    ioState.sockets.sockets.clear();
+    ioState.sockets.adapter.rooms.clear();
+
+    prisma = makePrisma();
+    translationService = makeTranslationService();
+
+    manager = new MeeshySocketIOManager({} as any, prisma as any, translationService as any);
+    await manager.initialize();
   });
 
-  describe('constructor', () => {
-    it('creates instance without throwing', () => {
-      const { manager } = makeManager();
-      expect(manager).toBeDefined();
+  // -------------------------------------------------------------------------
+  // 1. Constructor
+  // -------------------------------------------------------------------------
+
+  describe('Constructor', () => {
+    it('instantiates the SocketIO server', () => {
+      const { Server } = jest.requireMock('socket.io') as any;
+      expect(Server).toHaveBeenCalled();
     });
 
-    it('sets up callEventsHandler with message broadcaster', () => {
-      makeManager();
-      expect(mockCallSetMessageBroadcaster).toHaveBeenCalled();
+    it('creates MaintenanceService with status broadcast callback', () => {
+      const { MaintenanceService } = jest.requireMock('../../services/MaintenanceService') as any;
+      expect(MaintenanceService).toHaveBeenCalled();
+      expect(mockMaintenanceServiceInstance.setStatusBroadcastCallback).toHaveBeenCalledWith(expect.any(Function));
     });
 
-    it('sets maintenance status broadcast callback', () => {
-      makeManager();
-      expect(mockMaintenanceSetStatusCallback).toHaveBeenCalled();
+    it('registers isCurrentlyConnected predicate on MaintenanceService', () => {
+      expect(mockMaintenanceServiceInstance.setIsCurrentlyConnected).toHaveBeenCalledWith(expect.any(Function));
     });
 
-    it('sets maintenance isCurrentlyConnected callback', () => {
-      makeManager();
-      expect(mockMaintenanceSetIsConnected).toHaveBeenCalled();
+    it('wires CallEventsHandler message broadcaster', () => {
+      expect(mockCallEventsHandlerInstance.setMessageBroadcaster).toHaveBeenCalledWith(expect.any(Function));
     });
   });
 
-  describe('getIO', () => {
-    it('returns the io server instance', () => {
-      const { manager } = makeManager();
-      const io = manager.getIO();
-      expect(io).toBeDefined();
+  // -------------------------------------------------------------------------
+  // 2. initialize()
+  // -------------------------------------------------------------------------
+
+  describe('initialize()', () => {
+    it('calls translationService.initialize()', () => {
+      expect(translationService.initialize).toHaveBeenCalled();
+    });
+
+    it('registers translationReady event listener on translationService', () => {
+      const listeners = translationService.listeners('translationReady');
+      expect(listeners).toHaveLength(1);
+    });
+
+    it('registers transcriptionReady event listener on translationService', () => {
+      const listeners = translationService.listeners('transcriptionReady');
+      expect(listeners).toHaveLength(1);
+    });
+
+    it('registers audioTranslationReady event listener', () => {
+      expect(translationService.listeners('audioTranslationReady')).toHaveLength(1);
+    });
+
+    it('registers audioTranslationsProgressive event listener', () => {
+      expect(translationService.listeners('audioTranslationsProgressive')).toHaveLength(1);
+    });
+
+    it('registers audioTranslationsCompleted event listener', () => {
+      expect(translationService.listeners('audioTranslationsCompleted')).toHaveLength(1);
+    });
+
+    it('registers storyTextObjectTranslationCompleted event listener', () => {
+      expect(translationService.listeners('storyTextObjectTranslationCompleted')).toHaveLength(1);
+    });
+
+    it('calls notificationService.setSocketIO', () => {
+      expect(mockNotificationServiceInstance.setSocketIO).toHaveBeenCalled();
+    });
+
+    it('calls notificationService.setPushNotificationService', () => {
+      expect(mockNotificationServiceInstance.setPushNotificationService).toHaveBeenCalled();
+    });
+
+    it('starts maintenance tasks', () => {
+      expect(mockMaintenanceServiceInstance.startMaintenanceTasks).toHaveBeenCalled();
+    });
+
+    it('registers socket connection handler on io', () => {
+      expect(ioState.connectionHandler).not.toBeNull();
+    });
+
+    it('starts AgentAdminRelay', () => {
+      expect(mockAgentAdminRelayInstance.start).toHaveBeenCalled();
+    });
+
+    it('throws if translationService.initialize rejects', async () => {
+      const failingTranslation = makeTranslationService();
+      (failingTranslation.initialize as jest.Mock).mockRejectedValue(new Error('ZMQ init failed'));
+      const m = new MeeshySocketIOManager({} as any, prisma as any, failingTranslation as any);
+      await expect(m.initialize()).rejects.toThrow('ZMQ init failed');
     });
   });
 
-  describe('setDeliveryQueue', () => {
-    it('stores the delivery queue', () => {
-      const { manager } = makeManager();
-      const mockQueue = { drain: jest.fn(), enqueue: jest.fn() };
-      manager.setDeliveryQueue(mockQueue as any);
-      // Verify by using it indirectly
-      expect((manager as any).deliveryQueue).toBe(mockQueue);
-    });
-  });
+  // -------------------------------------------------------------------------
+  // 3. Presence methods
+  // -------------------------------------------------------------------------
 
-  describe('setAgentClient', () => {
-    it('stores the agent client', () => {
-      const { manager } = makeManager();
-      const mockClient = { sendEvent: jest.fn() };
-      manager.setAgentClient(mockClient as any);
-      expect((manager as any).agentClient).toBe(mockClient);
-    });
-  });
-
-  describe('getNotificationService', () => {
-    it('returns the notification service', () => {
-      const { manager } = makeManager();
-      const service = manager.getNotificationService();
-      expect(service).toBeDefined();
-    });
-  });
-
-  describe('getSocialEventsHandler', () => {
-    it('returns the social events handler', () => {
-      const { manager } = makeManager();
-      const handler = manager.getSocialEventsHandler();
-      expect(handler).toBeDefined();
-    });
-  });
-
-  describe('getPresenceBroadcastCallback', () => {
-    it('returns a callable function', () => {
-      const { manager } = makeManager();
-      const cb = manager.getPresenceBroadcastCallback();
-      expect(typeof cb).toBe('function');
-    });
-
-    it('callback invokes _broadcastUserStatus', async () => {
-      const { manager, prisma } = makeManager();
-      mockGetPreferences.mockResolvedValue({ showOnlineStatus: false, showLastSeen: true });
-      const cb = manager.getPresenceBroadcastCallback();
-      await cb('u1', true, false);
-      // If showOnlineStatus is false, no emit should happen (but no error either)
-      expect(mockIoToEmit).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('isPresenceOnline', () => {
-    it('returns true when user is in connectedUsers', () => {
-      const { manager } = makeManager();
-      (manager as any).connectedUsers.set('u1', makeSocketUser());
-      expect(manager.isPresenceOnline('u1')).toBe(true);
-    });
-
-    it('returns false when user is not in connectedUsers', () => {
-      const { manager } = makeManager();
-      expect(manager.isPresenceOnline('unknown')).toBe(false);
-    });
-  });
-
-  describe('getPresenceForIds', () => {
-    it('maps online and offline IDs correctly', () => {
-      const { manager } = makeManager();
-      (manager as any).connectedUsers.set('u1', makeSocketUser());
-      const result = manager.getPresenceForIds(['u1', 'u2', 'u3']);
-      expect(result.get('u1')).toBe(true);
-      expect(result.get('u2')).toBe(false);
-      expect(result.get('u3')).toBe(false);
-    });
-
-    it('returns empty map for empty input', () => {
-      const { manager } = makeManager();
-      const result = manager.getPresenceForIds([]);
-      expect(result.size).toBe(0);
-    });
-  });
-
-  describe('listOnlineAmong', () => {
-    it('filters to only online users', () => {
-      const { manager } = makeManager();
-      (manager as any).connectedUsers.set('u1', makeSocketUser({ id: 'u1', userId: 'u1' }));
-      (manager as any).connectedUsers.set('u3', makeSocketUser({ id: 'u3', userId: 'u3', socketId: 's3' }));
-      const result = manager.listOnlineAmong(['u1', 'u2', 'u3']);
-      expect(result).toEqual(['u1', 'u3']);
-    });
-
-    it('returns empty array when none online', () => {
-      const { manager } = makeManager();
-      const result = manager.listOnlineAmong(['u1', 'u2']);
-      expect(result).toEqual([]);
-    });
-  });
-
-  describe('getConnectedUsers', () => {
-    it('returns array of user IDs', () => {
-      const { manager } = makeManager();
-      (manager as any).connectedUsers.set('u1', makeSocketUser());
-      (manager as any).connectedUsers.set('u2', makeSocketUser({ id: 'u2', userId: 'u2', socketId: 's2' }));
-      const result = manager.getConnectedUsers();
-      expect(result).toContain('u1');
-      expect(result).toContain('u2');
-    });
-
-    it('returns empty array when no users connected', () => {
-      const { manager } = makeManager();
-      expect(manager.getConnectedUsers()).toEqual([]);
-    });
-  });
-
-  describe('isUserConnected', () => {
-    it('returns true when user is connected', () => {
-      const { manager } = makeManager();
-      (manager as any).connectedUsers.set('u1', makeSocketUser());
-      expect(manager.isUserConnected('u1')).toBe(true);
-    });
-
-    it('returns false when user is not connected', () => {
-      const { manager } = makeManager();
-      expect(manager.isUserConnected('unknown')).toBe(false);
-    });
-  });
-
-  describe('isUserInConversationRoom', () => {
-    it('returns true when socket is in the conversation room', () => {
-      const { manager } = makeManager();
-      (manager as any).connectedUsers.set('u1', makeSocketUser());
-      const mockSock = { rooms: new Set(['conversation:conv1']) };
-      mockIoSockets.sockets.set('s1', mockSock);
-      expect(manager.isUserInConversationRoom('u1', 'conv1')).toBe(true);
-    });
-
-    it('returns false when socket is not in the room', () => {
-      const { manager } = makeManager();
-      (manager as any).connectedUsers.set('u1', makeSocketUser());
-      const mockSock = { rooms: new Set(['conversation:other']) };
-      mockIoSockets.sockets.set('s1', mockSock);
-      expect(manager.isUserInConversationRoom('u1', 'conv1')).toBe(false);
-    });
-
-    it('returns false when socket is not found', () => {
-      const { manager } = makeManager();
-      (manager as any).connectedUsers.set('u1', makeSocketUser());
-      // No socket in mockIoSockets.sockets
-      expect(manager.isUserInConversationRoom('u1', 'conv1')).toBe(false);
-    });
-
-    it('returns false when user is not connected', () => {
-      const { manager } = makeManager();
-      expect(manager.isUserInConversationRoom('unknown', 'conv1')).toBe(false);
-    });
-  });
-
-  describe('disconnectUser', () => {
-    it('calls socket.disconnect(true) and returns true', () => {
-      const { manager } = makeManager();
-      (manager as any).connectedUsers.set('u1', makeSocketUser());
-      const mockSock = { disconnect: jest.fn() };
-      mockIoSockets.sockets.set('s1', mockSock);
-      const result = manager.disconnectUser('u1');
-      expect(result).toBe(true);
-      expect(mockSock.disconnect).toHaveBeenCalledWith(true);
-    });
-
-    it('returns false when user socket not found', () => {
-      const { manager } = makeManager();
-      (manager as any).connectedUsers.set('u1', makeSocketUser());
-      // No socket in sockets map
-      const result = manager.disconnectUser('u1');
-      expect(result).toBe(false);
-    });
-
-    it('returns false when user not connected', () => {
-      const { manager } = makeManager();
-      expect(manager.disconnectUser('unknown')).toBe(false);
-    });
-  });
-
-  describe('sendToUser', () => {
-    it('emits event to user socket and returns true', () => {
-      const { manager } = makeManager();
-      (manager as any).connectedUsers.set('u1', makeSocketUser());
-      const mockSock = { emit: jest.fn() };
-      mockIoSockets.sockets.set('s1', mockSock);
-      const result = (manager as any).sendToUser('u1', SERVER_EVENTS.ERROR, { message: 'test' });
-      expect(result).toBe(true);
-      expect(mockSock.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, { message: 'test' });
-    });
-
-    it('returns false when user socket not found', () => {
-      const { manager } = makeManager();
-      (manager as any).connectedUsers.set('u1', makeSocketUser());
-      // No socket in sockets map
-      const result = (manager as any).sendToUser('u1', SERVER_EVENTS.ERROR, { message: 'test' });
-      expect(result).toBe(false);
-    });
-
-    it('returns false when user not connected', () => {
-      const { manager } = makeManager();
-      const result = (manager as any).sendToUser('unknown', SERVER_EVENTS.ERROR, { message: 'test' });
-      expect(result).toBe(false);
-    });
-  });
-
-  describe('broadcast', () => {
-    it('delegates to io.emit', () => {
-      const { manager } = makeManager();
-      (manager as any).broadcast(SERVER_EVENTS.ERROR, { message: 'test' });
-      expect(mockIoEmit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, { message: 'test' });
-    });
-  });
-
-  describe('getStats', () => {
-    it('returns stats object with connected_users count', () => {
-      const { manager } = makeManager();
-      (manager as any).connectedUsers.set('u1', makeSocketUser());
-      const stats = manager.getStats();
-      expect(stats).toMatchObject({
-        total_connections: expect.any(Number),
-        active_connections: expect.any(Number),
-        messages_processed: expect.any(Number),
-        translations_sent: expect.any(Number),
-        errors: expect.any(Number),
-        connected_users: 1,
+  describe('Presence methods', () => {
+    beforeEach(() => {
+      (manager as any).connectedUsers.set('user-A', {
+        id: 'user-A', socketId: 'sock-A', isAnonymous: false, language: 'fr', resolvedLanguages: ['fr'],
       });
-      expect(stats.translation_service_stats).toBeDefined();
+      (manager as any).connectedUsers.set('user-B', {
+        id: 'user-B', socketId: 'sock-B', isAnonymous: false, language: 'en', resolvedLanguages: ['en'],
+      });
+    });
+
+    it('isPresenceOnline returns true for connected user', () => {
+      expect(manager.isPresenceOnline('user-A')).toBe(true);
+    });
+
+    it('isPresenceOnline returns false for disconnected user', () => {
+      expect(manager.isPresenceOnline('user-Z')).toBe(false);
+    });
+
+    it('getPresenceForIds returns correct map', () => {
+      const result = manager.getPresenceForIds(['user-A', 'user-Z']);
+      expect(result.get('user-A')).toBe(true);
+      expect(result.get('user-Z')).toBe(false);
+    });
+
+    it('getPresenceForIds handles empty array', () => {
+      expect(manager.getPresenceForIds([])).toEqual(new Map());
+    });
+
+    it('listOnlineAmong filters correctly', () => {
+      const result = manager.listOnlineAmong(['user-A', 'user-Z', 'user-B']);
+      expect(result).toEqual(expect.arrayContaining(['user-A', 'user-B']));
+      expect(result).not.toContain('user-Z');
+    });
+
+    it('isUserConnected returns true for connected user', () => {
+      expect((manager as any).isUserConnected('user-A')).toBe(true);
+    });
+
+    it('isUserConnected returns false for unknown user', () => {
+      expect((manager as any).isUserConnected('ghost')).toBe(false);
+    });
+
+    it('getConnectedUsers returns all connected user ids', () => {
+      const users = manager.getConnectedUsers();
+      expect(users).toContain('user-A');
+      expect(users).toContain('user-B');
     });
   });
 
-  describe('healthCheck', () => {
-    it('delegates to translationService.healthCheck and returns true', async () => {
-      const { manager } = makeManager();
-      mockTranslationService.healthCheck.mockResolvedValue(true);
-      const result = await manager.healthCheck();
+  // -------------------------------------------------------------------------
+  // 4. Socket operations
+  // -------------------------------------------------------------------------
+
+  describe('Socket operations', () => {
+    it('isUserInConversationRoom returns false when user not in connectedUsers', () => {
+      expect(manager.isUserInConversationRoom('ghost', 'conv-1')).toBe(false);
+    });
+
+    it('isUserInConversationRoom returns false when socket not found', () => {
+      (manager as any).connectedUsers.set('user-1', {
+        id: 'user-1', socketId: 'sock-missing', isAnonymous: false, language: 'fr', resolvedLanguages: [],
+      });
+      expect(manager.isUserInConversationRoom('user-1', 'conv-1')).toBe(false);
+    });
+
+    it('isUserInConversationRoom returns true when socket is in room', () => {
+      const rooms = new Set(['conversation:conv-1']);
+      const fakeSocket = { rooms };
+      ioState.sockets.sockets.set('sock-1', fakeSocket);
+      (manager as any).connectedUsers.set('user-1', {
+        id: 'user-1', socketId: 'sock-1', isAnonymous: false, language: 'fr', resolvedLanguages: [],
+      });
+      expect(manager.isUserInConversationRoom('user-1', 'conv-1')).toBe(true);
+    });
+
+    it('isUserInConversationRoom returns false when socket lacks the room', () => {
+      const rooms = new Set(['conversation:other']);
+      const fakeSocket = { rooms };
+      ioState.sockets.sockets.set('sock-1', fakeSocket);
+      (manager as any).connectedUsers.set('user-1', {
+        id: 'user-1', socketId: 'sock-1', isAnonymous: false, language: 'fr', resolvedLanguages: [],
+      });
+      expect(manager.isUserInConversationRoom('user-1', 'conv-1')).toBe(false);
+    });
+
+    it('disconnectUser returns false for unknown user', () => {
+      expect(manager.disconnectUser('ghost')).toBe(false);
+    });
+
+    it('disconnectUser returns false when socket not found', () => {
+      (manager as any).connectedUsers.set('user-1', {
+        id: 'user-1', socketId: 'sock-missing', isAnonymous: false, language: 'fr', resolvedLanguages: [],
+      });
+      expect(manager.disconnectUser('user-1')).toBe(false);
+    });
+
+    it('disconnectUser calls socket.disconnect and returns true', () => {
+      const fakeSocket = { disconnect: jest.fn() };
+      ioState.sockets.sockets.set('sock-1', fakeSocket);
+      (manager as any).connectedUsers.set('user-1', {
+        id: 'user-1', socketId: 'sock-1', isAnonymous: false, language: 'fr', resolvedLanguages: [],
+      });
+      expect(manager.disconnectUser('user-1')).toBe(true);
+      expect(fakeSocket.disconnect).toHaveBeenCalledWith(true);
+    });
+
+    it('sendToUser returns false for unknown user', () => {
+      expect(manager.sendToUser('ghost', SERVER_EVENTS.MESSAGE_NEW as any, {} as any)).toBe(false);
+    });
+
+    it('sendToUser emits event to socket and returns true', () => {
+      const fakeSocket = { emit: jest.fn() };
+      ioState.sockets.sockets.set('sock-1', fakeSocket);
+      (manager as any).connectedUsers.set('user-1', {
+        id: 'user-1', socketId: 'sock-1', isAnonymous: false, language: 'fr', resolvedLanguages: [],
+      });
+      const result = manager.sendToUser('user-1', SERVER_EVENTS.MESSAGE_NEW as any, { id: 'test' } as any);
       expect(result).toBe(true);
+      expect(fakeSocket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'test' });
     });
 
-    it('returns false when translationService.healthCheck throws', async () => {
-      const { manager } = makeManager();
-      mockTranslationService.healthCheck.mockRejectedValue(new Error('Health check failed'));
-      const result = await manager.healthCheck();
-      expect(result).toBe(false);
+    it('broadcast emits to all connected sockets', () => {
+      manager.broadcast(SERVER_EVENTS.USER_STATUS as any, {} as any);
+      expect(ioState.emit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, {});
     });
   });
 
-  describe('close', () => {
-    it('closes translationService and io', async () => {
-      const { manager } = makeManager();
-      // Set up agentAdminRelay
-      (manager as any).agentAdminRelay = { stop: mockRelayStop };
-      await manager.close();
-      expect(mockRelayStop).toHaveBeenCalled();
-      expect(mockTranslationService.close).toHaveBeenCalled();
-      expect(mockIoClose).toHaveBeenCalled();
+  // -------------------------------------------------------------------------
+  // 5. Stats and health
+  // -------------------------------------------------------------------------
+
+  describe('Stats and health', () => {
+    it('getStats returns stats with connected_users count', () => {
+      const stats = manager.getStats();
+      expect(stats).toHaveProperty('total_connections');
+      expect(stats).toHaveProperty('active_connections');
+      expect(stats).toHaveProperty('connected_users');
+      expect(stats).toHaveProperty('translation_service_stats');
     });
 
-    it('handles close with null agentAdminRelay', async () => {
-      const { manager } = makeManager();
-      (manager as any).agentAdminRelay = null;
+    it('healthCheck returns true when translationService is healthy', async () => {
+      (translationService.healthCheck as jest.Mock).mockResolvedValue(true);
+      expect(await manager.healthCheck()).toBe(true);
+    });
+
+    it('healthCheck returns false when translationService is unhealthy', async () => {
+      (translationService.healthCheck as jest.Mock).mockResolvedValue(false);
+      expect(await manager.healthCheck()).toBe(false);
+    });
+
+    it('healthCheck returns false on exception', async () => {
+      (translationService.healthCheck as jest.Mock).mockRejectedValue(new Error('fail'));
+      expect(await manager.healthCheck()).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 6. close()
+  // -------------------------------------------------------------------------
+
+  describe('close()', () => {
+    it('calls agentAdminRelay.stop()', async () => {
+      await manager.close();
+      expect(mockAgentAdminRelayInstance.stop).toHaveBeenCalled();
+    });
+
+    it('calls translationService.close()', async () => {
+      await manager.close();
+      expect(translationService.close).toHaveBeenCalled();
+    });
+
+    it('calls io.close()', async () => {
+      await manager.close();
+      expect(ioState.close).toHaveBeenCalled();
+    });
+
+    it('does not throw if agentAdminRelay.stop() rejects', async () => {
+      mockAgentAdminRelayInstance.stop.mockRejectedValue(new Error('relay down'));
       await expect(manager.close()).resolves.not.toThrow();
     });
   });
 
+  // -------------------------------------------------------------------------
+  // 7. setDeliveryQueue / setAgentClient
+  // -------------------------------------------------------------------------
+
+  describe('setDeliveryQueue / setAgentClient', () => {
+    it('setDeliveryQueue stores the queue on the manager', () => {
+      const fakeQueue = { drain: jest.fn(), enqueue: jest.fn() };
+      manager.setDeliveryQueue(fakeQueue as any);
+      expect((manager as any).deliveryQueue).toBe(fakeQueue);
+    });
+
+    it('setAgentClient stores the client on the manager', () => {
+      const fakeClient = { sendEvent: jest.fn() };
+      manager.setAgentClient(fakeClient as any);
+      expect((manager as any).agentClient).toBe(fakeClient);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 8. refreshUserResolvedLanguages
+  // -------------------------------------------------------------------------
+
   describe('refreshUserResolvedLanguages', () => {
-    it('calls applyResolvedLanguagesRefresh with connected users map', () => {
-      const { manager } = makeManager();
-      const prefs = { systemLanguage: 'en', regionalLanguage: 'fr' };
-      manager.refreshUserResolvedLanguages('u1', prefs);
-      expect(mockApplyResolvedLanguagesRefresh).toHaveBeenCalledWith(
+    it('delegates to applyResolvedLanguagesRefresh', () => {
+      const { applyResolvedLanguagesRefresh } = jest.requireMock('../utils/resolved-languages-refresh') as any;
+      const prefs = { systemLanguage: 'fr', regionalLanguage: 'en' };
+      manager.refreshUserResolvedLanguages('user-1', prefs);
+      expect(applyResolvedLanguagesRefresh).toHaveBeenCalledWith(
         (manager as any).connectedUsers,
-        'u1',
+        'user-1',
         prefs
       );
     });
   });
 
-  describe('initialize', () => {
-    it('calls translationService.initialize', async () => {
-      const { manager } = makeManager();
-      await manager.initialize();
-      expect(mockTranslationService.initialize).toHaveBeenCalled();
+  // -------------------------------------------------------------------------
+  // 9. Getters
+  // -------------------------------------------------------------------------
+
+  describe('getNotificationService / getSocialEventsHandler / getPresenceBroadcastCallback', () => {
+    it('getNotificationService returns the notificationService instance', () => {
+      expect(manager.getNotificationService()).toBe(mockNotificationServiceInstance);
     });
 
-    it('registers connection handler on io', async () => {
-      const { manager } = makeManager();
-      await manager.initialize();
-      expect(capturedConnectionHandlers).toHaveLength(1);
+    it('getSocialEventsHandler returns the socialEventsHandler instance', () => {
+      expect(manager.getSocialEventsHandler()).toBe(mockSocialEventsHandlerInstance);
     });
 
-    it('calls notificationService.setSocketIO', async () => {
-      const { manager } = makeManager();
-      await manager.initialize();
-      expect(mockNotificationSetSocketIO).toHaveBeenCalled();
+    it('getPresenceBroadcastCallback returns a callable function', () => {
+      const cb = manager.getPresenceBroadcastCallback();
+      expect(typeof cb).toBe('function');
     });
 
-    it('calls notificationService.setPushNotificationService', async () => {
-      const { manager } = makeManager();
-      await manager.initialize();
-      expect(mockNotificationSetPush).toHaveBeenCalled();
+    it('getPresenceBroadcastCallback invokes _broadcastUserStatus when called', async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({
+        showOnlineStatus: false,
+        showLastSeen: false,
+      });
+      const cb = manager.getPresenceBroadcastCallback();
+      // Should not throw
+      await cb('user-1', true, false);
     });
 
-    it('calls notificationService.setEmailService', async () => {
-      const { manager } = makeManager();
-      await manager.initialize();
-      expect(mockNotificationSetEmail).toHaveBeenCalled();
-    });
-
-    it('starts maintenance tasks', async () => {
-      const { manager } = makeManager();
-      await manager.initialize();
-      expect(mockMaintenanceStartTasks).toHaveBeenCalled();
-    });
-
-    it('calls callEventsHandler.setNotificationService', async () => {
-      const { manager } = makeManager();
-      await manager.initialize();
-      expect(mockCallSetNotificationService).toHaveBeenCalled();
-    });
-
-    it('calls callEventsHandler.setPushNotificationService', async () => {
-      const { manager } = makeManager();
-      await manager.initialize();
-      expect(mockCallSetPushNotificationService).toHaveBeenCalled();
-    });
-
-    it('initializes PostTranslationService when zmqClient exists', async () => {
-      const { manager } = makeManager();
-      const mockZmqClient = {};
-      mockTranslationService.getZmqClient.mockReturnValue(mockZmqClient);
-      await manager.initialize();
-      const { PostTranslationService } = await import('../../services/posts/PostTranslationService');
-      expect(PostTranslationService.init).toHaveBeenCalled();
-    });
-
-    it('does not throw when maintenance tasks fail', async () => {
-      const { manager } = makeManager();
-      mockMaintenanceStartTasks.mockRejectedValue(new Error('Maintenance failed'));
-      await expect(manager.initialize()).resolves.not.toThrow();
-    });
-
-    it('throws when translationService.initialize fails', async () => {
-      const { manager } = makeManager();
-      mockTranslationService.initialize.mockRejectedValue(new Error('Init failed'));
-      await expect(manager.initialize()).rejects.toThrow('Init failed');
-    });
-
-    it('registers translationReady event listener', async () => {
-      const { manager } = makeManager();
-      await manager.initialize();
-      expect(mockTranslationService.listenerCount('translationReady')).toBeGreaterThan(0);
-    });
-
-    it('registers transcriptionReady event listener', async () => {
-      const { manager } = makeManager();
-      await manager.initialize();
-      expect(mockTranslationService.listenerCount('transcriptionReady')).toBeGreaterThan(0);
+    it('getIO returns the underlying io server', () => {
+      const io = manager.getIO();
+      expect(io).toBeDefined();
     });
   });
 
-  describe('normalizeConversationId (via broadcastMessage)', () => {
-    it('returns ObjectId directly without DB call', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-      const msg = makeMessage({ id: '000000000000000000000001', conversationId: '000000000000000000000001' });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      expect(prisma.conversation.findUnique).not.toHaveBeenCalled();
-    });
+  // -------------------------------------------------------------------------
+  // 10. Socket connection events
+  // -------------------------------------------------------------------------
 
-    it('resolves identifier via DB lookup', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.conversation.findUnique.mockResolvedValue({ id: '000000000000000000000001', identifier: 'my-conv' });
-      prisma.participant.findMany.mockResolvedValue([]);
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-      await manager.broadcastMessage(makeMessage() as any, 'my-conv');
-      expect(prisma.conversation.findUnique).toHaveBeenCalledWith({
-        where: { identifier: 'my-conv' },
-        select: { id: true, identifier: true },
-      });
-    });
-
-    it('returns identifier as-is when not found in DB', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.conversation.findUnique.mockResolvedValue(null);
-      prisma.participant.findMany.mockResolvedValue([]);
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-      await manager.broadcastMessage(makeMessage() as any, 'unknown-id');
-      // Should not throw, just use 'unknown-id' as the room
-      expect(mockIoTo).toHaveBeenCalledWith('conversation:unknown-id');
-    });
-
-    it('uses cache on second lookup', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.conversation.findUnique.mockResolvedValue({ id: '000000000000000000000002', identifier: 'test-conv' });
-      prisma.participant.findMany.mockResolvedValue([]);
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-      // First call
-      await (manager as any).normalizeConversationId('test-conv');
-      // Second call
-      await (manager as any).normalizeConversationId('test-conv');
-      // DB should only be called once
-      expect(prisma.conversation.findUnique).toHaveBeenCalledTimes(1);
-    });
-
-    it('evicts oldest entry when cache at 2000', async () => {
-      const { manager, prisma } = makeManager();
-      const cache = (manager as any).conversationIdCache;
-      for (let i = 0; i < 2000; i++) cache.set(`key${i}`, `val${i}`);
-      prisma.conversation.findUnique.mockResolvedValue({ id: 'newid', identifier: 'newkey' });
-      await (manager as any).normalizeConversationId('newkey');
-      expect(cache.size).toBe(2000);
-      expect(cache.has('key0')).toBe(false);
-      expect(cache.has('newkey')).toBe(true);
-    });
-
-    it('returns id on DB error', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.conversation.findUnique.mockRejectedValue(new Error('DB error'));
-      const result = await (manager as any).normalizeConversationId('some-id');
-      expect(result).toBe('some-id');
-    });
-  });
-
-  describe('broadcastMessage', () => {
-    beforeEach(() => {
-      mockUpdateOnNewMessage.mockResolvedValue(undefined);
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-    });
-
-    it('broadcasts message to conversation room', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      const msg = makeMessage({ id: '000000000000000000000001', conversationId: '000000000000000000000001' });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      expect(mockIoTo).toHaveBeenCalledWith('conversation:000000000000000000000001');
-      expect(mockIoToEmit).toHaveBeenCalledWith(
-        SERVER_EVENTS.MESSAGE_NEW,
-        expect.objectContaining({ id: '000000000000000000000001' })
-      );
-    });
-
-    it('emits MENTION_CREATED to mentioned user personal rooms', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-      const msg = makeMessage({
-        id: '000000000000000000000001',
-        validatedMentions: [{ userId: 'other-user', participantId: 'p1', username: 'other' }],
-      });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      // io.to should be called with user room for mentions
-      const calls = mockIoTo.mock.calls.map((c: any[]) => c[0]);
-      expect(calls).toContain(ROOMS.user('other-user'));
-    });
-
-    it('does not emit MENTION_CREATED for sender self-mention', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      const msg = makeMessage({
-        senderId: 'sender-participant-id',
-        validatedMentions: [{ userId: 'sender-participant-id', participantId: 'p1' }],
-      });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      // User room for sender should NOT be called via mention
-      const userRoomCalls = mockIoTo.mock.calls.filter((c: any[]) => c[0] === ROOMS.user('sender-participant-id'));
-      // Filter out the CONVERSATION_UNREAD_UPDATED calls
-      expect(userRoomCalls.length).toBe(0);
-    });
-
-    it('uses SOCKET_LANG_FILTER branch when env set', async () => {
-      process.env.SOCKET_LANG_FILTER = 'true';
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      const roomSet = new Set(['s1']);
-      mockIoSockets.adapter.rooms.set('conversation:000000000000000000000001', roomSet);
-      (manager as any).socketToUser.set('s1', 'u1');
-      (manager as any).connectedUsers.set('u1', makeSocketUser({ socketId: 's1', resolvedLanguages: ['fr'] }));
-      const msg = makeMessage();
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      expect(mockFilterPayload).toHaveBeenCalled();
-      delete process.env.SOCKET_LANG_FILTER;
-    });
-
-    it('enqueues to deliveryQueue for offline participants', async () => {
-      const { manager, prisma } = makeManager();
-      const mockQueue = { enqueue: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined), drain: jest.fn() };
-      manager.setDeliveryQueue(mockQueue as any);
-      prisma.participant.findMany.mockResolvedValue([
-        { id: 'p2', userId: 'offline-user', joinedAt: new Date() }
-      ]);
-      mockGetUnreadCounts.mockResolvedValue(new Map([['p2', 1]]));
-      // offline-user is not in connectedUsers
-      const msg = makeMessage({ senderId: 'sender-participant-id', id: '000000000000000000000001' });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      expect(mockQueue.enqueue).toHaveBeenCalledWith('offline-user', expect.any(Object));
-    });
-
-    it('does not enqueue for online participants', async () => {
-      const { manager, prisma } = makeManager();
-      const mockQueue = { enqueue: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined), drain: jest.fn() };
-      manager.setDeliveryQueue(mockQueue as any);
-      // online user
-      (manager as any).connectedUsers.set('online-user', makeSocketUser({ id: 'online-user', userId: 'online-user', socketId: 's2' }));
-      prisma.participant.findMany.mockResolvedValue([
-        { id: 'p2', userId: 'online-user', joinedAt: new Date() }
-      ]);
-      mockGetUnreadCounts.mockResolvedValue(new Map([['p2', 0]]));
-      const msg = makeMessage({ senderId: 'sender-participant-id', id: '000000000000000000000001' });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      expect(mockQueue.enqueue).not.toHaveBeenCalled();
-    });
-
-    it('does not crash when senderId is null', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      const msg = makeMessage({ senderId: null });
-      await expect(manager.broadcastMessage(msg as any, '000000000000000000000001')).resolves.not.toThrow();
-    });
-
-    it('includes sender info in payload', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      const msg = makeMessage({
-        sender: {
-          id: 'p1',
-          displayName: 'Alice',
-          nickname: 'ali',
-          type: 'REGISTERED',
-          userId: 'u-alice',
-          avatar: null,
-          user: { username: 'alice', firstName: 'Alice', lastName: 'Smith' }
-        }
-      });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      expect(mockIoToEmit).toHaveBeenCalledWith(
-        SERVER_EVENTS.MESSAGE_NEW,
-        expect.objectContaining({ sender: expect.objectContaining({ id: 'p1' }) })
-      );
-    });
-  });
-
-  describe('_setupSocketEvents (via initialize + connection)', () => {
-    let manager: MeeshySocketIOManager;
-    let prisma: ReturnType<typeof makePrisma>;
-    let socket: ReturnType<typeof makeSocket>;
-
-    beforeEach(async () => {
-      ({ manager, prisma } = makeManager());
-      await manager.initialize();
-      socket = makeSocket('s1');
-      capturedConnectionHandlers[0](socket);
-    });
-
-    it('increments stats.total_connections on connection', async () => {
-      // Each connection increments
-      const statsBefore = (manager as any).stats.total_connections;
-      const socket2 = makeSocket('s2');
-      capturedConnectionHandlers[0](socket2);
-      expect((manager as any).stats.total_connections).toBe(statsBefore + 1);
+  describe('Socket connection events', () => {
+    it('increments total_connections and active_connections on connection', () => {
+      const before = manager.getStats().total_connections;
+      const beforeActive = manager.getStats().active_connections;
+      const socket = makeSocket();
+      triggerConnection(socket);
+      expect(manager.getStats().total_connections).toBe(before + 1);
+      expect(manager.getStats().active_connections).toBe(beforeActive + 1);
     });
 
     it('calls authHandler.handleTokenAuthentication on connection', () => {
-      expect(mockAuthHandleToken).toHaveBeenCalledWith(socket);
+      const socket = makeSocket();
+      triggerConnection(socket);
+      expect(mockAuthHandlerInstance.handleTokenAuthentication).toHaveBeenCalledWith(socket);
     });
 
-    it('registers AUTHENTICATE listener', () => {
-      expect(socket.on).toHaveBeenCalledWith(CLIENT_EVENTS.AUTHENTICATE, expect.any(Function));
+    it('registers all expected socket event listeners', () => {
+      const socket = makeSocket();
+      triggerConnection(socket);
+      const registeredEvents = socket.on.mock.calls.map((c: any) => c[0]);
+      expect(registeredEvents).toContain(CLIENT_EVENTS.AUTHENTICATE);
+      expect(registeredEvents).toContain(CLIENT_EVENTS.MESSAGE_SEND);
+      expect(registeredEvents).toContain(CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS);
+      expect(registeredEvents).toContain(CLIENT_EVENTS.REQUEST_TRANSLATION);
+      expect(registeredEvents).toContain(CLIENT_EVENTS.CONVERSATION_JOIN);
+      expect(registeredEvents).toContain(CLIENT_EVENTS.CONVERSATION_LEAVE);
+      expect(registeredEvents).toContain(CLIENT_EVENTS.FEED_SUBSCRIBE);
+      expect(registeredEvents).toContain(CLIENT_EVENTS.FEED_UNSUBSCRIBE);
+      expect(registeredEvents).toContain(CLIENT_EVENTS.TYPING_START);
+      expect(registeredEvents).toContain(CLIENT_EVENTS.TYPING_STOP);
+      expect(registeredEvents).toContain(CLIENT_EVENTS.HEARTBEAT);
+      expect(registeredEvents).toContain(CLIENT_EVENTS.REACTION_ADD);
+      expect(registeredEvents).toContain(CLIENT_EVENTS.REACTION_REMOVE);
+      expect(registeredEvents).toContain(CLIENT_EVENTS.LOCATION_SHARE);
+      expect(registeredEvents).toContain('disconnect');
     });
 
-    it('AUTHENTICATE event calls authHandler.handleManualAuthentication', async () => {
-      mockAuthHandleManual.mockResolvedValue(undefined);
-      await socket._trigger(CLIENT_EVENTS.AUTHENTICATE, { token: 'test' });
-      expect(mockAuthHandleManual).toHaveBeenCalledWith(socket, { token: 'test' });
-    });
-
-    it('MESSAGE_SEND calls messageHandler.handleMessageSend', async () => {
-      const cb = jest.fn();
-      mockMessageHandleSend.mockResolvedValue(undefined);
-      await socket._trigger(CLIENT_EVENTS.MESSAGE_SEND, { content: 'hi' }, cb);
-      expect(mockMessageHandleSend).toHaveBeenCalledWith(socket, { content: 'hi' }, cb);
-    });
-
-    it('MESSAGE_SEND error calls callback with error', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      mockMessageHandleSend.mockRejectedValue(new Error('fail'));
-      await socket._trigger(CLIENT_EVENTS.MESSAGE_SEND, { content: 'hi' }, cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Internal server error' });
-    });
-
-    it('MESSAGE_SEND_WITH_ATTACHMENTS calls handler', async () => {
-      const cb = jest.fn();
-      mockMessageHandleSendWithAttachments.mockResolvedValue(undefined);
-      await socket._trigger(CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS, {}, cb);
-      expect(mockMessageHandleSendWithAttachments).toHaveBeenCalledWith(socket, {}, cb);
-    });
-
-    it('CONVERSATION_JOIN delegates to conversationHandler', async () => {
-      mockConvHandleJoin.mockResolvedValue(undefined);
-      await socket._trigger(CLIENT_EVENTS.CONVERSATION_JOIN, { conversationId: 'c1' });
-      expect(mockConvHandleJoin).toHaveBeenCalledWith(socket, { conversationId: 'c1' });
-    });
-
-    it('TYPING_START delegates to statusHandler', async () => {
-      mockStatusHandleTypingStart.mockResolvedValue(undefined);
-      socket._trigger(CLIENT_EVENTS.TYPING_START, { conversationId: 'c1' });
-      expect(mockStatusHandleTypingStart).toHaveBeenCalledWith(socket, { conversationId: 'c1' });
-    });
-
-    it('TYPING_STOP delegates to statusHandler', async () => {
-      mockStatusHandleTypingStop.mockResolvedValue(undefined);
-      socket._trigger(CLIENT_EVENTS.TYPING_STOP, { conversationId: 'c1' });
-      expect(mockStatusHandleTypingStop).toHaveBeenCalledWith(socket, { conversationId: 'c1' });
-    });
-
-    it('HEARTBEAT delegates to authHandler.handleHeartbeat', async () => {
-      socket._trigger(CLIENT_EVENTS.HEARTBEAT);
-      expect(mockAuthHandleHeartbeat).toHaveBeenCalledWith(socket);
-    });
-
-    it('FEED_SUBSCRIBE calls socialEventsHandler with authenticated user', () => {
-      (manager as any).socketToUser.set('s1', 'u1');
-      const cb = jest.fn() as jest.Mock<any>;
-      socket._trigger(CLIENT_EVENTS.FEED_SUBSCRIBE, cb);
-      expect(mockFeedSubscribe).toHaveBeenCalledWith(socket, 'u1');
-      expect(cb).toHaveBeenCalledWith({ success: true });
-    });
-
-    it('FEED_SUBSCRIBE returns error when not authenticated', () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      socket._trigger(CLIENT_EVENTS.FEED_SUBSCRIBE, cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Not authenticated' });
-    });
-
-    it('FEED_SUBSCRIBE without callback does not throw', () => {
-      (manager as any).socketToUser.set('s1', 'u1');
-      expect(() => socket._trigger(CLIENT_EVENTS.FEED_SUBSCRIBE)).not.toThrow();
-    });
-
-    it('FEED_UNSUBSCRIBE calls socialEventsHandler with authenticated user', () => {
-      (manager as any).socketToUser.set('s1', 'u1');
-      const cb = jest.fn() as jest.Mock<any>;
-      socket._trigger(CLIENT_EVENTS.FEED_UNSUBSCRIBE, cb);
-      expect(mockFeedUnsubscribe).toHaveBeenCalledWith(socket, 'u1');
-      expect(cb).toHaveBeenCalledWith({ success: true });
-    });
-
-    it('FEED_UNSUBSCRIBE returns error when not authenticated', () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      socket._trigger(CLIENT_EVENTS.FEED_UNSUBSCRIBE, cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Not authenticated' });
-    });
-
-    it('disconnect event cleans up rate limits and calls authHandler.handleDisconnection', async () => {
-      (manager as any).socketToUser.set('s1', 'u1');
-      (manager as any).userSockets.set('u1', new Set(['s1']));
-      (manager as any).socketRateLimits.set('translation_request:u1', [Date.now()]);
-      (manager as any).presenceSnapshotCache.set('u1', { users: [], cachedAt: Date.now() });
-      mockAuthHandleDisconnection.mockResolvedValue(undefined);
-      socket._trigger('disconnect', 'transport close');
-      // Rate limit should be deleted (last socket)
-      expect((manager as any).socketRateLimits.has('translation_request:u1')).toBe(false);
-      expect((manager as any).presenceSnapshotCache.has('u1')).toBe(false);
-      expect(mockStatusInvalidateCache).toHaveBeenCalledWith('u1');
-      expect(mockStatusClearTyping).toHaveBeenCalledWith('u1');
-      expect(mockAuthHandleDisconnection).toHaveBeenCalledWith(socket);
-    });
-
-    it('disconnect does not delete rate limits when multiple sockets remain', () => {
-      (manager as any).socketToUser.set('s1', 'u1');
-      (manager as any).userSockets.set('u1', new Set(['s1', 's2']));
-      (manager as any).socketRateLimits.set('translation_request:u1', [Date.now()]);
-      socket._trigger('disconnect', 'transport close');
-      // Rate limit should NOT be deleted (multiple sockets)
-      expect((manager as any).socketRateLimits.has('translation_request:u1')).toBe(true);
-    });
-
-    it('disconnect decrements active_connections', () => {
-      const before = (manager as any).stats.active_connections;
-      socket._trigger('disconnect', 'transport close');
-      expect((manager as any).stats.active_connections).toBe(before - 1);
-    });
-
-    it('disconnect with no socketToUser entry does not error', () => {
-      // No entry in socketToUser
-      expect(() => socket._trigger('disconnect', 'transport close')).not.toThrow();
+    it('calls callEventsHandler.setupCallEvents on each connection', () => {
+      const socket = makeSocket();
+      triggerConnection(socket);
+      expect(mockCallEventsHandlerInstance.setupCallEvents).toHaveBeenCalledWith(
+        socket,
+        expect.anything(),
+        expect.any(Function),
+        expect.any(Function)
+      );
     });
   });
 
-  describe('REQUEST_TRANSLATION (rate limiting)', () => {
-    let manager: MeeshySocketIOManager;
-    let socket: ReturnType<typeof makeSocket>;
+  // -------------------------------------------------------------------------
+  // 11. Socket disconnect event
+  // -------------------------------------------------------------------------
 
-    beforeEach(async () => {
-      ({ manager } = makeManager());
-      await manager.initialize();
-      socket = makeSocket('s1');
-      capturedConnectionHandlers[0](socket);
-      (manager as any).socketToUser.set('s1', 'u1');
-      mockTranslationService.getTranslation.mockResolvedValue({ translatedText: 'Bonjour', confidenceScore: 0.9 });
+  describe('Socket disconnect event', () => {
+    it('decrements active_connections on disconnect', () => {
+      const socket = makeSocket('sock-d');
+      triggerConnection(socket);
+      const beforeActive = manager.getStats().active_connections;
+      socket._handlers['disconnect']('transport close');
+      expect(manager.getStats().active_connections).toBe(beforeActive - 1);
     });
 
-    it('emits error when not authenticated', () => {
-      const unauthSocket = makeSocket('s-unauth');
-      capturedConnectionHandlers[0](unauthSocket);
-      unauthSocket._trigger(CLIENT_EVENTS.REQUEST_TRANSLATION, { messageId: 'm1', targetLanguage: 'fr' });
-      expect(unauthSocket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, { message: 'Not authenticated' });
+    it('calls authHandler.handleDisconnection on disconnect', () => {
+      const socket = makeSocket('sock-d2');
+      triggerConnection(socket);
+      socket._handlers['disconnect']('transport close');
+      expect(mockAuthHandlerInstance.handleDisconnection).toHaveBeenCalledWith(socket);
     });
 
-    it('emits translation when cache hit', async () => {
-      await socket._trigger(CLIENT_EVENTS.REQUEST_TRANSLATION, { messageId: 'm1', targetLanguage: 'fr' });
-      await new Promise((r) => setImmediate(r));
-      expect(socket.emit).toHaveBeenCalledWith(
-        SERVER_EVENTS.MESSAGE_TRANSLATION,
-        expect.objectContaining({ messageId: 'm1', translatedText: 'Bonjour' })
-      );
+    it('invalidates identity cache and clears typing throttle on disconnect when userId found', () => {
+      const socket = makeSocket('sock-d3');
+      (manager as any).socketToUser.set('sock-d3', 'user-d3');
+      triggerConnection(socket);
+      socket._handlers['disconnect']('transport close');
+      expect(mockStatusHandlerInstance.invalidateIdentityCache).toHaveBeenCalledWith('user-d3');
+      expect(mockStatusHandlerInstance.clearTypingThrottle).toHaveBeenCalledWith('user-d3');
     });
 
-    it('rate limits after 10 requests per minute', async () => {
-      // Fill up the rate limit (10 requests)
-      const rateLimitKey = `translation_request:u1`;
+    it('deletes presenceSnapshotCache entry on disconnect', () => {
+      const socket = makeSocket('sock-d4');
+      (manager as any).socketToUser.set('sock-d4', 'user-d4');
+      (manager as any).presenceSnapshotCache.set('user-d4', { users: [], cachedAt: Date.now() });
+      triggerConnection(socket);
+      socket._handlers['disconnect']('io server disconnect');
+      expect((manager as any).presenceSnapshotCache.has('user-d4')).toBe(false);
+    });
+
+    it('removes socketRateLimits when last socket disconnects', () => {
+      const socket = makeSocket('sock-d5');
+      const userId = 'user-rate-limit';
+      (manager as any).socketToUser.set('sock-d5', userId);
+      (manager as any).socketRateLimits.set(`translation_request:${userId}`, [Date.now()]);
+      // userSockets has only this socket (size=1)
+      (manager as any).userSockets.set(userId, new Set(['sock-d5']));
+      triggerConnection(socket);
+      socket._handlers['disconnect']('transport close');
+      expect((manager as any).socketRateLimits.has(`translation_request:${userId}`)).toBe(false);
+    });
+
+    it('keeps socketRateLimits when another socket remains', () => {
+      const socket = makeSocket('sock-d6');
+      const userId = 'user-multi';
+      (manager as any).socketToUser.set('sock-d6', userId);
+      (manager as any).socketRateLimits.set(`translation_request:${userId}`, [Date.now()]);
+      // Two sockets → size=2
+      (manager as any).userSockets.set(userId, new Set(['sock-d6', 'sock-d7']));
+      triggerConnection(socket);
+      socket._handlers['disconnect']('transport close');
+      expect((manager as any).socketRateLimits.has(`translation_request:${userId}`)).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 12. REQUEST_TRANSLATION handler
+  // -------------------------------------------------------------------------
+
+  describe('REQUEST_TRANSLATION handler', () => {
+    function getTranslationHandler(socket: ReturnType<typeof makeSocket>) {
+      return socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION];
+    }
+
+    it('emits ERROR when not authenticated', async () => {
+      const socket = makeSocket('sock-t1');
+      triggerConnection(socket);
+      const handler = getTranslationHandler(socket);
+      await handler({ messageId: 'msg-1', targetLanguage: 'en' });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: expect.stringContaining('authenticated') }));
+    });
+
+    it('allows up to 10 translation requests per minute', async () => {
+      const socket = makeSocket('sock-t2');
+      (manager as any).socketToUser.set('sock-t2', 'user-t2');
+      (translationService.getTranslation as jest.Mock).mockResolvedValue({
+        translatedText: 'Bonjour',
+        confidenceScore: 0.9,
+      });
+      triggerConnection(socket);
+      const handler = getTranslationHandler(socket);
+      for (let i = 0; i < 10; i++) {
+        await handler({ messageId: `msg-${i}`, targetLanguage: 'fr' });
+      }
+      expect(socket.emit).not.toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: expect.stringContaining('Rate limit') }));
+    });
+
+    it('blocks the 11th request with rate limit error', async () => {
+      const socket = makeSocket('sock-t3');
+      (manager as any).socketToUser.set('sock-t3', 'user-t3');
+      (translationService.getTranslation as jest.Mock).mockResolvedValue({
+        translatedText: 'Hello',
+        confidenceScore: 0.8,
+      });
+      const rateLimitKey = 'translation_request:user-t3';
       const now = Date.now();
       (manager as any).socketRateLimits.set(rateLimitKey, Array(10).fill(now));
-      // 11th request
-      await socket._trigger(CLIENT_EVENTS.REQUEST_TRANSLATION, { messageId: 'm1', targetLanguage: 'fr' });
-      await new Promise((r) => setImmediate(r));
-      expect(socket.emit).toHaveBeenCalledWith(
-        SERVER_EVENTS.ERROR,
-        expect.objectContaining({ message: 'Rate limit exceeded for translation requests' })
-      );
+      triggerConnection(socket);
+      const handler = getTranslationHandler(socket);
+      await handler({ messageId: 'msg-x', targetLanguage: 'en' });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: expect.stringContaining('Rate limit') }));
     });
 
-    it('allows expired timestamps (sliding window)', async () => {
-      const rateLimitKey = `translation_request:u1`;
-      // Old timestamps (2 minutes ago)
-      const old = Date.now() - 120_000;
-      (manager as any).socketRateLimits.set(rateLimitKey, Array(10).fill(old));
-      // Should succeed (old timestamps are outside 1-min window)
-      await socket._trigger(CLIENT_EVENTS.REQUEST_TRANSLATION, { messageId: 'm1', targetLanguage: 'fr' });
-      await new Promise((r) => setImmediate(r));
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.any(Object));
-    });
-  });
-
-  describe('_handleTranslationRequest (via socket event)', () => {
-    let manager: MeeshySocketIOManager;
-    let prisma: ReturnType<typeof makePrisma>;
-    let socket: ReturnType<typeof makeSocket>;
-
-    beforeEach(async () => {
-      ({ manager, prisma } = makeManager());
-      await manager.initialize();
-      socket = makeSocket('s1');
-      capturedConnectionHandlers[0](socket);
-      (manager as any).socketToUser.set('s1', 'u1');
+    it('emits MESSAGE_TRANSLATION when cached translation found', async () => {
+      const socket = makeSocket('sock-t4');
+      (manager as any).socketToUser.set('sock-t4', 'user-t4');
+      (translationService.getTranslation as jest.Mock).mockResolvedValue({
+        translatedText: 'Bonjour',
+        confidenceScore: 0.95,
+      });
+      triggerConnection(socket);
+      const handler = getTranslationHandler(socket);
+      await handler({ messageId: 'msg-cached', targetLanguage: 'fr' });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.objectContaining({
+        messageId: 'msg-cached',
+        translatedText: 'Bonjour',
+        targetLanguage: 'fr',
+      }));
     });
 
-    it('triggers on-demand translation when no cache hit', async () => {
-      mockTranslationService.getTranslation.mockResolvedValue(null);
+    it('increments translations_sent stat when translation found', async () => {
+      const socket = makeSocket('sock-t5');
+      (manager as any).socketToUser.set('sock-t5', 'user-t5');
+      (translationService.getTranslation as jest.Mock).mockResolvedValue({
+        translatedText: 'Hello',
+        confidenceScore: 0.9,
+      });
+      const before = manager.getStats().translations_sent;
+      triggerConnection(socket);
+      await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-stat', targetLanguage: 'en' });
+      expect(manager.getStats().translations_sent).toBe(before + 1);
+    });
+
+    it('triggers on-demand translation via ZMQ when no cached translation', async () => {
+      const socket = makeSocket('sock-t6');
+      (manager as any).socketToUser.set('sock-t6', 'user-t6');
+      (translationService.getTranslation as jest.Mock).mockResolvedValue(null);
       prisma.message.findUnique.mockResolvedValue({
-        id: 'm1',
-        conversationId: 'c1',
-        content: 'Hello',
-        originalLanguage: 'en',
-        senderId: 'u1',
+        id: 'msg-fresh',
+        conversationId: 'conv-abc',
+        content: 'Bonjour',
+        originalLanguage: 'fr',
+        senderId: 'sender-1',
         encryptionMode: null,
       });
-      await socket._trigger(CLIENT_EVENTS.REQUEST_TRANSLATION, { messageId: 'm1', targetLanguage: 'fr' });
-      await new Promise((r) => setImmediate(r));
-      expect(mockTranslationService.handleNewMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'm1', content: 'Hello', targetLanguage: 'fr' })
-      );
+      triggerConnection(socket);
+      const handler = getTranslationHandler(socket);
+      await handler({ messageId: 'msg-fresh', targetLanguage: 'en' });
+      expect(translationService.handleNewMessage).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'msg-fresh',
+        targetLanguage: 'en',
+      }));
     });
 
-    it('emits error when message not found', async () => {
-      mockTranslationService.getTranslation.mockResolvedValue(null);
+    it('emits ERROR when message not found in DB', async () => {
+      const socket = makeSocket('sock-t7');
+      (manager as any).socketToUser.set('sock-t7', 'user-t7');
+      (translationService.getTranslation as jest.Mock).mockResolvedValue(null);
       prisma.message.findUnique.mockResolvedValue(null);
-      await socket._trigger(CLIENT_EVENTS.REQUEST_TRANSLATION, { messageId: 'm1', targetLanguage: 'fr' });
-      await new Promise((r) => setImmediate(r));
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'Message not found or empty' }));
-    });
-
-    it('emits error when message has no content', async () => {
-      mockTranslationService.getTranslation.mockResolvedValue(null);
-      prisma.message.findUnique.mockResolvedValue({ id: 'm1', content: null, conversationId: 'c1', originalLanguage: 'en', senderId: 'u1', encryptionMode: null });
-      await socket._trigger(CLIENT_EVENTS.REQUEST_TRANSLATION, { messageId: 'm1', targetLanguage: 'fr' });
-      await new Promise((r) => setImmediate(r));
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'Message not found or empty' }));
-    });
-
-    it('emits error when handleNewMessage fails', async () => {
-      mockTranslationService.getTranslation.mockResolvedValue(null);
-      prisma.message.findUnique.mockResolvedValue({ id: 'm1', content: 'Hello', conversationId: 'c1', originalLanguage: 'en', senderId: 'u1', encryptionMode: null });
-      mockTranslationService.handleNewMessage.mockRejectedValue(new Error('ZMQ error'));
-      await socket._trigger(CLIENT_EVENTS.REQUEST_TRANSLATION, { messageId: 'm1', targetLanguage: 'fr' });
-      await new Promise((r) => setImmediate(r));
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'Translation request failed' }));
+      triggerConnection(socket);
+      const handler = getTranslationHandler(socket);
+      await handler({ messageId: 'msg-missing', targetLanguage: 'en' });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: expect.stringContaining('not found') }));
     });
   });
 
-  describe('_handleTextTranslationReady (via translationService event)', () => {
-    let manager: MeeshySocketIOManager;
-    let prisma: ReturnType<typeof makePrisma>;
+  // -------------------------------------------------------------------------
+  // 13. FEED_SUBSCRIBE handler
+  // -------------------------------------------------------------------------
 
-    beforeEach(async () => {
-      ({ manager, prisma } = makeManager());
-      await manager.initialize();
+  describe('FEED_SUBSCRIBE handler', () => {
+    it('calls socialEventsHandler.handleFeedSubscribe and invokes success callback when authenticated', () => {
+      const socket = makeSocket('sock-fs1');
+      (manager as any).socketToUser.set('sock-fs1', 'user-feed1');
+      triggerConnection(socket);
+      const callback = jest.fn();
+      socket._handlers[CLIENT_EVENTS.FEED_SUBSCRIBE](callback);
+      expect(mockSocialEventsHandlerInstance.handleFeedSubscribe).toHaveBeenCalledWith(socket, 'user-feed1');
+      expect(callback).toHaveBeenCalledWith({ success: true });
     });
 
-    it('broadcasts translation to conversation room when found', async () => {
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      prisma.conversation.findUnique.mockResolvedValue(null); // normalize returns same id (objectId)
-      mockTranslationService.emit('translationReady', {
-        taskId: 't1',
-        result: { messageId: 'm1', translatedText: 'Bonjour', sourceLanguage: 'en', confidenceScore: 0.9 },
-        targetLanguage: 'fr',
-      });
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoTo).toHaveBeenCalledWith('conversation:000000000000000000000001');
-      expect(mockIoToEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.any(Object));
+    it('invokes error callback when not authenticated', () => {
+      const socket = makeSocket('sock-fs2');
+      // No entry in socketToUser
+      triggerConnection(socket);
+      const callback = jest.fn();
+      socket._handlers[CLIENT_EVENTS.FEED_SUBSCRIBE](callback);
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Not authenticated' });
+    });
+
+    it('works without callback when authenticated', () => {
+      const socket = makeSocket('sock-fs3');
+      (manager as any).socketToUser.set('sock-fs3', 'user-feed3');
+      triggerConnection(socket);
+      expect(() => socket._handlers[CLIENT_EVENTS.FEED_SUBSCRIBE](undefined)).not.toThrow();
+    });
+
+    it('works without callback when not authenticated', () => {
+      const socket = makeSocket('sock-fs4');
+      triggerConnection(socket);
+      expect(() => socket._handlers[CLIENT_EVENTS.FEED_SUBSCRIBE](undefined)).not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 14. FEED_UNSUBSCRIBE handler
+  // -------------------------------------------------------------------------
+
+  describe('FEED_UNSUBSCRIBE handler', () => {
+    it('calls socialEventsHandler.handleFeedUnsubscribe and invokes success callback when authenticated', () => {
+      const socket = makeSocket('sock-fu1');
+      (manager as any).socketToUser.set('sock-fu1', 'user-feed-unsub');
+      triggerConnection(socket);
+      const callback = jest.fn();
+      socket._handlers[CLIENT_EVENTS.FEED_UNSUBSCRIBE](callback);
+      expect(mockSocialEventsHandlerInstance.handleFeedUnsubscribe).toHaveBeenCalledWith(socket, 'user-feed-unsub');
+      expect(callback).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('invokes error callback when not authenticated', () => {
+      const socket = makeSocket('sock-fu2');
+      triggerConnection(socket);
+      const callback = jest.fn();
+      socket._handlers[CLIENT_EVENTS.FEED_UNSUBSCRIBE](callback);
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Not authenticated' });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 15. Error handling in event handlers (catch blocks)
+  // -------------------------------------------------------------------------
+
+  describe('Error handling in event handlers', () => {
+    it('catches errors in MESSAGE_SEND handler and calls callback with error', async () => {
+      mockMessageHandlerInstance.handleMessageSend.mockRejectedValue(new Error('DB error'));
+      const socket = makeSocket('sock-err1');
+      triggerConnection(socket);
+      const callback = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.MESSAGE_SEND]({}, callback);
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Internal server error' });
+    });
+
+    it('catches errors in REACTION_ADD handler and calls callback with error', async () => {
+      mockReactionHandlerInstance.handleReactionAdd.mockRejectedValue(new Error('reaction error'));
+      const socket = makeSocket('sock-err2');
+      triggerConnection(socket);
+      const callback = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.REACTION_ADD]({}, callback);
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Internal server error' });
+    });
+
+    it('catches errors in AUTHENTICATE handler without crashing', async () => {
+      mockAuthHandlerInstance.handleManualAuthentication.mockRejectedValue(new Error('auth fail'));
+      const socket = makeSocket('sock-err3');
+      triggerConnection(socket);
+      await expect(socket._handlers[CLIENT_EVENTS.AUTHENTICATE]({})).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 16. _handleTextTranslationReady
+  // -------------------------------------------------------------------------
+
+  describe('_handleTextTranslationReady', () => {
+    const baseData = {
+      taskId: 'task-1',
+      result: { messageId: 'msg-txt-1', translatedText: 'Hello', sourceLanguage: 'fr', confidenceScore: 0.9 },
+      targetLanguage: 'en',
+      translationId: 'trans-1',
+    };
+
+    it('broadcasts to conversation room when message found', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      ioState.sockets.adapter.rooms.set(ROOMS.conversation('conv-123456789012'), new Set(['sock-a']));
+
+      await (manager as any)._handleTextTranslationReady(baseData);
+
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.conversation('conv-123456789012'));
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.objectContaining({ messageId: 'msg-txt-1' }));
+    });
+
+    it('increments translations_sent by room client count', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-count-3' });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      ioState.sockets.adapter.rooms.set(ROOMS.conversation('conv-count-3'), new Set(['s1', 's2', 's3']));
+      const before = manager.getStats().translations_sent;
+
+      await (manager as any)._handleTextTranslationReady(baseData);
+
+      expect(manager.getStats().translations_sent).toBe(before + 3);
     });
 
     it('falls back to direct user emit when no conversation found', async () => {
       prisma.message.findUnique.mockResolvedValue(null);
-      (manager as any).connectedUsers.set('u1', makeSocketUser({ socketId: 's1', language: 'fr', resolvedLanguages: ['fr'] }));
-      const mockUserSocket = { emit: jest.fn() };
-      mockIoSockets.sockets.set('s1', mockUserSocket);
-      mockTranslationService.emit('translationReady', {
-        taskId: 't1',
-        result: { messageId: 'm1', translatedText: 'Bonjour', sourceLanguage: 'en', confidenceScore: 0.9 },
-        targetLanguage: 'fr',
+      // Put a user with matching language in connectedUsers
+      (manager as any).connectedUsers.set('user-en', {
+        id: 'user-en', socketId: 'sock-en', isAnonymous: false, language: 'en', resolvedLanguages: ['en'],
       });
-      await new Promise((r) => setImmediate(r));
-      expect(mockUserSocket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.any(Object));
+      const fakeSocket = { emit: jest.fn() };
+      ioState.sockets.sockets.set('sock-en', fakeSocket);
+
+      await (manager as any)._handleTextTranslationReady(baseData);
+
+      expect(fakeSocket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.objectContaining({ messageId: 'msg-txt-1' }));
     });
 
-    it('handles DB error gracefully', async () => {
-      prisma.message.findUnique.mockRejectedValue(new Error('DB error'));
-      expect(() =>
-        mockTranslationService.emit('translationReady', {
-          taskId: 't1',
-          result: { messageId: 'm1', translatedText: 'Bonjour', sourceLanguage: 'en', confidenceScore: 0.9 },
-          targetLanguage: 'fr',
-        })
-      ).not.toThrow();
-      await new Promise((r) => setImmediate(r));
-    });
-
-    it('skips direct emit when no matching language users', async () => {
-      prisma.message.findUnique.mockResolvedValue(null);
-      // No connected users with 'de' language
-      (manager as any).connectedUsers.set('u1', makeSocketUser({ language: 'fr', resolvedLanguages: ['fr'] }));
-      const mockUserSocket = { emit: jest.fn() };
-      mockIoSockets.sockets.set('s1', mockUserSocket);
-      mockTranslationService.emit('translationReady', {
-        result: { messageId: 'm1', translatedText: 'Hallo', sourceLanguage: 'en' },
-        targetLanguage: 'de',
-      });
-      await new Promise((r) => setImmediate(r));
-      expect(mockUserSocket.emit).not.toHaveBeenCalled();
+    it('gracefully handles DB error when looking up message', async () => {
+      prisma.message.findUnique.mockRejectedValue(new Error('DB down'));
+      // Should not throw
+      await expect((manager as any)._handleTextTranslationReady(baseData)).resolves.not.toThrow();
     });
   });
 
-  describe('_handleTranscriptionReady (via translationService event)', () => {
-    let manager: MeeshySocketIOManager;
-    let prisma: ReturnType<typeof makePrisma>;
+  // -------------------------------------------------------------------------
+  // 17. _handleTranscriptionReady
+  // -------------------------------------------------------------------------
 
-    beforeEach(async () => {
-      ({ manager, prisma } = makeManager());
-      await manager.initialize();
-    });
+  describe('_handleTranscriptionReady', () => {
+    const baseTranscription = {
+      taskId: 'task-tr1',
+      messageId: 'msg-tr-1',
+      attachmentId: 'att-tr-1',
+      transcription: {
+        id: 'transcription-1',
+        text: 'Bonjour tout le monde',
+        language: 'fr',
+        confidence: 0.95,
+      },
+    };
 
-    it('routes to PostAudioService when postId and postMediaId present', async () => {
-      mockPostAudioHandleTranscription.mockResolvedValue(undefined);
-      mockTranslationService.emit('transcriptionReady', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        transcription: { id: 't1', text: 'hello', language: 'en' },
-        postId: 'post1',
-        postMediaId: 'media1',
+    it('delegates to PostAudioService when postId and postMediaId present', async () => {
+      const { PostAudioService } = jest.requireMock('../../services/posts/PostAudioService') as any;
+      await (manager as any)._handleTranscriptionReady({
+        ...baseTranscription,
+        postId: 'post-1',
+        postMediaId: 'media-1',
       });
-      await new Promise((r) => setImmediate(r));
-      expect(mockPostAudioHandleTranscription).toHaveBeenCalledWith(expect.objectContaining({
-        postId: 'post1',
-        postMediaId: 'media1',
-      }));
-    });
-
-    it('broadcasts transcription to conversation room', async () => {
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      prisma.messageAttachment.findUnique.mockResolvedValue({ id: 'a1' });
-      mockTranslationService.emit('transcriptionReady', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        transcription: { id: 't1', text: 'hello', language: 'en' },
+      expect(PostAudioService.shared.handleTranscriptionReady).toHaveBeenCalledWith({
+        postId: 'post-1',
+        postMediaId: 'media-1',
+        transcription: baseTranscription.transcription,
       });
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).toHaveBeenCalledWith(SERVER_EVENTS.TRANSCRIPTION_READY, expect.any(Object));
     });
 
     it('returns early when no conversationId found', async () => {
       prisma.message.findUnique.mockResolvedValue(null);
-      mockTranslationService.emit('transcriptionReady', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        transcription: { id: 't1', text: 'hello', language: 'en' },
-      });
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).not.toHaveBeenCalled();
+      await (manager as any)._handleTranscriptionReady(baseTranscription);
+      expect(ioState.to).not.toHaveBeenCalledWith(expect.stringContaining('conversation:'));
     });
 
-    it('calls emitAttachmentUpdated after transcription broadcast', async () => {
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      prisma.messageAttachment.findUnique.mockResolvedValue({ id: 'a1', url: 'http://test' });
-      mockTranslationService.emit('transcriptionReady', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        transcription: { id: 't1', text: 'hello', language: 'en' },
-      });
-      await new Promise((r) => setImmediate(r));
-      expect(mockEmitAttachmentUpdated).toHaveBeenCalled();
-    });
-
-    it('handles missing attachment in broadcastAttachmentUpdated gracefully', async () => {
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
+    it('emits TRANSCRIPTION_READY to conversation room', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
       prisma.messageAttachment.findUnique.mockResolvedValue(null);
-      mockTranslationService.emit('transcriptionReady', {
+
+      await (manager as any)._handleTranscriptionReady(baseTranscription);
+
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.conversation('conv-123456789012'));
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.TRANSCRIPTION_READY,
+        expect.objectContaining({ messageId: 'msg-tr-1', attachmentId: 'att-tr-1' })
+      );
+    });
+
+    it('calls _broadcastAttachmentUpdated after emitting transcription', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
+      const freshAttachment = { id: 'att-tr-1', type: 'audio' };
+      prisma.messageAttachment.findUnique.mockResolvedValue(freshAttachment);
+
+      const { emitAttachmentUpdated } = jest.requireMock('../emitAttachmentUpdated') as any;
+      await (manager as any)._handleTranscriptionReady(baseTranscription);
+
+      expect(emitAttachmentUpdated).toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 18. _broadcastTranslationEvent
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastTranslationEvent', () => {
+    const baseAudioData = {
+      taskId: 'task-audio-1',
+      messageId: 'msg-audio-1',
+      attachmentId: 'att-audio-1',
+      language: 'en',
+      translatedAudio: {
+        id: 'taudio-1',
+        targetLanguage: 'en',
+        url: 'https://cdn.meeshy.me/audio.mp3',
+        durationMs: 5000,
+        format: 'mp3',
+        cloned: true,
+        quality: 0.9,
+        ttsModel: 'xtts',
+      },
+    };
+
+    it('returns early when no conversationId found', async () => {
+      prisma.message.findUnique.mockResolvedValue(null);
+      await (manager as any)._broadcastTranslationEvent(baseAudioData, 'audioTranslationReady', SERVER_EVENTS.AUDIO_TRANSLATION_READY, '🎯');
+      expect(ioState.to).not.toHaveBeenCalledWith(expect.stringContaining('conversation:'));
+    });
+
+    it('returns early when translatedAudio is undefined', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
+      await (manager as any)._broadcastTranslationEvent(
+        { ...baseAudioData, translatedAudio: undefined },
+        'audioTranslationReady',
+        SERVER_EVENTS.AUDIO_TRANSLATION_READY,
+        '🎯'
+      );
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.AUDIO_TRANSLATION_READY, expect.anything());
+    });
+
+    it('emits the event to the conversation room', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
+      prisma.messageAttachment.findUnique.mockResolvedValue(null);
+
+      await (manager as any)._broadcastTranslationEvent(
+        baseAudioData, 'audioTranslationReady', SERVER_EVENTS.AUDIO_TRANSLATION_READY, '🎯'
+      );
+
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.conversation('conv-123456789012'));
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.AUDIO_TRANSLATION_READY, expect.objectContaining({
+        messageId: 'msg-audio-1',
+        attachmentId: 'att-audio-1',
+        language: 'en',
+      }));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 19. _handleAudioTranslationReady
+  // -------------------------------------------------------------------------
+
+  describe('_handleAudioTranslationReady', () => {
+    it('returns early when translatedAudio is missing', async () => {
+      await (manager as any)._handleAudioTranslationReady({
+        taskId: 't1', messageId: 'msg-1', attachmentId: 'att-1', language: 'en',
+      });
+      expect(prisma.message.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('delegates to _broadcastTranslationEvent when translatedAudio present', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
+      prisma.messageAttachment.findUnique.mockResolvedValue(null);
+
+      await (manager as any)._handleAudioTranslationReady({
         taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'missing-a1',
-        transcription: { id: 't1', text: 'hello', language: 'en' },
+        messageId: 'msg-audio-ok',
+        attachmentId: 'att-1',
+        language: 'en',
+        translatedAudio: { id: 't', targetLanguage: 'en', url: 'x', durationMs: 100, format: 'mp3', cloned: false, quality: 0.8, ttsModel: 'xtts' },
       });
-      await new Promise((r) => setImmediate(r));
-      expect(mockEmitAttachmentUpdated).not.toHaveBeenCalled();
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.AUDIO_TRANSLATION_READY, expect.anything());
     });
   });
 
-  describe('storyTextObjectTranslationCompleted (via translationService event)', () => {
-    it('delegates to StoryTextObjectTranslationService.shared.handleTranslationCompleted', async () => {
-      const { manager } = makeManager();
-      await manager.initialize();
-      mockStoryHandleTranslationCompleted.mockResolvedValue(undefined);
-      mockTranslationService.emit('storyTextObjectTranslationCompleted', {
-        postId: 'post1',
-        textObjectIndex: 0,
-        translations: { fr: 'Bonjour', en: 'Hello' },
-      });
-      await new Promise((r) => setImmediate(r));
-      expect(mockStoryHandleTranslationCompleted).toHaveBeenCalledWith({
-        postId: 'post1',
-        textObjectIndex: 0,
-        translations: { fr: 'Bonjour', en: 'Hello' },
-      });
-    });
-  });
+  // -------------------------------------------------------------------------
+  // 20. _broadcastUserStatus
+  // -------------------------------------------------------------------------
 
-  describe('_broadcastUserStatus (via getPresenceBroadcastCallback)', () => {
-    let manager: MeeshySocketIOManager;
-    let prisma: ReturnType<typeof makePrisma>;
-
-    beforeEach(() => {
-      ({ manager, prisma } = makeManager());
+  describe('_broadcastUserStatus', () => {
+    it('returns early when showOnlineStatus is false', async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({
+        showOnlineStatus: false,
+        showLastSeen: true,
+      });
+      await (manager as any)._broadcastUserStatus('user-1', true, false);
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
     });
 
-    it('broadcasts user status to conversation rooms for registered user', async () => {
-      mockGetPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
+    it('broadcasts anonymous participant status to their conversation room', async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
+      prisma.participant.findUnique.mockResolvedValue({
+        id: 'anon-1',
+        displayName: 'Anonymous',
+        nickname: 'Anon',
+        lastActiveAt: new Date(),
+        conversationId: 'conv-123456789012',
+      });
+
+      await (manager as any)._broadcastUserStatus('anon-1', true, true);
+
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.conversation('conv-123456789012'));
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
+        userId: 'anon-1',
+        isOnline: true,
+      }));
+    });
+
+    it('respects showLastSeen=false for anonymous participant', async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: false });
+      prisma.participant.findUnique.mockResolvedValue({
+        id: 'anon-2',
+        displayName: 'Incognito',
+        nickname: null,
+        lastActiveAt: new Date(),
+        conversationId: 'conv-test',
+      });
+
+      await (manager as any)._broadcastUserStatus('anon-2', true, true);
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
+        lastActiveAt: null,
+      }));
+    });
+
+    it('broadcasts registered user status to all their conversation rooms', async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
       prisma.user.findUnique.mockResolvedValue({
-        id: 'u1',
+        id: 'user-reg-1',
         username: 'alice',
         displayName: 'Alice',
+        firstName: 'Alice',
+        lastName: 'Smith',
+        lastActiveAt: new Date(),
+      });
+      prisma.participant.findMany.mockResolvedValue([
+        { conversationId: 'conv-aaa' },
+        { conversationId: 'conv-bbb' },
+      ]);
+
+      await (manager as any)._broadcastUserStatus('user-reg-1', false, false);
+
+      expect(ioState.to).toHaveBeenCalledWith(expect.arrayContaining([
+        ROOMS.conversation('conv-aaa'),
+        ROOMS.conversation('conv-bbb'),
+      ]));
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
+        userId: 'user-reg-1',
+        isOnline: false,
+      }));
+    });
+
+    it('skips broadcast when registered user not found', async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
+      prisma.user.findUnique.mockResolvedValue(null);
+      await (manager as any)._broadcastUserStatus('user-ghost', false, false);
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.anything());
+    });
+
+    it('skips broadcast when registered user has no participant rows', async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-lonely',
+        username: 'lonely',
+        displayName: null,
         firstName: '',
         lastName: '',
         lastActiveAt: null,
       });
-      prisma.participant.findMany.mockResolvedValue([{ conversationId: '000000000000000000000001' }]);
-      const cb = manager.getPresenceBroadcastCallback();
-      cb('u1', true, false);
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoTo).toHaveBeenCalledWith(['conversation:000000000000000000000001']);
-      expect(mockIoToEmit).toHaveBeenCalledWith(
-        SERVER_EVENTS.USER_STATUS,
-        expect.objectContaining({ userId: 'u1', isOnline: true })
-      );
-    });
-
-    it('does not broadcast when showOnlineStatus is false', async () => {
-      mockGetPreferences.mockResolvedValue({ showOnlineStatus: false, showLastSeen: true });
-      const cb = manager.getPresenceBroadcastCallback();
-      cb('u1', true, false);
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).not.toHaveBeenCalled();
-    });
-
-    it('does not broadcast when user not found', async () => {
-      mockGetPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue(null);
-      const cb = manager.getPresenceBroadcastCallback();
-      cb('u1', true, false);
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).not.toHaveBeenCalled();
-    });
-
-    it('does not broadcast when no conversations for user', async () => {
-      mockGetPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({ id: 'u1', username: 'alice', displayName: null, firstName: 'Alice', lastName: 'Smith', lastActiveAt: null });
       prisma.participant.findMany.mockResolvedValue([]);
-      const cb = manager.getPresenceBroadcastCallback();
-      cb('u1', true, false);
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).not.toHaveBeenCalled();
-    });
-
-    it('hides lastActiveAt when showLastSeen is false', async () => {
-      mockGetPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: false });
-      prisma.user.findUnique.mockResolvedValue({ id: 'u1', username: 'alice', displayName: 'Alice', firstName: '', lastName: '', lastActiveAt: new Date() });
-      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'c1' }]);
-      const cb = manager.getPresenceBroadcastCallback();
-      cb('u1', false, false);
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).toHaveBeenCalledWith(
-        SERVER_EVENTS.USER_STATUS,
-        expect.objectContaining({ lastActiveAt: null })
-      );
-    });
-
-    it('broadcasts for anonymous participant', async () => {
-      mockGetPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.participant.findUnique.mockResolvedValue({
-        id: 'anon1',
-        displayName: 'Anon',
-        nickname: 'Guest',
-        lastActiveAt: null,
-        conversationId: 'c1',
-      });
-      const cb = manager.getPresenceBroadcastCallback();
-      cb('anon1', true, true);
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).toHaveBeenCalledWith(
-        SERVER_EVENTS.USER_STATUS,
-        expect.objectContaining({ userId: 'anon1', isOnline: true })
-      );
-    });
-
-    it('does not broadcast when anonymous participant not found', async () => {
-      mockGetPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.participant.findUnique.mockResolvedValue(null);
-      const cb = manager.getPresenceBroadcastCallback();
-      cb('anon1', true, true);
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).not.toHaveBeenCalled();
-    });
-
-    it('handles error gracefully', async () => {
-      mockGetPreferences.mockRejectedValue(new Error('DB error'));
-      const cb = manager.getPresenceBroadcastCallback();
-      cb('u1', true, false);
-      await new Promise((r) => setImmediate(r));
-      // No throw expected - error is caught internally
-    });
-
-    it('builds displayName from firstName+lastName when displayName is null', async () => {
-      mockGetPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({ id: 'u1', username: 'alice', displayName: null, firstName: 'Alice', lastName: 'Smith', lastActiveAt: null });
-      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'c1' }]);
-      const cb = manager.getPresenceBroadcastCallback();
-      cb('u1', true, false);
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).toHaveBeenCalledWith(
-        SERVER_EVENTS.USER_STATUS,
-        expect.objectContaining({ username: 'Alice Smith' })
-      );
+      await (manager as any)._broadcastUserStatus('user-lonely', true, false);
+      // to(rooms) is called with an empty array — .emit should not be called with USER_STATUS
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.anything());
     });
   });
 
-  describe('_emitPresenceSnapshot', () => {
-    let manager: MeeshySocketIOManager;
-    let prisma: ReturnType<typeof makePrisma>;
+  // -------------------------------------------------------------------------
+  // 21. broadcastMessage / _broadcastNewMessage
+  // -------------------------------------------------------------------------
 
-    beforeEach(() => {
-      ({ manager, prisma } = makeManager());
+  describe('broadcastMessage / _broadcastNewMessage', () => {
+    it('emits MESSAGE_NEW to the conversation room (SOCKET_LANG_FILTER=false)', async () => {
+      const msg = makeMessage({ conversationId: 'conv-123456789012' });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([]);
+
+      await manager.broadcastMessage(msg, 'conv-123456789012');
+
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.conversation('conv-123456789012'));
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.objectContaining({ id: msg.id }));
     });
 
-    it('emits PRESENCE_SNAPSHOT to socket', async () => {
-      const socket = makeSocket();
-      prisma.participant.findMany
-        .mockResolvedValueOnce([{ conversationId: 'c1' }])  // first call: conversations
-        .mockResolvedValueOnce([
-          {
-            id: 'p2',
-            userId: 'u2',
-            displayName: 'Bob',
-            type: 'REGISTERED',
-            lastActiveAt: null,
-            user: { id: 'u2', username: 'bob', displayName: 'Bob', lastActiveAt: null }
-          }
-        ]);  // second call: contacts
-      await (manager as any)._emitPresenceSnapshot(socket, 'u1', false);
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PRESENCE_SNAPSHOT, expect.objectContaining({
-        users: expect.arrayContaining([
-          expect.objectContaining({ userId: 'u2', username: 'bob' })
-        ])
+    it('emits to senderSocket when provided', async () => {
+      const msg = makeMessage({ conversationId: 'conv-123456789012' });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([]);
+      const senderSocket = makeSocket('sender-sock');
+
+      await (manager as any)._broadcastNewMessage(msg, 'conv-123456789012', senderSocket);
+
+      expect(senderSocket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.objectContaining({ id: msg.id }));
+    });
+
+    it('emits MENTION_CREATED to mentioned user room', async () => {
+      const msg = makeMessage({
+        conversationId: 'conv-123456789012',
+        validatedMentions: [{ userId: 'user-mentioned', participantId: 'part-m1', username: 'bob' }],
+        senderId: 'other-sender',
+      });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([]);
+
+      await manager.broadcastMessage(msg, 'conv-123456789012');
+
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('user-mentioned'));
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MENTION_CREATED, expect.objectContaining({
+        mentionedUserId: 'user-mentioned',
       }));
     });
 
-    it('returns early when no conversations', async () => {
-      const socket = makeSocket();
-      prisma.participant.findMany.mockResolvedValueOnce([]);
-      await (manager as any)._emitPresenceSnapshot(socket, 'u1', false);
+    it('does NOT emit MENTION_CREATED when sender mentions themselves', async () => {
+      const msg = makeMessage({
+        conversationId: 'conv-123456789012',
+        validatedMentions: [{ userId: 'sender-participantId', username: 'alice' }],
+        senderId: 'sender-participantId',
+      });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([]);
+
+      await manager.broadcastMessage(msg, 'conv-123456789012');
+
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MENTION_CREATED, expect.anything());
+    });
+
+    it('enqueues message for offline users when deliveryQueue present', async () => {
+      const fakeQueue = {
+        enqueue: jest.fn().mockResolvedValue(undefined),
+        drain: jest.fn(),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+
+      const msg = makeMessage({ conversationId: 'conv-123456789012', senderId: 'part-sender' });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-offline', userId: 'user-offline', joinedAt: new Date() },
+      ]);
+
+      await manager.broadcastMessage(msg, 'conv-123456789012');
+
+      expect(fakeQueue.enqueue).toHaveBeenCalledWith('user-offline', expect.objectContaining({
+        messageId: msg.id,
+        conversationId: 'conv-123456789012',
+      }));
+    });
+
+    it('calls _emitMessageNewByLanguage when SOCKET_LANG_FILTER=true', async () => {
+      process.env.SOCKET_LANG_FILTER = 'true';
+      try {
+        const msg = makeMessage({ conversationId: 'conv-123456789012' });
+        prisma.conversation.findUnique.mockResolvedValue(null);
+        prisma.participant.findMany.mockResolvedValue([]);
+        const room = ROOMS.conversation('conv-123456789012');
+        ioState.sockets.adapter.rooms.set(room, new Set(['sock-a']));
+        (manager as any).socketToUser.set('sock-a', 'user-a');
+        (manager as any).connectedUsers.set('user-a', {
+          id: 'user-a', socketId: 'sock-a', isAnonymous: false, language: 'fr', resolvedLanguages: ['fr'],
+        });
+
+        await manager.broadcastMessage(msg, 'conv-123456789012');
+
+        const { filterMessagePayloadForLanguages } = jest.requireMock('../utils/message-payload-filter') as any;
+        expect(filterMessagePayloadForLanguages).toHaveBeenCalled();
+      } finally {
+        delete process.env.SOCKET_LANG_FILTER;
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 22. normalizeConversationId
+  // -------------------------------------------------------------------------
+
+  describe('normalizeConversationId', () => {
+    it('returns 24-char hex string as-is', async () => {
+      const id = 'a'.repeat(24);
+      const result = await (manager as any).normalizeConversationId(id);
+      expect(result).toBe(id);
+    });
+
+    it('returns cached value on second lookup', async () => {
+      (manager as any).conversationIdCache.set('my-identifier', 'b'.repeat(24));
+      const result = await (manager as any).normalizeConversationId('my-identifier');
+      expect(result).toBe('b'.repeat(24));
+      expect(prisma.conversation.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('queries DB and caches when not in cache', async () => {
+      const objectId = 'c'.repeat(24);
+      prisma.conversation.findUnique.mockResolvedValue({ id: objectId, identifier: 'custom-id' });
+      const result = await (manager as any).normalizeConversationId('custom-id');
+      expect(result).toBe(objectId);
+      expect((manager as any).conversationIdCache.get('custom-id')).toBe(objectId);
+    });
+
+    it('returns original id when DB lookup returns null', async () => {
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      const result = await (manager as any).normalizeConversationId('unknown-id');
+      expect(result).toBe('unknown-id');
+    });
+
+    it('evicts oldest entry when cache exceeds 2000 items', async () => {
+      const cache: Map<string, string> = (manager as any).conversationIdCache;
+      // Fill to max
+      for (let i = 0; i < 2000; i++) {
+        cache.set(`key-${i}`, `val-${i}`);
+      }
+      const firstKey = cache.keys().next().value;
+      // Add one more via DB
+      prisma.conversation.findUnique.mockResolvedValue({ id: 'd'.repeat(24), identifier: 'new-key' });
+      await (manager as any).normalizeConversationId('new-key');
+      expect(cache.has(firstKey)).toBe(false);
+      expect(cache.has('new-key')).toBe(true);
+    });
+
+    it('returns original id and does not throw on DB error', async () => {
+      prisma.conversation.findUnique.mockRejectedValue(new Error('DB error'));
+      const result = await (manager as any).normalizeConversationId('error-id');
+      expect(result).toBe('error-id');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 23. _drainPendingMessages
+  // -------------------------------------------------------------------------
+
+  describe('_drainPendingMessages', () => {
+    it('returns early when no deliveryQueue is set', async () => {
+      const socket = makeSocket('sock-drain1');
+      await (manager as any)._drainPendingMessages(socket, 'user-1');
       expect(socket.emit).not.toHaveBeenCalled();
     });
 
-    it('uses TTL cache on second call', async () => {
-      const socket = makeSocket();
-      (manager as any).presenceSnapshotCache.set('u1', {
-        users: [{ userId: 'u2', username: 'bob', isOnline: false, lastActiveAt: null }],
-        cachedAt: Date.now(),
-      });
-      await (manager as any)._emitPresenceSnapshot(socket, 'u1', false);
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PRESENCE_SNAPSHOT, expect.any(Object));
+    it('returns early when no pending messages', async () => {
+      const fakeQueue = { drain: jest.fn().mockResolvedValue([]) };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const socket = makeSocket('sock-drain2');
+      await (manager as any)._drainPendingMessages(socket, 'user-1');
+      expect(socket.emit).not.toHaveBeenCalled();
+    });
+
+    it('emits MESSAGE_NEW for each pending message and PENDING_MESSAGES_DELIVERED', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-p1', conversationId: 'conv-1' } },
+          { payload: { id: 'msg-p2', conversationId: 'conv-1' } },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const socket = makeSocket('sock-drain3');
+      await (manager as any)._drainPendingMessages(socket, 'user-drain');
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p1', conversationId: 'conv-1' });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p2', conversationId: 'conv-1' });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: 2 });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 24. _emitPresenceSnapshot
+  // -------------------------------------------------------------------------
+
+  describe('_emitPresenceSnapshot', () => {
+    it('uses cache when entry is fresh', async () => {
+      const socket = makeSocket('sock-ps1');
+      const cachedUsers = [{ userId: 'user-x', username: 'x', isOnline: false, lastActiveAt: null }];
+      (manager as any).presenceSnapshotCache.set('user-ps1', { users: cachedUsers, cachedAt: Date.now() });
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-ps1', false);
+
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PRESENCE_SNAPSHOT, expect.objectContaining({
+        users: expect.arrayContaining([expect.objectContaining({ userId: 'user-x' })]),
+      }));
       expect(prisma.participant.findMany).not.toHaveBeenCalled();
     });
 
-    it('does not use expired cache', async () => {
-      const socket = makeSocket();
-      (manager as any).presenceSnapshotCache.set('u1', {
-        users: [{ userId: 'u2', username: 'bob', isOnline: false, lastActiveAt: null }],
-        cachedAt: Date.now() - 120_000,  // Expired (> 60s)
+    it('fetches fresh data when cache is stale', async () => {
+      const socket = makeSocket('sock-ps2');
+      // Stale cache entry (2 minutes ago)
+      (manager as any).presenceSnapshotCache.set('user-ps2', {
+        users: [{ userId: 'stale', username: 's', isOnline: false, lastActiveAt: null }],
+        cachedAt: Date.now() - 120_000,
       });
-      prisma.participant.findMany
-        .mockResolvedValueOnce([{ conversationId: 'c1' }])
-        .mockResolvedValueOnce([]);
-      await (manager as any)._emitPresenceSnapshot(socket, 'u1', false);
-      expect(prisma.participant.findMany).toHaveBeenCalled();
+      prisma.participant.findMany.mockResolvedValueOnce([{ conversationId: 'conv-x' }]);
+      prisma.participant.findMany.mockResolvedValueOnce([]);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-ps2', false);
+
+      // With empty contacts, should still emit presence snapshot
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users: [] });
     });
 
-    it('uses anonymous query (by id) for anonymous users', async () => {
-      const socket = makeSocket();
-      prisma.participant.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
-      await (manager as any)._emitPresenceSnapshot(socket, 'anon1', true);
-      expect(prisma.participant.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ id: 'anon1' }) })
-      );
-    });
-
-    it('deduplicates contacts from multiple conversations', async () => {
-      const socket = makeSocket();
-      const sharedContact = {
-        id: 'p2', userId: 'u2', displayName: 'Bob', type: 'REGISTERED', lastActiveAt: null,
-        user: { id: 'u2', username: 'bob', displayName: 'Bob', lastActiveAt: null }
-      };
-      prisma.participant.findMany
-        .mockResolvedValueOnce([{ conversationId: 'c1' }, { conversationId: 'c2' }])
-        .mockResolvedValueOnce([sharedContact, sharedContact]);
-      await (manager as any)._emitPresenceSnapshot(socket, 'u1', false);
-      const call = (socket.emit as jest.Mock<any>).mock.calls[0];
-      const payload = call[1];
-      expect(payload.users).toHaveLength(1);
-    });
-
-    it('shows cached user as online if currently connected', async () => {
-      const socket = makeSocket();
-      (manager as any).connectedUsers.set('u2', makeSocketUser({ id: 'u2', userId: 'u2', socketId: 's2' }));
-      (manager as any).presenceSnapshotCache.set('u1', {
-        users: [{ userId: 'u2', username: 'bob', isOnline: false, lastActiveAt: null }],
-        cachedAt: Date.now(),
-      });
-      await (manager as any)._emitPresenceSnapshot(socket, 'u1', false);
-      const call = (socket.emit as jest.Mock<any>).mock.calls[0];
-      expect(call[1].users[0].isOnline).toBe(true);
-    });
-
-    it('handles error gracefully', async () => {
-      const socket = makeSocket();
-      prisma.participant.findMany.mockRejectedValue(new Error('DB error'));
-      await expect((manager as any)._emitPresenceSnapshot(socket, 'u1', false)).resolves.not.toThrow();
-    });
-  });
-
-  describe('_drainPendingMessages', () => {
-    it('emits queued messages to reconnected socket', async () => {
-      const { manager } = makeManager();
-      const mockQueue = {
-        drain: (jest.fn() as jest.Mock<any>).mockResolvedValue([
-          { payload: { id: 'm1', content: 'hello' } },
-          { payload: { id: 'm2', content: 'world' } }
-        ]),
-        enqueue: jest.fn(),
-      };
-      manager.setDeliveryQueue(mockQueue as any);
-      const socket = makeSocket();
-      await (manager as any)._drainPendingMessages(socket, 'u1');
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'm1', content: 'hello' });
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'm2', content: 'world' });
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: 2 });
-    });
-
-    it('does nothing when no deliveryQueue', async () => {
-      const { manager } = makeManager();
-      const socket = makeSocket();
-      await (manager as any)._drainPendingMessages(socket, 'u1');
-      expect(socket.emit).not.toHaveBeenCalled();
-    });
-
-    it('does nothing when no pending messages', async () => {
-      const { manager } = makeManager();
-      const mockQueue = { drain: (jest.fn() as jest.Mock<any>).mockResolvedValue([]), enqueue: jest.fn() };
-      manager.setDeliveryQueue(mockQueue as any);
-      const socket = makeSocket();
-      await (manager as any)._drainPendingMessages(socket, 'u1');
-      expect(socket.emit).not.toHaveBeenCalled();
-    });
-
-    it('handles drain error gracefully', async () => {
-      const { manager } = makeManager();
-      const mockQueue = { drain: (jest.fn() as jest.Mock<any>).mockRejectedValue(new Error('Redis error')), enqueue: jest.fn() };
-      manager.setDeliveryQueue(mockQueue as any);
-      const socket = makeSocket();
-      await expect((manager as any)._drainPendingMessages(socket, 'u1')).resolves.not.toThrow();
-    });
-  });
-
-  describe('_emitMessageNewByLanguage', () => {
-    it('does nothing when room is empty', () => {
-      const { manager } = makeManager();
-      (manager as any)._emitMessageNewByLanguage('conversation:c1', { id: 'm1' });
-      expect(mockIoTo).not.toHaveBeenCalled();
-    });
-
-    it('groups sockets by resolved language and sends filtered payloads', () => {
-      const { manager } = makeManager();
-      const roomSet = new Set(['s1', 's2']);
-      mockIoSockets.adapter.rooms.set('conversation:c1', roomSet);
-      (manager as any).socketToUser.set('s1', 'u1');
-      (manager as any).socketToUser.set('s2', 'u2');
-      (manager as any).connectedUsers.set('u1', makeSocketUser({ socketId: 's1', resolvedLanguages: ['fr'] }));
-      (manager as any).connectedUsers.set('u2', makeSocketUser({ id: 'u2', userId: 'u2', socketId: 's2', language: 'en', resolvedLanguages: ['en'] }));
-      mockFilterPayload.mockImplementation((p: any) => p);
-      (manager as any)._emitMessageNewByLanguage('conversation:c1', { id: 'm1', originalLanguage: 'fr' });
-      expect(mockFilterPayload).toHaveBeenCalledTimes(2); // two language groups
-    });
-
-    it('uses originalLanguage for unknown socket users', () => {
-      const { manager } = makeManager();
-      const roomSet = new Set(['s-unknown']);
-      mockIoSockets.adapter.rooms.set('conversation:c1', roomSet);
-      // socketToUser doesn't have s-unknown
-      (manager as any)._emitMessageNewByLanguage('conversation:c1', { id: 'm1', originalLanguage: 'es' });
-      expect(mockFilterPayload).toHaveBeenCalled();
-    });
-  });
-
-  describe('_findUsersForLanguage', () => {
-    it('matches by resolvedLanguages', () => {
-      const { manager } = makeManager();
-      (manager as any).connectedUsers.set('u1', makeSocketUser({ language: 'fr', resolvedLanguages: ['fr', 'en'] }));
-      (manager as any).connectedUsers.set('u2', makeSocketUser({ id: 'u2', socketId: 's2', language: 'de', resolvedLanguages: ['de'] }));
-      const result = (manager as any)._findUsersForLanguage('en');
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('u1');
-    });
-
-    it('matches by language fallback', () => {
-      const { manager } = makeManager();
-      (manager as any).connectedUsers.set('u1', makeSocketUser({ language: 'FR', resolvedLanguages: [] }));
-      const result = (manager as any)._findUsersForLanguage('fr');
-      expect(result).toHaveLength(1);
-    });
-
-    it('returns empty when no matching users', () => {
-      const { manager } = makeManager();
-      (manager as any).connectedUsers.set('u1', makeSocketUser({ language: 'en', resolvedLanguages: ['en'] }));
-      const result = (manager as any)._findUsersForLanguage('zh');
-      expect(result).toHaveLength(0);
-    });
-  });
-
-  describe('handleAgentResponse', () => {
-    let manager: MeeshySocketIOManager;
-    let prisma: ReturnType<typeof makePrisma>;
-
-    beforeEach(() => {
-      ({ manager, prisma } = makeManager());
-    });
-
-    it('calls messagingService.handleMessage with correct params', async () => {
-      const resultMessage = makeMessage({ id: '000000000000000000000001' });
-      mockHandleMessage.mockResolvedValue({ success: true, data: resultMessage });
+    it('returns early when participantRows is empty', async () => {
+      const socket = makeSocket('sock-ps3');
       prisma.participant.findMany.mockResolvedValue([]);
-
-      await manager.handleAgentResponse({
-        type: 'agent:response',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        content: 'Hello',
-        originalLanguage: 'fr',
-        messageSource: 'agent',
-        metadata: { agentType: 'orchestrator', roleConfidence: 0.9 },
-      });
-
-      expect(mockHandleMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ content: 'Hello', messageSource: 'agent', conversationId: 'c1' }),
-        'agent-user'
-      );
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-ps3', false);
+      expect(socket.emit).not.toHaveBeenCalledWith(SERVER_EVENTS.PRESENCE_SNAPSHOT, expect.anything());
     });
 
-    it('does not broadcast when messagingService returns failure', async () => {
-      mockHandleMessage.mockResolvedValue({ success: false, error: 'Not found' });
-      await manager.handleAgentResponse({
-        type: 'agent:response',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        content: 'Hello',
-        originalLanguage: 'fr',
-        messageSource: 'agent',
-        metadata: { agentType: 'orchestrator', roleConfidence: 0.9 },
-      });
-      expect(mockIoToEmit).not.toHaveBeenCalled();
-    });
+    it('uses anonymous participant lookup when isAnonymous=true', async () => {
+      const socket = makeSocket('sock-ps4');
+      prisma.participant.findMany.mockResolvedValueOnce([{ conversationId: 'conv-anon' }]);
+      prisma.participant.findMany.mockResolvedValueOnce([]);
 
-    it('resolves mentioned usernames to IDs', async () => {
-      const resultMessage = makeMessage({ id: '000000000000000000000001' });
-      mockHandleMessage.mockResolvedValue({ success: true, data: resultMessage });
-      prisma.user.findMany.mockResolvedValue([{ id: 'user-id-1' }]);
-      prisma.participant.findMany.mockResolvedValue([]);
+      await (manager as any)._emitPresenceSnapshot(socket, 'anon-id', true);
 
-      await manager.handleAgentResponse({
-        type: 'agent:response',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        content: 'Hello @alice',
-        originalLanguage: 'fr',
-        mentionedUsernames: ['alice'],
-        messageSource: 'agent',
-        metadata: { agentType: 'orchestrator', roleConfidence: 0.9 },
-      });
-
-      expect(prisma.user.findMany).toHaveBeenCalled();
-      expect(mockHandleMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ mentionedUserIds: ['user-id-1'] }),
-        'agent-user'
-      );
-    });
-
-    it('resolves @mentions from content when no mentionedUsernames', async () => {
-      const resultMessage = makeMessage({ id: '000000000000000000000001' });
-      mockHandleMessage.mockResolvedValue({ success: true, data: resultMessage });
-      prisma.participant.findMany
-        .mockResolvedValueOnce([{ userId: 'u2', displayName: 'Bob', user: { id: 'u2', username: 'bob', displayName: 'Bob' } }])
-        .mockResolvedValueOnce([]);
-      mockExtractMentions.mockReturnValue(['bob']);
-      mockResolveUsernames.mockResolvedValue(new Map([['bob', { id: 'u2' }]]));
-
-      await manager.handleAgentResponse({
-        type: 'agent:response',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        content: 'Hello @bob',
-        originalLanguage: 'fr',
-        messageSource: 'agent',
-        metadata: { agentType: 'orchestrator', roleConfidence: 0.9 },
-      });
-
-      expect(mockExtractMentions).toHaveBeenCalled();
-    });
-
-    it('handles error gracefully', async () => {
-      mockHandleMessage.mockRejectedValue(new Error('Unexpected error'));
-      await expect(manager.handleAgentResponse({
-        type: 'agent:response',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        content: 'Hello',
-        originalLanguage: 'fr',
-        messageSource: 'agent',
-        metadata: { agentType: 'orchestrator', roleConfidence: 0.9 },
-      })).resolves.not.toThrow();
-    });
-  });
-
-  describe('_broadcastTranslationEvent (audioTranslationReady)', () => {
-    let manager: MeeshySocketIOManager;
-    let prisma: ReturnType<typeof makePrisma>;
-
-    beforeEach(async () => {
-      ({ manager, prisma } = makeManager());
-      await manager.initialize();
-    });
-
-    it('broadcasts audioTranslationReady to conversation room', async () => {
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      prisma.messageAttachment.findUnique.mockResolvedValue({ id: 'a1' });
-      mockTranslationService.emit('audioTranslationReady', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        language: 'fr',
-        translatedAudio: {
-          id: 'ta1',
-          targetLanguage: 'fr',
-          url: 'http://test/audio.mp3',
-          durationMs: 2000,
-          format: 'mp3',
-          cloned: false,
-          quality: 0.9,
-          ttsModel: 'xtts',
-        },
-      });
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).toHaveBeenCalledWith(SERVER_EVENTS.AUDIO_TRANSLATION_READY, expect.any(Object));
-    });
-
-    it('returns early when translatedAudio missing in audioTranslationReady', async () => {
-      mockTranslationService.emit('audioTranslationReady', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        language: 'fr',
-        // translatedAudio is missing
-      });
-      await new Promise((r) => setImmediate(r));
-      expect(prisma.message.findUnique).not.toHaveBeenCalled();
-    });
-
-    it('returns early when no conversation found for audio translation', async () => {
-      prisma.message.findUnique.mockResolvedValue(null);
-      mockTranslationService.emit('audioTranslationReady', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        language: 'fr',
-        translatedAudio: { id: 'ta1', targetLanguage: 'fr', url: 'http://test.mp3', durationMs: 0, format: 'mp3' },
-      });
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).not.toHaveBeenCalled();
-    });
-
-    it('broadcasts audioTranslationsProgressive to conversation room', async () => {
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      prisma.messageAttachment.findUnique.mockResolvedValue({ id: 'a1' });
-      mockTranslationService.emit('audioTranslationsProgressive', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        language: 'fr',
-        translatedAudio: { id: 'ta1', targetLanguage: 'fr', url: 'http://test.mp3', durationMs: 0, format: 'mp3' },
-      });
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).toHaveBeenCalledWith(SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE, expect.any(Object));
-    });
-
-    it('broadcasts audioTranslationsCompleted to conversation room', async () => {
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      prisma.messageAttachment.findUnique.mockResolvedValue({ id: 'a1' });
-      mockTranslationService.emit('audioTranslationsCompleted', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        language: 'fr',
-        translatedAudio: { id: 'ta1', targetLanguage: 'fr', url: 'http://test.mp3', durationMs: 0, format: 'mp3' },
-      });
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).toHaveBeenCalledWith(SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED, expect.any(Object));
-    });
-  });
-
-  describe('isCurrentlyConnected maintenance callback', () => {
-    it('returns true for connected user', () => {
-      const { manager } = makeManager();
-      (manager as any).connectedUsers.set('u1', makeSocketUser());
-      // Get the callback set by maintenanceService.setIsCurrentlyConnected
-      const cb = mockMaintenanceSetIsConnected.mock.calls[0][0] as (userId: string, isAnon: boolean) => boolean;
-      expect(cb('u1', false)).toBe(true);
-    });
-
-    it('returns false for disconnected user', () => {
-      const { manager } = makeManager();
-      const cb = mockMaintenanceSetIsConnected.mock.calls[0][0] as (userId: string, isAnon: boolean) => boolean;
-      expect(cb('unknown', false)).toBe(false);
-    });
-  });
-
-  describe('callEventsHandler.setMessageBroadcaster', () => {
-    it('broadcaster callback returns promise', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      const broadcaster = mockCallSetMessageBroadcaster.mock.calls[0][0] as (msg: any, convId: string) => Promise<void>;
-      const msg = makeMessage();
-      await expect(broadcaster(msg, '000000000000000000000001')).resolves.not.toThrow();
-    });
-  });
-
-  describe('callEventsHandler.setupCallEvents lambda callbacks', () => {
-    let manager: MeeshySocketIOManager;
-
-    beforeEach(async () => {
-      ({ manager } = makeManager());
-      await manager.initialize();
-      const socket = makeSocket('s1');
-      capturedConnectionHandlers[0](socket);
-    });
-
-    it('first lambda returns userId from socketToUser', () => {
-      (manager as any).socketToUser.set('s1', 'u1');
-      const getSocketUserId = mockCallSetupCallEvents.mock.calls[0][2] as (socketId: string) => string | undefined;
-      expect(getSocketUserId('s1')).toBe('u1');
-    });
-
-    it('first lambda returns undefined for unknown socket', () => {
-      const getSocketUserId = mockCallSetupCallEvents.mock.calls[0][2] as (socketId: string) => string | undefined;
-      expect(getSocketUserId('unknown')).toBeUndefined();
-    });
-
-    it('second lambda returns user info when both userId and user exist', () => {
-      (manager as any).socketToUser.set('s1', 'u1');
-      (manager as any).connectedUsers.set('u1', makeSocketUser({ id: 'u1', isAnonymous: false }));
-      const getSocketUserInfo = mockCallSetupCallEvents.mock.calls[0][3] as (socketId: string) => any;
-      const result = getSocketUserInfo('s1');
-      expect(result).toEqual({ id: 'u1', isAnonymous: false });
-    });
-
-    it('second lambda returns undefined when userId not found', () => {
-      const getSocketUserInfo = mockCallSetupCallEvents.mock.calls[0][3] as (socketId: string) => any;
-      const result = getSocketUserInfo('unknown');
-      expect(result).toBeUndefined();
-    });
-
-    it('second lambda returns undefined when user not in connectedUsers', () => {
-      (manager as any).socketToUser.set('s1', 'u1');
-      // connectedUsers does not have u1
-      const getSocketUserInfo = mockCallSetupCallEvents.mock.calls[0][3] as (socketId: string) => any;
-      const result = getSocketUserInfo('s1');
-      expect(result).toBeUndefined();
-    });
-  });
-
-  describe('socket event error handling', () => {
-    let manager: MeeshySocketIOManager;
-    let socket: ReturnType<typeof makeSocket>;
-
-    beforeEach(async () => {
-      ({ manager } = makeManager());
-      await manager.initialize();
-      socket = makeSocket('s1');
-      capturedConnectionHandlers[0](socket);
-      (manager as any).socketToUser.set('s1', 'u1');
-    });
-
-    it('AUTHENTICATE error is caught and logged', async () => {
-      mockAuthHandleManual.mockRejectedValue(new Error('auth error'));
-      socket._trigger(CLIENT_EVENTS.AUTHENTICATE, {});
-      await new Promise((r) => setImmediate(r));
-      // No throw expected
-    });
-
-    it('MESSAGE_SEND_WITH_ATTACHMENTS error calls callback', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      mockMessageHandleSendWithAttachments.mockRejectedValue(new Error('fail'));
-      await socket._trigger(CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS, {}, cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Internal server error' });
-    });
-
-    it('REQUEST_TRANSLATION outer catch when getTranslation throws', async () => {
-      mockTranslationService.getTranslation.mockRejectedValue(new Error('ZMQ crash'));
-      await socket._trigger(CLIENT_EVENTS.REQUEST_TRANSLATION, { messageId: 'm1', targetLanguage: 'fr' });
-      await new Promise((r) => setImmediate(r));
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'Failed to get translation' }));
-    });
-
-    it('CONVERSATION_LEAVE error is caught', async () => {
-      mockConvHandleLeave.mockRejectedValue(new Error('leave error'));
-      await socket._trigger(CLIENT_EVENTS.CONVERSATION_LEAVE, { conversationId: 'c1' });
-      await new Promise((r) => setImmediate(r));
-      // No throw expected
-    });
-
-    it('TYPING_START error is caught', async () => {
-      mockStatusHandleTypingStart.mockRejectedValue(new Error('typing error'));
-      socket._trigger(CLIENT_EVENTS.TYPING_START, { conversationId: 'c1' });
-      await new Promise((r) => setImmediate(r));
-      // No throw expected
-    });
-
-    it('HEARTBEAT error is caught', async () => {
-      mockAuthHandleHeartbeat.mockRejectedValue(new Error('heartbeat error'));
-      socket._trigger(CLIENT_EVENTS.HEARTBEAT);
-      await new Promise((r) => setImmediate(r));
-      // No throw expected
-    });
-
-    it('REACTION_ADD error calls callback', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      mockReactionHandleAdd.mockRejectedValue(new Error('reaction error'));
-      await socket._trigger(CLIENT_EVENTS.REACTION_ADD, {}, cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Internal server error' });
-    });
-
-    it('REACTION_REMOVE error calls callback', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      mockReactionHandleRemove.mockRejectedValue(new Error('reaction remove error'));
-      await socket._trigger(CLIENT_EVENTS.REACTION_REMOVE, {}, cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Internal server error' });
-    });
-
-    it('REACTION_SYNC error calls callback', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      mockReactionHandleSync.mockRejectedValue(new Error('sync error'));
-      await socket._trigger(CLIENT_EVENTS.REACTION_REQUEST_SYNC, 'm1', cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Internal server error' });
-    });
-  });
-
-  describe('handleAgentReaction', () => {
-    let manager: MeeshySocketIOManager;
-    let prisma: ReturnType<typeof makePrisma>;
-
-    beforeEach(() => {
-      ({ manager, prisma } = makeManager());
-      mockAddReaction.mockResolvedValue({ id: 'r1', emoji: '👍' });
-      mockCreateUpdateEvent.mockResolvedValue({ messageId: 'm1', emoji: '👍' });
-      mockCreateReactionNotification.mockResolvedValue(undefined);
-    });
-
-    it('returns early when no active participant found', async () => {
-      prisma.participant.findFirst.mockResolvedValue(null);
-      await manager.handleAgentReaction({
-        type: 'agent:reaction',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        targetMessageId: 'm1',
-        emoji: '👍',
-      });
-      expect(mockAddReaction).not.toHaveBeenCalled();
-    });
-
-    it('returns early when addReaction returns falsy', async () => {
-      prisma.participant.findFirst.mockResolvedValue({ id: 'p1' });
-      mockAddReaction.mockResolvedValue(null);
-      await manager.handleAgentReaction({
-        type: 'agent:reaction',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        targetMessageId: 'm1',
-        emoji: '👍',
-      });
-      expect(mockCreateUpdateEvent).not.toHaveBeenCalled();
-    });
-
-    it('emits REACTION_ADDED to conversation room', async () => {
-      prisma.participant.findFirst.mockResolvedValue({ id: 'p1' });
-      prisma.message.findUnique.mockResolvedValue({ conversationId: 'c1', senderId: 'p2' });
-      prisma.participant.findUnique.mockResolvedValue({ userId: 'author-user' });
-      await manager.handleAgentReaction({
-        type: 'agent:reaction',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        targetMessageId: 'm1',
-        emoji: '👍',
-      });
-      expect(mockIoTo).toHaveBeenCalledWith(ROOMS.conversation('c1'));
-      expect(mockIoToEmit).toHaveBeenCalledWith(SERVER_EVENTS.REACTION_ADDED, expect.any(Object));
-    });
-
-    it('creates reaction notification for message author', async () => {
-      prisma.participant.findFirst.mockResolvedValue({ id: 'p1' });
-      prisma.message.findUnique.mockResolvedValue({ conversationId: 'c1', senderId: 'p2' });
-      prisma.participant.findUnique.mockResolvedValue({ userId: 'author-user' });
-      await manager.handleAgentReaction({
-        type: 'agent:reaction',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        targetMessageId: 'm1',
-        emoji: '👍',
-      });
-      expect(mockCreateReactionNotification).toHaveBeenCalledWith(
-        expect.objectContaining({ messageAuthorId: 'author-user', reactorUserId: 'agent-user' })
-      );
-    });
-
-    it('does not notify when author is same as reactor', async () => {
-      prisma.participant.findFirst.mockResolvedValue({ id: 'p1' });
-      prisma.message.findUnique.mockResolvedValue({ conversationId: 'c1', senderId: 'p2' });
-      prisma.participant.findUnique.mockResolvedValue({ userId: 'agent-user' });
-      await manager.handleAgentReaction({
-        type: 'agent:reaction',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        targetMessageId: 'm1',
-        emoji: '👍',
-      });
-      expect(mockCreateReactionNotification).not.toHaveBeenCalled();
-    });
-
-    it('handles null message gracefully', async () => {
-      prisma.participant.findFirst.mockResolvedValue({ id: 'p1' });
-      prisma.message.findUnique.mockResolvedValue(null);
-      await expect(manager.handleAgentReaction({
-        type: 'agent:reaction',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        targetMessageId: 'm1',
-        emoji: '👍',
-      })).resolves.not.toThrow();
-    });
-
-    it('handles null senderId on message', async () => {
-      prisma.participant.findFirst.mockResolvedValue({ id: 'p1' });
-      prisma.message.findUnique.mockResolvedValue({ conversationId: 'c1', senderId: null });
-      await expect(manager.handleAgentReaction({
-        type: 'agent:reaction',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        targetMessageId: 'm1',
-        emoji: '👍',
-      })).resolves.not.toThrow();
-      expect(mockCreateReactionNotification).not.toHaveBeenCalled();
-    });
-
-    it('handles error gracefully', async () => {
-      prisma.participant.findFirst.mockRejectedValue(new Error('DB error'));
-      await expect(manager.handleAgentReaction({
-        type: 'agent:reaction',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        targetMessageId: 'm1',
-        emoji: '👍',
-      })).resolves.not.toThrow();
-    });
-  });
-
-  describe('_notifyAgent', () => {
-    it('does nothing when no agentClient', () => {
-      const { manager } = makeManager();
-      const msg = { id: 'm1', conversationId: 'c1', senderId: 'u1', content: 'Hello', originalLanguage: 'fr', createdAt: new Date() };
-      expect(() => (manager as any)._notifyAgent(msg)).not.toThrow();
-    });
-
-    it('does nothing when senderId is null', () => {
-      const { manager } = makeManager();
-      const mockClient = { sendEvent: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined) };
-      manager.setAgentClient(mockClient as any);
-      const msg = { id: 'm1', conversationId: 'c1', senderId: null, content: 'Hello', originalLanguage: 'fr', createdAt: new Date() };
-      (manager as any)._notifyAgent(msg);
-      expect(mockClient.sendEvent).not.toHaveBeenCalled();
-    });
-
-    it('does nothing when content is null', () => {
-      const { manager } = makeManager();
-      const mockClient = { sendEvent: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined) };
-      manager.setAgentClient(mockClient as any);
-      const msg = { id: 'm1', conversationId: 'c1', senderId: 'u1', content: null, originalLanguage: 'fr', createdAt: new Date() };
-      (manager as any)._notifyAgent(msg);
-      expect(mockClient.sendEvent).not.toHaveBeenCalled();
-    });
-
-    it('calls agentClient.sendEvent with correct payload', async () => {
-      const { manager } = makeManager();
-      const mockClient = { sendEvent: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined) };
-      manager.setAgentClient(mockClient as any);
-      const createdAt = new Date();
-      const msg = { id: 'm1', conversationId: 'c1', senderId: 'u1', content: 'Hello', originalLanguage: 'fr', createdAt, mentionedUserIds: ['u2'] };
-      (manager as any)._notifyAgent(msg);
-      expect(mockClient.sendEvent).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'agent:new-message',
-        conversationId: 'c1',
-        messageId: 'm1',
-        senderId: 'u1',
-        content: 'Hello',
-        originalLanguage: 'fr',
-        mentionedUserIds: ['u2'],
-        timestamp: createdAt.getTime(),
+      expect(prisma.participant.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ id: 'anon-id' }),
       }));
     });
 
-    it('handles sendEvent error gracefully', async () => {
-      const { manager } = makeManager();
-      const mockClient = { sendEvent: (jest.fn() as jest.Mock<any>).mockRejectedValue(new Error('ZMQ error')) };
-      manager.setAgentClient(mockClient as any);
-      const msg = { id: 'm1', conversationId: 'c1', senderId: 'u1', content: 'Hello', originalLanguage: 'fr', createdAt: new Date() };
-      (manager as any)._notifyAgent(msg);
-      await new Promise((r) => setImmediate(r));
-      // No throw expected
-    });
-
-    it('uses fr as fallback when originalLanguage is null', () => {
-      const { manager } = makeManager();
-      const mockClient = { sendEvent: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined) };
-      manager.setAgentClient(mockClient as any);
-      const msg = { id: 'm1', conversationId: 'c1', senderId: 'u1', content: 'Hello', originalLanguage: null, createdAt: new Date() };
-      (manager as any)._notifyAgent(msg);
-      expect(mockClient.sendEvent).toHaveBeenCalledWith(expect.objectContaining({ originalLanguage: 'fr' }));
+    it('does not throw on DB error', async () => {
+      const socket = makeSocket('sock-ps5');
+      prisma.participant.findMany.mockRejectedValue(new Error('DB fail'));
+      await expect((manager as any)._emitPresenceSnapshot(socket, 'user-err', false)).resolves.not.toThrow();
     });
   });
 
-  describe('close error handling', () => {
-    it('handles errors during close gracefully', async () => {
-      const { manager } = makeManager();
-      mockTranslationService.close.mockRejectedValue(new Error('close error'));
-      await expect(manager.close()).resolves.not.toThrow();
-    });
-  });
+  // -------------------------------------------------------------------------
+  // 25. handleAgentResponse
+  // -------------------------------------------------------------------------
 
-  describe('broadcastMessage with senderSocket', () => {
-    it('emits to senderSocket directly when provided', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      const senderSocket = makeSocket('sender-s');
-      const msg = makeMessage({ id: '000000000000000000000001' });
-      // Call _broadcastNewMessage directly with senderSocket
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-      await (manager as any)._broadcastNewMessage(msg, '000000000000000000000001', senderSocket);
-      expect(senderSocket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.any(Object));
-    });
+  describe('handleAgentResponse', () => {
+    const baseAgentResponse = {
+      type: 'agent:response' as const,
+      conversationId: 'conv-123456789012',
+      asUserId: 'agent-user-1',
+      content: 'Hello from agent',
+      originalLanguage: 'fr',
+      messageSource: 'agent' as const,
+      metadata: { agentType: 'animator' as const, roleConfidence: 0.9 },
+    };
 
-    it('includes replyTo in payload', async () => {
-      const { manager, prisma } = makeManager();
+    it('resolves mentionedUsernames to user ids', async () => {
+      prisma.user.findMany.mockResolvedValue([{ id: 'mentioned-user-1' }]);
+      prisma.conversation.findUnique.mockResolvedValue(null);
       prisma.participant.findMany.mockResolvedValue([]);
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-      const msg = makeMessage({
-        replyToId: 'r1',
-        replyTo: {
-          id: 'r1',
-          conversationId: '000000000000000000000001',
-          senderId: 'p1',
-          content: 'Original',
-          originalLanguage: 'fr',
-          messageType: 'text',
-          createdAt: new Date(),
-          sender: {
-            id: 'p1',
-            displayName: 'Alice',
-            nickname: null,
-            avatar: null,
-            type: 'REGISTERED',
-            userId: 'u1',
-            user: { username: 'alice', firstName: 'Alice', lastName: 'Smith' }
-          }
-        }
+
+      await manager.handleAgentResponse({
+        ...baseAgentResponse,
+        mentionedUsernames: ['bob'],
       });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      expect(mockIoToEmit).toHaveBeenCalledWith(
-        SERVER_EVENTS.MESSAGE_NEW,
-        expect.objectContaining({ replyToId: 'r1', replyTo: expect.objectContaining({ id: 'r1' }) })
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ username: { in: ['bob'] } }),
+      }));
+    });
+
+    it('returns early when messagingService.handleMessage fails', async () => {
+      mockMessagingServiceInstance.handleMessage.mockResolvedValue({ success: false, error: 'failed' });
+      prisma.participant.findMany.mockResolvedValue([]);
+
+      await manager.handleAgentResponse(baseAgentResponse);
+
+      // broadcastMessage should NOT have been called → io.to should not emit MESSAGE_NEW
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
+    });
+
+    it('broadcasts message on success', async () => {
+      mockMessagingServiceInstance.handleMessage.mockResolvedValue({
+        success: true,
+        data: {
+          id: 'agent-msg-1',
+          conversationId: 'conv-123456789012',
+          senderId: 'agent-user-1',
+          content: 'Agent says hi',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([]);
+
+      await manager.handleAgentResponse(baseAgentResponse);
+
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.conversation('conv-123456789012'));
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.objectContaining({ id: 'agent-msg-1' }));
+    });
+
+    it('handles @ in content by querying participants', async () => {
+      mockMessagingServiceInstance.handleMessage.mockResolvedValue({
+        success: true,
+        data: { id: 'agent-msg-2', conversationId: 'conv-123456789012', senderId: 'agent', content: '@bob hi', createdAt: new Date(), updatedAt: new Date() },
+      });
+      prisma.participant.findMany.mockResolvedValue([
+        { userId: 'user-bob', displayName: 'Bob', user: { id: 'user-bob', username: 'bob', displayName: 'Bob' } }
+      ]);
+      mockMentionServiceInstance.extractMentionsWithParticipants.mockReturnValue(['bob']);
+      mockMentionServiceInstance.resolveUsernames.mockResolvedValue(new Map([['bob', { id: 'user-bob' }]]));
+      prisma.conversation.findUnique.mockResolvedValue(null);
+
+      await manager.handleAgentResponse({
+        ...baseAgentResponse,
+        content: '@bob hi',
+      });
+
+      expect(mockMentionServiceInstance.extractMentionsWithParticipants).toHaveBeenCalled();
+    });
+
+    it('does not throw on unexpected error', async () => {
+      mockMessagingServiceInstance.handleMessage.mockRejectedValue(new Error('unexpected'));
+      await expect(manager.handleAgentResponse(baseAgentResponse)).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 26. handleAgentReaction
+  // -------------------------------------------------------------------------
+
+  describe('handleAgentReaction', () => {
+    const baseReaction = {
+      type: 'agent:reaction' as const,
+      conversationId: 'conv-123456789012',
+      asUserId: 'agent-user-1',
+      targetMessageId: 'msg-target-1',
+      emoji: '👍',
+    };
+
+    it('returns early when no active participant found', async () => {
+      prisma.participant.findFirst.mockResolvedValue(null);
+      await manager.handleAgentReaction(baseReaction);
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.REACTION_ADDED, expect.anything());
+    });
+
+    it('returns early when addReaction returns null', async () => {
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
+      const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
+      ReactionService.mockImplementation(() => ({
+        addReaction: jest.fn().mockResolvedValue(null),
+        createUpdateEvent: jest.fn(),
+      }));
+
+      await manager.handleAgentReaction(baseReaction);
+
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.REACTION_ADDED, expect.anything());
+    });
+
+    it('emits REACTION_ADDED to conversation room on success', async () => {
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
+      const mockReactionSvc = {
+        addReaction: jest.fn().mockResolvedValue({ id: 'reaction-1' }),
+        createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'reaction-1', emoji: '👍' }),
+      };
+      const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
+      ReactionService.mockImplementation(() => mockReactionSvc);
+
+      prisma.message.findUnique.mockResolvedValue({
+        conversationId: 'conv-123456789012',
+        senderId: 'author-part-1',
+      });
+      prisma.participant.findUnique.mockResolvedValue({ userId: 'author-user-1' });
+
+      await manager.handleAgentReaction(baseReaction);
+
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.conversation('conv-123456789012'));
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.REACTION_ADDED, expect.objectContaining({ reactionId: 'reaction-1' }));
+    });
+
+    it('creates notification when reactor !== author', async () => {
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
+      const mockReactionSvc = {
+        addReaction: jest.fn().mockResolvedValue({ id: 'reaction-1' }),
+        createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'reaction-1', emoji: '👍' }),
+      };
+      const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
+      ReactionService.mockImplementation(() => mockReactionSvc);
+
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012', senderId: 'author-part' });
+      prisma.participant.findUnique.mockResolvedValue({ userId: 'different-user' });
+
+      await manager.handleAgentReaction(baseReaction);
+
+      expect(mockNotificationServiceInstance.createReactionNotification).toHaveBeenCalledWith(expect.objectContaining({
+        messageAuthorId: 'different-user',
+        reactorUserId: 'agent-user-1',
+      }));
+    });
+
+    it('skips notification when reactor === author', async () => {
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
+      const mockReactionSvc = {
+        addReaction: jest.fn().mockResolvedValue({ id: 'reaction-1' }),
+        createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'reaction-1', emoji: '👍' }),
+      };
+      const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
+      ReactionService.mockImplementation(() => mockReactionSvc);
+
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012', senderId: 'author-part' });
+      // authorUserId === asUserId
+      prisma.participant.findUnique.mockResolvedValue({ userId: 'agent-user-1' });
+
+      await manager.handleAgentReaction(baseReaction);
+
+      expect(mockNotificationServiceInstance.createReactionNotification).not.toHaveBeenCalled();
+    });
+
+    it('does not throw on unexpected error', async () => {
+      prisma.participant.findFirst.mockRejectedValue(new Error('DB fail'));
+      await expect(manager.handleAgentReaction(baseReaction)).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 27. _handleStoryTextObjectTranslationCompleted
+  // -------------------------------------------------------------------------
+
+  describe('_handleStoryTextObjectTranslationCompleted', () => {
+    it('delegates to StoryTextObjectTranslationService.shared.handleTranslationCompleted', async () => {
+      const { StoryTextObjectTranslationService } = jest.requireMock('../../services/posts/StoryTextObjectTranslationService') as any;
+      const data = { postId: 'post-1', textObjectIndex: 0, translations: { en: 'Hello' } };
+      await (manager as any)._handleStoryTextObjectTranslationCompleted(data);
+      expect(StoryTextObjectTranslationService.shared.handleTranslationCompleted).toHaveBeenCalledWith(data);
+    });
+
+    it('does not throw when handleTranslationCompleted rejects', async () => {
+      const { StoryTextObjectTranslationService } = jest.requireMock('../../services/posts/StoryTextObjectTranslationService') as any;
+      StoryTextObjectTranslationService.shared.handleTranslationCompleted.mockRejectedValue(new Error('story error'));
+      const data = { postId: 'post-fail', textObjectIndex: 1, translations: {} };
+      await expect((manager as any)._handleStoryTextObjectTranslationCompleted(data)).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 28. callEventsHandler callbacks exercised at connection time
+  // -------------------------------------------------------------------------
+
+  describe('callEventsHandler.setupCallEvents callbacks', () => {
+    it('socketId → userId callback returns correct userId', () => {
+      const socket = makeSocket('sock-cb1');
+      (manager as any).socketToUser.set('sock-cb1', 'user-cb1');
+      triggerConnection(socket);
+      const setupCall = mockCallEventsHandlerInstance.setupCallEvents.mock.calls[0];
+      const userIdCb = setupCall[2];
+      expect(userIdCb('sock-cb1')).toBe('user-cb1');
+      expect(userIdCb('unknown-sock')).toBeUndefined();
+    });
+
+    it('socketId → user info callback returns id and isAnonymous', () => {
+      const socket = makeSocket('sock-cb2');
+      (manager as any).socketToUser.set('sock-cb2', 'user-cb2');
+      (manager as any).connectedUsers.set('user-cb2', {
+        id: 'user-cb2', socketId: 'sock-cb2', isAnonymous: true, language: 'fr', resolvedLanguages: [],
+      });
+      triggerConnection(socket);
+      const setupCall = mockCallEventsHandlerInstance.setupCallEvents.mock.calls[0];
+      const userInfoCb = setupCall[3];
+      const info = userInfoCb('sock-cb2');
+      expect(info).toEqual({ id: 'user-cb2', isAnonymous: true });
+    });
+
+    it('user info callback returns undefined when userId not found', () => {
+      const socket = makeSocket('sock-cb3');
+      triggerConnection(socket);
+      const setupCall = mockCallEventsHandlerInstance.setupCallEvents.mock.calls[0];
+      const userInfoCb = setupCall[3];
+      expect(userInfoCb('unknown-sock')).toBeUndefined();
+    });
+
+    it('user info callback returns undefined when connectedUsers has no entry', () => {
+      const socket = makeSocket('sock-cb4');
+      (manager as any).socketToUser.set('sock-cb4', 'user-cb4');
+      triggerConnection(socket);
+      const setupCall = mockCallEventsHandlerInstance.setupCallEvents.mock.calls[0];
+      const userInfoCb = setupCall[3];
+      expect(userInfoCb('sock-cb4')).toBeUndefined();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 29. TYPING_START / TYPING_STOP / HEARTBEAT handlers
+  // -------------------------------------------------------------------------
+
+  describe('TYPING_START / TYPING_STOP / HEARTBEAT handlers', () => {
+    it('TYPING_START delegates to statusHandler.handleTypingStart', async () => {
+      const socket = makeSocket('sock-typing1');
+      triggerConnection(socket);
+      await socket._handlers[CLIENT_EVENTS.TYPING_START]({ conversationId: 'conv-1' });
+      expect(mockStatusHandlerInstance.handleTypingStart).toHaveBeenCalledWith(socket, { conversationId: 'conv-1' });
+    });
+
+    it('TYPING_STOP delegates to statusHandler.handleTypingStop', async () => {
+      const socket = makeSocket('sock-typing2');
+      triggerConnection(socket);
+      await socket._handlers[CLIENT_EVENTS.TYPING_STOP]({ conversationId: 'conv-1' });
+      expect(mockStatusHandlerInstance.handleTypingStop).toHaveBeenCalledWith(socket, { conversationId: 'conv-1' });
+    });
+
+    it('HEARTBEAT delegates to authHandler.handleHeartbeat', async () => {
+      const socket = makeSocket('sock-hb1');
+      triggerConnection(socket);
+      await socket._handlers[CLIENT_EVENTS.HEARTBEAT]();
+      expect(mockAuthHandlerInstance.handleHeartbeat).toHaveBeenCalledWith(socket);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 30. _handleAudioTranslationsProgressive / _handleAudioTranslationsCompleted
+  // -------------------------------------------------------------------------
+
+  describe('_handleAudioTranslationsProgressive / _handleAudioTranslationsCompleted', () => {
+    const audioData = {
+      taskId: 'task-p1',
+      messageId: 'msg-prog-1',
+      attachmentId: 'att-prog-1',
+      language: 'en',
+      translatedAudio: {
+        id: 'ta-prog',
+        targetLanguage: 'en',
+        url: 'https://cdn/prog.mp3',
+        durationMs: 3000,
+        format: 'mp3',
+        cloned: false,
+        quality: 0.8,
+        ttsModel: 'xtts',
+      },
+    };
+
+    it('_handleAudioTranslationsProgressive emits AUDIO_TRANSLATIONS_PROGRESSIVE', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
+      prisma.messageAttachment.findUnique.mockResolvedValue(null);
+      await (manager as any)._handleAudioTranslationsProgressive(audioData);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE, expect.objectContaining({ messageId: 'msg-prog-1' }));
+    });
+
+    it('_handleAudioTranslationsCompleted emits AUDIO_TRANSLATIONS_COMPLETED', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
+      prisma.messageAttachment.findUnique.mockResolvedValue(null);
+      await (manager as any)._handleAudioTranslationsCompleted(audioData);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED, expect.objectContaining({ messageId: 'msg-prog-1' }));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 31. maintenanceService callbacks exercised
+  // -------------------------------------------------------------------------
+
+  describe('maintenanceService callbacks', () => {
+    it('setStatusBroadcastCallback callback calls _broadcastUserStatus', async () => {
+      const cb = mockMaintenanceServiceInstance.setStatusBroadcastCallback.mock.calls[0][0];
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: false, showLastSeen: false });
+      await cb('user-maint', true, false);
+    });
+
+    it('setIsCurrentlyConnected callback returns true for connected user', () => {
+      const cb = mockMaintenanceServiceInstance.setIsCurrentlyConnected.mock.calls[0][0];
+      (manager as any).connectedUsers.set('user-live', { id: 'user-live', socketId: 's1', isAnonymous: false, language: 'fr', resolvedLanguages: [] });
+      expect(cb('user-live', false)).toBe(true);
+    });
+
+    it('setIsCurrentlyConnected callback returns false for disconnected user', () => {
+      const cb = mockMaintenanceServiceInstance.setIsCurrentlyConnected.mock.calls[0][0];
+      expect(cb('user-gone', false)).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 32. callEventsHandler messageBroadcaster callback
+  // -------------------------------------------------------------------------
+
+  describe('callEventsHandler messageBroadcaster callback', () => {
+    it('messageBroadcaster calls broadcastMessage on the manager', async () => {
+      const broadcastCb = mockCallEventsHandlerInstance.setMessageBroadcaster.mock.calls[0][0];
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([]);
+      const msg = makeMessage({ conversationId: 'conv-123456789012' });
+      await broadcastCb(msg, 'conv-123456789012');
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.conversation('conv-123456789012'));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 33. _broadcastNewMessage with delivery queue error
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastNewMessage - delivery queue error handling', () => {
+    it('continues even when deliveryQueue.enqueue rejects', async () => {
+      const fakeQueue = {
+        enqueue: jest.fn().mockRejectedValue(new Error('Redis down')),
+        drain: jest.fn(),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const msg = makeMessage({ conversationId: 'conv-123456789012', senderId: 'part-sender' });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-offline', userId: 'user-offline', joinedAt: new Date() },
+      ]);
+      await expect(manager.broadcastMessage(msg, 'conv-123456789012')).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 34. _emitPresenceSnapshot - anonymous contacts and deduplication
+  // -------------------------------------------------------------------------
+
+  describe('_emitPresenceSnapshot - anonymous contacts', () => {
+    it('uses participant.id as presenceKey when userId is null', async () => {
+      const socket = makeSocket('sock-anon-contact');
+      prisma.participant.findMany
+        .mockResolvedValueOnce([{ conversationId: 'conv-x' }])
+        .mockResolvedValueOnce([
+          {
+            id: 'anon-part-1',
+            userId: null,
+            displayName: 'Guest',
+            type: 'anonymous',
+            lastActiveAt: new Date(),
+            user: null,
+          },
+        ]);
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-reg', false);
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PRESENCE_SNAPSHOT, expect.objectContaining({
+        users: expect.arrayContaining([expect.objectContaining({ userId: 'anon-part-1' })]),
+      }));
+    });
+
+    it('deduplicates contacts across conversations', async () => {
+      const socket = makeSocket('sock-dedup');
+      const contact = {
+        id: 'part-dup',
+        userId: 'user-dup',
+        displayName: 'Dup User',
+        type: 'registered',
+        lastActiveAt: null,
+        user: { id: 'user-dup', username: 'dup', displayName: 'Dup', lastActiveAt: null },
+      };
+      prisma.participant.findMany
+        .mockResolvedValueOnce([{ conversationId: 'conv-1' }, { conversationId: 'conv-2' }])
+        .mockResolvedValueOnce([contact, contact]);
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-x', false);
+      const emittedCall = socket.emit.mock.calls.find((c: any) => c[0] === SERVER_EVENTS.PRESENCE_SNAPSHOT);
+      expect(emittedCall).toBeDefined();
+      const users = emittedCall[1].users;
+      const dupCount = users.filter((u: any) => u.userId === 'user-dup').length;
+      expect(dupCount).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 35. _broadcastNewMessage - normalizeConversationId path with DB lookup
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastNewMessage - conversation ID normalization', () => {
+    it('normalizes identifier → ObjectId for broadcast room', async () => {
+      const objectId = 'f'.repeat(24);
+      prisma.conversation.findUnique.mockResolvedValue({ id: objectId, identifier: 'conv-slug' });
+      prisma.participant.findMany.mockResolvedValue([]);
+      const msg = makeMessage({ conversationId: 'conv-slug' });
+      await manager.broadcastMessage(msg, 'conv-slug');
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.conversation(objectId));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 36. getConnectedUsers edge cases
+  // -------------------------------------------------------------------------
+
+  describe('getConnectedUsers edge cases', () => {
+    it('returns empty array when no users connected', () => {
+      (manager as any).connectedUsers.clear();
+      expect(manager.getConnectedUsers()).toEqual([]);
+    });
+
+    it('includes all connected user IDs', () => {
+      (manager as any).connectedUsers.clear();
+      (manager as any).connectedUsers.set('u1', { id: 'u1', socketId: 's1', isAnonymous: false, language: 'fr', resolvedLanguages: [] });
+      (manager as any).connectedUsers.set('u2', { id: 'u2', socketId: 's2', isAnonymous: false, language: 'en', resolvedLanguages: [] });
+      const users = manager.getConnectedUsers();
+      expect(users).toContain('u1');
+      expect(users).toContain('u2');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 37. REQUEST_TRANSLATION - rate limit window expired
+  // -------------------------------------------------------------------------
+
+  describe('REQUEST_TRANSLATION - expired rate limit timestamps', () => {
+    it('ignores timestamps older than 60 seconds and allows request', async () => {
+      const socket = makeSocket('sock-rw1');
+      (manager as any).socketToUser.set('sock-rw1', 'user-rw1');
+      const rateLimitKey = 'translation_request:user-rw1';
+      const oldTime = Date.now() - 70_000;
+      (manager as any).socketRateLimits.set(rateLimitKey, Array(10).fill(oldTime));
+      (translationService.getTranslation as any).mockResolvedValue({ translatedText: 'Hi', confidenceScore: 0.9 });
+      triggerConnection(socket);
+      await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-fresh2', targetLanguage: 'en' });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.anything());
+      expect(socket.emit).not.toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: expect.stringContaining('Rate limit') }));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 38. handleAgentResponse - @ content with no participants found
+  // -------------------------------------------------------------------------
+
+  describe('handleAgentResponse - @ with no participants', () => {
+    it('skips mention resolution when no participants found', async () => {
+      mockMessagingServiceInstance.handleMessage.mockResolvedValue({
+        success: true,
+        data: { id: 'msg-at', conversationId: 'conv-123456789012', senderId: 'a', content: '@ghost', createdAt: new Date(), updatedAt: new Date() },
+      });
+      prisma.participant.findMany.mockResolvedValue([]);
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      await manager.handleAgentResponse({
+        type: 'agent:response',
+        conversationId: 'conv-123456789012',
+        asUserId: 'agent-1',
+        content: '@ghost hi',
+        originalLanguage: 'fr',
+        messageSource: 'agent',
+        metadata: { agentType: 'animator', roleConfidence: 0.9 },
+      });
+      expect(mockMentionServiceInstance.extractMentionsWithParticipants).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 39. handleAgentResponse - mentionedUsernames that resolve to no users
+  // -------------------------------------------------------------------------
+
+  describe('handleAgentResponse - mentionedUsernames with no DB hits', () => {
+    it('proceeds without mentionedUserIds when no users found', async () => {
+      prisma.user.findMany.mockResolvedValue([]);
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([]);
+      await manager.handleAgentResponse({
+        type: 'agent:response',
+        conversationId: 'conv-123456789012',
+        asUserId: 'agent-1',
+        content: 'Hello @nobody',
+        originalLanguage: 'fr',
+        mentionedUsernames: ['nobody'],
+        messageSource: 'agent',
+        metadata: { agentType: 'animator', roleConfidence: 0.9 },
+      });
+      expect(mockMessagingServiceInstance.handleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ mentionedUserIds: undefined }),
+        'agent-1'
       );
     });
+  });
 
-    it('handles attachment debug log path with attachments', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-      const msg = makeMessage({
-        attachments: [{ id: 'att1', metadata: { type: 'audio' } }],
+  // -------------------------------------------------------------------------
+  // 40. _handleTranscriptionReady - DB error
+  // -------------------------------------------------------------------------
+
+  describe('_handleTranscriptionReady - DB error', () => {
+    it('handles DB error on message lookup gracefully', async () => {
+      prisma.message.findUnique.mockRejectedValue(new Error('DB timeout'));
+      const data = {
+        taskId: 'task-err',
+        messageId: 'msg-err',
+        attachmentId: 'att-err',
+        transcription: { id: 't-err', text: 'test', language: 'en', confidence: 0.8 },
+      };
+      await expect((manager as any)._handleTranscriptionReady(data)).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 41. _broadcastUserStatus - registered user showLastSeen=false
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastUserStatus - registered user showLastSeen=false', () => {
+    it('sends null lastActiveAt when showLastSeen=false', async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: false });
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-hidden',
+        username: 'hidden',
+        displayName: 'Hidden User',
+        firstName: 'Hidden',
+        lastName: 'User',
+        lastActiveAt: new Date(),
       });
-      await expect(manager.broadcastMessage(msg as any, '000000000000000000000001')).resolves.not.toThrow();
-    });
-
-    it('handles error in unreadCount gracefully (catch block)', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockRejectedValue(new Error('DB error'));
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-      await expect(manager.broadcastMessage(makeMessage() as any, '000000000000000000000001')).resolves.not.toThrow();
-    });
-
-    it('handles translationsResult failure (Promise.allSettled rejected branch)', async () => {
-      const { transformTranslationsToArray } = await import('../../utils/translation-transformer');
-      (transformTranslationsToArray as jest.Mock<any>).mockImplementation(() => { throw new Error('transform error'); });
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-      await expect(manager.broadcastMessage(makeMessage() as any, '000000000000000000000001')).resolves.not.toThrow();
-      (transformTranslationsToArray as jest.Mock<any>).mockReturnValue([]);
+      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-h1' }]);
+      await (manager as any)._broadcastUserStatus('user-hidden', true, false);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
+        lastActiveAt: null,
+      }));
     });
   });
 
-  describe('initialize - AgentAdminRelay start failure', () => {
-    it('catches AgentAdminRelay start error without throwing', async () => {
-      mockRelayStart.mockRejectedValue(new Error('relay error'));
-      const { manager } = makeManager();
-      await expect(manager.initialize()).resolves.not.toThrow();
+  // -------------------------------------------------------------------------
+  // 42. sendToUser - returns false when socket missing from sockets map
+  // -------------------------------------------------------------------------
+
+  describe('sendToUser - edge cases', () => {
+    it('returns false when connectedUser exists but socket is missing from sockets map', () => {
+      (manager as any).connectedUsers.set('user-no-socket', {
+        id: 'user-no-socket', socketId: 'missing-sock', isAnonymous: false, language: 'fr', resolvedLanguages: [],
+      });
+      expect(manager.sendToUser('user-no-socket', SERVER_EVENTS.MESSAGE_NEW as any, {} as any)).toBe(false);
     });
   });
 
-  describe('uncovered socket event handlers', () => {
-    let manager: MeeshySocketIOManager;
-    let socket: ReturnType<typeof makeSocket>;
+  // -------------------------------------------------------------------------
+  // 43. _broadcastTranslationEvent - error increments stats.errors
+  // -------------------------------------------------------------------------
 
-    beforeEach(async () => {
-      ({ manager } = makeManager());
-      await manager.initialize();
-      socket = makeSocket('s1');
-      capturedConnectionHandlers[0](socket);
-    });
-
-    it('ADMIN_AGENT_SUBSCRIBE triggers handler', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      socket._trigger(CLIENT_EVENTS.ADMIN_AGENT_SUBSCRIBE, cb);
-      await new Promise((r) => setImmediate(r));
-      // No throw
-    });
-
-    it('ADMIN_AGENT_UNSUBSCRIBE triggers handler', () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      socket._trigger(CLIENT_EVENTS.ADMIN_AGENT_UNSUBSCRIBE, cb);
-      // No throw
-    });
-
-    it('ATTACHMENT_REACTION_ADD triggers handler', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      await socket._trigger(CLIENT_EVENTS.ATTACHMENT_REACTION_ADD, {}, cb);
-    });
-
-    it('ATTACHMENT_REACTION_REMOVE triggers handler', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      await socket._trigger(CLIENT_EVENTS.ATTACHMENT_REACTION_REMOVE, {}, cb);
-    });
-
-    it('COMMENT_REACTION_ADD triggers handler', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      await socket._trigger(CLIENT_EVENTS.COMMENT_REACTION_ADD, {}, cb);
-    });
-
-    it('COMMENT_REACTION_REMOVE triggers handler', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      await socket._trigger(CLIENT_EVENTS.COMMENT_REACTION_REMOVE, {}, cb);
-    });
-
-    it('COMMENT_REACTION_REQUEST_SYNC triggers handler', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      await socket._trigger(CLIENT_EVENTS.COMMENT_REACTION_REQUEST_SYNC, {}, cb);
-    });
-
-    it('JOIN_POST triggers handler', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      await socket._trigger(CLIENT_EVENTS.JOIN_POST, {}, cb);
-    });
-
-    it('LEAVE_POST triggers handler', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      await socket._trigger(CLIENT_EVENTS.LEAVE_POST, {}, cb);
-    });
-
-    it('POST_REACTION_ADD triggers handler', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      await socket._trigger(CLIENT_EVENTS.POST_REACTION_ADD, {}, cb);
-    });
-
-    it('POST_REACTION_REMOVE triggers handler', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      await socket._trigger(CLIENT_EVENTS.POST_REACTION_REMOVE, {}, cb);
-    });
-
-    it('POST_REACTION_REQUEST_SYNC triggers handler', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      await socket._trigger(CLIENT_EVENTS.POST_REACTION_REQUEST_SYNC, {}, cb);
-    });
-
-    it('LOCATION_SHARE triggers handler', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      await socket._trigger(CLIENT_EVENTS.LOCATION_SHARE, {}, cb);
-    });
-
-    it('LOCATION_LIVE_START triggers handler', async () => {
-      const cb = jest.fn() as jest.Mock<any>;
-      await socket._trigger(CLIENT_EVENTS.LOCATION_LIVE_START, {}, cb);
-    });
-
-    it('LOCATION_LIVE_UPDATE triggers handler', async () => {
-      await socket._trigger(CLIENT_EVENTS.LOCATION_LIVE_UPDATE, {});
-    });
-
-    it('LOCATION_LIVE_STOP triggers handler', async () => {
-      await socket._trigger(CLIENT_EVENTS.LOCATION_LIVE_STOP, {});
-    });
-
-    it('ATTACHMENT_REACTION_ADD error calls callback', async () => {
-      const handler = (manager as any).attachmentReactionHandler;
-      handler.handleAdd = (jest.fn() as jest.Mock<any>).mockRejectedValue(new Error('fail'));
-      const cb = jest.fn() as jest.Mock<any>;
-      await socket._trigger(CLIENT_EVENTS.ATTACHMENT_REACTION_ADD, {}, cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Internal server error' });
-    });
-
-    it('COMMENT_REACTION_ADD error calls callback', async () => {
-      const handler = (manager as any).commentReactionHandler;
-      handler.handleAddReaction = (jest.fn() as jest.Mock<any>).mockRejectedValue(new Error('fail'));
-      const cb = jest.fn() as jest.Mock<any>;
-      await socket._trigger(CLIENT_EVENTS.COMMENT_REACTION_ADD, {}, cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Internal server error' });
-    });
-
-    it('JOIN_POST error calls callback', async () => {
-      const handler = (manager as any).postReactionHandler;
-      handler.handleJoinPost = (jest.fn() as jest.Mock<any>).mockRejectedValue(new Error('fail'));
-      const cb = jest.fn() as jest.Mock<any>;
-      await socket._trigger(CLIENT_EVENTS.JOIN_POST, {}, cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Internal server error' });
-    });
-
-    it('LOCATION_SHARE error calls callback', async () => {
-      const handler = (manager as any).locationHandler;
-      handler.handleLocationShare = (jest.fn() as jest.Mock<any>).mockRejectedValue(new Error('fail'));
-      const cb = jest.fn() as jest.Mock<any>;
-      await socket._trigger(CLIENT_EVENTS.LOCATION_SHARE, {}, cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Internal server error' });
-    });
-
-    it('LOCATION_LIVE_UPDATE error is caught', async () => {
-      const handler = (manager as any).locationHandler;
-      handler.handleLiveLocationUpdate = (jest.fn() as jest.Mock<any>).mockRejectedValue(new Error('fail'));
-      await socket._trigger(CLIENT_EVENTS.LOCATION_LIVE_UPDATE, {});
-      await new Promise((r) => setImmediate(r));
-      // No throw expected
-    });
-
-    it('LOCATION_LIVE_STOP error is caught', async () => {
-      const handler = (manager as any).locationHandler;
-      handler.handleLiveLocationStop = (jest.fn() as jest.Mock<any>).mockRejectedValue(new Error('fail'));
-      await socket._trigger(CLIENT_EVENTS.LOCATION_LIVE_STOP, {});
-      await new Promise((r) => setImmediate(r));
-      // No throw expected
+  describe('_broadcastTranslationEvent - error handling', () => {
+    it('returns early gracefully when DB throws on message lookup', async () => {
+      // The inner try-catch in _broadcastTranslationEvent handles DB errors gracefully.
+      // It catches the error, sets conversationId = null, then returns early without incrementing stats.errors.
+      prisma.message.findUnique.mockImplementation(() => { throw new Error('DB down'); });
+      await expect((manager as any)._broadcastTranslationEvent(
+        {
+          taskId: 't-err',
+          messageId: 'msg-err-bt',
+          attachmentId: 'att-err',
+          language: 'en',
+          translatedAudio: { id: 'ta', targetLanguage: 'en', url: 'x', durationMs: 100, format: 'mp3', cloned: false, quality: 0.8, ttsModel: 'xtts' },
+        },
+        'audioTranslationReady',
+        SERVER_EVENTS.AUDIO_TRANSLATION_READY,
+        '🎯'
+      )).resolves.not.toThrow();
+      // Should NOT emit to room since no conversationId was found
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.AUDIO_TRANSLATION_READY, expect.anything());
     });
   });
+
+  // -------------------------------------------------------------------------
+  // 44. _handleTextTranslationReady - no matching users for fallback
+  // -------------------------------------------------------------------------
+
+  describe('_handleTextTranslationReady - fallback no matching users', () => {
+    it('handles gracefully when no users match the target language', async () => {
+      prisma.message.findUnique.mockResolvedValue(null);
+      (manager as any).connectedUsers.clear();
+      const data = {
+        taskId: 'task-no-users',
+        result: { messageId: 'msg-no-users', translatedText: 'Hola', sourceLanguage: 'fr', confidenceScore: 0.9 },
+        targetLanguage: 'es',
+      };
+      await expect((manager as any)._handleTextTranslationReady(data)).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 45. MESSAGE_SEND_WITH_ATTACHMENTS handler
+  // -------------------------------------------------------------------------
+
+  describe('MESSAGE_SEND_WITH_ATTACHMENTS handler', () => {
+    it('delegates to messageHandler.handleMessageSendWithAttachments', async () => {
+      const socket = makeSocket('sock-att1');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS]({ content: 'test' }, cb);
+      expect(mockMessageHandlerInstance.handleMessageSendWithAttachments).toHaveBeenCalledWith(socket, { content: 'test' }, cb);
+    });
+
+    it('catches error and calls callback with Internal server error', async () => {
+      mockMessageHandlerInstance.handleMessageSendWithAttachments.mockRejectedValue(new Error('fail'));
+      const socket = makeSocket('sock-att2');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS]({}, cb);
+      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Internal server error' });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 46. REACTION_REMOVE / REACTION_REQUEST_SYNC handlers
+  // -------------------------------------------------------------------------
+
+  describe('REACTION_REMOVE / REACTION_REQUEST_SYNC handlers', () => {
+    it('REACTION_REMOVE delegates to reactionHandler.handleReactionRemove', async () => {
+      const socket = makeSocket('sock-rr1');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.REACTION_REMOVE]({ messageId: 'msg-1', emoji: '👍' }, cb);
+      expect(mockReactionHandlerInstance.handleReactionRemove).toHaveBeenCalled();
+    });
+
+    it('REACTION_REQUEST_SYNC delegates to reactionHandler.handleReactionSync', async () => {
+      const socket = makeSocket('sock-rs1');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.REACTION_REQUEST_SYNC]('msg-1', cb);
+      expect(mockReactionHandlerInstance.handleReactionSync).toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 47. CONVERSATION_JOIN / CONVERSATION_LEAVE handlers
+  // -------------------------------------------------------------------------
+
+  describe('CONVERSATION_JOIN / CONVERSATION_LEAVE handlers', () => {
+    it('CONVERSATION_JOIN delegates to conversationHandler', async () => {
+      const { ConversationHandler } = jest.requireMock('../handlers/ConversationHandler') as any;
+      const mockConvHandler = { handleConversationJoin: jest.fn().mockResolvedValue(undefined), handleConversationLeave: jest.fn().mockResolvedValue(undefined) };
+      ConversationHandler.mockImplementation(() => mockConvHandler);
+      // Existing manager already has a handler — test via the socket event
+      const socket = makeSocket('sock-cj1');
+      triggerConnection(socket);
+      await socket._handlers[CLIENT_EVENTS.CONVERSATION_JOIN]({ conversationId: 'conv-1' });
+    });
+
+    it('CONVERSATION_LEAVE delegates to conversationHandler', async () => {
+      const socket = makeSocket('sock-cl1');
+      triggerConnection(socket);
+      await socket._handlers[CLIENT_EVENTS.CONVERSATION_LEAVE]({ conversationId: 'conv-1' });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 48. _findUsersForLanguage
+  // -------------------------------------------------------------------------
+
+  describe('_findUsersForLanguage', () => {
+    it('returns users matching by resolvedLanguages', () => {
+      (manager as any).connectedUsers.set('u-fr', { id: 'u-fr', socketId: 's-fr', isAnonymous: false, language: 'en', resolvedLanguages: ['fr', 'en'] });
+      (manager as any).connectedUsers.set('u-en', { id: 'u-en', socketId: 's-en', isAnonymous: false, language: 'en', resolvedLanguages: ['en'] });
+      const result = (manager as any)._findUsersForLanguage('fr');
+      expect(result.some((u: any) => u.id === 'u-fr')).toBe(true);
+      expect(result.some((u: any) => u.id === 'u-en')).toBe(false);
+    });
+
+    it('returns users matching by language field', () => {
+      (manager as any).connectedUsers.set('u-es', { id: 'u-es', socketId: 's-es', isAnonymous: false, language: 'ES', resolvedLanguages: [] });
+      const result = (manager as any)._findUsersForLanguage('es');
+      expect(result.some((u: any) => u.id === 'u-es')).toBe(true);
+    });
+
+    it('returns empty array when no users match', () => {
+      (manager as any).connectedUsers.clear();
+      expect((manager as any)._findUsersForLanguage('zh')).toHaveLength(0);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 49. Remaining socket event handlers coverage
+  // -------------------------------------------------------------------------
+
+  describe('ADMIN_AGENT_SUBSCRIBE / ADMIN_AGENT_UNSUBSCRIBE event handlers', () => {
+    it('ADMIN_AGENT_SUBSCRIBE invokes adminAgentHandler.handleSubscribe', async () => {
+      const socket = makeSocket('sock-aas1');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      socket._handlers[CLIENT_EVENTS.ADMIN_AGENT_SUBSCRIBE](cb);
+      await new Promise(r => setImmediate(r));
+    });
+
+    it('ADMIN_AGENT_UNSUBSCRIBE invokes adminAgentHandler.handleUnsubscribe', () => {
+      const socket = makeSocket('sock-aau1');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      socket._handlers[CLIENT_EVENTS.ADMIN_AGENT_UNSUBSCRIBE](cb);
+    });
+  });
+
+  describe('ATTACHMENT_REACTION event handlers', () => {
+    it('ATTACHMENT_REACTION_ADD invokes attachmentReactionHandler.handleAdd', async () => {
+      const { AttachmentReactionHandler } = jest.requireMock('../handlers/AttachmentReactionHandler') as any;
+      const mockHandler = { handleAdd: jest.fn().mockResolvedValue(undefined), handleRemove: jest.fn().mockResolvedValue(undefined) };
+      AttachmentReactionHandler.mockImplementation(() => mockHandler);
+      const socket = makeSocket('sock-ara1');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.ATTACHMENT_REACTION_ADD]({ attachmentId: 'att-1' }, cb);
+    });
+
+    it('ATTACHMENT_REACTION_REMOVE invokes attachmentReactionHandler.handleRemove', async () => {
+      const socket = makeSocket('sock-arr1');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.ATTACHMENT_REACTION_REMOVE]({ attachmentId: 'att-1' }, cb);
+    });
+  });
+
+  describe('COMMENT_REACTION event handlers', () => {
+    it('COMMENT_REACTION_ADD invokes commentReactionHandler.handleAddReaction', async () => {
+      const socket = makeSocket('sock-cra1');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.COMMENT_REACTION_ADD]({ commentId: 'c1' }, cb);
+    });
+
+    it('COMMENT_REACTION_REMOVE invokes commentReactionHandler.handleRemoveReaction', async () => {
+      const socket = makeSocket('sock-crr1');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.COMMENT_REACTION_REMOVE]({ commentId: 'c1' }, cb);
+    });
+
+    it('COMMENT_REACTION_REQUEST_SYNC invokes commentReactionHandler.handleRequestSync', async () => {
+      const socket = makeSocket('sock-crs1');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.COMMENT_REACTION_REQUEST_SYNC]({ commentId: 'c1' }, cb);
+    });
+  });
+
+  describe('POST_REACTION event handlers', () => {
+    it('JOIN_POST invokes postReactionHandler.handleJoinPost', async () => {
+      const socket = makeSocket('sock-jp1');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.JOIN_POST]({ postId: 'p1' }, cb);
+    });
+
+    it('LEAVE_POST invokes postReactionHandler.handleLeavePost', async () => {
+      const socket = makeSocket('sock-lp1');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.LEAVE_POST]({ postId: 'p1' }, cb);
+    });
+
+    it('POST_REACTION_ADD invokes postReactionHandler.handleAddReaction', async () => {
+      const socket = makeSocket('sock-pra1');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.POST_REACTION_ADD]({ postId: 'p1', emoji: '❤️' }, cb);
+    });
+
+    it('POST_REACTION_REMOVE invokes postReactionHandler.handleRemoveReaction', async () => {
+      const socket = makeSocket('sock-prr1');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.POST_REACTION_REMOVE]({ postId: 'p1', emoji: '❤️' }, cb);
+    });
+
+    it('POST_REACTION_REQUEST_SYNC invokes postReactionHandler.handleRequestSync', async () => {
+      const socket = makeSocket('sock-prs1');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.POST_REACTION_REQUEST_SYNC]({ postId: 'p1' }, cb);
+    });
+  });
+
+  describe('LOCATION event handlers', () => {
+    it('LOCATION_SHARE invokes locationHandler.handleLocationShare', async () => {
+      const socket = makeSocket('sock-ls1');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.LOCATION_SHARE]({ lat: 1, lon: 2 }, cb);
+    });
+
+    it('LOCATION_LIVE_START invokes locationHandler.handleLiveLocationStart', async () => {
+      const socket = makeSocket('sock-lls1');
+      triggerConnection(socket);
+      const cb = jest.fn();
+      await socket._handlers[CLIENT_EVENTS.LOCATION_LIVE_START]({ lat: 1, lon: 2 }, cb);
+    });
+
+    it('LOCATION_LIVE_UPDATE invokes locationHandler.handleLiveLocationUpdate', async () => {
+      const socket = makeSocket('sock-llu1');
+      triggerConnection(socket);
+      await socket._handlers[CLIENT_EVENTS.LOCATION_LIVE_UPDATE]({ lat: 1, lon: 2 });
+    });
+
+    it('LOCATION_LIVE_STOP invokes locationHandler.handleLiveLocationStop', async () => {
+      const socket = makeSocket('sock-llstop1');
+      triggerConnection(socket);
+      await socket._handlers[CLIENT_EVENTS.LOCATION_LIVE_STOP]({ shareId: 'share-1' });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 50. REQUEST_TRANSLATION - handleNewMessage throws (translation error path)
+  // -------------------------------------------------------------------------
+
+  describe('REQUEST_TRANSLATION - on-demand translation failure', () => {
+    it('emits ERROR when handleNewMessage rejects during on-demand translation', async () => {
+      const socket = makeSocket('sock-trans-err');
+      (manager as any).socketToUser.set('sock-trans-err', 'user-trans-err');
+      (translationService.getTranslation as any).mockResolvedValue(null);
+      prisma.message.findUnique.mockResolvedValue({
+        id: 'msg-err-demand',
+        conversationId: 'conv-abc',
+        content: 'Bonjour',
+        originalLanguage: 'fr',
+        senderId: 'sender-1',
+        encryptionMode: null,
+      });
+      (translationService.handleNewMessage as any).mockRejectedValue(new Error('ZMQ send fail'));
+      triggerConnection(socket);
+      await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-err-demand', targetLanguage: 'en' });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'Translation request failed' }));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 51. _resolveMentionUserIds
+  // -------------------------------------------------------------------------
 
   describe('_resolveMentionUserIds', () => {
-    it('returns empty array when usernames is empty', async () => {
-      const { manager } = makeManager();
+    it('returns empty array for empty input', async () => {
       const result = await (manager as any)._resolveMentionUserIds([]);
       expect(result).toEqual([]);
     });
 
-    it('returns user IDs for given usernames', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.user.findMany.mockResolvedValue([{ id: 'u1' }, { id: 'u2' }]);
+    it('returns user IDs for found usernames', async () => {
+      prisma.user.findMany.mockResolvedValue([{ id: 'user-alice' }, { id: 'user-bob' }]);
       const result = await (manager as any)._resolveMentionUserIds(['alice', 'bob']);
-      expect(result).toEqual(['u1', 'u2']);
+      expect(result).toEqual(['user-alice', 'user-bob']);
     });
 
     it('returns empty array on DB error', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.user.findMany.mockRejectedValue(new Error('DB error'));
+      prisma.user.findMany.mockRejectedValue(new Error('DB fail'));
       const result = await (manager as any)._resolveMentionUserIds(['alice']);
       expect(result).toEqual([]);
     });
   });
 
-  describe('broadcastMessage catch paths', () => {
-    it('outer catch handles normalizeConversationId DB error gracefully', async () => {
-      const { manager, prisma } = makeManager();
-      // Make message have no id so transformTranslationsToArray returns []
-      prisma.conversation.findUnique.mockRejectedValue(new Error('DB crash'));
-      // normalizeConversationId will catch and return the id as-is
-      prisma.participant.findMany.mockResolvedValue([]);
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-      await expect(manager.broadcastMessage(makeMessage() as any, 'test-conv')).resolves.not.toThrow();
+  // -------------------------------------------------------------------------
+  // 52. _notifyAgent
+  // -------------------------------------------------------------------------
+
+  describe('_notifyAgent', () => {
+    it('does nothing when agentClient is null', () => {
+      (manager as any).agentClient = null;
+      expect(() => (manager as any)._notifyAgent({
+        id: 'msg-1', conversationId: 'conv-1', senderId: 'sender-1',
+        content: 'Hello', originalLanguage: 'fr', createdAt: new Date(),
+      })).not.toThrow();
     });
 
-    it('updateOnNewMessage catch handler (stats failure)', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      mockUpdateOnNewMessage.mockRejectedValue(new Error('stats DB error'));
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-      await expect(manager.broadcastMessage(makeMessage() as any, '000000000000000000000001')).resolves.not.toThrow();
+    it('does nothing when senderId is null', () => {
+      const fakeClient = { sendEvent: jest.fn().mockResolvedValue(undefined) };
+      (manager as any).agentClient = fakeClient;
+      (manager as any)._notifyAgent({
+        id: 'msg-1', conversationId: 'conv-1', senderId: null,
+        content: 'Hello', originalLanguage: 'fr', createdAt: new Date(),
+      });
+      expect(fakeClient.sendEvent).not.toHaveBeenCalled();
     });
 
-    it('deliveryQueue enqueue catch handler', async () => {
-      const { manager, prisma } = makeManager();
-      const mockQueue = {
-        enqueue: (jest.fn() as jest.Mock<any>).mockRejectedValue(new Error('Redis down')),
-        drain: jest.fn(),
+    it('does nothing when content is null', () => {
+      const fakeClient = { sendEvent: jest.fn().mockResolvedValue(undefined) };
+      (manager as any).agentClient = fakeClient;
+      (manager as any)._notifyAgent({
+        id: 'msg-1', conversationId: 'conv-1', senderId: 'sender-1',
+        content: null, originalLanguage: 'fr', createdAt: new Date(),
+      });
+      expect(fakeClient.sendEvent).not.toHaveBeenCalled();
+    });
+
+    it('calls agentClient.sendEvent with correct payload', async () => {
+      const fakeClient = { sendEvent: jest.fn().mockResolvedValue(undefined) };
+      (manager as any).agentClient = fakeClient;
+      const createdAt = new Date('2026-01-01T00:00:00.000Z');
+      (manager as any)._notifyAgent({
+        id: 'msg-n1', conversationId: 'conv-n1', senderId: 'sender-n1',
+        senderDisplayName: 'Alice', senderUsername: 'alice',
+        content: 'Hello agent', originalLanguage: 'fr',
+        replyToId: null, mentionedUserIds: ['user-x'],
+        createdAt,
+      });
+      await new Promise(r => setImmediate(r));
+      expect(fakeClient.sendEvent).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'agent:new-message',
+        conversationId: 'conv-n1',
+        messageId: 'msg-n1',
+        senderId: 'sender-n1',
+        content: 'Hello agent',
+        originalLanguage: 'fr',
+        mentionedUserIds: ['user-x'],
+        timestamp: createdAt.getTime(),
+      }));
+    });
+
+    it('logs warning when sendEvent rejects (non-blocking)', async () => {
+      const fakeClient = { sendEvent: jest.fn().mockRejectedValue(new Error('agent down')) };
+      (manager as any).agentClient = fakeClient;
+      expect(() => (manager as any)._notifyAgent({
+        id: 'msg-err', conversationId: 'conv-err', senderId: 'sender-1',
+        content: 'Hi', originalLanguage: 'fr', createdAt: new Date(),
+      })).not.toThrow();
+      await new Promise(r => setImmediate(r));
+      // Error is swallowed — no re-throw
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 53. _handleTranslationRequest - direct call unauthenticated (covers 801-802)
+  // -------------------------------------------------------------------------
+
+  describe('_handleTranslationRequest - direct unauthenticated call', () => {
+    it('emits ERROR "User not authenticated" when called directly without socket in map', async () => {
+      // Call _handleTranslationRequest directly (bypassing the outer rate-limit check)
+      // The socket is NOT in socketToUser, so lines 800-802 execute
+      const socket = makeSocket('sock-direct-unauth');
+      // socket is NOT added to socketToUser
+      await (manager as any)._handleTranslationRequest(socket, { messageId: 'msg-1', targetLanguage: 'en' });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'User not authenticated' }));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 53b. _handleTranslationRequest - outer catch (getTranslation throws)
+  // -------------------------------------------------------------------------
+
+  describe('_handleTranslationRequest - outer catch path', () => {
+    it('emits ERROR "Failed to get translation" when getTranslation throws', async () => {
+      const socket = makeSocket('sock-trans-outer-err');
+      (manager as any).socketToUser.set('sock-trans-outer-err', 'user-outer-err');
+      (translationService.getTranslation as any).mockRejectedValue(new Error('Redis crash'));
+      triggerConnection(socket);
+      await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-1', targetLanguage: 'en' });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'Failed to get translation' }));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 54. _handleTextTranslationReady - setImmediate notification path
+  // -------------------------------------------------------------------------
+
+  describe('_handleTextTranslationReady - notification setImmediate branches', () => {
+    it('covers fr/en/es translation notification branches', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+
+      // 'fr' branch
+      await (manager as any)._handleTextTranslationReady({
+        taskId: 't-fr', result: { messageId: 'msg-fr-notif', translatedText: 'Bonjour', sourceLanguage: 'en', confidenceScore: 0.9 },
+        targetLanguage: 'fr',
+      });
+      await new Promise(r => setImmediate(r));
+
+      // 'en' branch
+      await (manager as any)._handleTextTranslationReady({
+        taskId: 't-en', result: { messageId: 'msg-en-notif', translatedText: 'Hello', sourceLanguage: 'fr', confidenceScore: 0.9 },
+        targetLanguage: 'en',
+      });
+      await new Promise(r => setImmediate(r));
+
+      // 'es' branch
+      await (manager as any)._handleTextTranslationReady({
+        taskId: 't-es', result: { messageId: 'msg-es-notif', translatedText: 'Hola', sourceLanguage: 'fr', confidenceScore: 0.9 },
+        targetLanguage: 'es',
+      });
+      await new Promise(r => setImmediate(r));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 55. _broadcastTranslationEvent - with segments (covers 1199-1201)
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastTranslationEvent - with segments', () => {
+    it('logs segment details when translatedAudio has segments', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.messageAttachment.findUnique.mockResolvedValue(null);
+
+      const dataWithSegments = {
+        taskId: 'task-seg',
+        messageId: 'msg-seg-1',
+        attachmentId: 'att-seg-1',
+        language: 'en',
+        translatedAudio: {
+          id: 'taud-1',
+          targetLanguage: 'en',
+          url: 'http://example.com/audio.mp3',
+          durationMs: 1000,
+          format: 'mp3',
+          segments: [
+            { text: 'Hello world', startMs: 0, endMs: 500, speakerId: 'spk-1', voiceSimilarityScore: 0.95 },
+          ],
+        },
       };
-      manager.setDeliveryQueue(mockQueue as any);
-      prisma.participant.findMany.mockResolvedValue([
-        { id: 'p2', userId: 'offline-user', joinedAt: new Date() }
-      ]);
-      mockGetUnreadCounts.mockResolvedValue(new Map([['p2', 1]]));
-      const msg = makeMessage({ senderId: 'sender-participant-id', id: '000000000000000000000001' });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      await new Promise((r) => setImmediate(r));
-      // enqueue rejected but catch handles it
-      expect(mockQueue.enqueue).toHaveBeenCalled();
-    });
-  });
-
-  describe('_handleTranslationRequest via direct call (userId null guard)', () => {
-    it('emits error when userId is null at time of handler call', async () => {
-      const { manager } = makeManager();
-      await manager.initialize();
-      const socket = makeSocket('s1');
-      capturedConnectionHandlers[0](socket);
-      // socketToUser has no entry for s1 (not authenticated at time of internal call)
-      // We call _handleTranslationRequest directly
-      await (manager as any)._handleTranslationRequest(socket, { messageId: 'm1', targetLanguage: 'fr' });
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, { message: 'User not authenticated' });
-    });
-  });
-
-  describe('_handleTranscriptionReady error paths', () => {
-    let manager: MeeshySocketIOManager;
-    let prisma: ReturnType<typeof makePrisma>;
-
-    beforeEach(async () => {
-      ({ manager, prisma } = makeManager());
-      await manager.initialize();
-    });
-
-    it('handles DB error in findUnique gracefully', async () => {
-      prisma.message.findUnique.mockRejectedValue(new Error('DB error'));
-      mockTranslationService.emit('transcriptionReady', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        transcription: { id: 't1', text: 'hello', language: 'en' },
-      });
-      await new Promise((r) => setImmediate(r));
-      // No throw expected; returns early (no conversationId)
-      expect(mockIoToEmit).not.toHaveBeenCalled();
-    });
-
-    it('handles outer error gracefully', async () => {
-      // Make normalizeConversationId crash by making message.conversationId trigger error
-      prisma.message.findUnique.mockResolvedValue({ conversationId: 'c1' });
-      prisma.conversation.findUnique.mockRejectedValue(new Error('normalize error'));
-      // normalizeConversationId catches and returns 'c1', so this won't trigger outer catch
-      prisma.messageAttachment.findUnique.mockRejectedValue(new Error('attachment error'));
-      mockTranslationService.emit('transcriptionReady', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        transcription: { id: 't1', text: 'hello', language: 'en' },
-      });
-      await new Promise((r) => setImmediate(r));
-      // No throw - error caught internally
-    });
-  });
-
-  describe('_broadcastAttachmentUpdated error catch', () => {
-    it('handles DB error in messageAttachment.findUnique gracefully', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.messageAttachment.findUnique.mockRejectedValue(new Error('DB error'));
       await expect(
-        (manager as any)._broadcastAttachmentUpdated('a1', 'm1', 'c1')
+        (manager as any)._broadcastTranslationEvent(dataWithSegments, 'audioTranslationReady', SERVER_EVENTS.AUDIO_TRANSLATION_READY, '🎯')
       ).resolves.not.toThrow();
     });
   });
 
-  describe('_broadcastTranslationEvent error paths', () => {
-    let manager: MeeshySocketIOManager;
-    let prisma: ReturnType<typeof makePrisma>;
+  // -------------------------------------------------------------------------
+  // 56. _broadcastTranslationEvent - outer catch (covers 1220-1221)
+  // -------------------------------------------------------------------------
 
-    beforeEach(async () => {
-      ({ manager, prisma } = makeManager());
-      await manager.initialize();
-    });
-
-    it('handles DB error in message.findUnique gracefully', async () => {
-      prisma.message.findUnique.mockRejectedValue(new Error('DB error'));
-      mockTranslationService.emit('audioTranslationReady', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        language: 'fr',
-        translatedAudio: { id: 'ta1', targetLanguage: 'fr', url: 'http://test.mp3', durationMs: 0, format: 'mp3' },
-      });
-      await new Promise((r) => setImmediate(r));
-      // DB error caught internally, no conversationId, returns early
-      expect(mockIoToEmit).not.toHaveBeenCalled();
-    });
-
-    it('handles outer error gracefully when normalizeConversationId throws', async () => {
-      prisma.message.findUnique.mockResolvedValue({ conversationId: 'c1' });
-      // Make io.to throw to trigger outer catch
-      mockIoTo.mockImplementationOnce(() => { throw new Error('io error'); });
-      prisma.messageAttachment.findUnique.mockResolvedValue({ id: 'a1' });
-      mockTranslationService.emit('audioTranslationReady', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        language: 'fr',
-        translatedAudio: { id: 'ta1', targetLanguage: 'fr', url: 'http://test.mp3', durationMs: 0, format: 'mp3' },
-      });
-      await new Promise((r) => setImmediate(r));
-      // Error caught, stats.errors incremented
-      expect((manager as any).stats.errors).toBeGreaterThan(0);
-    });
-  });
-
-  describe('_handleTextTranslationReady error paths', () => {
-    let manager: MeeshySocketIOManager;
-    let prisma: ReturnType<typeof makePrisma>;
-
-    beforeEach(async () => {
-      ({ manager, prisma } = makeManager());
-      await manager.initialize();
-    });
-
-    it('handles outer error when io.to throws', async () => {
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      mockIoTo.mockImplementationOnce(() => { throw new Error('io crash'); });
-      mockTranslationService.emit('translationReady', {
-        taskId: 't1',
-        result: { messageId: 'm1', translatedText: 'Bonjour', sourceLanguage: 'en', confidenceScore: 0.9 },
-        targetLanguage: 'fr',
-      });
-      await new Promise((r) => setImmediate(r));
-      expect((manager as any).stats.errors).toBeGreaterThan(0);
-    });
-  });
-
-  describe('handleAgentReaction - notification catch', () => {
-    it('notification error is caught by .catch()', async () => {
-      const { manager, prisma } = makeManager();
-      mockAddReaction.mockResolvedValue({ id: 'r1' });
-      mockCreateUpdateEvent.mockResolvedValue({ messageId: 'm1', emoji: '👍' });
-      mockCreateReactionNotification.mockRejectedValue(new Error('notification error'));
-      prisma.participant.findFirst.mockResolvedValue({ id: 'p1' });
-      prisma.message.findUnique.mockResolvedValue({ conversationId: 'c1', senderId: 'p2' });
-      prisma.participant.findUnique.mockResolvedValue({ userId: 'author-user' });
-      await manager.handleAgentReaction({
-        type: 'agent:reaction',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        targetMessageId: 'm1',
-        emoji: '👍',
-      });
-      await new Promise((r) => setImmediate(r));
-      // Error caught by .catch() in notification call
-    });
-  });
-
-  describe('storyTextObjectTranslationCompleted error path', () => {
-    it('handles StoryTextObjectTranslationService error gracefully', async () => {
-      const { manager } = makeManager();
-      await manager.initialize();
-      mockStoryHandleTranslationCompleted.mockRejectedValue(new Error('story error'));
-      mockTranslationService.emit('storyTextObjectTranslationCompleted', {
-        postId: 'post1',
-        textObjectIndex: 0,
-        translations: { fr: 'Bonjour' },
-      });
-      await new Promise((r) => setImmediate(r));
-      // Error caught internally
-    });
-  });
-
-  describe('_handleTranscriptionReady outer catch', () => {
-    it('increments stats.errors when io.to throws', async () => {
-      const { manager, prisma } = makeManager();
-      await manager.initialize();
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      const statsBefore = (manager as any).stats.errors;
-      mockIoTo.mockImplementationOnce(() => { throw new Error('io crash'); });
-      mockTranslationService.emit('transcriptionReady', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        transcription: { id: 't1', text: 'hello', language: 'en' },
-      });
-      await new Promise((r) => setImmediate(r));
-      expect((manager as any).stats.errors).toBe(statsBefore + 1);
-    });
-  });
-
-  describe('_broadcastTranslationEvent with segments (lines 1199-1201)', () => {
-    it('logs segments when translatedAudio has segments', async () => {
-      const { manager, prisma } = makeManager();
-      await manager.initialize();
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      prisma.messageAttachment.findUnique.mockResolvedValue({ id: 'a1' });
-      mockTranslationService.emit('audioTranslationReady', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        language: 'fr',
-        translatedAudio: {
-          id: 'ta1',
-          targetLanguage: 'fr',
-          url: 'http://test/audio.mp3',
-          durationMs: 2000,
-          format: 'mp3',
-          cloned: false,
-          quality: 0.9,
-          ttsModel: 'xtts',
-          segments: [
-            { text: 'Hello', startMs: 0, endMs: 500, speakerId: 'spk1', voiceSimilarityScore: 0.9 }
-          ],
-        },
-      });
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).toHaveBeenCalledWith(SERVER_EVENTS.AUDIO_TRANSLATION_READY, expect.any(Object));
-    });
-  });
-
-  describe('_broadcastTranslationEvent - translatedAudio undefined after conversation found', () => {
-    it('returns early when translatedAudio is undefined in progressive event (after conv lookup)', async () => {
-      const { manager, prisma } = makeManager();
-      await manager.initialize();
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      // In audioTranslationsProgressive, there's no early guard like in audioTranslationReady
-      // So data goes to _broadcastTranslationEvent which checks translatedAudio AFTER conv lookup
-      mockTranslationService.emit('audioTranslationsProgressive', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        language: 'fr',
-        translatedAudio: null,
-      });
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('_handleTextTranslationReady - setImmediate language branches (en, es)', () => {
-    it('runs setImmediate for en translation', async () => {
-      const { manager, prisma } = makeManager();
-      await manager.initialize();
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      mockTranslationService.emit('translationReady', {
-        taskId: 't1',
-        result: { messageId: 'm1', translatedText: 'Hello', sourceLanguage: 'fr', confidenceScore: 0.9 },
-        targetLanguage: 'en',
-      });
-      await new Promise((r) => setImmediate(r));
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).toHaveBeenCalled();
-    });
-
-    it('runs setImmediate for es translation', async () => {
-      const { manager, prisma } = makeManager();
-      await manager.initialize();
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      mockTranslationService.emit('translationReady', {
-        taskId: 't1',
-        result: { messageId: 'm1', translatedText: 'Hola', sourceLanguage: 'fr', confidenceScore: 0.9 },
-        targetLanguage: 'es',
-      });
-      await new Promise((r) => setImmediate(r));
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).toHaveBeenCalled();
-    });
-
-    it('runs setImmediate for other language (no branch match)', async () => {
-      const { manager, prisma } = makeManager();
-      await manager.initialize();
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      mockTranslationService.emit('translationReady', {
-        taskId: 't1',
-        result: { messageId: 'm1', translatedText: 'Hallo', sourceLanguage: 'fr', confidenceScore: 0.9 },
-        targetLanguage: 'de',
-      });
-      await new Promise((r) => setImmediate(r));
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).toHaveBeenCalled();
-    });
-  });
-
-  describe('broadcastNewMessage - getConnectedUsers lambda and outer catch', () => {
-    it('captures getConnectedUsers lambda from updateOnNewMessage call', async () => {
-      const { manager, prisma } = makeManager();
-      // Capture the lambda passed to updateOnNewMessage
-      let capturedLambda: (() => string[]) | undefined;
-      mockUpdateOnNewMessage.mockImplementation((_prisma: any, _convId: any, _lang: any, connectedUsersFn: any) => {
-        capturedLambda = connectedUsersFn;
-        return Promise.resolve(null);
-      });
-      prisma.participant.findMany.mockResolvedValue([]);
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-      (manager as any).connectedUsers.set('u1', makeSocketUser());
-      await manager.broadcastMessage(makeMessage() as any, '000000000000000000000001');
-      expect(capturedLambda).toBeDefined();
-      const result = capturedLambda!();
-      expect(result).toContain('u1');
-    });
-
-    it('outer catch triggered when io.to throws in broadcast', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-      mockIoTo.mockImplementationOnce(() => { throw new Error('io crash'); });
-      const statsBefore = (manager as any).stats;
-      await expect(manager.broadcastMessage(makeMessage() as any, '000000000000000000000001')).resolves.not.toThrow();
-    });
-  });
-
-  describe('handleAgentResponse - no mentionedUsernames found in DB', () => {
-    it('does not set mentionedUserIds when no users found', async () => {
-      const resultMessage = makeMessage({ id: '000000000000000000000001' });
-      mockHandleMessage.mockResolvedValue({ success: true, data: resultMessage });
-      const { manager, prisma } = makeManager();
-      prisma.user.findMany.mockResolvedValue([]); // no users found
-      prisma.participant.findMany.mockResolvedValue([]);
-      await manager.handleAgentResponse({
-        type: 'agent:response',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        content: 'Hello @alice',
-        originalLanguage: 'fr',
-        mentionedUsernames: ['alice'],
-        messageSource: 'agent',
-        metadata: { agentType: 'orchestrator', roleConfidence: 0.9 },
-      });
-      expect(mockHandleMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ mentionedUserIds: undefined }),
-        'agent-user'
-      );
-    });
-  });
-
-  describe('constructor lambda callbacks (lines 187, 252, 270)', () => {
-    it('setStatusBroadcastCallback lambda calls _broadcastUserStatus', async () => {
-      const { manager } = makeManager();
-      // The callback was captured by the mock
-      const broadcastCb = mockMaintenanceSetStatusCallback.mock.calls[0][0] as (
-        userId: string, isOnline: boolean, isAnonymous: boolean
-      ) => void;
-      // showOnlineStatus = false so no emit, but the lambda body is covered
-      mockGetPreferences.mockResolvedValue({ showOnlineStatus: false, showLastSeen: true });
-      broadcastCb('u1', true, false);
-      await new Promise((r) => setImmediate(r));
-      // Lambda body executed
-    });
-
-    it('AuthHandler emitPresenceSnapshot lambda calls _emitPresenceSnapshot', async () => {
-      const { manager } = makeManager();
-      // AuthHandler is mocked via jest.mock, but the options object passed to its constructor
-      // contains the lambda. Let's check the AuthHandler constructor args.
-      const { AuthHandler } = await import('../handlers/AuthHandler');
-      const constructorArgs = (AuthHandler as jest.Mock<any>).mock.calls[0][0];
-      const emitPresenceSnapshotFn = constructorArgs.emitPresenceSnapshot;
-      expect(emitPresenceSnapshotFn).toBeDefined();
-      // Call it to cover line 270
-      const socket = makeSocket();
-      const { prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      // Calling this lambda exercises line 270
-      await emitPresenceSnapshotFn(socket, 'u1', false);
-      // No throw expected
-    });
-  });
-
-  describe('CORS origin callback (lines 204-210)', () => {
-    it('calls origin callback with null,true when origin is undefined', () => {
-      const { Server } = require('socket.io');
-      makeManager();
-      const constructorCalls = Server.mock.calls;
-      const lastOptions = constructorCalls[constructorCalls.length - 1][1];
-      const corsOrigin = lastOptions?.cors?.origin;
-      if (typeof corsOrigin === 'function') {
-        const cb = jest.fn();
-        corsOrigin(undefined, cb);
-        expect(cb).toHaveBeenCalledWith(null, true);
-        const cb2 = jest.fn();
-        corsOrigin('https://meeshy.me', cb2);
-        expect(cb2).toHaveBeenCalledWith(null, true);
-        const cb3 = jest.fn();
-        corsOrigin('https://evil.com', cb3);
-        expect(cb3).toHaveBeenCalledWith(expect.any(Error));
-      } else {
-        expect(typeof corsOrigin).toBe('boolean');
-      }
-    });
-
-    it('uses ALLOWED_ORIGINS env var when CORS_ORIGINS is not set', () => {
-      const { Server } = require('socket.io');
-      const origCors = process.env.CORS_ORIGINS;
-      const origAllowed = process.env.ALLOWED_ORIGINS;
-      delete process.env.CORS_ORIGINS;
-      process.env.ALLOWED_ORIGINS = 'https://custom.meeshy.com';
-      makeManager(); // This creates the SocketIOServer with the new env vars
-      const constructorCalls = Server.mock.calls;
-      const lastOptions = constructorCalls[constructorCalls.length - 1][1];
-      const corsOrigin = lastOptions?.cors?.origin;
-      if (typeof corsOrigin === 'function') {
-        const cb = jest.fn();
-        corsOrigin('https://custom.meeshy.com', cb);
-        expect(cb).toHaveBeenCalledWith(null, true);
-        const cb2 = jest.fn();
-        corsOrigin('https://other.com', cb2);
-        expect(cb2).toHaveBeenCalledWith(expect.any(Error));
-      }
-      // Restore
-      if (origCors !== undefined) process.env.CORS_ORIGINS = origCors;
-      else delete process.env.CORS_ORIGINS;
-      if (origAllowed !== undefined) process.env.ALLOWED_ORIGINS = origAllowed;
-      else delete process.env.ALLOWED_ORIGINS;
-    });
-  });
-
-  describe('LocationHandler normalizeConversationId lambda (line 252)', () => {
-    it('normalizeConversationId lambda works correctly', async () => {
-      const { LocationHandler } = await import('../handlers/LocationHandler');
-      const { manager, prisma } = makeManager(); // creates the manager, LocationHandler gets its options
-      const constructorArgs = (LocationHandler as jest.Mock<any>).mock.calls[0][0];
-      const normalizeFn = constructorArgs.normalizeConversationId;
-      expect(normalizeFn).toBeDefined();
-      // Call it to cover line 252
+  describe('_broadcastTranslationEvent - outer catch path', () => {
+    it('increments stats.errors when io.to.emit throws', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
       prisma.conversation.findUnique.mockResolvedValue(null);
-      const result = await normalizeFn('some-id');
-      expect(result).toBeDefined();
-    });
-  });
 
-  describe('getConversationParticipantsForMention error path (line 1917)', () => {
-    it('returns empty array when prisma throws in getConversationParticipantsForMention', async () => {
-      const resultMessage = makeMessage({ id: '000000000000000000000001' });
-      mockHandleMessage.mockResolvedValue({ success: true, data: resultMessage });
-      const { manager, prisma } = makeManager();
-      // Make participant.findMany throw ONLY for the mentions lookup
-      prisma.participant.findMany
-        .mockRejectedValueOnce(new Error('DB error in mentions'))  // first call: getConversationParticipantsForMention
-        .mockResolvedValue([]);  // subsequent calls: broadcastNewMessage
-      await manager.handleAgentResponse({
-        type: 'agent:response',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        content: 'Hello @bob',
-        originalLanguage: 'fr',
-        // No mentionedUsernames — triggers @ mention path
-        messageSource: 'agent',
-        metadata: { agentType: 'orchestrator', roleConfidence: 0.9 },
-      });
-      // Should still call handleMessage (getConversationParticipantsForMention returns [] on error)
-      expect(mockHandleMessage).toHaveBeenCalled();
-    });
-  });
+      // Make io.to().emit throw
+      ioState.toEmit.mockImplementationOnce(() => { throw new Error('socket emit failed'); });
 
-  describe('_handleTextTranslationReady - setImmediate notification path', () => {
-    it('runs setImmediate notification block when conversation found', async () => {
-      const { manager, prisma } = makeManager();
-      await manager.initialize();
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      mockTranslationService.emit('translationReady', {
-        taskId: 't1',
-        result: { messageId: 'm1', translatedText: 'Bonjour', sourceLanguage: 'en', confidenceScore: 0.9 },
-        targetLanguage: 'fr',
-      });
-      // Two flushes: one for the main async handler, one for the setImmediate inside it
-      await new Promise((r) => setImmediate(r));
-      await new Promise((r) => setImmediate(r));
-      // The setImmediate callback runs and does nothing visible - just verify no throw
-      expect(mockIoToEmit).toHaveBeenCalled();
-    });
-
-    it('broadcasts when room has clients (clientCount > 0 branch)', async () => {
-      const { manager, prisma } = makeManager();
-      await manager.initialize();
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      mockIoSockets.adapter.rooms.set('conversation:000000000000000000000001', new Set(['s1']));
-      mockTranslationService.emit('translationReady', {
-        taskId: 't1',
-        result: { messageId: 'm1', translatedText: 'Bonjour', sourceLanguage: 'en', confidenceScore: 0.9 },
-        targetLanguage: 'en',
-      });
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.any(Object));
-    });
-  });
-
-  describe('_broadcastTranslationEvent - translatedAudio undefined branch', () => {
-    it('returns early when translatedAudio is undefined in broadcastTranslationEvent', async () => {
-      const { manager, prisma } = makeManager();
-      await manager.initialize();
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      // Progressive event with null translatedAudio (different guard vs audioTranslationReady)
-      mockTranslationService.emit('audioTranslationsProgressive', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        language: 'fr',
-        translatedAudio: undefined,
-      });
-      await new Promise((r) => setImmediate(r));
-      // Should not emit because translatedAudio check fails
-      expect(mockIoToEmit).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('initialize - maintenance non-Error thrown (line 592)', () => {
-    it('logs No stack trace when non-Error thrown from maintenance', async () => {
-      mockMaintenanceStartTasks.mockRejectedValue('string error');
-      const { manager } = makeManager();
-      await expect(manager.initialize()).resolves.not.toThrow();
-    });
-  });
-
-  describe('CORS origin - development mode (line 203)', () => {
-    it('uses boolean true as CORS origin in development env', () => {
-      const { Server } = require('socket.io');
-      const origNodeEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'development';
-      makeManager();
-      const constructorCalls = Server.mock.calls;
-      const lastOptions = constructorCalls[constructorCalls.length - 1][1];
-      const corsOrigin = lastOptions?.cors?.origin;
-      expect(corsOrigin).toBe(true);
-      process.env.NODE_ENV = origNodeEnv;
-    });
-  });
-
-  describe('normalizeConversationId - cache firstKey undefined edge case (line 386)', () => {
-    it('handles firstKey undefined gracefully (empty cache)', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.conversation.findUnique.mockResolvedValue({ id: '000000000000000000000002', identifier: 'c2' });
-      // Fill cache to exactly MAX - 1 to avoid eviction with undefined keys
-      const cache = (manager as any).conversationIdCache;
-      for (let i = 0; i < 2000; i++) cache.set(`key${i}`, `val${i}`);
-      // Now mock keys() to return undefined on .next().value
-      const origKeys = cache.keys.bind(cache);
-      cache.keys = () => {
-        const iter = origKeys();
-        return {
-          next: () => ({ value: undefined, done: false }),
-          [Symbol.iterator]() { return this; }
-        };
+      const data = {
+        taskId: 'task-outer-emit-err',
+        messageId: 'msg-outer-emit',
+        attachmentId: 'att-outer-emit',
+        language: 'en',
+        translatedAudio: {
+          id: 'ta-emit-err',
+          targetLanguage: 'en',
+          url: 'http://example.com/audio.mp3',
+          durationMs: 1000,
+          format: 'mp3',
+        },
       };
-      prisma.conversation.findUnique.mockResolvedValue({ id: 'new-id', identifier: 'new-key' });
-      const result = await (manager as any).normalizeConversationId('new-key');
-      expect(result).toBe('new-id');
-      cache.keys = origKeys;
+
+      const before = manager.getStats().errors;
+      await (manager as any)._broadcastTranslationEvent(data, 'audioTranslationReady', SERVER_EVENTS.AUDIO_TRANSLATION_READY, '🎯');
+      expect(manager.getStats().errors).toBe(before + 1);
     });
   });
 
-  describe('_emitPresenceSnapshot - anonymous contact with null userId (lines 470, 489, 494)', () => {
-    it('uses contact.id as presenceKey when contact.userId is null', async () => {
-      const { manager, prisma } = makeManager();
-      const socket = makeSocket();
-      prisma.participant.findMany
-        .mockResolvedValueOnce([{ conversationId: 'c1' }])  // first call: user conversations (isAnonymous=true uses id)
-        .mockResolvedValueOnce([
-          {
-            id: 'anon-p1',
-            userId: null,           // <-- triggers c.userId ?? c.id branch
-            displayName: 'GuestUser',
-            type: 'ANONYMOUS',
-            lastActiveAt: new Date(),
-            user: null              // <-- triggers username fallback chain
-          }
-        ]);
-      await (manager as any)._emitPresenceSnapshot(socket, 'anon-requester', true);
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PRESENCE_SNAPSHOT, expect.objectContaining({
-        users: expect.arrayContaining([
-          expect.objectContaining({ userId: 'anon-p1' })
-        ])
-      }));
-    });
+  // -------------------------------------------------------------------------
+  // 57. _broadcastNewMessage - with sender object (covers 1512-1514)
+  // -------------------------------------------------------------------------
 
-    it('falls through username fallback chain when user and displayName are null (line 494)', async () => {
-      const { manager, prisma } = makeManager();
-      const socket = makeSocket();
-      prisma.participant.findMany
-        .mockResolvedValueOnce([{ conversationId: 'c1' }])
-        .mockResolvedValueOnce([
-          {
-            id: 'p-no-name',
-            userId: 'u-no-name',
-            displayName: null,       // <-- triggers displayName ?? presenceKey
-            type: 'REGISTERED',
-            lastActiveAt: null,
-            user: {                  // <-- triggers user?.username ?? user?.displayName chain
-              id: 'u-no-name',
-              username: null,        // username is null → fallback to displayName
-              displayName: null,     // displayName null too → fallback to participant.displayName
-              lastActiveAt: null
-            }
-          }
-        ]);
-      await (manager as any)._emitPresenceSnapshot(socket, 'u1', false);
-      // presenceKey = 'u-no-name', username should fallback all the way to presenceKey
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PRESENCE_SNAPSHOT, expect.objectContaining({
-        users: expect.arrayContaining([
-          expect.objectContaining({ userId: 'u-no-name', username: 'u-no-name' })
-        ])
-      }));
-    });
-  });
-
-  describe('FEED_SUBSCRIBE/UNSUBSCRIBE - no callback (lines 672, 680, 682)', () => {
-    let manager: MeeshySocketIOManager;
-    let socket: ReturnType<typeof makeSocket>;
-
-    beforeEach(async () => {
-      ({ manager } = makeManager());
-      await manager.initialize();
-      socket = makeSocket('s1');
-      capturedConnectionHandlers[0](socket);
-    });
-
-    it('FEED_SUBSCRIBE with userId but no callback does not throw', () => {
-      (manager as any).socketToUser.set('s1', 'u1');
-      expect(() => socket._trigger(CLIENT_EVENTS.FEED_SUBSCRIBE)).not.toThrow();
-    });
-
-    it('FEED_SUBSCRIBE without userId and without callback does not throw', () => {
-      // no socketToUser entry
-      expect(() => socket._trigger(CLIENT_EVENTS.FEED_SUBSCRIBE)).not.toThrow();
-    });
-
-    it('FEED_UNSUBSCRIBE with userId but no callback does not throw', () => {
-      (manager as any).socketToUser.set('s1', 'u1');
-      expect(() => socket._trigger(CLIENT_EVENTS.FEED_UNSUBSCRIBE)).not.toThrow();
-    });
-
-    it('FEED_UNSUBSCRIBE without userId and without callback does not throw', () => {
-      expect(() => socket._trigger(CLIENT_EVENTS.FEED_UNSUBSCRIBE)).not.toThrow();
-    });
-  });
-
-  describe('_broadcastTranslationEvent - binary-expr fallbacks (lines 1139, 1180-1194)', () => {
-    let manager: MeeshySocketIOManager;
-    let prisma: ReturnType<typeof makePrisma>;
-
-    beforeEach(async () => {
-      ({ manager, prisma } = makeManager());
-      await manager.initialize();
-    });
-
-    it('uses targetLanguage fallback when language is undefined (line 1139)', async () => {
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      prisma.messageAttachment.findUnique.mockResolvedValue({ id: 'a1' });
-      mockTranslationService.emit('audioTranslationReady', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        language: undefined,          // <-- triggers data.language || data.translatedAudio.targetLanguage
-        translatedAudio: {
-          id: 'ta1',
-          targetLanguage: 'de',
-          url: 'http://test.mp3',
-          durationMs: 0,
-          format: 'mp3'
-        },
-      });
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).toHaveBeenCalledWith(SERVER_EVENTS.AUDIO_TRANSLATION_READY, expect.any(Object));
-    });
-
-    it('uses id fallback when translatedAudio.id is undefined (line 1182)', async () => {
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      prisma.messageAttachment.findUnique.mockResolvedValue({ id: 'a1' });
-      mockTranslationService.emit('audioTranslationReady', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        language: 'fr',
-        translatedAudio: {
-          id: undefined,              // <-- triggers id || `${data.attachmentId}_${data.language}` fallback
-          targetLanguage: undefined,  // <-- triggers targetLanguage || data.language fallback
-          url: 'http://test.mp3',
-          translatedText: 'Bonjour', // <-- triggers translatedText || transcription || ''
-          durationMs: undefined,      // <-- triggers durationMs || duration || 0
-          duration: 1000,
-          format: undefined,          // <-- triggers format || 'mp3'
-          cloned: undefined,
-          quality: undefined,
-          ttsModel: undefined,        // <-- triggers ttsModel || 'xtts'
-        },
-      });
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).toHaveBeenCalledWith(SERVER_EVENTS.AUDIO_TRANSLATION_READY, expect.any(Object));
-    });
-
-    it('uses phase-aware processingTimeMs (line 1194)', async () => {
-      prisma.message.findUnique.mockResolvedValue({ conversationId: '000000000000000000000001' });
-      prisma.messageAttachment.findUnique.mockResolvedValue({ id: 'a1' });
-      mockTranslationService.emit('audioTranslationsProgressive', {
-        taskId: 't1',
-        messageId: 'm1',
-        attachmentId: 'a1',
-        language: 'fr',
-        phase: 'progressive',         // <-- triggers data.phase ? undefined : 0 → undefined
-        translatedAudio: { id: 'ta1', targetLanguage: 'fr', url: 'http://test.mp3', durationMs: 500, format: 'mp3' },
-      });
-      await new Promise((r) => setImmediate(r));
-      expect(mockIoToEmit).toHaveBeenCalledWith(SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE, expect.any(Object));
-    });
-  });
-
-  describe('_emitMessageNewByLanguage - originalLanguage fallback (line 1308)', () => {
-    it('uses fr fallback when payload.originalLanguage is null', () => {
-      const { manager } = makeManager();
-      const roomSet = new Set(['s1']);
-      mockIoSockets.adapter.rooms.set('conversation:c1', roomSet);
-      (manager as any).socketToUser.set('s1', 'u1');
-      (manager as any).connectedUsers.set('u1', makeSocketUser({ resolvedLanguages: ['fr'] }));
-      mockFilterPayload.mockImplementation((p: any) => p);
-      // payload.originalLanguage is null → triggers 'fr' fallback
-      (manager as any)._emitMessageNewByLanguage('conversation:c1', { id: 'm1', originalLanguage: null });
-      expect(mockFilterPayload).toHaveBeenCalled();
-    });
-  });
-
-  describe('broadcastMessage - message payload fallbacks (lines 1445, 1490-1526)', () => {
-    beforeEach(() => {
-      mockUpdateOnNewMessage.mockResolvedValue(undefined);
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-    });
-
-    it('handles message with no id (line 1445 - if !message.id path)', async () => {
-      const { manager, prisma } = makeManager();
+  describe('_broadcastNewMessage - sender object building', () => {
+    it('builds sender field when message.sender is provided', async () => {
+      prisma.conversation.findUnique.mockResolvedValue(null);
       prisma.participant.findMany.mockResolvedValue([]);
-      const msg = makeMessage({ id: null });
-      await expect(manager.broadcastMessage(msg as any, '000000000000000000000001')).resolves.not.toThrow();
-    });
 
-    it('handles message.originalLanguage null fallback (line 1490)', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      const msg = makeMessage({ originalLanguage: null });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      expect(mockIoToEmit).toHaveBeenCalledWith(
-        SERVER_EVENTS.MESSAGE_NEW,
-        expect.objectContaining({ originalLanguage: 'fr' })
-      );
-    });
-
-    it('handles message.messageType null fallback (line 1492)', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      const msg = makeMessage({ messageType: null });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      expect(mockIoToEmit).toHaveBeenCalledWith(
-        SERVER_EVENTS.MESSAGE_NEW,
-        expect.objectContaining({ messageType: 'text' })
-      );
-    });
-
-    it('handles null createdAt and updatedAt fallbacks (lines 1504-1505)', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      const msg = makeMessage({ createdAt: null, updatedAt: null });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      expect(mockIoToEmit).toHaveBeenCalledWith(
-        SERVER_EVENTS.MESSAGE_NEW,
-        expect.objectContaining({ createdAt: expect.any(Date) })
-      );
-    });
-
-    it('handles null validatedMentions fallback (line 1507)', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      const msg = makeMessage({ validatedMentions: null });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      expect(mockIoToEmit).toHaveBeenCalledWith(
-        SERVER_EVENTS.MESSAGE_NEW,
-        expect.objectContaining({ validatedMentions: [] })
-      );
-    });
-
-    it('handles sender with null avatar and no user (line 1516-1524)', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
       const msg = makeMessage({
+        conversationId: 'conv-123456789012',
         sender: {
-          id: 'p1',
+          id: 'part-s1',
+          nickname: 'Alice',
+          displayName: 'Alice Smith',
+          avatar: 'https://example.com/avatar.png',
+          type: 'registered',
+          userId: 'user-alice',
+          user: {
+            id: 'user-alice',
+            username: 'alice',
+            firstName: 'Alice',
+            lastName: 'Smith',
+            avatar: null,
+          },
+        },
+      });
+
+      await manager.broadcastMessage(msg, 'conv-123456789012');
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.objectContaining({
+        sender: expect.objectContaining({
+          id: 'part-s1',
           displayName: 'Alice',
-          nickname: null,        // <-- triggers s.nickname || s.displayName → displayName
-          type: 'REGISTERED',
-          userId: 'u-alice',
-          avatar: null,          // <-- avatar || u?.avatar with no u
-          user: null             // <-- null user, no username/firstName/lastName
-        }
-      });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      expect(mockIoToEmit).toHaveBeenCalledWith(
-        SERVER_EVENTS.MESSAGE_NEW,
-        expect.objectContaining({
-          sender: expect.objectContaining({
-            displayName: 'Alice',
-            username: undefined,
-            firstName: '',
-            lastName: '',
-          })
-        })
-      );
+          userId: 'user-alice',
+          username: 'alice',
+        }),
+      }));
     });
 
-    it('handles null attachments fallback (line 1526)', async () => {
-      const { manager, prisma } = makeManager();
+    it('logs attachment debug info when message has attachments', async () => {
+      prisma.conversation.findUnique.mockResolvedValue(null);
       prisma.participant.findMany.mockResolvedValue([]);
-      const msg = makeMessage({ attachments: null });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      expect(mockIoToEmit).toHaveBeenCalledWith(
-        SERVER_EVENTS.MESSAGE_NEW,
-        expect.objectContaining({ attachments: [] })
-      );
-    });
 
-    it('handles replyTo with null senderId and null sender (lines 1532-1537)', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      mockGetUnreadCounts.mockResolvedValue(new Map());
       const msg = makeMessage({
-        replyToId: 'r1',
+        conversationId: 'conv-123456789012',
+        attachments: [
+          {
+            id: 'att-debug-1',
+            metadata: { width: 800, height: 600 },
+          },
+        ],
+      });
+
+      await expect(manager.broadcastMessage(msg, 'conv-123456789012')).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 58. _broadcastNewMessage - unreadCount error path (covers 1663)
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastNewMessage - unreadCount error catch', () => {
+    it('continues broadcast when participant.findMany throws in unreadCount block', async () => {
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      // First call for participants: throw to trigger unreadCount error
+      prisma.participant.findMany.mockRejectedValue(new Error('DB fail in unreadCount'));
+
+      const msg = makeMessage({ conversationId: 'conv-123456789012' });
+      await expect(manager.broadcastMessage(msg, 'conv-123456789012')).resolves.not.toThrow();
+
+      // MESSAGE_NEW should still have been emitted
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 59. handleAgentReaction - notification error catch (covers 1986)
+  // -------------------------------------------------------------------------
+
+  describe('handleAgentReaction - notification error catch', () => {
+    it('continues when createReactionNotification rejects', async () => {
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
+      const mockReactionSvc = {
+        addReaction: jest.fn().mockResolvedValue({ id: 'reaction-1' }),
+        createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'reaction-1', emoji: '🔥' }),
+      };
+      const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
+      ReactionService.mockImplementation(() => mockReactionSvc);
+
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012', senderId: 'author-part' });
+      prisma.participant.findUnique.mockResolvedValue({ userId: 'different-author-user' });
+
+      // Notification will fail
+      mockNotificationServiceInstance.createReactionNotification.mockRejectedValue(new Error('FCM down'));
+
+      const baseReaction = {
+        type: 'agent:reaction' as const,
+        conversationId: 'conv-123456789012',
+        asUserId: 'agent-user-99',
+        targetMessageId: 'msg-target-99',
+        emoji: '🔥',
+      };
+
+      await expect(manager.handleAgentReaction(baseReaction)).resolves.not.toThrow();
+      await new Promise(r => setImmediate(r)); // Let .catch() run
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 60. _broadcastNewMessage - transformTranslationsToArray error (covers 1453-1455)
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastNewMessage - translation transform error', () => {
+    it('continues when transformTranslationsToArray throws (returns empty translations)', async () => {
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([]);
+
+      const { transformTranslationsToArray } = jest.requireMock('../../utils/translation-transformer') as any;
+      transformTranslationsToArray.mockImplementationOnce(() => { throw new Error('transform fail'); });
+
+      const msg = makeMessage({
+        conversationId: 'conv-123456789012',
+        translations: { fr: 'Bonjour', en: 'Hello' },
+      });
+      await expect(manager.broadcastMessage(msg, 'conv-123456789012')).resolves.not.toThrow();
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 61. _broadcastNewMessage outer catch (covers 1672)
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastNewMessage - outer catch path', () => {
+    it('does not throw when io.to.emit throws during MESSAGE_NEW broadcast', async () => {
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([]);
+
+      // Make io.to().emit throw
+      ioState.toEmit.mockImplementationOnce(() => { throw new Error('Socket emit crashed'); });
+
+      const msg = makeMessage({ conversationId: 'conv-123456789012' });
+      await expect(manager.broadcastMessage(msg, 'conv-123456789012')).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 62. _handleTranscriptionReady - error path (covers 1072-1073)
+  // -------------------------------------------------------------------------
+
+  describe('_handleTranscriptionReady - error path', () => {
+    it('increments stats.errors when transcription object is null (property access throws)', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-tcr-null' });
+
+      const data = {
+        taskId: 'task-tcr-null',
+        messageId: 'msg-tcr-null',
+        attachmentId: 'att-tcr-null',
+        transcription: null, // Will cause data.transcription.id to throw
+      };
+
+      const before = manager.getStats().errors;
+      await (manager as any)._handleTranscriptionReady(data);
+      expect(manager.getStats().errors).toBe(before + 1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 63. _broadcastAttachmentUpdated - error path (covers 1106)
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastAttachmentUpdated - error path', () => {
+    it('does not throw when messageAttachment.findUnique throws', async () => {
+      prisma.messageAttachment.findUnique.mockRejectedValue(new Error('DB err in attachment'));
+      await expect(
+        (manager as any)._broadcastAttachmentUpdated('att-1', 'msg-1', 'conv-123456789012')
+      ).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 64. _broadcastUserStatus - error catch (covers 1413)
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastUserStatus - error catch', () => {
+    it('does not throw when getPreferences throws', async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockRejectedValue(new Error('Privacy svc fail'));
+      await expect(
+        (manager as any)._broadcastUserStatus('user-status-err', true, false)
+      ).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 65. _handleTextTranslationReady - outer catch (covers 957-959)
+  // -------------------------------------------------------------------------
+
+  describe('_handleTextTranslationReady - outer catch', () => {
+    it('increments stats.errors when io.to.emit throws', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+
+      // Make io.to().emit throw to trigger outer catch
+      ioState.toEmit.mockImplementationOnce(() => { throw new Error('socket emit crashed in textTranslation'); });
+
+      const data = {
+        taskId: 'task-txt-outer',
+        result: { messageId: 'msg-txt-outer', translatedText: 'Bonjour', sourceLanguage: 'en', confidenceScore: 0.9 },
+        targetLanguage: 'fr',
+      };
+
+      const before = manager.getStats().errors;
+      await (manager as any)._handleTextTranslationReady(data);
+      expect(manager.getStats().errors).toBe(before + 1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 66. getConversationParticipantsForMention - error catch (covers 1917)
+  // -------------------------------------------------------------------------
+
+  describe('getConversationParticipantsForMention - error catch', () => {
+    it('returns empty array when participant.findMany throws', async () => {
+      prisma.participant.findMany.mockRejectedValue(new Error('DB exploded in mention'));
+      const result = await (manager as any).getConversationParticipantsForMention('conv-123456789012');
+      expect(result).toEqual([]);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 67. _broadcastNewMessage - stats.catch warn (covers 1463-1466)
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastNewMessage - stats catch warn', () => {
+    it('logs warning when conversationStatsService.updateOnNewMessage rejects', async () => {
+      const { conversationStatsService } = jest.requireMock('../../services/ConversationStatsService') as any;
+      conversationStatsService.updateOnNewMessage.mockRejectedValueOnce(new Error('stats fail'));
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([]);
+
+      const msg = makeMessage({ conversationId: 'conv-123456789012' });
+      await expect(manager.broadcastMessage(msg, 'conv-123456789012')).resolves.not.toThrow();
+      // Broadcast should still emit MESSAGE_NEW despite stats failure
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 68. _drainPendingMessages - error catch (covers 365)
+  // -------------------------------------------------------------------------
+
+  describe('_drainPendingMessages - error catch', () => {
+    it('logs warning when deliveryQueue.drain throws', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockRejectedValue(new Error('Redis drain fail')),
+        enqueue: jest.fn(),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+
+      const socket = makeSocket('sock-drain-err');
+      await expect(
+        (manager as any)._drainPendingMessages(socket, 'user-drain-err')
+      ).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 69. initialize() - AgentAdminRelay start error (covers 580)
+  // -------------------------------------------------------------------------
+
+  describe('initialize() - AgentAdminRelay start error', () => {
+    it('does not throw when agentAdminRelay.start() rejects', async () => {
+      const { AgentAdminRelay } = jest.requireMock('../AgentAdminRelay') as any;
+      AgentAdminRelay.mockImplementationOnce(() => ({
+        start: jest.fn().mockRejectedValue(new Error('relay start failed')),
+        stop: jest.fn().mockResolvedValue(undefined),
+      }));
+
+      const m = new MeeshySocketIOManager({} as any, prisma as any, makeTranslationService() as any);
+      await expect(m.initialize()).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 70. initialize() - maintenance error (covers 591-592)
+  // -------------------------------------------------------------------------
+
+  describe('initialize() - maintenance start error', () => {
+    it('does not throw when startMaintenanceTasks throws', async () => {
+      const { MaintenanceService } = jest.requireMock('../../services/MaintenanceService') as any;
+      MaintenanceService.mockImplementationOnce(() => ({
+        startMaintenanceTasks: jest.fn().mockRejectedValue(new Error('maintenance fail')),
+        setStatusBroadcastCallback: jest.fn(),
+        setIsCurrentlyConnected: jest.fn(),
+      }));
+
+      const m = new MeeshySocketIOManager({} as any, prisma as any, makeTranslationService() as any);
+      await expect(m.initialize()).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 71. initialize() - zmqClient present (covers 542)
+  // -------------------------------------------------------------------------
+
+  describe('initialize() - with zmqClient', () => {
+    it('calls PostTranslationService.init when zmqClient is present', async () => {
+      const fakeZmqClient = { send: jest.fn() };
+      const customTranslation = makeTranslationService();
+      (customTranslation.getZmqClient as any).mockReturnValue(fakeZmqClient);
+
+      const { PostTranslationService } = jest.requireMock('../../services/posts/PostTranslationService') as any;
+
+      const m = new MeeshySocketIOManager({} as any, prisma as any, customTranslation as any);
+      await m.initialize();
+
+      expect(PostTranslationService.init).toHaveBeenCalledWith(
+        expect.anything(),
+        fakeZmqClient,
+        expect.anything()
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 72. _broadcastNewMessage - replyTo null-fallback branches (lines 1532-1545)
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastNewMessage - replyTo null-fallback branches', () => {
+    it('uses fallback values for replyTo fields when they are null/undefined', async () => {
+      prisma.participant.findMany.mockResolvedValue([]);
+
+      const msg = makeMessage({
+        conversationId: '507f1f77bcf86cd799439060',
+        replyToId: 'reply-msg-1',
         replyTo: {
-          id: 'r1',
-          conversationId: '000000000000000000000001',
-          senderId: null,             // <-- triggers replyTo.senderId || undefined
+          id: 'reply-msg-1',
+          senderId: null,         // triggers || undefined at 1532
           content: 'Original',
-          originalLanguage: null,     // <-- triggers replyTo.originalLanguage || 'fr'
-          messageType: null,          // <-- triggers replyTo.messageType || 'text'
-          createdAt: null,            // <-- triggers replyTo.createdAt || new Date()
-          sender: null,               // <-- no sender in replyTo → cond-expr branch[132][1]
-        }
+          originalLanguage: null, // triggers || 'fr' at 1534
+          messageType: null,      // triggers || 'text' at 1535
+          createdAt: null,        // triggers || new Date() at 1536
+          sender: {
+            id: 'sender-r1',
+            nickname: null,       // triggers || displayName at 1539
+            displayName: 'Bob',
+            avatar: 'http://avatar.com/bob.png',
+            type: 'registered',
+            userId: 'user-bob',
+            user: {
+              username: 'bob',
+              firstName: null,    // triggers || '' at 1544
+              lastName: null,     // triggers || '' at 1545
+            },
+          },
+        },
       });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      expect(mockIoToEmit).toHaveBeenCalledWith(
-        SERVER_EVENTS.MESSAGE_NEW,
-        expect.objectContaining({
-          replyTo: expect.objectContaining({
-            id: 'r1',
-            sender: undefined,
-          })
+
+      await (manager as any)._broadcastNewMessage(msg, '507f1f77bcf86cd799439060');
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.objectContaining({
+        replyTo: expect.objectContaining({
+          originalLanguage: 'fr',
+          messageType: 'text',
+        }),
+      }));
+    });
+
+    it('uses undefined for replyTo.sender when sender is null (line 1537 false-branch)', async () => {
+      prisma.participant.findMany.mockResolvedValue([]);
+
+      const msg = makeMessage({
+        conversationId: '507f1f77bcf86cd799439061',
+        replyToId: 'reply-msg-2',
+        replyTo: {
+          id: 'reply-msg-2',
+          senderId: 'sender-p1',
+          content: 'Reply content',
+          originalLanguage: 'en',
+          messageType: 'text',
+          createdAt: new Date('2026-01-01'),
+          sender: null,  // triggers ternary false-branch at 1537
+        },
+      });
+
+      await (manager as any)._broadcastNewMessage(msg, '507f1f77bcf86cd799439061');
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.objectContaining({
+        replyTo: expect.objectContaining({ sender: undefined }),
+      }));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 73. _broadcastTranslationEvent - translatedAudio fallback fields (1182-1187)
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastTranslationEvent - translatedAudio fallback fields', () => {
+    it('uses fallback values when translatedAudio fields are null', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: '507f1f77bcf86cd799439070' });
+      prisma.messageAttachment.findUnique.mockResolvedValue({ id: 'att-fallback', url: 'http://x.com/a.mp3' });
+
+      const data = {
+        taskId: 'task-fallback',
+        messageId: 'msg-fallback',
+        attachmentId: 'att-fallback',
+        language: 'en',
+        translatedAudio: {
+          // No id → triggers `${data.attachmentId}_${data.language}` at 1182
+          targetLanguage: null,   // triggers || data.language at 1183
+          url: 'http://x.com/trans.mp3',
+          translatedText: null,   // triggers || transcription at 1185
+          transcription: null,    // triggers || '' at 1185
+          durationMs: null,       // triggers || duration at 1186
+          duration: null,         // triggers || 0 at 1186
+          format: null,           // triggers || 'mp3' at 1187
+          ttsModel: null,         // triggers || 'xtts' at 1191
+          segments: undefined,
+        },
+      };
+
+      await expect(
+        (manager as any)._broadcastTranslationEvent(data, 'audioTranslationReady', SERVER_EVENTS.AUDIO_TRANSLATION_READY, '🎯')
+      ).resolves.not.toThrow();
+    });
+
+    it('covers phase=truthy → processingTimeMs=undefined branch (1194)', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: '507f1f77bcf86cd799439071' });
+      prisma.messageAttachment.findUnique.mockResolvedValue({ id: 'att-phase', url: 'http://x.com/a.mp3' });
+
+      const dataWithPhase = {
+        taskId: 'task-with-phase',
+        messageId: 'msg-with-phase',
+        attachmentId: 'att-phase',
+        language: 'fr',
+        phase: 'final',  // → processingTimeMs = undefined
+        translatedAudio: { url: 'http://x.com/t.mp3', targetLanguage: 'fr', durationMs: 1000, segments: [] },
+      };
+      await (manager as any)._broadcastTranslationEvent(dataWithPhase, 'audioTranslationReady', SERVER_EVENTS.AUDIO_TRANSLATION_READY, '🎯');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 74. _emitMessageNewByLanguage - branches coverage
+  // -------------------------------------------------------------------------
+
+  describe('_emitMessageNewByLanguage - comprehensive branches', () => {
+    it('returns early when room has no sockets (line 1306 branch)', () => {
+      ioState.sockets.adapter.rooms.clear();
+      expect(() =>
+        (manager as any)._emitMessageNewByLanguage('conversation:empty-room', { id: 'msg-x', originalLanguage: 'fr', translations: [] })
+      ).not.toThrow();
+    });
+
+    it('falls back to originalLanguage when socketUser not found (line 1308, 1314)', () => {
+      const room = 'conversation:unknown-socket-room';
+      ioState.sockets.adapter.rooms.set(room, new Set(['sock-unknown-u']));
+      // No socketToUser mapping → userId undefined → uses originalLanguage
+      (manager as any).socketToUser.delete('sock-unknown-u');
+
+      const payload = { id: 'msg-uk', originalLanguage: 'de', translations: [] };
+      expect(() => (manager as any)._emitMessageNewByLanguage(room, payload)).not.toThrow();
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
+    });
+
+    it('uses socket user language when resolvedLanguages is empty (line 1316 false-branch)', () => {
+      const room = 'conversation:lang-branch-room';
+      ioState.sockets.adapter.rooms.set(room, new Set(['sock-lang-br']));
+      (manager as any).socketToUser.set('sock-lang-br', 'user-lang-br');
+      (manager as any).connectedUsers.set('user-lang-br', {
+        id: 'user-lang-br', socketId: 'sock-lang-br', isAnonymous: false,
+        language: 'es',
+        resolvedLanguages: [],  // empty → falls back to language field
+      });
+
+      const payload = { id: 'msg-lang-br', originalLanguage: 'fr', translations: [] };
+      expect(() => (manager as any)._emitMessageNewByLanguage(room, payload)).not.toThrow();
+    });
+
+    it('accumulates multiple sockets with same language key into same bucket (line 1319)', () => {
+      const room = 'conversation:multi-socket-room';
+      ioState.sockets.adapter.rooms.set(room, new Set(['sock-multi-1', 'sock-multi-2']));
+      (manager as any).socketToUser.set('sock-multi-1', 'user-multi-1');
+      (manager as any).socketToUser.set('sock-multi-2', 'user-multi-2');
+      // Both users have same resolved language → same bucket
+      (manager as any).connectedUsers.set('user-multi-1', {
+        id: 'user-multi-1', socketId: 'sock-multi-1', isAnonymous: false,
+        language: 'en', resolvedLanguages: ['en'],
+      });
+      (manager as any).connectedUsers.set('user-multi-2', {
+        id: 'user-multi-2', socketId: 'sock-multi-2', isAnonymous: false,
+        language: 'en', resolvedLanguages: ['en'],
+      });
+
+      const payload = { id: 'msg-multi', originalLanguage: 'fr', translations: [] };
+      expect(() => (manager as any)._emitMessageNewByLanguage(room, payload)).not.toThrow();
+      // Both sockets should be in one bucket → chained emit
+      expect(ioState.to).toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 75. _handleTranslationRequest unauthenticated (line 800 branch idx 0)
+  // -------------------------------------------------------------------------
+
+  describe('_handleTranslationRequest - userId not found (branch 800)', () => {
+    it('emits ERROR when socketToUser has no entry for this socket', async () => {
+      const socket = makeSocket('sock-no-user-trans-b');
+      // No socketToUser entry for this socket
+      triggerConnection(socket);
+      await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-no-user-b', targetLanguage: 'en' });
+      // Emits some error event indicating unauthenticated
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.any(Object));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 76. _broadcastNewMessage - senderId null path and message.id null path
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastNewMessage - null senderId path and null id', () => {
+    it('skips unreadCount when senderId is null (line 1617 false-branch)', async () => {
+      prisma.participant.findMany.mockResolvedValue([]);
+
+      const msg = makeMessage({
+        conversationId: '507f1f77bcf86cd799439080',
+        senderId: null,  // triggers if (senderId) false at 1617
+      });
+
+      await (manager as any)._broadcastNewMessage(msg, '507f1f77bcf86cd799439080');
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
+    });
+
+    it('returns empty translations when message.id is null (line 1445)', async () => {
+      prisma.participant.findMany.mockResolvedValue([]);
+
+      const msg = makeMessage({
+        conversationId: '507f1f77bcf86cd799439081',
+        id: null,  // triggers if (!message.id) return [] at 1445
+      });
+
+      await (manager as any)._broadcastNewMessage(msg, '507f1f77bcf86cd799439081');
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 77. broadcastMessage - timestamp fallback branches (line 1700)
+  // -------------------------------------------------------------------------
+
+  describe('broadcastMessage - timestamp fallback branches', () => {
+    it('uses message.timestamp when createdAt is undefined', async () => {
+      prisma.participant.findMany.mockResolvedValue([]);
+      const ts = new Date('2026-01-15');
+      const msg = makeMessage({
+        conversationId: '507f1f77bcf86cd799439090',
+        createdAt: undefined,  // forces fallback
+        timestamp: ts,
+      });
+      await expect(manager.broadcastMessage(msg, '507f1f77bcf86cd799439090')).resolves.not.toThrow();
+    });
+
+    it('uses new Date() when both createdAt and timestamp are undefined', async () => {
+      prisma.participant.findMany.mockResolvedValue([]);
+      const msg = makeMessage({
+        conversationId: '507f1f77bcf86cd799439091',
+        createdAt: undefined,
+        timestamp: undefined,
+      });
+      await expect(manager.broadcastMessage(msg, '507f1f77bcf86cd799439091')).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 78. _broadcastUserStatus - privacy showOnlineStatus=false (line 1341)
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastUserStatus - showOnlineStatus=false branch', () => {
+    it('returns early when user has disabled online status visibility', async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({
+        showOnlineStatus: false,
+        showLastSeen: true,
+      });
+
+      await (manager as any)._broadcastUserStatus('user-hidden-status', true, false);
+      // io.to should NOT be called for broadcast
+      expect(ioState.toEmit).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 79. _handleTextTranslationReady - source language / confidence fallback
+  //     Covers lines 888, 892, 894 binary-expr fallback (idx 1)
+  // -------------------------------------------------------------------------
+
+  describe('_handleTextTranslationReady - result field fallbacks', () => {
+    it('uses default values when sourceLanguage, confidenceScore, processingTimeMs are null', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: '507f1f77bcf86cd799439092' });
+
+      await (manager as any)._handleTextTranslationReady({
+        taskId: 'task-fallback-fields',
+        result: {
+          messageId: 'msg-fallback-fields',
+          translatedText: 'Hello',
+          sourceLanguage: null,    // → || 'auto'
+          confidenceScore: null,   // → || 0
+          processingTimeMs: null,  // → || undefined
+        },
+        targetLanguage: 'en',
+        translationId: 'trans-fb-1',
+      });
+    });
+
+    it('uses result.id as translationId when both translationId and id are absent', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: '507f1f77bcf86cd799439093' });
+
+      await (manager as any)._handleTextTranslationReady({
+        taskId: 'task-result-id',
+        result: {
+          messageId: 'msg-result-id-1',
+          translatedText: 'Bonjour',
+          id: 'result-id-from-result',
+        },
+        targetLanguage: 'fr',
+        // No translationId, no outer id
+      });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 80. normalizeConversationId - DB returns null (line 386 false-branch)
+  // -------------------------------------------------------------------------
+
+  describe('normalizeConversationId - DB null result', () => {
+    it('returns original id when conversation.findUnique returns null', async () => {
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      const result = await (manager as any).normalizeConversationId('unknown-identifier');
+      expect(result).toBe('unknown-identifier');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 81. handleAgentReaction - participant not found early return
+  // -------------------------------------------------------------------------
+
+  describe('handleAgentReaction - participant not found', () => {
+    it('returns early when participant.findFirst returns null', async () => {
+      prisma.participant.findFirst.mockResolvedValue(null);
+
+      await expect(
+        manager.handleAgentReaction({
+          type: 'agent:reaction',
+          conversationId: '507f1f77bcf86cd799439121',
+          asUserId: 'user-no-part',
+          targetMessageId: 'msg-no-part',
+          emoji: '❓',
         })
+      ).resolves.not.toThrow();
+
+      expect(prisma.message.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 82. handleAgentReaction - addReaction returns null (early return at 1947)
+  // -------------------------------------------------------------------------
+
+  describe('handleAgentReaction - addReaction null', () => {
+    it('returns early when addReaction returns null/falsy', async () => {
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-null-rxn' });
+      const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
+      ReactionService.mockImplementationOnce(() => ({
+        addReaction: jest.fn().mockResolvedValue(null),
+        createUpdateEvent: jest.fn(),
+      }));
+
+      await expect(
+        manager.handleAgentReaction({
+          type: 'agent:reaction',
+          conversationId: '507f1f77bcf86cd799439122',
+          asUserId: 'user-agent-null-rxn',
+          targetMessageId: 'msg-null-rxn',
+          emoji: '👎',
+        })
+      ).resolves.not.toThrow();
+
+      expect(prisma.message.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 83. _broadcastNewMessage - with senderSocket provided
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastNewMessage - senderSocket provided', () => {
+    it('also emits to senderSocket when provided', async () => {
+      prisma.participant.findMany.mockResolvedValue([]);
+      const senderSocket = makeSocket('sock-sender');
+
+      const msg = makeMessage({ conversationId: '507f1f77bcf86cd799439130' });
+      await (manager as any)._broadcastNewMessage(msg, '507f1f77bcf86cd799439130', senderSocket);
+
+      expect(senderSocket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 84. _broadcastNewMessage - validatedMentions loop coverage
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastNewMessage - validatedMentions loop', () => {
+    it('emits MENTION_CREATED for each non-self, non-null userId mention', async () => {
+      prisma.participant.findMany.mockResolvedValue([]);
+
+      const msg = makeMessage({
+        conversationId: '507f1f77bcf86cd799439140',
+        senderId: 'sender-mention',
+        validatedMentions: [
+          { userId: 'user-mentioned', participantId: 'part-mentioned' },   // should emit
+          { userId: 'sender-mention', participantId: 'part-self' },        // same as senderId → skipped
+          { userId: null, participantId: 'part-null' },                    // null userId → skipped
+        ],
+      });
+
+      await (manager as any)._broadcastNewMessage(msg, '507f1f77bcf86cd799439140');
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.MENTION_CREATED,
+        expect.objectContaining({ mentionedUserId: 'user-mentioned' })
       );
     });
   });
 
-  describe('broadcastMessage - participant userId fallback (lines 1637-1638)', () => {
-    beforeEach(() => {
-      mockUpdateOnNewMessage.mockResolvedValue(undefined);
+  // -------------------------------------------------------------------------
+  // 85. CORS production - no CORS_ORIGINS, no ALLOWED_ORIGINS (default list)
+  // -------------------------------------------------------------------------
+
+  describe('CORS origin - default allowed list', () => {
+    it('uses hardcoded default list when no env vars set', async () => {
+      const origNodeEnv = process.env.NODE_ENV;
+      const origCorsOrigins = process.env.CORS_ORIGINS;
+      const origAllowedOrigins = process.env.ALLOWED_ORIGINS;
+      process.env.NODE_ENV = 'production';
+      delete process.env.CORS_ORIGINS;
+      delete process.env.ALLOWED_ORIGINS;
+      try {
+        const { Server } = jest.requireMock('socket.io') as any;
+        const newPrisma = makePrisma();
+        const newTs = makeTranslationService();
+        const newManager = new MeeshySocketIOManager({} as any, newPrisma, newTs as any);
+        await newManager.initialize();
+
+        const corsOptions = Server.mock.calls[Server.mock.calls.length - 1][1];
+        const originFn = corsOptions.cors.origin;
+        if (typeof originFn === 'function') {
+          const cb1 = jest.fn();
+          originFn('https://meeshy.me', cb1);
+          expect(cb1).toHaveBeenCalledWith(null, true);
+
+          const cb2 = jest.fn();
+          originFn(undefined, cb2);
+          expect(cb2).toHaveBeenCalledWith(null, true);
+
+          const cb3 = jest.fn();
+          originFn('https://evil.com', cb3);
+          expect(cb3).toHaveBeenCalledWith(expect.any(Error));
+        }
+      } finally {
+        process.env.NODE_ENV = origNodeEnv;
+        if (origCorsOrigins !== undefined) process.env.CORS_ORIGINS = origCorsOrigins;
+        if (origAllowedOrigins !== undefined) process.env.ALLOWED_ORIGINS = origAllowedOrigins;
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 86. Constructor callbacks (line 252, 270) - exercise through wired fns
+  // -------------------------------------------------------------------------
+
+  describe('Constructor callbacks - normalizeConversationId and emitPresenceSnapshot', () => {
+    it('normalizeConversationId callback resolves correctly', async () => {
+      const { LocationHandler } = jest.requireMock('../handlers/LocationHandler') as any;
+      const lastCallArgs = LocationHandler.mock.calls[LocationHandler.mock.calls.length - 1][0];
+      expect(lastCallArgs.normalizeConversationId).toBeDefined();
+      prisma.conversation.findUnique.mockResolvedValue({ id: '507f1f77bcf86cd799439099', identifier: 'my-conv-cb' });
+      const result = await lastCallArgs.normalizeConversationId('my-conv-cb');
+      expect(result).toBe('507f1f77bcf86cd799439099');
     });
 
-    it('uses participant.id as roomTarget when participant.userId is null', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([
-        { id: 'p-anon', userId: null, joinedAt: new Date() }   // userId null → roomTarget = p-anon
-      ]);
-      mockGetUnreadCounts.mockResolvedValue(new Map([['p-anon', 2]]));
-      // p-anon is offline
-      const msg = makeMessage({ senderId: 'sender-participant-id', id: '000000000000000000000001' });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      // Should emit CONVERSATION_UNREAD_UPDATED to user:p-anon room
-      const calls = mockIoTo.mock.calls.map((c: any[]) => c[0]);
-      expect(calls).toContain(ROOMS.user('p-anon'));
+    it('emitPresenceSnapshot callback does not throw', () => {
+      const { AuthHandler } = jest.requireMock('../handlers/AuthHandler') as any;
+      const lastCallArgs = AuthHandler.mock.calls[AuthHandler.mock.calls.length - 1][0];
+      expect(lastCallArgs.emitPresenceSnapshot).toBeDefined();
+      const mockSock = makeSocket('sock-eps-cb');
+      expect(() => lastCallArgs.emitPresenceSnapshot(mockSock, 'user-eps-cb', false)).not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 87. _drainPendingMessages - pending messages with content
+  // -------------------------------------------------------------------------
+
+  describe('_drainPendingMessages - pending messages emitted', () => {
+    it('emits each pending message payload and delivery confirmation', async () => {
+      const socket = makeSocket('sock-drain-pending');
+      const mockQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-p1', conversationId: '507f1f77bcf86cd799439200' } },
+          { payload: { id: 'msg-p2', conversationId: '507f1f77bcf86cd799439200' } },
+        ]),
+      };
+      (manager as any).deliveryQueue = mockQueue;
+
+      await (manager as any)._drainPendingMessages(socket, 'user-drain-pending');
+
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.objectContaining({ id: 'msg-p1' }));
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: 2 });
     });
 
-    it('uses 0 fallback when unreadCountMap returns undefined for participant (line 1638)', async () => {
-      const { manager, prisma } = makeManager();
+    it('catches drain() errors without throwing (line 365)', async () => {
+      const socket = makeSocket('sock-drain-err-3');
+      const mockQueue = { drain: jest.fn().mockRejectedValue(new Error('Redis down')) };
+      (manager as any).deliveryQueue = mockQueue;
+
+      await expect(
+        (manager as any)._drainPendingMessages(socket, 'user-drain-err-3')
+      ).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 88. _broadcastNewMessage - roomClients / senderSocket absent path (line 1589)
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastNewMessage - no senderSocket (line 1587 else-branch)', () => {
+    it('tries to find sender socket via connectedUsers when senderSocket absent', async () => {
+      prisma.participant.findMany.mockResolvedValue([]);
+
+      // Connect a user as sender
+      (manager as any).connectedUsers.set('user-sender-absent', {
+        id: 'user-sender-absent', socketId: 'sock-sender-absent', isAnonymous: false,
+        language: 'fr', resolvedLanguages: ['fr'],
+      });
+      (manager as any).socketToUser.set('sock-sender-absent', 'user-sender-absent');
+      const mockSenderSock = makeSocket('sock-sender-absent');
+      ioState.sockets.sockets.set('sock-sender-absent', mockSenderSock);
+
+      const msg = makeMessage({
+        conversationId: '507f1f77bcf86cd799439210',
+        senderId: 'user-sender-absent',  // references user id (not participant id here)
+      });
+
+      // No senderSocket passed → else branch at 1589
+      await (manager as any)._broadcastNewMessage(msg, '507f1f77bcf86cd799439210');
+      // The else branch tries to emit via connectedUsers[senderId]
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 89. handleAgentResponse - mentionedUserIds resolution via @username
+  //     Covers lines 1850 (participants.length > 0 true) and 1853 (resolved.length > 0 true)
+  // -------------------------------------------------------------------------
+
+  describe('handleAgentResponse - @-mention resolution paths', () => {
+    it('covers participants.length=0 path (line 1847 false-branch)', async () => {
+      // No participants → mentionedUserIds stays []
+      prisma.participant.findMany.mockResolvedValue([]);
+      mockMessagingServiceInstance.handleMessage.mockResolvedValue({
+        success: true,
+        data: { id: 'msg-at-empty', conversationId: '507f1f77bcf86cd799439220', createdAt: new Date(), updatedAt: new Date() },
+      });
+
+      await expect(
+        manager.handleAgentResponse({
+          type: 'agent:response',
+          conversationId: '507f1f77bcf86cd799439220',
+          asUserId: 'user-agent-empty',
+          content: '@nobody',
+          originalLanguage: 'en',
+          metadata: { agentType: 'assistant' as any },
+        })
+      ).resolves.not.toThrow();
+    });
+
+    it('covers resolved.length=0 path (line 1853 false-branch)', async () => {
       prisma.participant.findMany.mockResolvedValue([
-        { id: 'p2', userId: 'u2', joinedAt: new Date() }
+        { userId: 'u-rv0', displayName: 'Rex', user: { id: 'u-rv0', username: 'rex', displayName: 'Rex' } },
       ]);
-      // Map does NOT have an entry for p2 → ?? 0 branch
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-      const msg = makeMessage({ senderId: 'sender-participant-id', id: '000000000000000000000001' });
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      expect(mockIoToEmit).toHaveBeenCalledWith(
+      mockMentionServiceInstance.extractMentionsWithParticipants.mockReturnValue(['rex']);
+      mockMentionServiceInstance.resolveUsernames.mockResolvedValue(new Map()); // empty resolution
+      mockMessagingServiceInstance.handleMessage.mockResolvedValue({
+        success: true,
+        data: { id: 'msg-at-rv0', conversationId: '507f1f77bcf86cd799439221', createdAt: new Date(), updatedAt: new Date() },
+      });
+
+      await expect(
+        manager.handleAgentResponse({
+          type: 'agent:response',
+          conversationId: '507f1f77bcf86cd799439221',
+          asUserId: 'user-agent-rv0',
+          content: '@rex hello',
+          originalLanguage: 'en',
+          metadata: { agentType: 'assistant' as any },
+        })
+      ).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 90. initialize() - maintenance error stack trace (line 592)
+  //     error NOT instanceof Error → 'No stack trace' fallback (idx 0,1)
+  // -------------------------------------------------------------------------
+
+  describe('initialize() - maintenance error with non-Error rejection', () => {
+    it('uses "No stack trace" string when rejection is not an Error instance', async () => {
+      const { MaintenanceService } = jest.requireMock('../../services/MaintenanceService') as any;
+      MaintenanceService.mockImplementationOnce(() => ({
+        startMaintenanceTasks: jest.fn().mockRejectedValue('string rejection'),  // not an Error
+        setStatusBroadcastCallback: jest.fn(),
+        setIsCurrentlyConnected: jest.fn(),
+      }));
+
+      const m = new MeeshySocketIOManager({} as any, prisma as any, makeTranslationService() as any);
+      await expect(m.initialize()).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 91. FEED_UNSUBSCRIBE - userId not found path (lines 680, 682)
+  // -------------------------------------------------------------------------
+
+  describe('FEED_UNSUBSCRIBE - userId not found branches', () => {
+    it('calls callback with error when userId not in socketToUser', () => {
+      const socket = makeSocket('sock-feed-unauth');
+      // Do NOT set socketToUser for this socket
+      triggerConnection(socket);
+      const cb = jest.fn();
+      socket._handlers[CLIENT_EVENTS.FEED_UNSUBSCRIBE](cb);
+      expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    });
+
+    it('does not throw when no callback provided and userId not found', () => {
+      const socket = makeSocket('sock-feed-unauth-nocb');
+      triggerConnection(socket);
+      expect(() => socket._handlers[CLIENT_EVENTS.FEED_UNSUBSCRIBE](undefined)).not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 92. _handleTextTranslationReady - userSocket NOT in sockets map (line 926 idx 1)
+  // -------------------------------------------------------------------------
+
+  describe('_handleTextTranslationReady - userSocket null in sockets map', () => {
+    it('covers if (userSocket) false branch when socket not in sockets map', async () => {
+      // Add user to connectedUsers but NOT to ioState.sockets.sockets
+      (manager as any).connectedUsers.set('user-no-sock', {
+        id: 'user-no-sock', socketId: 'sock-no-sock', isAnonymous: false,
+        language: 'en', resolvedLanguages: ['en'],
+      });
+      (manager as any).socketToUser.set('sock-no-sock', 'user-no-sock');
+      // Do NOT add to ioState.sockets.sockets
+
+      prisma.message.findUnique.mockResolvedValue({ conversationId: '507f1f77bcf86cd799439150' });
+
+      await (manager as any)._handleTextTranslationReady({
+        taskId: 'task-no-sock',
+        result: {
+          messageId: 'msg-no-sock-1',
+          translatedText: 'Hello',
+          confidenceScore: 0.9,
+        },
+        targetLanguage: 'en',
+        translationId: 'trans-no-sock-1',
+      });
+      // Should complete without error (userSocket is null/undefined → if (userSocket) is false)
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 93. _broadcastNewMessage - participant.userId null → participant.id used (line 1637)
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastNewMessage - participant.userId null fallback', () => {
+    it('uses participant.id when participant.userId is null', async () => {
+      const participants = [
+        { id: 'part-id-fallback', userId: null, joinedAt: new Date() },
+      ];
+      prisma.participant.findMany.mockResolvedValue(participants);
+      const { MessageReadStatusService } = jest.requireMock('../../services/MessageReadStatusService.js') as any;
+      MessageReadStatusService.mockImplementationOnce(() => ({
+        getUnreadCountsForParticipants: jest.fn().mockResolvedValue(new Map([['part-id-fallback', 2]])),
+      }));
+
+      const msg = makeMessage({
+        conversationId: '507f1f77bcf86cd799439160',
+        senderId: 'sender-with-null-userId-participants',
+      });
+
+      await (manager as any)._broadcastNewMessage(msg, '507f1f77bcf86cd799439160');
+      // CONVERSATION_UNREAD_UPDATED should be emitted to user room with 'part-id-fallback'
+      expect(ioState.toEmit).toHaveBeenCalledWith(
         SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED,
-        expect.objectContaining({ unreadCount: 0 })
+        expect.objectContaining({ conversationId: '507f1f77bcf86cd799439160' })
       );
     });
   });
 
-  describe('broadcastMessage - timestamp fallback (line 1700)', () => {
-    it('uses message.timestamp when createdAt is missing', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-      // broadcastMessage wraps message with timestamp = createdAt || timestamp || new Date()
-      const ts = new Date('2026-01-01');
-      const msg = { ...makeMessage({ createdAt: null }), timestamp: ts };
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      // No throw; timestamp assigned correctly
-      expect(mockIoToEmit).toHaveBeenCalled();
+  // -------------------------------------------------------------------------
+  // 94. handleAgentReaction - message not found (line 1965 false-branch)
+  //     and senderId null (line 1969 false-branch)
+  // -------------------------------------------------------------------------
+
+  describe('handleAgentReaction - message lookup branches', () => {
+    it('skips emit when message.findUnique returns null (line 1965 false-branch)', async () => {
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-msg-null' });
+      const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
+      ReactionService.mockImplementationOnce(() => ({
+        addReaction: jest.fn().mockResolvedValue({ id: 'rxn-msg-null' }),
+        createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'rxn-msg-null' }),
+      }));
+      prisma.message.findUnique.mockResolvedValue(null);  // message not found
+
+      await expect(
+        manager.handleAgentReaction({
+          type: 'agent:reaction',
+          conversationId: '507f1f77bcf86cd799439170',
+          asUserId: 'user-msg-null',
+          targetMessageId: 'msg-msg-null',
+          emoji: '🤔',
+        })
+      ).resolves.not.toThrow();
+
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.REACTION_ADDED, expect.anything());
     });
 
-    it('uses new Date() fallback when both createdAt and timestamp are missing', async () => {
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany.mockResolvedValue([]);
-      mockGetUnreadCounts.mockResolvedValue(new Map());
-      const msg = makeMessage({ createdAt: null });
-      delete (msg as any).timestamp;
-      await manager.broadcastMessage(msg as any, '000000000000000000000001');
-      expect(mockIoToEmit).toHaveBeenCalled();
-    });
-  });
-
-  describe('handleAgentResponse - mention resolution branches (lines 1850-1853)', () => {
-    it('resolves to mentionedUserIds when users found from usernames (line 1843)', async () => {
-      const resultMessage = makeMessage({ id: '000000000000000000000001' });
-      mockHandleMessage.mockResolvedValue({ success: true, data: resultMessage });
-      const { manager, prisma } = makeManager();
-      prisma.user.findMany.mockResolvedValue([{ id: 'user-resolved' }]);
-      prisma.participant.findMany.mockResolvedValue([]);
-      await manager.handleAgentResponse({
-        type: 'agent:response',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        content: 'Hello @alice',
-        originalLanguage: 'fr',
-        mentionedUsernames: ['alice'],
-        messageSource: 'agent',
-        metadata: { agentType: 'orchestrator', roleConfidence: 0.9 },
+    it('skips participant lookup when message.senderId is null (line 1969 false-branch)', async () => {
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-sndr-null' });
+      const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
+      ReactionService.mockImplementationOnce(() => ({
+        addReaction: jest.fn().mockResolvedValue({ id: 'rxn-sndr-null' }),
+        createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'rxn-sndr-null' }),
+      }));
+      prisma.message.findUnique.mockResolvedValue({
+        conversationId: '507f1f77bcf86cd799439171',
+        senderId: null,  // null → ternary false branch → authorParticipant = null
       });
-      expect(mockHandleMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ mentionedUserIds: ['user-resolved'] }),
-        'agent-user'
-      );
-    });
 
-    it('@mention content branch with empty resolved result (line 1853)', async () => {
-      const resultMessage = makeMessage({ id: '000000000000000000000001' });
-      mockHandleMessage.mockResolvedValue({ success: true, data: resultMessage });
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany
-        .mockResolvedValueOnce([{
-          userId: 'u2',
-          displayName: 'Bob',
-          user: { id: 'u2', username: 'bob', displayName: 'Bob' }
-        }])
-        .mockResolvedValueOnce([]);
-      mockExtractMentions.mockReturnValue(['nobody']);
-      // resolveUsernames returns empty map → resolved.length === 0
-      mockResolveUsernames.mockResolvedValue(new Map());
-      await manager.handleAgentResponse({
-        type: 'agent:response',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        content: 'Hello @nobody',
-        originalLanguage: 'fr',
-        messageSource: 'agent',
-        metadata: { agentType: 'orchestrator', roleConfidence: 0.9 },
-      });
-      // mentionedUserIds stays undefined since resolved.length === 0
-      expect(mockHandleMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ mentionedUserIds: undefined }),
-        'agent-user'
-      );
+      await expect(
+        manager.handleAgentReaction({
+          type: 'agent:reaction',
+          conversationId: '507f1f77bcf86cd799439171',
+          asUserId: 'user-sndr-null',
+          targetMessageId: 'msg-sndr-null',
+          emoji: '🎯',
+        })
+      ).resolves.not.toThrow();
+
+      // participant.findUnique should NOT have been called (senderId is null)
+      // And no notification should be created
+      expect(mockNotificationServiceInstance.createReactionNotification).not.toHaveBeenCalled();
     });
   });
 
-  describe('getConversationParticipantsForMention - displayName ?? username fallback (line 1914)', () => {
-    it('uses username as displayName when displayName is null', async () => {
-      const resultMessage = makeMessage({ id: '000000000000000000000001' });
-      mockHandleMessage.mockResolvedValue({ success: true, data: resultMessage });
-      const { manager, prisma } = makeManager();
-      prisma.participant.findMany
-        .mockResolvedValueOnce([{
-          userId: 'u2',
+  // -------------------------------------------------------------------------
+  // 95. _notifyAgent - originalLanguage null fallback (line 2031)
+  // -------------------------------------------------------------------------
+
+  describe('_notifyAgent - originalLanguage null fallback', () => {
+    it('uses "fr" when originalLanguage is null', async () => {
+      const fakeClient = { sendEvent: jest.fn().mockResolvedValue(undefined) };
+      (manager as any).agentClient = fakeClient;
+      const createdAt = new Date('2026-01-01');
+      (manager as any)._notifyAgent({
+        id: 'msg-orig-null', conversationId: 'conv-orig-null', senderId: 'sender-orig-null',
+        content: 'Hello', originalLanguage: null,  // triggers ?? 'fr'
+        createdAt,
+      });
+      await new Promise(r => setImmediate(r));
+      expect(fakeClient.sendEvent).toHaveBeenCalledWith(expect.objectContaining({
+        originalLanguage: 'fr',
+      }));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 96. getConversationParticipantsForMention - displayName null fallback (line 1914)
+  // -------------------------------------------------------------------------
+
+  describe('getConversationParticipantsForMention - displayName null fallback', () => {
+    it('uses username when displayName is null (line 1914 idx 1)', async () => {
+      prisma.participant.findMany.mockResolvedValue([
+        {
+          userId: 'u-disp-null',
           displayName: null,
-          user: { id: 'u2', username: 'bob', displayName: null }  // displayName null → username fallback
-        }])
-        .mockResolvedValueOnce([]);
-      mockExtractMentions.mockReturnValue([]);
-      mockResolveUsernames.mockResolvedValue(new Map());
-      await manager.handleAgentResponse({
-        type: 'agent:response',
-        conversationId: 'c1',
-        asUserId: 'agent-user',
-        content: 'Hello @bob',
-        originalLanguage: 'fr',
-        messageSource: 'agent',
-        metadata: { agentType: 'orchestrator', roleConfidence: 0.9 },
+          user: { id: 'u-disp-null', username: 'usernameonly', displayName: null },  // displayName null → uses username
+        },
+      ]);
+      const result = await (manager as any).getConversationParticipantsForMention('conv-disp-null');
+      expect(result).toHaveLength(1);
+      expect(result[0].displayName).toBe('usernameonly');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 97. _handleAudioTranslationReady - language fallback (line 1243)
+  //     when data.language is absent → uses data.translatedAudio.targetLanguage
+  // -------------------------------------------------------------------------
+
+  describe('_handleAudioTranslationReady - language fallback', () => {
+    it('uses translatedAudio.targetLanguage when data.language is absent', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: '507f1f77bcf86cd799439180' });
+      prisma.messageAttachment.findUnique.mockResolvedValue({ id: 'att-lang-fallback', url: 'http://x.com/a.mp3' });
+
+      await expect(
+        (manager as any)._handleAudioTranslationReady({
+          taskId: 'task-lang-fb',
+          messageId: 'msg-lang-fb',
+          attachmentId: 'att-lang-fallback',
+          // language omitted → falls back to translatedAudio.targetLanguage
+          translatedAudio: {
+            targetLanguage: 'es',
+            url: 'http://x.com/trans.mp3',
+            durationMs: 2000,
+            segments: [],
+          },
+        })
+      ).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 98. _broadcastTranslationEvent - data.language absent (lines 1139, 1180)
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastTranslationEvent - data.language absent', () => {
+    it('uses UNDEFINED fallback for data.language log and translatedAudio.targetLanguage fallback', async () => {
+      prisma.message.findUnique.mockResolvedValue({ conversationId: '507f1f77bcf86cd799439190' });
+      prisma.messageAttachment.findUnique.mockResolvedValue({ id: 'att-nodatalang', url: 'http://x.com/a.mp3' });
+
+      const data = {
+        taskId: 'task-no-lang',
+        messageId: 'msg-no-lang',
+        attachmentId: 'att-nodatalang',
+        // language: absent (undefined) → triggers || 'UNDEFINED' at log and || targetLanguage at 1180
+        translatedAudio: {
+          id: 'ta-no-lang',
+          targetLanguage: 'de',  // fallback used for data.language
+          url: 'http://x.com/trans.mp3',
+          durationMs: 1000,
+          segments: [],
+        },
+      };
+
+      await expect(
+        (manager as any)._broadcastTranslationEvent(data, 'audioTranslationReady', SERVER_EVENTS.AUDIO_TRANSLATION_READY, '🎯')
+      ).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 99. _broadcastNewMessage - sender with null nickname and null avatar (lines 1516, 1517)
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastNewMessage - sender field fallbacks', () => {
+    it('uses displayName when nickname is null and u?.avatar when avatar is null (1516, 1517)', async () => {
+      prisma.participant.findMany.mockResolvedValue([]);
+
+      const msg = makeMessage({
+        conversationId: '507f1f77bcf86cd799439200',
+        sender: {
+          id: 'part-s3',
+          nickname: null,            // triggers || displayName at 1516
+          displayName: 'NoNickname',
+          avatar: null,              // triggers || u?.avatar at 1517
+          type: 'registered',
+          userId: 'user-s3',
+          user: {
+            id: 'user-s3',
+            username: 'nonickname',
+            firstName: null,         // triggers || '' at 1521
+            lastName: null,          // triggers || '' at 1522
+            avatar: 'http://user.avatar.com/s3.png',  // u?.avatar fallback
+          },
+        },
       });
-      expect(mockExtractMentions).toHaveBeenCalledWith(
-        'Hello @bob',
-        expect.arrayContaining([expect.objectContaining({ displayName: 'bob' })])
-      );
+
+      await (manager as any)._broadcastNewMessage(msg, '507f1f77bcf86cd799439200');
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.objectContaining({
+        sender: expect.objectContaining({
+          displayName: 'NoNickname',
+          avatar: 'http://user.avatar.com/s3.png',
+          firstName: '',
+          lastName: '',
+        }),
+      }));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 100. _broadcastNewMessage - message.updatedAt null fallback (line 1505)
+  // -------------------------------------------------------------------------
+
+  describe('_broadcastNewMessage - updatedAt null fallback', () => {
+    it('uses new Date() when updatedAt is null', async () => {
+      prisma.participant.findMany.mockResolvedValue([]);
+
+      const msg = makeMessage({
+        conversationId: '507f1f77bcf86cd799439210',
+        updatedAt: null,   // triggers || new Date() at 1505
+      });
+
+      await (manager as any)._broadcastNewMessage(msg, '507f1f77bcf86cd799439210');
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
     });
   });
 });

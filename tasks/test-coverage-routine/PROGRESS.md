@@ -154,7 +154,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
 | web | `pnpm --filter web test:coverage` | 33.10 | 25.77 | 2026-06-14 (re-measured after Sprint 0.2/0.3 fixes; threshold floor set at 33/25) |
-| gateway | `pnpm --filter gateway test:coverage` | 49.35 | 45.46 | 2026-06-17 local (post P1 Real-time MeeshySocketIOManager; 149/172 suites pass (23 pre-existing failures); threshold floor ratcheted to lines:48/branches:44/statements:48/functions:50) |
+| gateway | `pnpm --filter gateway test:coverage` | 50.02 | 46.93 | 2026-06-17 (post P1 Real-time MeeshySocketIOManager; 253 new tests; threshold floor ratcheted to lines:49/branches:45/statements:49/functions:51) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | 37.09 | n/a | 2026-06-14 (subset: no-GPU tests only; 4 files w/ import errors excluded) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |
