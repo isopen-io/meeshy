@@ -666,4 +666,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   2. notification-socketio.singleton.ts line 73 (`if (!this.socket) return;` in private method) structurally unreachable — private method only called after socket is set in connect(). 98.94% still exceeds 92% target. No istanbul ignore added (not worth the noise).
   3. Pre-existing flaky test in use-bot-protection.test.tsx (timeElapsed expected 0 got 1) — unrelated to this diff; present on main before changes.
 - Next slice: P1 Conversations & membership × web OR P1 Real-time × shared/SDK (next highest-priority ☐ cell)
-- Commit: (see branch claude/coverage/p1-realtime-web)
+- Commit: fd4833a766ef5f4bfb7018adeff5cd14100464fa (squash-merged to main via PR #699)
