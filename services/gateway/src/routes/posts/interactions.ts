@@ -269,6 +269,32 @@ export function registerInteractionRoutes(
     }
   });
 
+  // POST /posts/:postId/anonymous-view — compte une ouverture ANONYME (sans compte).
+  // v1 "comptage bête" : public, dédup faible par X-Session-Token (chaîne opaque).
+  // Les clients INSCRITS (JWT présent) sont comptés via le parcours engagement →
+  // no-op ici pour éviter le double-comptage. Voir spec 2026-06-17 (§ Sécurité).
+  // Pas de preValidation auth : on lit le header directement, sans tenter de
+  // résoudre un Participant (un token navigateur n'en est pas un → éviterait un 401).
+  fastify.post('/posts/:postId/anonymous-view', {
+    config: { rateLimit: createPostRouteRateLimitConfig('view') },
+  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
+    try {
+      if (request.headers.authorization) {
+        return sendSuccess(reply, { counted: false }); // client inscrit → parcours engagement
+      }
+      const sessionKey = request.headers['x-session-token'] as string | undefined;
+      if (!sessionKey || sessionKey.length === 0 || sessionKey.length > 128) {
+        return sendBadRequest(reply, 'Missing or invalid session key', { code: 'VALIDATION_ERROR' });
+      }
+      const { postId } = request.params;
+      const counted = await postService.recordAnonymousOpen(postId, sessionKey);
+      return sendSuccess(reply, { counted });
+    } catch (error) {
+      fastify.log.error(`[POST /posts/:postId/anonymous-view] Error: ${error}`);
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
+    }
+  });
+
   // POST /posts/:postId/impression — Track a feed impression
   fastify.post('/posts/:postId/impression', {
     schema: {
