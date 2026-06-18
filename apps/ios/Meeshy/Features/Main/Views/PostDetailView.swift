@@ -280,6 +280,11 @@ struct PostDetailView: View {
         return post.displayContent
     }
 
+    /// Vidéo embeddable (YouTube) détectée dans le contenu affiché du post.
+    private var embeddedVideo: EmbeddedVideo? {
+        EmbeddableVideoResolver.resolve(in: effectiveContent)
+    }
+
     private var textTruncation: (text: String, isTruncated: Bool) {
         let words = effectiveContent.split(separator: " ", omittingEmptySubsequences: true)
         if words.count <= 60 { return (effectiveContent, false) }
@@ -948,6 +953,13 @@ struct PostDetailView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(String(format: String(localized: "a11y.post.secondary_translation", defaultValue: "Traduction en %1$@ : %2$@", bundle: .main), display?.name ?? code, content))
+            }
+
+            // Embed vidéo (YouTube) détecté dans le contenu du post.
+            if let embeddedVideo {
+                VideoEmbedContainer(video: embeddedVideo, accent: Color(hex: accentColor))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
             }
         }
     }
