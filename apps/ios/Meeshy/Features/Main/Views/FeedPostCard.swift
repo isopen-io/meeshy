@@ -204,6 +204,13 @@ struct FeedPostCard: View {
         HapticFeedback.light()
     }
 
+    /// Vidéo embeddable (YouTube) détectée dans le contenu affiché. Dérivée (non stockée) :
+    /// le gate `.equatable()` (compare `post.content`) ne ré-évalue le body que si le contenu
+    /// change, donc le NSDataDetector ne tourne pas à chaque re-render parent.
+    private var embeddedVideo: EmbeddedVideo? {
+        EmbeddableVideoResolver.resolve(in: effectiveContent)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Main content
@@ -296,6 +303,13 @@ struct FeedPostCard: View {
                 .contentShape(Rectangle())
                 .onTapGesture {
                     onTapPost?(post)
+                }
+
+                // Embed vidéo (YouTube) détecté dans le contenu : player façade
+                // (vignette → lecture inline), hors du geste d'ouverture du post.
+                if let embeddedVideo {
+                    VideoEmbedContainer(video: embeddedVideo, accent: Color(hex: accentColor))
+                        .padding(.top, 8)
                 }
 
                 // Repost-of-STORY: render the embedded story canvas (muted, autoplay).
