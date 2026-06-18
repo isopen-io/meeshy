@@ -147,8 +147,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       FAILED + tap-to-retry (EN/FR), WorkManager flush
 - [x] Message pagination (before-cursor, scroll-top trigger, history-safe cache prune)
 - [~] `:feature:feed` — cache-first feed (SWR), Prisme-resolved post content,
-      optimistic like toggle (`isLikedByMe`), image collage, like/comment/repost stats
-- [ ] Pending: Stories / Calls slices, feed pagination + post detail, reactions UI polish
+      optimistic like toggle (`isLikedByMe`), image collage, like/comment/repost stats,
+      cursor-paginated infinite scroll (`PostRepository.loadMore` + `feedHasMore`,
+      `loadMoreIfNeeded` 5-from-tail trigger, footer spinner, dedupe-append, history-safe
+      freshness watermark — port of `FeedViewModel.loadMoreIfNeeded`)
+- [ ] Pending: Stories / Calls slices, feed new-posts banner + post detail, reactions UI polish
 
 ## Phase 6 — Integration & final audit
 - [ ] Navigation graph + deep links (`meeshy://`, `https://meeshy.me`)
@@ -331,9 +334,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Accessibility for canvas elements (labels, custom delete/duplicate/reorder actions)
 
 ## F. Feed & Posts
-- [~] Social feed: cache-first SWR list + pull-to-refresh done (`PostRepository.feedStream`,
-      skeleton on cold cache, silent background revalidation) ; cursor-paginated
-      infinite scroll / new-posts banner pending
+- [~] Social feed: cache-first SWR list + pull-to-refresh + cursor-paginated infinite
+      scroll done (`PostRepository.feedStream`/`loadMore`/`feedHasMore`, skeleton on cold
+      cache, silent background revalidation, 5-from-tail prefetch + footer spinner,
+      dedupe-append, history pages do not bump the freshness watermark) ; new-posts banner
+      + realtime-head merge pending
 - [x] Post reactions (heart like) — **optimistic** toggle via `PostRepository.toggleLike`
       (flips `isLikedByMe` + count instantly, rolls back on failure). Fixes the prior
       bug where any post liked by *others* rendered as liked-by-me (`likeCount > 0`
@@ -348,7 +353,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [x] Feed card stats row: like (filled when own) + comment count + repost count,
       mood emoji on the author line, pure `FeedPostPresentation` builder (8 builder
       tests + 1 model Prisme test + 3 repository optimistic/rollback tests, all green)
-- [ ] Social feed: cursor-paginated post list, infinite scroll, new-posts banner
+- [~] Social feed: cursor-paginated post list + infinite scroll done (see above) ;
+      new-posts banner pending
 - [ ] Feed overlay shell with draggable floating buttons + radial menu ladder
 - [ ] Create post (text, photos/videos, camera, files, location, audio+transcription, visibility, language)
 - [ ] Unified post composer (Post / Status / Story tabs)

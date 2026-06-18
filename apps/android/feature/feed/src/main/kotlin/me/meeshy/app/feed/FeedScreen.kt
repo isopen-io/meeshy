@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -109,11 +110,30 @@ fun FeedScreen(
                     verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
                 ) {
                     items(state.posts, key = { it.id }) { post ->
+                        LaunchedEffect(post.id, state.posts.size) {
+                            viewModel.loadMoreIfNeeded(post.id)
+                        }
                         PostCard(
                             post = post,
                             onLike = { viewModel.toggleLike(post.id) },
                             onClick = { onPostClick(post.id) },
                         )
+                    }
+                    if (state.isLoadingMore) {
+                        item(key = "feed_load_more") {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(MeeshySpacing.md),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator(
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(24.dp),
+                                    color = MeeshyPalette.Indigo500,
+                                )
+                            }
+                        }
                     }
                 }
             }
