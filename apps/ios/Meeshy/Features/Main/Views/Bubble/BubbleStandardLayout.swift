@@ -884,7 +884,10 @@ struct BubbleStandardLayout: View {
                 // Inline OpenGraph preview for the first URL in the
                 // effective (possibly translated) content. Self-loading.
                 // URL précalculée dans BubbleContent (plus de NSDataDetector ici).
-                if let url = content.text?.firstLinkURL {
+                if let video = content.text?.embeddedVideo {
+                    VideoEmbedContainer(video: video, accent: Color(hex: contactColor))
+                        .padding(.top, 4)
+                } else if let url = content.text?.firstLinkURL {
                     LinkPreviewCard(
                         urlString: url,
                         accentColor: contactColor,

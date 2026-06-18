@@ -87,13 +87,16 @@ extension BubbleContent {
             return EmojiDetector.analyze(message.content)
         }()
         let isEmojiOnly = emojiResult != .notEmojiOnly
+        let firstLinkURL = LinkPreviewFetcher.firstURL(in: effective)
         self.text = effective.isEmpty ? nil : Text(
             raw: effective,
             isEmojiOnly: isEmojiOnly,
             emojiFontSize: emojiResult.fontSize,
             // Précalcul unique du lien (NSDataDetector) — réutilisé par
             // `hasBubbleBodyContent` et le rendu du link preview sans re-scan.
-            firstLinkURL: LinkPreviewFetcher.firstURL(in: effective)
+            firstLinkURL: firstLinkURL,
+            // Résolution embed vidéo (YouTube) au même endroit, une seule fois.
+            embeddedVideo: firstLinkURL.flatMap { EmbeddableVideoResolver.resolve(urlString: $0) }
         )
 
         // --- Translation panel ---

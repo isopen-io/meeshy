@@ -64,6 +64,10 @@ struct BubbleContent: Equatable {
         /// `NSDataDetector` sous-jacent est désormais partagé (static) côté
         /// `LinkPreviewFetcher`, donc plus d'instanciation par cellule au scroll.
         let firstLinkURL: String?
+        /// Vidéo embeddable (YouTube) résolue depuis `firstLinkURL`, précalculée
+        /// une fois par le builder. Non-nil → la bulle affiche un player façade
+        /// (`VideoEmbedContainer`) au lieu de l'aperçu OpenGraph (`LinkPreviewCard`).
+        let embeddedVideo: EmbeddedVideo?
     }
 
     struct Translation: Equatable {
