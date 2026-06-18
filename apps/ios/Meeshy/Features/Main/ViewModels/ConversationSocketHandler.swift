@@ -493,6 +493,28 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
+        // Pinned messages — un autre participant (ou un autre device) epingle un
+        // message. Write-through persistence; l'observation du store surface le pin.
+        socketManager.messagePinned
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, let persistence = self.persistence else { return }
+                let pinnedBy = event.pinnedBy
+                Task { try? await persistence.updatePinned(localId: event.messageId, pinnedAt: Date(), pinnedBy: pinnedBy) }
+            }
+            .store(in: &cancellables)
+
+        // Unpinned messages — meme chemin write-through, pinnedAt remis a nil.
+        socketManager.messageUnpinned
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, let persistence = self.persistence else { return }
+                Task { try? await persistence.updatePinned(localId: event.messageId, pinnedAt: nil, pinnedBy: nil) }
+            }
+            .store(in: &cancellables)
+
         // Reactions added (with deduplication)
         socketManager.reactionAdded
             .filter { $0.conversationId == convId }

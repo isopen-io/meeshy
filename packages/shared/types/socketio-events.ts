@@ -214,11 +214,12 @@ export const SERVER_EVENTS = {
   TRANSCRIPTION_READY: 'audio:transcription-ready',
 
   /**
-   * --- Message pinning (RESERVED — no emitter yet) ---
-   * Declared for future "pin message" feature. Gateway does not
-   * currently emit these and no client subscribes to them. Keep the
-   * constants + types in sync with the iOS roadmap so the feature
-   * can be wired without renaming.
+   * --- Message pinning ---
+   * Emitted by the gateway on the pin/unpin REST routes
+   * (POST/DELETE /conversations/:id/messages/:messageId/pin) to the
+   * conversation room. iOS subscribes via MessageSocketManager
+   * (messagePinned / messageUnpinned) and applies the change through
+   * persistence so other participants and devices see pin state live.
    */
   MESSAGE_PINNED: 'message:pinned',
   MESSAGE_UNPINNED: 'message:unpinned',

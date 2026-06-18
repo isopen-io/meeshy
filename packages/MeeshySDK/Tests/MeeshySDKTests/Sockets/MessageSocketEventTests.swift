@@ -33,6 +33,43 @@ final class MessageSocketEventTests: XCTestCase {
         XCTAssertEqual(event.conversationId, "conv456")
     }
 
+    // MARK: - MessagePinnedEvent / MessageUnpinnedEvent
+
+    func testMessagePinnedEventDecoding() throws {
+        let json = """
+        {"messageId": "m1", "conversationId": "c1", "pinnedBy": "u1", "pinnedAt": "2026-06-18T12:00:00.000Z"}
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(MessagePinnedEvent.self, from: json)
+        XCTAssertEqual(event.messageId, "m1")
+        XCTAssertEqual(event.conversationId, "c1")
+        XCTAssertEqual(event.pinnedBy, "u1")
+        XCTAssertEqual(event.pinnedAt, "2026-06-18T12:00:00.000Z")
+    }
+
+    func testMessagePinnedEventDecoding_tolerantWithoutOptionalFields() throws {
+        // pinnedBy/pinnedAt absents : decodage tolerant (optionnels) — le listener
+        // appliquera tout de meme l'epingle (pinnedAt local par defaut cote app).
+        let json = """
+        {"messageId": "m2", "conversationId": "c2"}
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(MessagePinnedEvent.self, from: json)
+        XCTAssertEqual(event.messageId, "m2")
+        XCTAssertNil(event.pinnedBy)
+        XCTAssertNil(event.pinnedAt)
+    }
+
+    func testMessageUnpinnedEventDecoding() throws {
+        let json = """
+        {"messageId": "m3", "conversationId": "c3"}
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(MessageUnpinnedEvent.self, from: json)
+        XCTAssertEqual(event.messageId, "m3")
+        XCTAssertEqual(event.conversationId, "c3")
+    }
+
     // MARK: - ReactionUpdateEvent
 
     func testReactionUpdateEventDecoding() throws {
