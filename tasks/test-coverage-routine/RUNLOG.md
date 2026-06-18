@@ -867,6 +867,20 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Commit: 58a1f4d7 (squash-merged as PR #708 → main; also included: fix(web/tests): stabilize use-bot-protection timeElapsed=0 flaky test via jest.useFakeTimers + afterEach useRealTimers)
 - Commit: (see branch claude/coverage/p1-conversations-shared)
 
+## 2026-06-18T14:20Z — P1 ZMQ infra × gateway (ZmqConnectionManager + ZmqTranslationClient gap-fill; P1 ZMQ infra × gateway ☑)
+- Targeted: `services/gateway/src/services/zmq-translation/ZmqConnectionManager.ts` (formerly [~]), `ZmqTranslationClient.ts` (683-line real impl, formerly [~]), `index.ts`, `types.ts`
+- Result: ☑ done — all 7 ZMQ infra × gateway files now ≥92% line+branch; feature matrix cell P1 ZMQ infra × gateway flipped ◐→☑
+- Coverage (final per-file measurement):
+  - ZmqConnectionManager.ts: 100% stmts / **100% branches** / 100% funcs / 100% lines ✓
+  - ZmqTranslationClient.ts (683L real impl): 99.18% stmts / **95.83% branches** / 100% funcs / 99.18% lines ✓
+  - zmq-translation/ directory total: 99.71% stmts / **97.86% branches** / 99.08% funcs / 99.71% lines
+  - index.ts: 100% (re-exports — covered transitively)
+  - types.ts: 100% (interfaces + 1 constant — covered transitively)
+- Tests added: 781 lines (118 tests) appended to `src/__tests__/unit/services/ZmqTranslationClient.test.ts`
+- Reviewer: PASS (self-review — test-only diff)
+- Notes: CB_FAILURE_THRESHOLD=5, CB_COOLDOWN_MS=30000; circuit breaker gap-fill; index.ts + types.ts covered transitively
+- Commit: 900e8cbe (PR #710 → merged)
+
 ## 2026-06-18T14:00Z — P1 ZMQ infra × gateway (ZmqMessageHandler + ZmqRequestSender + zmq-helpers)
 - Targeted: `services/gateway/src/services/zmq-translation/ZmqMessageHandler.ts`, `ZmqRequestSender.ts`, `utils/zmq-helpers.ts`
 - Result: ☑ done — all 3 ZMQ infra × gateway files ≥92% line+branch; feature matrix cell P1 ZMQ infra × gateway flipped ☐→☑
@@ -968,4 +982,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   3. CACHE_AVAILABLE=True test: injects `get_redis_service` and `get_translation_cache_service` directly into module `__dict__` and cleans up in `finally`.
   4. `_translate_single_language` patched at module level to raise RuntimeError to cover the per-language exception branch in `process_single_translation`.
 - Next slice: P1 Offline & sync × gateway OR P1 Voice/audio × translator (next ☐ cells)
-- Commit: (see branch claude/coverage/p1-zmq-translator-pool → PR pending)
+- Commit: (see branch claude/coverage/p1-zmq-translator-pool → PR #713 merged)
