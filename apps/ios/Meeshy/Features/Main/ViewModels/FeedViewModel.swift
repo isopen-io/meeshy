@@ -839,7 +839,7 @@ class FeedViewModel: ObservableObject {
     /// are cleared (the gateway re-translates in background and pushes
     /// `post:updated` via socket). Rolls back the snapshot on API failure.
     /// No-op if the post isn't found in the current feed.
-    func updatePost(_ postId: String, content: String, language: String? = nil, type: String? = nil) async {
+    func updatePost(_ postId: String, content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil) async {
         guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = posts[idx]
         // Apply optimistic mutation: new content + clear translations so the
@@ -852,7 +852,7 @@ class FeedViewModel: ObservableObject {
         posts[idx] = optimistic
         debouncedCacheSave()
         do {
-            let updated = try await postService.update(postId: postId, content: content, visibility: nil, moodEmoji: nil, originalLanguage: language, type: type)
+            let updated = try await postService.update(postId: postId, content: content, visibility: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds)
             // Re-hydrate from the server response so the gateway-authoritative
             // fields (updatedAt, isEdited, sanitized content, …) replace the
             // optimistic in-memory copy. Preserves the resolved translation

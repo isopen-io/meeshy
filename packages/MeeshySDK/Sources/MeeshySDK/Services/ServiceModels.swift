@@ -121,14 +121,18 @@ public struct UpdatePostRequest: Encodable, Sendable {
     public let originalLanguage: String?
     /// Editable only between "POST" and "REEL" (gateway enforces the rest).
     public let type: String?
+    /// Ids of attached media (PostMedia) to detach during the edit.
+    public let removeMediaIds: [String]?
 
     public init(content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil,
-                moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil) {
+                moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil,
+                removeMediaIds: [String]? = nil) {
         self.content = content; self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds
         self.moodEmoji = moodEmoji
         self.originalLanguage = originalLanguage
         self.type = type
+        self.removeMediaIds = removeMediaIds
     }
 }
 

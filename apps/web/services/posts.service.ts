@@ -48,6 +48,8 @@ export interface UpdatePostRequest {
   readonly visibilityUserIds?: string[];
   readonly storyEffects?: Record<string, unknown>;
   readonly moodEmoji?: string;
+  /** Ids of attached media (PostMedia) to detach during the edit. */
+  readonly removeMediaIds?: readonly string[];
 }
 
 export interface RepostRequest {

@@ -1394,9 +1394,10 @@ struct FeedView: View {
                 originalLanguage: post.originalLanguage,
                 originalType: post.type,
                 canBeReel: post.hasMedia,
+                media: post.media.map { EditablePostMedia($0) },
                 isRepost: post.repost != nil,
                 onSave: { draft in
-                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type)
+                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds)
                 },
                 onDismiss: { editingPost = nil }
             )

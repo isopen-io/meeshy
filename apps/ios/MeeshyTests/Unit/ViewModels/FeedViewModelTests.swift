@@ -845,6 +845,15 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertNil(postService.lastUpdateType)
     }
 
+    func test_updatePost_forwardsRemoveMediaIdsToService() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+
+        await sut.updatePost("p1", content: "body", removeMediaIds: ["m1", "m2"])
+
+        XCTAssertEqual(postService.lastUpdateRemoveMediaIds, ["m1", "m2"])
+    }
+
     // MARK: - refresh()
 
     func test_refresh_resetsNewPostsCountAndReloads() async {

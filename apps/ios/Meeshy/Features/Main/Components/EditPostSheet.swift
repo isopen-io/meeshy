@@ -12,6 +12,36 @@ struct EditPostDraft {
     let language: String?
     /// Non-nil only when the author switched between "POST" and "REEL".
     let type: String?
+    /// Ids of attached media the author chose to remove. Empty when none.
+    let removeMediaIds: [String]
+}
+
+/// Lightweight, presentation-only view of an attached media item for the edit
+/// sheet — maps from the SDK `FeedMedia` to just what the thumbnail strip needs.
+struct EditablePostMedia: Identifiable, Equatable {
+    enum Kind { case image, video, audio, document, location }
+    let id: String
+    let kind: Kind
+    let previewURL: URL?
+
+    init(id: String, kind: Kind, previewURL: URL?) {
+        self.id = id
+        self.kind = kind
+        self.previewURL = previewURL
+    }
+
+    init(_ media: FeedMedia) {
+        self.id = media.id
+        switch media.type {
+        case .image: self.kind = .image
+        case .video: self.kind = .video
+        case .audio: self.kind = .audio
+        case .document: self.kind = .document
+        case .location: self.kind = .location
+        }
+        let raw = media.thumbnailUrl ?? media.url
+        self.previewURL = raw.flatMap { MeeshyConfig.resolveMediaURL($0) }
+    }
 }
 
 /// Sheet for editing an authored post: body text, source language (with
@@ -24,6 +54,9 @@ struct EditPostSheet: View {
     /// The post carries media → switching to REEL is allowed (a reel needs
     /// something to show on the immersive surface).
     var canBeReel: Bool = false
+    /// Attached media shown with a remove control. Removing here sends the ids
+    /// in `removeMediaIds`; the gateway detaches them.
+    var media: [EditablePostMedia] = []
     /// A repost mirrors its source; its type is not editable.
     var isRepost: Bool = false
     var maxLength: Int = 5000
@@ -38,6 +71,7 @@ struct EditPostSheet: View {
     @State private var showLanguagePicker = false
     @FocusState private var isFocused: Bool
     @State private var isSaving: Bool = false
+    @State private var removedMediaIds: Set<String> = []
 
     private var trimmedContent: String {
         draftContent.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -56,10 +90,15 @@ struct EditPostSheet: View {
     }
     private var languageChanged: Bool { selectedLanguage != (originalLanguage ?? "") }
     private var typeChanged: Bool { showTypePicker && selectedType != normalizedOriginalType }
-    private var hasChanges: Bool { contentChanged || languageChanged || typeChanged }
+    private var mediaChanged: Bool { !removedMediaIds.isEmpty }
+    private var hasChanges: Bool { contentChanged || languageChanged || typeChanged || mediaChanged }
+
+    private var remainingMediaCount: Int { media.count - removedMediaIds.count }
 
     private var isValid: Bool {
-        !trimmedContent.isEmpty && trimmedContent.count <= maxLength
+        guard trimmedContent.count <= maxLength else { return false }
+        // A media-only post (no text) stays valid as long as media remains.
+        return !trimmedContent.isEmpty || remainingMediaCount > 0
     }
 
     private var remainingChars: Int {
@@ -92,6 +131,8 @@ struct EditPostSheet: View {
                         )
                         .padding(.horizontal, 16)
                         .frame(maxHeight: .infinity)
+
+                    mediaSection
 
                     metadataSection
 
@@ -206,13 +247,96 @@ struct EditPostSheet: View {
         .padding(.horizontal, 16)
     }
 
+    // MARK: - Attached media
+
+    @ViewBuilder
+    private var mediaSection: some View {
+        if !media.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(media) { item in
+                        mediaThumbnail(item)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func mediaThumbnail(_ item: EditablePostMedia) -> some View {
+        let removed = removedMediaIds.contains(item.id)
+        let blockRemoval = selectedType == "REEL" && !removed && remainingMediaCount <= 1
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if let url = item.previewURL, item.kind == .image || item.kind == .video {
+                    AsyncImage(url: url) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        mediaIcon(item.kind)
+                    }
+                } else {
+                    mediaIcon(item.kind)
+                }
+            }
+            .frame(width: 64, height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.inputBorder, lineWidth: 1))
+            .opacity(removed ? 0.35 : 1)
+
+            Button {
+                toggleRemove(item.id)
+            } label: {
+                Image(systemName: removed ? "arrow.uturn.backward.circle.fill" : "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundColor(removed ? MeeshyColors.indigo300 : .white)
+                    .shadow(radius: 1)
+            }
+            .buttonStyle(.plain)
+            .offset(x: 6, y: -6)
+            .disabled(blockRemoval || isSaving)
+        }
+    }
+
+    @ViewBuilder
+    private func mediaIcon(_ kind: EditablePostMedia.Kind) -> some View {
+        ZStack {
+            theme.inputBackground
+            Image(systemName: mediaSymbol(kind))
+                .font(.system(size: 22))
+                .foregroundColor(theme.textMuted)
+        }
+    }
+
+    private func mediaSymbol(_ kind: EditablePostMedia.Kind) -> String {
+        switch kind {
+        case .video: return "film"
+        case .audio: return "music.note"
+        case .image: return "photo"
+        case .document: return "doc"
+        case .location: return "mappin.and.ellipse"
+        }
+    }
+
+    private func toggleRemove(_ id: String) {
+        if removedMediaIds.contains(id) {
+            removedMediaIds.remove(id)
+        } else {
+            // A reel must keep at least one media — block removing the last one.
+            if selectedType == "REEL" && remainingMediaCount <= 1 { return }
+            removedMediaIds.insert(id)
+        }
+    }
+
     private func save() async {
         guard isValid, !isSaving else { return }
         isSaving = true
         let draft = EditPostDraft(
             content: trimmedContent,
             language: languageChanged ? selectedLanguage : nil,
-            type: typeChanged ? selectedType : nil
+            type: typeChanged ? selectedType : nil,
+            removeMediaIds: Array(removedMediaIds)
         )
         await onSave(draft)
         isSaving = false

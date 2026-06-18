@@ -103,9 +103,9 @@ export default function PostDetailPage() {
 
   const handleEdit = () => setEditorOpen(true);
 
-  const handleSaveEdit = (data: { content: string; visibility: string }) => {
+  const handleSaveEdit = (data: { content: string; visibility: string; removeMediaIds: string[] }) => {
     updateMutation.mutate(
-      { postId: post.id, data: { content: data.content, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' } },
+      { postId: post.id, data: { content: data.content, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE', removeMediaIds: data.removeMediaIds } },
       {
         onSuccess: () => {
           setEditorOpen(false);
@@ -177,6 +177,8 @@ export default function PostDetailPage() {
         open={editorOpen}
         initialContent={post.content ?? ''}
         initialVisibility={post.visibility}
+        media={post.media}
+        postType={post.type}
         onSave={handleSaveEdit}
         onClose={() => setEditorOpen(false)}
         saving={updateMutation.isPending}

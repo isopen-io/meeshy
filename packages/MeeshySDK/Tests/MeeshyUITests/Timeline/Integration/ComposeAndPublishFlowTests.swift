@@ -57,7 +57,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
                 repostOfId: String?) async throws -> APIPost {
         throw NSError(domain: "mock", code: -1)
     }
-    func update(postId: String, content: String?, visibility: String?, moodEmoji: String?, originalLanguage: String?, type: String?) async throws -> APIPost {
+    func update(postId: String, content: String?, visibility: String?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?) async throws -> APIPost {
         throw NSError(domain: "mock", code: -1)
     }
     func delete(postId: String) async throws {}
