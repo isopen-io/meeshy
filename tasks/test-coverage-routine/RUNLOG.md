@@ -738,7 +738,7 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 
 ## 2026-06-17T22:16Z — P1 Conversations & membership × gateway (routes sub-slice: sharing.ts)
 - Targeted: `src/routes/conversations/sharing.ts` (887 lines)
-- Result: ◐ partial — sharing.ts☑ (tests written, reviewer PASS, PR #702 open); merge blocked on CI (Test Python translator still in_progress); remaining: core.ts, messages-advanced.ts
+- Result: ☑ done — sharing.ts☑ (tests written, reviewer PASS, PR #702 squash-merged to main)
 - Coverage (per-file):
   - sharing.ts: 100% stmts / 99.25% branches / 100% funcs / 100% lines ✓
   - Only uncovered branch: line 107 `request.body || {}` — Fastify always provides body, structurally unreachable
@@ -756,4 +756,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   3. **Next run action**: check if PR #702 CI is complete (Python translator job); if green, squash-merge PR #702 to main, then proceed to next slice: core.ts (1390L) or messages-advanced.ts (1329L).
   4. Pre-existing 25 failing suites (TS errors in MessageReadStatusService.ts, unrelated to diff) unchanged.
 - Next slice (when PR #702 merges): P1 Conversations & membership × gateway — core.ts (1390L) [too large, split into sub-units] OR messages-advanced.ts (1329L)
-- Commit: 4e2da39f (branch claude/coverage/p1-conversations-gateway-sharing → PR #702 open, awaiting CI)
+- Commit: 4e2da39f (squash-merged as PR #702 → main)
