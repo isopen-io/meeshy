@@ -18,6 +18,7 @@ export default defineConfig({
         'encryption/signal/signal-types.ts',
         'types/encryption.ts',
         'types/status-types.ts',
+        'types/conversation.ts',
       ],
       exclude: ['**/*.d.ts', '**/index.ts', '**/signal-store-interface.ts'],
       thresholds: {
