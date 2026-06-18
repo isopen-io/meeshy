@@ -55,7 +55,7 @@ A run targets **one (feature × app) cell**. Pick the highest-priority `☐` cel
 | P0 | **Prisme Linguistique** (lang resolution + translation display) | ☑ | ☑ | ☑ | ☐ | ☐ | ☑ (TS shared; MeeshySDK Swift ⊘ Linux env) |
 | P0 | **Messaging core** (send/recv/edit/delete/optimistic/dedup/clientMessageId) | ◐ sub: MessageHandler.ts ☑, messages.ts ⚠TS-errors (3 runs blocked) | ⊘ | ☑ | ☐ | ☐ | ☑ (client-message-id.ts 100%; MeeshySDK Swift ⊘ Linux env) |
 | P1 | **Real-time** (Socket.IO presence, typing, reactions, delivery, reconnect) | ☑ sub: StatusHandler☑ ConversationHandler☑ AttachmentReactionHandler☑ LocationHandler☑ CallEventsHandler☑ MeeshySocketIOManager☑ | ⊘ | ☑ sub: notification-socketio.singleton☑ use-connection-status☑ use-socketio-messaging☑ | ☐ | ☐ | ☐ |
-| P1 | **Conversations & membership** (create/join/leave/participants/settings) | ◐ sub: leave.ts☑ ban.ts☑ delete-for-me.ts☑ stats.ts☑ ConversationStatsService.ts☑ ConversationMessageStatsService.ts☑ conversation-id-cache.ts☑ identifier-generator.ts☑ access-control.ts☑ participants.ts☑ search.ts☑ threads.ts☑ index.ts☑ sharing.ts☑; remaining: core.ts, messages-advanced.ts | ⊘ | ☐ | ☐ | ☐ | ☐ |
+| P1 | **Conversations & membership** (create/join/leave/participants/settings) | ☑ sub: leave.ts☑ ban.ts☑ delete-for-me.ts☑ stats.ts☑ ConversationStatsService.ts☑ ConversationMessageStatsService.ts☑ conversation-id-cache.ts☑ identifier-generator.ts☑ access-control.ts☑ participants.ts☑ search.ts☑ threads.ts☑ index.ts☑ sharing.ts☑ core.ts☑ messages-advanced.ts☑ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P1 | **Offline & sync** (outbox, failed-messages queue, reconnect flush) | ☐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P1 | **ZMQ infra** (worker pool, connection mgr, multipart frames, dedup) | ☐ | ☐ | ⊘ | ⊘ | ⊘ | ⊘ |
 | P1 | **Voice/audio** (transcription, TTS, voice profiles, voice translation) | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
@@ -154,7 +154,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
 | web | `pnpm --filter web test:coverage` | 33.10 | 25.77 | 2026-06-14 (re-measured after Sprint 0.2/0.3 fixes; threshold floor set at 33/25) |
-| gateway | `pnpm --filter gateway test:coverage` | 51.57 | 47.35 | 2026-06-18 (local-measured; post sharing.ts☑; 69 new tests; threshold floor lines:47/branches:43/statements:47/functions:48; CI expected ~47/43) |
+| gateway | `pnpm --filter gateway test:coverage` | 53.10 | 49.68 | 2026-06-18 (local-measured; post core.ts☑ messages-advanced.ts☑; 190 new tests; threshold floor lines:48/branches:44/statements:48/functions:48; CI expected ~48/44) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | 37.09 | n/a | 2026-06-14 (subset: no-GPU tests only; 4 files w/ import errors excluded) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |
