@@ -1244,16 +1244,25 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         fastify.prisma.messageAttachment.count({ where: attWhere })
       ]);
 
+      const toMedia = (m: Record<string, unknown>, source: 'post' | 'message', contextId: unknown) => ({
+        id: m.id,
+        originalName: m.originalName,
+        mimeType: m.mimeType,
+        fileUrl: m.fileUrl,
+        thumbnailUrl: m.thumbnailUrl,
+        fileSize: m.fileSize,
+        width: m.width,
+        height: m.height,
+        duration: m.duration,
+        createdAt: m.createdAt as string | Date,
+        source,
+        contextId
+      });
+
       const merged = [
-        ...postMedia.map((m: Record<string, unknown>) => {
-          const { postId, ...rest } = m;
-          return { ...rest, source: 'post', contextId: postId };
-        }),
-        ...attachments.map((m: Record<string, unknown>) => {
-          const { messageId, ...rest } = m;
-          return { ...rest, source: 'message', contextId: messageId };
-        })
-      ].sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime());
+        ...postMedia.map((m) => toMedia(m as Record<string, unknown>, 'post', (m as Record<string, unknown>).postId)),
+        ...attachments.map((m) => toMedia(m as Record<string, unknown>, 'message', (m as Record<string, unknown>).messageId))
+      ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
       const pageSlice = merged.slice(offsetNum, offsetNum + limitNum);
       const total = postCount + attCount;
