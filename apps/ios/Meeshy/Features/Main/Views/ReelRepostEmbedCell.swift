@@ -2,14 +2,15 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Renders a feed POST that reposts a REEL as a rich, tappable reel preview —
-/// poster (or audio backdrop) + center play glyph + reel badge (top-right) +
-/// the original author + caption + like count — instead of the empty
-/// text-only quote block. A reel's content lives in `media` + caption, never in
-/// the `content` text, so the legacy `repostView` rendered a blank card.
+/// Renders a feed POST that reposts a REEL as a compact, full-width "cited
+/// post" card — a short media strip (reel logo + centered music glyph for an
+/// audio reel, or a cropped poster for a video reel) followed by the original
+/// author, caption and engagement counts. Mirrors the visual language of the
+/// generic `repostView` (cited posts) instead of a tall 9:16 portrait that
+/// filled most of the feed.
 ///
 /// Used by `FeedPostCard` when `post.type == "POST"` AND `post.repost?.type == "REEL"`.
-/// Tap forwards to `onTap` (→ reel detail page). Mirrors `StoryRepostEmbedCell`.
+/// Tap forwards to `onTap` (→ reel detail page).
 ///
 /// Leaf view: reads `ThemeManager.shared` directly and takes value inputs only
 /// (no `@ObservedObject` on global singletons) so the feed list stays cheap to
@@ -18,12 +19,20 @@ struct ReelRepostEmbedCell: View {
     let post: FeedPost
     var onTap: (() -> Void)? = nil
 
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    /// Short media-strip height. Tall enough to read the reel badge + the
+    /// centered music glyph (audio) or a cropped poster band (video), short
+    /// enough that the card stays compact — the caption drives the rest of the
+    /// height, exactly like a cited post.
+    private let stripHeight: CGFloat = 116
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             attributionHeader
 
             // The re-poster's own added text (quote). The reel's caption is
-            // shown inside the preview overlay, not here.
+            // shown inside the card, not here.
             if !post.content.isEmpty {
                 Text(post.displayContent)
                     .font(.body)
@@ -35,7 +44,7 @@ struct ReelRepostEmbedCell: View {
                     HapticFeedback.light()
                     onTap?()
                 } label: {
-                    reelPreview(repost)
+                    reelCard(repost)
                 }
                 .buttonStyle(.plain)
                 .accessibilityElement(children: .ignore)
@@ -59,22 +68,67 @@ struct ReelRepostEmbedCell: View {
         }
     }
 
-    // MARK: - Reel preview (9:16, poster + glyphs + overlay)
+    // MARK: - Reel card (full-width, content-height — mirrors repostView)
 
     @ViewBuilder
-    private func reelPreview(_ repost: RepostContent) -> some View {
+    private func reelCard(_ repost: RepostContent) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            mediaStrip(repost)
+
+            // Original author
+            HStack(spacing: 8) {
+                MeeshyAvatar(
+                    name: repost.author,
+                    context: .postComment,
+                    accentColor: repost.authorColor,
+                    avatarURL: repost.authorAvatarURL
+                )
+                Text("@\(repost.authorUsername ?? repost.author)")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(theme.accentText(repost.authorColor))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+
+            // Reel caption — drives the card height, like a cited post.
+            if !repost.content.isEmpty {
+                Text(repost.content)
+                    .font(.footnote)
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            statsRow(repost)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(theme.accentText(repost.authorColor).opacity(0.2), lineWidth: 1)
+                )
+        )
+    }
+
+    // MARK: - Media strip (short, full-width)
+
+    /// Short full-width banner: poster (video/image) or tinted music backdrop
+    /// (audio/media-less), with the reel badge top-right and a center play
+    /// glyph for video reels. Cropped to a fixed short height so the card stays
+    /// compact instead of a full 9:16 portrait.
+    private func mediaStrip(_ repost: RepostContent) -> some View {
         ZStack {
             poster(repost)
             centerPlayButton(repost)
             reelBadge
-            bottomOverlay(repost)
         }
-        .aspectRatio(9.0 / 16.0, contentMode: .fit)
-        // Cap the embed width so on iPad it doesn't stretch into a giant
-        // vertical column in a wide feed pane (mirrors StoryRepostEmbedCell).
-        .frame(maxWidth: 420)
-        .frame(maxWidth: .infinity, alignment: .center)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .frame(maxWidth: .infinity)
+        .frame(height: stripHeight)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     @ViewBuilder
@@ -94,7 +148,7 @@ struct ReelRepostEmbedCell: View {
             ZStack {
                 Color(hex: repost.authorColor).opacity(0.45)
                 Image(systemName: "music.note")
-                    .font(.system(size: 34, weight: .semibold))
+                    .font(.system(size: 30, weight: .semibold))
                     .foregroundColor(.white.opacity(0.85))
             }
         }
@@ -105,61 +159,39 @@ struct ReelRepostEmbedCell: View {
     private func centerPlayButton(_ repost: RepostContent) -> some View {
         if repost.primaryReelMedia?.type == .video {
             Image(systemName: "play.fill")
-                .font(.system(size: 22, weight: .bold))
+                .font(.system(size: 18, weight: .bold))
                 .foregroundColor(.white)
-                .padding(16)
+                .padding(13)
                 .background(Circle().fill(.ultraThinMaterial))
                 .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
                 .shadow(color: .black.opacity(0.3), radius: 4, y: 1)
         }
     }
 
-    /// Reel badge (top-right) — the "logo Réel" lost when a reel share renders
-    /// as a plain POST card. Visual only; the whole preview is the tap target.
+    /// Reel badge (top-right) — the "logo Réel". Visual only; the whole card is
+    /// the tap target.
     private var reelBadge: some View {
         VStack {
             HStack {
                 Spacer()
                 Image(systemName: "play.rectangle.on.rectangle.fill")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundColor(.white)
-                    .padding(7)
+                    .padding(6)
                     .background(Circle().fill(.ultraThinMaterial))
                     .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
                     .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
-                    .padding(10)
+                    .padding(8)
             }
             Spacer()
         }
         .accessibilityHidden(true)
     }
 
-    @ViewBuilder
-    private func bottomOverlay(_ repost: RepostContent) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Spacer()
-            HStack(spacing: 8) {
-                MeeshyAvatar(
-                    name: repost.author,
-                    context: .postComment,
-                    accentColor: repost.authorColor,
-                    avatarURL: repost.authorAvatarURL
-                )
-                Text("@\(repost.authorUsername ?? repost.author)")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
-            }
+    // MARK: - Stats (likes — shares count is not in the repost payload)
 
-            if !repost.content.isEmpty {
-                Text(repost.content)
-                    .font(.subheadline)
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
-            }
-
+    private func statsRow(_ repost: RepostContent) -> some View {
+        HStack(spacing: 16) {
             HStack(spacing: 4) {
                 Image(systemName: "heart.fill")
                     .font(.caption2)
@@ -167,16 +199,11 @@ struct ReelRepostEmbedCell: View {
                 Text("\(repost.likes)")
                     .font(.caption.weight(.medium))
             }
-            .foregroundColor(.white.opacity(0.9))
+            .foregroundColor(theme.accentText(repost.authorColor).opacity(0.8))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(String(localized: "feed.reel.repost.likes", defaultValue: "\(repost.likes) j'aime", bundle: .main))
         }
-        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.55)],
-                startPoint: .top, endPoint: .bottom
-            )
-        )
     }
 
     // MARK: - Helpers
