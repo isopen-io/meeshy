@@ -188,14 +188,16 @@ platform :ios do
 
     build_production
 
-    # NE PAS passer `changelog` ici : combine a skip_waiting_for_build_processing,
-    # pilot est force d'attendre l'apparition du build pour y ecrire le changelog
-    # -- attente quasi infinie quand le processing Apple stagne. Sans changelog,
-    # l'action rend la main des l'IPA livree. Le « What to Test » se regle dans
+    # On ATTEND la fin du processing Apple (synchronisation / remontee du build
+    # dans App Store Connect) avant de rendre la main : skip_waiting_for_build_processing
+    # repasse a false. On NE passe toujours PAS de `changelog` ici -- combine a
+    # l'attente, pilot resterait bloque a ecrire le changelog si le processing
+    # stagne (attente quasi infinie). Sans changelog, l'action attend uniquement
+    # que le build soit traite puis rend la main. Le « What to Test » se regle dans
     # App Store Connect, ou via le lane `release` pour les soumissions App Store.
     upload_to_testflight(
       api_key: api_key,
-      skip_waiting_for_build_processing: true,
+      skip_waiting_for_build_processing: false,
       distribute_external: false
     )
 
