@@ -444,18 +444,19 @@ struct FeedView: View {
                 feedScrollView
             }
 
-            if sizeClass != .regular {
-                VStack(spacing: 0) {
-                    CollapsibleHeader(
-                        title: "Meeshy Feed",
-                        scrollOffset: headerScrollOffset,
-                        showBackButton: false,
-                        titleColor: theme.textPrimary,
-                        backArrowColor: MeeshyColors.indigo500,
-                        backgroundColor: theme.backgroundPrimary
-                    )
-                    Spacer()
-                }
+            // Header shown on iPhone AND iPad: the scroll content already
+            // reserves `CollapsibleHeaderMetrics.expandedHeight` of top padding,
+            // so on iPad it simply fills the space that was previously left empty.
+            VStack(spacing: 0) {
+                CollapsibleHeader(
+                    title: "Meeshy Feed",
+                    scrollOffset: headerScrollOffset,
+                    showBackButton: false,
+                    titleColor: theme.textPrimary,
+                    backArrowColor: MeeshyColors.indigo500,
+                    backgroundColor: theme.backgroundPrimary
+                )
+                Spacer()
             }
 
             // Full-screen composer overlay
@@ -630,7 +631,11 @@ struct FeedView: View {
     // MARK: - Feed Post Card
     @ViewBuilder
     private func feedPostCardView(for post: FeedPost) -> some View {
-        if post.isReel {
+        // On iPad/Mac (regular width) the feed lives in a narrow column where a
+        // full-bleed reel card looks crude, so reels render as the standard
+        // compact card there (author header + bounded media + action bar) for
+        // parity with the iPhone feed. iPhone keeps the immersive full-frame card.
+        if post.isReel && sizeClass != .regular {
             reelFeedCardView(for: post)
         } else {
             standardFeedPostCardView(for: post)
