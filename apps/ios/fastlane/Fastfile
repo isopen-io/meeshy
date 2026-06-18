@@ -172,19 +172,31 @@ platform :ios do
   lane :beta do |options|
     sync_certificates
 
-    increment_build_number(
-      build_number: latest_testflight_build_number(api_key: api_key) + 1
-    )
+    # Build number = max(version locale du projet, dernier build connu d'Apple) + 1.
+    # latest_testflight_build_number seul sous-compte un build encore en PROCESSING
+    # (ou passe Invalid) : il renvoyait alors le numero deja uploade, qu'on
+    # re-tentait a l'identique -> 409 ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE
+    # ("bundle version must be higher than the previously uploaded version").
+    # Prendre le max avec le numero local garantit un build strictement superieur.
+    next_build = [
+      get_build_number(xcodeproj: "Meeshy.xcodeproj").to_i,
+      latest_testflight_build_number(api_key: api_key, initial_build_number: 0).to_i
+    ].max + 1
+    increment_build_number(build_number: next_build)
 
     test unless options[:skip_tests]
 
     build_production
 
+    # NE PAS passer `changelog` ici : combine a skip_waiting_for_build_processing,
+    # pilot est force d'attendre l'apparition du build pour y ecrire le changelog
+    # -- attente quasi infinie quand le processing Apple stagne. Sans changelog,
+    # l'action rend la main des l'IPA livree. Le « What to Test » se regle dans
+    # App Store Connect, ou via le lane `release` pour les soumissions App Store.
     upload_to_testflight(
       api_key: api_key,
       skip_waiting_for_build_processing: true,
-      distribute_external: false,
-      changelog: options[:changelog] || "Bug fixes and improvements"
+      distribute_external: false
     )
 
     UI.success("Build uploaded to TestFlight!")
@@ -204,9 +216,17 @@ platform :ios do
       increment_version_number(version_number: options[:version])
     end
 
-    increment_build_number(
-      build_number: latest_testflight_build_number(api_key: api_key) + 1
-    )
+    # Build number = max(version locale du projet, dernier build connu d'Apple) + 1.
+    # latest_testflight_build_number seul sous-compte un build encore en PROCESSING
+    # (ou passe Invalid) : il renvoyait alors le numero deja uploade, qu'on
+    # re-tentait a l'identique -> 409 ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE
+    # ("bundle version must be higher than the previously uploaded version").
+    # Prendre le max avec le numero local garantit un build strictement superieur.
+    next_build = [
+      get_build_number(xcodeproj: "Meeshy.xcodeproj").to_i,
+      latest_testflight_build_number(api_key: api_key, initial_build_number: 0).to_i
+    ].max + 1
+    increment_build_number(build_number: next_build)
 
     test unless options[:skip_tests]
 
