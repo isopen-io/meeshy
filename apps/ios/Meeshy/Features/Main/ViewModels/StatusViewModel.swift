@@ -300,14 +300,42 @@ class StatusViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Reception temps reel des reactions de statut (le REST /posts/:id/like
+        // emet `status:reacted` cote gateway). La propre reaction de l'utilisateur
+        // est deja posee optimistiquement par reactToStatus ; on n'applique donc
+        // que celles des AUTRES. Le payload ne porte pas de compte agrege, on
+        // incremente prudemment (meme garde d'echo que la reaction de conversation).
+        socialSocket.statusReacted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                guard let self, payload.userId != self.authManager.currentUser?.id,
+                      let index = self.statuses.firstIndex(where: { $0.id == payload.statusId }) else { return }
+                var summary = self.statuses[index].reactionSummary ?? [:]
+                summary[payload.emoji, default: 0] += 1
+                self.statuses[index].reactionSummary = summary
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - React to Status
 
     func reactToStatus(_ statusId: String, emoji: String) async {
+        // Optimistic : refleter la reaction dans reactionSummary avant le reseau
+        // (parite avec les reactions de post/commentaire). Snapshot pour rollback.
+        let previousSummary = statuses.first(where: { $0.id == statusId })?.reactionSummary
+        if let index = statuses.firstIndex(where: { $0.id == statusId }) {
+            var summary = statuses[index].reactionSummary ?? [:]
+            summary[emoji, default: 0] += 1
+            statuses[index].reactionSummary = summary
+        }
         do {
             try await statusService.react(statusId: statusId, emoji: emoji)
         } catch {
+            // Rollback de l'optimisme + toast. (Sur succes, le broadcast
+            // `status:reacted` reconcilie l'etat autoritaire cote serveur.)
+            if let index = statuses.firstIndex(where: { $0.id == statusId }) {
+                statuses[index].reactionSummary = previousSummary
+            }
             FeedbackToastManager.shared.showError(String(localized: "status.reactError", defaultValue: "Error reacting to status", bundle: .main))
         }
     }
