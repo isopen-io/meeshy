@@ -55,7 +55,7 @@ A run targets **one (feature × app) cell**. Pick the highest-priority `☐` cel
 | P0 | **Prisme Linguistique** (lang resolution + translation display) | ☑ | ☑ | ☑ | ☐ | ☐ | ☑ (TS shared; MeeshySDK Swift ⊘ Linux env) |
 | P0 | **Messaging core** (send/recv/edit/delete/optimistic/dedup/clientMessageId) | ◐ sub: MessageHandler.ts ☑, messages.ts ⚠TS-errors (3 runs blocked) | ⊘ | ☑ | ☐ | ☐ | ☑ (client-message-id.ts 100%; MeeshySDK Swift ⊘ Linux env) |
 | P1 | **Real-time** (Socket.IO presence, typing, reactions, delivery, reconnect) | ☑ sub: StatusHandler☑ ConversationHandler☑ AttachmentReactionHandler☑ LocationHandler☑ CallEventsHandler☑ MeeshySocketIOManager☑ | ⊘ | ☑ sub: notification-socketio.singleton☑ use-connection-status☑ use-socketio-messaging☑ | ☐ | ☐ | ☑ (types/status-types.ts 100%/100%; utils/errors.ts 100%/100%; utils/notification-strings.ts 100%/96.96%; MeeshySDK Swift ⊘ Linux env) |
-| P1 | **Conversations & membership** (create/join/leave/participants/settings) | ☑ sub: leave.ts☑ ban.ts☑ delete-for-me.ts☑ stats.ts☑ ConversationStatsService.ts☑ ConversationMessageStatsService.ts☑ conversation-id-cache.ts☑ identifier-generator.ts☑ access-control.ts☑ participants.ts☑ search.ts☑ threads.ts☑ index.ts☑ sharing.ts☑ core.ts☑ messages-advanced.ts☑ | ⊘ | ☑ sub: transformers.service.ts☑ crud.service.ts☑ links.service.ts☑ link-conversation.service.ts☑ | ☐ | ☐ | ☐ |
+| P1 | **Conversations & membership** (create/join/leave/participants/settings) | ☑ sub: leave.ts☑ ban.ts☑ delete-for-me.ts☑ stats.ts☑ ConversationStatsService.ts☑ ConversationMessageStatsService.ts☑ conversation-id-cache.ts☑ identifier-generator.ts☑ access-control.ts☑ participants.ts☑ search.ts☑ threads.ts☑ index.ts☑ sharing.ts☑ core.ts☑ messages-advanced.ts☑ | ⊘ | ☑ sub: transformers.service.ts☑ crud.service.ts☑ links.service.ts☑ link-conversation.service.ts☑ | ☐ | ☐ | ☑ (types/conversation.ts 100%/100%; MeeshySDK Swift ⊘ Linux env) |
 | P1 | **Offline & sync** (outbox, failed-messages queue, reconnect flush) | ☐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P1 | **ZMQ infra** (worker pool, connection mgr, multipart frames, dedup) | ☐ | ☐ | ⊘ | ⊘ | ⊘ | ⊘ |
 | P1 | **Voice/audio** (transcription, TTS, voice profiles, voice translation) | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
@@ -158,7 +158,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | 37.09 | n/a | 2026-06-14 (subset: no-GPU tests only; 4 files w/ import errors excluded) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |
-| shared | `pnpm --filter @meeshy/shared test:coverage` | 98.56 | 96.10 | 2026-06-18 (re-measured after P1 Real-time × shared slice; 648 tests; threshold floor ratcheted to lines:97/branches:95/functions:84/statements:97; types/status-types.ts added to coverage) |
+| shared | `pnpm --filter @meeshy/shared test:coverage` | 98.56 | 96.15 | 2026-06-18 (re-measured after P1 Conversations × shared slice; 673 tests; threshold floor unchanged lines:97/branches:95/functions:84/statements:97; types/conversation.ts added to coverage) |
 
 ### Key findings from baseline measurement
 

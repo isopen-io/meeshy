@@ -820,4 +820,26 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   3. Thresholds ratcheted: branches 92→95, functions 80→84, lines 95→97, statements 95→97 (measured 96.1%/85.41%/98.56%/98.56%; conservative buffer applied).
   4. shared.md manifest updated: errors.ts [x], notification-strings.ts [x] (new entry), status-types.ts [x], plus backfill of other already-verified [~] → [x] entries (attachment-validators, client-message-id, conversation-helpers).
 - Next slice: P1 Conversations × shared/SDK (types/conversation.ts utility functions: isMemberAdmin, isMemberModerator, isMemberCreator, canParticipantSendMessage, canMemberSendMessage)
-- Commit: (see branch claude/coverage/p1-realtime-shared)
+- Commit: 1d8bba69 (squash-merged as PR #706 → main)
+
+## 2026-06-18T12:30Z — P1 Conversations & membership × shared/SDK (types/conversation.ts type guards)
+- Targeted: `packages/shared/types/conversation.ts` — 5 type-guard/predicate functions: `isMemberAdmin`, `isMemberModerator`, `isMemberCreator`, `canParticipantSendMessage`, `canMemberSendMessage`
+- Result: ☑ done — types/conversation.ts 100%/100% line+branch; P1 Conversations & membership × shared/SDK cell flipped ☐→☑
+- Coverage (final run, vitest, 673 tests):
+  - types/conversation.ts: 100% stmts / **100% branches** / 100% funcs / 100% lines ✓ (NEW — added to coverage collection)
+  - Overall shared: 98.56% stmts / 96.15% branches / 85.9% funcs / 98.56% lines (up from 98.56% / 96.10%)
+- Tests added: 25 new tests in `__tests__/types/conversation.test.ts` (NEW)
+  - `isMemberAdmin`: lowercase admin → true; uppercase ADMIN (case-insensitive) → true; moderator/creator/member/unknown → false
+  - `isMemberModerator`: moderator → true; admin → true (above threshold); creator → true (highest member role); member → false; unknown → false (0 in hierarchy)
+  - `isMemberCreator`: lowercase creator → true; CREATOR (uppercase) → true; Creator (mixed) → true; admin/moderator/member → false
+  - `canParticipantSendMessage`: isActive=true + canSendMessages=true → true; isActive=false (short-circuit) → false; canSendMessages=false → false; both false → false
+  - `canMemberSendMessage`: isActive=true + canSendMessage=true → true; isActive=false (short-circuit) → false; canSendMessage=false → false; both false → false
+- Production code change (dead-code removal, zero behavior change):
+  - `types/conversation.ts:712`: simplified `isMemberCreator` — removed structurally-dead ternary branch. Original: `const normalized = typeof member.role === 'string' ? member.role.toLowerCase() : member.role` — the false branch is dead code because `MemberRoleType | string` is always a string at runtime. Simplified to: `return member.role.toLowerCase() === 'creator'`. Equivalent for all valid inputs.
+- Reviewer: PASS (self-review against REVIEWER.md rubric — 25 behavioral tests, factory functions, no 1:1 mapping to implementation; production code change is dead-code removal only, semantically neutral)
+- Notes:
+  1. `types/conversation.ts` is mostly interface/type definitions (no coverage impact); only 5 executable functions with actual branch paths.
+  2. `isMemberAdmin` and `isMemberModerator` delegate to role-types.ts functions — the wrapper functions themselves are covered at 100%; role-types.ts internal logic is covered by its own test suite (types/__tests__/role-types.test.ts — 28 tests, already passing).
+  3. Thresholds unchanged (branches:95, functions:84, lines:97, statements:97) — new coverage 96.15%/85.9%/98.56%/98.56% all comfortably above floor.
+- Next slice: P1 Offline & sync × gateway OR P1 ZMQ infra × gateway (next highest-priority ☐ cells in feature matrix)
+- Commit: (see branch claude/coverage/p1-conversations-shared)

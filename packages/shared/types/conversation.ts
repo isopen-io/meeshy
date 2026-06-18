@@ -710,8 +710,7 @@ export function isMemberModerator(member: { role: MemberRoleType | string }): bo
  * Verifie si un membre est un createur
  */
 export function isMemberCreator(member: { role: MemberRoleType | string }): boolean {
-  const normalized = typeof member.role === 'string' ? member.role.toLowerCase() : member.role;
-  return normalized === 'creator';
+  return member.role.toLowerCase() === 'creator';
 }
 
 /**
