@@ -1012,10 +1012,18 @@ class FeedViewModel: ObservableObject {
             .store(in: &socketCancellables)
 
         // --- post:bookmarked ---
+        // Le favori est PERSONNEL : le gateway n'émet `post:bookmarked` que vers la
+        // feed room du viewer (toutes ses sessions/vues, dont le reel viewer). On
+        // réconcilie `isBookmarkedByMe` sur le post → le re-seed du reel viewer
+        // depuis `FeedViewModel.posts` porte le bon état (favori persistant).
         socialSocket.postBookmarked
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.debouncedCacheSave()
+            .sink { [weak self] payload in
+                guard let self else { return }
+                if let index = self.posts.firstIndex(where: { $0.id == payload.postId }) {
+                    self.posts[index].isBookmarkedByMe = payload.bookmarked
+                }
+                self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
 

@@ -347,4 +347,15 @@ final class PostServiceTests: XCTestCase {
         try await service.recordEngagement([])
         XCTAssertEqual(mock.requestCount, 0)
     }
+
+    func test_recordImpression_postsTo_singleImpressionEndpoint() async throws {
+        let response = APIResponse(success: true, data: ["recorded": true], error: nil)
+        mock.stub("/posts/\(postId)/impression", result: response)
+
+        try await service.recordImpression(postId: postId, source: "detail")
+
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/\(postId)/impression")
+        XCTAssertEqual(mock.lastRequest?.method, "POST")
+    }
 }

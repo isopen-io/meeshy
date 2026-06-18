@@ -196,6 +196,9 @@ export function registerInteractionRoutes(
 
       const { postId } = request.params;
       await postService.bookmarkPost(postId, authContext.registeredUser.id);
+      // Sync temps réel (perso) : le feed et le reel viewer réhydratent
+      // `isBookmarkedByMe` → le favori survit à la fermeture/réouverture.
+      fastify.socialEvents?.broadcastPostBookmarked({ postId, bookmarked: true }, authContext.registeredUser.id);
       return sendSuccess(reply, { bookmarked: true });
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/bookmark] Error: ${error}`);
@@ -215,6 +218,7 @@ export function registerInteractionRoutes(
 
       const { postId } = request.params;
       await postService.unbookmarkPost(postId, authContext.registeredUser.id);
+      fastify.socialEvents?.broadcastPostBookmarked({ postId, bookmarked: false }, authContext.registeredUser.id);
       return sendSuccess(reply, { bookmarked: false });
     } catch (error) {
       fastify.log.error(`[DELETE /posts/:postId/bookmark] Error: ${error}`);
@@ -302,7 +306,7 @@ export function registerInteractionRoutes(
       body: {
         type: 'object',
         properties: {
-          source: { type: 'string', enum: ['feed', 'profile', 'search', 'shared_link', 'notification'] }
+          source: { type: 'string', enum: ['feed', 'profile', 'search', 'shared_link', 'notification', 'detail'] }
         }
       }
     },
@@ -321,9 +325,20 @@ export function registerInteractionRoutes(
         data: { postId, userId: authContext.registeredUser.id, source }
       });
 
+      // Ouvrir le Détail d'un post (`source: 'detail'`) est à la fois une
+      // impression ET une vue (totale, jamais dédupliquée) comptée IMMÉDIATEMENT
+      // — chaque ouverture compte, sans seuil ni gating engagement. Les autres
+      // sources (apparition feed, etc.) ne comptent qu'une impression.
+      // Note : `postOpenCount` n'est PLUS alimenté par l'engagement sur la surface
+      // `detail` (cf. engagementAggregateIncrements) pour éviter le double comptage.
+      const counters: Record<string, { increment: number }> = { impressionCount: { increment: 1 } };
+      if (source === 'detail') {
+        counters.postOpenCount = { increment: 1 };
+      }
+
       await prisma.post.update({
         where: { id: postId },
-        data: { impressionCount: { increment: 1 } }
+        data: counters
       });
 
       return sendSuccess(reply, { recorded: true });
@@ -341,7 +356,7 @@ export function registerInteractionRoutes(
         required: ['postIds'],
         properties: {
           postIds: { type: 'array', items: { type: 'string' } },
-          source: { type: 'string', enum: ['feed', 'profile', 'search', 'shared_link', 'notification'] }
+          source: { type: 'string', enum: ['feed', 'profile', 'search', 'shared_link', 'notification', 'detail'] }
         }
       }
     },

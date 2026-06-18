@@ -40,6 +40,12 @@ struct ThreadedCommentSection: View {
         return max(0, total - autoPreviewReplies.count)
     }
 
+    /// « Voir » n'apparaît que tant qu'il reste des réponses non révélées (au-delà
+    /// de l'auto-preview de 2). Une fois le thread déplié, il disparaît → pas de repli.
+    private var showSeeReplies: Bool {
+        !isExpanded && remainingRepliesCount > 0
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             CommentRowView(
@@ -50,6 +56,8 @@ struct ThreadedCommentSection: View {
                 isInFlight: heartInFlightIds.contains(comment.id),
                 onReply: { onReply(comment) },
                 onLikeComment: { onLikeComment(comment.id) },
+                showSeeReplies: showSeeReplies,
+                onSeeReplies: { onToggleThread() },
                 moodEmoji: moodEmoji,
                 storyState: storyState,
                 presenceState: presenceState
@@ -76,10 +84,8 @@ struct ThreadedCommentSection: View {
                 }
             }
 
-            // "Voir les autres réponses" toggle
-            if comment.replies > 2 {
-                threadToggleButton
-            }
+            // Le bouton « Voir » vit désormais dans la barre d'actions du commentaire
+            // racine (`CommentRowView`, gated par `showSeeReplies`), plus ici.
 
             // Expanded — show ALL replies
             if isExpanded {
@@ -114,31 +120,6 @@ struct ThreadedCommentSection: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isExpanded)
-    }
-
-    private var threadToggleButton: some View {
-        Button {
-            HapticFeedback.light()
-            onToggleThread()
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 10, weight: .bold))
-
-                Text(isExpanded
-                     ? String(localized: "feed.comments.hide_replies", defaultValue: "Masquer les réponses", bundle: .main)
-                     : String(localized: "feed.comments.show_more_replies", defaultValue: "Voir \(remainingRepliesCount) autre\(remainingRepliesCount > 1 ? "s" : "") réponse\(remainingRepliesCount > 1 ? "s" : "")", bundle: .main))
-                    .font(.system(size: 12, weight: .semibold))
-            }
-            .foregroundColor(Color(hex: accentColor))
-            .padding(.leading, 36)
-            .padding(.vertical, 6)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(isExpanded
-            ? String(localized: "a11y.comment.hide_replies", defaultValue: "Masquer les réponses", bundle: .main)
-            : String(format: String(localized: "a11y.comment.show_replies", defaultValue: "Voir %d réponses", bundle: .main), remainingRepliesCount))
     }
 }
 
@@ -800,6 +781,13 @@ struct CommentRowView: View, Equatable {
     var isInFlight: Bool = false
     let onReply: () -> Void
     var onLikeComment: (() -> Void)? = nil
+    /// Affiche le bouton « Voir » (charger/afficher les réponses) à côté de
+    /// « Répondre ». Calculé par le parent (`ThreadedCommentSection`) : vrai
+    /// seulement s'il reste des réponses non révélées. Ignoré pour une réponse.
+    var showSeeReplies: Bool = false
+    /// Déclenché par « Voir » : déplie le thread (charge + affiche les réponses)
+    /// sans avoir à répondre. Sans repli (le bouton disparaît une fois déplié).
+    var onSeeReplies: (() -> Void)? = nil
     var moodEmoji: String? = nil
     var storyState: StoryRingState = .none
     var presenceState: PresenceState = .offline
@@ -809,6 +797,8 @@ struct CommentRowView: View, Equatable {
         lhs.isLiked == rhs.isLiked &&
         lhs.likeCount == rhs.likeCount &&
         lhs.isInFlight == rhs.isInFlight &&
+        lhs.showSeeReplies == rhs.showSeeReplies &&
+        lhs.comment.replies == rhs.comment.replies &&
         lhs.comment.content == rhs.comment.content &&
         lhs.comment.translatedContent == rhs.comment.translatedContent
     }
@@ -979,30 +969,56 @@ struct CommentRowView: View, Equatable {
                     .accessibilityValue("\(likeCount)")
                     .accessibilityHint(String(localized: "a11y.comment.like.hint", defaultValue: "Aimer ce commentaire", bundle: .main))
 
-                    // Max 2 levels: a reply (level 2) cannot itself be replied to,
-                    // so it shows no reply button. Top comments show "Répondre"
-                    // plus the reply count next to the glyph.
+                    // Max 2 niveaux : une réponse (niveau 2) ne peut pas elle-même
+                    // recevoir de réponse → ni « Répondre » ni « Voir ». Un commentaire
+                    // racine montre `↰ N  Répondre`, puis — s'il reste des réponses non
+                    // révélées (`showSeeReplies`) — `·  Voir` qui charge/affiche les
+                    // réponses SANS avoir à répondre.
                     if !isReply {
-                        Button {
-                            onReply()
-                            HapticFeedback.light()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrowshape.turn.up.left")
-                                    .font(.system(size: 13))
-                                Text(String(localized: "feed.comments.reply", defaultValue: "Répondre", bundle: .main))
-                                    .font(.system(size: 12, weight: .medium))
-                                if comment.replies > 0 {
-                                    Text("\(comment.replies)")
-                                        .font(.system(size: 12, weight: .semibold))
+                        HStack(spacing: 8) {
+                            Button {
+                                onReply()
+                                HapticFeedback.light()
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrowshape.turn.up.left")
+                                        .font(.system(size: 13))
+                                    if comment.replies > 0 {
+                                        Text("\(comment.replies)")
+                                            .font(.system(size: 12, weight: .semibold))
+                                    }
+                                    Text(String(localized: "feed.comments.reply", defaultValue: "Répondre", bundle: .main))
+                                        .font(.system(size: 12, weight: .medium))
                                 }
+                                .foregroundColor(theme.textMuted)
                             }
-                            .foregroundColor(theme.textMuted)
+                            .frame(minHeight: 44)
+                            .accessibilityLabel(String(localized: "a11y.comment.reply", defaultValue: "Répondre", bundle: .main))
+                            .accessibilityValue(comment.replies > 0 ? String(format: String(localized: "a11y.comment.replies.count", defaultValue: "%d réponses", bundle: .main), comment.replies) : "")
+                            .accessibilityHint(String(format: String(localized: "a11y.comment.reply.hint", defaultValue: "Répondre à %@", bundle: .main), comment.author))
+
+                            if showSeeReplies {
+                                Text("\u{00B7}")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(theme.textMuted)
+                                    .accessibilityHidden(true)
+
+                                Button {
+                                    onSeeReplies?()
+                                    HapticFeedback.light()
+                                } label: {
+                                    Text(String(localized: "feed.comments.see_replies", defaultValue: "Voir", bundle: .main))
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(Color(hex: accentColor))
+                                }
+                                .frame(minHeight: 44)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityAddTraits(.isButton)
+                                .accessibilityLabel(comment.replies > 0
+                                    ? String(format: String(localized: "a11y.comment.show_replies", defaultValue: "Voir %d réponses", bundle: .main), comment.replies)
+                                    : String(localized: "feed.comments.see_replies", defaultValue: "Voir", bundle: .main))
+                            }
                         }
-                        .frame(minHeight: 44)
-                        .accessibilityLabel(String(localized: "a11y.comment.reply", defaultValue: "Répondre", bundle: .main))
-                        .accessibilityValue(comment.replies > 0 ? String(format: String(localized: "a11y.comment.replies.count", defaultValue: "%d réponses", bundle: .main), comment.replies) : "")
-                        .accessibilityHint(String(format: String(localized: "a11y.comment.reply.hint", defaultValue: "Répondre à %@", bundle: .main), comment.author))
                     }
 
                     Spacer()

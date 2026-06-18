@@ -113,6 +113,36 @@ final class ReelsViewModelTests: XCTestCase {
         XCTAssertEqual(sut.reels.map(\.id), ["fresh-1"])
         XCTAssertEqual(sut.currentId, "fresh-1")
     }
+
+    // MARK: - Affinity thread wiring (getReels / seedReelId)
+
+    func test_coldStart_fresh_pagesReelsThreadWithoutSeed() async {
+        let (sut, service, _) = makeSUT(cachedReels: [])
+        service.getReelsResult = .success(Self.makePaginated(reelIds: ["pourtoi-1", "pourtoi-2"]))
+
+        sut.seed(posts: [], startId: nil)
+        await sut.awaitColdStart()
+
+        // Fresh launch (no entry reel) pages the seedless « Pour toi » thread via getReels.
+        XCTAssertEqual(service.getReelsCallCount, 1)
+        XCTAssertNil(service.lastGetReelsSeedId)
+        XCTAssertEqual(service.getFeedCallCount, 0)
+        XCTAssertEqual(sut.reels.map(\.id), ["pourtoi-1", "pourtoi-2"])
+    }
+
+    func test_loadMore_afterFeedSeed_pagesAffinityThreadSeededByEntryReel() async {
+        let (sut, service, _) = makeSUT()
+        service.getReelsResult = .success(Self.makePaginated(reelIds: ["affinity-1"]))
+
+        sut.seed(posts: [Self.makeReel(id: "r1"), Self.makeReel(id: "r2")], startId: "r2")
+        // Scrolling near the end pulls the affinity discovery thread, seeded by the
+        // reel the viewer opened on, and appends it (deduped) after the feed reels.
+        await sut.loadMoreIfNeeded(currentReel: Self.makeReel(id: "r2"))
+
+        XCTAssertEqual(service.getReelsCallCount, 1)
+        XCTAssertEqual(service.lastGetReelsSeedId, "r2")
+        XCTAssertEqual(sut.reels.map(\.id), ["r1", "r2", "affinity-1"])
+    }
 }
 
 // MARK: - Reel Media Layout (pure classification of a reel's media surfaces)

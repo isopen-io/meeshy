@@ -26,14 +26,15 @@ struct CacheCoordinatorReelFeedCache: ReelFeedCacheReading {
 }
 
 /// Drives the immersive reel pager: holds the ordered list of reel posts,
-/// the cursor for chronological pagination, the currently-visible reel, and the
+/// the cursor for the affinity thread, the currently-visible reel, and the
 /// optimistic like / bookmark state.
 ///
-/// Reels are derived from the same `/posts/feed` contract as the feed (no
-/// dedicated endpoint): the view model pages through the feed and keeps only
-/// the posts `FeedPost.isReel` classifies as reels. When the server later sorts
-/// the feed by attention/watch-time, the reel pager benefits automatically — the
-/// pagination contract is unchanged.
+/// The pager opens instantly from whatever reels the feed already loaded
+/// (cache-first seed), then pages the **affinity discovery thread** via
+/// `getReels(seedReelId:)` — the dedicated `/posts/feed/reels` endpoint that
+/// ranks reels by affinity to the entry reel (`seedReelId`), excludes the
+/// viewer's own reels, and carries `isBookmarkedByMe`. A fresh launch (no entry
+/// reel) pages the seedless « Pour toi » thread.
 @MainActor
 final class ReelsViewModel: ObservableObject {
     @Published private(set) var reels: [FeedPost] = []
@@ -60,10 +61,18 @@ final class ReelsViewModel: ObservableObject {
     @Published private var commentDelta: [String: Int] = [:]
     private var heartInFlight: Set<String> = []
     private var bookmarkInFlight: Set<String> = []
+    /// Reels whose impression (reach) has already been recorded this session —
+    /// one impression per reel per session, mirroring the main feed's
+    /// `recordedImpressionIds`. The reel's TOTAL view (`postOpenCount`) is
+    /// counted separately by the engagement pipeline (full-screen dwell).
+    private var impressionRecordedIds: Set<String> = []
 
     private var nextCursor: String?
     private var hasMore = true
     private var isFetching = false
+    /// Le réel d'entrée (réel touché dans le feed) qui sème le thread d'affinité.
+    /// `nil` pour un lancement « fresh » (long-press) → thread « Pour toi ».
+    private var seedReelId: String?
     private var coldStartTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
     private let service: PostServiceProviding
@@ -80,6 +89,7 @@ final class ReelsViewModel: ObservableObject {
         self.service = service
         self.cache = cache
         subscribeToLikeEvents()
+        subscribeToBookmarkEvents()
     }
 
     /// S'abonne à l'événement CANONIQUE absolu `post:liked`/`post:unliked` (le ❤️
@@ -106,6 +116,25 @@ final class ReelsViewModel: ObservableObject {
         if liked { likedIds.insert(postId) } else { likedIds.remove(postId) }
     }
 
+    /// S'abonne à `post:bookmarked`. Le favori est PERSONNEL : le gateway n'émet
+    /// l'événement que vers la feed room de l'utilisateur (`emitToUser`), donc tout
+    /// événement reçu est notre propre action (depuis n'importe quelle session/vue).
+    /// On réconcilie l'état local — idempotent avec l'optimistic update du toggle —
+    /// ET le flag sur le modèle, pour que la persistance survive à la fermeture/réouverture.
+    private func subscribeToBookmarkEvents() {
+        SocialSocketManager.shared.postBookmarked
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.applyServerBookmark($0.postId, bookmarked: $0.bookmarked) }
+            .store(in: &cancellables)
+    }
+
+    private func applyServerBookmark(_ postId: String, bookmarked: Bool) {
+        if bookmarked { bookmarkedIds.insert(postId) } else { bookmarkedIds.remove(postId) }
+        if let index = reels.firstIndex(where: { $0.id == postId }) {
+            reels[index].isBookmarkedByMe = bookmarked
+        }
+    }
+
     /// À appeler quand le viewer se ferme : quitte la post room du réel actif.
     func leaveActivePostRoom() {
         if let id = currentId { SocialSocketManager.shared.leavePostRoom(postId: id) }
@@ -127,6 +156,8 @@ final class ReelsViewModel: ObservableObject {
     /// instantly (cache-first), then cold-starts only when the seed is empty
     /// (long-press launch with no feed context).
     func seed(posts: [FeedPost], startId: String?) {
+        // The entry reel seeds the affinity thread for all subsequent paging.
+        seedReelId = startId
         let seeded = FeedPost.reels(from: posts)
         if !seeded.isEmpty {
             apply(reels: seeded, startId: startId)
@@ -180,7 +211,10 @@ final class ReelsViewModel: ObservableObject {
         }
         do {
             let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-            let response = try await service.getFeed(cursor: reset ? nil : nextCursor, limit: 20)
+            // Thread d'affinité dédié (exclut le seed + les réels du viewer, porte
+            // `isBookmarkedByMe`). `FeedPost.reels` reste un garde-fou : la réponse
+            // est déjà `type: REEL`, on filtre par sécurité.
+            let response = try await service.getReels(seedReelId: seedReelId, cursor: reset ? nil : nextCursor, limit: 20)
             let mapped = response.data.map { $0.toFeedPost(preferredLanguages: preferred) }
             let newReels = FeedPost.reels(from: mapped)
             if reset {
@@ -315,6 +349,13 @@ final class ReelsViewModel: ObservableObject {
     }
 
     func recordView(_ id: String) {
+        // Unique view (viewCount, deduped server-side) — saved, not displayed.
         Task { try? await service.viewPost(postId: id, duration: nil) }
+        // Impression (reach) — the reel appeared on screen. Once per reel per
+        // session. `source: "feed"` bumps impressionCount only (the reel's total
+        // view comes from the engagement pipeline, not from this appearance).
+        if impressionRecordedIds.insert(id).inserted {
+            Task { try? await service.recordImpression(postId: id, source: "feed") }
+        }
     }
 }

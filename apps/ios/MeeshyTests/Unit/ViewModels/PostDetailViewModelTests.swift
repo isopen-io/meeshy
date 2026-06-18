@@ -86,6 +86,31 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTAssertNil(sut.post)
     }
 
+    // MARK: - registerDetailOpen
+
+    func test_registerDetailOpen_recordsImpression_withDetailSource() async {
+        let (sut, mock) = makeSUT()
+
+        await sut.registerDetailOpen("p1")
+
+        XCTAssertEqual(mock.recordImpressionCallCount, 1)
+        XCTAssertEqual(mock.lastRecordImpressionPostId, "p1")
+        XCTAssertEqual(mock.lastRecordImpressionSource, "detail")
+    }
+
+    func test_registerDetailOpen_optimisticallyBumpsTotalViewAndImpression() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let beforeOpens = sut.post?.postOpenCount ?? -1
+        let beforeImpr = sut.post?.impressionCount ?? -1
+
+        await sut.registerDetailOpen("p1")
+
+        XCTAssertEqual(sut.post?.postOpenCount, beforeOpens + 1)
+        XCTAssertEqual(sut.post?.impressionCount, beforeImpr + 1)
+    }
+
     // MARK: - loadComments
 
     func test_loadComments_success_populatesComments() async {

@@ -461,23 +461,34 @@ export class PostFeedService {
     };
   }
 
-  /** Enrichit des réels avec l'état viewer (réactions + like). */
+  /** Enrichit des réels avec l'état viewer (réactions + like + favori). */
   private async enrichReelsForViewer(items: any[], viewerUserId: string) {
     if (items.length === 0) return [];
     const postIds = items.map((p) => p.id);
-    const userReactions = await this.prisma.postReaction.findMany({
-      where: { userId: viewerUserId, postId: { in: postIds } },
-      select: { postId: true, emoji: true },
-    });
+    // Aligné sur `getFeed` : on récupère AUSSI les favoris du viewer pour exposer
+    // `isBookmarkedByMe`. Sans lui, le reel viewer ne pouvait pas réhydrater l'état
+    // favori → le bookmark « disparaissait » à la réouverture.
+    const [userReactions, userBookmarks] = await Promise.all([
+      this.prisma.postReaction.findMany({
+        where: { userId: viewerUserId, postId: { in: postIds } },
+        select: { postId: true, emoji: true },
+      }),
+      this.prisma.postBookmark.findMany({
+        where: { userId: viewerUserId, postId: { in: postIds } },
+        select: { postId: true },
+      }),
+    ]);
     const userReactionsMap = new Map<string, string[]>();
     for (const r of userReactions) {
       const list = userReactionsMap.get(r.postId) ?? [];
       list.push(r.emoji);
       userReactionsMap.set(r.postId, list);
     }
+    const bookmarkedIds = new Set(userBookmarks.map((b) => b.postId));
     return items.map((p) => ({
       ...this.enrichWithLikeStatus(p, userReactionsMap.get(p.id) ?? []),
       currentUserReactions: userReactionsMap.get(p.id) ?? [],
+      isBookmarkedByMe: bookmarkedIds.has(p.id),
     }));
   }
 

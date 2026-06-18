@@ -432,6 +432,11 @@ public struct FeedPost: Identifiable, Sendable {
     /// badge shows ("vues totales"). Derived server-side from PostEngagement
     /// sessions on the `reels`/`detail` surfaces. Runtime-only.
     public var postOpenCount: Int = 0
+    /// Server-issued impression count (`Post.impressionCount`) — total
+    /// exposures, NEVER deduplicated: each feed appearance AND each Detail
+    /// open counts. This is what the "Impressions" (chart) badge shows.
+    /// Runtime-only — set via `APIPost.toFeedPost`, not cached/Codable.
+    public var impressionCount: Int = 0
     /// Server-issued qualified-view count (`Post.qualifiedViewCount`) — total
     /// sessions reaching the 2.5s-OR-30% threshold. Runtime-only.
     public var qualifiedViewCount: Int = 0

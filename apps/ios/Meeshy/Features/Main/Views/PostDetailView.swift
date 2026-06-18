@@ -517,8 +517,12 @@ struct PostDetailView: View {
             // NotificationToastManager can drop in-app banners about it (the user
             // already sees the content live).
             NotificationToastManager.shared.activePostId = postId
-            // Record view when post detail is opened
+            // Record view when post detail is opened.
+            // - viewPost → vue UNIQUE (viewCount, dédupliquée, sauvegardée non affichée)
+            // - registerDetailOpen → vue TOTALE (postOpenCount, chaque ouverture) + impression,
+            //   comptées IMMÉDIATEMENT, avant tout tracking d'engagement (durée de lecture).
             try? await PostService.shared.viewPost(postId: postId, duration: nil)
+            await viewModel.registerDetailOpen(postId)
         }
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: postId)

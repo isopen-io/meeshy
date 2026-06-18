@@ -14,6 +14,7 @@ import type {
   PostLikedEventData,
   PostUnlikedEventData,
   PostRepostedEventData,
+  PostBookmarkedEventData,
   StoryViewedEventData,
   StoryReactedEventData,
   StoryUnreactedEventData,
@@ -194,6 +195,16 @@ export class SocialEventsHandler {
   async broadcastPostReposted(data: PostRepostedEventData, authorId: string): Promise<void> {
     const friendIds = await this.getFriendIds(authorId);
     this.emitToFriends(friendIds, authorId, SERVER_EVENTS.POST_REPOSTED, data);
+  }
+
+  /**
+   * Broadcast d'un toggle de favori — PERSONNEL : le favori n'intéresse que
+   * l'utilisateur qui l'a posé. On émet donc uniquement vers SA feed room (toutes
+   * ses sessions/vues : feed + reel viewer). Permet de garder `isBookmarkedByMe`
+   * synchronisé en direct et de le réhydrater à la réouverture du viewer.
+   */
+  broadcastPostBookmarked(data: PostBookmarkedEventData, userId: string): void {
+    this.emitToUser(userId, SERVER_EVENTS.POST_BOOKMARKED, data);
   }
 
   // ==============================================

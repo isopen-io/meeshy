@@ -19,6 +19,7 @@ final class MockPostService: PostServiceProviding {
     // MARK: - Stubbing
 
     var getFeedResult: Result<PaginatedAPIResponse<[APIPost]>, Error> = .success(emptyPaginatedPosts)
+    var getReelsResult: Result<PaginatedAPIResponse<[APIPost]>, Error>? = nil
     var createResult: Result<APIPost, Error> = .success(stubPost)
     var deleteResult: Result<Void, Error> = .success(())
     var likeResult: Result<Void, Error> = .success(())
@@ -37,6 +38,11 @@ final class MockPostService: PostServiceProviding {
     var getFeedCallCount = 0
     var lastGetFeedCursor: String?
     var lastGetFeedLimit: Int?
+
+    var getReelsCallCount = 0
+    var lastGetReelsSeedId: String?
+    var lastGetReelsCursor: String?
+    var lastGetReelsLimit: Int?
 
     var createCallCount = 0
     var lastCreateContent: String?
@@ -122,6 +128,10 @@ final class MockPostService: PostServiceProviding {
     var recordImpressionsCallCount = 0
     var lastRecordImpressionPostIds: [String]?
 
+    var recordImpressionCallCount = 0
+    var lastRecordImpressionPostId: String?
+    var lastRecordImpressionSource: String?
+
     var recordEngagementCallCount = 0
     var lastRecordEngagementSessions: [EngagementSession]?
 
@@ -132,6 +142,16 @@ final class MockPostService: PostServiceProviding {
         lastGetFeedCursor = cursor
         lastGetFeedLimit = limit
         return try getFeedResult.get()
+    }
+
+    func getReels(seedReelId: String?, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
+        getReelsCallCount += 1
+        lastGetReelsSeedId = seedReelId
+        lastGetReelsCursor = cursor
+        lastGetReelsLimit = limit
+        // Falls through to `getFeedResult` when no dedicated reels stub is set, so
+        // existing tests that only stub the feed keep working unchanged.
+        return try (getReelsResult ?? getFeedResult).get()
     }
 
     func create(content: String?, type: String, visibility: String, moodEmoji: String?,
@@ -309,6 +329,12 @@ final class MockPostService: PostServiceProviding {
         lastRecordImpressionPostIds = postIds
     }
 
+    func recordImpression(postId: String, source: String) async throws {
+        recordImpressionCallCount += 1
+        lastRecordImpressionPostId = postId
+        lastRecordImpressionSource = source
+    }
+
     func recordEngagement(_ sessions: [EngagementSession]) async throws {
         recordEngagementCallCount += 1
         lastRecordEngagementSessions = sessions
@@ -321,6 +347,12 @@ final class MockPostService: PostServiceProviding {
         getFeedCallCount = 0
         lastGetFeedCursor = nil
         lastGetFeedLimit = nil
+
+        getReelsResult = nil
+        getReelsCallCount = 0
+        lastGetReelsSeedId = nil
+        lastGetReelsCursor = nil
+        lastGetReelsLimit = nil
 
         createResult = .success(stubPost)
         createCallCount = 0
@@ -408,6 +440,10 @@ final class MockPostService: PostServiceProviding {
 
         recordImpressionsCallCount = 0
         lastRecordImpressionPostIds = nil
+
+        recordImpressionCallCount = 0
+        lastRecordImpressionPostId = nil
+        lastRecordImpressionSource = nil
 
         recordEngagementCallCount = 0
         lastRecordEngagementSessions = nil

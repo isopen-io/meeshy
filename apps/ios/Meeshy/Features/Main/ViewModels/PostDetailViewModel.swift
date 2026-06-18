@@ -109,6 +109,22 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
+    /// Ouvrir la page Détail d'un post est, par règle produit, une vue TOTALE
+    /// (chaque ouverture compte, jamais dédupliquée) ET une impression, comptées
+    /// IMMÉDIATEMENT — avant et indépendamment du tracking d'engagement (durée de
+    /// lecture). Le gateway incrémente `postOpenCount` + `impressionCount` via
+    /// `POST /posts/:id/impression?source=detail`. On bump les compteurs affichés
+    /// de façon optimiste pour un feedback instantané, puis on enregistre (fire-
+    /// and-forget). La vue UNIQUE (`viewCount`, dédupliquée, non affichée) reste
+    /// portée par `viewPost` appelé séparément à l'ouverture.
+    func registerDetailOpen(_ postId: String) async {
+        if post != nil {
+            post?.impressionCount += 1
+            post?.postOpenCount += 1
+        }
+        try? await postService.recordImpression(postId: postId, source: "detail")
+    }
+
     private func refreshPost(_ postId: String) async {
         defer { isLoading = false }
         do {

@@ -23,6 +23,12 @@ public struct PostShareResult: Decodable, Sendable {
 
 public protocol PostServiceProviding: Sendable {
     func getFeed(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
+    /// Thread de découverte de réels (`GET /posts/feed/reels`). `seedReelId` = le
+    /// réel d'entrée touché dans le feed → le serveur classe par affinité à ce réel
+    /// (et l'exclut, comme il exclut les réels de l'utilisateur). Sans seed → « Pour toi ».
+    /// Contrairement à `getFeed`, la réponse est déjà filtrée `type: REEL` et porte
+    /// `isBookmarkedByMe` (cf. `enrichReelsForViewer`).
+    func getReels(seedReelId: String?, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
     func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?) async throws -> APIPost
     func update(postId: String, content: String?, visibility: String?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?) async throws -> APIPost
     func delete(postId: String) async throws
@@ -50,6 +56,7 @@ public protocol PostServiceProviding: Sendable {
     func getCommentReplies(postId: String, commentId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
     func getCommunityPosts(communityId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
     func recordImpressions(postIds: [String], source: String) async throws
+    func recordImpression(postId: String, source: String) async throws
     func recordEngagement(_ sessions: [EngagementSession]) async throws
 }
 
@@ -63,6 +70,13 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
 
     public func getFeed(cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
         try await api.paginatedRequest(endpoint: "/posts/feed", cursor: cursor, limit: limit)
+    }
+
+    public func getReels(seedReelId: String? = nil, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
+        var queryItems = [URLQueryItem(name: "limit", value: "\(limit)")]
+        if let cursor { queryItems.append(URLQueryItem(name: "cursor", value: cursor)) }
+        if let seedReelId { queryItems.append(URLQueryItem(name: "seed", value: seedReelId)) }
+        return try await api.request(endpoint: "/posts/feed/reels", queryItems: queryItems)
     }
 
     public func create(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, repostOfId: String? = nil) async throws -> APIPost {
@@ -271,6 +285,17 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: Int]> = try await api.post(
             endpoint: "/posts/impressions/batch",
             body: BatchBody(postIds: postIds, source: source)
+        )
+    }
+
+    /// Records a single impression for one post. Unlike `recordImpressions`
+    /// (feed batch, deduped client-side per session), this is NOT deduped —
+    /// every Detail open is one more impression (`source: "detail"`).
+    public func recordImpression(postId: String, source: String = "detail") async throws {
+        struct Body: Encodable { let source: String }
+        let _: APIResponse<[String: Bool]> = try await api.post(
+            endpoint: "/posts/\(postId)/impression",
+            body: Body(source: source)
         )
     }
 

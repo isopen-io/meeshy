@@ -520,7 +520,7 @@ struct ReelPageView: View {
             }
             if isAuthor {
                 if reel.authorUsername?.isEmpty == false { metaDot }
-                statInline(icon: "chart.bar.fill", count: reel.viewCount,
+                statInline(icon: "chart.bar.fill", count: reel.impressionCount,
                            a11yLabel: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
                 metaDot
                 statInline(icon: "eye.fill", count: reel.postOpenCount,

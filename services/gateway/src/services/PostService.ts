@@ -1034,10 +1034,13 @@ export class PostService {
 
     const increments: Record<string, { increment: number }> = {};
 
-    // "Ouverture" d'un post = consommation plein-cadre : lecteur reel plein écran
-    // OU page Detail. Concept générique à tout Post (pas qu'aux reels). Les surfaces
-    // éphémères (story/status) ont leurs propres métriques et ne comptent pas ici.
-    if (s.surface === 'reels' || s.surface === 'detail') {
+    // "Ouverture" d'un post = consommation plein-cadre. Sur le feed de reels,
+    // l'ouverture (vue totale) est comptée par l'engagement (défilement plein
+    // écran). La page Detail, elle, compte sa vue IMMÉDIATEMENT à l'ouverture
+    // (route /impression?source=detail) → on ne la recompte PAS ici, sinon une
+    // ouverture de Detail vaudrait +2. Les surfaces éphémères (story/status) ont
+    // leurs propres métriques et ne comptent pas ici.
+    if (s.surface === 'reels') {
       increments.postOpenCount = { increment: 1 };
     }
 

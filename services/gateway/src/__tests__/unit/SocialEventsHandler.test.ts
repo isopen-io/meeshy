@@ -230,6 +230,36 @@ describe('SocialEventsHandler', () => {
     });
   });
 
+  describe('broadcastPostBookmarked', () => {
+    it('should emit POST_BOOKMARKED ONLY to the viewer feed room (favori personnel)', () => {
+      handler.broadcastPostBookmarked({ postId: 'post-1', bookmarked: true }, VIEWER_ID);
+
+      // Personnel : seul l'utilisateur qui a bookmarké le reçoit (toutes ses sessions/vues).
+      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(VIEWER_ID));
+      expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.POST_BOOKMARKED, {
+        postId: 'post-1',
+        bookmarked: true,
+      });
+    });
+
+    it('should carry bookmarked:false on un-bookmark', () => {
+      handler.broadcastPostBookmarked({ postId: 'post-1', bookmarked: false }, VIEWER_ID);
+
+      expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.POST_BOOKMARKED, {
+        postId: 'post-1',
+        bookmarked: false,
+      });
+    });
+
+    it('should NOT emit to friends', () => {
+      handler.broadcastPostBookmarked({ postId: 'post-1', bookmarked: true }, VIEWER_ID);
+
+      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_1));
+      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
+    });
+  });
+
   // ==============================================
   // STORY BROADCASTS
   // ==============================================

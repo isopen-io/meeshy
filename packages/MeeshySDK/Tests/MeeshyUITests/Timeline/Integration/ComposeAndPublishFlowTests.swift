@@ -51,6 +51,9 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     func getFeed(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
         throw NSError(domain: "mock", code: -1)
     }
+    func getReels(seedReelId: String?, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
+        throw NSError(domain: "mock", code: -1)
+    }
     func create(content: String?, type: String, visibility: String, moodEmoji: String?,
                 mediaIds: [String]?, audioUrl: String?, audioDuration: Int?,
                 originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?,
@@ -105,6 +108,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         throw NSError(domain: "mock", code: -1)
     }
     func recordImpressions(postIds: [String], source: String) async throws {}
+    func recordImpression(postId: String, source: String) async throws {}
     func recordEngagement(_ sessions: [EngagementSession]) async throws {}
 }
 
