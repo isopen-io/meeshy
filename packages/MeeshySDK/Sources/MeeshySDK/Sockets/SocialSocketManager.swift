@@ -149,6 +149,10 @@ public struct SocketCommentReactionSyncEvent: Codable, Sendable {
 public struct SocketPostBookmarkedData: Decodable, Sendable {
     public let postId: String
     public let bookmarked: Bool
+    /// Absolute bookmark count after the mutation (mirrors `likeCount` on the
+    /// like events). Optional so decoding survives an older gateway that does
+    /// not yet emit it — clients then leave the displayed count untouched.
+    public let bookmarkCount: Int?
 }
 
 public struct SocketPostReactionAggregation: Codable, Sendable {

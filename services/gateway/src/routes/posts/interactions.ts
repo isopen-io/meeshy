@@ -195,11 +195,15 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
-      await postService.bookmarkPost(postId, authContext.registeredUser.id);
+      const result = await postService.bookmarkPost(postId, authContext.registeredUser.id);
       // Sync temps réel (perso) : le feed et le reel viewer réhydratent
-      // `isBookmarkedByMe` → le favori survit à la fermeture/réouverture.
-      fastify.socialEvents?.broadcastPostBookmarked({ postId, bookmarked: true }, authContext.registeredUser.id);
-      return sendSuccess(reply, { bookmarked: true });
+      // `isBookmarkedByMe` + le `bookmarkCount` absolu → le favori et son
+      // compteur survivent à la fermeture/réouverture, sans reload.
+      fastify.socialEvents?.broadcastPostBookmarked(
+        { postId, bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 },
+        authContext.registeredUser.id,
+      );
+      return sendSuccess(reply, { bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 });
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/bookmark] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -217,9 +221,12 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
-      await postService.unbookmarkPost(postId, authContext.registeredUser.id);
-      fastify.socialEvents?.broadcastPostBookmarked({ postId, bookmarked: false }, authContext.registeredUser.id);
-      return sendSuccess(reply, { bookmarked: false });
+      const result = await postService.unbookmarkPost(postId, authContext.registeredUser.id);
+      fastify.socialEvents?.broadcastPostBookmarked(
+        { postId, bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 },
+        authContext.registeredUser.id,
+      );
+      return sendSuccess(reply, { bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 });
     } catch (error) {
       fastify.log.error(`[DELETE /posts/:postId/bookmark] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });

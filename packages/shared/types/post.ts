@@ -159,6 +159,13 @@ export interface PostRepostedEventData {
 export interface PostBookmarkedEventData {
   readonly postId: string;
   readonly bookmarked: boolean;
+  /**
+   * Absolute bookmark count AFTER the mutation — broadcast so the feed, reel
+   * viewer and post detail reconcile the displayed count without a reload
+   * (mirrors `likeCount` on {@link PostLikedEventData}). The bookmark event is
+   * personal (emitted only to the acting user's sockets via `emitToUser`).
+   */
+  readonly bookmarkCount: number;
 }
 
 export interface StoryCreatedEventData {

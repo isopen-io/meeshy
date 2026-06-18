@@ -678,7 +678,7 @@ private struct ReelActionRail: View {
                 systemName: isBookmarked ? "bookmark.fill" : "bookmark",
                 outline: "bookmark",
                 tint: isBookmarked ? MeeshyColors.warning : .white,
-                count: nil,
+                count: viewModel.bookmarkCount(reel),
                 participated: isBookmarked,
                 accentHex: reel.authorColor,
                 action: { viewModel.toggleBookmark(reel) }

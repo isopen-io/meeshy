@@ -1060,6 +1060,22 @@ struct FeedView: View {
                 postLikedIds.remove(event.postId)
             }
         }
+        // Bookmark : même réconciliation canonique que le like. L'événement est
+        // PERSONNEL (emitToUser) → toujours pour l'utilisateur courant. Le
+        // ViewModel a posé le `bookmarkCount` absolu sur le post ; on purge ici
+        // le delta optimiste local pour que `bookmarkCount + delta` retombe sur
+        // le compteur autoritaire (sans reload). Si le compteur est absent
+        // (vieux gateway), on garde le delta (dégradation gracieuse).
+        .onReceive(SocialSocketManager.shared.postBookmarked.receive(on: DispatchQueue.main)) { payload in
+            if payload.bookmarkCount != nil {
+                postBookmarkDelta[payload.postId] = nil
+            }
+            if payload.bookmarked {
+                postBookmarkedIds.insert(payload.postId)
+            } else {
+                postBookmarkedIds.remove(payload.postId)
+            }
+        }
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()
             viewModel.feedStore?.stopObserving()

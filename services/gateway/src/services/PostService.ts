@@ -708,37 +708,53 @@ export class PostService {
       await this.prisma.postBookmark.create({ data: { postId, userId } });
     } catch (err) {
       if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
-        return { success: true }; // already bookmarked — idempotent no-op
+        // Already bookmarked — idempotent no-op. Return the unchanged absolute
+        // count so the broadcast stays authoritative.
+        return { success: true, bookmarkCount: (post as { bookmarkCount?: number }).bookmarkCount ?? 0 };
       }
       throw err;
     }
 
-    await this.prisma.post.update({
+    // `update` returns the post AFTER the increment → the absolute bookmarkCount
+    // that `post:bookmarked` carries so feed / reel / detail reconcile without
+    // a reload (mirrors the canonical likeCount on `post:liked`).
+    const updated = await this.prisma.post.update({
       where: { id: postId },
       data: { bookmarkCount: { increment: 1 } },
+      select: { bookmarkCount: true },
     });
 
-    return { success: true };
+    return { success: true, bookmarkCount: updated.bookmarkCount };
   }
 
   async unbookmarkPost(postId: string, userId: string) {
+    let existed = true;
     try {
       await this.prisma.postBookmark.delete({
         where: { postId_userId: { postId, userId } },
       });
     } catch {
-      // Not bookmarked — nothing to decrement.
-      return { success: true };
+      // Not bookmarked — nothing to decrement, but still surface the count.
+      existed = false;
     }
 
-    // Guarded decrement: only when the counter is still > 0, so a drifted /
-    // already-zero counter can never go negative.
-    await this.prisma.post.updateMany({
-      where: { id: postId, bookmarkCount: { gt: 0 } },
-      data: { bookmarkCount: { decrement: 1 } },
+    if (existed) {
+      // Guarded decrement: only when the counter is still > 0, so a drifted /
+      // already-zero counter can never go negative.
+      await this.prisma.post.updateMany({
+        where: { id: postId, bookmarkCount: { gt: 0 } },
+        data: { bookmarkCount: { decrement: 1 } },
+      });
+    }
+
+    // Read-after-write the absolute count for the broadcast (the guarded
+    // updateMany returns a batch count, not the new value).
+    const fresh = await this.prisma.post.findFirst({
+      where: { id: postId },
+      select: { bookmarkCount: true },
     });
 
-    return { success: true };
+    return { success: true, bookmarkCount: fresh?.bookmarkCount ?? 0 };
   }
 
   /**
