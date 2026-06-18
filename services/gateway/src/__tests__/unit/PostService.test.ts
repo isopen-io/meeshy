@@ -37,6 +37,7 @@ function createMockPrisma() {
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      count: jest.fn(),
     },
     postComment: {
       findFirst: jest.fn(),
@@ -51,6 +52,7 @@ function createMockPrisma() {
     postBookmark: {
       upsert: jest.fn(),
       delete: jest.fn(),
+      findFirst: jest.fn(),
     },
     postView: {
       findUnique: jest.fn(),
@@ -968,6 +970,64 @@ describe('PostService', () => {
 
       expect((result as any).currentUserReactions).toEqual([]);
       expect(prisma.postReaction.findMany).not.toHaveBeenCalled();
+    });
+
+    // Bookmark / repost personal-state enrichment — mirrors PostFeedService so
+    // the post detail hydrates the SAME isBookmarkedByMe / isRepostedByMe as the
+    // feed and reel viewer. Without these, the detail always showed "non
+    // bookmarked" / "non reposted" even when the post was saved/reposted.
+
+    it('returns isBookmarkedByMe: true when the viewer has bookmarked the post', async () => {
+      const post = makePost();
+      prisma.post.findFirst.mockResolvedValue(post);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue([]);
+      prisma.postBookmark.findFirst.mockResolvedValue({ postId: 'post-1' });
+      prisma.post.count.mockResolvedValue(0);
+
+      const result = await service.getPostById('post-1', 'user-1');
+
+      expect((result as any).isBookmarkedByMe).toBe(true);
+      expect((result as any).isRepostedByMe).toBe(false);
+    });
+
+    it('returns isBookmarkedByMe: false when the viewer has not bookmarked the post', async () => {
+      const post = makePost();
+      prisma.post.findFirst.mockResolvedValue(post);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue([]);
+      prisma.postBookmark.findFirst.mockResolvedValue(null);
+      prisma.post.count.mockResolvedValue(0);
+
+      const result = await service.getPostById('post-1', 'user-1');
+
+      expect((result as any).isBookmarkedByMe).toBe(false);
+    });
+
+    it('returns isRepostedByMe: true when the viewer has reposted the post', async () => {
+      const post = makePost();
+      prisma.post.findFirst.mockResolvedValue(post);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue([]);
+      prisma.postBookmark.findFirst.mockResolvedValue(null);
+      prisma.post.count.mockResolvedValue(1);
+
+      const result = await service.getPostById('post-1', 'user-1');
+
+      expect((result as any).isRepostedByMe).toBe(true);
+    });
+
+    it('returns bookmark/repost flags false for anonymous read without querying them', async () => {
+      const post = makePost();
+      prisma.post.findFirst.mockResolvedValue(post);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      const result = await service.getPostById('post-1', undefined);
+
+      expect((result as any).isBookmarkedByMe).toBe(false);
+      expect((result as any).isRepostedByMe).toBe(false);
+      expect(prisma.postBookmark.findFirst).not.toHaveBeenCalled();
+      expect(prisma.post.count).not.toHaveBeenCalled();
     });
   });
 

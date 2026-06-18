@@ -402,18 +402,46 @@ export class PostService {
     });
     if (!post) return null;
 
-    const userReactions = viewerUserId
-      ? await this.prisma.postReaction.findMany({
-          where: { userId: viewerUserId, postId: post.id },
-          select: { postId: true, emoji: true },
-        })
-      : [];
+    // Anonymous read: no viewer-specific state to resolve.
+    if (!viewerUserId) {
+      return {
+        ...post,
+        currentUserReactions: [],
+        isLikedByMe: false,
+        isBookmarkedByMe: false,
+        isRepostedByMe: false,
+      };
+    }
+
+    // Personal-state enrichment, identical to PostFeedService so the post
+    // detail hydrates the SAME flags as the feed and the reel viewer
+    // (single source of truth). Without these, the detail always rendered
+    // « non liké / non bookmarké / non reposté » even when the post was
+    // liked, saved or reposted (absent field → SDK decodes `?? false`).
+    const [userReactions, viewerBookmark, viewerRepostCount] = await Promise.all([
+      this.prisma.postReaction.findMany({
+        where: { userId: viewerUserId, postId: post.id },
+        select: { postId: true, emoji: true },
+      }),
+      this.prisma.postBookmark.findFirst({
+        where: { userId: viewerUserId, postId: post.id },
+        select: { postId: true },
+      }),
+      // A repost is any non-deleted post authored by the viewer whose
+      // `repostOfId` points at this post — mirrors PostFeedService.
+      this.prisma.post.count({
+        where: { authorId: viewerUserId, repostOfId: post.id, deletedAt: NOT_DELETED },
+      }),
+    ]);
     const currentUserReactions = userReactions.map((r) => r.emoji);
 
-    // `isLikedByMe` aligné sur la table (comme le feed) : iOS lit
-    // `isLiked = isLikedByMe`. Sans ce champ, le détail de post affichait
-    // TOUJOURS « non liké » même après un like (champ absent → `?? false`).
-    return { ...post, currentUserReactions, isLikedByMe: currentUserReactions.length > 0 };
+    return {
+      ...post,
+      currentUserReactions,
+      isLikedByMe: currentUserReactions.length > 0,
+      isBookmarkedByMe: viewerBookmark !== null,
+      isRepostedByMe: viewerRepostCount > 0,
+    };
   }
 
   /// Builds the Prisma `where` fragment that enforces post visibility for a viewer.
