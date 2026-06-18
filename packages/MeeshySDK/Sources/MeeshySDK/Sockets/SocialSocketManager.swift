@@ -300,6 +300,12 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     private let decoder = JSONDecoder()
     private var reconnectAttempt: Int = 0
     private var hadPreviousConnection = false
+    /// Post rooms actuellement rejointes (détail, reel, story, commentaires).
+    /// Miroir de `MessageSocketManager.joinedConversations` : après une reconnexion
+    /// (résumé d'app / réseau revenu), le gateway a oublié nos rooms — sans re-join
+    /// les likes/commentaires/réactions temps réel du post ouvert cessaient
+    /// silencieusement. Préservé à travers `suspendTransport`, vidé au `disconnect()`.
+    private var joinedPostRooms: Set<String> = []
     /// Fires on every reconnect (a `.connect` that follows a previous one).
     /// R2 — feed/social re-sync trigger; app-side handlers (FeedViewModel /
     /// FeedSyncEngine) observe this to backfill missed posts/reactions.
@@ -437,6 +443,9 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         // Logout / cold reset: forget the prior connection so the next `.connect`
         // is a genuine cold first connect (no spurious reconnect backfill).
         hadPreviousConnection = false
+        // Cold reset : oublier les post rooms (contrairement à suspendTransport qui
+        // les préserve pour le re-join au resume).
+        joinedPostRooms.removeAll()
     }
 
     // MARK: - Background lifecycle
@@ -523,13 +532,27 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     // MARK: - Post Room Management
 
     public func joinPostRoom(postId: String) {
+        // Tracker AVANT toute émission : le handler `.connect` re-émet `post:join`
+        // pour toutes les rooms de `joinedPostRooms` une fois le handshake terminé.
+        joinedPostRooms.insert(postId)
+        guard socket?.status == .connected else {
+            // Socket pas encore connecté : émettre serait perdu. Le re-join du
+            // handler `.connect` prendra le relais (miroir de joinConversation).
+            return
+        }
         socket?.emit("post:join", ["postId": postId])
         Logger.socket.info("SocialSocket joined post room: \(postId)")
     }
 
     public func leavePostRoom(postId: String) {
+        joinedPostRooms.remove(postId)
         socket?.emit("post:leave", ["postId": postId])
         Logger.socket.info("SocialSocket left post room: \(postId)")
+    }
+
+    /// Rooms à re-joindre après un (re)connect, ordre déterministe pour les tests.
+    func postRoomsToRejoinOnConnect() -> [String] {
+        joinedPostRooms.sorted()
     }
 
     // MARK: - Comment Reaction Emission
@@ -752,6 +775,16 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             }
             self.startHeartbeat()
             self.subscribeFeed()
+            // Re-join des post rooms après (re)connexion : le gateway a oublié nos
+            // rooms à la coupure. Sans ça, le post/reel/story ouvert cessait de
+            // recevoir likes/commentaires/réactions temps réel après un flap réseau.
+            let rooms = self.postRoomsToRejoinOnConnect()
+            for postId in rooms {
+                self.socket?.emit("post:join", ["postId": postId])
+            }
+            if !rooms.isEmpty {
+                Logger.socket.info("SocialSocket reconnected — re-joined \(rooms.count) post room(s)")
+            }
             Logger.socket.info("SocialSocket connected")
         }
 

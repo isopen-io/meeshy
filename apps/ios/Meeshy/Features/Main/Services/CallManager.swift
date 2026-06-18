@@ -2146,6 +2146,27 @@ final class CallManager: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Audit WS — `call:error` était décodé (MessageSocketManager.callError)
+        // mais n'avait AUCUN abonné : un rejet serveur d'opération d'appel émis
+        // hors de l'ACK `call:initiate` (ex. salle pleine, conversation fermée,
+        // permission) laissait l'écran d'appel figé sans feedback ni teardown. On
+        // surface le message et on termine l'appel si l'un est en cours/connexion.
+        socket.callError
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                let message = event.message
+                    ?? String(localized: "call.error.generic", defaultValue: "Erreur lors de l'appel", bundle: .main)
+                Logger.calls.error("call:error received: code=\(event.code ?? "?") message=\(message)")
+                FeedbackToastManager.shared.showError(message)
+                // Ne teardown que si un appel est réellement en vol (ringing →
+                // reconnecting). Une erreur hors-appel ne fait qu'afficher le toast.
+                if self.callState.isActive {
+                    self.endCallInternal(reason: .failed(message))
+                }
+            }
+            .store(in: &cancellables)
+
         // Audit P1-30 — on Socket.IO reconnect, re-emit `call:join` so the
         // gateway puts us back in the call's room. Without this rejoin, ICE
         // continued via NWPathMonitor restart but every gateway-relayed
