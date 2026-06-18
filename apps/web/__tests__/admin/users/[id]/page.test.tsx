@@ -216,7 +216,9 @@ const createMockUser = (overrides: any = {}) => ({
 
 const mockUserDetailApi = (userOverride?: any) => (url: string) => {
   const emptyPage = { success: true, data: [], pagination: { total: 0, offset: 0, limit: 20, hasMore: false } };
-  if (url.includes('/conversations') || url.includes('/media') || url === '/admin/posts') {
+  if (url.includes('/conversations') || url.includes('/media') ||
+      url.includes('/reports') || url.includes('/reported-messages') ||
+      url === '/admin/posts') {
     return Promise.resolve({ data: emptyPage });
   }
   return Promise.resolve({ data: { success: true, data: createMockUser(userOverride) } });
