@@ -928,9 +928,9 @@ private struct ReelVideoView: View {
                 // Blurred ambient fill behind the `.fit` poster/video so the WHOLE
                 // reel is visible (letterboxed), never cropped and never black
                 // bars — mirrors the `.fit` image carousel (`ReelImageBackdrop`).
-                ReelImageBackdrop(media: media)
+                ReelImageBackdrop(media: media).equatable()
 
-                ReelPoster(thumbHash: media.thumbHash, url: media.thumbnailUrl ?? media.url, color: media.thumbnailColor, contentMode: .fit)
+                ReelPoster(thumbHash: media.thumbHash, url: media.thumbnailUrl ?? media.url, color: media.thumbnailColor, contentMode: .fit).equatable()
 
                 // Tap-to-pause is handled by the page-level tap zone (ReelPageView),
                 // so this surface stays gesture-free to avoid swallowing scrub/rail
@@ -1203,7 +1203,7 @@ private struct ReelImageCell: View {
             // NEVER overflow the viewport. The blurred backdrop fills behind.
             let fit = fittedSize(in: geo.size)
             ZStack {
-                ReelImageBackdrop(media: media)
+                ReelImageBackdrop(media: media).equatable()
 
                 ProgressiveCachedImage(
                     thumbHash: media.thumbHash,
@@ -1239,8 +1239,19 @@ private struct ReelImageCell: View {
 /// 28pt blur hides the low resolution, and the full image is already fetched by
 /// the `.fit` foreground — loading it twice would double the fullscreen network
 /// + bitmap cost. Falls back to the media's tint colour.
-private struct ReelImageBackdrop: View {
+private struct ReelImageBackdrop: View, Equatable {
     let media: FeedMedia
+
+    /// Equatable so `.equatable()` memoizes the expensive 28pt blur across the
+    /// parent's 10 Hz playback-time re-renders. The backdrop depends only on the
+    /// media identity + the thumbnail inputs it actually reads, so SwiftUI reuses
+    /// the rasterized blur as long as those are unchanged (the real GPU heat win).
+    static func == (lhs: ReelImageBackdrop, rhs: ReelImageBackdrop) -> Bool {
+        lhs.media.id == rhs.media.id
+            && lhs.media.thumbHash == rhs.media.thumbHash
+            && lhs.media.thumbnailUrl == rhs.media.thumbnailUrl
+            && lhs.media.thumbnailColor == rhs.media.thumbnailColor
+    }
 
     var body: some View {
         ProgressiveCachedImage(
@@ -1391,7 +1402,7 @@ private struct ReelAudioControl: View {
 /// the image over a blurred backdrop rather than cropping it full-bleed.)
 /// `internal` (not `private`) so the feed-card surface (`ReelFeedVideoSurface`)
 /// can reuse it as the muted-video poster.
-struct ReelPoster: View {
+struct ReelPoster: View, Equatable {
     let thumbHash: String?
     let url: String?
     let color: String

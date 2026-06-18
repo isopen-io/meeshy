@@ -1181,8 +1181,12 @@ class FeedViewModel: ObservableObject {
                 }
             }
 
-            // Video preroll: separate from main group — non-blocking, fire-and-forget
-            if let firstVideo = slice.flatMap(\.media).first(where: { $0.type == .video }),
+            // Video preroll: separate from main group — non-blocking, fire-and-forget.
+            // Suspended while the device is critically hot (SOTA thermal back-off,
+            // WWDC19 #422) so fast scrolling stops spawning new decode sessions until
+            // it cools down.
+            if MediaThermalPolicy.shouldPrefetchVideo(thermalState: ProcessInfo.processInfo.thermalState),
+               let firstVideo = slice.flatMap(\.media).first(where: { $0.type == .video }),
                let url = firstVideo.url, let resolved = MeeshyConfig.resolveMediaURL(url) {
                 Task(priority: .utility) {
                     await StoryMediaLoader.shared.preloadAndCachePlayer(url: resolved)
