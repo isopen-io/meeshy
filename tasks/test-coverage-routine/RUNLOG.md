@@ -756,4 +756,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   4. **Threshold calibration**: lines/stmts ratcheted 45→47 based on local 51.37/51.57 minus 4.5% CI gap; branches kept at 43 (CI estimate 44.48% barely above current floor); functions 46→48.
   5. Pre-existing 25 failing suites (TypeScript TS2740 in MessageReadStatusService.ts) unchanged.
 - Next slice: P1 Conversations & membership × gateway (remaining: core.ts 1390L, messages-advanced.ts 1329L)
-- Commit: (see branch claude/coverage/p1-conversations-gateway-sharing)
+- Commit: PR #702 → squash-merged to main sha `aefa4c1d` (branch `claude/coverage/p1-conversations-gateway-sharing` deleted)
