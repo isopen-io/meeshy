@@ -209,6 +209,9 @@ export const UpdatePostSchema = z.object({
   // Type is editable only between POST and REEL (service enforces the rest:
   // no repost, no STORY/STATUS, reel requires media).
   type: z.enum(['POST', 'REEL']).optional(),
+  // Ids of attached media (PostMedia) to detach during the edit. Only media
+  // belonging to this post is removed; a reel must keep at least one media.
+  removeMediaIds: z.array(z.string()).max(50).optional(),
 }).refine((data) => {
   if ((data.visibility === 'EXCEPT' || data.visibility === 'ONLY') && (!data.visibilityUserIds || data.visibilityUserIds.length === 0)) {
     return false;

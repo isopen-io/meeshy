@@ -31,7 +31,7 @@ jest.mock('../../services/posts/PostAudioService', () => ({
 // ---------------------------------------------------------------------------
 
 function createMockPrisma() {
-  return {
+  const prisma: any = {
     post: {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
@@ -63,6 +63,7 @@ function createMockPrisma() {
       updateMany: jest.fn(),
       findFirst: jest.fn(),
       update: jest.fn(),
+      deleteMany: jest.fn(),
     },
     participant: {
       findMany: jest.fn(),
@@ -73,7 +74,11 @@ function createMockPrisma() {
     friendRequest: {
       findMany: jest.fn(),
     },
-  } as any;
+  };
+  prisma.$transaction = jest.fn(async (arg: any) =>
+    typeof arg === 'function' ? arg(prisma) : Promise.all(arg),
+  );
+  return prisma;
 }
 
 function makePost(overrides: Record<string, unknown> = {}) {
@@ -1026,6 +1031,47 @@ describe('PostService', () => {
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ type: PostType.REEL }) }),
       );
+    });
+
+    it('removes only media that belongs to the post (ignores foreign ids)', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [{ id: 'm1' }, { id: 'm2' }] }));
+      prisma.post.update.mockResolvedValue(makePost());
+
+      await service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1', 'foreign-media'] });
+
+      expect(prisma.postMedia.deleteMany).toHaveBeenCalledWith({
+        where: { id: { in: ['m1'] }, postId: 'post-1' },
+      });
+      expect(prisma.post.update).toHaveBeenCalled();
+    });
+
+    it('does not delete media when removeMediaIds is omitted', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [{ id: 'm1' }] }));
+      prisma.post.update.mockResolvedValue(makePost());
+
+      await service.updatePost('post-1', 'user-1', { content: 'x' });
+
+      expect(prisma.postMedia.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects removing the last media of a REEL (422) and deletes nothing', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1' }] }));
+
+      await expect(service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1'] }))
+        .rejects.toMatchObject({ statusCode: 422 });
+      expect(prisma.postMedia.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.post.update).not.toHaveBeenCalled();
+    });
+
+    it('allows removing media from a REEL that keeps at least one', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1' }, { id: 'm2' }] }));
+      prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
+
+      await service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1'] });
+
+      expect(prisma.postMedia.deleteMany).toHaveBeenCalledWith({
+        where: { id: { in: ['m1'] }, postId: 'post-1' },
+      });
     });
 
     it('rejects switching to REEL without media (422)', async () => {

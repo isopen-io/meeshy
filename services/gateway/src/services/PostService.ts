@@ -459,10 +459,11 @@ export class PostService {
     moodEmoji?: string;
     originalLanguage?: string;
     type?: PostType;
+    removeMediaIds?: string[];
   }) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      include: { media: { select: { id: true }, take: 1 } },
+      include: { media: { select: { id: true } } },
     });
 
     if (!post) return null;
@@ -470,9 +471,9 @@ export class PostService {
       throw new Error('FORBIDDEN');
     }
 
-    // The two edit-only fields are handled explicitly below; keep them out of
-    // the blind spread so they are never written unconditionally.
-    const { type: requestedType, originalLanguage: requestedLanguage, ...rest } = data;
+    // The edit-only fields are handled explicitly below; keep them out of the
+    // blind spread so they are never written unconditionally.
+    const { type: requestedType, originalLanguage: requestedLanguage, removeMediaIds, ...rest } = data;
 
     const updateData: any = {
       ...rest,
@@ -483,6 +484,13 @@ export class PostService {
     if (data.visibilityUserIds !== undefined) {
       updateData.visibilityUserIds = data.visibilityUserIds;
     }
+
+    // Only remove media that actually belongs to this post — an id pointing at
+    // another post's media is silently ignored (never cross-deletes).
+    const ownMediaIds = new Set(post.media.map((m) => m.id));
+    const mediaIdsToRemove = (removeMediaIds ?? []).filter((id) => ownMediaIds.has(id));
+    const remainingMediaCount = post.media.length - mediaIdsToRemove.length;
+    const finalType = requestedType ?? post.type;
 
     // Type switch is limited to POST <-> REEL on the author's OWN original post:
     // never on a repost (it mirrors its source) and never to/from STORY/STATUS
@@ -501,12 +509,15 @@ export class PostService {
         err.statusCode = 422;
         throw err;
       }
-      if (requestedType === PostType.REEL && post.media.length === 0) {
-        const err: any = new Error('A reel requires at least one media');
-        err.statusCode = 422;
-        throw err;
-      }
       updateData.type = requestedType;
+    }
+
+    // A reel must always keep at least one media — whether it is being switched
+    // to REEL or staying a REEL while media is being removed.
+    if (finalType === PostType.REEL && remainingMediaCount === 0) {
+      const err: any = new Error('A reel requires at least one media');
+      err.statusCode = 422;
+      throw err;
     }
 
     // A language change re-runs the Prisme translation pipeline from the new
@@ -519,10 +530,15 @@ export class PostService {
       updateData.translations = {};
     }
 
-    const updated = await this.prisma.post.update({
-      where: { id: postId },
-      data: updateData,
-      include: postInclude,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (mediaIdsToRemove.length > 0) {
+        await tx.postMedia.deleteMany({ where: { id: { in: mediaIdsToRemove }, postId } });
+      }
+      return tx.post.update({
+        where: { id: postId },
+        data: updateData,
+        include: postInclude,
+      });
     });
 
     if (languageChanged) {
