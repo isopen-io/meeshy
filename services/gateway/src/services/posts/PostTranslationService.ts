@@ -11,6 +11,7 @@ import type { ZmqTranslationClient } from '../zmq-translation/ZmqTranslationClie
 import type { TranslationCompletedEvent } from '../zmq-translation/types';
 import type { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { isUrlOnly } from '../../utils/url-content';
 
 const log = enhancedLogger.child({ module: 'PostTranslationService' });
 
@@ -64,6 +65,14 @@ export class PostTranslationService {
    * Fire-and-forget: results arrive via ZMQ events.
    */
   async translatePost(postId: string, content: string, originalLanguage?: string, authorId?: string): Promise<void> {
+    // Skip translation for URL-only posts: links carry no translatable text and
+    // must be preserved verbatim (NLLB would corrupt them). Mixed content still
+    // translates — the translator masks/restores the URLs.
+    if (isUrlOnly(content)) {
+      log.info('PostTranslation: skipping URL-only post (links preserved verbatim)', { postId });
+      return;
+    }
+
     const sourceLang = originalLanguage ?? detectLanguage(content);
     const targetLanguages = TOP_LANGUAGES.filter(l => l !== sourceLang);
 

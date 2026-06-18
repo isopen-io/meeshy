@@ -24,6 +24,7 @@ import type { AttachmentTranscription, AttachmentTranslations, AttachmentTransla
 import { toSocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
 import { createTranslationJSON, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { isBlankTranscriptionText } from '../../utils/transcription';
+import { isUrlOnly } from '../../utils/url-content';
 import { KeyedMutex } from '../../utils/keyed-mutex';
 import { PostAudioService } from '../posts/PostAudioService';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
@@ -169,6 +170,23 @@ export class MessageTranslationService extends EventEmitter {
           return { messageId: savedMessage.id, status: 'emoji_only_skipped' };
         }
         return { messageId: messageData.id, status: 'emoji_only_skipped' };
+      }
+
+      // Skip translation for URL-only messages: links carry no translatable text
+      // and must be preserved verbatim (NLLB would corrupt them). Mixed content
+      // (text + link) still translates — the translator masks/restores the URLs.
+      if (messageData.content && isUrlOnly(messageData.content)) {
+        logger.debug('Skipping translation for URL-only message', {
+          conversationId: messageData.conversationId,
+          content: messageData.content.substring(0, 40)
+        });
+
+        if (!messageData.id) {
+          const savedMessage = await this._saveMessageToDatabase(messageData);
+          this.stats.incrementMessagesSaved();
+          return { messageId: savedMessage.id, status: 'url_only_skipped' };
+        }
+        return { messageId: messageData.id, status: 'url_only_skipped' };
       }
 
       // SECURITY: Skip translation for E2EE messages
