@@ -214,7 +214,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
           offset: { type: 'string', description: 'Pagination offset', default: '0' },
           limit: { type: 'string', description: 'Pagination limit (max 100)', default: '20' },
           search: { type: 'string', description: 'Search in post content' },
-          type: { type: 'string', enum: ['POST', 'STORY', 'STATUS'], description: 'Filter by post type' },
+          type: { type: 'string', enum: ['POST', 'REEL', 'STORY', 'STATUS'], description: 'Filter by post type' },
           visibility: { type: 'string', enum: ['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY'], description: 'Filter by visibility' },
           authorId: { type: 'string', description: 'Filter by author user ID' },
           period: { type: 'string', enum: ['today', 'week', 'month'], description: 'Filter by time period' },
