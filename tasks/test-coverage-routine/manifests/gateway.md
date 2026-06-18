@@ -159,7 +159,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/conversations/messages.ts`
 - [~] `services/gateway/src/routes/conversations/participants.ts`
 - [ ] `services/gateway/src/routes/conversations/search.ts`
-- [ ] `services/gateway/src/routes/conversations/sharing.ts`
+- [x] `services/gateway/src/routes/conversations/sharing.ts`
 - [x] `services/gateway/src/routes/conversations/stats.ts`
 - [ ] `services/gateway/src/routes/conversations/threads.ts`
 - [ ] `services/gateway/src/routes/conversations/types.ts`

@@ -735,3 +735,25 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   3. Pre-existing 25 failing suites (TS errors unrelated to this diff) unchanged.
 - Next slice: P1 Conversations & membership × gateway route files (core.ts 1390L, messages-advanced.ts 1329L, sharing.ts 887L) OR P1 Conversations & membership × web
 - Commit: bcaa2ea1 + 7e0f6275 (2 commits squash-merged as PR #701 → main sha 62adb0c4)
+
+## 2026-06-18T00:00Z — P1 Conversations & membership × gateway (sharing.ts ≥92% line+branch)
+- Targeted: `services/gateway/src/routes/conversations/sharing.ts` (887 lines, 5 routes)
+- Result: ☑ done — sharing.ts ≥92% line+branch; sub-slice sharing.ts flipped ◐→☑
+- Coverage (final per-file run):
+  - sharing.ts: 100% stmts / **97.01% branches** / 100% funcs / **100% lines** ✓ (target ≥92% both)
+  - Gateway global (local): 51.37% stmts / 47.35% branches / 52.34% funcs / 51.57% lines (threshold ratcheted: lines 45→47, branches 43 unchanged, statements 45→47, functions 46→48)
+- Tests added: 69 new tests in `src/__tests__/unit/routes/conversation-sharing.test.ts` (NEW)
+  - POST /new-link (11 tests): 403 on null conversationId, null conversation, null membership, null user, direct type, global+non-BIGBOSS; BIGBOSS on global; name/description/generated identifiers; FRONTEND_URL response shape; DB error
+  - PATCH /conversations/:id (12 tests): 401 unauthenticated, 403 null conversationId, 403 non-member, 403 regular-member changing type, creator/ADMIN/BIGBOSS allowed; P2002/P2025/P2003/ValidationError; unexpected error; field selection (no title when undefined)
+  - GET /links (6 tests): 403 non-member, moderator/admin/creator sees all (no creatorId filter), member sees own (filter), participantCount=currentUses mapping, DB error
+  - POST /join/:linkId (13 tests): 401 null authContext, 404 not found, 410 inactive, 410 expired, future expiry allowed, already-member success without create, creates + increments counter, username/User fallback displayNames, admin notification, no notificationService, notification error doesn't block, DB error, iOS identifier format (OR query)
+  - POST /invite (27 tests): 401 not-auth/no-registeredUser, 404 conversation, 403 not-member, 403 insufficient-role, admin/creator/ADMIN/BIGBOSS allowed, 404 target user, 400 already-member, notification sent, notification failure non-blocking, mention cache invalidated, cache-fail non-blocking, missing services don't block, message includes displayName/username, DB error
+- Reviewer: PASS (rounds: 1 — all rubric items satisfied; no production code changed)
+- Notes:
+  1. **Invite route uses fastify.prisma (not the prisma parameter)** — different from all other sharing routes; mock fastify requires `.prisma`, `.notificationService`, `.mentionService`, `.authenticate` properties in addition to route registration methods.
+  2. **GET /links sends custom reply.send() not sendSuccess()** — response includes top-level `isModerator` field consumed by iOS SDK; tested via `reply._body` directly.
+  3. **4 uncovered V8 branches** (lines 107, 199, 631, 851): defensive `||`/`??` short-circuit arms with no business logic; framework always provides a body, and fallback displayName branches are tested via the truthy path.
+  4. **Threshold calibration**: lines/stmts ratcheted 45→47 based on local 51.37/51.57 minus 4.5% CI gap; branches kept at 43 (CI estimate 44.48% barely above current floor); functions 46→48.
+  5. Pre-existing 25 failing suites (TypeScript TS2740 in MessageReadStatusService.ts) unchanged.
+- Next slice: P1 Conversations & membership × gateway (remaining: core.ts 1390L, messages-advanced.ts 1329L)
+- Commit: (see branch claude/coverage/p1-conversations-gateway-sharing)
