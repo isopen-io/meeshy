@@ -888,3 +888,20 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   5. Gateway jest.config.json thresholds ratcheted: lines 48→54, branches 44→50, statements 48→54, functions 48→54.
 - Next slice: P1 Offline & sync × gateway OR P1 ZMQ infra × translator
 - Commit: (see branch claude/coverage/p1-zmq-gateway)
+
+## 2026-06-18T22:31Z — P1 ZMQ infra × gateway (ZmqTranslationClient)
+- Targeted: `services/gateway/src/services/zmq-translation/ZmqTranslationClient.ts`
+- Result: ◐ partial — ZmqTranslationClient.ts ☑ (100%/93.02%); ZmqConnectionManager.ts ☐ remains for next sub-slice
+- Coverage:
+  - `ZmqTranslationClient.ts`: 100% stmts / **93.02% branches** / 100% fns / 100% lines ✓
+  - Gateway global: 53.10% lines / 49.68% branches (threshold at lines:54/branches:50; already set in prior run)
+  - Translator: ~56% total (full non-GPU suite; --cov-fail-under=37 passes)
+- Tests added: 37 tests in 2 new files
+  - `src/__tests__/unit/services/ZmqTranslationClient.gap.test.ts` (NEW, 32 tests): circuit-breaker open guard / threshold→open / cooldown auto-reset / success-reset / stats; retry resend lambdas (translation/audio/voice-profile); retry max-exhausted emits `error` after 4th timeout (700-iteration Promise.resolve() flush); retry resend-throws (5-PR flush); 10 previously-untested event forwarding types; close() swallows errors
+  - `services/translator/tests/test_url_preservation.py` (+5 integration tests): `TranslatorEngine.translate_text()` with mocked `_translate_single_chunk` covering mask_urls call + restore_urls on short-text + restore_urls on long-text (>200 chars chunks) + model-not-loaded raises + multiple URLs all preserved
+- Reviewer: PASS (rounds: 1)
+- Notes:
+  1. Branch also fixes Python CI: commit 5c3d8526 added URL preservation inside translate_text() without covering the 3 new lines; integration tests added here close that gap.
+  2. Istanbul annotations on ZmqTranslationClient.ts: 4 structurally-unreachable catch blocks + `if (message)` guard whose false branch requires receive() to return null (it never does per ZMQ contract).
+  3. Next sub-slice: P1 ZMQ infra × gateway — ZmqConnectionManager.ts (connection pooling, priority queue, reconnect logic).
+- Commit: aa265627 (claude/coverage/p1-zmq-gateway-client)
