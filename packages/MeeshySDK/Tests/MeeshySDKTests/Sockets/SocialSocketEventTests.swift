@@ -595,4 +595,60 @@ final class SocialSocketEventTests: XCTestCase {
         XCTAssertNil(comment.author.displayName)
         XCTAssertNil(comment.author.avatar)
     }
+
+    // MARK: - Reaction ACK contract (gateway ACK == broadcast `updateEvent`)
+
+    /// Contrat aligné : le gateway renvoie désormais l'`updateEvent` (action+aggregation)
+    /// dans l'ACK de `post:reaction-add/-remove`, identique au broadcast. iOS doit le décoder.
+    func testPostReactionAck_decodesAlignedUpdateEvent() throws {
+        let data: [String: Any] = [
+            "postId": "p1", "userId": "u1", "emoji": "❤️", "action": "add",
+            "aggregation": ["emoji": "❤️", "count": 5]
+        ]
+        let event = SocialSocketManager.decodePostReactionAck(
+            data, decoder: decoder, postId: "p1", emoji: "❤️", action: "add")
+        XCTAssertEqual(event.postId, "p1")
+        XCTAssertEqual(event.userId, "u1")
+        XCTAssertEqual(event.action, "add")
+        XCTAssertEqual(event.aggregation.count, 5)
+    }
+
+    /// Tolérance : un ACK au shape dérivé (ancienne `reaction` brute, sans action/aggregation)
+    /// ne doit PAS jeter — on synthétise un événement minimal (l'agrégation autoritaire
+    /// arrive via le broadcast ; les appelants ignorent ce retour). Régression de l'ancien
+    /// `malformedResponse` systématique.
+    func testPostReactionAck_tolerantOnDriftedShape() throws {
+        let rawReaction: [String: Any] = [
+            "id": "r1", "postId": "p1", "userId": "u1", "emoji": "❤️",
+            "createdAt": "2026-06-18T10:00:00.000Z", "updatedAt": "2026-06-18T10:00:00.000Z"
+        ]
+        let event = SocialSocketManager.decodePostReactionAck(
+            rawReaction, decoder: decoder, postId: "p1", emoji: "❤️", action: "remove")
+        XCTAssertEqual(event.postId, "p1")
+        XCTAssertEqual(event.emoji, "❤️")
+        XCTAssertEqual(event.action, "remove")
+    }
+
+    func testCommentReactionAck_decodesAlignedUpdateEvent() throws {
+        let data: [String: Any] = [
+            "commentId": "c1", "postId": "p1", "userId": "u1", "emoji": "👍", "action": "add",
+            "aggregation": ["emoji": "👍", "count": 3, "userIds": ["u1"], "hasCurrentUser": true]
+        ]
+        let event = SocialSocketManager.decodeCommentReactionAck(
+            data, decoder: decoder, commentId: "c1", postId: "p1", emoji: "👍", action: "add")
+        XCTAssertEqual(event.commentId, "c1")
+        XCTAssertEqual(event.action, "add")
+        XCTAssertEqual(event.aggregation.count, 3)
+        XCTAssertTrue(event.aggregation.hasCurrentUser)
+    }
+
+    func testCommentReactionAck_tolerantOnDriftedShape() throws {
+        let rawReaction: [String: Any] = [
+            "id": "r1", "commentId": "c1", "postId": "p1", "userId": "u1", "emoji": "👍"
+        ]
+        let event = SocialSocketManager.decodeCommentReactionAck(
+            rawReaction, decoder: decoder, commentId: "c1", postId: "p1", emoji: "👍", action: "remove")
+        XCTAssertEqual(event.commentId, "c1")
+        XCTAssertEqual(event.action, "remove")
+    }
 }

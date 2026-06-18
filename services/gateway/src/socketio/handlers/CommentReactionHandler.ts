@@ -136,9 +136,13 @@ export class CommentReactionHandler {
         validated.postId
       );
 
+      // Contrat ACK == broadcast : on renvoie l'`updateEvent` (commentId, postId,
+      // userId, emoji, action, aggregation, timestamp) — le MÊME objet que le
+      // broadcast `comment:reaction-added`. Le web ignore `data`, l'iOS le décode en
+      // `SocketCommentReactionUpdateEvent`. La `reaction` brute cassait le décodage iOS.
       const successResponse: SocketIOResponse<unknown> = {
         success: true,
-        data: reaction,
+        data: updateEvent,
       };
       if (callback) callback(successResponse);
 
@@ -230,9 +234,11 @@ export class CommentReactionHandler {
         validated.postId
       );
 
+      // Contrat ACK == broadcast (voir handleAddReaction) : on renvoie l'`updateEvent`,
+      // identique au broadcast `comment:reaction-removed`, au lieu d'un simple {message}.
       const successResponse: SocketIOResponse<unknown> = {
         success: true,
-        data: { message: 'Reaction removed successfully' },
+        data: updateEvent,
       };
       if (callback) callback(successResponse);
 

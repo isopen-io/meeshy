@@ -566,12 +566,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                     continuation.resume(throwing: CommentReactionError.serverError(message))
                     return
                 }
-                guard let jsonData = try? JSONSerialization.data(withJSONObject: data),
-                      let event = try? self.decoder.decode(SocketCommentReactionUpdateEvent.self, from: jsonData) else {
-                    continuation.resume(throwing: CommentReactionError.malformedResponse)
-                    return
-                }
-                continuation.resume(returning: event)
+                continuation.resume(returning: Self.decodeCommentReactionAck(data, decoder: self.decoder, commentId: commentId, postId: postId, emoji: emoji, action: "add"))
             }
         }
     }
@@ -592,12 +587,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                     continuation.resume(throwing: CommentReactionError.serverError(message))
                     return
                 }
-                guard let jsonData = try? JSONSerialization.data(withJSONObject: data),
-                      let event = try? self.decoder.decode(SocketCommentReactionUpdateEvent.self, from: jsonData) else {
-                    continuation.resume(throwing: CommentReactionError.malformedResponse)
-                    return
-                }
-                continuation.resume(returning: event)
+                continuation.resume(returning: Self.decodeCommentReactionAck(data, decoder: self.decoder, commentId: commentId, postId: postId, emoji: emoji, action: "remove"))
             }
         }
     }
@@ -646,6 +636,38 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         }
     }
 
+    /// Décode l'ACK d'une réaction post. Contrat aligné (gateway `PostReactionHandler`) :
+    /// `data` == l'`updateEvent` du broadcast `post:reaction-added/-removed`.
+    /// TOLÉRANT : si le shape de l'ACK dérive (success==true mais champs inattendus), on
+    /// synthétise un événement minimal au lieu de jeter `malformedResponse` — l'agrégation
+    /// autoritaire arrive via le broadcast et tous les appelants ignorent ce retour
+    /// (`_ = try await …`). Évite l'ancien bug où chaque réaction socket échouait.
+    nonisolated static func decodePostReactionAck(
+        _ data: [String: Any], decoder: JSONDecoder, postId: String, emoji: String, action: String
+    ) -> SocketPostReactionUpdateEvent {
+        if let jsonData = try? JSONSerialization.data(withJSONObject: data),
+           let event = try? decoder.decode(SocketPostReactionUpdateEvent.self, from: jsonData) {
+            return event
+        }
+        return SocketPostReactionUpdateEvent(
+            postId: postId, userId: "", emoji: emoji, action: action,
+            aggregation: SocketPostReactionAggregation(emoji: emoji, count: 0), timestamp: nil)
+    }
+
+    /// Décode l'ACK d'une réaction commentaire (même contrat/tolérance que `decodePostReactionAck`).
+    nonisolated static func decodeCommentReactionAck(
+        _ data: [String: Any], decoder: JSONDecoder, commentId: String, postId: String, emoji: String, action: String
+    ) -> SocketCommentReactionUpdateEvent {
+        if let jsonData = try? JSONSerialization.data(withJSONObject: data),
+           let event = try? decoder.decode(SocketCommentReactionUpdateEvent.self, from: jsonData) {
+            return event
+        }
+        return SocketCommentReactionUpdateEvent(
+            commentId: commentId, postId: postId, userId: "", emoji: emoji, action: action,
+            aggregation: SocketCommentReactionAggregation(emoji: emoji, count: 0, userIds: [], hasCurrentUser: false),
+            timestamp: nil)
+    }
+
     public func addPostReaction(postId: String, emoji: String) async throws -> SocketPostReactionUpdateEvent {
         guard let socket else { throw PostReactionError.noSocket }
         return try await withCheckedThrowingContinuation { continuation in
@@ -662,12 +684,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                     continuation.resume(throwing: PostReactionError.serverError(message))
                     return
                 }
-                guard let jsonData = try? JSONSerialization.data(withJSONObject: data),
-                      let event = try? self.decoder.decode(SocketPostReactionUpdateEvent.self, from: jsonData) else {
-                    continuation.resume(throwing: PostReactionError.malformedResponse)
-                    return
-                }
-                continuation.resume(returning: event)
+                continuation.resume(returning: Self.decodePostReactionAck(data, decoder: self.decoder, postId: postId, emoji: emoji, action: "add"))
             }
         }
     }
@@ -688,12 +705,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                     continuation.resume(throwing: PostReactionError.serverError(message))
                     return
                 }
-                guard let jsonData = try? JSONSerialization.data(withJSONObject: data),
-                      let event = try? self.decoder.decode(SocketPostReactionUpdateEvent.self, from: jsonData) else {
-                    continuation.resume(throwing: PostReactionError.malformedResponse)
-                    return
-                }
-                continuation.resume(returning: event)
+                continuation.resume(returning: Self.decodePostReactionAck(data, decoder: self.decoder, postId: postId, emoji: emoji, action: "remove"))
             }
         }
     }
