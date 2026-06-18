@@ -7,6 +7,7 @@ import type { Socket } from 'socket.io';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../services/notifications/NotificationService';
+import { notifyReactionAdded } from '../../services/notifications/reactionNotify';
 import { ReactionService } from '../../services/ReactionService.js';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
@@ -334,47 +335,16 @@ export class ReactionHandler {
     emoji: string,
     reactorId: string,
     isAnonymous: boolean,
-    reactionId: string
+    _reactionId: string
   ): Promise<void> {
-    if (isAnonymous) return; // Pas de notifications pour les anonymes
-
-    const message = await this.prisma.message.findUnique({
-      where: { id: messageId },
-      select: {
-        senderId: true,
-        conversationId: true,
-      }
+    // Source unique partagée avec la route REST `POST /reactions`
+    // (cf. notifyReactionAdded) — évite la dérive entre transports qui avait
+    // fait disparaître les notifs de réaction sur le chemin outbox/REST.
+    await notifyReactionAdded(
+      { prisma: this.prisma, notificationService: this.notificationService },
+      { messageId, reactorParticipantId: reactorId, emoji, isAnonymous }
+    ).catch((error) => {
+      logger.error('reaction notification creation failed', { error });
     });
-
-    if (!message || !message.senderId) return;
-
-    // Résoudre senderId (Participant.id) → User.id pour la notification
-    const [authorParticipant, reactorParticipant] = await Promise.all([
-      this.prisma.participant.findUnique({
-        where: { id: message.senderId },
-        select: { userId: true }
-      }),
-      this.prisma.participant.findUnique({
-        where: { id: reactorId },
-        select: { userId: true }
-      })
-    ]);
-
-    const authorUserId = authorParticipant?.userId;
-    const reactorUserId = reactorParticipant?.userId;
-
-    if (!authorUserId || !reactorUserId || authorUserId === reactorUserId) return;
-
-    this.notificationService
-      .createReactionNotification({
-        messageAuthorId: authorUserId,
-        reactorUserId,
-        messageId,
-        conversationId: message.conversationId,
-        reactionEmoji: emoji,
-      })
-      .catch((error) => {
-        logger.error('reaction notification creation failed', { error });
-      });
   }
 }

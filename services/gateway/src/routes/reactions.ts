@@ -18,6 +18,7 @@ import {
   sendInternalError,
 } from '../utils/response.js';
 import { ReactionService } from '../services/ReactionService.js';
+import { notifyReactionAdded } from '../services/notifications/reactionNotify.js';
 import type {
   ReactionAddData,
   ReactionRemoveData,
@@ -196,6 +197,18 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
           );
         }
       }
+
+      // Notifier l'auteur du message — PARITÉ avec le handler socket `reaction:add`
+      // via la source unique `notifyReactionAdded`. La route REST broadcastait
+      // `REACTION_ADDED` à la room mais ne créait AUCUNE notification/push : les
+      // réactions envoyées via l'outbox/REST (chemin iOS) ne déclenchaient donc
+      // jamais de notif. Fire-and-forget : ne bloque pas la réponse 201.
+      void notifyReactionAdded(
+        { prisma, notificationService: fastify.notificationService },
+        { messageId, reactorParticipantId: participantId, emoji, isAnonymous }
+      ).catch((error: unknown) => {
+        fastify.log.error({ error }, 'REST reaction notification creation failed');
+      });
 
       return sendSuccess(reply, reaction, { statusCode: 201 });
     } catch (error) {
