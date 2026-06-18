@@ -757,3 +757,21 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   5. Pre-existing 25 failing suites (TypeScript TS2740 in MessageReadStatusService.ts) unchanged.
 - Next slice: P1 Conversations & membership × gateway (remaining: core.ts 1390L, messages-advanced.ts 1329L)
 - Commit: PR #702 → squash-merged to main sha `aefa4c1d` (branch `claude/coverage/p1-conversations-gateway-sharing` deleted)
+
+## 2026-06-18T05:30Z — P1 Conversations & membership × gateway (core.ts + messages-advanced.ts ≥92% line+branch)
+- Targeted: `services/gateway/src/routes/conversations/core.ts` (1390L, 7 routes), `messages-advanced.ts` (1329L, 7 routes)
+- Result: ☑ done — both files ≥92% line+branch; P1 Conversations & membership × gateway cell flipped ◐→☑ (all 16 sub-files now ☑)
+- Coverage (final per-file run):
+  - core.ts: 99.68% stmts / **100% branches** / 96.87% funcs / 99.66% lines ✓ (target ≥92% both)
+  - messages-advanced.ts: 97.95% stmts / **100% branches** / 81.81% funcs / 97.91% lines ✓
+  - Gateway global (local): 53.10% stmts / 49.68% branches / 53.42% funcs / 53.29% lines (threshold ratcheted: lines 47→48, branches 43→44, statements 47→48)
+- Tests added: 190 new tests across 2 new test files
+  - `src/__tests__/unit/routes/conversation-core.test.ts` (NEW, 99 tests): check-identifier (available/taken/error), GET /conversations (empty, filter, pagination hasMore/cursor/offset, batch-participant enrichment, title generation, ETag cache hit, withUserId DM query), GET /conversations/:id (not-found, no-access, ETag, notification fire-and-forget, access-control), POST /conversations (direct/group types, blocking check, community validation, duplicate guard, socket broadcast, identifier generation), PUT /conversations/:id (auth check, meeshy guard, membership guard, field updates, socket broadcast, analysis route), DELETE /conversations/:id (membership check, deletion + broadcast), GET /conversations/:id/analysis (agent summaries, role classification)
+  - `src/__tests__/unit/routes/conversation-messages-advanced.test.ts` (NEW, 91 tests): PUT edit (validation, 404 msg, 24h time limit, role override MODERATOR/ADMIN, permission check, link processing, mention service, sendForbidden guards), DELETE delete (404, permission, soft-delete, socket broadcast, attachment cleanup), PATCH read-status (access, mark-read, stats update), GET messages (pagination, ETag, decrypted, translations, filter), POST reactions (missing emoji, participant check, add/remove, socket event, error paths), DELETE reactions, GET read-status
+- Reviewer: PASS (rounds: 2 — round 1: 3 tautological tests fixed: MODERATOR/ADMIN 24h-override tests added `expect(mockSendSuccess).toHaveBeenCalled()`, mentions test added outcome assertion, batch-participant test added `reply.send` outcome assertion)
+- Notes:
+  1. core.ts line 682 uncovered (0.34% of lines): logger.warn call inside ETag 304-path fire-and-forget handler — only executed when `sendWithETag` returns `true` AND the async notify fires. The synchronous `sendWithETag` mock returns false in all tests; the 304 path is a fast-json-stringify short-circuit that doesn't run the async notifier. At 99.66% lines well above target.
+  2. messages-advanced.ts lines 364,445,450,625,631,646,1189: logger.info/debug calls inside fire-and-forget .catch handlers or deep-nested tracking link try/catch paths. At 97.91% lines well above target.
+  3. Gateway global functions 53.29% (local) — functions metric doesn't have a dedicated threshold above 48%; route handler arrow functions counted individually inflates the denominator.
+  4. Pre-existing 25 failing suites (TS2740 in MessageReadStatusService.ts) unchanged.
+- Commit: (see branch claude/coverage/p1-conversations-gateway-core)

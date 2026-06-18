@@ -151,17 +151,17 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 ## routes/conversations  (2/15 have a test)
 
 - [x] `services/gateway/src/routes/conversations/ban.ts`
-- [ ] `services/gateway/src/routes/conversations/core.ts`
+- [x] `services/gateway/src/routes/conversations/core.ts`
 - [x] `services/gateway/src/routes/conversations/delete-for-me.ts`
-- [ ] `services/gateway/src/routes/conversations/index.ts`
+- [x] `services/gateway/src/routes/conversations/index.ts`
 - [x] `services/gateway/src/routes/conversations/leave.ts`
-- [ ] `services/gateway/src/routes/conversations/messages-advanced.ts`
+- [x] `services/gateway/src/routes/conversations/messages-advanced.ts`
 - [ ] `services/gateway/src/routes/conversations/messages.ts`
 - [~] `services/gateway/src/routes/conversations/participants.ts`
-- [ ] `services/gateway/src/routes/conversations/search.ts`
+- [x] `services/gateway/src/routes/conversations/search.ts`
 - [x] `services/gateway/src/routes/conversations/sharing.ts`
 - [x] `services/gateway/src/routes/conversations/stats.ts`
-- [ ] `services/gateway/src/routes/conversations/threads.ts`
+- [x] `services/gateway/src/routes/conversations/threads.ts`
 - [ ] `services/gateway/src/routes/conversations/types.ts`
 - [x] `services/gateway/src/routes/conversations/utils/access-control.ts`
 - [x] `services/gateway/src/routes/conversations/utils/identifier-generator.ts`
