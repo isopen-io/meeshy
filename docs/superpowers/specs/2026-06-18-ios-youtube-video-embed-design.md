@@ -66,8 +66,8 @@ point d'extension du cadre général.
 | Couche | Composants | Justification |
 |--------|-----------|---------------|
 | **MeeshySDK (core)** | `EmbeddableVideoResolver`, `EmbeddedVideo`, `VideoEmbedProvider` | Moteur de règles stateless + value types agnostiques. Building blocks. |
-| **MeeshyUI** | `YouTubeEmbedPlayerView` (atome `WKWebView` enveloppant l'IFrame API, prend un `videoId` + config + callbacks d'état, opaque) ; `VideoEmbedThumbnail` (atome : miniature + overlay play + badge provider) | Composants paramétrés, agnostiques des singletons Meeshy. |
-| **app (apps/ios/Meeshy)** | `VideoEmbedContainer` (cascade vignette → player au tap, single-active, call-aware, plein écran) ; câblage des 3 surfaces ; intégration coordinateur | Orchestration UX produit + dépend des singletons Meeshy (`MediaSessionCoordinator`). Analogue de `VideoAvailabilityResolver`. |
+| **MeeshyUI** | `YouTubeEmbedPlayerView` (atome `WKWebView` enveloppant l'IFrame API, prend un `videoId` + config + callbacks d'état, opaque) ; `VideoEmbedThumbnail` (atome : miniature + overlay play + badge provider) | Composants paramétrés, agnostiques des singletons Meeshy. Précédent prouvé : `DocumentWebView: UIViewRepresentable` (MeeshyUI/Media/). |
+| **app (apps/ios/Meeshy)** | `VideoEmbedContainer` (cascade vignette → player au tap, single-active, call-aware, plein écran) ; câblage des 3 surfaces ; intégration coordinateurs | Orchestration UX produit + dépend des singletons Meeshy (`PlaybackCoordinator`, `MediaSessionCoordinator`). Analogue de `VideoAvailabilityResolver`. |
 
 ### YouTubeEmbedPlayerView (MeeshyUI)
 
@@ -79,7 +79,14 @@ point d'extension du cadre général.
   un tap utilisateur côté façade).
 - Bridge JS (`WKScriptMessageHandler`) exposant les transitions d'état
   (`ready`, `playing`, `paused`, `ended`) et permettant `getCurrentTime()` à la demande.
+  Sous `defaultIsolation(MainActor)`, le callback `userContentController(_:didReceive:)`
+  est implicitement `@MainActor` (pratique pour mettre à jour l'état) — garder la
+  surface JS minimale (événements d'état + `getCurrentTime` à la demande, rien en continu).
 - Callbacks : `onStateChange`, `onReady`. Pas de flux haute fréquence vers SwiftUI.
+- **Contraintes SDK iOS 16** : APIs iOS-16-safe uniquement ; utiliser le wrapper
+  `adaptiveOnChange` (pas de `.onChange` brut). Si un template HTML local est bundlé
+  dans `MeeshyUI/Resources/` (`.process("Resources")` déjà déclaré), accéder à
+  `Bundle.module` **uniquement depuis un contexte `@MainActor`** (gotcha connu).
 
 ### VideoEmbedContainer (app)
 
@@ -92,12 +99,30 @@ idle(vignette) ──tap──▶ loading ──ready──▶ playing ──exp
 ```
 
 - État `idle` : `VideoEmbedThumbnail` seul (aucun `WKWebView`).
-- Au tap : enregistrement auprès de `MediaSessionCoordinator` (stop des autres médias),
-  instanciation de `YouTubeEmbedPlayerView`.
-- Single-active : ouvrir un embed pause/détruit le précédent.
-- Teardown : destruction du `WKWebView` au scroll-off / recyclage de cellule (libère
-  mémoire, stoppe les timers JS).
-- Call-aware : pause sur appel actif via `MediaSessionCoordinator`.
+- Au tap : `PlaybackCoordinator.shared.willStartPlaying(external:)` (stop des autres
+  médias) + `MediaSessionCoordinator.shared.activatePlaybackSync(...)` (session audio),
+  puis instanciation de `YouTubeEmbedPlayerView`.
+- **Single-active via `PlaybackCoordinator` (MeeshyUI), pas via une extension de
+  `MediaSessionCoordinator`.** Le player conforme le protocole **existant**
+  `StoppablePlayer` (`func stop()`), s'enregistre via `registerExternal(_:)` et réclame
+  la session via `willStartPlaying(external:)`. Référence à copier : `StoryMediaCoordinator`.
+  Rôles : `PlaybackCoordinator` = mutex single-active hétérogène ; `MediaSessionCoordinator`
+  = session `AVAudioSession` refcountée + call-aware. **À vérifier en implémentation** :
+  `willStartPlaying(external:)` doit bien stopper aussi la **vidéo native**
+  (`SharedAVPlayerManager`) — sémantique à confirmer/ajuster pour qu'ouvrir un embed
+  vidéo coupe une vidéo native en cours.
+- `stop()` (appelé par le coordinateur quand un autre média démarre) doit : pauser via
+  le bridge JS (`pauseVideo()`), nettoyer l'état, et `deactivatePlaybackSync()`.
+- Teardown du `WKWebView` :
+  - **Messages** (`UICollectionView` à cellules recyclées, `UIHostingConfiguration`) :
+    via `onDisappear` de la vue hostée — les hooks de cycle de vie SwiftUI se
+    déclenchent correctement dans `UIHostingConfiguration`. Ne PAS se reposer sur le
+    seul recyclage de cellule.
+  - **Feed / détail** (SwiftUI pur, `LazyVStack` / `ScrollView`) : teardown automatique
+    au scroll-off.
+- Call-aware : observer `MediaSessionCoordinator` (`isCallActive` synchrone +
+  publisher `events` pour `interruptionBegan` / route change) → pause à l'ouverture
+  d'un appel ; gate l'entrée `play` si `isCallActive`.
 
 ## Flux de données & modèle
 
@@ -133,23 +158,38 @@ backend en v1.
 
 ### Messages — `BubbleStandardLayout`
 
-Aujourd'hui : la première URL du corps → `LinkPreviewCard` (aperçu OG).
-Nouvelle précédence :
+Aujourd'hui : la première URL du corps → `LinkPreviewCard` (aperçu OG), point
+d'insertion confirmé (`content.text?.firstLinkURL`, `String?`, **déjà précalculé** par
+`BubbleContentBuilder` via `LinkPreviewFetcher.firstURL` au build du `BubbleContent` —
+détection gratuite, pas de scan par render). Nouvelle précédence à ce point :
 
-1. Résoudre la première URL via `EmbeddableVideoResolver`.
+1. Résoudre `firstLinkURL` via `EmbeddableVideoResolver`.
 2. Si `EmbeddedVideo` non nil → `VideoEmbedContainer`.
 3. Sinon → `LinkPreviewCard` (comportement OG **inchangé**).
 
+Comme `firstLinkURL` fait déjà partie de l'égalité de `BubbleContent`, aucun champ
+supplémentaire dans l'`Equatable` de la bulle n'est requis.
+
 ### Feed — `FeedPostCard`
 
-Aujourd'hui : `post.content` en texte brut, aucune détection de lien.
+Aujourd'hui : `post.content` en texte brut, aucune détection de lien. `FeedPostCard` est
+un **struct stateless `Equatable`** (pas de ViewModel ni `@State`), hosté dans un
+`LazyVStack` SwiftUI pur.
 Ajout : détecter la première URL du `post.content` ; si `EmbeddedVideo` → afficher
-l'embed (façade) sous le texte. **On n'ajoute pas l'aperçu OG générique aux postes**
-(voir Hors scope).
+l'embed (façade) sous le texte (entre le panneau de traduction secondaire et le bloc
+repost). **On n'ajoute pas l'aperçu OG générique aux postes** (voir Hors scope).
+
+**Mémoïsation + footgun `Equatable`** : résoudre l'`EmbeddedVideo` côté parent
+(`FeedView`, où vit `viewModel.posts`) et le passer en paramètre (`embeddedVideo:
+EmbeddedVideo?`) plutôt que de re-scanner dans le `body`. Si on ajoute ce paramètre, il
+**doit** être inclus dans le `static func ==` de `FeedPostCard`, sinon le gate
+`.equatable()` court-circuite des re-renders nécessaires
+(cf. footgun Equatable + état).
 
 ### Détail — `PostDetailView`
 
-Même logique que le Feed. Inline par défaut, bouton plein écran disponible.
+Même logique que le Feed (`ScrollView` + `LazyVStack` SwiftUI pur, teardown auto).
+Inline par défaut, bouton plein écran disponible. Pas de gate `Equatable` ici.
 
 ## Plein écran
 
@@ -166,8 +206,10 @@ Contraintes issues de l'historique reels (re-render 10 Hz, pool de lecteurs, cal
 
 - **Façade stricte** : en surface scrollable, seulement la vignette. `WKWebView`
   instancié uniquement au tap.
-- **Single-active** : un seul embed lecteur vivant à la fois (coordinateur).
-- **Teardown au recyclage / scroll-off** : destruction du `WKWebView`. Cellules `Equatable`.
+- **Single-active** : un seul embed lecteur vivant à la fois, via `PlaybackCoordinator`
+  (protocole `StoppablePlayer`) — coexistence déjà gérée pour audio/vidéo native/story.
+- **Teardown** : messages = `onDisappear` (cellules `UICollectionView` recyclées) ;
+  feed/détail = automatique (SwiftUI pur). Destruction du `WKWebView`, arrêt des timers JS.
 - **Pas de `@Published` haute fréquence** vers le `body` : `getCurrentTime()` interrogé
   seulement à l'expand, jamais en continu (on n'ouvre pas la porte au bug « blur 10 Hz »).
 - **Call-aware** : enregistrement auprès de `MediaSessionCoordinator` → pause sur appel,
@@ -204,11 +246,46 @@ Contraintes issues de l'historique reels (re-render 10 Hz, pool de lecteurs, cal
   (+ `EmbeddedVideo`, `VideoEmbedProvider`).
 - Nouveau — `packages/MeeshySDK/Sources/MeeshyUI/Media/YouTubeEmbedPlayerView.swift`.
 - Nouveau — `packages/MeeshySDK/Sources/MeeshyUI/Media/VideoEmbedThumbnail.swift`.
-- Nouveau — `apps/ios/Meeshy/Features/Main/Views/VideoEmbedContainer.swift`.
+- Nouveau — `apps/ios/Meeshy/Features/Main/Views/VideoEmbedContainer.swift`
+  (conforme `StoppablePlayer`).
 - Modifié — `apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift`
-  (précédence embed/OG).
-- Modifié — `apps/ios/Meeshy/Features/Main/Views/FeedPostCard.swift` (détection + embed).
+  (précédence embed/OG, point d'insertion `content.text?.firstLinkURL`).
+- Modifié — `apps/ios/Meeshy/Features/Main/Views/FeedPostCard.swift` (param `embeddedVideo`
+  + mise à jour du `==`) et `FeedView.swift` (résolution parent + passage en param).
 - Modifié — `apps/ios/Meeshy/Features/Main/Views/PostDetailView.swift` (détection + embed).
-- Modifié — `MediaSessionCoordinator` (single-active embed + call-aware).
-- pbxproj : 4 entrées + 2 UUIDs par nouveau fichier `.swift` app-side (xcodeproj classique).
+- Vérif/ajust éventuel — `packages/MeeshySDK/Sources/MeeshyUI/Media/PlaybackCoordinator.swift`
+  (sémantique `willStartPlaying(external:)` vs vidéo native). Pas de nouveau coordinateur :
+  on conforme `StoppablePlayer` (existant) et on observe `MediaSessionCoordinator` (existant).
+- pbxproj : **seul** `VideoEmbedContainer.swift` (app-side) demande la chirurgie manuelle
+  (4 entrées + 2 UUIDs, xcodeproj objectVersion 63). Les fichiers SDK/MeeshyUI sont
+  auto-découverts (SPM) → aucune entrée pbxproj.
+- Info.plist : **aucune modif** (ATS HTTPS déjà OK pour YouTube).
 - Tests SDK + app correspondants.
+
+## Revue d'implémentabilité (2026-06-18)
+
+Vérifié contre le code réel (4 sondages read-only). **Verdict : implémentable, aucun
+blocker.** Synthèse :
+
+| Point | Verdict | Ancrage réel |
+|-------|---------|--------------|
+| WKWebView dans MeeshyUI | ✅ | `DocumentWebView: UIViewRepresentable` (MeeshyUI/Media/) importe déjà WebKit |
+| Resolver pur en core | ✅ | Pattern `LinkPreviewFetcher` (MeeshySDK/Services/), core = nonisolated |
+| Miniature | ✅ | `CachedAsyncImage(url:targetSize:)` (MeeshyUI/Primitives/) |
+| Single-active hétérogène | ✅ (dé-risqué) | Protocole `StoppablePlayer` + `PlaybackCoordinator` existants ; réf. `StoryMediaCoordinator` |
+| Call-aware | ✅ | `MediaSessionCoordinator.isCallActive` (sync) + publisher `events` ; `CallManager` propage déjà |
+| Insertion messages | ✅ | `firstLinkURL` précalculé dans `BubbleContent`, point clair |
+| Teardown messages | ⚠️ gérable | Liste = `UICollectionView` recyclé + `UIHostingConfiguration` → teardown via `onDisappear` |
+| Insertion feed/détail | ✅ | SwiftUI pur (`LazyVStack`/`ScrollView`), teardown auto |
+| ATS / Info.plist | ✅ | HTTPS imposé, YouTube HTTPS, zéro exception |
+| Cibles iOS | ✅ | App iOS 17, SDK iOS 16 ; WKWebView dispo |
+| pbxproj | ✅ (1 fichier) | Seul le fichier app-side ; SDK auto-découvert |
+
+**À confirmer pendant l'implémentation (non bloquant) :**
+1. Sémantique exacte de `PlaybackCoordinator.willStartPlaying(external:)` vis-à-vis de
+   l'arrêt de la **vidéo native** (`SharedAVPlayerManager`) — ajuster pour qu'ouvrir un
+   embed coupe une vidéo native.
+2. `WKScriptMessageHandler` implicitement `@MainActor` sous MeeshyUI → surface JS minimale.
+3. `Bundle.module` (si template HTML bundlé) accédé seulement en `@MainActor`.
+4. APIs iOS-16-safe côté SDK + `adaptiveOnChange` (pas de `.onChange` brut).
+5. Fiabilité du bridge JS WKWebView (risque moyen) → garder le contrat d'état simple.
