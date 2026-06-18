@@ -1763,10 +1763,15 @@ extension Array where Element == APIPost {
 extension APIPost {
     public func toStatusEntry() -> StatusEntry? {
         guard (type ?? "").uppercased() == "STATUS", let emoji = moodEmoji else { return nil }
+        // Attribution "via @X" : un status republié pointe la source via
+        // `repostOf` (single source of truth — pas de colonne `viaUsername`
+        // dédiée côté gateway). On dérive donc l'attribution de l'auteur du
+        // repost quand le champ direct est absent.
+        let via = viaUsername ?? repostOf?.author.username
         return StatusEntry(id: id, userId: author.id, username: author.name,
                            avatarColor: DynamicColorGenerator.colorForName(author.name),
                            moodEmoji: emoji, content: content, audioUrl: audioUrl, createdAt: createdAt,
-                           expiresAt: expiresAt, viaUsername: viaUsername)
+                           expiresAt: expiresAt, viaUsername: via)
     }
 }
 

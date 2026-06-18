@@ -66,6 +66,7 @@ public struct APIRepostOf: Codable, Sendable {
     public let translations: [String: APIPostTranslationEntry]?
     public let storyEffects: StoryEffects?
     public let audioUrl: String?
+    public let moodEmoji: String?
     public let originalRepostOfId: String?
     public let author: APIAuthor
     public let media: [APIPostMedia]?
@@ -285,6 +286,7 @@ extension APIPost {
                                    type: r.type,
                                    originalLanguage: r.originalLanguage,
                                    audioUrl: r.audioUrl,
+                                   moodEmoji: r.moodEmoji,
                                    storyEffects: r.storyEffects,
                                    media: repostMedia,
                                    translations: repostTranslations,

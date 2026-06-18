@@ -193,6 +193,9 @@ public struct RepostContent: Identifiable, Sendable {
     public let type: String?
     public let originalLanguage: String?
     public let audioUrl: String?
+    /// Mood emoji of the reposted STATUS (nil for non-status sources). Lets the
+    /// feed quote-block render the mood instead of an empty body.
+    public let moodEmoji: String?
     public let storyEffects: StoryEffects?
     public let media: [FeedMedia]
     public let translations: [String: PostTranslation]?
@@ -204,6 +207,7 @@ public struct RepostContent: Identifiable, Sendable {
                 authorUsername: String? = nil, authorAvatarURL: String? = nil,
                 content: String, timestamp: Date = Date(), likes: Int = 0, isQuote: Bool = false,
                 type: String? = nil, originalLanguage: String? = nil, audioUrl: String? = nil,
+                moodEmoji: String? = nil,
                 storyEffects: StoryEffects? = nil, media: [FeedMedia] = [],
                 translations: [String: PostTranslation]? = nil,
                 originalRepostOfId: String? = nil, visibility: String? = nil,
@@ -217,6 +221,7 @@ public struct RepostContent: Identifiable, Sendable {
         self.type = type
         self.originalLanguage = originalLanguage
         self.audioUrl = audioUrl
+        self.moodEmoji = moodEmoji
         self.storyEffects = storyEffects
         self.media = media
         self.translations = translations
@@ -229,7 +234,7 @@ public struct RepostContent: Identifiable, Sendable {
 extension RepostContent: Codable {
     enum CodingKeys: String, CodingKey {
         case id, author, authorId, authorUsername, authorAvatarURL, content, timestamp, likes, isQuote
-        case type, originalLanguage, audioUrl, storyEffects, media, translations
+        case type, originalLanguage, audioUrl, moodEmoji, storyEffects, media, translations
         case originalRepostOfId, visibility, expiresAt
     }
 
@@ -247,6 +252,7 @@ extension RepostContent: Codable {
         type = try c.decodeIfPresent(String.self, forKey: .type)
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
         audioUrl = try c.decodeIfPresent(String.self, forKey: .audioUrl)
+        moodEmoji = try c.decodeIfPresent(String.self, forKey: .moodEmoji)
         storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
         media = try c.decodeIfPresent([FeedMedia].self, forKey: .media) ?? []
         translations = try c.decodeIfPresent([String: PostTranslation].self, forKey: .translations)
@@ -270,6 +276,7 @@ extension RepostContent: Codable {
         try c.encodeIfPresent(type, forKey: .type)
         try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
         try c.encodeIfPresent(audioUrl, forKey: .audioUrl)
+        try c.encodeIfPresent(moodEmoji, forKey: .moodEmoji)
         try c.encodeIfPresent(storyEffects, forKey: .storyEffects)
         if !media.isEmpty { try c.encode(media, forKey: .media) }
         try c.encodeIfPresent(translations, forKey: .translations)
