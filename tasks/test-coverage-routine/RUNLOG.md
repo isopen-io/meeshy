@@ -865,3 +865,26 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   5. Pre-existing gateway failures: 26 suites — production bugs, unchanged.
 - Next slice: P1 ZMQ infra × gateway (verify ZmqConnectionManager + ZmqTranslationClient; cover index.ts + types.ts) OR P1 Offline & sync × gateway
 - Commit: (see branch claude/dreamy-mayer-6dvj58)
+- Commit: (see branch claude/coverage/p1-conversations-shared)
+
+## 2026-06-18T14:00Z — P1 ZMQ infra × gateway (ZmqMessageHandler + ZmqRequestSender + zmq-helpers)
+- Targeted: `services/gateway/src/services/zmq-translation/ZmqMessageHandler.ts`, `ZmqRequestSender.ts`, `utils/zmq-helpers.ts`
+- Result: ☑ done — all 3 ZMQ infra × gateway files ≥92% line+branch; feature matrix cell P1 ZMQ infra × gateway flipped ☐→☑
+- Coverage (final run, 129 tests):
+  - ZmqMessageHandler.ts: 100% stmts / **99.08% branches** / 100% funcs / 100% lines ✓ (1 unreachable branch at line 271)
+  - ZmqRequestSender.ts: 100% stmts / **98.14% branches** / 100% funcs / 100% lines ✓ (1 unreachable branch at line 445)
+  - zmq-helpers.ts: 100% stmts / **100% branches** / 100% funcs / 100% lines ✓
+  - Gateway global: 54.83% lines / 50.87% branches (threshold ratcheted 48/44 → 54/50)
+- Tests added: 129 tests across 3 new test files
+  - `src/__tests__/unit/services/ZmqHelpers.test.ts` (NEW, 22 tests): loadAudioAsBinary (undefined/empty path→null, not found→null, file too large→null, exactly at threshold→data, readFile throws→null, all 7 MIME extensions, uppercase ext, unknown ext→wav fallback), audioFormatToMimeType (all 7 formats + fallback), mimeTypeToAudioFormat (strips audio/ prefix, passes through other types)
+  - `src/__tests__/unit/services/ZmqMessageHandler.test.ts` (NEW, 87 tests): handleMessage (single Buffer, multipart+binaryFrames, JSON parse error no-throw, messagesProcessed stat), all 20+ event type routes, translationCompleted (dedup, LRU at 1001 entries, no result, no messageId, metadata, scoped event), audioProcessCompleted (binary extraction, embedding, invalid frame index, no binaryFrames, dedup, LRU at 1001 entries, newVoiceProfile null), all voice profile handlers (analyze/verify/compare success+failure), audioTranslation events (ready/progressive/completed with and without binary frames), transcriptionCompleted/Ready (with+without text/language/speakerCount), voiceTranslationCompleted (with+without result), pong no-op, unknown type no-op, getStats/resetStats/clear
+  - `src/__tests__/unit/services/ZmqRequestSender.test.ts` (NEW, 20 tests): sendTranslationRequest (returns taskId, existingTaskId, dedup+lowercase targetLanguages, empty after dedup throws, pending request stored, stats increment, 5s send timeout, message shape), sendAudioProcessRequest (no audioPath throws, empty audioPath throws, loadAudio null throws, success+pending+stats, existingTaskId, multipart frame sent, embedding frame added, no profile=1 frame, invalid embedding catch), sendTranscriptionOnlyRequest (no source throws, file null throws, file success, existingTaskId, base64+audioFormatToMimeType, default wav format, pending stored), sendVoiceAPIRequest (success, returns taskId, stats+pending), sendVoiceProfileRequest (success, returns request_id, stats+pending), sendStoryTextObjectRequest (message shape, returns void), registerTimeout (no-op when absent, fires+clears pending, cancelled by remove), removePendingRequest (removes, no-op when absent, cancels timeout), getPendingRequestsCount (initial 0, multiple), getStats (copy not reference, initial zeros), clear (empties map, cancels all timeouts)
+- Reviewer: PASS (self-review — test-only diff; all tests assert observable behavior through public API; factory functions throughout; deterministic via jest.useFakeTimers() + mocked fs/zmq-helpers; unreachable branches at lines 271/445 are genuine defensive guards)
+- Notes:
+  1. Uncovered branch line 271 (`if (event.result?.messageId)`) is always-true defensive guard — line 252 returns early when messageId is falsy, so condition at 271 can never be false when reached. Structurally unreachable; no istanbul ignore needed (99.08% > 92% floor).
+  2. Uncovered branch line 445 (`if (this.pendingRequests.has(taskId))`) inside the setTimeout callback is always-true when timer fires naturally — `clearTimeout()` in `removePendingRequest`/`clear()` prevents the callback from ever running when the entry is deleted. Structurally unreachable through the public API.
+  3. Audio LRU eviction (lines 305-308) required a dedicated test filling 1000 audio events — the shared `processedResults` Set isn't directly accessible so we drive it through `handleMessage`. Test runs in ~0.5s.
+  4. `jest.advanceTimersByTimeAsync(5001)` for ZMQ send timeout test: rejection handler must be registered on `promise` BEFORE advancing fake timers to avoid PromiseRejectionHandledWarning. Pattern: `const assertionPromise = expect(promise).rejects.toThrow(...); await advanceTimers; await assertionPromise`.
+  5. Gateway jest.config.json thresholds ratcheted: lines 48→54, branches 44→50, statements 48→54, functions 48→54.
+- Next slice: P1 Offline & sync × gateway OR P1 ZMQ infra × translator
+- Commit: (see branch claude/coverage/p1-zmq-gateway)
