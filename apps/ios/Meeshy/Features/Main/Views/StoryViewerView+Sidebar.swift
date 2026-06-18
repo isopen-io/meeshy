@@ -193,24 +193,14 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // 4. Reshare (republish to own story) — hidden for own stories.
-            // Visibility-gated on `currentStory?.isPublic` (B.2 helper) so we never
-            // expose Partager for non-public visibility (FRIENDS / PRIVATE).
-            if !isOwnStory, currentStory?.isPublic == true {
-                StoryActionButton(
-                    icon: "arrow.2.squarepath",
-                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : "Partager"
-                ) {
-                    HapticFeedback.light()
-                    pauseTimer()
-                    if let story = currentStory, let group = currentGroup {
-                        repostStoryComposerSource = RepostStorySourceWrapper(
-                            story: story,
-                            authorHandle: group.username
-                        )
-                    }
-                }
-            } else if isOwnStory {
+            // 4. Author-only viewers count.
+            // NOTE 2026-06-18 : le bouton « Partager » (reshare/republier la
+            // story) a été retiré des FAB — la republication de story n'est pas
+            // encore parfaitement implémentée (republier produisait un status
+            // vide). Le point d'entrée `repostStoryComposerSource` + son
+            // `fullScreenCover` restent câblés ; il suffira de réafficher ce
+            // bouton ici une fois le flux de repost finalisé.
+            if isOwnStory {
                 StoryActionButton(
                     icon: "eye.fill",
                     label: storyViewCount > 0 ? "\(storyViewCount)" : "Vues"
