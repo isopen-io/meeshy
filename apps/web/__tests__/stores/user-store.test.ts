@@ -468,5 +468,27 @@ describe('UserStore', () => {
       nowSpy.mockRestore();
       expect(result.current).toBe(initialTick + 1000);
     });
+
+    it('triggerStatusTick changes _lastStatusUpdate even within the same millisecond as a prior update', () => {
+      // Regression : triggerStatusTick reliait le signal de re-render a Date.now().
+      // Quand un mergeParticipants et un tick tombaient dans la meme milliseconde,
+      // _lastStatusUpdate restait identique → useUserStatusTick ne re-rendait pas →
+      // le decay temporel des feuilles de presence n'etait jamais recalcule.
+      const frozen = 1_700_000_000_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(frozen);
+
+      act(() => {
+        useUserStore.getState().mergeParticipants([mockUser1]);
+      });
+      const afterMerge = useUserStore.getState()._lastStatusUpdate;
+
+      act(() => {
+        useUserStore.getState().triggerStatusTick();
+      });
+      const afterTick = useUserStore.getState()._lastStatusUpdate;
+
+      nowSpy.mockRestore();
+      expect(afterTick).toBeGreaterThan(afterMerge);
+    });
   });
 });
