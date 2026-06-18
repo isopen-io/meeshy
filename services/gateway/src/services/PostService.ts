@@ -1233,7 +1233,16 @@ export class PostService {
 
     const expiresAt = computeExpiresAt(targetType);
 
-    const isStoryToPostRepost = original.type === PostType.STORY && targetType === PostType.POST;
+    // Snapshot the source's intrinsic content into the repost whenever the
+    // SOURCE is EPHEMERAL (STORY = 21h, STATUS = 1h). The original can expire
+    // and be deleted, so a repost that merely referenced it via `repostOfId`
+    // would render EMPTY once the source is gone — the exact "status/story
+    // vide" bug. Duplicating media + audio and copying storyEffects / moodEmoji
+    // / content makes every ephemeral repost self-contained. This is the same
+    // guarantee the story→POST path always relied on, now generalized to
+    // story→story, status→status, status→post, etc.
+    const isEphemeralSourceRepost =
+      original.type === PostType.STORY || original.type === PostType.STATUS;
 
     type SnapshotMediaCreate = {
       fileName: string;
@@ -1250,7 +1259,7 @@ export class PostService {
     let snapshotAudioUrl: string | undefined;
     let snapshotStoryEffects: Prisma.InputJsonValue | undefined;
 
-    if (isStoryToPostRepost) {
+    if (isEphemeralSourceRepost) {
       const duplicatedMedia: SnapshotMediaCreate[] = [];
       let duplicatedAudioUrl: string | undefined;
       // Outbox row IDs to release once the surrounding transaction commits.
@@ -1311,16 +1320,29 @@ export class PostService {
         snapshotMedia = duplicatedMedia;
         snapshotStoryEffects = original.storyEffects as Prisma.InputJsonValue | undefined;
 
+        // STATUS carries its text in `content` (the mood caption); STORY carries
+        // its text inside `storyEffects` (rendered on the canvas). Inherit the
+        // source body/language only for STATUS reshares with no overriding quote
+        // — otherwise a story's caption would be duplicated into the post body.
+        const inheritStatusBody = original.type === PostType.STATUS && !content;
+        const snapshotContent = content
+          ?? (inheritStatusBody ? ((original.content as string | null | undefined) ?? undefined) : undefined);
+        const snapshotOriginalLanguage = content
+          ? originalLanguage
+          : (inheritStatusBody ? ((original.originalLanguage as string | null | undefined) ?? undefined) : originalLanguage);
+        const sourceMoodEmoji = (original.moodEmoji as string | null | undefined) ?? undefined;
+
         const repost = await this.prisma.post.create({
           data: {
             authorId: userId,
             type: targetType,
             visibility: original.visibility,
-            content: content ?? undefined,
-            originalLanguage,
+            content: snapshotContent ?? undefined,
+            originalLanguage: snapshotOriginalLanguage,
             repostOfId: postId,
             originalRepostOfId,
             isQuote,
+            ...(sourceMoodEmoji !== undefined ? { moodEmoji: sourceMoodEmoji } : {}),
             ...(expiresAt !== undefined ? { expiresAt } : {}),
             ...(snapshotAudioUrl !== undefined ? { audioUrl: snapshotAudioUrl } : {}),
             ...(snapshotStoryEffects !== undefined ? { storyEffects: snapshotStoryEffects } : {}),

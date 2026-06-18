@@ -125,6 +125,7 @@ export const repostOfInclude = Prisma.validator<Prisma.Post$repostOfArgs>()({
     translations: true,
     storyEffects: true,
     audioUrl: true,
+    moodEmoji: true,
     originalRepostOfId: true,
     author: { select: authorSelect },
     media: mediaInclude,

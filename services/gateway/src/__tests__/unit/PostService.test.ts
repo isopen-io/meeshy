@@ -818,6 +818,81 @@ describe('PostService', () => {
       );
     });
 
+    it('snapshots moodEmoji, content and audio when reposting a STATUS as STATUS', async () => {
+      // A STATUS is ephemeral (1h). A repost that merely referenced it would
+      // render empty once the source expires. The repost must carry its own
+      // copy of the mood + text + voice so it survives the original's TTL.
+      const original = makePost({
+        id: 'status-1',
+        type: PostType.STATUS,
+        visibility: 'PUBLIC',
+        moodEmoji: '🔥',
+        content: 'feeling great',
+        originalLanguage: 'en',
+        audioUrl: '/api/v1/attachments/file/mood.mp3',
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockResolvedValue(makePost({ id: 'status-repost' }));
+      prisma.post.update.mockResolvedValue(original);
+
+      const duplicateSpy = jest.spyOn(mediaService, 'duplicateMedia')
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-mood.mp3', filePath: 'snap/new-mood.mp3', fileName: 'new-mood.mp3', fileSize: 1000, mimeType: 'audio/mpeg' });
+
+      await service.repostPost('status-1', 'user-reposter', { targetType: PostType.STATUS });
+
+      expect(duplicateSpy).toHaveBeenCalledWith('/api/v1/attachments/file/mood.mp3');
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: PostType.STATUS,
+            moodEmoji: '🔥',
+            content: 'feeling great',
+            originalLanguage: 'en',
+            audioUrl: '/api/v1/attachments/file/new-mood.mp3',
+            repostOfId: 'status-1',
+          }),
+        })
+      );
+    });
+
+    it('duplicates media + storyEffects when reposting a STORY as STORY', async () => {
+      const original = makePost({
+        id: 'story-2',
+        type: PostType.STORY,
+        visibility: 'PUBLIC',
+        media: [
+          { id: 'm1', fileUrl: '/api/v1/attachments/file/s1.jpg', mimeType: 'image/jpeg', filePath: 'p/s1.jpg', fileName: 's1.jpg', originalName: 's1.jpg', fileSize: 1000 },
+        ],
+        storyEffects: { canvas: 'fx' },
+        audioUrl: '/api/v1/attachments/file/bg.mp3',
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockResolvedValue(makePost({ id: 'story-repost' }));
+      prisma.post.update.mockResolvedValue(original);
+
+      const duplicateSpy = jest.spyOn(mediaService, 'duplicateMedia')
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-s1.jpg', filePath: 'snap/new-s1.jpg', fileName: 'new-s1.jpg', fileSize: 1000, mimeType: 'image/jpeg' })
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-bg.mp3', filePath: 'snap/new-bg.mp3', fileName: 'new-bg.mp3', fileSize: 500, mimeType: 'audio/mpeg' });
+
+      await service.repostPost('story-2', 'user-reposter', { targetType: PostType.STORY });
+
+      expect(duplicateSpy).toHaveBeenCalledWith('/api/v1/attachments/file/s1.jpg');
+      expect(duplicateSpy).toHaveBeenCalledWith('/api/v1/attachments/file/bg.mp3');
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: PostType.STORY,
+            storyEffects: { canvas: 'fx' },
+            audioUrl: '/api/v1/attachments/file/new-bg.mp3',
+            repostOfId: 'story-2',
+            media: { create: expect.arrayContaining([
+              expect.objectContaining({ fileUrl: '/api/v1/attachments/file/new-s1.jpg' }),
+            ]) },
+          }),
+        })
+      );
+    });
+
     it('returns null when original is deleted', async () => {
       prisma.post.findFirst.mockResolvedValue(null);
       const result = await service.repostPost('deleted-1', 'user-reposter');
