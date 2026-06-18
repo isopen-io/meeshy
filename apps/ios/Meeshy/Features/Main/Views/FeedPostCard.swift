@@ -625,11 +625,19 @@ struct FeedPostCard: View {
                         .foregroundColor(theme.textMuted)
                 }
 
-                // Original content
-                Text(repost.content)
-                    .font(.footnote)
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(4)
+                // Original content — préfixé du mood emoji pour un STATUS
+                // reposté (sinon un mood republié n'afficherait qu'un corps vide).
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    if let mood = repost.moodEmoji, !mood.isEmpty {
+                        Text(mood)
+                            .font(.body)
+                            .accessibilityHidden(true)
+                    }
+                    Text(repost.content)
+                        .font(.footnote)
+                        .foregroundColor(theme.textSecondary)
+                        .lineLimit(4)
+                }
 
                 // Original stats
                 HStack(spacing: 12) {

@@ -149,7 +149,7 @@ class StatusViewModel: ObservableObject {
 
     // MARK: - Set Status
 
-    func setStatus(emoji: String, content: String?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, viaUsername: String? = nil) async {
+    func setStatus(emoji: String, content: String?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, viaUsername: String? = nil, audioUrl: String? = nil, repostOfId: String? = nil) async {
         // Offline: persist the mood durably through the SAME `.createPost` outbox
         // row as posts/reels (type STATUS) so it is not lost, and survives an app
         // kill. We do NOT insert an optimistic entry — unlike posts, the gateway
@@ -176,7 +176,7 @@ class StatusViewModel: ObservableObject {
         }
 
         do {
-            let post = try await statusService.create(moodEmoji: emoji, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, viaUsername: viaUsername)
+            let post = try await statusService.create(moodEmoji: emoji, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, viaUsername: viaUsername, audioUrl: audioUrl, repostOfId: repostOfId)
 
             if let entry = post.toStatusEntry() {
                 myStatus = entry

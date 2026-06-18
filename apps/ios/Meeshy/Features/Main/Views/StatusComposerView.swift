@@ -32,6 +32,11 @@ struct StatusComposerView: View {
     var initialEmoji: String? = nil
     var initialText: String? = nil
     var viaUsername: String? = nil
+    /// When republishing an existing status: id of the source post (links the
+    /// repost → attribution resolves from repostOf.author) and the source voice
+    /// note url (preserved so a republished voice mood keeps its audio).
+    var repostOfId: String? = nil
+    var repostAudioUrl: String? = nil
 
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
@@ -230,7 +235,9 @@ struct StatusComposerView: View {
                     content: statusText.isEmpty ? nil : statusText,
                     visibility: selectedVisibility.rawValue,
                     visibilityUserIds: (selectedVisibility == .except || selectedVisibility == .only) ? selectedUserIds : nil,
-                    viaUsername: viaUsername
+                    viaUsername: viaUsername,
+                    audioUrl: repostAudioUrl,
+                    repostOfId: repostOfId
                 )
                 isPublishing = false
                 dismiss()

@@ -540,7 +540,9 @@ struct ConversationListView: View {
                 viewModel: statusViewModel,
                 initialEmoji: entry.moodEmoji,
                 initialText: entry.content,
-                viaUsername: entry.username
+                viaUsername: entry.username,
+                repostOfId: entry.id,
+                repostAudioUrl: entry.audioUrl
             )
             .presentationDetents([.medium])
         }

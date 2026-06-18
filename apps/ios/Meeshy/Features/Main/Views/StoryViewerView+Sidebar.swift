@@ -193,14 +193,48 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // 4. Author-only viewers count.
-            // NOTE 2026-06-18 : le bouton « Partager » (reshare/republier la
-            // story) a été retiré des FAB — la republication de story n'est pas
-            // encore parfaitement implémentée (republier produisait un status
-            // vide). Le point d'entrée `repostStoryComposerSource` + son
-            // `fullScreenCover` restent câblés ; il suffira de réafficher ce
-            // bouton ici une fois le flux de repost finalisé.
-            if isOwnStory {
+            // 4. Reshare (republier la story) — non-auteur + story publique.
+            // Réintroduit 2026-06-18 après finalisation du flux serveur : route
+            // via le snapshot de repost (`PostService.repost` targetType .story).
+            // Le gateway duplique le média + l'audio source et copie storyEffects
+            // dans une STORY fraîche, self-contenue, liée via repostOfId. Remplace
+            // l'ancien chemin composer qui produisait une story VIDE (il forçait
+            // repostOfId: nil et ne dupliquait jamais le média source).
+            if !isOwnStory, currentStory?.isPublic == true {
+                StoryActionButton(
+                    icon: "arrow.2.squarepath",
+                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : "Partager"
+                ) {
+                    guard let story = currentStory else { return }
+                    HapticFeedback.light()
+                    Task {
+                        do {
+                            _ = try await PostService.shared.repost(
+                                postId: story.id,
+                                targetType: .story,
+                                content: nil,
+                                isQuote: false
+                            )
+                            await MainActor.run {
+                                HapticFeedback.success()
+                                FeedbackToastManager.shared.show("Story republiée")
+                            }
+                        } catch APIError.serverError(404, _) {
+                            await MainActor.run {
+                                FeedbackToastManager.shared.showError("La story n'est plus disponible")
+                            }
+                        } catch APIError.serverError(403, _) {
+                            await MainActor.run {
+                                FeedbackToastManager.shared.showError("Cette story ne peut pas être repartagée")
+                            }
+                        } catch {
+                            await MainActor.run {
+                                FeedbackToastManager.shared.showError("Échec de la republication")
+                            }
+                        }
+                    }
+                }
+            } else if isOwnStory {
                 StoryActionButton(
                     icon: "eye.fill",
                     label: storyViewCount > 0 ? "\(storyViewCount)" : "Vues"
