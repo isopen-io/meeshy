@@ -88,12 +88,11 @@ struct PostDetailView: View {
     @State private var postLikeDelta: [String: Int] = [:]
     @State private var postHeartInFlightIds: Set<String> = []
 
-    // Bookmark / repost / share optimistic state — same pattern as FeedView.
+    // Bookmark / repost optimistic state — same pattern as FeedView.
     @State private var isPostBookmarked: Bool = false
     @State private var isBookmarkInFlight: Bool = false
     @State private var isPostReposted: Bool = false
     @State private var isRepostInFlight: Bool = false
-    @State private var isShareInFlight: Bool = false
     @State private var showRepostOptions: Bool = false
     @State private var isEditing: Bool = false
 
@@ -219,46 +218,25 @@ struct PostDetailView: View {
         }
     }
 
-    @MainActor
-    private func sharePostFromDetail() {
-        guard !isShareInFlight else { return }
-        isShareInFlight = true
-        Task {
-            defer { Task { @MainActor in isShareInFlight = false } }
-            // Mint a tracking link; fall back to the raw post URL when the
-            // gateway can't issue a TrackingLink (offline / 5xx).
-            do {
-                struct SharePayload: Decodable {
-                    let shared: Bool?
-                    let shareCount: Int?
-                    let shortUrl: String?
-                    let token: String?
-                }
-                let body = try JSONSerialization.data(withJSONObject: ["generateLink": true])
-                let resp: APIResponse<SharePayload> = try await APIClient.shared.request(
-                    endpoint: "/posts/\(postId)/share",
-                    method: "POST",
-                    body: body
-                )
-                if let s = resp.data.shortUrl, let url = URL(string: s) {
-                    shareableLink = ShareableLink(url: url)
-                    return
-                }
-            } catch {
-                // fall through to raw fallback
-            }
-            if let raw = ShareableLink.fallback(forPostId: postId) {
-                shareableLink = raw
-            } else {
-                FeedbackToastManager.shared.showError("Erreur lors du partage")
-            }
-        }
-    }
-
     private var displayPost: FeedPost? { viewModel.post ?? initialPost }
 
     private var accentColor: String {
         displayPost?.authorColor ?? "6366F1"
+    }
+
+    /// True when the signed-in user authored this post — gates the private reach
+    /// stats (vues + impressions) shown next to the @handle, mirroring the feed
+    /// and reel cards where analytics are author-only.
+    private var isPostAuthor: Bool {
+        guard let me = AuthManager.shared.currentUser?.id, let post = displayPost else { return false }
+        return me == post.authorId
+    }
+
+    /// Compact count format (1.2k / 3.4M) — mirrors `ReelFeedCard.compactCount`.
+    private static func compactCount(_ value: Int) -> String {
+        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
+        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
+        return "\(value)"
     }
 
     // MARK: - Prisme Linguistique
@@ -793,6 +771,43 @@ struct PostDetailView: View {
         )
     }
 
+    // MARK: - Author Reach Line
+
+    /// `@pseudo` suivi, pour l'auteur uniquement, des compteurs de portée
+    /// (vues puis impressions) — la barre d'actions du bas n'affiche donc plus
+    /// l'œil. Même grammaire visuelle que le feed/réel (`FeedPostCard`,
+    /// `ReelFeedCard`) : analytics privées, réservées à l'auteur.
+    @ViewBuilder
+    private func authorReachLine(_ post: FeedPost) -> some View {
+        let username = post.authorUsername ?? ""
+        let hasUsername = !username.isEmpty
+        if hasUsername || isPostAuthor {
+            HStack(spacing: 5) {
+                if hasUsername {
+                    Text("@\(username)")
+                        .font(.caption)
+                        .foregroundColor(theme.textSecondary)
+                }
+                if isPostAuthor {
+                    if hasUsername {
+                        Text("·").font(.caption2).foregroundColor(theme.textMuted)
+                    }
+                    HStack(spacing: 3) {
+                        Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
+                        Text(Self.compactCount(post.postOpenCount)).font(.caption2.weight(.medium))
+                        Text("·").font(.caption2)
+                        Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
+                        Text(Self.compactCount(post.impressionCount)).font(.caption2.weight(.medium))
+                    }
+                    .foregroundColor(theme.textMuted)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(String(localized: "feed.post.reach", defaultValue: "Vues et impressions", bundle: .main))
+                    .accessibilityValue("\(post.postOpenCount) · \(post.impressionCount)")
+                }
+            }
+        }
+    }
+
     // MARK: - Text Zone
 
     @ViewBuilder
@@ -826,6 +841,10 @@ struct PostDetailView: View {
                         .accessibilityAddTraits(.isButton)
                         .accessibilityLabel(String(format: String(localized: "a11y.post.author_profile", defaultValue: "Profil de %@", bundle: .main), post.author))
                         .accessibilityHint(String(localized: "a11y.post.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
+
+                    // @pseudo + portée (vues · impressions) — sous le nom, l'œil
+                    // ne vit plus dans la barre d'actions du bas.
+                    authorReachLine(post)
 
                     HStack(spacing: 4) {
                         Text(post.timestamp, style: .relative)
@@ -1257,38 +1276,6 @@ struct PostDetailView: View {
 
             Spacer()
 
-            HStack(spacing: 5) {
-                Image(systemName: "bubble.right")
-                    .font(.body)
-                    .foregroundColor(Color(hex: accentColor))
-                Text("\(post.commentCount)")
-                    .font(.caption.weight(.medium))
-                    .foregroundColor(theme.textMuted)
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(String(localized: "a11y.post.comments", defaultValue: "Commentaires", bundle: .main))
-            .accessibilityValue("\(post.commentCount)")
-
-            // Total opens (postOpenCount) — informative, non-interactive, mirrors the
-            // reel eye badge. The Detail page now both COUNTS an opening (engagement
-            // surface=detail) and SHOWS the running total.
-            if post.postOpenCount > 0 {
-                Spacer()
-                HStack(spacing: 5) {
-                    Image(systemName: "eye.fill")
-                        .font(.body)
-                        .foregroundColor(theme.textSecondary)
-                    Text("\(post.postOpenCount)")
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(String(localized: "reels.action.views", defaultValue: "Vues", bundle: .main))
-                .accessibilityValue("\(post.postOpenCount)")
-            }
-
-            Spacer()
-
             // Repost
             Button {
                 showRepostOptions = true
@@ -1334,30 +1321,6 @@ struct PostDetailView: View {
                 ? String(localized: "a11y.post.bookmark_remove", defaultValue: "Retirer des favoris", bundle: .main)
                 : String(localized: "a11y.post.bookmark_add", defaultValue: "Ajouter aux favoris", bundle: .main))
             .accessibilityHint(String(localized: "a11y.post.bookmark.hint", defaultValue: "Enregistrer cette publication", bundle: .main))
-
-            Spacer()
-
-            // Share
-            Button {
-                sharePostFromDetail()
-                HapticFeedback.light()
-            } label: {
-                ZStack {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.body)
-                        .foregroundColor(theme.textSecondary)
-                        .opacity(isShareInFlight ? 0 : 1)
-                    if isShareInFlight {
-                        ProgressView()
-                            .scaleEffect(0.6)
-                            .progressViewStyle(.circular)
-                    }
-                }
-                .animation(.easeInOut(duration: 0.2), value: isShareInFlight)
-            }
-            .disabled(isShareInFlight)
-            .accessibilityLabel(String(localized: "a11y.post.share", defaultValue: "Partager", bundle: .main))
-            .accessibilityHint(String(localized: "a11y.post.share.hint", defaultValue: "Partager cette publication", bundle: .main))
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
@@ -1628,19 +1591,14 @@ struct PostDetailView: View {
     // MARK: - Comments Header
 
     private var commentsHeader: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Text(String(localized: "feed.post.detail.comments", defaultValue: "Commentaires", bundle: .main))
                 .font(.subheadline.weight(.bold))
                 .foregroundColor(theme.textPrimary)
 
-            if let post = displayPost, post.commentCount > 0 {
-                Text("\(post.commentCount)")
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(Color(hex: accentColor)))
-            }
+            Text("(\(displayPost?.commentCount ?? 0))")
+                .font(.subheadline.weight(.bold))
+                .foregroundColor(theme.textMuted)
 
             Spacer()
         }
