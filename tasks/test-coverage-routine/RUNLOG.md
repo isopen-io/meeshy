@@ -774,4 +774,5 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   2. messages-advanced.ts lines 364,445,450,625,631,646,1189: logger.info/debug calls inside fire-and-forget .catch handlers or deep-nested tracking link try/catch paths. At 97.91% lines well above target.
   3. Gateway global functions 53.29% (local) — functions metric doesn't have a dedicated threshold above 48%; route handler arrow functions counted individually inflates the denominator.
   4. Pre-existing 25 failing suites (TS2740 in MessageReadStatusService.ts) unchanged.
-- Commit: (see branch claude/coverage/p1-conversations-gateway-core)
+- Commit: 4ffbd9ee5ef3953252143db6bfa8166ccfbc7278 (squash-merged to main as PR #704; branch deleted)
+- Web test side-fix: fixed pre-existing 17-test regression in `apps/web/__tests__/admin/users/[id]/page.test.tsx` — admin user-detail page sub-section components (UserConversationsSection, UserPostsSection, UserMediaSection, UserReportsSection, UserReportedMessagesSection) were returning user-object data from the blanket `apiService.get` mock, causing `.map is not a function` crashes. Added `mockUserDetailApi` helper that routes sub-section URLs (/conversations, /media, /reports, /reported-messages, /admin/posts) to empty paginated payloads and the main user endpoint to a user object. 0 new failures; all web CI checks green.
