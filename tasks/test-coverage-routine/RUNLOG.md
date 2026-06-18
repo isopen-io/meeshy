@@ -864,7 +864,7 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   4. ZMQ mocks: `connectionManager.send` / `connectionManager.sendMultipart` as `jest.fn()` — `zeromq` itself is never imported by ZmqRequestSender, so no zeromq mock needed.
   5. Pre-existing gateway failures: 26 suites — production bugs, unchanged.
 - Next slice: P1 ZMQ infra × gateway (verify ZmqConnectionManager + ZmqTranslationClient; cover index.ts + types.ts) OR P1 Offline & sync × gateway
-- Commit: (see branch claude/dreamy-mayer-6dvj58)
+- Commit: 58a1f4d7 (squash-merged as PR #708 → main; also included: fix(web/tests): stabilize use-bot-protection timeElapsed=0 flaky test via jest.useFakeTimers + afterEach useRealTimers)
 - Commit: (see branch claude/coverage/p1-conversations-shared)
 
 ## 2026-06-18T14:00Z — P1 ZMQ infra × gateway (ZmqMessageHandler + ZmqRequestSender + zmq-helpers)
