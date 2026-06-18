@@ -165,6 +165,20 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertNil(sut.error)
     }
 
+    func test_didReconnect_backfillsFeedFromNetwork() async {
+        let (sut, api, socket, _) = makeSUT()
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", content: "Backfilled")]))
+        sut.subscribeToSocketEvents()
+
+        // Un reconnect du socket social doit declencher un refresh du feed
+        // (backfill du gap pendant la coupure), miroir de ConversationSyncEngine.
+        socket.didReconnect.send(())
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(sut.posts.count, 1)
+        XCTAssertEqual(sut.posts.first?.id, "p1")
+    }
+
     func test_loadFeed_failure_setsError() async {
         let (sut, api, _, _) = makeSUT()
         api.errorToThrow = APIError.networkError(URLError(.notConnectedToInternet))

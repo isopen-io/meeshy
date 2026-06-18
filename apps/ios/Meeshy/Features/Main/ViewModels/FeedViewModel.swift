@@ -918,6 +918,19 @@ class FeedViewModel: ObservableObject {
         guard socketCancellables.isEmpty else { return }
         socialSocket.connect()
 
+        // --- didReconnect → backfill du feed ---
+        // Apres un flap reseau, le gateway a oublie nos rooms et des posts ont pu
+        // etre crees pendant la coupure. Un refresh (forceRefresh) recharge la tete
+        // du feed ; mergePreservingRealtimeHead conserve les posts inseres en temps
+        // reel. Miroir de ConversationSyncEngine sur messageSocket.didReconnect.
+        socialSocket.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                guard let self else { return }
+                Task { await self.loadFeed(forceRefresh: true) }
+            }
+            .store(in: &socketCancellables)
+
         // --- post:created ---
         socialSocket.postCreated
             .receive(on: DispatchQueue.main)

@@ -232,12 +232,10 @@ public protocol SocialSocketProviding: Sendable {
     var storyTranslationUpdated: PassthroughSubject<SocketStoryTranslationUpdatedData, Never> { get }
     var postTranslationUpdated: PassthroughSubject<SocketPostTranslationUpdatedData, Never> { get }
     var commentTranslationUpdated: PassthroughSubject<SocketCommentTranslationUpdatedData, Never> { get }
-    /// In-app notification fired by the gateway over `notification:new`.
-    /// Carries the same `title`/`subtitle`/`content` framing as the APN push
-    /// payload so the iOS app can render a toast with sender + conversation
-    /// context + audio body label without re-deriving anything client-side.
-    /// UX decision (whether/when to show the toast) is app-side.
-    var inAppNotification: PassthroughSubject<APINotification, Never> { get }
+    /// Fires on every reconnect (a `.connect` that follows a previous one).
+    /// App-side feed handlers (FeedViewModel) observe this to backfill posts /
+    /// reactions missed while the social socket was down.
+    var didReconnect: PassthroughSubject<Void, Never> { get }
     var isConnected: Bool { get }
     var connectionState: ConnectionState { get }
     func connect()
@@ -290,7 +288,6 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public let storyTranslationUpdated = PassthroughSubject<SocketStoryTranslationUpdatedData, Never>()
     public let postTranslationUpdated = PassthroughSubject<SocketPostTranslationUpdatedData, Never>()
     public let commentTranslationUpdated = PassthroughSubject<SocketCommentTranslationUpdatedData, Never>()
-    public let inAppNotification = PassthroughSubject<APINotification, Never>()
 
     @Published public var isConnected = false
     @Published public var connectionState: ConnectionState = .disconnected
@@ -307,8 +304,8 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// silencieusement. Préservé à travers `suspendTransport`, vidé au `disconnect()`.
     private var joinedPostRooms: Set<String> = []
     /// Fires on every reconnect (a `.connect` that follows a previous one).
-    /// R2 — feed/social re-sync trigger; app-side handlers (FeedViewModel /
-    /// FeedSyncEngine) observe this to backfill missed posts/reactions.
+    /// R2 — feed re-sync trigger; FeedViewModel observes this to backfill
+    /// posts/reactions missed while the social socket was down.
     public let didReconnect = PassthroughSubject<Void, Never>()
     private var heartbeatTimer: Timer?
     private var lifecycleCancellables = Set<AnyCancellable>()
@@ -1066,19 +1063,10 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             }
         }
 
-        // --- In-app notification toast ---
-        // Gateway emits `notification:new` whenever a server-side notification
-        // is created. The payload is shaped identically to the REST
-        // `APINotification` model plus the optional `title`/`subtitle` push
-        // header fields. The app subscribes to `inAppNotification` and
-        // decides whether to surface a toast (e.g. suppressed when already in
-        // the target conversation).
-        socket.on("notification:new") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(APINotification.self, from: data) { [weak self] payload in
-                self?.inAppNotification.send(payload)
-            }
-        }
+        // NOTE — `notification:new` in-app toasts are handled via
+        // MessageSocketManager.notificationReceived → NotificationToastManager.
+        // SocialSocketManager intentionally does NOT mirror that event (a second
+        // decode with no consumer would be dead work + a double-toast hazard).
     }
 
     // MARK: - Decode Helper

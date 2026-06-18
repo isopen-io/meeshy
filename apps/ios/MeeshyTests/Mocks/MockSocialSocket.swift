@@ -44,7 +44,7 @@ final class MockSocialSocket: SocialSocketProviding, @unchecked Sendable {
     let postReactionAdded = PassthroughSubject<SocketPostReactionUpdateEvent, Never>()
     let postReactionRemoved = PassthroughSubject<SocketPostReactionUpdateEvent, Never>()
     let postReactionSync = PassthroughSubject<SocketPostReactionSyncEvent, Never>()
-    let inAppNotification = PassthroughSubject<APINotification, Never>()
+    let didReconnect = PassthroughSubject<Void, Never>()
 
     // MARK: - Call Tracking
 
