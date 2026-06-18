@@ -1230,7 +1230,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/services/dashboard.service.ts`
 - [ ] `apps/web/services/groups.service.ts`
 - [ ] `apps/web/services/index.ts`
-- [ ] `apps/web/services/link-conversation.service.ts`
+- [x] `apps/web/services/link-conversation.service.ts`
 - [ ] `apps/web/services/magic-link.service.ts`
 - [ ] `apps/web/services/markdown-parser-v2.2-optimized.ts`
 - [ ] `apps/web/services/markdown.ts`
@@ -1262,12 +1262,12 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## services/conversations  (3/7 have a test)
 
-- [ ] `apps/web/services/conversations/crud.service.ts`
+- [x] `apps/web/services/conversations/crud.service.ts`
 - [ ] `apps/web/services/conversations/index.ts`
-- [ ] `apps/web/services/conversations/links.service.ts`
+- [x] `apps/web/services/conversations/links.service.ts`
 - [~] `apps/web/services/conversations/messages.service.ts`
 - [~] `apps/web/services/conversations/participants.service.ts`
-- [ ] `apps/web/services/conversations/transformers.service.ts`
+- [x] `apps/web/services/conversations/transformers.service.ts`
 - [~] `apps/web/services/conversations/types.ts`
 
 ## services/markdown  (2/16 have a test)
