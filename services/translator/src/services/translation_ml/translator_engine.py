@@ -18,6 +18,39 @@ from concurrent.futures import ThreadPoolExecutor
 logger = logging.getLogger(__name__)
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# PRÉSERVATION DES LIENS HTTP(S)
+# NLLB corromprait les URLs (domaines/segments traduits comme des mots). On les
+# masque par un marqueur emoji-délimité (copié verbatim par NLLB, comme les
+# emojis) avant traduction, puis on les restaure intactes après.
+# ═══════════════════════════════════════════════════════════════════════════
+_URL_PATTERN = re.compile(r'https?://\S+')
+
+
+def mask_urls(text: str) -> Tuple[str, List[str]]:
+    """Remplace chaque URL HTTP(S) par un marqueur 🔗{i}🔗.
+
+    Retourne `(texte_masqué, urls)` où `urls[i]` est l'URL d'origine du marqueur i.
+    """
+    urls: List[str] = []
+
+    def _replace(match: "re.Match[str]") -> str:
+        urls.append(match.group(0))
+        return f'🔗{len(urls) - 1}🔗'
+
+    return _URL_PATTERN.sub(_replace, text), urls
+
+
+def restore_urls(text: str, urls: List[str]) -> str:
+    """Restaure les URLs masquées par `mask_urls`.
+
+    Tolère un espacement éventuellement inséré par NLLB autour du marqueur.
+    """
+    for index, url in enumerate(urls):
+        text = re.sub(r'🔗\s*' + str(index) + r'\s*🔗', lambda _m: url, text)
+    return text
+
+
 def smart_split_text(text: str, max_chars: int = 200) -> List[str]:
     """
     Découpe intelligemment un texte long en morceaux aux ponctuations naturelles.
@@ -292,16 +325,22 @@ class TranslatorEngine:
             raise Exception(f"Modèle {model_type} non chargé")
 
         # ═══════════════════════════════════════════════════════════════════
+        # PRÉSERVATION DES LIENS: masquer les URLs HTTP(S) AVANT découpage et
+        # traduction (NLLB les corromprait). Restaurées verbatim à la fin.
+        # ═══════════════════════════════════════════════════════════════════
+        masked_text, urls = mask_urls(text)
+
+        # ═══════════════════════════════════════════════════════════════════
         # DÉCOUPAGE INTELLIGENT: Textes longs découpés aux ponctuations
         # ═══════════════════════════════════════════════════════════════════
-        if len(text) > 200:
+        if len(masked_text) > 200:
             logger.info(
-                f"[TRANSLATE] Texte long détecté ({len(text)} chars) → "
+                f"[TRANSLATE] Texte long détecté ({len(masked_text)} chars) → "
                 f"découpage intelligent aux ponctuations"
             )
 
             # Découper en morceaux de max 200 caractères
-            chunks = smart_split_text(text, max_chars=200)
+            chunks = smart_split_text(masked_text, max_chars=200)
 
             logger.info(
                 f"[TRANSLATE] Texte découpé en {len(chunks)} morceaux "
@@ -324,10 +363,13 @@ class TranslatorEngine:
                 f"[TRANSLATE] ✅ Traduction complète: {len(text)} → {len(final_translation)} chars"
             )
 
-            return final_translation
+            return restore_urls(final_translation, urls)
 
         # Texte court: traduction directe
-        return await self._translate_single_chunk(text, source_lang, target_lang, model_type)
+        translated = await self._translate_single_chunk(
+            masked_text, source_lang, target_lang, model_type
+        )
+        return restore_urls(translated, urls)
 
     async def _translate_single_chunk(
         self,
