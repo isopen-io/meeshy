@@ -12,6 +12,7 @@
 		0135B9488688ACDA9A26DB98 /* ReplyThreadLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6004F67A016838BA122ED6E /* ReplyThreadLoaderTests.swift */; };
 		031EA7F524ECB3B634B6CFAD /* FeedViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7789A854759F389975CB9906 /* FeedViewModelTests.swift */; };
 		0CA1A0DE0000000000000001 /* ReelsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA1A0DE0000000000000002 /* ReelsViewModelTests.swift */; };
+		0CA1B0DE0000000000000003 /* VideoEmbedModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA1B0DE0000000000000004 /* VideoEmbedModelTests.swift */; };
 		044D99CB3F85BD65437758B8 /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71C9C50ECED369B628670C7 /* ThreadView.swift */; };
 		05B5F79B388C9B158E00C29A /* SharePickerViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F724878269B34D64666FE22F /* SharePickerViewModelTests.swift */; };
 		07C7DC41C6D41D9141CDA4B6 /* EmailVerificationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F66FA34FBEE79DA54D82826E /* EmailVerificationView.swift */; };
@@ -66,6 +67,7 @@
 		55E92C6A456D714A38A06932 /* ContactsShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674A915642772CC82D9344C6 /* ContactsShared.swift */; };
 		561B8D85E8499F1CEFEE5AF3 /* RequestsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24D2E778341AEEA32569BF20 /* RequestsTab.swift */; };
 		571D8BA6C0844CA0B2ADDB1B /* VideoAvailabilityResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE2501A2F8D4343B50DA1FF /* VideoAvailabilityResolver.swift */; };
+		0CA1B0DE0000000000000001 /* VideoEmbedContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA1B0DE0000000000000002 /* VideoEmbedContainer.swift */; };
 		577A0F5A0787D83353269514 /* EditPostSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48CE3690D4CCEEC41757B801 /* EditPostSheet.swift */; };
 		59B4750D99F14408899F63E5 /* BubbleAnimations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE78C4D05DE49F89B91AC03 /* BubbleAnimations.swift */; };
 		5C223B3EE18F5544C2630966 /* MessageListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4123CB43F341CF06F12CBE5A /* MessageListView.swift */; };
@@ -698,6 +700,7 @@
 		75BB3BB6E01A899FDB29E8A8 /* ConversationCommandHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationCommandHandler.swift; sourceTree = "<group>"; };
 		7789A854759F389975CB9906 /* FeedViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeedViewModelTests.swift; sourceTree = "<group>"; };
 		0CA1A0DE0000000000000002 /* ReelsViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReelsViewModelTests.swift; sourceTree = "<group>"; };
+		0CA1B0DE0000000000000004 /* VideoEmbedModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoEmbedModelTests.swift; sourceTree = "<group>"; };
 		7A27F2AB5AC64E0CA5724730 /* MultiAttachmentSendPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiAttachmentSendPlanner.swift; sourceTree = "<group>"; };
 		7B489B1DA15CF189E770686F /* UserProfileViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UserProfileViewModel.swift; sourceTree = "<group>"; };
 		7D674426B581D850405E32AE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -764,6 +767,7 @@
 		AB4C730288DF17886BFB7464 /* ConversationSearchHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationSearchHandler.swift; sourceTree = "<group>"; };
 		AB514257655035123C7AD2F8 /* ConversationView+Composer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ConversationView+Composer.swift"; sourceTree = "<group>"; };
 		ABE2501A2F8D4343B50DA1FF /* VideoAvailabilityResolver.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoAvailabilityResolver.swift; sourceTree = "<group>"; };
+		0CA1B0DE0000000000000002 /* VideoEmbedContainer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoEmbedContainer.swift; sourceTree = "<group>"; };
 		ABRT0001000100010001F001 /* AudioBubbleRouter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AudioBubbleRouter.swift; sourceTree = "<group>"; };
 		ABTT0001000100010001F001 /* AudioBubbleRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioBubbleRouterTests.swift; sourceTree = "<group>"; };
 		ABTV001A001A001A001A0001 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
@@ -1488,6 +1492,7 @@
 				161B698A5C7ABD5B61A9F071 /* Bubble/BubbleStandardLayout+Media.swift */,
 				56FAE7930C60B05A39A5DAF2 /* ConversationMediaViews.swift */,
 				ABE2501A2F8D4343B50DA1FF /* VideoAvailabilityResolver.swift */,
+				0CA1B0DE0000000000000002 /* VideoEmbedContainer.swift */,
 				453EA4BE81494798990488CB /* AudioAvailabilityResolver.swift */,
 				BDC4F50D912C4CFBA6887850 /* VideoLegacySupport.swift */,
 				GALLERY001A001A001A00001 /* ConversationMediaGalleryView.swift */,
@@ -1649,6 +1654,7 @@
 				CVOQ000F000F000F000F000 /* ConversationViewModelOfflineQueueTests.swift */,
 				7789A854759F389975CB9906 /* FeedViewModelTests.swift */,
 				0CA1A0DE0000000000000002 /* ReelsViewModelTests.swift */,
+				0CA1B0DE0000000000000004 /* VideoEmbedModelTests.swift */,
 				E5AC4E027FC1B934E44A48FD /* GlobalSearchViewModelTests.swift */,
 				E4A4562A9E8160E9EF7098B7 /* StatusViewModelTests.swift */,
 				CSVT470B470B470B470B4701 /* ConnectionStatusViewModelTests.swift */,
@@ -2583,6 +2589,7 @@
 				BBLU0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleBlurRevealLifecycle.swift in Sources */,
 				9F0935CAA94371C402BE2B6E /* ConversationMediaViews.swift in Sources */,
 				571D8BA6C0844CA0B2ADDB1B /* VideoAvailabilityResolver.swift in Sources */,
+				0CA1B0DE0000000000000001 /* VideoEmbedContainer.swift in Sources */,
 				1A68DA6927A547B98A748D78 /* AudioAvailabilityResolver.swift in Sources */,
 				0EBDC9C3A9104D7D9543A208 /* VideoLegacySupport.swift in Sources */,
 				GALLERY001B001B001B00002 /* ConversationMediaGalleryView.swift in Sources */,
@@ -2790,6 +2797,7 @@
 				FB41480E2ACB451CBEA4AE9B /* ConversationViewModelOtherUnreadTests.swift in Sources */,
 				031EA7F524ECB3B634B6CFAD /* FeedViewModelTests.swift in Sources */,
 				0CA1A0DE0000000000000001 /* ReelsViewModelTests.swift in Sources */,
+				0CA1B0DE0000000000000003 /* VideoEmbedModelTests.swift in Sources */,
 				34135EFA521513464A6DEE23 /* GlobalSearchViewModelTests.swift in Sources */,
 				84522147F0B370813212EA59 /* StatusViewModelTests.swift in Sources */,
 				CSVT470A470A470A470A4701 /* ConnectionStatusViewModelTests.swift in Sources */,
