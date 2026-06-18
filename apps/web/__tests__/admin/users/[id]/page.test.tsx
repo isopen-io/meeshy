@@ -214,6 +214,14 @@ const createMockUser = (overrides: any = {}) => ({
   ...overrides,
 });
 
+const mockUserDetailApi = (userOverride?: any) => (url: string) => {
+  const emptyPage = { success: true, data: [], pagination: { total: 0, offset: 0, limit: 20, hasMore: false } };
+  if (url.includes('/conversations') || url.includes('/media') || url === '/admin/posts') {
+    return Promise.resolve({ data: emptyPage });
+  }
+  return Promise.resolve({ data: { success: true, data: createMockUser(userOverride) } });
+};
+
 describe('UserDetailPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -308,12 +316,7 @@ describe('UserDetailPage', () => {
 
   describe('Successful Data Load', () => {
     beforeEach(() => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser(),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi());
     });
 
     it('should display user display name in header', async () => {
@@ -342,12 +345,7 @@ describe('UserDetailPage', () => {
     });
 
     it('should display inactive status badge when user is not active', async () => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser({ isActive: false }),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi({ isActive: false }));
 
       render(<UserDetailPage />);
 
@@ -381,12 +379,7 @@ describe('UserDetailPage', () => {
 
   describe('Profile Information Section', () => {
     beforeEach(() => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser(),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi());
     });
 
     it('should display profile section title', async () => {
@@ -458,12 +451,7 @@ describe('UserDetailPage', () => {
 
   describe('Edit Profile Mode', () => {
     beforeEach(() => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser(),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi());
     });
 
     it('should enter edit mode when clicking Modifier', async () => {
@@ -630,12 +618,7 @@ describe('UserDetailPage', () => {
 
   describe('Role and Permissions Section', () => {
     beforeEach(() => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser({ role: 'USER' }),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi({ role: 'USER' }));
     });
 
     it('should display role section title', async () => {
@@ -752,12 +735,7 @@ describe('UserDetailPage', () => {
 
   describe('Security Section', () => {
     beforeEach(() => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser(),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi());
     });
 
     it('should display security section title', async () => {
@@ -886,12 +864,7 @@ describe('UserDetailPage', () => {
 
   describe('Statistics Section', () => {
     beforeEach(() => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser(),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi());
     });
 
     it('should display statistics section title', async () => {
@@ -937,12 +910,7 @@ describe('UserDetailPage', () => {
 
   describe('Quick Actions Section', () => {
     beforeEach(() => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser(),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi());
     });
 
     it('should display quick actions title', async () => {
@@ -962,12 +930,7 @@ describe('UserDetailPage', () => {
     });
 
     it('should display toggle status button for inactive user', async () => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser({ isActive: false }),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi({ isActive: false }));
 
       render(<UserDetailPage />);
 
@@ -1078,12 +1041,7 @@ describe('UserDetailPage', () => {
 
   describe('Account Security Section', () => {
     beforeEach(() => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser(),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi());
     });
 
     it('should display account security title', async () => {
@@ -1104,12 +1062,7 @@ describe('UserDetailPage', () => {
     });
 
     it('should display email verification status - not verified', async () => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser({ emailVerifiedAt: null }),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi({ emailVerifiedAt: null }));
 
       render(<UserDetailPage />);
 
@@ -1148,12 +1101,7 @@ describe('UserDetailPage', () => {
 
   describe('Role Display', () => {
     it('should display BIGBOSS role correctly', async () => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser({ role: 'BIGBOSS' }),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi({ role: 'BIGBOSS' }));
 
       render(<UserDetailPage />);
 
@@ -1164,12 +1112,7 @@ describe('UserDetailPage', () => {
     });
 
     it('should display ADMIN role correctly', async () => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser({ role: 'ADMIN' }),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi({ role: 'ADMIN' }));
 
       render(<UserDetailPage />);
 
@@ -1180,12 +1123,7 @@ describe('UserDetailPage', () => {
     });
 
     it('should display MODO role correctly', async () => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser({ role: 'MODO' }),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi({ role: 'MODO' }));
 
       render(<UserDetailPage />);
 
@@ -1196,12 +1134,7 @@ describe('UserDetailPage', () => {
     });
 
     it('should display AUDIT role correctly', async () => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser({ role: 'AUDIT' }),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi({ role: 'AUDIT' }));
 
       render(<UserDetailPage />);
 
@@ -1212,12 +1145,7 @@ describe('UserDetailPage', () => {
     });
 
     it('should display ANALYST role correctly', async () => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser({ role: 'ANALYST' }),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi({ role: 'ANALYST' }));
 
       render(<UserDetailPage />);
 
@@ -1230,12 +1158,7 @@ describe('UserDetailPage', () => {
 
   describe('Edge Cases', () => {
     it('should handle user without phone number', async () => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser({ phoneNumber: null }),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi({ phoneNumber: null }));
 
       render(<UserDetailPage />);
 
@@ -1245,12 +1168,7 @@ describe('UserDetailPage', () => {
     });
 
     it('should handle user without bio', async () => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser({ bio: null }),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi({ bio: null }));
 
       render(<UserDetailPage />);
 
@@ -1260,12 +1178,7 @@ describe('UserDetailPage', () => {
     });
 
     it('should handle user without last activity', async () => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser({ lastActiveAt: null }),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi({ lastActiveAt: null }));
 
       render(<UserDetailPage />);
 
@@ -1275,12 +1188,7 @@ describe('UserDetailPage', () => {
     });
 
     it('should handle null profile completion rate', async () => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser({ profileCompletionRate: null }),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi({ profileCompletionRate: null }));
 
       render(<UserDetailPage />);
 
@@ -1292,12 +1200,7 @@ describe('UserDetailPage', () => {
 
   describe('Accessibility', () => {
     beforeEach(() => {
-      mockApiService.get.mockResolvedValue({
-        data: {
-          success: true,
-          data: createMockUser(),
-        },
-      });
+      mockApiService.get.mockImplementation(mockUserDetailApi());
     });
 
     it('should render within admin layout', async () => {
