@@ -905,3 +905,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   2. Istanbul annotations on ZmqTranslationClient.ts: 4 structurally-unreachable catch blocks + `if (message)` guard whose false branch requires receive() to return null (it never does per ZMQ contract).
   3. Next sub-slice: P1 ZMQ infra × gateway — ZmqConnectionManager.ts (connection pooling, priority queue, reconnect logic).
 - Commit: aa265627 (claude/coverage/p1-zmq-gateway-client)
+- Merge: PR #711 squash-merged to main as sha 825bee8c at 2026-06-18T23:34Z. Voice API Tests runner (ID 1000051161) took 54 min on step 10 (ffmpeg apt install) vs TTS/STT's 16 min total — slow apt mirror, not a code issue. All other 11 CI checks green.
