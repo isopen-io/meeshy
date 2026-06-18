@@ -842,4 +842,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   2. `isMemberAdmin` and `isMemberModerator` delegate to role-types.ts functions — the wrapper functions themselves are covered at 100%; role-types.ts internal logic is covered by its own test suite (types/__tests__/role-types.test.ts — 28 tests, already passing).
   3. Thresholds unchanged (branches:95, functions:84, lines:97, statements:97) — new coverage 96.15%/85.9%/98.56%/98.56% all comfortably above floor.
 - Next slice: P1 Offline & sync × gateway OR P1 ZMQ infra × gateway (next highest-priority ☐ cells in feature matrix)
-- Commit: (see branch claude/coverage/p1-conversations-shared)
+- Commit: da73838017f01f9f609652bc1aa7ac8a2ae2818e (squash-merged as PR #707 → main)
