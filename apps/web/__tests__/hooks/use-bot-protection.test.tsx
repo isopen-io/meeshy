@@ -27,6 +27,7 @@ describe('useBotProtection', () => {
   afterEach(() => {
     jest.restoreAllMocks();
     jest.clearAllTimers();
+    jest.useRealTimers();
   });
 
   describe('Initial State', () => {
@@ -51,6 +52,7 @@ describe('useBotProtection', () => {
     });
 
     it('should return timeElapsed as 0 initially', () => {
+      jest.useFakeTimers();
       const { result } = renderHook(() => useBotProtection());
 
       expect(result.current.timeElapsed).toBe(0);
