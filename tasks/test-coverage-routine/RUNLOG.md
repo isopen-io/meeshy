@@ -799,4 +799,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   3. link-conversation.service.ts fallback catch branch covered by test where fallback fetch itself throws (`mockRejectedValueOnce`) — original error is rethrown.
   4. Web threshold unchanged (lines:38, branches:30, statements:38, functions:35) — CI "Test web" passed confirming floor still met; new files add marginal % not requiring ratchet.
   5. Pre-existing web failures: 19 suites (same as baseline — zero new failures introduced).
-- Commit: 730a6755 (branch claude/dreamy-mayer-56bs7m → PR #705 open)
+- Commit: 730a6755 + cc4f03f1 (squash-merged as PR #705 → main sha 0e3c0299)
