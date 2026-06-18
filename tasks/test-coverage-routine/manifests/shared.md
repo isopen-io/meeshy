@@ -73,7 +73,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `packages/shared/types/security.ts`
 - [ ] `packages/shared/types/signal-database.ts`
 - [~] `packages/shared/types/socketio-events.ts`
-- [ ] `packages/shared/types/status-types.ts`
+- [x] `packages/shared/types/status-types.ts`
 - [ ] `packages/shared/types/tracking-link.ts`
 - [ ] `packages/shared/types/translated-audio.ts`
 - [ ] `packages/shared/types/user-preferences.ts`
@@ -98,17 +98,18 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `packages/shared/types/validation/admin-user.ts`
 - [ ] `packages/shared/types/validation/index.ts`
 
-## utils  (10/12 have a test)
+## utils  (11/13 have a test)
 
-- [~] `packages/shared/utils/attachment-validators.ts`
+- [x] `packages/shared/utils/attachment-validators.ts`
 - [~] `packages/shared/utils/call-summary.ts`
-- [ ] `packages/shared/utils/client-message-id.ts`
-- [~] `packages/shared/utils/conversation-helpers.ts`
+- [x] `packages/shared/utils/client-message-id.ts`
+- [x] `packages/shared/utils/conversation-helpers.ts`
 - [~] `packages/shared/utils/email-validator.ts`
-- [~] `packages/shared/utils/errors.ts`
+- [x] `packages/shared/utils/errors.ts`
 - [ ] `packages/shared/utils/index.ts`
 - [~] `packages/shared/utils/language-normalize.ts`
 - [~] `packages/shared/utils/languages.ts`
 - [~] `packages/shared/utils/mention-parser.ts`
+- [x] `packages/shared/utils/notification-strings.ts`
 - [~] `packages/shared/utils/sender-identity.ts`
 - [~] `packages/shared/utils/validation.ts`

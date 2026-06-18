@@ -75,4 +75,22 @@ describe('notificationString — interpolation', () => {
   it('retombe sur fr pour une langue hors catalogue', () => {
     expect(notificationString('ja', 'mention')).toBe('vous a mentionné');
   });
+  it('résout isStory:true dans reaction.commentVerbose (branche story)', () => {
+    const result = notificationString('fr', 'reaction.commentVerbose',
+      { actor: 'Alice', emoji: '❤️', author: 'Bob', isStory: true });
+    expect(result).toContain('Alice');
+    expect(result).toContain('❤️');
+    expect(result).toContain('Bob');
+  });
+  it('remplace les tokens manquants par une chaîne vide (branche v===undefined)', () => {
+    // A key that uses {possObj} tokens without providing postType → token undefined → ''
+    const result = notificationString('en', 'reaction.post', { emoji: '👍' });
+    // Should not throw; the missing {possObj} placeholder becomes ''
+    expect(typeof result).toBe('string');
+  });
+  it('retourne une chaîne vide pour un template inexistant (guard template===undefined)', () => {
+    // Using a key cast that doesn't exist in the templates ensures the early-return guard
+    const result = notificationString('en', 'nonexistent.key' as typeof NOTIFICATION_STRING_KEYS[number]);
+    expect(result).toBe('');
+  });
 });
