@@ -1349,6 +1349,7 @@ private struct ReelAudioView: View {
                 maxHeight: 360,
                 isPlaying: player.isPlaying,
                 progress: player.progress,
+                fontSize: 22,
                 onSeek: { time in player.seekToTime(time) }
             )
             .padding(.horizontal, 20)
