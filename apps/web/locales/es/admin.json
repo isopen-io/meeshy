@@ -1710,6 +1710,8 @@
     "systemActive": "Activo"
   },
   "usersDetail": {
+    "viewMembers": "Ver miembros",
+    "membersModalTitle": "Miembros",
     "mediaTitle": "Medios",
     "loadingMedia": "Cargando medios...",
     "noMedia": "Sin medios",
