@@ -502,16 +502,48 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
 
         let speakableGroupName: INSpeakableString?
         if isGroup {
-            let groupTitle = (userInfo["conversationTitle"] as? String)
-                .flatMap { $0.isEmpty ? nil : $0 }
+            // iOS renders `speakableGroupName` as the group line in the Communication
+            // Notification subtitle (and IGNORES content.subtitle there). So we carry
+            // the FULLY DECORATED name here — type glyph + favorite emoji + customName
+            // ?? canonical title + (category) + mute/lock badges — via the same
+            // Local-First composition used by `composedConversationSubtitle`.
+            let localDetails = (userInfo["conversationId"] as? String)
+                .flatMap { NSEDataSync.conversationDetails(forId: $0) }
+            let decorated = NotificationPayloadHelpers.composedConversationSubtitle(
+                conversationType: conversationType,
+                conversationTitle: userInfo["conversationTitle"] as? String,
+                customName: localDetails?.customName,
+                favoriteEmoji: localDetails?.favoriteEmoji,
+                categoryName: localDetails?.categoryName,
+                isMuted: localDetails?.isMuted ?? false,
+                isLocked: localDetails?.isLocked ?? false
+            )
+            let groupTitle = decorated
+                ?? (userInfo["conversationTitle"] as? String).flatMap { $0.isEmpty ? nil : $0 }
                 ?? content.title
             speakableGroupName = INSpeakableString(spokenPhrase: groupTitle)
         } else {
             speakableGroupName = nil
         }
 
+        // iOS surfaces the group name (speakableGroupName) in the Communication
+        // Notification subtitle ONLY when the intent is a GROUP conversation, which
+        // requires ≥2 recipients. With recipients:nil iOS renders a 1:1 banner
+        // (sender as title, no group subtitle) and IGNORES any manually-set
+        // content.subtitle — confirmed empirically on iOS 26.3.1. We synthesize
+        // neutral members keyed by conversationId purely to trigger group mode;
+        // the displayed name comes from speakableGroupName, not these handles.
+        let groupRecipients: [INPerson]? = isGroup ? [
+            INPerson(personHandle: INPersonHandle(value: "\(conversationId)#m1", type: .unknown),
+                     nameComponents: nil, displayName: "", image: nil,
+                     contactIdentifier: nil, customIdentifier: "\(conversationId)#m1"),
+            INPerson(personHandle: INPersonHandle(value: "\(conversationId)#m2", type: .unknown),
+                     nameComponents: nil, displayName: "", image: nil,
+                     contactIdentifier: nil, customIdentifier: "\(conversationId)#m2")
+        ] : nil
+
         let intent = INSendMessageIntent(
-            recipients: nil,
+            recipients: groupRecipients,
             outgoingMessageType: .unknown,
             content: content.body,
             speakableGroupName: speakableGroupName,

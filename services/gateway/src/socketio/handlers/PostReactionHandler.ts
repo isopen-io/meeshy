@@ -190,9 +190,14 @@ export class PostReactionHandler {
         userId
       );
 
+      // Contrat ACK == broadcast : on renvoie l'`updateEvent` (postId, userId,
+      // emoji, action, aggregation, timestamp) — le MÊME objet que le broadcast
+      // `post:reaction-added`. Le web ignore `data` (lit seulement success/error),
+      // l'iOS le décode en `SocketPostReactionUpdateEvent`. Renvoyer la `reaction`
+      // brute (sans action/aggregation) cassait le décodage iOS (malformedResponse).
       const successResponse: SocketIOResponse<unknown> = {
         success: true,
-        data: reaction,
+        data: updateEvent,
       };
       if (callback) callback(successResponse);
 
@@ -282,9 +287,11 @@ export class PostReactionHandler {
         userId
       );
 
+      // Contrat ACK == broadcast (voir handleAddReaction) : on renvoie l'`updateEvent`,
+      // identique au broadcast `post:reaction-removed`, au lieu d'un simple {message}.
       const successResponse: SocketIOResponse<unknown> = {
         success: true,
-        data: { message: 'Reaction removed successfully' },
+        data: updateEvent,
       };
       if (callback) callback(successResponse);
 
