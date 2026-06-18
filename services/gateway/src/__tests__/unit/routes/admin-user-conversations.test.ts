@@ -1,9 +1,14 @@
 /**
  * admin-user-conversations.test.ts
  *
- * Tests GET /admin/users/:userId/conversations (admin view of a user's
- * conversations). Covers permission gating, 404 on unknown user, and the
- * pagination + membership-flattening shape of a successful response.
+ * Tests the admin "user fiche" sub-resources added to userAdminRoutes:
+ *   GET /admin/users/:userId/conversations
+ *   GET /admin/users/:userId/media
+ *   GET /admin/users/:userId/reports
+ *   GET /admin/users/:userId/reported-messages
+ *
+ * Covers permission gating, 404 on unknown user, and the response shape
+ * (pagination + membership flattening / media merge / report+message join).
  *
  * @jest-environment node
  */
@@ -26,21 +31,47 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
+type AnyRecord = Record<string, unknown>;
 type PrismaOpts = {
   userExists?: boolean;
-  conversations?: Array<Record<string, unknown>>;
+  conversations?: AnyRecord[];
   total?: number;
+  postMedia?: AnyRecord[];
+  postMediaCount?: number;
+  attachments?: AnyRecord[];
+  attachmentsCount?: number;
+  reports?: AnyRecord[];
+  reportsCount?: number;
+  participants?: AnyRecord[];
+  messages?: AnyRecord[];
 };
 
 function createMockPrisma(opts: PrismaOpts) {
-  const conversations = opts.conversations ?? [];
   return {
     user: {
       findUnique: jest.fn(async () => (opts.userExists === false ? null : { id: TARGET_ID })),
     },
     conversation: {
-      findMany: jest.fn(async () => conversations),
-      count: jest.fn(async () => opts.total ?? conversations.length),
+      findMany: jest.fn(async () => opts.conversations ?? []),
+      count: jest.fn(async () => opts.total ?? (opts.conversations?.length ?? 0)),
+    },
+    postMedia: {
+      findMany: jest.fn(async () => opts.postMedia ?? []),
+      count: jest.fn(async () => opts.postMediaCount ?? (opts.postMedia?.length ?? 0)),
+    },
+    messageAttachment: {
+      findMany: jest.fn(async () => opts.attachments ?? []),
+      count: jest.fn(async () => opts.attachmentsCount ?? (opts.attachments?.length ?? 0)),
+    },
+    report: {
+      findMany: jest.fn(async () => opts.reports ?? []),
+      count: jest.fn(async () => opts.reportsCount ?? (opts.reports?.length ?? 0)),
+    },
+    participant: {
+      findMany: jest.fn(async () => opts.participants ?? []),
+    },
+    message: {
+      findMany: jest.fn(async () => opts.messages ?? []),
     },
   } as unknown as PrismaClient;
 }
@@ -127,9 +158,103 @@ describe('GET /admin/users/:userId/conversations', () => {
       isActive: true,
       nickname: null,
     });
-    // raw participants array must not leak through
     expect(body.data[0].participants).toBeUndefined();
     expect(body.pagination).toMatchObject({ total: 7, offset: 0, limit: 20, hasMore: true });
+    await app.close();
+  });
+});
+
+describe('GET /admin/users/:userId/media', () => {
+  it('merges post media and message attachments, newest first, with a normalized shape', async () => {
+    const prisma = createMockPrisma({
+      postMedia: [
+        { id: 'pm1', originalName: 'a.jpg', mimeType: 'image/jpeg', fileUrl: 'u1', thumbnailUrl: 't1', fileSize: 100, width: 10, height: 10, duration: null, createdAt: new Date('2026-06-02').toISOString(), postId: 'post1' },
+      ],
+      postMediaCount: 1,
+      attachments: [
+        { id: 'att1', originalName: 'b.mp4', mimeType: 'video/mp4', fileUrl: 'u2', thumbnailUrl: null, fileSize: 200, width: null, height: null, duration: 5000, createdAt: new Date('2026-06-03').toISOString(), messageId: 'msg1' },
+      ],
+      attachmentsCount: 1,
+    });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/users/${TARGET_ID}/media?offset=0&limit=20`,
+      headers: { authorization: 'Bearer x' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.pagination.total).toBe(2);
+    expect(body.data).toHaveLength(2);
+    // newest first → the attachment (2026-06-03) before the post media (2026-06-02)
+    expect(body.data[0]).toMatchObject({ id: 'att1', source: 'message', contextId: 'msg1' });
+    expect(body.data[1]).toMatchObject({ id: 'pm1', source: 'post', contextId: 'post1' });
+    // raw foreign keys must not leak (normalized to contextId)
+    expect(body.data[0].messageId).toBeUndefined();
+    expect(body.data[1].postId).toBeUndefined();
+    await app.close();
+  });
+});
+
+describe('GET /admin/users/:userId/reports', () => {
+  it('returns the reports filed by the user (paginated)', async () => {
+    const prisma = createMockPrisma({
+      reports: [
+        { id: 'r1', reportedType: 'message', reportedEntityId: 'm9', reportType: 'spam', reason: 'unsolicited', status: 'pending', actionTaken: null, createdAt: new Date('2026-06-01').toISOString(), resolvedAt: null },
+      ],
+      reportsCount: 3,
+    });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/users/${TARGET_ID}/reports?offset=0&limit=20`,
+      headers: { authorization: 'Bearer x' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toMatchObject({ id: 'r1', reportType: 'spam', status: 'pending' });
+    expect(body.pagination).toMatchObject({ total: 3, hasMore: true });
+    await app.close();
+  });
+});
+
+describe('GET /admin/users/:userId/reported-messages', () => {
+  it('returns an empty page when the user has no participants', async () => {
+    const app = await buildApp(createMockPrisma({ participants: [] }), 'ADMIN');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/users/${TARGET_ID}/reported-messages`,
+      headers: { authorization: 'Bearer x' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data).toEqual([]);
+    expect(body.pagination.total).toBe(0);
+    await app.close();
+  });
+
+  it('joins reports on the user messages with the message content', async () => {
+    const prisma = createMockPrisma({
+      participants: [{ id: 'p1' }],
+      messages: [{ id: 'm1', content: 'bad message', conversationId: 'c1', messageType: 'text', createdAt: new Date('2026-05-01').toISOString(), deletedAt: null }],
+      reports: [{ id: 'r1', reportedEntityId: 'm1', reportType: 'harassment', reason: 'abuse', status: 'under_review', reporterId: null, reporterName: 'Anon', createdAt: new Date('2026-06-01').toISOString(), resolvedAt: null }],
+      reportsCount: 1,
+    });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/users/${TARGET_ID}/reported-messages`,
+      headers: { authorization: 'Bearer x' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toMatchObject({ id: 'r1', reportType: 'harassment' });
+    expect(body.data[0].message).toMatchObject({ id: 'm1', content: 'bad message' });
     await app.close();
   });
 });

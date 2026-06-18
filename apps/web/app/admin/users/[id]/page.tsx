@@ -38,6 +38,9 @@ import { UserGeolocationSection } from '@/components/admin/user-detail/UserGeolo
 import { UserActivitySection } from '@/components/admin/user-detail/UserActivitySection';
 import { UserConversationsSection } from '@/components/admin/user-detail/UserConversationsSection';
 import { UserPostsSection } from '@/components/admin/user-detail/UserPostsSection';
+import { UserMediaSection } from '@/components/admin/user-detail/UserMediaSection';
+import { UserReportsSection } from '@/components/admin/user-detail/UserReportsSection';
+import { UserReportedMessagesSection } from '@/components/admin/user-detail/UserReportedMessagesSection';
 
 interface AdminApiResponse<T> {
   success: boolean;
@@ -313,6 +316,12 @@ export default function UserDetailPage() {
             <UserConversationsSection userId={userId} />
 
             <UserPostsSection userId={userId} />
+
+            <UserMediaSection userId={userId} />
+
+            <UserReportsSection userId={userId} />
+
+            <UserReportedMessagesSection userId={userId} />
 
             {/* Gestion du rôle */}
             <Card className="dark:bg-gray-900 dark:border-gray-800">
