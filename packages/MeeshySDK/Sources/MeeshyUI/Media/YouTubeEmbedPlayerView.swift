@@ -78,7 +78,10 @@ public struct YouTubeEmbedPlayerView: UIViewRepresentable {
     // C'est un loader bootstrap que YouTube met à jour et qui charge dynamiquement
     // www-widgetapi.js ; un hash SRI le casserait et YouTube n'en publie pas.
     private static func html(videoId: String, start: Int) -> String {
-        """
+        // Défense en profondeur : neutralise toute injection JS via videoId, même si un
+        // appelant futur passe une valeur non validée (le resolver garantit déjà le charset).
+        let safeId = sanitizedId(videoId)
+        return """
         <!DOCTYPE html><html><head>
         <meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <style>html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden}#player{width:100%;height:100%}</style>
@@ -88,7 +91,7 @@ public struct YouTubeEmbedPlayerView: UIViewRepresentable {
         <script>
         var ytp;
         function onYouTubeIframeAPIReady(){
-          ytp=new YT.Player('player',{width:'100%',height:'100%',videoId:'\(videoId)',
+          ytp=new YT.Player('player',{width:'100%',height:'100%',videoId:'\(safeId)',
             playerVars:{playsinline:1,modestbranding:1,rel:0,start:\(start)},
             events:{
               'onReady':function(e){post('ready');},
@@ -106,6 +109,11 @@ public struct YouTubeEmbedPlayerView: UIViewRepresentable {
         </script>
         </body></html>
         """
+    }
+
+    private static func sanitizedId(_ raw: String) -> String {
+        let allowed = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-")
+        return String(raw.filter { allowed.contains($0) }.prefix(20))
     }
 
     public final class Coordinator: NSObject, WKScriptMessageHandler {
