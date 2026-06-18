@@ -980,6 +980,40 @@ public struct AudioPlayerView: View {
         return result
     }
 
+    /// Index du segment de transcription en cours de lecture (karaoké), résolu
+    /// depuis l'état live du moteur. Délègue au helper pur testable ci-dessous.
+    private func activeTranscriptionIndex(in segments: [TranscriptionDisplaySegment]) -> Int? {
+        Self.activeSegmentIndex(
+            segments: segments,
+            currentTime: player.currentTime,
+            progress: player.progress,
+            isPlaying: player.isPlaying
+        )
+    }
+
+    /// Index du segment actif à un instant donné — fonction PURE (testable).
+    ///
+    /// Utilise les timestamps réels dès qu'au moins un segment en porte un valide
+    /// (`endTime > startTime`). Quand la transcription n'a AUCUNE découpe temporelle
+    /// — segments à `startTime == endTime == 0`, fréquent sur les audios transcrits
+    /// sans alignement mot-à-mot — le prédicat `currentTime < endTime` resterait
+    /// toujours faux et plus AUCUN segment ne s'allumerait (tout gris, désynchronisé).
+    /// On retombe alors sur une progression proportionnelle pilotée par `progress`
+    /// pour que le surlignage avance quand même avec la lecture. `nil` à l'arrêt.
+    nonisolated public static func activeSegmentIndex(
+        segments: [TranscriptionDisplaySegment],
+        currentTime: TimeInterval,
+        progress: Double,
+        isPlaying: Bool
+    ) -> Int? {
+        guard isPlaying, !segments.isEmpty else { return nil }
+        if segments.contains(where: { $0.endTime > $0.startTime }) {
+            return segments.firstIndex { currentTime >= $0.startTime && currentTime < $0.endTime }
+        }
+        let idx = Int(progress * Double(segments.count))
+        return min(max(idx, 0), segments.count - 1)
+    }
+
     @ViewBuilder
     private func inlineFlowTranscription(segments: [TranscriptionDisplaySegment]) -> some View {
         // Cas fallback synthesized : `resolveDisplaySegments` renvoie un
@@ -993,10 +1027,14 @@ public struct AudioPlayerView: View {
         // idle (avant), actif (pendant lecture), past (après) — pour qu'un
         // audio sans segments soit aussi lisible pendant la lecture.
         if segments.count == 1, let single = segments.first {
-            let isActive = player.isPlaying
-                && player.currentTime >= single.startTime
-                && player.currentTime < single.endTime
-            let isPast = !isActive && player.currentTime >= single.endTime
+            // Activité résolue par le helper partagé : timing réel si disponible,
+            // sinon proportionnel (un segment unique non-timé reste actif toute la
+            // lecture au lieu de ne jamais s'allumer faute de `endTime`).
+            let isActive = activeTranscriptionIndex(in: segments) == 0
+            let hasRealTiming = single.endTime > single.startTime
+            let isPast = !isActive && (hasRealTiming
+                ? player.currentTime >= single.endTime
+                : (!player.isPlaying && player.progress >= 0.999))
             Button {
                 player.seekToTime(single.startTime)
                 HapticFeedback.light()
@@ -1018,14 +1056,12 @@ public struct AudioPlayerView: View {
             .animation(.easeInOut(duration: 0.15), value: isActive)
             .animation(.easeInOut(duration: 0.15), value: isPast)
         } else {
-            // BUG D fix — gate active-segment detection on `isPlaying`. On an
-            // idle carousel page `player.currentTime == 0` and segment 0 has
-            // `startTime == 0`, so the unguarded predicate false-highlighted
-            // segment 0 on every idle page. The single-segment branch above is
-            // already gated the same way.
-            let activeIdx = player.isPlaying
-                ? segments.firstIndex { player.currentTime >= $0.startTime && player.currentTime < $0.endTime }
-                : nil
+            // Activité résolue par le helper partagé : timing réel quand au moins un
+            // segment en porte, sinon fallback proportionnel sur `player.progress`
+            // (transcription sans découpe temporelle → karaoké quand même synchronisé).
+            // Gate sur `isPlaying` conservé (BUG D : sur une page carousel idle,
+            // `currentTime == 0` + segment 0 à `startTime == 0` faussait l'allumage).
+            let activeIdx = activeTranscriptionIndex(in: segments)
             FlowLayout(spacing: 0) {
                 ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
                     let isActive = index == activeIdx

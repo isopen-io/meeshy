@@ -613,6 +613,7 @@ private struct AudioFullscreenPage: View {
             currentTime: player.currentTime,
             accentColor: currentLangColorHex,
             isPlaying: player.isPlaying,
+            progress: player.progress,
             onSeek: { time in
                 player.seekToTime(time)
             }

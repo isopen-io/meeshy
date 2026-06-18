@@ -65,22 +65,35 @@ public struct MediaTranscriptionView: View {
     /// existing callers that always pass a synchronized `currentTime` keep
     /// their behavior; callers that can be idle pass the real state.
     public var isPlaying: Bool = true
+    /// Progression globale (0…1) du moteur. Sert UNIQUEMENT de repli quand la
+    /// transcription n'a aucun timing exploitable (`startTime == endTime == 0`) :
+    /// le karaoké avance alors proportionnellement au lieu de rester figé (aucun
+    /// segment n'aurait jamais `currentTime < endTime`). Défaut 0 pour la
+    /// rétro-compat des appelants à segments réellement timés.
+    public var progress: Double = 0
 
     @ObservedObject private var theme = ThemeManager.shared
     private var isDark: Bool { theme.mode.isDark }
 
     public init(segments: [TranscriptionDisplaySegment], currentTime: Double,
                 accentColor: String = MeeshyColors.brandPrimaryHex, maxHeight: CGFloat = 200,
-                isPlaying: Bool = true,
+                isPlaying: Bool = true, progress: Double = 0,
                 onSeek: ((Double) -> Void)? = nil) {
         self.segments = segments; self.currentTime = currentTime
         self.accentColor = accentColor; self.maxHeight = maxHeight
-        self.isPlaying = isPlaying; self.onSeek = onSeek
+        self.isPlaying = isPlaying; self.progress = progress; self.onSeek = onSeek
     }
 
+    /// Index du segment actif — résolu par le helper PUR partagé avec
+    /// `AudioPlayerView` : timing réel si disponible, sinon repli proportionnel
+    /// sur `progress`. Source unique de vérité du karaoké (détail ET réel).
     private var activeIndex: Int? {
-        guard isPlaying else { return nil }
-        return segments.firstIndex { currentTime >= $0.startTime && currentTime < $0.endTime }
+        AudioPlayerView.activeSegmentIndex(
+            segments: segments,
+            currentTime: currentTime,
+            progress: progress,
+            isPlaying: isPlaying
+        )
     }
 
     public var body: some View {
