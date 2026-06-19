@@ -58,6 +58,9 @@ struct FloatingCallPillView: View {
     var body: some View {
         if callManager.displayMode == .pip && callManager.callState.isActive {
             pillContent
+                // Pilule verre + contrôles blancs : on épingle le verre en
+                // sombre pour rester lisible quel que soit le mode système.
+                .environment(\.colorScheme, .dark)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .animation(.spring(response: 0.5, dampingFraction: 0.75), value: callManager.displayMode)
                 .zIndex(999)

@@ -209,7 +209,7 @@ struct StoryTrayView: View {
 
             Text(group.username)
                 .font(.system(size: 10, weight: group.hasUnviewed ? .semibold : .medium))
-                .foregroundColor(group.hasUnviewed ? .white : theme.textMuted)
+                .foregroundColor(group.hasUnviewed ? theme.textPrimary : theme.textMuted)
                 .lineLimit(1)
                 .frame(width: 96)
         }
@@ -408,7 +408,7 @@ private struct MyStoryButton: View {
 
             Text(String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main))
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(theme.textSecondary)
         }
         .accessibilityLabel(hasMyStory ? String(localized: "story.tray.a11y.myStory", defaultValue: "Ma story", bundle: .main) : String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
     }

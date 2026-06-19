@@ -33,7 +33,9 @@ struct IncomingCallView: View {
             // Caller name
             Text(callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.bold))
-                .foregroundColor(theme.textPrimary)
+                // Posé sur le fond sombre fixe de CallView → texte clair fixe
+                // (theme.textPrimary suit le système et virait au foncé en Light).
+                .foregroundColor(.white)
                 .padding(.bottom, 8)
 
             // Call type label
@@ -41,7 +43,7 @@ struct IncomingCallView: View {
                 ? String(localized: "call.incoming.video", defaultValue: "Appel video entrant", bundle: .main)
                 : String(localized: "call.incoming.audio", defaultValue: "Appel entrant", bundle: .main))
                 .font(.system(size: 16, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundColor(.white.opacity(0.7))
                 .padding(.bottom, 12)
 
             // Call type badge

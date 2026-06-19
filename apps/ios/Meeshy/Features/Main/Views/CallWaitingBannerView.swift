@@ -91,6 +91,10 @@ struct CallWaitingBannerView: View {
                 autoDismissTask?.cancel()
                 autoDismissTask = nil
             }
+            // Bannière blanc-sur-verre : on épingle le verre en sombre pour
+            // rester lisible en mode Light (sinon .ultraThinMaterial vire au
+            // clair et le texte blanc devient illisible).
+            .environment(\.colorScheme, .dark)
         }
     }
 

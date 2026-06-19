@@ -148,6 +148,12 @@ struct CallView: View {
         }
         .ignoresSafeArea()
         .statusBarHidden(true)
+        // L'écran d'appel est blanc-sur-fond-sombre fixe (cf. callBackground).
+        // On épingle aussi le colorScheme en .dark pour que le verre et les
+        // matériaux (.ultraThinMaterial, glassEffect) rendent leur variante
+        // sombre : sinon ils virent au clair en mode Light et les contrôles/
+        // textes blancs deviennent illisibles (white-on-white).
+        .environment(\.colorScheme, .dark)
         .onAppear {
             startPulseAnimation()
         }

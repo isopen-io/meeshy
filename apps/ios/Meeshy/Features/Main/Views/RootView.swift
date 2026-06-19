@@ -1383,11 +1383,19 @@ struct RootView: View {
                 }
             },
             onRightTap: {
-                // Le bouton porte désormais l'avatar de l'utilisateur : un simple
-                // tap ouvre/ferme le menu. Les réglages sont le DERNIER item du
-                // menu ; la config du profil est le PREMIER item (ou long-press).
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showMenu.toggle()
+                HapticFeedback.light()
+                // Le bouton porte l'avatar de l'utilisateur. 1er tap = déplie le
+                // menu ; 2e tap (menu déjà ouvert) = ouvre la page profil dans les
+                // réglages et referme le menu, comme n'importe quel autre item.
+                if showMenu {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showMenu = false
+                    }
+                    router.push(.profile)
+                } else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showMenu.toggle()
+                    }
                 }
             },
             onLeftLongPress: {
@@ -1399,16 +1407,16 @@ struct RootView: View {
                 }
             },
             onRightLongPress: {
-                // Long-press sur l'avatar = raccourci direct vers la config profil
-                // (miroir du premier item du menu). Les réglages restent accessibles
-                // via le dernier item du menu (roue dentée).
+                // Long-press sur l'avatar = raccourci direct vers la page profil
+                // (sans passer par le menu). Les réglages restent accessibles via
+                // le dernier item du menu (roue dentée).
                 HapticFeedback.medium()
                 if showMenu {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showMenu = false
                     }
                 }
-                router.push(.editProfile)
+                router.push(.profile)
             },
             isSearchBarVisible: !isScrollingDown,
             leftA11yLabel: String(localized: "a11y.floating.feed", defaultValue: "Flux", bundle: .main),
@@ -1507,11 +1515,10 @@ struct RootView: View {
             let menuX = pos.isLeft ? buttonX : buttonX
             let menuStartY = expandDown ? buttonY + halfButton + menuSpacing + menuItemSize / 2 : buttonY - halfButton - menuSpacing - menuItemSize / 2
 
-            // Menu items — le PREMIER bouton (index 0) est l'avatar de l'utilisateur
-            // (→ configuration du profil) ; il est rendu séparément car ce n'est pas
-            // une icône SF Symbol. Les boutons d'action suivent (indices 1+), et le
+            // Menu items — boutons d'action. Le profil n'a PAS d'item dédié : il
+            // s'ouvre via le 2e tap (ou le long-press) sur le bouton avatar. Le
             // DERNIER bouton est la roue dentée (→ préférences générales).
-            let actionItems: [(icon: String, color: String, action: () -> Void)] = [
+            let menuItems: [(icon: String, color: String, action: () -> Void)] = [
                 ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.links) }),
                 ("bell.fill", "FF6B6B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.notifications) }),
                 ("person.2.fill", "6366F1", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.contacts()) }),
@@ -1519,27 +1526,10 @@ struct RootView: View {
                 ("gearshape.fill", "64748B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.settings) })
             ]
 
-            // Premier item (index 0) — avatar utilisateur → configuration du profil
-            MeeshyAvatar(
-                name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
-                context: .custom(menuItemSize),
-                avatarURL: AuthManager.shared.currentUser?.avatar,
-                thumbHash: AuthManager.shared.currentUser?.avatarThumbHash,
-                onTap: {
-                    HapticFeedback.light()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }
-                    router.push(.editProfile)
-                }
-            )
-            .frame(width: menuItemSize, height: menuItemSize)
-            .position(x: menuX, y: menuStartY)
-            .menuAnimation(showMenu: showMenu, delay: 0)
-
-            ForEach(Array(actionItems.enumerated()), id: \.offset) { index, item in
-                let displayIndex = index + 1
+            ForEach(Array(menuItems.enumerated()), id: \.offset) { index, item in
                 let yOffset = expandDown
-                    ? CGFloat(displayIndex) * (menuItemSize + menuSpacing)
-                    : -CGFloat(displayIndex) * (menuItemSize + menuSpacing)
+                    ? CGFloat(index) * (menuItemSize + menuSpacing)
+                    : -CGFloat(index) * (menuItemSize + menuSpacing)
 
                 let itemY = menuStartY + yOffset
 
@@ -1547,11 +1537,11 @@ struct RootView: View {
                 if item.icon == "bell.fill" {
                     ThemedActionButton(icon: item.icon, color: item.color, badge: notificationManager.unreadCount, action: item.action)
                         .position(x: menuX, y: itemY)
-                        .menuAnimation(showMenu: showMenu, delay: Double(displayIndex) * 0.04)
+                        .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
                 } else {
                     ThemedActionButton(icon: item.icon, color: item.color, action: item.action)
                         .position(x: menuX, y: itemY)
-                        .menuAnimation(showMenu: showMenu, delay: Double(displayIndex) * 0.04)
+                        .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
                 }
             }
         }
