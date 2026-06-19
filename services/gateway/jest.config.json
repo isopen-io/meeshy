@@ -36,6 +36,7 @@
     "src/middleware/**/*.ts",
     "src/socketio/**/*.ts",
     "src/utils/**/*.ts",
+    "src/jobs/**/*.ts",
     "!src/**/*.d.ts",
     "!src/**/__tests__/**",
     "!src/main.ts",
@@ -59,10 +60,10 @@
   "moduleFileExtensions": ["ts", "js", "json"],
   "coverageThreshold": {
     "global": {
-      "lines": 50,
-      "branches": 48,
-      "statements": 50,
-      "functions": 49
+      "lines": 54,
+      "branches": 50,
+      "statements": 54,
+      "functions": 55
     }
   }
 }

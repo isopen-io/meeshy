@@ -40,6 +40,7 @@ export class RedisDeliveryQueue {
     // Evict oldest user bucket when global cap reached
     if (this.memoryQueue.size >= MEMORY_QUEUE_MAX_USERS && !this.memoryQueue.has(userId)) {
       const firstUser = this.memoryQueue.keys().next().value;
+      /* istanbul ignore next -- Map always has a key when size >= 1000 */
       if (firstUser !== undefined) {
         logger.warn('Memory delivery queue at capacity, evicting oldest user', { evicted: firstUser });
         this.memoryQueue.delete(firstUser);

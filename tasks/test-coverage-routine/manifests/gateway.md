@@ -43,7 +43,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 - [ ] `services/gateway/src/jobs/broadcast-sender.ts`
 - [ ] `services/gateway/src/jobs/cleanup-expired-tokens.ts`
-- [ ] `services/gateway/src/jobs/delivery-queue-cleanup.ts`
+- [x] `services/gateway/src/jobs/delivery-queue-cleanup.ts`
 - [ ] `services/gateway/src/jobs/index.ts`
 - [ ] `services/gateway/src/jobs/mutation-log-cleanup.ts`
 - [~] `services/gateway/src/jobs/notification-digest.ts`
@@ -273,7 +273,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/services/PrivacyPreferencesService.ts`
 - [~] `services/gateway/src/services/PushNotificationService.ts`
 - [~] `services/gateway/src/services/ReactionService.ts`
-- [~] `services/gateway/src/services/RedisDeliveryQueue.ts`
+- [x] `services/gateway/src/services/RedisDeliveryQueue.ts`
 - [ ] `services/gateway/src/services/SecurityMonitor.ts`
 - [~] `services/gateway/src/services/SessionService.ts`
 - [~] `services/gateway/src/services/SmsService.ts`

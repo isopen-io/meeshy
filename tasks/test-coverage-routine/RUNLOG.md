@@ -983,3 +983,25 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   4. `_translate_single_language` patched at module level to raise RuntimeError to cover the per-language exception branch in `process_single_translation`.
 - Next slice: P1 Offline & sync × gateway OR P1 Voice/audio × translator (next ☐ cells)
 - Commit: (see branch claude/coverage/p1-zmq-translator-pool → PR #713 merged)
+
+## 2026-06-19T04:20Z — P1 Offline & sync × gateway (RedisDeliveryQueue.ts ☑ + delivery-queue-cleanup.ts ☑)
+- Targeted: `services/gateway/src/services/RedisDeliveryQueue.ts` (gap-fill Redis path + boundary conditions), `services/gateway/src/jobs/delivery-queue-cleanup.ts` (new tests from zero)
+- Result: ☑ done — both files 100%/100% line+branch; cell P1 Offline & sync × gateway flipped ◐→☑
+- Coverage (final per-file measurement):
+  - RedisDeliveryQueue.ts: 100% stmts / **100% branches** / 100% funcs / 100% lines ✓
+  - delivery-queue-cleanup.ts: 100% stmts / **100% branches** / 100% funcs / 100% lines ✓
+  - Gateway global: 54.87% lines / 50.80% branches (threshold ratcheted lines:50→54, branches:48→50, statements:50→54, functions:49→55)
+- Tests added: 42 tests (31 new in RedisDeliveryQueue.test.ts gap-fill, 11 new in delivery-queue-cleanup.test.ts)
+  - Redis happy-path tests: enqueue (rpush+expire called), drain (pipeline lrange+del), drain null results, peek with/without limit, size (llen)
+  - Redis cleanup: scan loop, expired entries removed, fresh entries kept, key deleted when all expired, multi-page cursor scan
+  - Redis-error → memory fallback: enqueue, drain, peek, size, cleanup all fall back gracefully on Redis errors
+  - Memory boundaries: LRU eviction at 1000 users (preloaded-0 evicted), no-evict for existing user, per-user cap at 50 (msg-0 dropped on 51st), exactly-at-50 no-drop, peek on unknown userId (covers ?? [] branch)
+  - DeliveryQueueCleanupJob: start() runs immediately + sets interval, double-start guard, stop() clears interval, stop() no-op when not running, restart after stop, runNow() public wrapper, error caught without re-throw, interval survives cleanup errors
+- Production code changes: 1 `istanbul ignore next` on RedisDeliveryQueue.ts line 43 (defensive guard `if (firstUser !== undefined)` — structurally unreachable when Map size >= 1000)
+- Config: added `src/jobs/**/*.ts` to jest.config.json `collectCoverageFrom` (was missing)
+- Reviewer: PASS (rounds: 1) — mild structural note on enqueue "memory bypassed" assertion accepted; istanbul ignore justified
+- Notes:
+  1. Prior run (in-flight check): merged PR #710 (ZMQ infra × gateway) to main (SHA 0d271441) before starting this slice — CI was still running when session resumed, polled until green.
+  2. RUNLOG has a duplicate 2026-06-18T14:00Z entry and a wrong SHA for PR #710 (900e8cbe vs 0d271441); cleaned up in this run's tracking update.
+- Next slice: P1 Voice/audio × gateway OR P1 Voice/audio × translator (next ☐ cells)
+- Commit: (see branch claude/coverage/p1-offline-sync-gateway)
