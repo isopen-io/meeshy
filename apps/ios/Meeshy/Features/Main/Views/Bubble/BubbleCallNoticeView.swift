@@ -184,16 +184,14 @@ struct BubbleCallNoticeView: View, Equatable {
         let isVideo = summary.callType == .video
         switch summary.outcome {
         case .missed:
-            return isVideo ? "video.slash.fill" : "phone.arrow.down.left.fill"
+            return isVideo ? "video.fill" : "phone.arrow.down.left.fill"
         case .rejected:
-            if isVideo { return "video.slash.fill" }
+            if isVideo { return "video.fill" }
             return isOutgoing ? "phone.arrow.up.right.fill" : "phone.arrow.down.left.fill"
         case .failed:
             return isVideo ? "video.slash.fill" : "phone.down.fill"
         case .completed:
-            if isVideo {
-                return isOutgoing ? "video.fill" : "video.fill"
-            }
+            if isVideo { return "video.fill" }
             return isOutgoing ? "phone.arrow.up.right.fill" : "phone.arrow.down.left.fill"
         }
     }

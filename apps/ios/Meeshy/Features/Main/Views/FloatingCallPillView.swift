@@ -13,6 +13,7 @@ enum CallPillStatus: Equatable {
     case ringing
     case connecting
     case reconnecting
+    case ended
 
     /// `true` only for an established call → the pill shows the live duration.
     var isConnected: Bool { self == .connected }
@@ -25,6 +26,7 @@ enum CallPillStatus: Equatable {
         case .ringing:      return String(localized: "call.pill.status.ringing", defaultValue: "Sonnerie…")
         case .connecting:   return String(localized: "call.pill.status.connecting", defaultValue: "Connexion…")
         case .reconnecting: return String(localized: "call.pill.status.reconnecting", defaultValue: "Reconnexion…")
+        case .ended:        return String(localized: "call.pill.status.ended", defaultValue: "Appel terminé")
         }
     }
 
@@ -34,9 +36,10 @@ enum CallPillStatus: Equatable {
         case .ringing:               return .ringing
         case .offering, .connecting: return .connecting
         case .reconnecting:          return .reconnecting
-        // The pill is hidden in `.idle`/`.ended` (callState.isActive == false);
+        case .ended:                 return .ended
+        // The pill is hidden in `.idle` (callState.isActive == false);
         // map to a safe non-connected status so a stray render never shows green.
-        case .idle, .ended:          return .connecting
+        case .idle:                  return .connecting
         }
     }
 }
@@ -56,7 +59,7 @@ struct FloatingCallPillView: View {
     private let pillHeight: CGFloat = 64
 
     var body: some View {
-        if callManager.displayMode == .pip && callManager.callState.isActive {
+        if callManager.displayMode == .pip && (callManager.callState.isActive || callManager.callState.isEnded) {
             pillContent
                 // Pilule verre + contrôles blancs : on épingle le verre en
                 // sombre pour rester lisible quel que soit le mode système.
@@ -153,7 +156,7 @@ struct FloatingCallPillView: View {
 
             Text(pillStatus.isConnected ? formattedDuration : pillStatus.label)
                 .font(.caption.weight(.medium).monospacedDigit())
-                .foregroundColor(pillStatus.isConnected ? MeeshyColors.success : MeeshyColors.warning)
+                .foregroundColor(pillStatus == .ended ? MeeshyColors.error : (pillStatus.isConnected ? MeeshyColors.success : MeeshyColors.warning))
         }
     }
 

@@ -859,6 +859,13 @@ struct RootView: View {
                 router.push(.links)
             }
 
+        case .startCall(let userId, let isVideo):
+            router.startCallWithUser(
+                userId: userId,
+                isVideo: isVideo,
+                conversationListViewModel: conversationViewModel
+            )
+
         case .magicLink:
             break
         }

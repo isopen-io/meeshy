@@ -726,7 +726,7 @@ struct CallView: View {
                     )
                     .frame(width: 56, height: 56)
                 Text(initial)
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                .font(.system(size: 24, weight: .semibold, design: .rounded))
                     .foregroundColor(.white)
             }
             .opacity(0.45)
@@ -1013,7 +1013,7 @@ struct CallView: View {
                 .frame(width: size, height: size)
 
             Text(initial)
-                .font(.system(size: size * 0.4, weight: .bold, design: .rounded))
+                .font(.system(size: size * 0.4, weight: .semibold, design: .rounded))
                 .foregroundColor(.white)
         }
         .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 12, y: 4)

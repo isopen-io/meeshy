@@ -134,7 +134,7 @@ struct IncomingCallView: View {
                 .frame(width: 110, height: 110)
 
             Text(initial)
-                .font(.system(size: 44, weight: .bold, design: .rounded))
+                .font(.system(size: 44, weight: .semibold, design: .rounded))
                 .foregroundColor(.white)
         }
         .shadow(color: MeeshyColors.indigo500.opacity(0.4), radius: 16, y: 6)

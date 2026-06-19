@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import UserNotifications
+import Intents
 import MeeshySDK
 import MeeshyUI
 import os
@@ -131,6 +132,9 @@ struct MeeshyApp: App {
                         return
                     }
                     let _ = deepLinkRouter.handle(url: url)
+                }
+                .onContinueUserActivity("INStartCallIntent") { userActivity in
+                    handleCallIntent(userActivity)
                 }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { userActivity in
                     guard let url = userActivity.webpageURL else { return }
@@ -757,6 +761,20 @@ struct MeeshyApp: App {
                 toastManager.showError(authManager.errorMessage ?? String(localized: "magicLink.error.invalidLink", defaultValue: "Invalid or expired link", bundle: .main))
             }
         }
+    }
+
+    // MARK: - Call Intent Handling (CallKit Redial)
+
+    /// Handles `INStartCallIntent` from Siri or the iOS Recents history.
+    /// Extracts the target userId and passes it to the deep-link router.
+    private func handleCallIntent(_ userActivity: NSUserActivity) {
+        guard let intent = userActivity.interaction?.intent as? INStartCallIntent else { return }
+        // The userId is stored as the CXHandle value in Recents; CallKit
+        // passes it back as the person's handle value.
+        guard let userId = intent.contacts?.first?.personHandle?.value, !userId.isEmpty else { return }
+        let isVideo = intent.callCapability == .videoCall
+
+        deepLinkRouter.pendingDeepLink = .startCall(userId: userId, isVideo: isVideo)
     }
 }
 

@@ -300,6 +300,7 @@ enum DeepLink: Equatable {
     case userProfile(username: String)
     case ownProfile
     case userLinks
+    case startCall(userId: String, isVideo: Bool)
 }
 
 // MARK: - Deep Link Router (ObservableObject for join/conversation deep links)

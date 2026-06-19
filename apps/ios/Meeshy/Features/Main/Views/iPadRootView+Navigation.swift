@@ -77,6 +77,12 @@ extension iPadRootView {
             rightPanelRoute = .profile
         case .userLinks:
             rightPanelRoute = .links
+        case .startCall(let userId, let isVideo):
+            router.startCallWithUser(
+                userId: userId,
+                isVideo: isVideo,
+                conversationListViewModel: conversationViewModel
+            )
         case .magicLink:
             break
         }
