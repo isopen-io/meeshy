@@ -258,11 +258,11 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/gateway/src/services/MaintenanceService.ts`
 - [~] `services/gateway/src/services/MediaService.ts`
 - [~] `services/gateway/src/services/MentionService.ts`
-- [~] `services/gateway/src/services/MessageReadStatusService.ts`
+- [x] `services/gateway/src/services/MessageReadStatusService.ts`
 - [~] `services/gateway/src/services/MessagingService.ts`
 - [ ] `services/gateway/src/services/MultiLevelCache.ts`
 - [ ] `services/gateway/src/services/MultiLevelJobMappingCache.ts`
-- [~] `services/gateway/src/services/MutationLogService.ts`
+- [x] `services/gateway/src/services/MutationLogService.ts`
 - [~] `services/gateway/src/services/PasswordResetService.ts`
 - [ ] `services/gateway/src/services/PhonePasswordResetService.ts`
 - [ ] `services/gateway/src/services/PhoneTransferService.ts`
@@ -428,7 +428,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/utils/socket-rate-limiter.ts`
 - [ ] `services/gateway/src/utils/transcription.ts`
 - [~] `services/gateway/src/utils/translation-transformer.ts`
-- [ ] `services/gateway/src/utils/withMutationLog.ts`
+- [x] `services/gateway/src/utils/withMutationLog.ts`
 
 ## validation  (1/11 have a test)
 
