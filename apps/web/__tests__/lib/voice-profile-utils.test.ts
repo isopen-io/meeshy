@@ -78,8 +78,12 @@ function makeIDBMock() {
         objectStore: jest.fn(() => store),
         oncomplete: null,
         onerror: null,
+        error: null,
       };
-      setTimeout(() => tx.oncomplete?.(), 0);
+      // Fire oncomplete via setTimeout so that store requests (which also use setTimeout 0)
+      // fire their onsuccess BEFORE oncomplete fires. We use delay=50 to ensure ordering.
+      // The real IDB model: oncomplete fires after all requests in the transaction complete.
+      setTimeout(() => tx.oncomplete?.(), 50);
       return tx;
     }),
     close: jest.fn(),
@@ -208,16 +212,16 @@ describe('openVoiceProfileDB', () => {
     expect(idbMock.open).toHaveBeenCalledWith('meeshy-voice-profile', 2);
   });
 
-  it('runs onupgradeneeded to create object stores', async () => {
-    // Simulate an upgrade needed event
+  it('runs onupgradeneeded to create object stores when they do not exist', async () => {
     const { open, request, db } = makeIDBMock();
+    // Contains returns false → createObjectStore is called
+    db.objectStoreNames.contains = jest.fn(() => false);
     Object.defineProperty(global, 'indexedDB', {
       value: { open },
       configurable: true,
       writable: true,
     });
 
-    // Override open to trigger onupgradeneeded
     open.mockImplementationOnce(() => {
       setTimeout(() => {
         request.onupgradeneeded?.({ target: request });
@@ -229,6 +233,29 @@ describe('openVoiceProfileDB', () => {
     const result = await openVoiceProfileDB();
     expect(result).toBeDefined();
     expect(db.createObjectStore).toHaveBeenCalled();
+  });
+
+  it('skips createObjectStore when stores already exist', async () => {
+    const { open, request, db } = makeIDBMock();
+    // Contains returns true → createObjectStore is NOT called
+    db.objectStoreNames.contains = jest.fn(() => true);
+    Object.defineProperty(global, 'indexedDB', {
+      value: { open },
+      configurable: true,
+      writable: true,
+    });
+
+    open.mockImplementationOnce(() => {
+      setTimeout(() => {
+        request.onupgradeneeded?.({ target: request });
+        request.onsuccess?.();
+      }, 0);
+      return request;
+    });
+
+    const result = await openVoiceProfileDB();
+    expect(result).toBeDefined();
+    expect(db.createObjectStore).not.toHaveBeenCalled();
   });
 
   it('rejects on error', async () => {
@@ -281,6 +308,25 @@ describe('saveRecordingToStorage', () => {
     // Should not throw, silently catches error
     await expect(saveRecordingToStorage(recording)).resolves.toBeUndefined();
   });
+
+  it('handles tx.onerror during save gracefully', async () => {
+    idbMock.db.transaction.mockImplementationOnce((_storeName: string, _mode: string) => {
+      const tx: any = {
+        objectStore: jest.fn(() => ({
+          put: jest.fn(),
+        })),
+        oncomplete: null,
+        onerror: null,
+        error: new Error('TX Error'),
+      };
+      // Fire onerror instead of oncomplete
+      setTimeout(() => tx.onerror?.(), 50);
+      return tx;
+    });
+
+    const recording = makeStoredRecording();
+    await expect(saveRecordingToStorage(recording)).resolves.toBeUndefined();
+  });
 });
 
 // ─── loadRecordingFromStorage ─────────────────────────────────────────────────
@@ -311,6 +357,28 @@ describe('loadRecordingFromStorage', () => {
     const result = await loadRecordingFromStorage();
     expect(result).toBeNull();
   });
+
+  it('returns null when get request errors (onerror path)', async () => {
+    idbMock.db.transaction.mockImplementationOnce((_storeName: string, _mode: string) => {
+      const tx: any = {
+        objectStore: jest.fn(() => ({
+          get: jest.fn(() => {
+            const req: any = { error: new Error('get error') };
+            setTimeout(() => req.onerror?.(), 0);
+            return req;
+          }),
+        })),
+        oncomplete: null,
+        onerror: null,
+        error: null,
+      };
+      setTimeout(() => tx.oncomplete?.(), 50);
+      return tx;
+    });
+
+    const result = await loadRecordingFromStorage();
+    expect(result).toBeNull();
+  });
 });
 
 // ─── clearRecordingFromStorage ────────────────────────────────────────────────
@@ -325,6 +393,23 @@ describe('clearRecordingFromStorage', () => {
     idbMock.db.transaction.mockImplementationOnce(() => {
       throw new Error('Clear error');
     });
+    await expect(clearRecordingFromStorage()).resolves.toBeUndefined();
+  });
+
+  it('handles tx.onerror during clear gracefully', async () => {
+    idbMock.db.transaction.mockImplementationOnce((_storeName: string, _mode: string) => {
+      const tx: any = {
+        objectStore: jest.fn(() => ({
+          delete: jest.fn(),
+        })),
+        oncomplete: null,
+        onerror: null,
+        error: new Error('TX Error during clear'),
+      };
+      setTimeout(() => tx.onerror?.(), 50);
+      return tx;
+    });
+
     await expect(clearRecordingFromStorage()).resolves.toBeUndefined();
   });
 });
@@ -384,6 +469,35 @@ describe('saveVoicePreviewsToStorage', () => {
     ];
     await expect(saveVoicePreviewsToStorage('user-1', previews, 2)).resolves.toBeUndefined();
   });
+
+  it('handles tx.onerror during save previews gracefully', async () => {
+    idbMock.db.transaction.mockImplementationOnce((_storeName: string, _mode: string) => {
+      const tx: any = {
+        objectStore: jest.fn(() => ({
+          put: jest.fn(),
+        })),
+        oncomplete: null,
+        onerror: null,
+        error: new Error('TX Error during save previews'),
+      };
+      setTimeout(() => tx.onerror?.(), 50);
+      return tx;
+    });
+
+    const previews = [
+      {
+        language: 'fr',
+        audioBase64: btoa('audio'),
+        audioFormat: 'audio/mp3',
+        originalText: 'Bonjour',
+        translatedText: 'Bonjour',
+        durationMs: 2000,
+        generatedAt: new Date().toISOString(),
+      },
+    ];
+
+    await expect(saveVoicePreviewsToStorage('user-1', previews, 1)).resolves.toBeUndefined();
+  });
 });
 
 // ─── loadVoicePreviewsFromStorage ─────────────────────────────────────────────
@@ -392,12 +506,72 @@ describe('loadVoicePreviewsFromStorage', () => {
   it('returns empty array when no previews exist', async () => {
     const result = await loadVoicePreviewsFromStorage('user-1');
     expect(Array.isArray(result)).toBe(true);
+    expect(result).toHaveLength(0);
   });
 
-  it('returns empty array on IDB error', async () => {
+  it('handles null result from getAll (covers || [] fallback branch)', async () => {
+    // Override the index mock to return null result (triggers `request.result || []`)
+    idbMock.db.transaction.mockImplementationOnce((_storeName: string, _mode: string) => {
+      const mockIndex = {
+        getAll: jest.fn(() => {
+          const req: any = { result: null }; // null triggers the || [] branch
+          setTimeout(() => req.onsuccess?.(), 0);
+          return req;
+        }),
+      };
+      const tx: any = {
+        objectStore: jest.fn(() => ({ index: jest.fn(() => mockIndex) })),
+        oncomplete: null,
+        onerror: null,
+        error: null,
+      };
+      setTimeout(() => tx.oncomplete?.(), 50);
+      return tx;
+    });
+
+    const result = await loadVoicePreviewsFromStorage('user-1');
+    expect(result).toEqual([]);
+  });
+
+  it('returns stored previews for matching userId', async () => {
+    // Seed the store with a preview for user-1
+    const preview = { userId: 'user-1', language: 'en', id: 'user-1_en', audioBlob: new Blob() };
+    idbMock.previewsStore.set('user-1_en', preview);
+
+    const result = await loadVoicePreviewsFromStorage('user-1');
+    expect(result).toHaveLength(1);
+    expect(result[0].userId).toBe('user-1');
+  });
+
+  it('returns empty array on IDB transaction error', async () => {
     idbMock.db.transaction.mockImplementationOnce(() => {
       throw new Error('Load previews error');
     });
+    const result = await loadVoicePreviewsFromStorage('user-1');
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array when getAll request errors', async () => {
+    // Override transaction to return a store whose index.getAll fires onerror
+    idbMock.db.transaction.mockImplementationOnce((_storeName: string, _mode: string) => {
+      const mockIndex = {
+        getAll: jest.fn(() => {
+          const req: any = { error: new Error('getAll error') };
+          setTimeout(() => req.onerror?.(), 0);
+          return req;
+        }),
+      };
+      const store = { objectStore: jest.fn(() => ({ index: jest.fn(() => mockIndex) })) };
+      const tx: any = {
+        objectStore: jest.fn(() => ({ index: jest.fn(() => mockIndex) })),
+        oncomplete: null,
+        onerror: null,
+        error: null,
+      };
+      setTimeout(() => tx.oncomplete?.(), 50);
+      return tx;
+    });
+
     const result = await loadVoicePreviewsFromStorage('user-1');
     expect(result).toEqual([]);
   });
@@ -406,14 +580,67 @@ describe('loadVoicePreviewsFromStorage', () => {
 // ─── clearVoicePreviewsFromStorage ────────────────────────────────────────────
 
 describe('clearVoicePreviewsFromStorage', () => {
-  it('resolves without error', async () => {
+  it('resolves without error when no previews exist', async () => {
     await expect(clearVoicePreviewsFromStorage('user-1')).resolves.toBeUndefined();
   });
 
-  it('handles IDB errors gracefully', async () => {
+  it('handles null result from getAllKeys (covers || [] fallback branch)', async () => {
+    idbMock.db.transaction.mockImplementationOnce((_storeName: string, _mode: string) => {
+      const mockIndex = {
+        getAllKeys: jest.fn(() => {
+          const req: any = { result: null }; // null triggers the || [] branch
+          setTimeout(() => req.onsuccess?.(), 0);
+          return req;
+        }),
+      };
+      const tx: any = {
+        objectStore: jest.fn(() => ({ index: jest.fn(() => mockIndex) })),
+        oncomplete: null,
+        onerror: null,
+        error: null,
+      };
+      setTimeout(() => tx.oncomplete?.(), 50);
+      return tx;
+    });
+
+    await expect(clearVoicePreviewsFromStorage('user-1')).resolves.toBeUndefined();
+  });
+
+  it('deletes existing previews (covers delete loop branch)', async () => {
+    // Seed the previewsStore with a preview for user-1
+    idbMock.previewsStore.set('user-1_en', { userId: 'user-1', language: 'en', id: 'user-1_en' });
+
+    await expect(clearVoicePreviewsFromStorage('user-1')).resolves.toBeUndefined();
+    // After clear, store should be empty
+    expect(idbMock.previewsStore.size).toBe(0);
+  });
+
+  it('handles IDB transaction throw errors gracefully', async () => {
     idbMock.db.transaction.mockImplementationOnce(() => {
       throw new Error('Clear previews error');
     });
+    await expect(clearVoicePreviewsFromStorage('user-1')).resolves.toBeUndefined();
+  });
+
+  it('handles getAllKeys request error gracefully', async () => {
+    idbMock.db.transaction.mockImplementationOnce((_storeName: string, _mode: string) => {
+      const mockIndex = {
+        getAllKeys: jest.fn(() => {
+          const req: any = { error: new Error('getAllKeys error') };
+          setTimeout(() => req.onerror?.(), 0);
+          return req;
+        }),
+      };
+      const tx: any = {
+        objectStore: jest.fn(() => ({ index: jest.fn(() => mockIndex) })),
+        oncomplete: null,
+        onerror: null,
+        error: null,
+      };
+      setTimeout(() => tx.oncomplete?.(), 50);
+      return tx;
+    });
+
     await expect(clearVoicePreviewsFromStorage('user-1')).resolves.toBeUndefined();
   });
 });
