@@ -1030,4 +1030,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   1. Branch 44 in MRSS (`throw lastError` in `withRetry` loop-exit path) is unreachable via public API (maxRetries always ≥1); excluded from ratchet justification — left as-is with no ignore pragma per "do not write tautological tests" rule.
   2. Global threshold NOT ratcheted this slice: pre-existing 27 failing suites in unrelated test files (NotificationService, posts, MessagingService) make CI delta measurement unreliable. Threshold stays at lines:50/branches:48/statements:50/functions:49.
 - Next slice: P1 Voice/audio × gateway OR P1 Offline & sync × web (next ☐ cells, top-to-bottom scan)
-- Commit: (see PR #715 → squash-merge SHA TBD)
+- Commit: af4f3c3e0f9577fc22ffa576a0f9a92405397dad (squash-merged as PR #715 → main)
