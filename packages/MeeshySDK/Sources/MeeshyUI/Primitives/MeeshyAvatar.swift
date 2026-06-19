@@ -377,7 +377,11 @@ public struct MeeshyAvatar: View {
                         }
                     }
                 }
-        } else { tappable }
+                .accessibilityLabel(name)
+        } else {
+            tappable
+                .accessibilityLabel(name)
+        }
     }
 
     // MARK: - Avatar Body

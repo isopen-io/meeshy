@@ -373,8 +373,8 @@ struct ConversationListView: View {
             SwipeAction(
                 icon: conversation.userState.isPinned ? "pin.slash.fill" : "pin.fill",
                 label: conversation.userState.isPinned
-                    ? String(localized: "swipe.unpin", defaultValue: "D\u{00e9}s\u{00e9}pingler")
-                    : String(localized: "swipe.pin", defaultValue: "\u{00c9}pingler"),
+                    ? String(localized: "swipe.unpin", defaultValue: "Désépingler")
+                    : String(localized: "swipe.pin", defaultValue: "Épingler"),
                 color: MeeshyColors.pinnedBlue
             ) {
                 Task { await conversationViewModel.togglePin(for: conversation.id) }
@@ -391,7 +391,7 @@ struct ConversationListView: View {
             SwipeAction(
                 icon: isLocked ? "lock.open.fill" : "lock.fill",
                 label: isLocked
-                    ? String(localized: "swipe.unlock", defaultValue: "D\u{00e9}verrouiller")
+                    ? String(localized: "swipe.unlock", defaultValue: "Déverrouiller")
                     : String(localized: "swipe.lock", defaultValue: "Verrouiller"),
                 color: MeeshyColors.warning
             ) {
@@ -419,7 +419,7 @@ struct ConversationListView: View {
             SwipeAction(
                 icon: isArchived ? "tray.and.arrow.up.fill" : "archivebox.fill",
                 label: isArchived
-                    ? String(localized: "swipe.unarchive", defaultValue: "D\u{00e9}sarchiver")
+                    ? String(localized: "swipe.unarchive", defaultValue: "Désarchiver")
                     : String(localized: "swipe.archive", defaultValue: "Archiver"),
                 color: MeeshyColors.warning
             ) {
@@ -449,7 +449,7 @@ struct ConversationListView: View {
             actions.append(SwipeAction(
                 icon: isBlocked ? "hand.raised.slash.fill" : "hand.raised.fill",
                 label: isBlocked
-                    ? String(localized: "swipe.unblock", defaultValue: "D\u{00e9}bloquer")
+                    ? String(localized: "swipe.unblock", defaultValue: "Débloquer")
                     : String(localized: "swipe.block", defaultValue: "Bloquer"),
                 color: MeeshyColors.error
             ) {
