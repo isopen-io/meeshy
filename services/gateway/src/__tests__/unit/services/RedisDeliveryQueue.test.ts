@@ -14,142 +14,515 @@ function makePayload(overrides: Partial<QueuedMessagePayload> = {}): QueuedMessa
   };
 }
 
+function makeMemoryQueue() {
+  const cacheStore = new RedisCacheStore();
+  const queue = new RedisDeliveryQueue(cacheStore);
+  return { cacheStore, queue };
+}
+
 describe('RedisDeliveryQueue (memory fallback)', () => {
-  let cacheStore: RedisCacheStore;
-  let queue: RedisDeliveryQueue;
-
-  beforeEach(() => {
-    cacheStore = new RedisCacheStore();
-    queue = new RedisDeliveryQueue(cacheStore);
-  });
-
-  afterEach(async () => {
-    await cacheStore.close();
-  });
-
   test('enqueue adds message to queue', async () => {
-    const entry = makePayload();
-    await queue.enqueue('user-1', entry);
+    const { cacheStore, queue } = makeMemoryQueue();
+    try {
+      const entry = makePayload();
+      await queue.enqueue('user-1', entry);
 
-    const size = await queue.size('user-1');
-    expect(size).toBe(1);
+      const size = await queue.size('user-1');
+      expect(size).toBe(1);
+    } finally {
+      await cacheStore.close();
+    }
   });
 
   test('drain returns all messages and clears queue', async () => {
-    const entry1 = makePayload({ messageId: 'msg-001' });
-    const entry2 = makePayload({ messageId: 'msg-002' });
+    const { cacheStore, queue } = makeMemoryQueue();
+    try {
+      const entry1 = makePayload({ messageId: 'msg-001' });
+      const entry2 = makePayload({ messageId: 'msg-002' });
 
-    await queue.enqueue('user-1', entry1);
-    await queue.enqueue('user-1', entry2);
+      await queue.enqueue('user-1', entry1);
+      await queue.enqueue('user-1', entry2);
 
-    const drained = await queue.drain('user-1');
-    expect(drained).toHaveLength(2);
-    expect(drained[0].messageId).toBe('msg-001');
-    expect(drained[1].messageId).toBe('msg-002');
+      const drained = await queue.drain('user-1');
+      expect(drained).toHaveLength(2);
+      expect(drained[0].messageId).toBe('msg-001');
+      expect(drained[1].messageId).toBe('msg-002');
 
-    const remaining = await queue.size('user-1');
-    expect(remaining).toBe(0);
+      const remaining = await queue.size('user-1');
+      expect(remaining).toBe(0);
+    } finally {
+      await cacheStore.close();
+    }
   });
 
   test('drain returns empty array when no messages', async () => {
-    const drained = await queue.drain('user-nonexistent');
-    expect(drained).toEqual([]);
+    const { cacheStore, queue } = makeMemoryQueue();
+    try {
+      const drained = await queue.drain('user-nonexistent');
+      expect(drained).toEqual([]);
+    } finally {
+      await cacheStore.close();
+    }
   });
 
   test('enqueue multiple messages preserves FIFO order', async () => {
-    const ids = ['msg-a', 'msg-b', 'msg-c', 'msg-d'];
-    for (const id of ids) {
-      await queue.enqueue('user-1', makePayload({ messageId: id }));
-    }
+    const { cacheStore, queue } = makeMemoryQueue();
+    try {
+      const ids = ['msg-a', 'msg-b', 'msg-c', 'msg-d'];
+      for (const id of ids) {
+        await queue.enqueue('user-1', makePayload({ messageId: id }));
+      }
 
-    const drained = await queue.drain('user-1');
-    expect(drained.map(d => d.messageId)).toEqual(ids);
+      const drained = await queue.drain('user-1');
+      expect(drained.map(d => d.messageId)).toEqual(ids);
+    } finally {
+      await cacheStore.close();
+    }
   });
 
   test('size returns correct count', async () => {
-    expect(await queue.size('user-1')).toBe(0);
+    const { cacheStore, queue } = makeMemoryQueue();
+    try {
+      expect(await queue.size('user-1')).toBe(0);
 
-    await queue.enqueue('user-1', makePayload({ messageId: 'msg-1' }));
-    expect(await queue.size('user-1')).toBe(1);
+      await queue.enqueue('user-1', makePayload({ messageId: 'msg-1' }));
+      expect(await queue.size('user-1')).toBe(1);
 
-    await queue.enqueue('user-1', makePayload({ messageId: 'msg-2' }));
-    expect(await queue.size('user-1')).toBe(2);
+      await queue.enqueue('user-1', makePayload({ messageId: 'msg-2' }));
+      expect(await queue.size('user-1')).toBe(2);
 
-    await queue.drain('user-1');
-    expect(await queue.size('user-1')).toBe(0);
+      await queue.drain('user-1');
+      expect(await queue.size('user-1')).toBe(0);
+    } finally {
+      await cacheStore.close();
+    }
   });
 
   test('queues are isolated per user', async () => {
-    await queue.enqueue('user-a', makePayload({ messageId: 'msg-for-a' }));
-    await queue.enqueue('user-b', makePayload({ messageId: 'msg-for-b' }));
+    const { cacheStore, queue } = makeMemoryQueue();
+    try {
+      await queue.enqueue('user-a', makePayload({ messageId: 'msg-for-a' }));
+      await queue.enqueue('user-b', makePayload({ messageId: 'msg-for-b' }));
 
-    const drainedA = await queue.drain('user-a');
-    expect(drainedA).toHaveLength(1);
-    expect(drainedA[0].messageId).toBe('msg-for-a');
+      const drainedA = await queue.drain('user-a');
+      expect(drainedA).toHaveLength(1);
+      expect(drainedA[0].messageId).toBe('msg-for-a');
 
-    const drainedB = await queue.drain('user-b');
-    expect(drainedB).toHaveLength(1);
-    expect(drainedB[0].messageId).toBe('msg-for-b');
+      const drainedB = await queue.drain('user-b');
+      expect(drainedB).toHaveLength(1);
+      expect(drainedB[0].messageId).toBe('msg-for-b');
+    } finally {
+      await cacheStore.close();
+    }
   });
 
   test('peek returns messages without removing them', async () => {
-    await queue.enqueue('user-1', makePayload({ messageId: 'msg-1' }));
-    await queue.enqueue('user-1', makePayload({ messageId: 'msg-2' }));
+    const { cacheStore, queue } = makeMemoryQueue();
+    try {
+      await queue.enqueue('user-1', makePayload({ messageId: 'msg-1' }));
+      await queue.enqueue('user-1', makePayload({ messageId: 'msg-2' }));
 
-    const peeked = await queue.peek('user-1');
-    expect(peeked).toHaveLength(2);
+      const peeked = await queue.peek('user-1');
+      expect(peeked).toHaveLength(2);
 
-    const size = await queue.size('user-1');
-    expect(size).toBe(2);
+      const size = await queue.size('user-1');
+      expect(size).toBe(2);
+    } finally {
+      await cacheStore.close();
+    }
   });
 
   test('peek respects limit parameter', async () => {
-    await queue.enqueue('user-1', makePayload({ messageId: 'msg-1' }));
-    await queue.enqueue('user-1', makePayload({ messageId: 'msg-2' }));
-    await queue.enqueue('user-1', makePayload({ messageId: 'msg-3' }));
+    const { cacheStore, queue } = makeMemoryQueue();
+    try {
+      await queue.enqueue('user-1', makePayload({ messageId: 'msg-1' }));
+      await queue.enqueue('user-1', makePayload({ messageId: 'msg-2' }));
+      await queue.enqueue('user-1', makePayload({ messageId: 'msg-3' }));
 
-    const peeked = await queue.peek('user-1', 2);
-    expect(peeked).toHaveLength(2);
-    expect(peeked[0].messageId).toBe('msg-1');
-    expect(peeked[1].messageId).toBe('msg-2');
+      const peeked = await queue.peek('user-1', 2);
+      expect(peeked).toHaveLength(2);
+      expect(peeked[0].messageId).toBe('msg-1');
+      expect(peeked[1].messageId).toBe('msg-2');
+    } finally {
+      await cacheStore.close();
+    }
   });
 
   test('cleanup removes expired entries', async () => {
-    const expired = makePayload({
-      messageId: 'old-msg',
-      enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
-    });
-    const fresh = makePayload({
-      messageId: 'new-msg',
-      enqueuedAt: new Date().toISOString(),
-    });
+    const { cacheStore, queue } = makeMemoryQueue();
+    try {
+      const expired = makePayload({
+        messageId: 'old-msg',
+        enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
+      });
+      const fresh = makePayload({
+        messageId: 'new-msg',
+        enqueuedAt: new Date().toISOString(),
+      });
 
-    await queue.enqueue('user-1', expired);
-    await queue.enqueue('user-1', fresh);
+      await queue.enqueue('user-1', expired);
+      await queue.enqueue('user-1', fresh);
 
-    const removed = await queue.cleanup();
-    expect(removed).toBe(1);
+      const removed = await queue.cleanup();
+      expect(removed).toBe(1);
 
-    const remaining = await queue.drain('user-1');
-    expect(remaining).toHaveLength(1);
-    expect(remaining[0].messageId).toBe('new-msg');
+      const remaining = await queue.drain('user-1');
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].messageId).toBe('new-msg');
+    } finally {
+      await cacheStore.close();
+    }
   });
 
   test('cleanup handles multiple users', async () => {
-    const expired = makePayload({
-      messageId: 'old',
+    const { cacheStore, queue } = makeMemoryQueue();
+    try {
+      const expired = makePayload({
+        messageId: 'old',
+        enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
+      });
+
+      await queue.enqueue('user-a', expired);
+      await queue.enqueue('user-b', expired);
+      await queue.enqueue('user-a', makePayload({ messageId: 'fresh' }));
+
+      const removed = await queue.cleanup();
+      expect(removed).toBe(2);
+
+      expect(await queue.size('user-a')).toBe(1);
+      expect(await queue.size('user-b')).toBe(0);
+    } finally {
+      await cacheStore.close();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Redis-backed paths — gap fill
+// ---------------------------------------------------------------------------
+
+function makeMockPipeline() {
+  const pipeline: Record<string, jest.Mock> = {
+    lrange: jest.fn(),
+    del: jest.fn(),
+    rpush: jest.fn(),
+    expire: jest.fn(),
+    exec: jest.fn(),
+  };
+  pipeline.lrange.mockReturnValue(pipeline);
+  pipeline.del.mockReturnValue(pipeline);
+  pipeline.rpush.mockReturnValue(pipeline);
+  pipeline.expire.mockReturnValue(pipeline);
+  return pipeline;
+}
+
+function makeMockRedis(pipeline = makeMockPipeline()) {
+  return {
+    rpush: jest.fn().mockResolvedValue(1),
+    expire: jest.fn().mockResolvedValue(1),
+    lrange: jest.fn().mockResolvedValue([]),
+    llen: jest.fn().mockResolvedValue(0),
+    scan: jest.fn().mockResolvedValue(['0', []]),
+    pipeline: jest.fn().mockReturnValue(pipeline),
+    _pipeline: pipeline,
+  };
+}
+
+function makeCacheStore(redis: ReturnType<typeof makeMockRedis> | null): any {
+  return { getNativeClient: jest.fn().mockReturnValue(redis) };
+}
+
+describe('RedisDeliveryQueue (Redis-backed paths)', () => {
+  test('enqueue — writes to Redis rpush + expire', async () => {
+    const redis = makeMockRedis();
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+    const entry = makePayload({ messageId: 'redis-msg-1' });
+
+    await queue.enqueue('user-r', entry);
+
+    expect(redis.rpush).toHaveBeenCalledWith(
+      'delivery:queue:user-r',
+      JSON.stringify(entry)
+    );
+    expect(redis.expire).toHaveBeenCalledWith(
+      'delivery:queue:user-r',
+      expect.any(Number)
+    );
+    expect(redis.expire.mock.calls[0][1]).toBeGreaterThan(0);
+  });
+
+  test('enqueue — falls back to memory when Redis rpush throws', async () => {
+    const redis = makeMockRedis();
+    redis.rpush.mockRejectedValue(new Error('conn reset'));
+    redis.llen.mockRejectedValue(new Error('conn reset'));
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    await queue.enqueue('user-fallback', makePayload({ messageId: 'fb-msg' }));
+
+    // size also falls back to memory because llen throws
+    const size = await queue.size('user-fallback');
+    expect(size).toBe(1);
+  });
+
+  test('drain — reads from Redis pipeline lrange+del and parses entries', async () => {
+    const entry = makePayload({ messageId: 'drain-redis' });
+    const pipeline = makeMockPipeline();
+    pipeline.exec.mockResolvedValue([
+      [null, [JSON.stringify(entry)]],
+      [null, 1],
+    ]);
+    const redis = makeMockRedis(pipeline);
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    const drained = await queue.drain('user-r');
+
+    expect(drained).toHaveLength(1);
+    expect(drained[0].messageId).toBe('drain-redis');
+  });
+
+  test('drain — returns empty array when pipeline exec returns null', async () => {
+    const pipeline = makeMockPipeline();
+    pipeline.exec.mockResolvedValue(null);
+    const redis = makeMockRedis(pipeline);
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    expect(await queue.drain('user-r')).toEqual([]);
+  });
+
+  test('drain — falls back to memory when Redis pipeline throws', async () => {
+    const entry = makePayload({ messageId: 'drain-fallback' });
+    const pipeline = makeMockPipeline();
+    pipeline.exec.mockRejectedValue(new Error('pipeline fail'));
+    const redis = makeMockRedis(pipeline);
+
+    const cacheStore: any = { getNativeClient: jest.fn() };
+    // First call (enqueue) returns null → memory path
+    cacheStore.getNativeClient
+      .mockReturnValueOnce(null)
+      .mockReturnValue(redis);
+
+    const queue = new RedisDeliveryQueue(cacheStore);
+    await queue.enqueue('user-r', entry);
+
+    const drained = await queue.drain('user-r');
+    expect(drained).toHaveLength(1);
+    expect(drained[0].messageId).toBe('drain-fallback');
+  });
+
+  test('peek — queries lrange(0, limit-1) when limit specified', async () => {
+    const entries = [
+      makePayload({ messageId: 'p1' }),
+      makePayload({ messageId: 'p2' }),
+    ];
+    const redis = makeMockRedis();
+    redis.lrange.mockResolvedValue(entries.map(e => JSON.stringify(e)));
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    const peeked = await queue.peek('user-r', 2);
+
+    expect(redis.lrange).toHaveBeenCalledWith('delivery:queue:user-r', 0, 1);
+    expect(peeked).toHaveLength(2);
+    expect(peeked[0].messageId).toBe('p1');
+  });
+
+  test('peek — queries lrange(0, -1) when no limit specified', async () => {
+    const redis = makeMockRedis();
+    redis.lrange.mockResolvedValue([]);
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    await queue.peek('user-r');
+
+    expect(redis.lrange).toHaveBeenCalledWith('delivery:queue:user-r', 0, -1);
+  });
+
+  test('peek — falls back to memory when Redis lrange throws', async () => {
+    const entry = makePayload({ messageId: 'peek-fallback' });
+    const redis = makeMockRedis();
+    redis.lrange.mockRejectedValue(new Error('lrange fail'));
+
+    const cacheStore: any = { getNativeClient: jest.fn() };
+    cacheStore.getNativeClient
+      .mockReturnValueOnce(null)  // enqueue → memory
+      .mockReturnValue(redis);    // peek → failing Redis → memory fallback
+
+    const queue = new RedisDeliveryQueue(cacheStore);
+    await queue.enqueue('user-r', entry);
+    const peeked = await queue.peek('user-r');
+
+    expect(peeked).toHaveLength(1);
+    expect(peeked[0].messageId).toBe('peek-fallback');
+  });
+
+  test('size — calls Redis llen and returns the count', async () => {
+    const redis = makeMockRedis();
+    redis.llen.mockResolvedValue(7);
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    expect(await queue.size('user-r')).toBe(7);
+    expect(redis.llen).toHaveBeenCalledWith('delivery:queue:user-r');
+  });
+
+  test('size — falls back to memory when Redis llen throws', async () => {
+    const redis = makeMockRedis();
+    redis.llen.mockRejectedValue(new Error('llen fail'));
+
+    const cacheStore: any = { getNativeClient: jest.fn() };
+    cacheStore.getNativeClient
+      .mockReturnValueOnce(null)  // enqueue → memory
+      .mockReturnValue(redis);    // size → failing Redis → memory fallback
+
+    const queue = new RedisDeliveryQueue(cacheStore);
+    await queue.enqueue('user-r', makePayload());
+    expect(await queue.size('user-r')).toBe(1);
+  });
+
+  test('cleanup — scans keys and rebuilds list after removing stale entries', async () => {
+    const stale = makePayload({
+      messageId: 'stale',
+      enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
+    });
+    const fresh = makePayload({ messageId: 'fresh' });
+    const pipeline = makeMockPipeline();
+    pipeline.exec.mockResolvedValue([[null, 1], [null, 1], [null, 1]]);
+
+    const redis = makeMockRedis(pipeline);
+    redis.scan.mockResolvedValue(['0', ['delivery:queue:user-r']]);
+    redis.lrange.mockResolvedValue([JSON.stringify(stale), JSON.stringify(fresh)]);
+
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+    const removed = await queue.cleanup();
+
+    expect(removed).toBe(1);
+    expect(pipeline.del).toHaveBeenCalled();
+    expect(pipeline.rpush).toHaveBeenCalled();
+    expect(pipeline.expire).toHaveBeenCalled();
+  });
+
+  test('cleanup — removes entire key when all entries are stale', async () => {
+    const stale = makePayload({
+      messageId: 'all-stale',
+      enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
+    });
+    const pipeline = makeMockPipeline();
+    pipeline.exec.mockResolvedValue([[null, 1]]);
+
+    const redis = makeMockRedis(pipeline);
+    redis.scan.mockResolvedValue(['0', ['delivery:queue:user-r']]);
+    redis.lrange.mockResolvedValue([JSON.stringify(stale)]);
+
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+    const removed = await queue.cleanup();
+
+    expect(removed).toBe(1);
+    expect(pipeline.del).toHaveBeenCalled();
+    expect(pipeline.rpush).not.toHaveBeenCalled();
+  });
+
+  test('cleanup — falls back to memory when Redis scan throws', async () => {
+    const redis = makeMockRedis();
+    redis.scan.mockRejectedValue(new Error('scan fail'));
+
+    const stale = makePayload({
+      messageId: 'mem-stale',
       enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
     });
 
-    await queue.enqueue('user-a', expired);
-    await queue.enqueue('user-b', expired);
-    await queue.enqueue('user-a', makePayload({ messageId: 'fresh' }));
+    const cacheStore: any = { getNativeClient: jest.fn() };
+    cacheStore.getNativeClient
+      .mockReturnValueOnce(null)  // enqueue → memory
+      .mockReturnValue(redis);    // cleanup → failing Redis → memory fallback
 
+    const queue = new RedisDeliveryQueue(cacheStore);
+    await queue.enqueue('user-r', stale);
+
+    expect(await queue.cleanup()).toBe(1);
+  });
+});
+
+describe('RedisDeliveryQueue (memory capacity limits)', () => {
+  test('evicts oldest user bucket when MEMORY_QUEUE_MAX_USERS is reached', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const memQueue: Map<string, any[]> = (queue as any).memoryQueue;
+
+    for (let i = 0; i < 1000; i++) {
+      memQueue.set(`slot-${i}`, [makePayload({ messageId: `m${i}` })]);
+    }
+    expect(memQueue.size).toBe(1000);
+
+    await queue.enqueue('overflow-user', makePayload({ messageId: 'overflow' }));
+
+    expect(memQueue.size).toBe(1000);
+    expect(memQueue.has('overflow-user')).toBe(true);
+    expect(memQueue.has('slot-0')).toBe(false);
+  });
+
+  test('truncates oldest entries when MEMORY_QUEUE_MAX_PER_USER is reached', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+
+    for (let i = 0; i < 50; i++) {
+      await queue.enqueue('user-cap', makePayload({ messageId: `msg-${i}` }));
+    }
+    expect(await queue.size('user-cap')).toBe(50);
+
+    await queue.enqueue('user-cap', makePayload({ messageId: 'msg-overflow' }));
+
+    expect(await queue.size('user-cap')).toBe(50);
+    const items = await queue.drain('user-cap');
+    expect(items[0].messageId).toBe('msg-1');
+    expect(items[49].messageId).toBe('msg-overflow');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Branch gap-fill: rangeError throw path + cleanup no-stale + drain null[0]
+// ---------------------------------------------------------------------------
+
+describe('RedisDeliveryQueue (branch gap-fill)', () => {
+  test('drain — falls back to memory when pipeline result has a rangeError', async () => {
+    const entry = makePayload({ messageId: 'range-err-fallback' });
+    const pipeline = makeMockPipeline();
+    pipeline.exec.mockResolvedValue([
+      [new Error('lrange error'), null],
+      [null, 1],
+    ]);
+    const redis = makeMockRedis(pipeline);
+
+    const cacheStore: any = { getNativeClient: jest.fn() };
+    cacheStore.getNativeClient
+      .mockReturnValueOnce(null) // enqueue → memory
+      .mockReturnValue(redis);   // drain → Redis rangeError → memory fallback
+
+    const queue = new RedisDeliveryQueue(cacheStore);
+    await queue.enqueue('user-r', entry);
+
+    const drained = await queue.drain('user-r');
+    expect(drained).toHaveLength(1);
+    expect(drained[0].messageId).toBe('range-err-fallback');
+  });
+
+  test('drain — returns empty when pipeline results[0] is null', async () => {
+    const pipeline = makeMockPipeline();
+    // results is truthy but results[0] is null → early return []
+    pipeline.exec.mockResolvedValue([null, [null, 1]]);
+    const redis = makeMockRedis(pipeline);
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    expect(await queue.drain('user-r')).toEqual([]);
+  });
+
+  test('cleanup — returns 0 and skips rebuild when no entries are stale', async () => {
+    const fresh = makePayload({ messageId: 'fresh-only', enqueuedAt: new Date().toISOString() });
+    const pipeline = makeMockPipeline();
+    const redis = makeMockRedis(pipeline);
+    redis.scan.mockResolvedValue(['0', ['delivery:queue:user-r']]);
+    redis.lrange.mockResolvedValue([JSON.stringify(fresh)]);
+
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
     const removed = await queue.cleanup();
-    expect(removed).toBe(2);
 
-    expect(await queue.size('user-a')).toBe(1);
-    expect(await queue.size('user-b')).toBe(0);
+    expect(removed).toBe(0);
+    expect(pipeline.del).not.toHaveBeenCalled();
+    expect(pipeline.rpush).not.toHaveBeenCalled();
   });
 });
 

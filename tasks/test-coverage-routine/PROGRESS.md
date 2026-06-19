@@ -56,7 +56,7 @@ A run targets **one (feature × app) cell**. Pick the highest-priority `☐` cel
 | P0 | **Messaging core** (send/recv/edit/delete/optimistic/dedup/clientMessageId) | ◐ sub: MessageHandler.ts ☑, messages.ts ⚠TS-errors (3 runs blocked) | ⊘ | ☑ | ☐ | ☐ | ☑ (client-message-id.ts 100%; MeeshySDK Swift ⊘ Linux env) |
 | P1 | **Real-time** (Socket.IO presence, typing, reactions, delivery, reconnect) | ☑ sub: StatusHandler☑ ConversationHandler☑ AttachmentReactionHandler☑ LocationHandler☑ CallEventsHandler☑ MeeshySocketIOManager☑ | ⊘ | ☑ sub: notification-socketio.singleton☑ use-connection-status☑ use-socketio-messaging☑ | ☐ | ☐ | ☑ (types/status-types.ts 100%/100%; utils/errors.ts 100%/100%; utils/notification-strings.ts 100%/96.96%; MeeshySDK Swift ⊘ Linux env) |
 | P1 | **Conversations & membership** (create/join/leave/participants/settings) | ☑ sub: leave.ts☑ ban.ts☑ delete-for-me.ts☑ stats.ts☑ ConversationStatsService.ts☑ ConversationMessageStatsService.ts☑ conversation-id-cache.ts☑ identifier-generator.ts☑ access-control.ts☑ participants.ts☑ search.ts☑ threads.ts☑ index.ts☑ sharing.ts☑ core.ts☑ messages-advanced.ts☑ | ⊘ | ☑ sub: transformers.service.ts☑ crud.service.ts☑ links.service.ts☑ link-conversation.service.ts☑ | ☐ | ☐ | ☑ (types/conversation.ts 100%/100%; MeeshySDK Swift ⊘ Linux env) |
-| P1 | **Offline & sync** (outbox, failed-messages queue, reconnect flush) | ☑ sub: RedisDeliveryQueue.ts☑ delivery-queue-cleanup.ts☑ | ⊘ | ☐ | ☐ | ☐ | ☐ |
+| P1 | **Offline & sync** (outbox, failed-messages queue, reconnect flush) | ☑ sub: RedisDeliveryQueue.ts☑ delivery-queue-cleanup.ts☑ MessageReadStatusService.ts☑ MutationLogService.ts☑ withMutationLog.ts☑ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P1 | **ZMQ infra** (worker pool, connection mgr, multipart frames, dedup) | ☑ sub: ZmqMessageHandler.ts☑ ZmqRequestSender.ts☑ zmq-helpers.ts☑ ZmqTranslationClient.ts☑ ZmqConnectionManager.ts☑ | ☑ sub: zmq_models.py☑ zmq_pool/worker_pool.py☑ zmq_voice_handler.py☑ zmq_pool/connection_manager.py☑ zmq_pool/translation_processor.py☑ zmq_pool/zmq_pool_manager.py☑ | ⊘ | ⊘ | ⊘ | ⊘ |
 | P1 | **Voice/audio** (transcription, TTS, voice profiles, voice translation) | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
 | P2 | **Notifications** (push, in-app, Firebase/APNs, delivery queue) | ☐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
@@ -129,7 +129,7 @@ The routine resolves a cell to concrete files here. Keep this list updated as th
 - **iOS:** `ConversationSocketHandler.swift` (has tests — fill gaps), `FeedSocketHandler.swift`
 
 ### Offline & sync
-- **gateway:** `services/gateway/src/services/RedisDeliveryQueue.ts` (gap-fill Redis path + boundary conditions), `services/gateway/src/jobs/delivery-queue-cleanup.ts` (new tests from zero)
+- **gateway:** `src/services/RedisDeliveryQueue.ts` (delivery queue for offline users), `src/jobs/delivery-queue-cleanup.ts` (cleanup job), `src/services/MessageReadStatusService.ts` (read/received status synced on reconnect), `src/services/MutationLogService.ts` (idempotency/dedup), `src/utils/withMutationLog.ts` (idempotent mutation helper)
 - **web:** `stores/failed-messages-store.ts` (overflow/migration), offline queue
 - **iOS:** `Services/OutboxDispatcher.swift` (+ protocol+mock), offline queue VM tests
 - **android:** sync/outbox equivalents
@@ -155,7 +155,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
 | web | `pnpm --filter web test:coverage` | 33.10 | 25.77 | 2026-06-14 (re-measured after Sprint 0.2/0.3 fixes; threshold floor set at 33/25) |
-| gateway | `pnpm --filter gateway test:coverage` | 50.38 | 48.18 | 2026-06-19 (post P1 Offline & sync × gateway; RedisDeliveryQueue.ts☑ delivery-queue-cleanup.ts☑; src/jobs/**/*.ts added to collectCoverageFrom — 6 uncovered job files dilute global%; threshold floor lines:50/branches:48/statements:50/functions:49) |
+| gateway | `pnpm --filter gateway test:coverage` | 56.02 | 52.28 | 2026-06-19 (post P1 Offline & sync × gateway; RedisDeliveryQueue.ts☑ delivery-queue-cleanup.ts☑ MessageReadStatusService.ts☑ MutationLogService.ts☑ withMutationLog.ts☑; src/jobs/**/*.ts added to collectCoverageFrom; +93 new tests total; threshold floor lines:50/branches:48/statements:50/functions:49 — CI delta not ratcheted due to pre-existing failures in 27 unrelated suites) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | 37.09 | n/a | 2026-06-14 (subset: no-GPU tests only; 4 files w/ import errors excluded) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |
