@@ -155,7 +155,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
 | web | `pnpm --filter web test:coverage` | 33.10 | 25.77 | 2026-06-14 (re-measured after Sprint 0.2/0.3 fixes; threshold floor set at 33/25) |
-| gateway | `pnpm --filter gateway test:coverage` | 54.87 | 50.80 | 2026-06-19 (post P1 Offline & sync × gateway; RedisDeliveryQueue.ts☑ delivery-queue-cleanup.ts☑; threshold floor ratcheted lines:54/branches:50/statements:54/functions:55) |
+| gateway | `pnpm --filter gateway test:coverage` | 50.38 | 48.18 | 2026-06-19 (post P1 Offline & sync × gateway; RedisDeliveryQueue.ts☑ delivery-queue-cleanup.ts☑; src/jobs/**/*.ts added to collectCoverageFrom — 6 uncovered job files dilute global%; threshold floor lines:50/branches:48/statements:50/functions:49) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | 37.09 | n/a | 2026-06-14 (subset: no-GPU tests only; 4 files w/ import errors excluded) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |
