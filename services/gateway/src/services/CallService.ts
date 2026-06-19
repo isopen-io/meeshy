@@ -779,12 +779,19 @@ export class CallService {
 
   /**
    * Get call session details with participants
-   * CVE-003: Added authorization check - requestingUserId parameter
+   * CVE-003: Added authorization check — the requesting USER must be an active
+   * member of the call's conversation (or already a call participant).
    *
    * @param callId - Call session ID
-   * @param requestingParticipantId - Optional participant ID requesting access (for authorization check)
+   * @param requestingUserId - Optional `User.id` requesting access. The REST route
+   *   `GET /calls/:callId` passes `authContext.userId`. Authorization MUST be
+   *   resolved by user (`Participant.userId`), NOT by `Participant.id`: a callee
+   *   fetching an incoming call to answer it is not yet a `CallParticipant` and
+   *   never has a `Participant` row whose `id` equals their `userId` — the old
+   *   `id:` lookup 403'd every legitimate callee (regression from the Participant
+   *   migration), which left incoming calls unjoinable.
    */
-  async getCallSession(callId: string, requestingParticipantId?: string): Promise<CallSessionWithParticipants> {
+  async getCallSession(callId: string, requestingUserId?: string): Promise<CallSessionWithParticipants> {
     const call = await this.prisma.callSession.findUnique({
       where: { id: callId },
       include: callSessionInclude
@@ -795,17 +802,17 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: Call session not found`);
     }
 
-    // CVE-003: Authorization check if requestingParticipantId provided
-    if (requestingParticipantId) {
-      // Check if user is a participant in the call
-      const isCallParticipant = call.participants.some((p) => p.participantId === requestingParticipantId);
+    // CVE-003: Authorization check if a requesting user is provided.
+    if (requestingUserId) {
+      // Fast path: the user is already a participant of this call.
+      const isCallParticipant = call.participants.some((p) => p.participant?.userId === requestingUserId);
 
-      // If not a participant, check if they're a member of the conversation
+      // Otherwise, authorize by active membership of the call's conversation.
       if (!isCallParticipant) {
         const isMember = await this.prisma.participant.findFirst({
           where: {
             conversationId: call.conversationId,
-            id: requestingParticipantId,
+            userId: requestingUserId,
             isActive: true
           }
         });
@@ -813,7 +820,7 @@ export class CallService {
         if (!isMember) {
           logger.warn('❌ Unauthorized call access attempt', {
             callId,
-            participantId: requestingParticipantId,
+            userId: requestingUserId,
             conversationId: call.conversationId
           });
           throw new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You do not have access to this call`);
