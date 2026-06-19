@@ -137,7 +137,7 @@ interface MockCallParticipant {
   isAudioEnabled: boolean;
   isVideoEnabled: boolean;
   user?: MockUser;
-  participant?: { user: MockUser };
+  participant?: { userId: string; user: MockUser };
 }
 
 interface MockCallSession {
@@ -766,10 +766,13 @@ describe('CallService', () => {
       );
     });
 
-    it('should authorize access for call participant', async () => {
+    it('should authorize a user who is already in the call (fast path, no membership query)', async () => {
       const mockCall = createMockCallSession({
         participants: [
-          createMockParticipant({ participantId: 'participant-123', userId: 'user-123', user: createMockUser() })
+          createMockParticipant({
+            participantId: 'participant-123',
+            participant: { userId: 'user-789', user: createMockUser() }
+          })
         ],
         initiator: createMockUser(),
         conversation: createMockConversation()
@@ -777,12 +780,14 @@ describe('CallService', () => {
 
       mockPrisma.callSession.findUnique.mockResolvedValue(mockCall);
 
-      const result = await callService.getCallSession('call-123', 'participant-123');
+      const result = await callService.getCallSession('call-123', 'user-789');
 
       expect(result).toBeDefined();
+      // The user maps to an existing CallParticipant → no conversation lookup.
+      expect(mockPrisma.participant.findFirst).not.toHaveBeenCalled();
     });
 
-    it('should authorize access for conversation member', async () => {
+    it('should authorize a conversation member by USER id, not participant id (regression: Participant migration 403)', async () => {
       const mockCall = createMockCallSession({
         participants: [createMockParticipant({ user: createMockUser() })],
         initiator: createMockUser(),
@@ -797,9 +802,15 @@ describe('CallService', () => {
         isActive: true
       });
 
-      const result = await callService.getCallSession('call-123', 'participant-456');
+      // The REST route passes `authContext.userId`; a callee fetching the call to
+      // answer it is not yet a CallParticipant and has no Participant row whose
+      // `id` equals their `userId`. Membership MUST be resolved by `userId`.
+      const result = await callService.getCallSession('call-123', 'user-456');
 
       expect(result).toBeDefined();
+      expect(mockPrisma.participant.findFirst).toHaveBeenCalledWith({
+        where: { conversationId: 'conv-123', userId: 'user-456', isActive: true }
+      });
     });
 
     it('should throw error for unauthorized access (CVE-003)', async () => {
@@ -812,7 +823,7 @@ describe('CallService', () => {
       mockPrisma.callSession.findUnique.mockResolvedValue(mockCall);
       mockPrisma.participant.findFirst.mockResolvedValue(null);
 
-      await expect(callService.getCallSession('call-123', 'unauthorized-participant')).rejects.toThrow(
+      await expect(callService.getCallSession('call-123', 'user-stranger')).rejects.toThrow(
         'NOT_A_PARTICIPANT: You do not have access to this call'
       );
     });
