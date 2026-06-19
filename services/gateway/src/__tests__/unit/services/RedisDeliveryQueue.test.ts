@@ -216,7 +216,7 @@ function makeMockPipeline() {
   return pipeline;
 }
 
-function makeGFRedis(pipeline = makeMockPipeline()) {
+function makeMockRedis(pipeline = makeMockPipeline()) {
   return {
     rpush: jest.fn().mockResolvedValue(1),
     expire: jest.fn().mockResolvedValue(1),
@@ -228,14 +228,14 @@ function makeGFRedis(pipeline = makeMockPipeline()) {
   };
 }
 
-function makeGFCacheStore(redis: ReturnType<typeof makeGFRedis> | null): any {
+function makeCacheStore(redis: ReturnType<typeof makeMockRedis> | null): any {
   return { getNativeClient: jest.fn().mockReturnValue(redis) };
 }
 
 describe('RedisDeliveryQueue (Redis-backed paths)', () => {
   test('enqueue — writes to Redis rpush + expire', async () => {
-    const redis = makeGFRedis();
-    const queue = new RedisDeliveryQueue(makeGFCacheStore(redis));
+    const redis = makeMockRedis();
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
     const entry = makePayload({ messageId: 'redis-msg-1' });
 
     await queue.enqueue('user-r', entry);
@@ -252,10 +252,10 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
   });
 
   test('enqueue — falls back to memory when Redis rpush throws', async () => {
-    const redis = makeGFRedis();
+    const redis = makeMockRedis();
     redis.rpush.mockRejectedValue(new Error('conn reset'));
     redis.llen.mockRejectedValue(new Error('conn reset'));
-    const queue = new RedisDeliveryQueue(makeGFCacheStore(redis));
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     await queue.enqueue('user-fallback', makePayload({ messageId: 'fb-msg' }));
 
@@ -271,8 +271,8 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
       [null, [JSON.stringify(entry)]],
       [null, 1],
     ]);
-    const redis = makeGFRedis(pipeline);
-    const queue = new RedisDeliveryQueue(makeGFCacheStore(redis));
+    const redis = makeMockRedis(pipeline);
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     const drained = await queue.drain('user-r');
 
@@ -283,8 +283,8 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
   test('drain — returns empty array when pipeline exec returns null', async () => {
     const pipeline = makeMockPipeline();
     pipeline.exec.mockResolvedValue(null);
-    const redis = makeGFRedis(pipeline);
-    const queue = new RedisDeliveryQueue(makeGFCacheStore(redis));
+    const redis = makeMockRedis(pipeline);
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     expect(await queue.drain('user-r')).toEqual([]);
   });
@@ -293,7 +293,7 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
     const entry = makePayload({ messageId: 'drain-fallback' });
     const pipeline = makeMockPipeline();
     pipeline.exec.mockRejectedValue(new Error('pipeline fail'));
-    const redis = makeGFRedis(pipeline);
+    const redis = makeMockRedis(pipeline);
 
     const cacheStore: any = { getNativeClient: jest.fn() };
     // First call (enqueue) returns null → memory path
@@ -314,9 +314,9 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
       makePayload({ messageId: 'p1' }),
       makePayload({ messageId: 'p2' }),
     ];
-    const redis = makeGFRedis();
+    const redis = makeMockRedis();
     redis.lrange.mockResolvedValue(entries.map(e => JSON.stringify(e)));
-    const queue = new RedisDeliveryQueue(makeGFCacheStore(redis));
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     const peeked = await queue.peek('user-r', 2);
 
@@ -326,9 +326,9 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
   });
 
   test('peek — queries lrange(0, -1) when no limit specified', async () => {
-    const redis = makeGFRedis();
+    const redis = makeMockRedis();
     redis.lrange.mockResolvedValue([]);
-    const queue = new RedisDeliveryQueue(makeGFCacheStore(redis));
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     await queue.peek('user-r');
 
@@ -337,7 +337,7 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
 
   test('peek — falls back to memory when Redis lrange throws', async () => {
     const entry = makePayload({ messageId: 'peek-fallback' });
-    const redis = makeGFRedis();
+    const redis = makeMockRedis();
     redis.lrange.mockRejectedValue(new Error('lrange fail'));
 
     const cacheStore: any = { getNativeClient: jest.fn() };
@@ -354,16 +354,16 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
   });
 
   test('size — calls Redis llen and returns the count', async () => {
-    const redis = makeGFRedis();
+    const redis = makeMockRedis();
     redis.llen.mockResolvedValue(7);
-    const queue = new RedisDeliveryQueue(makeGFCacheStore(redis));
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     expect(await queue.size('user-r')).toBe(7);
     expect(redis.llen).toHaveBeenCalledWith('delivery:queue:user-r');
   });
 
   test('size — falls back to memory when Redis llen throws', async () => {
-    const redis = makeGFRedis();
+    const redis = makeMockRedis();
     redis.llen.mockRejectedValue(new Error('llen fail'));
 
     const cacheStore: any = { getNativeClient: jest.fn() };
@@ -385,11 +385,11 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
     const pipeline = makeMockPipeline();
     pipeline.exec.mockResolvedValue([[null, 1], [null, 1], [null, 1]]);
 
-    const redis = makeGFRedis(pipeline);
+    const redis = makeMockRedis(pipeline);
     redis.scan.mockResolvedValue(['0', ['delivery:queue:user-r']]);
     redis.lrange.mockResolvedValue([JSON.stringify(stale), JSON.stringify(fresh)]);
 
-    const queue = new RedisDeliveryQueue(makeGFCacheStore(redis));
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
     const removed = await queue.cleanup();
 
     expect(removed).toBe(1);
@@ -406,11 +406,11 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
     const pipeline = makeMockPipeline();
     pipeline.exec.mockResolvedValue([[null, 1]]);
 
-    const redis = makeGFRedis(pipeline);
+    const redis = makeMockRedis(pipeline);
     redis.scan.mockResolvedValue(['0', ['delivery:queue:user-r']]);
     redis.lrange.mockResolvedValue([JSON.stringify(stale)]);
 
-    const queue = new RedisDeliveryQueue(makeGFCacheStore(redis));
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
     const removed = await queue.cleanup();
 
     expect(removed).toBe(1);
@@ -419,7 +419,7 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
   });
 
   test('cleanup — falls back to memory when Redis scan throws', async () => {
-    const redis = makeGFRedis();
+    const redis = makeMockRedis();
     redis.scan.mockRejectedValue(new Error('scan fail'));
 
     const stale = makePayload({
@@ -441,7 +441,7 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
 
 describe('RedisDeliveryQueue (memory capacity limits)', () => {
   test('evicts oldest user bucket when MEMORY_QUEUE_MAX_USERS is reached', async () => {
-    const queue = new RedisDeliveryQueue(makeGFCacheStore(null));
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
     const memQueue: Map<string, any[]> = (queue as any).memoryQueue;
 
     for (let i = 0; i < 1000; i++) {
@@ -457,7 +457,7 @@ describe('RedisDeliveryQueue (memory capacity limits)', () => {
   });
 
   test('truncates oldest entries when MEMORY_QUEUE_MAX_PER_USER is reached', async () => {
-    const queue = new RedisDeliveryQueue(makeGFCacheStore(null));
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
 
     for (let i = 0; i < 50; i++) {
       await queue.enqueue('user-cap', makePayload({ messageId: `msg-${i}` }));
@@ -485,7 +485,7 @@ describe('RedisDeliveryQueue (branch gap-fill)', () => {
       [new Error('lrange error'), null],
       [null, 1],
     ]);
-    const redis = makeGFRedis(pipeline);
+    const redis = makeMockRedis(pipeline);
 
     const cacheStore: any = { getNativeClient: jest.fn() };
     cacheStore.getNativeClient
@@ -504,8 +504,8 @@ describe('RedisDeliveryQueue (branch gap-fill)', () => {
     const pipeline = makeMockPipeline();
     // results is truthy but results[0] is null → early return []
     pipeline.exec.mockResolvedValue([null, [null, 1]]);
-    const redis = makeGFRedis(pipeline);
-    const queue = new RedisDeliveryQueue(makeGFCacheStore(redis));
+    const redis = makeMockRedis(pipeline);
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     expect(await queue.drain('user-r')).toEqual([]);
   });
@@ -513,410 +513,16 @@ describe('RedisDeliveryQueue (branch gap-fill)', () => {
   test('cleanup — returns 0 and skips rebuild when no entries are stale', async () => {
     const fresh = makePayload({ messageId: 'fresh-only', enqueuedAt: new Date().toISOString() });
     const pipeline = makeMockPipeline();
-    const redis = makeGFRedis(pipeline);
+    const redis = makeMockRedis(pipeline);
     redis.scan.mockResolvedValue(['0', ['delivery:queue:user-r']]);
     redis.lrange.mockResolvedValue([JSON.stringify(fresh)]);
 
-    const queue = new RedisDeliveryQueue(makeGFCacheStore(redis));
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
     const removed = await queue.cleanup();
 
     expect(removed).toBe(0);
     expect(pipeline.del).not.toHaveBeenCalled();
     expect(pipeline.rpush).not.toHaveBeenCalled();
-  });
-});
-
-// ─── Helpers for Redis-path tests ─────────────────────────────────────────────
-
-type MockPipeline = {
-  lrange: jest.MockedFunction<() => MockPipeline>;
-  del: jest.MockedFunction<() => MockPipeline>;
-  rpush: jest.MockedFunction<(...args: unknown[]) => MockPipeline>;
-  expire: jest.MockedFunction<() => MockPipeline>;
-  exec: jest.MockedFunction<() => Promise<unknown>>;
-};
-
-function makePipeline(execResult: unknown = [[null, []], [null, 1]]): MockPipeline {
-  const pipeline: MockPipeline = {
-    lrange: jest.fn().mockReturnThis(),
-    del: jest.fn().mockReturnThis(),
-    rpush: jest.fn().mockReturnThis(),
-    expire: jest.fn().mockReturnThis(),
-    exec: jest.fn().mockResolvedValue(execResult),
-  } as unknown as MockPipeline;
-  return pipeline;
-}
-
-function makeMockRedis(overrides: Record<string, unknown> = {}) {
-  const pipeline = makePipeline();
-  return {
-    rpush: jest.fn().mockResolvedValue(1),
-    expire: jest.fn().mockResolvedValue(1),
-    lrange: jest.fn().mockResolvedValue([]),
-    del: jest.fn().mockResolvedValue(1),
-    llen: jest.fn().mockResolvedValue(0),
-    scan: jest.fn().mockResolvedValue(['0', []]),
-    pipeline: jest.fn().mockReturnValue(pipeline),
-    _pipeline: pipeline,
-    ...overrides,
-  };
-}
-
-function makeCacheStore(redis: unknown = null): CacheStore {
-  return {
-    getNativeClient: jest.fn().mockReturnValue(redis),
-    get: jest.fn(),
-    set: jest.fn(),
-    del: jest.fn(),
-    keys: jest.fn(),
-    setnx: jest.fn(),
-    expire: jest.fn(),
-    publish: jest.fn(),
-    info: jest.fn(),
-    isAvailable: jest.fn(),
-    close: jest.fn().mockResolvedValue(undefined),
-  } as unknown as CacheStore;
-}
-
-// ─── Redis-path tests ──────────────────────────────────────────────────────────
-
-describe('RedisDeliveryQueue (Redis path)', () => {
-  test('enqueue calls rpush + expire and bypasses memory queue', async () => {
-    const redis = makeMockRedis();
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-    const entry = makePayload({ messageId: 'r-1' });
-
-    await queue.enqueue('user-redis', entry);
-
-    expect(redis.rpush).toHaveBeenCalledWith(
-      expect.stringContaining('user-redis'),
-      JSON.stringify(entry),
-    );
-    expect(redis.expire).toHaveBeenCalledWith(
-      expect.stringContaining('user-redis'),
-      DELIVERY_QUEUE_TTL_SECONDS,
-    );
-    // memory fallback was NOT used
-    expect(await queue.size('user-redis')).toBe(0);
-  });
-
-  test('drain calls pipeline lrange+del and returns parsed entries', async () => {
-    const entry = makePayload({ messageId: 'drain-1' });
-    const serialized = JSON.stringify(entry);
-    const pipeline = makePipeline([[null, [serialized]], [null, 1]]);
-    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    const result = await queue.drain('user-drain');
-
-    expect(result).toHaveLength(1);
-    expect(result[0].messageId).toBe('drain-1');
-    expect(pipeline.lrange).toHaveBeenCalled();
-    expect(pipeline.del).toHaveBeenCalled();
-  });
-
-  test('drain returns [] when pipeline exec returns null results', async () => {
-    const pipeline = makePipeline(null);
-    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    const result = await queue.drain('user-null');
-    expect(result).toEqual([]);
-  });
-
-  test('drain returns [] when pipeline exec first element is null', async () => {
-    const pipeline = makePipeline([null]);
-    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    const result = await queue.drain('user-null2');
-    expect(result).toEqual([]);
-  });
-
-  test('drain throws if pipeline returns an error in results[0]', async () => {
-    const rangeError = new Error('lrange failed');
-    const pipeline = makePipeline([[rangeError, null], [null, 1]]);
-    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    // Redis error → falls back to memory (empty)
-    const result = await queue.drain('user-err');
-    expect(result).toEqual([]);
-  });
-
-  test('peek with limit calls lrange(key, 0, limit-1)', async () => {
-    const e1 = makePayload({ messageId: 'p-1' });
-    const e2 = makePayload({ messageId: 'p-2' });
-    const redis = makeMockRedis({
-      lrange: jest.fn().mockResolvedValue([JSON.stringify(e1), JSON.stringify(e2)]),
-    });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    const result = await queue.peek('user-peek', 2);
-
-    expect(redis.lrange).toHaveBeenCalledWith(expect.any(String), 0, 1);
-    expect(result).toHaveLength(2);
-    expect(result[0].messageId).toBe('p-1');
-  });
-
-  test('peek without limit calls lrange(key, 0, -1)', async () => {
-    const redis = makeMockRedis({ lrange: jest.fn().mockResolvedValue([]) });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    await queue.peek('user-peek-nolimit');
-
-    expect(redis.lrange).toHaveBeenCalledWith(expect.any(String), 0, -1);
-  });
-
-  test('size calls llen and returns the count', async () => {
-    const redis = makeMockRedis({ llen: jest.fn().mockResolvedValue(7) });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    expect(await queue.size('user-size')).toBe(7);
-    expect(redis.llen).toHaveBeenCalled();
-  });
-
-  test('cleanup scans Redis keys and removes expired entries', async () => {
-    const fresh = makePayload({ messageId: 'fresh', enqueuedAt: new Date().toISOString() });
-    const old = makePayload({
-      messageId: 'old',
-      enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
-    });
-    const pipeline = makePipeline([[null, 1]]);
-    const redis = makeMockRedis({
-      scan: jest.fn().mockResolvedValue(['0', ['delivery:queue:u1']]),
-      lrange: jest.fn().mockResolvedValue([JSON.stringify(old), JSON.stringify(fresh)]),
-      pipeline: jest.fn().mockReturnValue(pipeline),
-    });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    const removed = await queue.cleanup();
-
-    expect(removed).toBe(1);
-    expect(pipeline.del).toHaveBeenCalled();
-    expect(pipeline.rpush).toHaveBeenCalled();
-    expect(pipeline.expire).toHaveBeenCalledWith(
-      expect.any(String),
-      DELIVERY_QUEUE_TTL_SECONDS,
-    );
-  });
-
-  test('cleanup skips key when all entries are fresh (removed === 0)', async () => {
-    const fresh = makePayload({ messageId: 'fresh', enqueuedAt: new Date().toISOString() });
-    const pipeline = makePipeline([[null, 1]]);
-    const redis = makeMockRedis({
-      scan: jest.fn().mockResolvedValue(['0', ['delivery:queue:u-fresh']]),
-      lrange: jest.fn().mockResolvedValue([JSON.stringify(fresh)]),
-      pipeline: jest.fn().mockReturnValue(pipeline),
-    });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    const removed = await queue.cleanup();
-
-    expect(removed).toBe(0);
-    expect(pipeline.exec).not.toHaveBeenCalled();
-  });
-
-  test('cleanup deletes key when all entries are expired and no fresh remain', async () => {
-    const old = makePayload({
-      messageId: 'old',
-      enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
-    });
-    const pipeline = makePipeline([[null, 1]]);
-    const redis = makeMockRedis({
-      scan: jest.fn().mockResolvedValue(['0', ['delivery:queue:u-all-old']]),
-      lrange: jest.fn().mockResolvedValue([JSON.stringify(old)]),
-      pipeline: jest.fn().mockReturnValue(pipeline),
-    });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    const removed = await queue.cleanup();
-
-    expect(removed).toBe(1);
-    expect(pipeline.del).toHaveBeenCalled();
-    expect(pipeline.rpush).not.toHaveBeenCalled();
-  });
-
-  test('cleanup iterates multiple cursor pages', async () => {
-    const fresh = makePayload({ messageId: 'f', enqueuedAt: new Date().toISOString() });
-    let scanCall = 0;
-    const redis = makeMockRedis({
-      scan: jest.fn().mockImplementation(() => {
-        scanCall += 1;
-        return scanCall === 1
-          ? Promise.resolve(['cursor1', ['delivery:queue:page1']])
-          : Promise.resolve(['0', ['delivery:queue:page2']]);
-      }),
-      lrange: jest.fn().mockResolvedValue([JSON.stringify(fresh)]),
-    });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    await queue.cleanup();
-
-    expect(redis.scan).toHaveBeenCalledTimes(2);
-  });
-});
-
-// ─── Redis-error fallback tests ────────────────────────────────────────────────
-
-describe('RedisDeliveryQueue (Redis error → memory fallback)', () => {
-  test('enqueue falls back to memory when Redis throws', async () => {
-    const redis = makeMockRedis({
-      rpush: jest.fn().mockRejectedValue(new Error('Redis down')),
-      llen: jest.fn().mockRejectedValue(new Error('Redis down')),
-    });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-    const entry = makePayload({ messageId: 'fallback-1' });
-
-    await queue.enqueue('user-fb', entry);
-
-    // Both rpush and llen fail → memory used for enqueue and size
-    const size = await queue.size('user-fb');
-    expect(size).toBe(1);
-  });
-
-  test('drain falls back to memory when Redis throws', async () => {
-    const pipeline = makePipeline();
-    pipeline.exec = jest.fn().mockRejectedValue(new Error('Redis pipeline failed'));
-    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    // Enqueue to memory by making rpush fail
-    const failingRedis = makeMockRedis({
-      rpush: jest.fn().mockRejectedValue(new Error('down')),
-      pipeline: jest.fn().mockReturnValue(pipeline),
-    });
-    const q2 = new RedisDeliveryQueue(makeCacheStore(failingRedis));
-    await q2.enqueue('user-d', makePayload({ messageId: 'mem-1' }));
-
-    // Drain should fall back to memory
-    const result = await q2.drain('user-d');
-    expect(result).toHaveLength(1);
-    expect(result[0].messageId).toBe('mem-1');
-  });
-
-  test('peek falls back to memory when Redis lrange throws', async () => {
-    const redis = makeMockRedis({
-      rpush: jest.fn().mockRejectedValue(new Error('rpush fail')),
-      lrange: jest.fn().mockRejectedValue(new Error('lrange error')),
-    });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-
-    // rpush fails → enqueue uses memory; lrange fails → peek uses memory
-    await queue.enqueue('user-pk', makePayload({ messageId: 'pk-1' }));
-    await queue.enqueue('user-pk', makePayload({ messageId: 'pk-2' }));
-
-    const result = await queue.peek('user-pk', 1);
-    expect(result).toHaveLength(1);
-    expect(result[0].messageId).toBe('pk-1');
-  });
-
-  test('size falls back to memory when Redis llen throws', async () => {
-    const redis = makeMockRedis({
-      rpush: jest.fn().mockRejectedValue(new Error('rpush fail')),
-      llen: jest.fn().mockRejectedValue(new Error('llen fail')),
-    });
-    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
-    await queue.enqueue('user-sz', makePayload());
-
-    const size = await queue.size('user-sz');
-    expect(size).toBe(1);
-  });
-
-  test('cleanup falls back to memory when Redis scan throws', async () => {
-    const redis = makeMockRedis({
-      scan: jest.fn().mockRejectedValue(new Error('scan error')),
-    });
-    const cacheStore = makeCacheStore(redis);
-    const queue = new RedisDeliveryQueue(cacheStore);
-
-    // Add to memory by failing rpush
-    const failRedis = makeMockRedis({
-      rpush: jest.fn().mockRejectedValue(new Error('rpush fail')),
-      scan: jest.fn().mockRejectedValue(new Error('scan error')),
-    });
-    const q2 = new RedisDeliveryQueue(makeCacheStore(failRedis));
-    const expired = makePayload({
-      messageId: 'expired',
-      enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
-    });
-    await q2.enqueue('user-cl', expired);
-
-    const removed = await q2.cleanup();
-    expect(removed).toBe(1);
-  });
-});
-
-// ─── Memory boundary tests ─────────────────────────────────────────────────────
-
-describe('RedisDeliveryQueue (memory boundary conditions)', () => {
-  test('evicts oldest user bucket when MEMORY_QUEUE_MAX_USERS (1000) is reached', async () => {
-    const queue = new RedisDeliveryQueue(makeCacheStore(null));
-    const internalMap: Map<string, QueuedMessagePayload[]> = (queue as unknown as { memoryQueue: Map<string, QueuedMessagePayload[]> }).memoryQueue;
-
-    // Fill exactly 1000 user buckets directly (avoiding 1000 async calls)
-    for (let i = 0; i < 1000; i++) {
-      internalMap.set(`preloaded-${i}`, [makePayload()]);
-    }
-    expect(internalMap.size).toBe(1000);
-
-    // Enqueueing a new user triggers eviction of the first inserted key
-    await queue.enqueue('brand-new-user', makePayload({ messageId: 'evicted-test' }));
-
-    expect(internalMap.size).toBe(1000);
-    expect(internalMap.has('preloaded-0')).toBe(false);
-    expect(internalMap.has('brand-new-user')).toBe(true);
-  });
-
-  test('does NOT evict when enqueueing for an existing user at capacity', async () => {
-    const queue = new RedisDeliveryQueue(makeCacheStore(null));
-    const internalMap: Map<string, QueuedMessagePayload[]> = (queue as unknown as { memoryQueue: Map<string, QueuedMessagePayload[]> }).memoryQueue;
-
-    for (let i = 0; i < 1000; i++) {
-      internalMap.set(`user-${i}`, [makePayload()]);
-    }
-
-    // Existing user 'user-0' re-enqueues — no eviction
-    await queue.enqueue('user-0', makePayload({ messageId: 'extra-for-existing' }));
-
-    expect(internalMap.size).toBe(1000);
-    expect(internalMap.has('user-0')).toBe(true);
-  });
-
-  test('caps per-user queue at MEMORY_QUEUE_MAX_PER_USER (50) and drops oldest', async () => {
-    const queue = new RedisDeliveryQueue(makeCacheStore(null));
-
-    for (let i = 0; i < 50; i++) {
-      await queue.enqueue('user-cap', makePayload({ messageId: `msg-${i}` }));
-    }
-    expect(await queue.size('user-cap')).toBe(50);
-
-    await queue.enqueue('user-cap', makePayload({ messageId: 'msg-50' }));
-
-    const entries = await queue.drain('user-cap');
-    expect(entries).toHaveLength(50);
-    expect(entries[0].messageId).toBe('msg-1');
-    expect(entries[49].messageId).toBe('msg-50');
-  });
-
-  test('exactly at per-user cap does not drop (50th message is kept)', async () => {
-    const queue = new RedisDeliveryQueue(makeCacheStore(null));
-
-    for (let i = 0; i < 49; i++) {
-      await queue.enqueue('user-edge', makePayload({ messageId: `msg-${i}` }));
-    }
-    await queue.enqueue('user-edge', makePayload({ messageId: 'msg-49' }));
-
-    expect(await queue.size('user-edge')).toBe(50);
-    const entries = await queue.drain('user-edge');
-    expect(entries[0].messageId).toBe('msg-0');
-    expect(entries[49].messageId).toBe('msg-49');
-  });
-
-  test('peek on an unknown userId returns empty array (memory ?? [] branch)', async () => {
-    const queue = new RedisDeliveryQueue(makeCacheStore(null));
-    const result = await queue.peek('unknown-user-peek');
-    expect(result).toEqual([]);
   });
 });
 
