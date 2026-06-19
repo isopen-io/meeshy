@@ -1162,4 +1162,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   1. PROGRESS.md also fixed: P1 Voice/audio × web ◐ → ☑ (PR #721 was merged 2026-06-19 but tracker hadn't been updated)
   2. `validation.ts` still has 52.17% function coverage (pre-existing; not targeted here; global functions passes 91% threshold)
 - Next slice: first actionable ☐ scanning P0→P1→P2, left-to-right (iOS/Android cells skipped — no Xcode/Android SDK in CI); likely P2 Notifications × gateway or P1 Voice/audio × shared/SDK
-- Commit: (see PR → squash-merge SHA TBD)
+- Commit: squash-merge SHA f1aa7ed5d82e3baf9cbc0581bdb2227bf147de49 (PR #724 → main, 2026-06-19T22:30Z)
