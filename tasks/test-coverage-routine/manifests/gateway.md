@@ -361,10 +361,10 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## services/zmq-translation  (5/7 have a test)
 
-- [~] `services/gateway/src/services/zmq-translation/ZmqConnectionManager.ts`
+- [x] `services/gateway/src/services/zmq-translation/ZmqConnectionManager.ts`
 - [x] `services/gateway/src/services/zmq-translation/ZmqMessageHandler.ts`
 - [x] `services/gateway/src/services/zmq-translation/ZmqRequestSender.ts`
-- [~] `services/gateway/src/services/zmq-translation/ZmqTranslationClient.ts`
+- [x] `services/gateway/src/services/zmq-translation/ZmqTranslationClient.ts`
 - [ ] `services/gateway/src/services/zmq-translation/index.ts`
 - [ ] `services/gateway/src/services/zmq-translation/types.ts`
 - [x] `services/gateway/src/services/zmq-translation/utils/zmq-helpers.ts`
