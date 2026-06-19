@@ -181,7 +181,7 @@ public struct StoryComposerView: View {
 
     // MARK: - Pickers
     private var transitionPicker: some View {
-        Text("Transitions")
+        Text(String(localized: "story.composer.transitions", defaultValue: "Transitions", bundle: .module))
             .foregroundColor(.white)
     }
 
@@ -804,16 +804,16 @@ public struct StoryComposerView: View {
             }
             Menu {
                 Button { visibility = "PUBLIC" } label: {
-                    Label(String(localized: "story.composer.public", defaultValue: "Public", bundle: .module), systemImage: visibility == "PUBLIC" ? "checkmark" : "globe")
+                    Label(String(localized: "story.composer.visibility.public", defaultValue: "Public", bundle: .module), systemImage: visibility == "PUBLIC" ? "checkmark" : "globe")
                 }
                 Button { visibility = "FRIENDS" } label: {
-                    Label(String(localized: "story.composer.friends", defaultValue: "Amis", bundle: .module), systemImage: visibility == "FRIENDS" ? "checkmark" : "person.2")
+                    Label(String(localized: "story.composer.visibility.friends", defaultValue: "Amis", bundle: .module), systemImage: visibility == "FRIENDS" ? "checkmark" : "person.2")
                 }
                 Button { visibility = "PRIVATE" } label: {
-                    Label(String(localized: "story.composer.private", defaultValue: "Prive", bundle: .module), systemImage: visibility == "PRIVATE" ? "checkmark" : "lock")
+                    Label(String(localized: "story.composer.visibility.private", defaultValue: "Privé", bundle: .module), systemImage: visibility == "PRIVATE" ? "checkmark" : "lock")
                 }
             } label: {
-                Label(String(localized: "story.composer.visibility", defaultValue: "Visibilite", bundle: .module), systemImage: "eye")
+                Label(String(localized: "story.composer.visibility", defaultValue: "Visibilité", bundle: .module), systemImage: "eye")
             }
             Divider()
             Button(role: .destructive) {
@@ -1239,6 +1239,7 @@ public struct StoryComposerView: View {
             .padding(6)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(.isButton)
         .accessibilityLabel(title)
         .accessibilityHint(subtitle)
     }
@@ -2372,12 +2373,12 @@ struct StoryLanguagePickerView: View {
                     }
                 }
             }
-            .searchable(text: $searchText, prompt: "Rechercher une langue")
-            .navigationTitle("Langue du contenu")
+            .searchable(text: $searchText, prompt: String(localized: "story.language.search", defaultValue: "Rechercher une langue", bundle: .module))
+            .navigationTitle(String(localized: "story.language.title", defaultValue: "Langue du contenu", bundle: .module))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Fermer") { dismiss() }
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .module)) { dismiss() }
                         .foregroundColor(MeeshyColors.indigo500)
                 }
             }
