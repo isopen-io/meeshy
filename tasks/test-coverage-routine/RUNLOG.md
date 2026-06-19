@@ -933,4 +933,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   2. ZmqConnectionManager.ts was already covered by tests in commit 18aafae7 (non-routine commit on main). No new gateway tests needed; PROGRESS.md and manifest updated to acknowledge.
   3. Bound method identity comparison: `pipeline.on_job_completed is handler._on_translation_job_completed` fails because Python creates a new bound method wrapper on each attribute access. Fixed test uses `__self__` + `__func__.__name__` instead.
   4. Next sub-slice: P1 ZMQ infra × translator — zmq_pool/connection_manager.py (59%), translation_processor.py (40%), zmq_pool_manager.py (79%).
-- Commit: (see branch claude/coverage/p1-zmq-gateway-connmgr)
+- Commit: 3f464e34 (PR #712 — claude/coverage/p1-zmq-gateway-connmgr)
