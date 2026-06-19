@@ -1074,7 +1074,7 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   - `src/__tests__/unit/services/VoiceProfileService.test.ts` (MODIFIED, +30 tests appended): ZMQ event handlers (voiceProfileVerifyResult, voiceProfileCompareResult, unknown requestId), attachment access denial (no conversationId, no message), voiceCloningSettings (all fields, bounds clamping, invalid preset, empty), browser transcription path, server transcription path, voice previews, calibrateProfile error catch (Error + non-Error), calculateAge birthday-not-yet-passed (jest.spyOn Date returning fresh instances to avoid mutation aliasing)
 - Production code changes:
   - `routes/voice-analysis.ts`: 2 `/* istanbul ignore if */` comments on defensive guards that schema validation (minItems:1/maxItems:50) makes structurally unreachable — JUSTIFIED
-  - `jest.config.json`: coverage threshold ratcheted lines:50→56 / branches:48→51 / statements:50→55 / functions:49→55
+  - `jest.config.json`: coverage threshold ratcheted lines:50→51 / branches:48→49 / statements:50→51 / functions:49→50 (CI-calibrated: initial commit set 56/51/55/55 from local measurement; post-CI-failure fix corrected to 51/49/51/50 to match CI environment which measures ~4% lower than local)
 - Key issues encountered:
   1. Logger mock missing `__esModule: true` → ts-jest `__importDefault` double-wraps the mock; `logger.info` becomes undefined. Fix: add `__esModule: true` to mock factory.
   2. `errorResponseSchema` mock as `{ type: 'object' }` → Fastify's fast-json-stringify strips all properties (no properties defined = empty output). Fix: mock with real property definitions (`success`, `error`, `message`, `code`).
@@ -1088,4 +1088,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   1. VoiceProfileService.ts branches at 84.84% (not 92%) because the remaining uncovered branches (lines 521, 539-549, 607, 647, 698, 707-734, 740-744, 856-866) are in pre-existing code paths not part of this slice's primary targets. Will be addressed in a future Voice/audio slice.
   2. 22 pre-existing failing test suites in gateway (NotificationService TS error, posts, MessagingService) are unrelated to this diff.
 - Next slice: P1 Voice/audio × translator OR P2 Notifications × gateway (next ☐ cells, top-to-bottom)
-- Commit: (see PR → squash-merge SHA TBD)
+- Commit: a4ebbec7 (squash-merged as PR #718 → main; includes CI threshold calibration fix 56→51 lines / 51→49 branches / 55→51 statements / 55→50 functions)
