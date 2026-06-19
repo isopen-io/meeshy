@@ -2081,46 +2081,43 @@ final class CallManager: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // ⚠️ Crash SIGTRAP (≤ build 1175) — ces `.sink` sont implicitement @MainActor
+        // (CallManager est @MainActor + SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor).
+        // Les livrer sur `DispatchQueue.global` faisait échouer l'assertion
+        // d'isolation Swift 6 (`dispatch_assert_queue` → EXC_BREAKPOINT) DÈS l'entrée
+        // de la closure, sur le thread de fond → l'app crashait à CHAQUE
+        // offer/answer/ICE candidate reçu pendant un appel (boucle crash → socket
+        // tombe → reconnexion → recrash = le « connecte puis coupe »). On livre sur
+        // la main queue : le wrapping SDP/ICE est trivial et `handle*` est déjà
+        // @MainActor (le `Task { @MainActor }` interne était donc redondant).
         socket.callSignalOfferReceived
-            .receive(on: DispatchQueue.global(qos: .userInitiated))
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let sdpString = event.signal.sdp else { return }
+                guard let self, let sdpString = event.signal.sdp else { return }
                 let sdp = SessionDescription(type: .offer, sdp: sdpString)
-                let callId = event.callId
-                let generation = event.signal.negotiationId ?? 0
-                Task { @MainActor [weak self] in
-                    self?.handleSignalOffer(callId: callId, sdp: sdp, generation: generation)
-                }
+                self.handleSignalOffer(callId: event.callId, sdp: sdp, generation: event.signal.negotiationId ?? 0)
             }
             .store(in: &cancellables)
 
         socket.callAnswerReceived
-            .receive(on: DispatchQueue.global(qos: .userInitiated))
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let sdpString = event.signal.sdp else { return }
+                guard let self, let sdpString = event.signal.sdp else { return }
                 let sdp = SessionDescription(type: .answer, sdp: sdpString)
-                let callId = event.callId
-                let generation = event.signal.negotiationId ?? 0
-                Task { @MainActor [weak self] in
-                    self?.handleRemoteAnswer(callId: callId, sdp: sdp, generation: generation)
-                }
+                self.handleRemoteAnswer(callId: event.callId, sdp: sdp, generation: event.signal.negotiationId ?? 0)
             }
             .store(in: &cancellables)
 
         socket.callICECandidateReceived
-            .receive(on: DispatchQueue.global(qos: .userInitiated))
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let candidateString = event.signal.candidate else { return }
+                guard let self, let candidateString = event.signal.candidate else { return }
                 let candidate = IceCandidate(
                     sdpMid: event.signal.sdpMid,
                     sdpMLineIndex: Int32(event.signal.sdpMLineIndex ?? 0),
                     candidate: candidateString
                 )
-                let callId = event.callId
-                let generation = event.signal.negotiationId ?? 0
-                Task { @MainActor [weak self] in
-                    self?.handleRemoteICECandidate(callId: callId, candidate: candidate, generation: generation)
-                }
+                self.handleRemoteICECandidate(callId: event.callId, candidate: candidate, generation: event.signal.negotiationId ?? 0)
             }
             .store(in: &cancellables)
 
