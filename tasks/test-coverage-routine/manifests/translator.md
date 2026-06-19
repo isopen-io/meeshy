@@ -55,13 +55,13 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/translator/src/services/voice_clone_service.py`
 - [~] `services/translator/src/services/voice_profile_handler.py`
 - [ ] `services/translator/src/services/zmq_audio_handler.py`
-- [ ] `services/translator/src/services/zmq_models.py`
+- [x] `services/translator/src/services/zmq_models.py`
 - [ ] `services/translator/src/services/zmq_pool_manager.py`
 - [~] `services/translator/src/services/zmq_server.py`
 - [ ] `services/translator/src/services/zmq_server_core.py`
 - [ ] `services/translator/src/services/zmq_transcription_handler.py`
 - [ ] `services/translator/src/services/zmq_translation_handler.py`
-- [ ] `services/translator/src/services/zmq_voice_handler.py`
+- [x] `services/translator/src/services/zmq_voice_handler.py`
 
 ## services/audio_pipeline  (2/8 have a test)
 
@@ -135,7 +135,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/translator/src/services/zmq_pool/__init__.py`
 - [ ] `services/translator/src/services/zmq_pool/connection_manager.py`
 - [ ] `services/translator/src/services/zmq_pool/translation_processor.py`
-- [ ] `services/translator/src/services/zmq_pool/worker_pool.py`
+- [x] `services/translator/src/services/zmq_pool/worker_pool.py`
 - [ ] `services/translator/src/services/zmq_pool/zmq_pool_manager.py`
 
 ## tests  (0/1 have a test)
