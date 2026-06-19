@@ -1139,3 +1139,27 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (rounds: 1) — all pragmas justified; behavior-first assertions; no production logic changed
 - Notes: line 295 in diarization_service.py (return await _detect_with_pyannote) uncovered because PYANNOTE_AVAILABLE=False in CI and _get_pyannote_pipeline is pragma'd. Acceptable: 99% coverage on testable subset.
 - Commit: (see PR → squash-merge SHA TBD)
+
+## 2026-06-19T22:00Z — P1 Offline & sync × shared
+- Targeted: `packages/shared/types/delivery-queue.ts`, `packages/shared/utils/call-summary.ts`, `packages/shared/utils/languages.ts`
+- Result: ☑ done — all 3 files ≥92% line+branch; P1 Offline & sync × shared cell ☑; P1 Voice/audio × web cell fixed to ☑ (was ◐ in tracker, PR #721 had already merged)
+- Coverage (targeted files):
+  - `types/delivery-queue.ts`: 100% all metrics ✓ (added to vitest coverage include)
+  - `utils/call-summary.ts`: 100% line / 98.78% branch / 96% funcs ✓ (was 95.53%/missing buildCallSummaryWithMetadata)
+  - `utils/languages.ts`: 100% line / 96.15% branch / 100% funcs ✓ (funcs: 52.94% → 100%)
+  - `utils/sender-identity.ts`: verified 100% all ✓ (ticked in manifest)
+  - Global shared (full suite): 99.70% lines / 96.37% branches / 91.94% funcs / 99.70% stmts
+- Tests added: 35 new tests (708 total, was 673)
+  - `__tests__/types/delivery-queue.test.ts` (NEW, 8 tests): DELIVERY_QUEUE_PREFIX (correct value, format, colon-suffix), DELIVERY_QUEUE_TTL_SECONDS (48h, 172800, positive integer), QueuedMessagePayload shape (valid + empty payload)
+  - `__tests__/call-summary.test.ts` (+5 tests): buildCallSummaryWithMetadata — null (garbageCollected), null (ringing), success (completed video), summary matches standalone buildCallSummary, metadata matches standalone buildCallSummaryMetadata
+  - `__tests__/languages.test.ts` (+22 tests): getLanguagesWithTTS (filter+subset), getLanguagesWithSTT (filter+non-empty), getLanguagesWithVoiceCloning (filter+subset), getLanguagesWithTranslation (filter+non-empty), getLanguagesByRegion (case-insensitive, empty-for-unknown), getAfricanLanguages (filter, non-empty, matches getLanguagesByRegion), getMMSTTSLanguages (mms-only, subset, SUPPORTED_LANGUAGES member), getLanguageStats (total, TTS-sum, STT-sum, feature-bounds, mms-matches-getMMSTTSLanguages)
+- Production code changes: NONE
+- vitest.config.ts: added `types/delivery-queue.ts` to coverage include; thresholds ratcheted lines:97→99 / branches:95→96 / functions:84→91 / statements:97→99
+- manifests/shared.md: ticked [x] for delivery-queue.ts, call-summary.ts, languages.ts, sender-identity.ts
+- Key issues encountered: none — all functions are pure (no mocks needed), factory pattern reused from existing test files
+- Reviewer: PASS (rounds: 1) — behavior-first assertions; no production logic changed; QueuedMessagePayload shape tests accepted (type contract validation); unreachable call-summary.ts branch 179 (labelFn ternary false branch, blocked by TypeScript types) not annotated (98.78% still well above 92%)
+- Notes:
+  1. PROGRESS.md also fixed: P1 Voice/audio × web ◐ → ☑ (PR #721 was merged 2026-06-19 but tracker hadn't been updated)
+  2. `validation.ts` still has 52.17% function coverage (pre-existing; not targeted here; global functions passes 91% threshold)
+- Next slice: first actionable ☐ scanning P0→P1→P2, left-to-right (iOS/Android cells skipped — no Xcode/Android SDK in CI); likely P2 Notifications × gateway or P1 Voice/audio × shared/SDK
+- Commit: (see PR → squash-merge SHA TBD)
