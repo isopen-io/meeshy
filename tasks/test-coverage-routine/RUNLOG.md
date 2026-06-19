@@ -1058,4 +1058,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   1. `use-messaging.ts` shows 95% functions coverage (19/20); the uncovered function is an internal callback nested in `useSocketIOMessaging` options that requires a specific mock wiring not provided here — left for a dedicated real-time slice.
   2. Global web threshold NOT ratcheted: 19 pre-existing failing suites unrelated to this diff.
 - Next slice: P1 Voice/audio × gateway OR P1 Voice/audio × translator (next ☐ cells, top-to-bottom scan)
-- Commit: (see PR → squash-merge SHA TBD)
+- Commit: cf224409bbbe60197a1fe65d81813687cdb300db (squash-merged as PR #717 → main; CI green: 13 success, 1 neutral/Trivy, 1 skipped/VoiceE2E)
