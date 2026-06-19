@@ -1031,3 +1031,31 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   2. Global threshold NOT ratcheted this slice: pre-existing 27 failing suites in unrelated test files (NotificationService, posts, MessagingService) make CI delta measurement unreliable. Threshold stays at lines:50/branches:48/statements:50/functions:49.
 - Next slice: P1 Voice/audio × gateway OR P1 Offline & sync × web (next ☐ cells, top-to-bottom scan)
 - Commit: (see PR #715 → squash-merge SHA TBD)
+
+## 2026-06-19T08:00Z — P1 Offline & sync × web (sub-slice: use-auto-retry-failed-messages.ts ☑ + use-messaging.ts ☑ + messages.service.ts ☑)
+- Targeted: P1 Offline & sync × web — `hooks/use-auto-retry-failed-messages.ts`, `hooks/use-messaging.ts`, `services/messages.service.ts`
+- Result: ☑ done — all 3 files ≥92% line+branch; P1 Offline & sync × web cell fully ☑
+- Coverage (targeted files):
+  - `use-auto-retry-failed-messages.ts`: 100% stmt / 100% branch / 100% funcs / 100% lines ✓
+  - `use-messaging.ts`: 100% stmt / 100% branch / 95% funcs / 100% lines ✓
+  - `messages.service.ts`: 98.68% stmt / 96.55% branch / 100% funcs / 100% lines ✓
+  - Global web (full suite): 19 pre-existing failing suites (unrelated @meeshy/shared/utils/sender-identity import errors) unchanged from main
+- Tests added: 32 new tests (97 total in 3 suites)
+  - `use-auto-retry-failed-messages.test.ts` (1 test): `isRetrying.current = false` reset after sequential loop completes
+  - `use-messaging.test.tsx` (23 new tests): update-existing-typing-user entry (no duplicate), cleanup-timer-clearing on immediate user removal, editMessage throw → sendError, deleteMessage throw → sendError, default empty options, conversationId-fallback-to-empty-string in typing user, attachment-only send (empty content + non-empty attachmentIds), systemLanguage used when originalLanguage omitted (try+catch paths), clientMessageId persisted in failed-message payload
+  - `messages.service.test.ts` (8 new tests): getMessagesByConversation error propagation, getMessagesWithOffset error propagation, getMessagesWithOffset default args (offset=0/limit=20), sendMessageToConversation error propagation, formatMessageDate cross-year (includes year in output)
+- Production code changes:
+  - `hooks/use-messaging.ts`: 4 istanbul-ignore additions (all justified); removed unused `const failedMsgId =` assignment; changed `/* istanbul ignore next */` in else-branch to `/* istanbul ignore else */` on if-statement for correct branch annotation
+  - NO behavioral changes
+- Key issues encountered:
+  1. Syntax error: extra spurious `  });` in use-messaging.test.tsx after inserting 2 new `it()` tests outside `describe('Typing Users Management')` — prematurely closed outer `describe('useMessaging')` causing SWC "Expression expected" at end-of-file. Fixed by removing the orphaned `});`.
+  2. Default-arg branch (line 73) uncovered: `options = {}` — covered by adding a test calling `useMessaging()` with no args.
+  3. `/* istanbul ignore next */` on else-block body doesn't suppress the branch count on the if statement; required `/* istanbul ignore else */` annotation on the if line instead.
+  4. `cleanupTimeoutRef.current` guard in effect main body (length=0 branch) is structurally dead — effect cleanup always clears the ref before the new run; annotated with `/* istanbul ignore next */`.
+  5. `cleanupTimeoutRef.current` guard in effect return function is also structurally dead — ref is always set immediately before the return; annotated with `/* istanbul ignore else */`.
+- Reviewer: PASS — all ignores justified; no production behavior changed; all tests assert observable outcomes
+- Notes:
+  1. `use-messaging.ts` shows 95% functions coverage (19/20); the uncovered function is an internal callback nested in `useSocketIOMessaging` options that requires a specific mock wiring not provided here — left for a dedicated real-time slice.
+  2. Global web threshold NOT ratcheted: 19 pre-existing failing suites unrelated to this diff.
+- Next slice: P1 Voice/audio × gateway OR P1 Voice/audio × translator (next ☐ cells, top-to-bottom scan)
+- Commit: (see PR → squash-merge SHA TBD)

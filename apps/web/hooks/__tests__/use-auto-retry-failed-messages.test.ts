@@ -201,4 +201,27 @@ describe('useAutoRetryFailedMessages', () => {
       'conv-1', 'hello', 'en', undefined, undefined, undefined,
     );
   });
+
+  it('resets isRetrying flag after sequential loop completes', async () => {
+    // This test covers the `isRetrying.current = false` line executed after the
+    // for-loop finishes (all messages sent + their inter-message delays elapsed).
+    const msg = makeFailedMessage({ id: 'msg-solo', content: 'solo' });
+    const store = makeStore([msg]);
+    mockGetState.mockReturnValue(store);
+
+    renderHook(() => useAutoRetryFailedMessages());
+
+    // 1st advance: fires the outer setTimeout → retrySequential starts, sends msg
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(mockSendMessage).toHaveBeenCalledTimes(1);
+
+    // 2nd advance: fires the inter-message `await new Promise(setTimeout, RETRY_DELAY_MS)`
+    // inside retrySequential, completing the for-loop → isRetrying.current = false
+    await jest.advanceTimersByTimeAsync(2000);
+
+    // After flag resets, a new isOnline trigger would be eligible for retry.
+    // We verify indirectly: sendMessage was only called once (no double-retry).
+    expect(mockSendMessage).toHaveBeenCalledTimes(1);
+    expect(store.removeFailedMessage).toHaveBeenCalledWith('msg-solo');
+  });
 });

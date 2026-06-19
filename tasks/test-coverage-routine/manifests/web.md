@@ -938,7 +938,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/hooks/use-audio-translation.ts`
 - [~] `apps/web/hooks/use-auth-guard.ts`
 - [~] `apps/web/hooks/use-auth.ts`
-- [~] `apps/web/hooks/use-auto-retry-failed-messages.ts`
+- [x] `apps/web/hooks/use-auto-retry-failed-messages.ts`
 - [~] `apps/web/hooks/use-bot-protection.ts`
 - [~] `apps/web/hooks/use-call-duration.ts`
 - [ ] `apps/web/hooks/use-call-quality.ts`
@@ -979,7 +979,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/web/hooks/use-message-reactions.ts`
 - [~] `apps/web/hooks/use-message-translations.ts`
 - [ ] `apps/web/hooks/use-message-view-state.tsx`
-- [~] `apps/web/hooks/use-messaging.ts`
+- [x] `apps/web/hooks/use-messaging.ts`
 - [~] `apps/web/hooks/use-network-status.ts`
 - [ ] `apps/web/hooks/use-participant-management.ts`
 - [ ] `apps/web/hooks/use-phone-validation.ts`
@@ -1239,7 +1239,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/services/mentions.service.ts`
 - [ ] `apps/web/services/message-translation.service.ts`
 - [ ] `apps/web/services/message.service.ts`
-- [~] `apps/web/services/messages.service.ts`
+- [x] `apps/web/services/messages.service.ts`
 - [ ] `apps/web/services/monitoring.service.ts`
 - [x] `apps/web/services/notification-socketio.singleton.ts`
 - [~] `apps/web/services/notification.service.ts`

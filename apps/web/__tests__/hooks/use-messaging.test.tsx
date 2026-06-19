@@ -543,6 +543,98 @@ describe('useMessaging', () => {
     });
   });
 
+    it('should update existing typing user entry (not duplicate)', () => {
+      jest.useFakeTimers();
+      const { result } = renderHook(() =>
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
+      );
+
+      const onUserTyping = (global as any).__mockOnUserTyping;
+      if (onUserTyping) {
+        // First event: user starts typing (adds to list)
+        act(() => {
+          onUserTyping('user-A', 'Alice', true, mockConversationId);
+        });
+        expect(result.current.typingUsers).toHaveLength(1);
+
+        // Second event: same user still typing (updates existing entry, not duplicate)
+        act(() => {
+          onUserTyping('user-A', 'Alice', true, mockConversationId);
+        });
+
+        // List length stays at 1 (updated, not duplicated)
+        expect(result.current.typingUsers).toHaveLength(1);
+        expect(result.current.typingUsers[0].userId).toBe('user-A');
+      }
+      jest.useRealTimers();
+    });
+
+    it('should clear pending cleanup timeout when all typing users are removed', () => {
+      jest.useFakeTimers();
+      const { result } = renderHook(() =>
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
+      );
+
+      const onUserTyping = (global as any).__mockOnUserTyping;
+      if (onUserTyping) {
+        // Add user → cleanup timer is scheduled (cleanupTimeoutRef.current set)
+        act(() => {
+          onUserTyping('user-B', 'Bob', true, mockConversationId);
+        });
+        expect(result.current.typingUsers).toHaveLength(1);
+
+        // Remove user immediately (before the 1s cleanup timer fires)
+        // → typingUsers.length becomes 0 → effect clears cleanupTimeoutRef
+        act(() => {
+          onUserTyping('user-B', 'Bob', false, mockConversationId);
+        });
+        expect(result.current.typingUsers).toHaveLength(0);
+
+        // Advancing time should NOT produce stale-user errors since cleanup was cleared
+        act(() => { jest.advanceTimersByTime(3000); });
+        expect(result.current.typingUsers).toHaveLength(0);
+      }
+      jest.useRealTimers();
+    });
+
+  describe('Edit Message — error path', () => {
+    it('should handle editMessage throw and set sendError', async () => {
+      mockEditMessage.mockRejectedValue(new Error('Network failure'));
+
+      const { result } = renderHook(() =>
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
+      );
+
+      let success: boolean = true;
+      await act(async () => {
+        success = await result.current.editMessage('msg-999', 'New content');
+      });
+
+      expect(success).toBe(false);
+      expect(result.current.sendError).not.toBeNull();
+      expect(mockToastError).toHaveBeenCalled();
+    });
+  });
+
+  describe('Delete Message — error path', () => {
+    it('should handle deleteMessage throw and set sendError', async () => {
+      mockDeleteMessage.mockRejectedValue(new Error('Permission denied'));
+
+      const { result } = renderHook(() =>
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
+      );
+
+      let success: boolean = true;
+      await act(async () => {
+        success = await result.current.deleteMessage('msg-999');
+      });
+
+      expect(success).toBe(false);
+      expect(result.current.sendError).not.toBeNull();
+      expect(mockToastError).toHaveBeenCalled();
+    });
+  });
+
   describe('Cleanup', () => {
     it('should clean up on unmount without errors', () => {
       const { result, unmount } = renderHook(() =>
@@ -567,6 +659,95 @@ describe('useMessaging', () => {
 
       expect(result.current.socketMessaging).toBeDefined();
       expect(result.current.socketMessaging.isConnected).toBe(true);
+    });
+  });
+
+  describe('Default options', () => {
+    it('should initialise with no options provided', () => {
+      const { result } = renderHook(() => useMessaging());
+      expect(result.current.isSending).toBe(false);
+      expect(result.current.sendError).toBeNull();
+      expect(result.current.typingUsers).toHaveLength(0);
+    });
+  });
+
+  describe('Typing user — missing conversationId fallback', () => {
+    it('should fall back to empty string conversationId in typing user entry', () => {
+      const { result } = renderHook(() =>
+        useMessaging({ currentUser: mockUser as any }) // no conversationId
+      );
+
+      const onUserTyping = (global as any).__mockOnUserTyping;
+      if (onUserTyping) {
+        act(() => { onUserTyping('user-x', 'UserX', true, undefined); });
+        expect(result.current.typingUsers[0].conversationId).toBe('');
+      }
+    });
+  });
+
+  describe('Send message — attachment-only (empty text)', () => {
+    it('should send when content is empty but attachmentIds is non-empty', async () => {
+      const { result } = renderHook(() =>
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
+      );
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.sendMessage('', undefined, undefined, undefined, ['att-1']);
+      });
+
+      expect(success).toBe(true);
+      expect(mockSendMessage).toHaveBeenCalled();
+    });
+  });
+
+  describe('Send message — default language', () => {
+    it('should use systemLanguage when originalLanguage is omitted', async () => {
+      const { result } = renderHook(() =>
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
+      );
+
+      await act(async () => {
+        await result.current.sendMessage('Hello');
+      });
+
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        'Hello', 'en', undefined, undefined, undefined, undefined, undefined,
+      );
+    });
+
+    it('should use systemLanguage in failed-message payload when originalLanguage is omitted', async () => {
+      mockSendMessage.mockResolvedValue({ success: false });
+      const { result } = renderHook(() =>
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
+      );
+
+      await act(async () => {
+        await result.current.sendMessage('Hello');
+      });
+
+      expect(mockAddFailedMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ originalLanguage: 'en' }),
+      );
+    });
+  });
+
+  describe('Send message — clientMessageId persistence', () => {
+    it('should include clientMessageId in failed-message payload when provided', async () => {
+      mockSendMessage.mockResolvedValue({ success: false });
+      const { result } = renderHook(() =>
+        useMessaging({ conversationId: mockConversationId, currentUser: mockUser as any })
+      );
+
+      await act(async () => {
+        await result.current.sendMessage(
+          'Hello', 'en', undefined, undefined, undefined, undefined, 'cid-abc',
+        );
+      });
+
+      expect(mockAddFailedMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ clientMessageId: 'cid-abc' }),
+      );
     });
   });
 });
