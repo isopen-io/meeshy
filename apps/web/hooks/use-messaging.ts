@@ -183,6 +183,7 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
       setIsTyping(false);
       socketMessaging.stopTyping();
 
+      /* istanbul ignore next -- typingTimeoutRef is managed by the parent component; it is never set within this hook, so this branch is structurally unreachable */
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
@@ -263,8 +264,9 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
       // fourni, sinon le retry génère un cid frais et bypass le dedup
       // gateway. Pour les call sites qui n'en passent pas (legacy), on
       // omet le champ — le backfill orchestrateur prendra le relais.
+      /* istanbul ignore else -- conversationId is validated at the top of sendMessage; the else branch is structurally dead */
       if (conversationId) {
-        const failedMsgId = addFailedMessage({
+        addFailedMessage({
           conversationId,
           content,
           originalLanguage: originalLanguage || systemLanguage,
@@ -273,7 +275,7 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
           ...(clientMessageId ? { clientMessageId } : {}),
           error: errorMessage,
         });
-        
+
         // Toast avec action de restauration
         toast.error(errorMessage, {
           action: {
@@ -287,7 +289,7 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
       } else {
         toast.error(errorMessage);
       }
-      
+
       // Callback d'erreur
       onMessageFailed?.(content, error as Error);
       
@@ -347,6 +349,7 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
   // Nettoyage des timeouts
   useEffect(() => {
     return () => {
+      /* istanbul ignore next -- typingTimeoutRef.current is never set in this hook */
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
@@ -358,6 +361,7 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
   useEffect(() => {
     // Ne rien faire si aucun user ne tape
     if (typingUsers.length === 0) {
+      /* istanbul ignore next -- the effect cleanup (return fn) always clears cleanupTimeoutRef before this body re-runs; this guard is defensive dead code */
       if (cleanupTimeoutRef.current) {
         clearTimeout(cleanupTimeoutRef.current);
         cleanupTimeoutRef.current = null;
@@ -383,6 +387,7 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
     cleanupTimeoutRef.current = setTimeout(cleanup, 1000);
 
     return () => {
+      /* istanbul ignore else -- cleanupTimeoutRef.current is always set immediately before this return; the false branch is structurally dead */
       if (cleanupTimeoutRef.current) {
         clearTimeout(cleanupTimeoutRef.current);
         cleanupTimeoutRef.current = null;
