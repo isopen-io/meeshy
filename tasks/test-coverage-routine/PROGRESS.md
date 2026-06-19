@@ -58,7 +58,7 @@ A run targets **one (feature × app) cell**. Pick the highest-priority `☐` cel
 | P1 | **Conversations & membership** (create/join/leave/participants/settings) | ☑ sub: leave.ts☑ ban.ts☑ delete-for-me.ts☑ stats.ts☑ ConversationStatsService.ts☑ ConversationMessageStatsService.ts☑ conversation-id-cache.ts☑ identifier-generator.ts☑ access-control.ts☑ participants.ts☑ search.ts☑ threads.ts☑ index.ts☑ sharing.ts☑ core.ts☑ messages-advanced.ts☑ | ⊘ | ☑ sub: transformers.service.ts☑ crud.service.ts☑ links.service.ts☑ link-conversation.service.ts☑ | ☐ | ☐ | ☑ (types/conversation.ts 100%/100%; MeeshySDK Swift ⊘ Linux env) |
 | P1 | **Offline & sync** (outbox, failed-messages queue, reconnect flush) | ☑ sub: RedisDeliveryQueue.ts☑ delivery-queue-cleanup.ts☑ MessageReadStatusService.ts☑ MutationLogService.ts☑ withMutationLog.ts☑ | ⊘ | ☑ sub: use-auto-retry-failed-messages.ts☑ use-messaging.ts☑ messages.service.ts☑ | ☐ | ☐ | ☐ |
 | P1 | **ZMQ infra** (worker pool, connection mgr, multipart frames, dedup) | ☑ sub: ZmqMessageHandler.ts☑ ZmqRequestSender.ts☑ zmq-helpers.ts☑ ZmqTranslationClient.ts☑ ZmqConnectionManager.ts☑ | ☑ sub: zmq_models.py☑ zmq_pool/worker_pool.py☑ zmq_voice_handler.py☑ zmq_pool/connection_manager.py☑ zmq_pool/translation_processor.py☑ zmq_pool/zmq_pool_manager.py☑ | ⊘ | ⊘ | ⊘ | ⊘ |
-| P1 | **Voice/audio** (transcription, TTS, voice profiles, voice translation) | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
+| P1 | **Voice/audio** (transcription, TTS, voice profiles, voice translation) | ☑ sub: VoiceAnalysisService.ts☑ routes/voice-analysis.ts☑ (VoiceProfileService.ts bonus gap-fill: branches 68.48%→84.84%) | ☐ | ☐ | ☐ | ☐ | ☐ |
 | P2 | **Notifications** (push, in-app, Firebase/APNs, delivery queue) | ☐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P2 | **Feed / posts / stories / reactions** | ☐ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P2 | **Calls** (WebRTC, call lifecycle, ICE restart) | ☐ | ⊘ | ☐ | ☐ | ⊘ | ⊘ |
@@ -155,7 +155,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
 | web | `pnpm --filter web test:coverage` | 33.10 | 25.77 | 2026-06-14 (re-measured after Sprint 0.2/0.3 fixes; threshold floor set at 33/25) |
-| gateway | `pnpm --filter gateway test:coverage` | 56.02 | 52.28 | 2026-06-19 (post P1 Offline & sync × gateway; RedisDeliveryQueue.ts☑ delivery-queue-cleanup.ts☑ MessageReadStatusService.ts☑ MutationLogService.ts☑ withMutationLog.ts☑; src/jobs/**/*.ts added to collectCoverageFrom; +93 new tests total; threshold floor lines:50/branches:48/statements:50/functions:49 — CI delta not ratcheted due to pre-existing failures in 27 unrelated suites) |
+| gateway | `pnpm --filter gateway test:coverage` | 56.11 | 51.72 | 2026-06-19 (post P1 Voice/audio × gateway; VoiceAnalysisService.ts☑ routes/voice-analysis.ts☑ +172 new tests; threshold floor lines:56/branches:51/statements:55/functions:55) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | 37.09 | n/a | 2026-06-14 (subset: no-GPU tests only; 4 files w/ import errors excluded) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |
