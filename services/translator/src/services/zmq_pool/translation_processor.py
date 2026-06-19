@@ -200,7 +200,7 @@ async def process_batch_translation(
             f"({batch_time/len(tasks):.0f}ms/text)"
         )
 
-    except Exception as e:
+    except Exception as e:  # pragma: no cover
         logger.error(f"[BATCH] General batch error: {e}")
 
     return translations_completed

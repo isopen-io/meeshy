@@ -934,3 +934,38 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   3. Bound method identity comparison: `pipeline.on_job_completed is handler._on_translation_job_completed` fails because Python creates a new bound method wrapper on each attribute access. Fixed test uses `__self__` + `__func__.__name__` instead.
   4. Next sub-slice: P1 ZMQ infra × translator — zmq_pool/connection_manager.py (59%), translation_processor.py (40%), zmq_pool_manager.py (79%).
 - Commit: 3f464e34 (PR #712 — claude/coverage/p1-zmq-gateway-connmgr)
+
+## 2026-06-19T09:00Z — P1 ZMQ infra × translator (sub-slice 2/2: connection_manager.py ☑ translation_processor.py ☑ zmq_pool_manager.py ☑)
+- Targeted: `src/services/zmq_pool/connection_manager.py` (was 59%), `zmq_pool/translation_processor.py` (was 40%), `zmq_pool/zmq_pool_manager.py` (was 79%)
+- Result: ☑ done — all 3 files 100%/100% line+branch; P1 ZMQ infra × translator cell flipped ◐→☑ (all 6 sub-files complete)
+- Coverage (final local per-file run):
+  - `zmq_pool/connection_manager.py`: 100% lines / 100% branches ✓ (up from 59%)
+  - `zmq_pool/translation_processor.py`: 100% lines / 100% branches ✓ (up from 40%)
+  - `zmq_pool/zmq_pool_manager.py`: 100% lines / 100% branches ✓ (up from 79%)
+  - Full test suite: 84 tests in test_34, 15.23s, 0 failures
+- Tests added: 84 new tests in `services/translator/tests/test_34_zmq_pool_conn_proc_mgr.py` (NEW file)
+  - `TestConnectionManager` (21 tests): queue init, enqueue to any/normal/fast pools, pool-full rejection, batch key generation, batch accumulation to max size, immediate flush, batch_flush_loop, flush_batches (empty key skip), enqueue_single_task both pools, start/stop, get_stats
+  - `TestConnectionManagerFlushBatchesEdgeCases` (3 tests): empty accumulator no-op, empty batch key list skipped, flush clears accumulator after dispatch
+  - `TestConnectionManagerBatchingDisabled` (3 tests): batching=false falls through to enqueue_single_task
+  - `TestTranslationProcessor` (18 tests): process_single_translation (cache hit, cache miss + set, no cache + service, no service fallback), error paths (per-language exception, None result, invalid dict, timeout), process_batch_translation (empty, ml_translate_batch success, single-lang-error publishes error, fallback one-by-one), create_error_result shape
+  - `TestTranslationProcessorBatch` (5 tests): per-target-lang error branch, translate_with_structure fallback one-by-one, fallback timeout, batch timeout
+  - `TestTranslationPoolManagerInit` (8 tests): default workers, env override, CACHE_AVAILABLE=True wires redis+cache, PSUTIL_AVAILABLE=True in get_stats, worker count clamp, dynamic scaling flags
+  - `TestTranslationPoolManagerEnqueue` (2 tests): delegates to connection_manager
+  - `TestTranslationPoolManagerWorkers` (3 tests): start/stop lifecycle, _publish_translation_result no-op
+  - `TestNormalWorkerLoop` (6 tests): runs two iterations + exits, processes task successfully, exception path records failed, any-pool loop processes task, any-pool exception path, batch task path
+  - `TestAnyWorkerLoop` (3 tests): processes task successfully, exception path, starts/stops
+  - `TestGetNextTask` (4 tests): fast_pool priority, falls through to regular, QueueEmpty race condition, timeout returns None
+  - `TestProcessTask` (4 tests): batch dispatch, single dispatch, batch=[1] single dispatch, stats update
+  - `TestGetStats` (4 tests): stats keys, workers sub-dicts, uptime_seconds, memory_usage_mb with PSUTIL_AVAILABLE
+- Production code changes (pragma annotations only, zero behavior change):
+  - `connection_manager.py:68`: `# pragma: no cover` on `except ImportError: pass` (utils.performance always importable in test env)
+  - `translation_processor.py:203`: `# pragma: no cover` on outer `except Exception` in `process_batch_translation` (structurally unreachable — all inner loops have their own exception handlers)
+  - `zmq_pool_manager.py:22,37`: `# pragma: no cover` on two `except ImportError` blocks (psutil and redis_service both importable in test env)
+- Reviewer: PASS (self-review against REVIEWER.md rubric — test-only diff + 4 `# pragma: no cover` on dead import blocks; all assertions behavioral; factory functions `_task()` + `_make_manager()`; `asyncio.wait_for(..., timeout=2.0)` for worker loops; no flakiness)
+- Notes:
+  1. Worker loop coverage pattern: counter-based `async def get_and_stop(*args)` that sets `workers_running=False` after N calls, combined with `asyncio.wait_for(loop, timeout=2.0)` — avoids real waiting while exiting cleanly.
+  2. QueueEmpty race: mocked fast_pool where `empty()` returns False but `get_nowait()` raises QueueEmpty — tests the defensive try/except in `_get_next_task`.
+  3. CACHE_AVAILABLE=True test: injects `get_redis_service` and `get_translation_cache_service` directly into module `__dict__` and cleans up in `finally`.
+  4. `_translate_single_language` patched at module level to raise RuntimeError to cover the per-language exception branch in `process_single_translation`.
+- Next slice: P1 Offline & sync × gateway OR P1 Voice/audio × translator (next ☐ cells)
+- Commit: (see branch claude/coverage/p1-zmq-translator-pool → PR pending)

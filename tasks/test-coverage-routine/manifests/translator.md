@@ -133,10 +133,10 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 ## services/zmq_pool  (0/5 have a test)
 
 - [ ] `services/translator/src/services/zmq_pool/__init__.py`
-- [ ] `services/translator/src/services/zmq_pool/connection_manager.py`
-- [ ] `services/translator/src/services/zmq_pool/translation_processor.py`
+- [x] `services/translator/src/services/zmq_pool/connection_manager.py`
+- [x] `services/translator/src/services/zmq_pool/translation_processor.py`
 - [x] `services/translator/src/services/zmq_pool/worker_pool.py`
-- [ ] `services/translator/src/services/zmq_pool/zmq_pool_manager.py`
+- [x] `services/translator/src/services/zmq_pool/zmq_pool_manager.py`
 
 ## tests  (0/1 have a test)
 
