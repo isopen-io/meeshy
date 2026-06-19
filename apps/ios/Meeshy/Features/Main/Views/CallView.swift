@@ -216,7 +216,7 @@ struct CallView: View {
 
             // Name
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
-                .font(.system(.title, design: .rounded).weight(.bold))
+                .font(.system(.title, design: .rounded).weight(.semibold))
                 .foregroundColor(.white)
                 .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
                 .padding(.bottom, 8)
@@ -254,7 +254,7 @@ struct CallView: View {
                 .padding(.bottom, 24)
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
-                .font(.system(.title, design: .rounded).weight(.bold))
+                .font(.system(.title, design: .rounded).weight(.semibold))
                 .foregroundColor(.white)
                 .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
                 .padding(.bottom, 8)
@@ -398,7 +398,7 @@ struct CallView: View {
                 .padding(.bottom, 8)
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
-                .font(.system(.title, design: .rounded).weight(.bold))
+                .font(.system(.title, design: .rounded).weight(.semibold))
                 .foregroundColor(theme.textPrimary)
 
             // Duration + audit P2-iOS-10 connection quality indicator
@@ -791,7 +791,7 @@ struct CallView: View {
                 .opacity(0.6)
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
-                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .font(.system(size: 24, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary.opacity(0.7))
 
             Text(endReasonText(reason))
@@ -1091,7 +1091,7 @@ struct CallView: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: "phone.down.fill")
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.system(size: 24, weight: .medium))
                     .foregroundColor(.white)
                     .endCallGlass(diameter: 56)
 

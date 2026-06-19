@@ -32,7 +32,7 @@ struct IncomingCallView: View {
 
             // Caller name
             Text(callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Inconnu", bundle: .main))
-                .font(.system(.title, design: .rounded).weight(.bold))
+                .font(.system(.title, design: .rounded).weight(.semibold))
                 // Posé sur le fond sombre fixe de CallView → texte clair fixe
                 // (theme.textPrimary suit le système et virait au foncé en Light).
                 .foregroundColor(.white)
@@ -178,7 +178,7 @@ struct IncomingCallView: View {
                 } label: {
                     VStack(spacing: 10) {
                         Image(systemName: "phone.down.fill")
-                            .font(.system(size: 28, weight: .semibold))
+                            .font(.system(size: 28, weight: .medium))
                             .foregroundColor(.white)
                             .frame(width: 70, height: 70)
                             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
@@ -197,7 +197,7 @@ struct IncomingCallView: View {
                 } label: {
                     VStack(spacing: 10) {
                         Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
-                            .font(.system(size: 28, weight: .semibold))
+                            .font(.system(size: 28, weight: .medium))
                             .foregroundColor(.white)
                             .frame(width: 70, height: 70)
                             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.success)
