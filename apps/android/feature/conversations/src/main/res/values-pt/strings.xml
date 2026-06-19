@@ -28,4 +28,12 @@
     <string name="conversations_filter_channels">Canais</string>
     <string name="conversations_filter_favorites">Favoritos</string>
     <string name="conversations_filter_archived">Arquivadas</string>
+    <string name="conversations_new">Nova conversa</string>
+    <string name="new_conversation_title">Nova conversa</string>
+    <string name="new_conversation_back">Voltar</string>
+    <string name="new_conversation_create">Criar</string>
+    <string name="new_conversation_search_hint">Procurar pessoas</string>
+    <string name="new_conversation_group_title">Nome do grupo</string>
+    <string name="new_conversation_remove">Remover</string>
+    <string name="new_conversation_selected">Selecionado</string>
 </resources>
