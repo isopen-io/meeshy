@@ -201,37 +201,6 @@ describe('RedisDeliveryQueue (memory fallback)', () => {
 // Redis-backed paths — gap fill
 // ---------------------------------------------------------------------------
 
-function makeMockPipeline() {
-  const pipeline: Record<string, jest.Mock> = {
-    lrange: jest.fn(),
-    del: jest.fn(),
-    rpush: jest.fn(),
-    expire: jest.fn(),
-    exec: jest.fn(),
-  };
-  pipeline.lrange.mockReturnValue(pipeline);
-  pipeline.del.mockReturnValue(pipeline);
-  pipeline.rpush.mockReturnValue(pipeline);
-  pipeline.expire.mockReturnValue(pipeline);
-  return pipeline;
-}
-
-function makeMockRedis(pipeline = makeMockPipeline()) {
-  return {
-    rpush: jest.fn().mockResolvedValue(1),
-    expire: jest.fn().mockResolvedValue(1),
-    lrange: jest.fn().mockResolvedValue([]),
-    llen: jest.fn().mockResolvedValue(0),
-    scan: jest.fn().mockResolvedValue(['0', []]),
-    pipeline: jest.fn().mockReturnValue(pipeline),
-    _pipeline: pipeline,
-  };
-}
-
-function makeCacheStore(redis: ReturnType<typeof makeMockRedis> | null): any {
-  return { getNativeClient: jest.fn().mockReturnValue(redis) };
-}
-
 describe('RedisDeliveryQueue (Redis-backed paths)', () => {
   test('enqueue — writes to Redis rpush + expire', async () => {
     const redis = makeMockRedis();
@@ -266,12 +235,12 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
 
   test('drain — reads from Redis pipeline lrange+del and parses entries', async () => {
     const entry = makePayload({ messageId: 'drain-redis' });
-    const pipeline = makeMockPipeline();
+    const pipeline = makePipeline();
     pipeline.exec.mockResolvedValue([
       [null, [JSON.stringify(entry)]],
       [null, 1],
     ]);
-    const redis = makeMockRedis(pipeline);
+    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     const drained = await queue.drain('user-r');
@@ -281,9 +250,9 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
   });
 
   test('drain — returns empty array when pipeline exec returns null', async () => {
-    const pipeline = makeMockPipeline();
+    const pipeline = makePipeline();
     pipeline.exec.mockResolvedValue(null);
-    const redis = makeMockRedis(pipeline);
+    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     expect(await queue.drain('user-r')).toEqual([]);
@@ -291,9 +260,9 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
 
   test('drain — falls back to memory when Redis pipeline throws', async () => {
     const entry = makePayload({ messageId: 'drain-fallback' });
-    const pipeline = makeMockPipeline();
+    const pipeline = makePipeline();
     pipeline.exec.mockRejectedValue(new Error('pipeline fail'));
-    const redis = makeMockRedis(pipeline);
+    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
 
     const cacheStore: any = { getNativeClient: jest.fn() };
     // First call (enqueue) returns null → memory path
@@ -382,10 +351,10 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
       enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
     });
     const fresh = makePayload({ messageId: 'fresh' });
-    const pipeline = makeMockPipeline();
+    const pipeline = makePipeline();
     pipeline.exec.mockResolvedValue([[null, 1], [null, 1], [null, 1]]);
 
-    const redis = makeMockRedis(pipeline);
+    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
     redis.scan.mockResolvedValue(['0', ['delivery:queue:user-r']]);
     redis.lrange.mockResolvedValue([JSON.stringify(stale), JSON.stringify(fresh)]);
 
@@ -403,10 +372,10 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
       messageId: 'all-stale',
       enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
     });
-    const pipeline = makeMockPipeline();
+    const pipeline = makePipeline();
     pipeline.exec.mockResolvedValue([[null, 1]]);
 
-    const redis = makeMockRedis(pipeline);
+    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
     redis.scan.mockResolvedValue(['0', ['delivery:queue:user-r']]);
     redis.lrange.mockResolvedValue([JSON.stringify(stale)]);
 
@@ -480,12 +449,12 @@ describe('RedisDeliveryQueue (memory capacity limits)', () => {
 describe('RedisDeliveryQueue (branch gap-fill)', () => {
   test('drain — falls back to memory when pipeline result has a rangeError', async () => {
     const entry = makePayload({ messageId: 'range-err-fallback' });
-    const pipeline = makeMockPipeline();
+    const pipeline = makePipeline();
     pipeline.exec.mockResolvedValue([
       [new Error('lrange error'), null],
       [null, 1],
     ]);
-    const redis = makeMockRedis(pipeline);
+    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
 
     const cacheStore: any = { getNativeClient: jest.fn() };
     cacheStore.getNativeClient
@@ -501,10 +470,10 @@ describe('RedisDeliveryQueue (branch gap-fill)', () => {
   });
 
   test('drain — returns empty when pipeline results[0] is null', async () => {
-    const pipeline = makeMockPipeline();
+    const pipeline = makePipeline();
     // results is truthy but results[0] is null → early return []
     pipeline.exec.mockResolvedValue([null, [null, 1]]);
-    const redis = makeMockRedis(pipeline);
+    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     expect(await queue.drain('user-r')).toEqual([]);
@@ -512,8 +481,8 @@ describe('RedisDeliveryQueue (branch gap-fill)', () => {
 
   test('cleanup — returns 0 and skips rebuild when no entries are stale', async () => {
     const fresh = makePayload({ messageId: 'fresh-only', enqueuedAt: new Date().toISOString() });
-    const pipeline = makeMockPipeline();
-    const redis = makeMockRedis(pipeline);
+    const pipeline = makePipeline();
+    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
     redis.scan.mockResolvedValue(['0', ['delivery:queue:user-r']]);
     redis.lrange.mockResolvedValue([JSON.stringify(fresh)]);
 
