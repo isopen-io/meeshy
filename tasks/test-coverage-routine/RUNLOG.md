@@ -990,7 +990,7 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Coverage (final per-file measurement):
   - RedisDeliveryQueue.ts: 100% stmts / **100% branches** / 100% funcs / 100% lines ✓
   - delivery-queue-cleanup.ts: 100% stmts / **100% branches** / 100% funcs / 100% lines ✓
-  - Gateway global: 54.87% lines / 50.80% branches (threshold ratcheted lines:50→54, branches:48→50, statements:50→54, functions:49→55)
+  - Gateway global (CI-measured): 50.38% lines / 48.18% branches / 50.31% statements / 49.73% functions (thresholds held at 50/48/50/49 — adding src/jobs/**/*.ts to collectCoverageFrom brought 6 uncovered job files into scope, diluting the global %; thresholds not ratcheted this run)
 - Tests added: 42 tests (31 new in RedisDeliveryQueue.test.ts gap-fill, 11 new in delivery-queue-cleanup.test.ts)
   - Redis happy-path tests: enqueue (rpush+expire called), drain (pipeline lrange+del), drain null results, peek with/without limit, size (llen)
   - Redis cleanup: scan loop, expired entries removed, fresh entries kept, key deleted when all expired, multi-page cursor scan
@@ -1004,4 +1004,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   1. Prior run (in-flight check): merged PR #710 (ZMQ infra × gateway) to main (SHA 0d271441) before starting this slice — CI was still running when session resumed, polled until green.
   2. RUNLOG has a duplicate 2026-06-18T14:00Z entry and a wrong SHA for PR #710 (900e8cbe vs 0d271441); cleaned up in this run's tracking update.
 - Next slice: P1 Voice/audio × gateway OR P1 Voice/audio × translator (next ☐ cells)
-- Commit: (see branch claude/coverage/p1-offline-sync-gateway)
+- Commit: 8be021c4 (squash-merged as PR #714 → main; CI calibration fix: reverted over-ratcheted thresholds 54/50/54/55→50/48/50/49 after discovering 6 uncovered jobs files dilute global %)
