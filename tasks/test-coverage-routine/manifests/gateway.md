@@ -359,14 +359,14 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 - [ ] `services/gateway/src/services/zmq-agent/ZmqAgentClient.ts`
 
-## services/zmq-translation  (5/7 have a test)
+## services/zmq-translation  (7/7 have a test)
 
 - [x] `services/gateway/src/services/zmq-translation/ZmqConnectionManager.ts`
 - [x] `services/gateway/src/services/zmq-translation/ZmqMessageHandler.ts`
 - [x] `services/gateway/src/services/zmq-translation/ZmqRequestSender.ts`
 - [x] `services/gateway/src/services/zmq-translation/ZmqTranslationClient.ts`
-- [ ] `services/gateway/src/services/zmq-translation/index.ts`
-- [ ] `services/gateway/src/services/zmq-translation/types.ts`
+- [x] `services/gateway/src/services/zmq-translation/index.ts`
+- [x] `services/gateway/src/services/zmq-translation/types.ts`
 - [x] `services/gateway/src/services/zmq-translation/utils/zmq-helpers.ts`
 
 ## socketio  (3/6 have a test)
