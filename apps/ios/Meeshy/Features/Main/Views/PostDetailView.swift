@@ -710,6 +710,8 @@ struct PostDetailView: View {
                                         .font(.caption2)
                                         .foregroundColor(theme.textMuted)
                                         .lineLimit(1)
+                                        .truncationMode(.tail)
+                                        .layoutPriority(0)
                                 }
                                 if let views = reach.views, let impressions = reach.impressions {
                                     if reach.pseudo != nil {
@@ -723,10 +725,15 @@ struct PostDetailView: View {
                                         Text(impressions).font(.caption2.weight(.medium))
                                     }
                                     .foregroundColor(theme.textMuted)
+                                    // Stats must always print in full (up to "2.3M") —
+                                    // they're the values the user cross-checks against the
+                                    // inline reach line. Pin their size + priority so the
+                                    // @pseudo yields/truncates first; never clip a number.
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
+                                    .layoutPriority(1)
                                 }
                             }
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
                             .accessibilityElement(children: .ignore)
                             .accessibilityLabel(String(localized: "feed.post.reach", defaultValue: "Vues et impressions", bundle: .main))
                             .accessibilityValue("\(post.postOpenCount) · \(post.impressionCount)")
@@ -1765,24 +1772,4 @@ private struct StoryCanvasFrameKey: PreferenceKey {
 private struct ScrollViewportHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
-
-// MARK: - iOS 18+ scroll-offset tracking
-
-private extension View {
-    /// Tracks a vertical `ScrollView`'s content offset on iOS 18+, where the
-    /// `.onPreferenceChange`-based reader stopped re-firing on scroll (it only ever
-    /// delivers the initial value — verified on iOS 18.2 and iOS 26). Reports
-    /// `contentOffset.y` (0 at the top, positive scrolling down). No-op on iOS 16–17,
-    /// which keep the preference path.
-    @ViewBuilder
-    func trackScrollContentOffset(_ onChange: @escaping (CGFloat) -> Void) -> some View {
-        if #available(iOS 18.0, *) {
-            self.onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, newValue in
-                onChange(newValue)
-            }
-        } else {
-            self
-        }
-    }
 }

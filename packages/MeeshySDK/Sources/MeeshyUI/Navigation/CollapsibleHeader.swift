@@ -64,8 +64,19 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
         return min(1, (progress - start) / (1 - start))
     }
 
+    /// `true` when a centered reveal slot (e.g. the post-author chip) is supplied.
+    private var hasReveal: Bool { centerReveal != nil }
+
+    /// Collapsed height — 1.3× the standard 44pt when a center reveal is present, so
+    /// the inserted avatar + name + stats chip gets vertical room and can sit
+    /// vertically centered over the opaque part of the gradient (the fade-to-clear
+    /// bottom edge is preserved). Non-reveal headers keep the standard height.
+    private var effectiveCollapsedHeight: CGFloat {
+        hasReveal ? Self.collapsedHeight * 1.3 : Self.collapsedHeight
+    }
+
     private var headerHeight: CGFloat {
-        lerp(Self.expandedHeight, Self.collapsedHeight, progress)
+        lerp(Self.expandedHeight, effectiveCollapsedHeight, progress)
     }
 
     private var titleSize: CGFloat {
@@ -149,12 +160,15 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
             }
             .padding(.horizontal, 12)
             .padding(.bottom, titleBottomPadding)
-            .frame(height: headerHeight, alignment: .bottom)
-            .overlay(alignment: .bottom) {
+            // With a reveal the chip is vertically centered in the taller header
+            // (the bottom edge stays faded/transparent); otherwise the title sits
+            // at the bottom, near the scroll content, as before.
+            .frame(height: headerHeight, alignment: hasReveal ? .center : .bottom)
+            .overlay(alignment: hasReveal ? .center : .bottom) {
                 if let centerReveal {
                     centerReveal()
-                        .padding(.horizontal, 56)   // réserve l'espace du back button (gauche) + trailing (droite)
-                        .padding(.bottom, titleBottomPadding)
+                        .padding(.horizontal, 48)   // réserve l'espace du back button (gauche) + trailing (droite)
+                        .padding(.bottom, hasReveal ? 0 : titleBottomPadding)
                         .opacity(Double(Self.revealOpacity(forProgress: progress)))
                         .offset(y: lerp(6, 0, Self.revealOpacity(forProgress: progress)))
                         .allowsHitTesting(Self.revealOpacity(forProgress: progress) > 0.5)
