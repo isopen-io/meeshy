@@ -49,6 +49,8 @@ plus restreint que public). Pas de ciblage d'une communauté précise → `Post.
 - Aligner le picker status sur la même enum partagée + ajouter Communautés.
 - `EXCEPT` / `ONLY` **masqués** des composers (la valeur d'enum reste définie pour le
   décodage/back-compat, mais n'est pas proposée tant que le picker n'existe pas).
+- **Corriger le trou d'ACL** de `getCommunityFeed` : un non-membre ne doit voir que les posts
+  `PUBLIC` d'une communauté, jamais ses posts `COMMUNITY` (embarqué ici pour ne pas l'oublier).
 
 ### Non-objectifs (Incrément 2 — spec séparé)
 - `AudienceUserPickerView` réutilisable (recherche + multi-select façon `NewConversationView`)
@@ -71,12 +73,14 @@ services/gateway                                                     │
    canUserViewPost (reactions)                                       │ ← +COMMUNITY
    SocialEventsHandler.getVisibilityFilteredRecipients (broadcast)   │ ← +COMMUNITY
    StoryTextObjectTranslationService.resolveBroadcastRecipients      │ ← +COMMUNITY
-   PostService.buildVisibilityFilter (détail post)                   ┘ ← +COMMUNITY
+   PostService.buildVisibilityFilter (détail post)                   │ ← +COMMUNITY
+   PostFeedService.getCommunityFeed (fix ACL membre/non-membre)      ┘ ← +ACL
         │ tous via helper unique
         ▼
    posts/communityVisibility.ts
      getCommunityCoMemberIds(prisma, userId, cache?) : string[]
      doUsersShareCommunity(prisma, a, b) : boolean
+     isActiveCommunityMember(prisma, userId, communityId) : boolean
         ▼
    CommunityMember(userId, communityId, isActive)
 ```
@@ -97,6 +101,11 @@ Deux fonctions pures (miroir du pattern `getDirectConversationContactIds`,
 - `doUsersShareCommunity(prisma, a, b) : Promise<boolean>`
   - Pour le check unitaire d'un post (évite de matérialiser toute la liste de co-membres).
   - `findMany` communautés de `a` (actives) → `findFirst` membership active de `b` dans ces `communityId`.
+  - `catch → false`.
+
+- `isActiveCommunityMember(prisma, userId, communityId) : Promise<boolean>`
+  - `findFirst({ where: { userId, communityId, isActive: true }, select: { id: true } }) !== null`.
+  - Utilisé par le fix ACL de `getCommunityFeed` (point 6).
   - `catch → false`.
 
 ### Points d'application (les 5 + 1)
@@ -123,10 +132,13 @@ Deux fonctions pures (miroir du pattern `getDirectConversationContactIds`,
    brancher COMMUNITY sur `getCommunityCoMemberIds(this.prisma, authorId)` (union avec l'auteur),
    au lieu du repli amis.
 
-6. **(Note, hors incrément)** `PostFeedService.getCommunityFeed` (`PostFeedService.ts:637`)
-   hard-code `visibility: { in: ['PUBLIC','COMMUNITY'] }` **sans vérifier l'appartenance du
-   viewer**. C'est un trou d'ACL préexistant sur le feed de communauté (posts permanents, pas
-   stories). **Documenté ici** mais corrigé séparément pour ne pas élargir le périmètre.
+6. **`PostFeedService.getCommunityFeed`** (`PostFeedService.ts:637`) — fix ACL embarqué.
+   Aujourd'hui hard-code `visibility: { in: ['PUBLIC','COMMUNITY'] }` **sans vérifier
+   l'appartenance du viewer** (trou d'ACL : n'importe quel authentifié voit les posts COMMUNITY
+   d'une communauté). Correction : résoudre `isActiveCommunityMember(this.prisma, viewerUserId,
+   communityId)` ; si **membre** → `{ in: ['PUBLIC','COMMUNITY'] }` ; si **non-membre** (ou
+   `viewerUserId` absent) → `visibility: 'PUBLIC'` seul. Concerne les posts permanents
+   (POST/REEL) du feed de communauté, distinct du surfacing stories/status.
 
 ## 6. Composant — iOS : enum partagée
 
@@ -149,6 +161,7 @@ décodage (`APIPost.visibility`).
 **Nouveau** `PostVisibility+Presentation` (MeeshyUI,
 `packages/MeeshySDK/Sources/MeeshyUI/Story/PostVisibilityPresentation.swift`) — concerns UI :
 - `var label: String` (localisé) — Public / Communautés / Contacts / Sauf… / Seulement… / Privé.
+  Le libellé `FRIENDS` est **harmonisé sur « Contacts »** partout (le status affichait « Amis »).
 - `var icon: String` (SF Symbol) — `globe` / `person.3.fill` / `person.2.fill` /
   `person.fill.xmark` / `person.fill.checkmark` / `lock.fill`.
 - `static let composerSelectableCases: [PostVisibility]` (Incrément 1) =
@@ -209,6 +222,8 @@ amis ∪ contacts-DM **et** co-membres-communauté → `buildVisibilityFilter` m
   non-co-membre, **visible** par l'auteur ; n'altère pas PUBLIC/FRIENDS.
 - `canUserViewPost` : COMMUNITY true/false.
 - `SocialEventsHandler` : recipients COMMUNITY = co-membres (pas friends).
+- `getCommunityFeed` (fix ACL) : **membre** voit PUBLIC + COMMUNITY ; **non-membre** voit
+  PUBLIC seul ; `isActiveCommunityMember` true/false.
 
 ### iOS (XCTest)
 - `PostVisibility` : `rawValue` ↔ case, `requiresUserSelection`, `composerSelectableCases`
