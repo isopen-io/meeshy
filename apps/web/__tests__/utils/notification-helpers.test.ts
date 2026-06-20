@@ -10,6 +10,7 @@ import {
   getNotificationLink,
   requiresUserAction,
   getActorDisplayName,
+  formatNotificationTimeAgo,
 } from '@/utils/notification-helpers';
 import { NotificationTypeEnum } from '@/types/notification';
 import type { Notification } from '@/types/notification';
@@ -349,6 +350,134 @@ describe('notification-helpers - Structure Groupée V2', () => {
     it('devrait retourner false pour NEW_MESSAGE', () => {
       const notification = { type: NotificationTypeEnum.NEW_MESSAGE } as Notification;
       expect(requiresUserAction(notification)).toBe(false);
+    });
+  });
+
+  describe('getNotificationLink - cibles sociales', () => {
+    const makeNotif = (overrides: Partial<Notification> = {}): Notification => ({
+      id: 'notif_1',
+      userId: 'user_recipient',
+      type: NotificationTypeEnum.POST_LIKE,
+      priority: 'normal',
+      content: '',
+      actor: { id: 'a', username: 'bob', displayName: 'Bob', avatar: null },
+      context: {},
+      metadata: {},
+      state: { isRead: false, readAt: null, createdAt: new Date() },
+      delivery: { emailSent: false, pushSent: false },
+      ...overrides,
+    });
+
+    it('route post_like vers /post/:postId', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.POST_LIKE, context: { postId: 'p1' } });
+      expect(getNotificationLink(n)).toBe('/post/p1');
+    });
+
+    it('route post_comment avec commentId vers /post/:postId#comment-:commentId', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.POST_COMMENT, context: { postId: 'p1', commentId: 'c1' } });
+      expect(getNotificationLink(n)).toBe('/post/p1#comment-c1');
+    });
+
+    it('route comment_reply vers /post/:postId#comment-:commentId', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.COMMENT_REPLY, context: { postId: 'p2', commentId: 'c2' } });
+      expect(getNotificationLink(n)).toBe('/post/p2#comment-c2');
+    });
+
+    it('route story_reaction vers /story/:postId', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.STORY_REACTION, context: { postId: 's1' } });
+      expect(getNotificationLink(n)).toBe('/story/s1');
+    });
+
+    it('route status_reaction vers /mood/:postId (status partage mood)', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.STATUS_REACTION, context: { postId: 'st1' } });
+      expect(getNotificationLink(n)).toBe('/mood/st1');
+    });
+
+    it('utilise metadata.contentType pour friend_new_story → /story', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.FRIEND_NEW_STORY, context: { postId: 's2' }, metadata: { contentType: 'STORY' } as any });
+      expect(getNotificationLink(n)).toBe('/story/s2');
+    });
+
+    it('utilise metadata.contentType pour friend_new_mood → /mood', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.FRIEND_NEW_MOOD, context: { postId: 'm1' }, metadata: { contentType: 'MOOD' } as any });
+      expect(getNotificationLink(n)).toBe('/mood/m1');
+    });
+
+    it('utilise metadata.contentType POST pour friend_new_post → /post', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.FRIEND_NEW_POST, context: { postId: 'pp' }, metadata: { contentType: 'POST' } as any });
+      expect(getNotificationLink(n)).toBe('/post/pp');
+    });
+
+    it('replie sur metadata.postId si context.postId absent', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.POST_LIKE, context: {}, metadata: { postId: 'pm' } as any });
+      expect(getNotificationLink(n)).toBe('/post/pm');
+    });
+
+    it('route friend_request vers /contacts', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.FRIEND_REQUEST, context: {} });
+      expect(getNotificationLink(n)).toBe('/contacts');
+    });
+
+    it('route contact_request vers /contacts', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.CONTACT_REQUEST, context: {} });
+      expect(getNotificationLink(n)).toBe('/contacts');
+    });
+
+    it('priorise conversationId sur postId', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.NEW_MESSAGE, context: { conversationId: 'conv_9', postId: 'p9' } });
+      expect(getNotificationLink(n)).toBe('/conversations/conv_9');
+    });
+
+    it('retourne null pour un type sans cible résoluble', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.SYSTEM, context: {}, metadata: {} });
+      expect(getNotificationLink(n)).toBeNull();
+    });
+  });
+
+  describe('formatNotificationTimeAgo', () => {
+    const t = (key: string): string => {
+      const map: Record<string, string> = {
+        'timeAgo.now': 'just now',
+        'timeAgo.minute': '{count} min',
+        'timeAgo.hour': '{count}h',
+        'timeAgo.day': '{count}d',
+      };
+      return map[key] ?? key;
+    };
+
+    it('retourne chaîne vide pour null', () => {
+      expect(formatNotificationTimeAgo(null, t)).toBe('');
+    });
+
+    it('retourne chaîne vide pour une date invalide', () => {
+      expect(formatNotificationTimeAgo('not-a-date', t)).toBe('');
+    });
+
+    it('retourne "just now" pour maintenant', () => {
+      expect(formatNotificationTimeAgo(new Date(), t)).toBe('just now');
+    });
+
+    it('formate les minutes', () => {
+      const d = new Date(Date.now() - 5 * 60 * 1000);
+      expect(formatNotificationTimeAgo(d, t)).toBe('5 min');
+    });
+
+    it('formate les heures', () => {
+      const d = new Date(Date.now() - 2 * 60 * 60 * 1000);
+      expect(formatNotificationTimeAgo(d, t)).toBe('2h');
+    });
+
+    it('formate les jours', () => {
+      const d = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+      expect(formatNotificationTimeAgo(d, t)).toBe('3d');
+    });
+
+    it('formate une date absolue au-delà d\'une semaine', () => {
+      const d = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000);
+      const result = formatNotificationTimeAgo(d, t);
+      expect(result).not.toBe('');
+      expect(result).not.toContain('min');
+      expect(result).not.toMatch(/^\d+d$/);
     });
   });
 });
