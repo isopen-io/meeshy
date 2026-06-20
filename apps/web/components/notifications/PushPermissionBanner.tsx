@@ -46,31 +46,26 @@ export const PushPermissionBanner = memo(function PushPermissionBanner() {
   if (permission !== 'default' || dismissed) return null;
 
   return (
-    <div className="backdrop-blur-xl bg-blue-50/80 dark:bg-blue-950/40 rounded-2xl border border-blue-200/50 dark:border-blue-800/40 p-4 mb-4 flex items-center gap-3">
-      <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
-        <Bell className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+    <div className="mb-4 flex items-center gap-3 rounded-lg border border-border bg-muted/40 p-4">
+      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
+        <Bell className="h-5 w-5 text-foreground" />
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-foreground">
           {t('push.title')}
         </p>
-        <p className="text-xs text-blue-700 dark:text-blue-300">
+        <p className="text-xs text-muted-foreground">
           {t('push.description')}
         </p>
       </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <Button
-          size="sm"
-          variant="default"
-          className="bg-blue-600 hover:bg-blue-700 text-white"
-          onClick={handleRequest}
-        >
+      <div className="flex flex-shrink-0 items-center gap-2">
+        <Button size="sm" variant="default" onClick={handleRequest}>
           {t('push.enable')}
         </Button>
         <Button
           size="sm"
           variant="ghost"
-          className="h-8 w-8 p-0"
+          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
           onClick={() => setDismissed(true)}
           aria-label={t('dismiss')}
         >
