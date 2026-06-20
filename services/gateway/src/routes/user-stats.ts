@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { sendInternalError, sendNotFound } from '../utils/response';
+import { sendInternalError } from '../utils/response';
 
 const ACHIEVEMENT_THRESHOLDS = {
   polyglotte: { field: 'languagesUsed', threshold: 5, icon: 'globe', color: '#3498DB' },
@@ -36,8 +36,6 @@ export type UserStats = {
   languages: string[];
   achievements: Achievement[];
 };
-
-const MONGO_ID_PATTERN = /^[a-f\d]{24}$/i;
 
 /**
  * Single source of truth for a user's aggregated statistics.
@@ -107,24 +105,6 @@ export async function computeUserStats(
   return { ...numericStats, languages, achievements };
 }
 
-/**
- * Resolves a `:id` path segment (MongoDB ObjectId or username) to a user id.
- * Returns null when no matching user exists.
- */
-async function resolveUserId(
-  prisma: PrismaClient,
-  idOrUsername: string
-): Promise<string | null> {
-  const isMongoId = MONGO_ID_PATTERN.test(idOrUsername);
-  const user = await prisma.user.findFirst({
-    where: isMongoId
-      ? { id: idOrUsername }
-      : { username: { equals: idOrUsername, mode: 'insensitive' } },
-    select: { id: true },
-  });
-  return user?.id ?? null;
-}
-
 export async function userStatsRoutes(fastify: FastifyInstance) {
 
   fastify.get(
@@ -160,48 +140,13 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
     }
   );
 
-  fastify.get(
-    '/users/:id/stats',
-    {
-      onRequest: [fastify.authenticate],
-      schema: {
-        description: 'Get statistics for any user by MongoDB ObjectId or username (auth required)',
-        tags: ['user-stats'],
-        summary: 'Public user stats',
-        params: {
-          type: 'object',
-          required: ['id'],
-          properties: {
-            id: { type: 'string', description: 'User MongoDB ObjectId (24 hex chars) or username' },
-          },
-        },
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean' },
-              data: { type: 'object', additionalProperties: true },
-            },
-          },
-          404: errorResponseSchema,
-          500: errorResponseSchema,
-        },
-      },
-    },
-    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      try {
-        const resolvedUserId = await resolveUserId(fastify.prisma, request.params.id);
-        if (!resolvedUserId) {
-          return sendNotFound(reply, 'User not found');
-        }
-        const stats = await computeUserStats(fastify.prisma, resolvedUserId);
-        return { success: true, data: stats };
-      } catch (error) {
-        fastify.log.error({ error }, 'Error fetching public user stats');
-        return sendInternalError(reply, 'Failed to fetch user stats');
-      }
-    }
-  );
+  // NOTE: `GET /users/:id/stats` (stats for any user by id/username) is owned by
+  // `getUserStats` in routes/users/preferences.ts (registered as
+  // `/users/:userId/stats`). A second registration here collided with it
+  // (find-my-way treats `/users/:id/stats` and `/users/:userId/stats` as the
+  // same route) → FST_ERR_DUPLICATED_ROUTE at boot, so the gateway failed to
+  // start and prod silently kept the old image. This file only owns the
+  // `/users/me/stats*` family.
 
   fastify.get(
     '/users/me/stats/timeline',
