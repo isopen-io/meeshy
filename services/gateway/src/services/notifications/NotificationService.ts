@@ -1290,6 +1290,9 @@ export class NotificationService {
         avatar: reactor.avatar,
       },
 
+      // postId/commentId vivent dans context (cible de navigation = contexte
+      // central de la notif). Ils sont désormais exposés par le schema de
+      // réponse (notificationContextSchema) — plus de strip côté REST.
       context: {
         postId: params.postId,
         commentId: params.commentId,

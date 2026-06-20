@@ -1804,7 +1804,9 @@ export const notificationContextSchema = {
     originalMessageId: { type: 'string', nullable: true, description: 'Original message ID (for replies)' },
     callSessionId: { type: 'string', nullable: true, description: 'Related call session ID' },
     friendRequestId: { type: 'string', nullable: true, description: 'Related friend request ID' },
-    reactionId: { type: 'string', nullable: true, description: 'Related reaction ID' }
+    reactionId: { type: 'string', nullable: true, description: 'Related reaction ID' },
+    postId: { type: 'string', nullable: true, description: 'Related post/story/mood ID (navigation target)' },
+    commentId: { type: 'string', nullable: true, description: 'Related comment ID (navigation anchor)' }
   }
 } as const;
 
