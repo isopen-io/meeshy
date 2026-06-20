@@ -273,6 +273,7 @@
 		CMCFG000000002F01 /* CallMediaConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMCFG000000001F01 /* CallMediaConfig.swift */; };
 		CMCFT000000002F01 /* CallMediaConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMCFT000000001F01 /* CallMediaConfigTests.swift */; };
 		CMGT000000002F01 /* CallManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMGT000000001F01 /* CallManagerTests.swift */; };
+		VFCONVT00000002F01 /* VideoFrameConverterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = VFCONVT00000001F01 /* VideoFrameConverterTests.swift */; };
 		CMPAU0001000100010001001 /* ConversationComposerStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMPAU0001000100010001000 /* ConversationComposerStateTests.swift */; };
 		CPREF0000000004F01 /* ConversationPreferencesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = CPREF0000000003F01 /* ConversationPreferencesTab.swift */; };
 		CRS00100010001000100B001 /* CrashReportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CRS00100010001000100F001 /* CrashReportSheet.swift */; };
@@ -442,6 +443,7 @@
 		MOCK000B000B000B000B001 /* MockBlockService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000B000B000B000B000 /* MockBlockService.swift */; };
 		MOCK000C000C000C000C001 /* MockLanguageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000C000C000C000C000 /* MockLanguageProvider.swift */; };
 		MPHK000000002F01 /* MediaPipelineHook.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHK000000001F01 /* MediaPipelineHook.swift */; };
+		VFCONV000000002F01 /* VideoFrameConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = VFCONV000000001F01 /* VideoFrameConverter.swift */; };
 		MPHT000000002F01 /* MediaPipelineHookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHT000000001F01 /* MediaPipelineHookTests.swift */; };
 		MSTS02002002002002001 /* MessageStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MSTS01001001001001001 /* MessageStoreTests.swift */; };
 		MUIEXP002A002A002A002A02 /* MeeshyUIExports.swift in Sources */ = {isa = PBXBuildFile; fileRef = MUIEXP001A001A001A001A01 /* MeeshyUIExports.swift */; };
@@ -891,6 +893,7 @@
 		CMCFG000000001F01 /* CallMediaConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallMediaConfig.swift; sourceTree = "<group>"; };
 		CMCFT000000001F01 /* CallMediaConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallMediaConfigTests.swift; sourceTree = "<group>"; };
 		CMGT000000001F01 /* CallManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManagerTests.swift; sourceTree = "<group>"; };
+		VFCONVT00000001F01 /* VideoFrameConverterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFrameConverterTests.swift; sourceTree = "<group>"; };
 		CMPAU0001000100010001000 /* ConversationComposerStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationComposerStateTests.swift; sourceTree = "<group>"; };
 		CPREF0000000003F01 /* ConversationPreferencesTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationPreferencesTab.swift; sourceTree = "<group>"; };
 		CRS00100010001000100F001 /* CrashReportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashReportSheet.swift; sourceTree = "<group>"; };
@@ -1045,6 +1048,7 @@
 		MOCK000B000B000B000B000 /* MockBlockService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBlockService.swift; sourceTree = "<group>"; };
 		MOCK000C000C000C000C000 /* MockLanguageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockLanguageProvider.swift; sourceTree = "<group>"; };
 		MPHK000000001F01 /* MediaPipelineHook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHook.swift; sourceTree = "<group>"; };
+		VFCONV000000001F01 /* VideoFrameConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFrameConverter.swift; sourceTree = "<group>"; };
 		MPHT000000001F01 /* MediaPipelineHookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHookTests.swift; sourceTree = "<group>"; };
 		MSTS01001001001001001 /* MessageStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStoreTests.swift; sourceTree = "<group>"; };
 		MUIEXP001A001A001A001A01 /* MeeshyUIExports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyUIExports.swift; sourceTree = "<group>"; };
@@ -2171,6 +2175,7 @@
 				MPHT000000001F01 /* MediaPipelineHookTests.swift */,
 				CEQT000000001F01 /* CallEventQueueTests.swift */,
 				CMGT000000001F01 /* CallManagerTests.swift */,
+				VFCONVT00000001F01 /* VideoFrameConverterTests.swift */,
 				CMAS000000001F01 /* CallManagerAudioSessionTests.swift */,
 				WRET000000001F01 /* WebRTCErrorTests.swift */,
 				WTTT000000001F01 /* WebRTCTypesTests.swift */,
@@ -2212,6 +2217,7 @@
 				P2PWRTC000000001F01 /* P2PWebRTCClient.swift */,
 				CMCFG000000001F01 /* CallMediaConfig.swift */,
 				MPHK000000001F01 /* MediaPipelineHook.swift */,
+				VFCONV000000001F01 /* VideoFrameConverter.swift */,
 			);
 			path = WebRTC;
 			sourceTree = "<group>";
@@ -2635,6 +2641,7 @@
 				P2PWRTC000000002F01 /* P2PWebRTCClient.swift in Sources */,
 				CMCFG000000002F01 /* CallMediaConfig.swift in Sources */,
 				MPHK000000002F01 /* MediaPipelineHook.swift in Sources */,
+				VFCONV000000002F01 /* VideoFrameConverter.swift in Sources */,
 				CEQ000000002F01 /* CallEventQueue.swift in Sources */,
 				AEFX000100010001000100B0 /* AudioEffectTypes.swift in Sources */,
 				CAES000100010001000100B0 /* CallAudioEffectsService.swift in Sources */,
@@ -2846,6 +2853,7 @@
 				MPHT000000002F01 /* MediaPipelineHookTests.swift in Sources */,
 				CEQT000000002F01 /* CallEventQueueTests.swift in Sources */,
 				CMGT000000002F01 /* CallManagerTests.swift in Sources */,
+				VFCONVT00000002F01 /* VideoFrameConverterTests.swift in Sources */,
 				CMAS000000002F01 /* CallManagerAudioSessionTests.swift in Sources */,
 				WRET000000002F01 /* WebRTCErrorTests.swift in Sources */,
 				WTTT000000002F01 /* WebRTCTypesTests.swift in Sources */,
