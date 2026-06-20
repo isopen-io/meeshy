@@ -26,7 +26,6 @@ struct PostDetailView: View {
     @State private var composerFocusTrigger: Bool = false
     @State private var isTextExpanded = false
     @State private var headerScrollOffset: CGFloat = 0
-    @State private var dbgCount: Int = 0
     // Inline story canvas playback gating (audio active → pause when off-screen / in call).
     @State private var storyCanvasVisible: Bool = true
     @State private var isCallActive: Bool = false
@@ -415,6 +414,7 @@ struct PostDetailView: View {
 
             if let post = displayPost {
                 ZStack(alignment: .top) {
+                    ScrollViewReader { scrollProxy in
                         ScrollView(showsIndicators: false) {
                             VStack(spacing: 0) {
                                 // Reserve the floating header's height so the inline
@@ -427,23 +427,26 @@ struct PostDetailView: View {
                                 }
                                 .padding(.bottom, 80)
                             }
-                            // Scroll-offset reader on the scrolling content itself:
-                            // its top `minY` is 0 at rest and goes negative as the
-                            // content scrolls up (this drives the header's author
-                            // reveal). A 0-height sentinel child reported a degenerate
-                            // constant here; measuring the content's own background
-                            // frame tracks scroll reliably.
+                            // iOS 16–17 scroll-offset reader: the content's top `minY`
+                            // is 0 at rest and goes negative as it scrolls up.
                             .background(
                                 GeometryReader { geo in
                                     Color.clear.preference(
                                         key: ScrollOffsetPreferenceKey.self,
-                                        value: geo.frame(in: .global).minY
+                                        value: geo.frame(in: .named(Self.scrollSpace)).minY
                                     )
                                 }
                             )
                         }
                         .coordinateSpace(name: Self.scrollSpace)
-                        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { headerScrollOffset = $0; dbgCount += 1 }
+                        // `.onPreferenceChange` stops re-firing on scroll under iOS 18+
+                        // (it delivers only the initial value — verified on iOS 18.2
+                        // and iOS 26), so the author chip never revealed. Keep it for
+                        // iOS 16–17 and overlay the native iOS 18+ scroll reader, which
+                        // reports `contentOffset.y` (0 at top, positive scrolling down),
+                        // negated to match the `minY` sign the preference path produced.
+                        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { headerScrollOffset = $0 }
+                        .trackScrollContentOffset { headerScrollOffset = -$0 }
                         .background(
                             GeometryReader { geo in
                                 Color.clear.preference(key: ScrollViewportHeightKey.self, value: geo.size.height)
@@ -453,6 +456,9 @@ struct PostDetailView: View {
                         .onAppear {
                             if showComments {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    withAnimation {
+                                        scrollProxy.scrollTo("commentsSection", anchor: .top)
+                                    }
                                     composerFocusTrigger.toggle()
                                 }
                             }
@@ -460,24 +466,17 @@ struct PostDetailView: View {
                         .onReceive(CallManager.shared.$callState) { state in
                             isCallActive = state.isActive
                         }
+                    } // ScrollViewReader
 
                     // Floating translucent header overlaid on the scroll content's
                     // top — NOT `.safeAreaInset` (which pinned the scroll-offset
-                    // preference and broke the reveal). The ZStack respects the safe
-                    // area so the header clears the Dynamic Island; the `Color.clear`
-                    // spacer above reserves its room so the author isn't hidden.
+                    // preference). The ZStack respects the safe area so the header
+                    // clears the Dynamic Island; the `Color.clear` spacer above
+                    // reserves its room so the author isn't hidden at rest.
                     VStack(spacing: 0) {
                         postDetailHeader(post)
                         Spacer(minLength: 0)
                     }
-
-                    Text(String(format: "off %.0f cnt %d", headerScrollOffset, dbgCount))
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.yellow)
-                        .padding(4)
-                        .background(Color.black.opacity(0.8))
-                        .padding(.top, 70)
-                        .allowsHitTesting(false)
                 } // ZStack
             } else if viewModel.isLoading {
                 Spacer()
@@ -1766,4 +1765,24 @@ private struct StoryCanvasFrameKey: PreferenceKey {
 private struct ScrollViewportHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+// MARK: - iOS 18+ scroll-offset tracking
+
+private extension View {
+    /// Tracks a vertical `ScrollView`'s content offset on iOS 18+, where the
+    /// `.onPreferenceChange`-based reader stopped re-firing on scroll (it only ever
+    /// delivers the initial value — verified on iOS 18.2 and iOS 26). Reports
+    /// `contentOffset.y` (0 at the top, positive scrolling down). No-op on iOS 16–17,
+    /// which keep the preference path.
+    @ViewBuilder
+    func trackScrollContentOffset(_ onChange: @escaping (CGFloat) -> Void) -> some View {
+        if #available(iOS 18.0, *) {
+            self.onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, newValue in
+                onChange(newValue)
+            }
+        } else {
+            self
+        }
+    }
 }
