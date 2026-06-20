@@ -140,7 +140,17 @@ struct LoginView: View {
                 .padding(.bottom, MeeshySpacing.md)
                 .opacity(showFields ? 1 : 0)
 
-                environmentSelector
+                // Sélecteur d'environnement (Production/Staging/Localhost/Custom +
+                // « Connecté à … ») réservé à l'environnement de simulation.
+                if Self.isSimulator {
+                    environmentSelector
+                        .padding(.bottom, MeeshySpacing.md)
+                        .opacity(showFields ? 1 : 0)
+                }
+
+                // Baseline de marque partagée avec le splash (BrandTagline).
+                BrandTagline()
+                    .padding(.horizontal, MeeshySpacing.xxxl)
                     .padding(.bottom, MeeshySpacing.xxxl)
                     .opacity(showFields ? 1 : 0)
             }
@@ -439,22 +449,12 @@ struct LoginView: View {
 
             loginButton(action: attemptLogin, disabled: username.isEmpty || password.isEmpty)
 
-            HStack(spacing: MeeshySpacing.lg) {
-                Button { showForgotPassword = true } label: {
-                    Text(String(localized: "auth.login.forgot_password", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-                .bounceOnTap(scale: 0.94)
-                .accessibilityLabel(String(localized: "auth.login.forgot_password.label", bundle: .main))
-
-                Text("·")
-                    .foregroundColor(theme.textMuted.opacity(0.5))
-                    .accessibilityHidden(true)
-
+            VStack(spacing: MeeshySpacing.sm) {
+                // « Connexion sans mot de passe » en premier (action mise en avant),
+                // « Mot de passe oublié » en dessous — empilés, plus côte à côte.
                 Button { showMagicLink = true } label: {
                     Text(String(localized: "auth.login.passwordless", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [MeeshyColors.purple500, MeeshyColors.indigo400],
@@ -465,6 +465,14 @@ struct LoginView: View {
                 }
                 .bounceOnTap(scale: 0.94)
                 .accessibilityLabel(String(localized: "auth.login.passwordless", bundle: .main))
+
+                Button { showForgotPassword = true } label: {
+                    Text(String(localized: "auth.login.forgot_password", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
+                .bounceOnTap(scale: 0.94)
+                .accessibilityLabel(String(localized: "auth.login.forgot_password.label", bundle: .main))
             }
             .padding(.top, MeeshySpacing.xs)
         }

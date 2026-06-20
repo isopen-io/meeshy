@@ -192,6 +192,7 @@
 		RFLAYOUTTST0100010001001 /* ReelFeedLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = RFLAYOUTTST0100010001002 /* ReelFeedLayoutTests.swift */; };
 		RFAUTOPLAYTST01000100001 /* ReelFeedAutoplayCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = RFAUTOPLAYTST01000100002 /* ReelFeedAutoplayCoordinatorTests.swift */; };
 		ATTLT002000000000000F002 /* AttachmentLoadingTile.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATTLT001000000000000F001 /* AttachmentLoadingTile.swift */; };
+		BRTAG002000000000000F002 /* BrandTagline.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRTAG001000000000000F001 /* BrandTagline.swift */; };
 		ATUP00200000000001F00 /* AttachmentUploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATUP00100000000001F00 /* AttachmentUploader.swift */; };
 		ATUT00200000000001F00 /* AttachmentUploaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATUT00100000000001F00 /* AttachmentUploaderTests.swift */; };
 		AUDFS001B001B001B0000002 /* AudioFullscreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AUDFS001A001A001A0000001 /* AudioFullscreenView.swift */; };
@@ -797,6 +798,7 @@
 		RFLAYOUTTST0100010001002 /* ReelFeedLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelFeedLayoutTests.swift; sourceTree = "<group>"; };
 		RFAUTOPLAYTST01000100002 /* ReelFeedAutoplayCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelFeedAutoplayCoordinatorTests.swift; sourceTree = "<group>"; };
 		ATTLT001000000000000F001 /* AttachmentLoadingTile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentLoadingTile.swift; sourceTree = "<group>"; };
+		BRTAG001000000000000F001 /* BrandTagline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandTagline.swift; sourceTree = "<group>"; };
 		ATUP00100000000001F00 /* AttachmentUploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentUploader.swift; sourceTree = "<group>"; };
 		ATUT00100000000001F00 /* AttachmentUploaderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AttachmentUploaderTests.swift; sourceTree = "<group>"; };
 		AUDFS001A001A001A0000001 /* AudioFullscreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFullscreenView.swift; sourceTree = "<group>"; };
@@ -1268,6 +1270,7 @@
 				AA2000000000001FA2 /* LocationPickerView.swift */,
 				AA5000000000001FA5 /* VideoPreviewView.swift */,
 				ATTLT001000000000000F001 /* AttachmentLoadingTile.swift */,
+				BRTAG001000000000000F001 /* BrandTagline.swift */,
 				CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */,
 				CC11DD22EE33FF44AA5500AC /* ComposerModels.swift */,
 				CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */,
@@ -2526,6 +2529,7 @@
 				AA3000000000002FA3 /* MediaCompressor.swift in Sources */,
 				APREPS02000000000000F002 /* AttachmentPreparationService.swift in Sources */,
 				ATTLT002000000000000F002 /* AttachmentLoadingTile.swift in Sources */,
+				BRTAG002000000000000F002 /* BrandTagline.swift in Sources */,
 				OAA0000000000002F01 /* OptimisticAttachmentAdopter.swift in Sources */,
 				AA5000000000002FA5 /* VideoPreviewView.swift in Sources */,
 				AA6000000000002FA6 /* AttachmentSendService.swift in Sources */,
@@ -3009,7 +3013,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1179;
+				CURRENT_PROJECT_VERSION = 1180;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -3117,7 +3121,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1179;
+				CURRENT_PROJECT_VERSION = 1180;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Dev";
@@ -3215,7 +3219,7 @@
 				CODE_SIGN_ENTITLEMENTS = Meeshy/Meeshy.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1179;
+				CURRENT_PROJECT_VERSION = 1180;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Meeshy;
@@ -3248,7 +3252,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1179;
+				CURRENT_PROJECT_VERSION = 1180;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -3286,7 +3290,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1179;
+				CURRENT_PROJECT_VERSION = 1180;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -3326,7 +3330,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1179;
+				CURRENT_PROJECT_VERSION = 1180;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;

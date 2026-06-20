@@ -870,10 +870,8 @@ struct SplashScreen: View {
                     .offset(y: showTitle ? 0 : -40)
                     .padding(.bottom, 8)
 
-                // Tagline
-                Text(String(localized: "splash.tagline", bundle: .main))
-                    .font(MeeshyFont.relative(16, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                // Tagline (shared baseline — see BrandTagline)
+                BrandTagline()
                     .frame(height: 40)
                     .opacity(showSubtitle ? 1 : 0)
                     .offset(y: showSubtitle ? 0 : -20)
