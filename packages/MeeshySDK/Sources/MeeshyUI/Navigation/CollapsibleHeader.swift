@@ -92,9 +92,6 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     /// `true` when a centered reveal slot (e.g. the post-author chip) is supplied.
     private var hasReveal: Bool { centerReveal != nil }
 
-    /// `true` when an in-header accessory (e.g. a compact story trail) is supplied.
-    private var hasAccessory: Bool { accessory != nil }
-
     /// Collapsed height — 1.3× the standard 44pt when a center reveal is present, so
     /// the inserted avatar + name + stats chip gets vertical room and can sit
     /// vertically centered over the opaque part of the gradient (the fade-to-clear
@@ -222,48 +219,35 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     /// from a readable blur at the top to fully transparent at the bottom edge, so
     /// the scroll content (list rows, etc.) passing under the lower edge stays
     /// visible instead of being clipped by an opaque bar.
-    @ViewBuilder
     private var headerBackground: some View {
-        if hasAccessory {
-            // With an in-header accessory (story trail), the surface must stay
-            // readable over the whole bar + accessory so the trail and the rows
-            // scrolling under it are masked — no mid-height fade that would
-            // visually detach the trail from the bar.
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay(backgroundColor.opacity(0.6))
-                .ignoresSafeArea(edges: .top)
-                .allowsHitTesting(false)
-        } else {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay(
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .overlay(
+                LinearGradient(
+                    stops: [
+                        .init(color: backgroundColor.opacity(0.75), location: 0),
+                        .init(color: backgroundColor.opacity(0.45), location: 0.5),
+                        .init(color: backgroundColor.opacity(0.0), location: 1.0),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .mask(
+                Rectangle().fill(
                     LinearGradient(
                         stops: [
-                            .init(color: backgroundColor.opacity(0.75), location: 0),
-                            .init(color: backgroundColor.opacity(0.45), location: 0.5),
-                            .init(color: backgroundColor.opacity(0.0), location: 1.0),
+                            .init(color: .black, location: 0),
+                            .init(color: .black, location: 0.5),
+                            .init(color: .clear, location: 1.0),
                         ],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                 )
-                .mask(
-                    Rectangle().fill(
-                        LinearGradient(
-                            stops: [
-                                .init(color: .black, location: 0),
-                                .init(color: .black, location: 0.5),
-                                .init(color: .clear, location: 1.0),
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                )
-                .ignoresSafeArea(edges: .top)
-                .allowsHitTesting(false)
-        }
+            )
+            .ignoresSafeArea(edges: .top)
+            .allowsHitTesting(false)
     }
 
     private var backButton: some View {
