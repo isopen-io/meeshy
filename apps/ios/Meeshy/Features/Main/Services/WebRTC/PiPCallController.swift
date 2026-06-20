@@ -163,6 +163,7 @@ final class PiPCallController: NSObject, PiPCallProviding {
         pipController?.delegate = nil
         pipController = nil
         videoCallViewController = nil
+        surfaceView.removeFromSuperview()
         remoteTrack = nil
         onStart = nil
         onRestoreUI = nil
@@ -182,8 +183,21 @@ final class PiPCallController: NSObject, PiPCallProviding {
         if let renderer, let remoteTrack {
             remoteTrack.remove(renderer)
         }
-        renderer?.reset()
         renderer = nil
+        // Fuite — vider la file du layer (le surfaceView est un singleton
+        // persistant) pour ne pas retenir de CMSampleBuffer entre deux sessions.
+        // `renderer.reset()` (async, [weak self]) ne suffisait pas : le renderer
+        // est libéré avant que le flush ne tourne. On flush ici sur le main,
+        // sûr car plus aucun enqueue ne suivra (renderer détaché + nil).
+        flushSurface()
+    }
+
+    private func flushSurface() {
+        if #available(iOS 17.0, *) {
+            surfaceView.displayLayer.sampleBufferRenderer.flush()
+        } else {
+            surfaceView.displayLayer.flush()
+        }
     }
 }
 
