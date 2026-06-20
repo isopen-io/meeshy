@@ -413,6 +413,26 @@ describe('notification-helpers - Structure Groupée V2', () => {
       expect(getNotificationLink(n)).toBe('/post/pm');
     });
 
+    it('utilise metadata.postType=STORY pour router post_like → /story', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.POST_LIKE, context: {}, metadata: { postId: 'ps', postType: 'STORY' } as any });
+      expect(getNotificationLink(n)).toBe('/story/ps');
+    });
+
+    it('utilise metadata.postType=REEL → /reel', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.POST_LIKE, context: {}, metadata: { postId: 'pr', postType: 'REEL' } as any });
+      expect(getNotificationLink(n)).toBe('/reel/pr');
+    });
+
+    it('comment_reply via metadata (postId+commentId) → /post#comment', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.COMMENT_REPLY, context: {}, metadata: { postId: 'pc', commentId: 'cc' } as any });
+      expect(getNotificationLink(n)).toBe('/post/pc#comment-cc');
+    });
+
+    it('comment_reaction sans postId → null (gap données gateway)', () => {
+      const n = makeNotif({ type: NotificationTypeEnum.COMMENT_REACTION, context: {}, metadata: { reactionEmoji: '❤️' } as any });
+      expect(getNotificationLink(n)).toBeNull();
+    });
+
     it('route friend_request vers /contacts', () => {
       const n = makeNotif({ type: NotificationTypeEnum.FRIEND_REQUEST, context: {} });
       expect(getNotificationLink(n)).toBe('/contacts');

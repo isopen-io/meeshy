@@ -147,11 +147,15 @@ const FRIEND_CONTACT_TYPES = new Set<string>([
  * Priorité au discriminant `metadata.contentType` (friend_new_*), sinon
  * dérivé du type de notification, défaut `/post`.
  */
-function resolveContentRoute(notification: Notification): '/post' | '/story' | '/mood' {
-  const contentType = (notification.metadata as any)?.contentType as string | undefined;
-  if (contentType === 'STORY') return '/story';
-  if (contentType === 'MOOD' || contentType === 'STATUS') return '/mood';
-  if (contentType === 'POST') return '/post';
+function resolveContentRoute(notification: Notification): '/post' | '/story' | '/mood' | '/reel' {
+  // Le discriminant de cible vit dans metadata : `postType` (post_like/post_comment…)
+  // ou `contentType` (friend_new_*). On lit les deux.
+  const meta = notification.metadata as any;
+  const kind = (meta?.contentType ?? meta?.postType) as string | undefined;
+  if (kind === 'STORY') return '/story';
+  if (kind === 'MOOD' || kind === 'STATUS') return '/mood';
+  if (kind === 'REEL') return '/reel';
+  if (kind === 'POST') return '/post';
 
   const type = notification.type;
   if (typeof type === 'string') {
