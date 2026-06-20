@@ -104,6 +104,10 @@ struct ThemedFeedOverlay: View {
     @State private var showFullComposer = false
     @State private var pendingAttachmentType: String?
     @State private var quoteOriginalPost: FeedPost?
+    /// Negative scroll offset of the feed (0 at rest, more negative scrolling
+    /// up) — drives the collapsing header and the reveal of the compact story
+    /// trail integrated in the header's accessory slot. Mirrors `FeedView`.
+    @State private var headerScrollOffset: CGFloat = 0
 
     // Post reaction state — socket-driven, mirrors FeedView pattern.
     @State private var postLikedIds: Set<String> = []
@@ -344,7 +348,7 @@ struct ThemedFeedOverlay: View {
     private var feedHeader: some View {
         CollapsibleHeader(
             title: "Meeshy Feed",
-            scrollOffset: 0,
+            scrollOffset: headerScrollOffset,
             showBackButton: false,
             titleColor: theme.textPrimary,
             backArrowColor: MeeshyColors.indigo500,
@@ -368,6 +372,22 @@ struct ThemedFeedOverlay: View {
                         .adaptiveGlass(in: Circle(), interactive: true)
                 }
                 .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
+            },
+            // Compact story trail integrated inside the header (accessory slot,
+            // below the title/actions bar) — reveals as the full Story Tray
+            // scrolls up under the header. Mirrors `FeedView` and the chats list.
+            accessory: {
+                AnyView(
+                    PinnedStoryTrailBand(
+                        viewModel: storyViewModel,
+                        scrollOffset: headerScrollOffset,
+                        onViewStory: { userId in
+                            selectedStoryUserId = userId
+                            storyViewerSingleGroup = false
+                            showStoryViewer = true
+                        }
+                    )
+                )
             }
         )
     }
@@ -529,10 +549,23 @@ struct ThemedFeedOverlay: View {
             // centré (iOS 16-compatible). Identique à `FeedView.feedScrollView`.
             GeometryReader { viewportProxy in
                 let viewportFrame = viewportProxy.frame(in: .global)
-                ScrollView(showsIndicators: false) {
+                // Branded pull-to-refresh + scroll-offset tracking (drives the
+                // collapsing header and the compact story-trail reveal). The
+                // `topPadding` reserves the header height so the full Story Tray
+                // glides up under the header on scroll. Mirrors `FeedView`.
+                MeeshyRefreshableScroll(
+                    onRefresh: {
+                        await viewModel.refresh()
+                        await storyViewModel.loadStories()
+                        await statusViewModel.loadStatuses()
+                    },
+                    coordinateSpaceName: "feedScroll",
+                    onScrollOffsetChange: { offset in
+                        headerScrollOffset = offset
+                    },
+                    topPadding: CollapsibleHeaderMetrics.expandedHeight
+                ) {
                 LazyVStack(spacing: 14) {
-                    Spacer().frame(height: 70)
-
                     // Story Tray
                     StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
                         selectedStoryUserId = userId
@@ -605,11 +638,6 @@ struct ThemedFeedOverlay: View {
                 }
                 .padding(.bottom, 100)
                 }
-                .refreshable {
-                    await viewModel.refresh()
-                    await storyViewModel.loadStories()
-                    await statusViewModel.loadStatuses()
-                }
                 .onPreferenceChange(ReelVisibilityPreferenceKey.self) { frames in
                     reelAutoplay.update(
                         frames: frames,
@@ -620,8 +648,10 @@ struct ThemedFeedOverlay: View {
             }
         }
         .overlay(alignment: .top) {
-            // Header « Meeshy Feed » épinglé (le ScrollView réserve déjà ~70pt en
-            // tête via le Spacer initial pour qu'il glisse dessous au scroll).
+            // Header « Meeshy Feed » épinglé : le `MeeshyRefreshableScroll`
+            // réserve `CollapsibleHeaderMetrics.expandedHeight` en tête (topPadding)
+            // pour que le contenu glisse dessous au scroll et que la trail compacte
+            // se révèle dans le slot accessory.
             feedHeader
         }
         .task {
