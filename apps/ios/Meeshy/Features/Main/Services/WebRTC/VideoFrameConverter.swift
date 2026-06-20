@@ -28,8 +28,10 @@ protocol VideoSampleBufferMaking: AnyObject {
     /// - Returns: un `CMSampleBuffer` marqué `DisplayImmediately` (frame live, pas
     ///   de timebase), ou `nil` si la création échoue (la frame est alors droppée
     ///   — jamais un crash).
-    func makeSampleBuffer(pixelBuffer: CVPixelBuffer, timeStampNs: Int64) -> CMSampleBuffer?
-    func reset()
+    /// `nonisolated` : appelé depuis le thread de décodage WebRTC (le target est
+    /// en `SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor`, qui inférerait `@MainActor`).
+    nonisolated func makeSampleBuffer(pixelBuffer: CVPixelBuffer, timeStampNs: Int64) -> CMSampleBuffer?
+    nonisolated func reset()
 }
 
 // MARK: - Converter
@@ -169,19 +171,19 @@ private extension Logger {
 // MARK: - WebRTC bridging
 
 #if canImport(WebRTC)
-import WebRTC
+@preconcurrency import WebRTC
 
 extension VideoFrameConverter {
     /// Extrait un `CVPixelBuffer` d'une frame distante décodée et l'emballe.
     /// Passthrough pour le chemin matériel (`RTCCVPixelBuffer`, H.264 — le codec
     /// épinglé, zéro copie) ; convertit `RTCI420Buffer` (VP8/VP9 logiciel) en NV12.
     /// Retourne `nil` pour un type de buffer inconnu (frame droppée — jamais un crash).
-    func makeSampleBuffer(from frame: RTCVideoFrame) -> CMSampleBuffer? {
+    nonisolated func makeSampleBuffer(from frame: RTCVideoFrame) -> CMSampleBuffer? {
         guard let pixelBuffer = pixelBuffer(from: frame.buffer) else { return nil }
         return makeSampleBuffer(pixelBuffer: pixelBuffer, timeStampNs: frame.timeStampNs)
     }
 
-    private func pixelBuffer(from buffer: RTCVideoFrameBuffer) -> CVPixelBuffer? {
+    private nonisolated func pixelBuffer(from buffer: RTCVideoFrameBuffer) -> CVPixelBuffer? {
         if let cv = buffer as? RTCCVPixelBuffer {
             return cv.pixelBuffer
         }
@@ -190,7 +192,7 @@ extension VideoFrameConverter {
 
     /// Convertit un buffer I420 planaire (Y + U + V) en `CVPixelBuffer` NV12
     /// (Y + CbCr entrelacé) via le pool de scratch. Gère les strides distincts.
-    private func makeNV12PixelBuffer(from i420: RTCI420BufferProtocol) -> CVPixelBuffer? {
+    private nonisolated func makeNV12PixelBuffer(from i420: RTCI420BufferProtocol) -> CVPixelBuffer? {
         let width = Int(i420.width)
         let height = Int(i420.height)
         guard width > 0, height > 0 else { return nil }
