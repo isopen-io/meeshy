@@ -445,6 +445,8 @@
 		MOCK000B000B000B000B001 /* MockBlockService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000B000B000B000B000 /* MockBlockService.swift */; };
 		MOCK000C000C000C000C001 /* MockLanguageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000C000C000C000C000 /* MockLanguageProvider.swift */; };
 		MPHK000000002F01 /* MediaPipelineHook.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHK000000001F01 /* MediaPipelineHook.swift */; };
+		PIPRND00000002F01 /* PiPVideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = PIPRND00000001F01 /* PiPVideoRenderer.swift */; };
+		PIPCTL00000002F01 /* PiPCallController.swift in Sources */ = {isa = PBXBuildFile; fileRef = PIPCTL00000001F01 /* PiPCallController.swift */; };
 		VFCONV000000002F01 /* VideoFrameConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = VFCONV000000001F01 /* VideoFrameConverter.swift */; };
 		MPHT000000002F01 /* MediaPipelineHookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHT000000001F01 /* MediaPipelineHookTests.swift */; };
 		MSTS02002002002002001 /* MessageStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MSTS01001001001001001 /* MessageStoreTests.swift */; };
@@ -568,6 +570,7 @@
 		WT86A001000100010001B001 /* WebRTCServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = WT86A001000100010001F001 /* WebRTCServiceTests.swift */; };
 		WTTT000000002F01 /* WebRTCTypesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = WTTT000000001F01 /* WebRTCTypesTests.swift */; };
 		WV4400000000002F44 /* WebRTCVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WV4400000000001F44 /* WebRTCVideoView.swift */; };
+		PIPSBV00000002F01 /* PiPVideoSampleBufferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = PIPSBV00000001F01 /* PiPVideoSampleBufferView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1052,6 +1055,8 @@
 		MOCK000B000B000B000B000 /* MockBlockService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBlockService.swift; sourceTree = "<group>"; };
 		MOCK000C000C000C000C000 /* MockLanguageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockLanguageProvider.swift; sourceTree = "<group>"; };
 		MPHK000000001F01 /* MediaPipelineHook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHook.swift; sourceTree = "<group>"; };
+		PIPRND00000001F01 /* PiPVideoRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiPVideoRenderer.swift; sourceTree = "<group>"; };
+		PIPCTL00000001F01 /* PiPCallController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiPCallController.swift; sourceTree = "<group>"; };
 		VFCONV000000001F01 /* VideoFrameConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFrameConverter.swift; sourceTree = "<group>"; };
 		MPHT000000001F01 /* MediaPipelineHookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHookTests.swift; sourceTree = "<group>"; };
 		MSTS01001001001001001 /* MessageStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStoreTests.swift; sourceTree = "<group>"; };
@@ -1174,6 +1179,7 @@
 		WT86A001000100010001F001 /* WebRTCServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCServiceTests.swift; sourceTree = "<group>"; };
 		WTTT000000001F01 /* WebRTCTypesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCTypesTests.swift; sourceTree = "<group>"; };
 		WV4400000000001F44 /* WebRTCVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCVideoView.swift; sourceTree = "<group>"; };
+		PIPSBV00000001F01 /* PiPVideoSampleBufferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiPVideoSampleBufferView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1517,6 +1523,7 @@
 				VF4200000000001F42 /* VideoFiltersPanel.swift */,
 				CE4300000000001F43 /* CallEffectsOverlay.swift */,
 				WV4400000000001F44 /* WebRTCVideoView.swift */,
+				PIPSBV00000001F01 /* PiPVideoSampleBufferView.swift */,
 				IC3900000000001F39 /* IncomingCallView.swift */,
 				3D8B8C79D3A388D45C5B5EEF /* UserStatsView.swift */,
 				3CA306483025A83773D87DED /* StatsTimelineChart.swift */,
@@ -2223,6 +2230,8 @@
 				P2PWRTC000000001F01 /* P2PWebRTCClient.swift */,
 				CMCFG000000001F01 /* CallMediaConfig.swift */,
 				MPHK000000001F01 /* MediaPipelineHook.swift */,
+				PIPRND00000001F01 /* PiPVideoRenderer.swift */,
+				PIPCTL00000001F01 /* PiPCallController.swift */,
 				VFCONV000000001F01 /* VideoFrameConverter.swift */,
 			);
 			path = WebRTC;
@@ -2648,6 +2657,8 @@
 				P2PWRTC000000002F01 /* P2PWebRTCClient.swift in Sources */,
 				CMCFG000000002F01 /* CallMediaConfig.swift in Sources */,
 				MPHK000000002F01 /* MediaPipelineHook.swift in Sources */,
+				PIPRND00000002F01 /* PiPVideoRenderer.swift in Sources */,
+				PIPCTL00000002F01 /* PiPCallController.swift in Sources */,
 				VFCONV000000002F01 /* VideoFrameConverter.swift in Sources */,
 				CEQ000000002F01 /* CallEventQueue.swift in Sources */,
 				AEFX000100010001000100B0 /* AudioEffectTypes.swift in Sources */,
@@ -2658,6 +2669,7 @@
 				VF4200000000002F42 /* VideoFiltersPanel.swift in Sources */,
 				CE4300000000002F43 /* CallEffectsOverlay.swift in Sources */,
 				WV4400000000002F44 /* WebRTCVideoView.swift in Sources */,
+				PIPSBV00000002F01 /* PiPVideoSampleBufferView.swift in Sources */,
 				IC3900000000002F39 /* IncomingCallView.swift in Sources */,
 				2A62EA2A80A8037FCA288EE2 /* OnboardingAnimations.swift in Sources */,
 				2D6AD43B267CD9FA109110AF /* OnboardingStepViews.swift in Sources */,
