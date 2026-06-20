@@ -153,6 +153,8 @@ struct ThemedAvatarButton: View {
             .shadow(color: Color(hex: color).opacity(isExpanded ? 0.6 : 0.4), radius: isExpanded ? 12 : 8, y: 3)
             .scaleEffect(isPressed ? 0.9 : (isExpanded ? 1.1 : 1))
         }
+        .accessibilityLabel(String(format: String(localized: "accessibility.user_profile_of", defaultValue: "Profil de %@", bundle: .main), name))
+        .accessibilityHint(String(localized: "accessibility.user_profile.hint", defaultValue: "Ouvre les détails du profil", bundle: .main))
     }
 }
 

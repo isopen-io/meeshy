@@ -656,7 +656,7 @@ struct SettingsView: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: color))

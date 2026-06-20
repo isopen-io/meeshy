@@ -440,12 +440,12 @@ struct RootView: View {
         .adaptiveOnChange(of: router.sceneTitle) { _, title in
             UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
-                .first?.title = "Meeshy — \(title)"
+                .first?.title = String(format: String(localized: "root.scene_title_format", defaultValue: "Meeshy — %@", bundle: .main), title)
         }
         .onAppear {
             UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
-                .first?.title = "Meeshy — Conversations"
+                .first?.title = String(localized: "root.scene_title_default", defaultValue: "Meeshy — Conversations", bundle: .main)
         }
         .task {
             // Connect Socket.IO early so the backend knows we're online
@@ -1475,6 +1475,7 @@ struct RootView: View {
                     // Badge
                     if !showMenu && notificationManager.unreadCount > 0 {
                         NotificationBadge(count: notificationManager.unreadCount)
+                            .accessibilityLabel(String(format: String(localized: "a11y.notifications.unread_count", defaultValue: "%d notifications non lues", bundle: .main), notificationManager.unreadCount))
                     }
                 }
             }
@@ -1506,7 +1507,7 @@ struct RootView: View {
 
             // Menu items configuration
             let menuItemSize: CGFloat = 46
-            let menuSpacing: CGFloat = 12
+            let menuSpacing: CGFloat = MeeshySpacing.md
 
             // Determine if menu should expand up or down
             let expandDown = pos.y < 0.5
