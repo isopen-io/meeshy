@@ -1223,4 +1223,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   2. Branch 18 in NotificationFormatter.ts (95.65%) is an Istanbul artifact on `|| undefined` ternary where the false branch requires sanitizeDate to return a non-null falsy value — structurally impossible given return type `Date | null`. No ignore annotation added (still well above 92% floor).
   3. notification-schemas.ts 60% functions is an Istanbul artifact — Zod schema `.parse()` references don't count as functions. 100% branch + lines.
 - Next slice: P2 Notifications × web OR P2 Feed/posts/stories × gateway (next ☐ cells top-to-bottom)
-- Commit: (to be filled after merge)
+- Commit: squash-merge SHA 4db3bfe6f3381a7d2aad36acd8494fa9a6e20471 (PR #727 → main, 2026-06-20T10:02Z)
