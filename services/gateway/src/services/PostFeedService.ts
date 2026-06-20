@@ -641,11 +641,17 @@ export class PostFeedService {
   async getCommunityFeed(communityId: string, viewerUserId: string | undefined, cursor?: string, limit: number = 20) {
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
+    // ACL : seuls les membres actifs voient les posts COMMUNITY ; un non-membre
+    // (ou un viewer anonyme) est limité aux posts PUBLIC de la communauté.
+    const isMember = viewerUserId
+      ? await isActiveCommunityMember(this.prisma, viewerUserId, communityId)
+      : false;
+
     const where: any = {
       communityId,
       deletedAt: NOT_DELETED,
       type: { in: [PostType.POST, PostType.REEL] },
-      visibility: { in: ['PUBLIC', 'COMMUNITY'] },
+      visibility: isMember ? { in: ['PUBLIC', 'COMMUNITY'] } : 'PUBLIC',
     };
 
     if (cursorData) {
