@@ -88,7 +88,7 @@ struct LoginView: View {
                 Spacer()
 
                 AnimatedLogoView(
-                    color: isDark ? .white : Color(hex: "1C1917"),
+                    color: isDark ? .white : MeeshyColors.indigo950,
                     lineWidth: 10,
                     continuous: false
                 )
@@ -100,12 +100,12 @@ struct LoginView: View {
                     .font(MeeshyFont.relative(40, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [Color(hex: "B24BF3"), Color(hex: "8B5CF6"), Color(hex: "A855F7")],
+                            colors: [MeeshyColors.purple700, MeeshyColors.purple600, MeeshyColors.purple500],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
-                    .shadow(color: Color(hex: "B24BF3").opacity(isDark ? 0.5 : 0.25), radius: 12, x: 0, y: 4)
+                    .shadow(color: MeeshyColors.purple700.opacity(isDark ? 0.5 : 0.25), radius: 12, x: 0, y: 4)
                     .padding(.bottom, 48)
                     .accessibilityAddTraits(.isHeader)
 
@@ -126,7 +126,7 @@ struct LoginView: View {
                         Text(String(localized: "auth.login.create_account", bundle: .main))
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [Color(hex: "B24BF3"), Color(hex: "8B5CF6")],
+                                    colors: [MeeshyColors.purple700, MeeshyColors.purple600],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -310,7 +310,7 @@ struct LoginView: View {
             // Password field
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "lock.fill")
-                    .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
+                    .foregroundColor(MeeshyColors.purple600.opacity(0.7))
                     .frame(width: 20)
                     .accessibilityHidden(true)
                 SecureField(String(localized: "auth.password.placeholder", bundle: .main), text: $accountPassword)
@@ -330,7 +330,7 @@ struct LoginView: View {
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(
                                 focusedField == .accountPassword
-                                    ? Color(hex: "8B5CF6").opacity(0.6)
+                                    ? MeeshyColors.purple600.opacity(0.6)
                                     : theme.inputBorder.opacity(0.3),
                                 lineWidth: 1
                             )
@@ -374,7 +374,7 @@ struct LoginView: View {
             // Username
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "person.fill")
-                    .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
+                    .foregroundColor(MeeshyColors.purple600.opacity(0.7))
                     .frame(width: 20)
                     .accessibilityHidden(true)
                 TextField(String(localized: "auth.username.placeholder", bundle: .main), text: $username)
@@ -396,7 +396,7 @@ struct LoginView: View {
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(
                                 focusedField == .username
-                                    ? Color(hex: "8B5CF6").opacity(0.6)
+                                    ? MeeshyColors.purple600.opacity(0.6)
                                     : theme.inputBorder.opacity(0.3),
                                 lineWidth: 1
                             )
@@ -407,7 +407,7 @@ struct LoginView: View {
             // Password
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "lock.fill")
-                    .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
+                    .foregroundColor(MeeshyColors.purple600.opacity(0.7))
                     .frame(width: 20)
                     .accessibilityHidden(true)
                 SecureField(String(localized: "auth.password.placeholder", bundle: .main), text: $password)
@@ -427,7 +427,7 @@ struct LoginView: View {
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(
                                 focusedField == .password
-                                    ? Color(hex: "8B5CF6").opacity(0.6)
+                                    ? MeeshyColors.purple600.opacity(0.6)
                                     : theme.inputBorder.opacity(0.3),
                                 lineWidth: 1
                             )
@@ -457,7 +457,7 @@ struct LoginView: View {
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [Color(hex: "A855F7"), MeeshyColors.indigo400],
+                                colors: [MeeshyColors.purple500, MeeshyColors.indigo400],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -595,7 +595,7 @@ struct LoginView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            Text(MeeshyConfig.shared.serverOrigin)
+            Text(String(format: String(localized: "auth.login.server_origin", defaultValue: "Connecté à : %@", bundle: .main), MeeshyConfig.shared.serverOrigin))
                 .font(.system(size: 10, weight: .regular, design: .monospaced))
                 .foregroundColor(theme.textMuted.opacity(0.5))
         }
@@ -644,7 +644,7 @@ struct LoginView: View {
             // Code Input
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "key.fill")
-                    .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
+                    .foregroundColor(MeeshyColors.purple600.opacity(0.7))
                     .frame(width: 20)
                     .accessibilityHidden(true)
                 TextField(String(localized: "auth.login.two_factor.placeholder", bundle: .main), text: $twoFactorCode)
@@ -664,7 +664,7 @@ struct LoginView: View {
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(
                                 focusedField == .twoFactorCode
-                                    ? Color(hex: "8B5CF6").opacity(0.6)
+                                    ? MeeshyColors.purple600.opacity(0.6)
                                     : theme.inputBorder.opacity(0.3),
                                 lineWidth: 1
                             )

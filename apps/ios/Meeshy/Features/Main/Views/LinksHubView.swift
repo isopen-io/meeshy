@@ -35,13 +35,13 @@ struct LinksHubView: View {
 
                     Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
-                    VStack(spacing: 20) {
+                    VStack(spacing: MeeshySpacing.xl) {
                         headerBanner
-                            .padding(.horizontal, 16)
-                            .padding(.top, 8)
+                            .padding(.horizontal, MeeshySpacing.lg)
+                            .padding(.top, MeeshySpacing.sm)
 
                         linkCategoryCards
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, MeeshySpacing.lg)
                     }
                     .padding(.bottom, 40)
                 }
@@ -95,12 +95,12 @@ struct LinksHubView: View {
                 Spacer()
             }
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(Color.white.opacity(0.05))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(MeeshyColors.communityAccent.opacity(0.3), lineWidth: 1)
                 )
         )
@@ -109,7 +109,7 @@ struct LinksHubView: View {
     // MARK: - Category Cards
 
     private var linkCategoryCards: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.md + 2) {
             linkCard(
                 icon: "link",
                 title: String(localized: "links.hub.share.title", defaultValue: "Liens de partage", bundle: .main),
@@ -212,12 +212,12 @@ struct LinksHubView: View {
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .padding(14)
+            .padding(MeeshySpacing.md + 2)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(Color.white.opacity(0.05))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(accent.opacity(0.2), lineWidth: 1)
                     )
             )

@@ -41,7 +41,7 @@ struct ProfileView: View {
     @State private var isUploadingBanner = false
     @State private var scrollOffset: CGFloat = 0
 
-    private let accentColor = "A855F7"
+    private let accentColor = MeeshyColors.purple500Hex
 
     private var user: MeeshyUser? { authManager.currentUser }
 
@@ -198,7 +198,7 @@ struct ProfileView: View {
 
             Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
-            VStack(spacing: 24) {
+            VStack(spacing: MeeshySpacing.xxl) {
                 // Cold-start placeholder: AuthManager has no cached
                 // user yet (first run, post-logout). Skip rendering the
                 // real banner/avatar/identity sections to avoid the
@@ -218,9 +218,9 @@ struct ProfileView: View {
                     friendRequestsSection
                     memberSinceSection
                 }
-                Spacer().frame(height: 40)
+                Spacer().frame(height: MeeshySpacing.xxxl + 8)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
             .padding(.top, 0)
         }
         .coordinateSpace(name: "scroll")
@@ -235,7 +235,7 @@ struct ProfileView: View {
             ZStack(alignment: .bottomTrailing) {
                 bannerImage
                     .frame(height: 120)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
 
                 if isEditing {
                     PhotosPicker(selection: $bannerItem, matching: .images) {
@@ -250,7 +250,7 @@ struct ProfileView: View {
                 }
 
                 if isUploadingBanner {
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .fill(Color.black.opacity(0.4))
                         .frame(height: 120)
                         .overlay(ProgressView().tint(.white))
@@ -343,7 +343,7 @@ struct ProfileView: View {
     // MARK: - Identity Section
 
     private var identitySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             sectionHeader(icon: "person.text.rectangle.fill", title: String(localized: "profile.section.identity", bundle: .main), color: accentColor)
 
             VStack(spacing: 0) {
@@ -360,7 +360,7 @@ struct ProfileView: View {
     // MARK: - Contact Section
 
     private var contactSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             sectionHeader(icon: "envelope.fill", title: String(localized: "profile.section.contact", bundle: .main), color: MeeshyColors.indigo300Hex)
 
             VStack(spacing: 0) {
@@ -420,7 +420,7 @@ struct ProfileView: View {
     // MARK: - Languages Section
 
     private var languagesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             sectionHeader(icon: "globe", title: String(localized: "profile.section.languages", bundle: .main), color: MeeshyColors.errorHex)
 
             VStack(spacing: 0) {
@@ -480,14 +480,14 @@ struct ProfileView: View {
     // MARK: - Stats Section
 
     private var statsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             sectionHeader(icon: "chart.bar.fill", title: String(localized: "profile.section.stats", bundle: .main), color: MeeshyColors.indigo300Hex)
 
             Button {
                 HapticFeedback.light()
                 showStats = true
             } label: {
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     statCard(value: "\(stats?.totalMessages ?? 0)", label: String(localized: "profile.stats.messages", bundle: .main), color: MeeshyColors.errorHex)
                     statCard(value: "\(stats?.totalConversations ?? 0)", label: String(localized: "profile.stats.conversations", bundle: .main), color: MeeshyColors.indigo300Hex)
                     statCard(value: "\(stats?.friendRequestsReceived ?? 0)", label: String(localized: "profile.stats.friends", bundle: .main), color: MeeshyColors.indigo600Hex)
@@ -500,14 +500,14 @@ struct ProfileView: View {
     // MARK: - Friend Requests Section
 
     private var friendRequestsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             sectionHeader(icon: "person.badge.plus.fill", title: String(localized: "profile.section.requests", bundle: .main), color: MeeshyColors.brandPrimaryHex)
 
             Button {
                 HapticFeedback.light()
                 router.push(.contacts(.requests))
             } label: {
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     fieldIcon("person.2.fill")
 
                     Text(String(localized: "profile.friend_requests", bundle: .main))
@@ -529,7 +529,7 @@ struct ProfileView: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .padding(.vertical, MeeshySpacing.md)
                 .background(sectionBackground)
             }
             .buttonStyle(.plain)
@@ -539,7 +539,7 @@ struct ProfileView: View {
     // MARK: - Member Since
 
     private var memberSinceSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             sectionHeader(icon: "calendar", title: String(localized: "profile.section.member_since", bundle: .main), color: MeeshyColors.indigo600Hex)
 
             HStack {
@@ -549,7 +549,7 @@ struct ProfileView: View {
                 Spacer()
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.vertical, MeeshySpacing.md)
             .background(sectionBackground)
         }
     }
@@ -570,10 +570,10 @@ struct ProfileView: View {
     }
 
     private var sectionBackground: some View {
-        RoundedRectangle(cornerRadius: 16)
+        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
             .fill(theme.surfaceGradient(tint: accentColor))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .stroke(theme.border(tint: accentColor), lineWidth: 1)
             )
     }
@@ -584,7 +584,7 @@ struct ProfileView: View {
             .foregroundColor(Color(hex: accentColor))
             .frame(width: 28, height: 28)
             .background(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm - 2)
                     .fill(Color(hex: accentColor).opacity(0.12))
             )
     }
@@ -728,12 +728,12 @@ struct ProfileView: View {
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
+        .padding(.vertical, MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: color))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(theme.border(tint: color), lineWidth: 1)
                 )
         )
@@ -878,7 +878,7 @@ struct ProfileView: View {
     private static let mediumDateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateStyle = .medium
-        f.locale = Locale(identifier: "fr_FR")
+        f.locale = Locale.current
         return f
     }()
 
