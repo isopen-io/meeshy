@@ -1006,7 +1006,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/hooks/use-stream-socket.ts`
 - [ ] `apps/web/hooks/use-stream-translation.ts`
 - [ ] `apps/web/hooks/use-stream-ui.ts`
-- [ ] `apps/web/hooks/use-tab-notification.ts`
+- [x] `apps/web/hooks/use-tab-notification.ts`
 - [ ] `apps/web/hooks/use-translation-performance.ts`
 - [ ] `apps/web/hooks/use-unsaved-changes-warning.ts`
 - [ ] `apps/web/hooks/use-user-search.ts`
@@ -1112,7 +1112,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/web/hooks/v2/use-friend-requests-v2.ts`
 - [ ] `apps/web/hooks/v2/use-login-v2.ts`
 - [ ] `apps/web/hooks/v2/use-messages-v2.ts`
-- [ ] `apps/web/hooks/v2/use-notifications-v2.ts`
+- [x] `apps/web/hooks/v2/use-notifications-v2.ts`
 - [~] `apps/web/hooks/v2/use-profile-v2.ts`
 - [ ] `apps/web/hooks/v2/use-settings-v2.ts`
 - [ ] `apps/web/hooks/v2/use-signup-v2.ts`
@@ -1365,8 +1365,8 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/utils/mention-display.ts`
 - [~] `apps/web/utils/messaging-utils.ts`
 - [~] `apps/web/utils/notification-helpers.ts`
-- [ ] `apps/web/utils/notification-sound.ts`
-- [ ] `apps/web/utils/notification-translations.ts`
+- [x] `apps/web/utils/notification-sound.ts`
+- [x] `apps/web/utils/notification-translations.ts`
 - [ ] `apps/web/utils/optimistic-message.ts`
 - [ ] `apps/web/utils/participant-helpers.ts`
 - [~] `apps/web/utils/participant-mapper.ts`

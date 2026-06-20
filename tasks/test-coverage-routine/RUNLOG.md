@@ -1225,3 +1225,29 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Next slice: P2 Notifications × web OR P2 Feed/posts/stories × gateway (next ☐ cells top-to-bottom)
 - Commit: squash-merge SHA 4db3bfe6f3381a7d2aad36acd8494fa9a6e20471 (PR #727 → main, 2026-06-20T12:02Z)
 - Note: coverageThreshold actually ratcheted lines:51→52 / branches:49 / statements:51→52 / functions:50→51 (not 58/54 as stated in PR body — squash merge kept the branch value from PR which was conservative)
+
+## 2026-06-20T14:00Z — P2 Notifications × web
+- Targeted: `apps/web/utils/notification-translations.ts`, `apps/web/utils/notification-sound.ts`, `apps/web/hooks/use-tab-notification.ts`, `apps/web/hooks/v2/use-notifications-v2.ts`
+- Result: ☑ done — all 4 files ≥92% line+branch; feature matrix P2 Notifications × web cell ☐→☑
+- Coverage (targeted files):
+  - `utils/notification-translations.ts`: 100% stmts / 93.33% branches / 100% funcs / 100% lines ✓
+  - `utils/notification-sound.ts`: 98.61% stmts / 92.50% branches / 100% funcs / 98.61% lines ✓
+  - `hooks/use-tab-notification.ts`: 100% stmts / 94.44% branches / 100% funcs / 100% lines ✓
+  - `hooks/v2/use-notifications-v2.ts`: 100% stmts / 93.15% branches / 100% funcs / 100% lines ✓
+- Tests added: 120 new tests across 4 new test files
+  - `__tests__/utils/notification-translations.test.ts` (NEW, 36 tests): buildMultilingualNotificationMessage (truncation at 30 chars, empty translations, each language flag, newline joining), getNotificationTitle (direct/group/public/global/unknown types), getNotificationIcon (all 5 types), getToastDuration (true→6000/false→4000), hasValidTranslations (undefined/empty/{fr}/{en}/{es}/multi), formatTranslationsForNotification (each language with flag, truncation, length=3)
+  - `__tests__/utils/notification-sound.test.ts` (NEW, 20 tests): isNotificationSoundSupported (AudioContext/webkitAudioContext/neither), initializeNotificationSound (creates once, idempotent, no-throw on error), disposeNotificationSound (calls close, no-throw before init), playNotificationSound (soundEnabled=false, DND same-day, DND overnight miss, DND overnight hit, no AudioContext support, default 1-oscillator, message 3-oscillator, urgent 3-oscillator, call 5-oscillator, lazy init, constructor-throws mid-play, oscillator-throws no-throw). Critical pattern: jest.resetModules() + await import() per-test for singleton isolation
+  - `__tests__/hooks/use-tab-notification.test.tsx` (NEW, 26 tests): title (visible=no-change, hidden+unread=prefix, hidden+zero=no-change, visible-restore, unmount-restore), favicon (hidden+unread=badge, creates-link-if-absent, visible-restore=no-badge), re-render-while-hidden (favicon+title both update via useEffect), getFaviconLink reuse (existing link[type=image/svg+xml] reused not duplicated), cleanup (removeEventListener called on unmount). Key: simulateVisibilityChange helper + act(() => { rerender() }) for effect flushing
+  - `__tests__/hooks/use-notifications-v2.test.tsx` (NEW, 38 tests): hook wiring (delegates to 5 React Query hooks, passes args), getNotificationContent (test.each for 16 notification types incl. system fallback vs content-present), markAsRead/markAllAsRead/deleteNotification (call mutations), formatRelativeTime (instant <1min, minutes <60min, hours <24h, yesterday diffDays=1, days <7d, older toLocaleDateString), loadMore/hasNextPage/isFetchingNextPage delegation, isLoading/totalUnread
+- Production code changes: NONE — test-only diff
+- Web global threshold: unchanged (lines:38/branches:30 — CI-measured values remain above floor after adding 4 well-covered files)
+- manifests/web.md: ticked [x] for notification-translations.ts, notification-sound.ts, use-tab-notification.ts, use-notifications-v2.ts
+- Reviewer: PASS (rounds: 1) — behavior-first assertions; factory functions (makeMockAudioContext, makeRQ, makeNotification, setupMocks); no shared mutable state; AudioContext singleton isolation via jest.resetModules()+dynamic import; DND overnight crossing tested with fake timers
+- Notes:
+  1. Pre-existing web suite failures: 19 suites (pre-existing — caused by missing @meeshy/shared dist on pnpm local env; bun CI env builds shared first → CI green). Zero new failures introduced.
+  2. AudioContext singleton requires jest.resetModules() + await import() to isolate between tests — standard require caches the module-level singleton.
+  3. Re-render-while-hidden tests require act(() => { rerender(); }) to flush useEffect after the state update from makeRQ().
+  4. use-notifications-v2.ts system type: `return notification.content || 'Notification systeme'` — returns content when present, fallback only when content is undefined/null.
+  5. formatRelativeTime branches: instant = diffMs < 60000, minutes = diffMs < 3600000, hours = diffMs < 86400000, yesterday = diffDays === 1, days = diffDays < 7, else toLocaleDateString.
+- Next slice: P2 Feed/posts/stories × gateway (next ☐ cell top-to-bottom in feature matrix)
+- Commit: 0beea05a (branch claude/coverage/p2-notifications-web)
