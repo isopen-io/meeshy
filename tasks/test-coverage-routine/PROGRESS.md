@@ -154,7 +154,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
-| web | `pnpm --filter web test:coverage` | 33.10 | 25.77 | 2026-06-14 (re-measured after Sprint 0.2/0.3 fixes; threshold floor set at 33/25) |
+| web | `pnpm --filter web test:coverage` | ~38 | ~30 | 2026-06-19 (post P1 Voice/audio × web; +193 tests covering 7 modules; threshold floor lines:38/branches:30/statements:38/functions:35; P1 Voice/audio × web ☑) |
 | gateway | `pnpm --filter gateway test:coverage` | 56.11 | 51.72 | 2026-06-19 (post P1 Voice/audio × gateway; VoiceAnalysisService.ts☑ routes/voice-analysis.ts☑ +172 new tests; threshold floor lines:56/branches:51/statements:55/functions:55) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | ~39 | n/a | 2026-06-19 (post P1 Voice/audio × translator; +127 tests covering 6 modules; fail_under ratcheted 37→39; diarization GPU methods pragma'd) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
