@@ -83,6 +83,19 @@ describe('NotificationFormatter.formatNotification — sanitizeDate behaviour', 
     expect(result.state.createdAt).toBeNull();
   });
 
+  it('returns null when value causes an exception during sanitization', () => {
+    // Pass an object with a getter that throws to exercise the catch branch
+    const throwingDate = {
+      toString: () => { throw new Error('thrown by getter'); },
+      valueOf: () => { throw new Error('thrown by getter'); },
+    };
+    // Should not throw — the try/catch in sanitizeDate must swallow the error
+    const result = NotificationFormatter.formatNotification(
+      makeRaw({ createdAt: throwingDate })
+    );
+    expect(result.state.createdAt).toBeNull();
+  });
+
   it('handles falsy value for readAt → null', () => {
     const result = NotificationFormatter.formatNotification(makeRaw({ readAt: null }));
     expect(result.state.readAt).toBeNull();
@@ -262,13 +275,10 @@ describe('NotificationFormatter.formatPaginatedResponse', () => {
       limit: 10,
       unreadCount: 7,
     });
-    expect(result.pagination).toEqual({
-      total: 50,
-      offset: 20,
-      limit: 10,
-      hasMore: false, // 20 + 0 = 20, which is < 50 → true ... wait
-    });
-    // offset(20) + length(0) = 20 < 50 → true
+    // offset(20) + length(0) = 20 which is < 50 → hasMore = true
+    expect(result.pagination.total).toBe(50);
+    expect(result.pagination.offset).toBe(20);
+    expect(result.pagination.limit).toBe(10);
     expect(result.pagination.hasMore).toBe(true);
     expect(result.unreadCount).toBe(7);
   });
