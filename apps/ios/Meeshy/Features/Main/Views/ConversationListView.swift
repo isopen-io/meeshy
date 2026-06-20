@@ -781,25 +781,28 @@ struct ConversationListView: View {
             .animation(.easeOut(duration: 0.25), value: showSearchOverlay)
         }
         // Layer 3: Collapsible header overlay — pinned to top, respects safe area.
-        // A compact story trail is pinned just below the header bar and reveals
-        // as the full-size trail scrolls up under the header.
+        // A compact story trail is integrated *inside* the header (accessory
+        // slot, below the title/actions bar) and reveals as the full-size trail
+        // scrolls up under the header.
         .overlay(alignment: .top) {
-            VStack(spacing: 0) {
-                ConversationListHeaderOverlay(
-                    scrollOffset: headerScrollOffset,
-                    iPadFeedAction: iPadFeedAction,
-                    iPadNotificationCount: iPadNotificationCount,
-                    onNotificationsTap: onNotificationsTap,
-                    onSettingsTap: onSettingsTap,
-                    onNewConversation: onNewConversation,
-                    showShareLinkSheet: $showShareLinkSheet
-                )
-                PinnedStoryTrailBand(
-                    viewModel: storyViewModel,
-                    scrollOffset: headerScrollOffset,
-                    onViewStory: { userId in onStoryViewRequest?(userId, true) }
-                )
-            }
+            ConversationListHeaderOverlay(
+                scrollOffset: headerScrollOffset,
+                iPadFeedAction: iPadFeedAction,
+                iPadNotificationCount: iPadNotificationCount,
+                onNotificationsTap: onNotificationsTap,
+                onSettingsTap: onSettingsTap,
+                onNewConversation: onNewConversation,
+                showShareLinkSheet: $showShareLinkSheet,
+                accessory: {
+                    AnyView(
+                        PinnedStoryTrailBand(
+                            viewModel: storyViewModel,
+                            scrollOffset: headerScrollOffset,
+                            onViewStory: { userId in onStoryViewRequest?(userId, true) }
+                        )
+                    )
+                }
+            )
         }
         .sheet(isPresented: $showShareLinkSheet) {
             ShareLinkPickerSheet(

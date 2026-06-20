@@ -35,6 +35,12 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     let titleView: (() -> TitleContent)?
     let trailing: () -> TrailingContent
     let centerReveal: (() -> CenterContent)?
+    /// Optional content rendered *inside* the header, below the title/actions bar
+    /// and covered by the same header surface (e.g. a compact story trail). Type-
+    /// erased (`AnyView`) so adding it doesn't introduce a 5th generic parameter
+    /// across every call site; it is a single, stable slot rendered once — not a
+    /// list cell — so the structural-identity cost of `AnyView` is irrelevant here.
+    let accessory: (() -> AnyView)?
 
     public static var expandedHeight: CGFloat { 64 }
     public static var collapsedHeight: CGFloat { 44 }
@@ -50,7 +56,8 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
         backgroundColor: Color,
         @ViewBuilder leading: @escaping () -> LeadingContent,
         @ViewBuilder titleView: @escaping () -> TitleContent,
-        @ViewBuilder trailing: @escaping () -> TrailingContent = { EmptyView() }
+        @ViewBuilder trailing: @escaping () -> TrailingContent = { EmptyView() },
+        accessory: (() -> AnyView)? = nil
     ) where CenterContent == EmptyView {
         self.title = title
         self.subtitle = subtitle
@@ -64,6 +71,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
         self.titleView = titleView
         self.trailing = trailing
         self.centerReveal = nil
+        self.accessory = accessory
     }
 
     public var progress: CGFloat {
@@ -83,6 +91,9 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
 
     /// `true` when a centered reveal slot (e.g. the post-author chip) is supplied.
     private var hasReveal: Bool { centerReveal != nil }
+
+    /// `true` when an in-header accessory (e.g. a compact story trail) is supplied.
+    private var hasAccessory: Bool { accessory != nil }
 
     /// Collapsed height — 1.3× the standard 44pt when a center reveal is present, so
     /// the inserted avatar + name + stats chip gets vertical room and can sit
@@ -193,6 +204,12 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                 }
             }
 
+            // In-header accessory (e.g. compact story trail) — rendered inside
+            // the header VStack, below the bar, so it shares the same surface.
+            if let accessory {
+                accessory()
+            }
+
             Divider()
                 .opacity(Double(progress) * 0.3)
         }
@@ -205,35 +222,48 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     /// from a readable blur at the top to fully transparent at the bottom edge, so
     /// the scroll content (list rows, etc.) passing under the lower edge stays
     /// visible instead of being clipped by an opaque bar.
+    @ViewBuilder
     private var headerBackground: some View {
-        Rectangle()
-            .fill(.ultraThinMaterial)
-            .overlay(
-                LinearGradient(
-                    stops: [
-                        .init(color: backgroundColor.opacity(0.75), location: 0),
-                        .init(color: backgroundColor.opacity(0.45), location: 0.5),
-                        .init(color: backgroundColor.opacity(0.0), location: 1.0),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .mask(
-                Rectangle().fill(
+        if hasAccessory {
+            // With an in-header accessory (story trail), the surface must stay
+            // readable over the whole bar + accessory so the trail and the rows
+            // scrolling under it are masked — no mid-height fade that would
+            // visually detach the trail from the bar.
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(backgroundColor.opacity(0.6))
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
+        } else {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(
                     LinearGradient(
                         stops: [
-                            .init(color: .black, location: 0),
-                            .init(color: .black, location: 0.5),
-                            .init(color: .clear, location: 1.0),
+                            .init(color: backgroundColor.opacity(0.75), location: 0),
+                            .init(color: backgroundColor.opacity(0.45), location: 0.5),
+                            .init(color: backgroundColor.opacity(0.0), location: 1.0),
                         ],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                 )
-            )
-            .ignoresSafeArea(edges: .top)
-            .allowsHitTesting(false)
+                .mask(
+                    Rectangle().fill(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .black, location: 0.5),
+                                .init(color: .clear, location: 1.0),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                )
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
+        }
     }
 
     private var backButton: some View {
@@ -263,7 +293,8 @@ extension CollapsibleHeader where LeadingContent == EmptyView, TitleContent == E
         titleColor: Color,
         backArrowColor: Color,
         backgroundColor: Color,
-        @ViewBuilder trailing: @escaping () -> TrailingContent = { EmptyView() }
+        @ViewBuilder trailing: @escaping () -> TrailingContent = { EmptyView() },
+        accessory: (() -> AnyView)? = nil
     ) {
         self.title = title
         self.subtitle = subtitle
@@ -277,6 +308,7 @@ extension CollapsibleHeader where LeadingContent == EmptyView, TitleContent == E
         self.titleView = nil
         self.trailing = trailing
         self.centerReveal = nil
+        self.accessory = accessory
     }
 }
 
@@ -307,6 +339,7 @@ extension CollapsibleHeader where LeadingContent == EmptyView, CenterContent == 
         self.titleView = titleView
         self.trailing = trailing
         self.centerReveal = nil
+        self.accessory = nil
     }
 }
 
@@ -337,5 +370,6 @@ extension CollapsibleHeader where LeadingContent == EmptyView, TitleContent == E
         self.titleView = nil
         self.trailing = trailing
         self.centerReveal = centerReveal
+        self.accessory = nil
     }
 }

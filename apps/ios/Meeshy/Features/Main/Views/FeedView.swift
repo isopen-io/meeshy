@@ -448,23 +448,27 @@ struct FeedView: View {
             // reserves `CollapsibleHeaderMetrics.expandedHeight` of top padding,
             // so on iPad it simply fills the space that was previously left empty.
             VStack(spacing: 0) {
+                // Compact story trail integrated inside the header (accessory
+                // slot) — reveals as the full-size trail scrolls up under it.
                 CollapsibleHeader(
                     title: "Meeshy Feed",
                     scrollOffset: headerScrollOffset,
                     showBackButton: false,
                     titleColor: theme.textPrimary,
                     backArrowColor: MeeshyColors.indigo500,
-                    backgroundColor: theme.backgroundPrimary
-                )
-                // Compact story trail pinned below the header — reveals as the
-                // full-size trail scrolls up under the header.
-                PinnedStoryTrailBand(
-                    viewModel: storyViewModel,
-                    scrollOffset: headerScrollOffset,
-                    onViewStory: { userId in
-                        selectedStoryUserId = userId
-                        storyViewerSingleGroup = false
-                        showStoryViewer = true
+                    backgroundColor: theme.backgroundPrimary,
+                    accessory: {
+                        AnyView(
+                            PinnedStoryTrailBand(
+                                viewModel: storyViewModel,
+                                scrollOffset: headerScrollOffset,
+                                onViewStory: { userId in
+                                    selectedStoryUserId = userId
+                                    storyViewerSingleGroup = false
+                                    showStoryViewer = true
+                                }
+                            )
+                        )
                     }
                 )
                 Spacer()

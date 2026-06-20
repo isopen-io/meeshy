@@ -597,8 +597,9 @@ struct PinnedStoryTrailBand: View {
             .padding(.top, 8)
             .padding(.bottom, 6)
         }
+        // No own background — this view is injected as the `CollapsibleHeader`
+        // accessory slot, so the header surface masks the content underneath.
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(bandBackground)
     }
 
     private var addStoryButton: some View {
@@ -619,16 +620,5 @@ struct PinnedStoryTrailBand: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "story.tray.addStory", defaultValue: "Ajouter une story"))
-    }
-
-    /// Solid-ish header surface so list rows scrolling under the band stay
-    /// masked — the header bar above fades to clear at its bottom edge, the band
-    /// picks the readable blur back up.
-    private var bandBackground: some View {
-        Rectangle()
-            .fill(.ultraThinMaterial)
-            .overlay(theme.backgroundPrimary.opacity(0.6))
-            .overlay(alignment: .bottom) { Divider().opacity(0.4) }
-            .allowsHitTesting(false)
     }
 }
