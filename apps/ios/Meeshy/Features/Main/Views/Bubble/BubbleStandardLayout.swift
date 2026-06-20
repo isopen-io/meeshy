@@ -885,7 +885,7 @@ struct BubbleStandardLayout: View {
                 // effective (possibly translated) content. Self-loading.
                 // URL précalculée dans BubbleContent (plus de NSDataDetector ici).
                 if let video = content.text?.embeddedVideo {
-                    VideoEmbedContainer(video: video, accent: Color(hex: contactColor))
+                    VideoEmbedContainer(video: video, accent: Color(hex: contactColor), trackedURL: content.text?.embedTrackedURL)
                         .padding(.top, 4)
                 } else if let url = content.text?.firstLinkURL {
                     LinkPreviewCard(
@@ -1074,7 +1074,8 @@ struct BubbleStandardLayout: View {
             mentionDisplayNames: mentionDisplayNames,
             highlightTerm: highlightSearchTerm,
             mentionTint: mentionTint,
-            linkTint: linkTint
+            linkTint: linkTint,
+            trackedLinks: content.text?.trackedLinks ?? [:]
         )
     }
 
@@ -1090,7 +1091,8 @@ struct BubbleStandardLayout: View {
                 textPrimary: theme.textPrimary,
                 mentionDisplayNames: mentionDisplayNames,
                 mentionTint: mentionTint,
-                linkTint: linkTint
+                linkTint: linkTint,
+                trackedLinks: content.text?.trackedLinks ?? [:]
             )
         }
     }

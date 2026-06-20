@@ -179,6 +179,26 @@ export class MessageProcessor {
   }
 
   /**
+   * Construit le mapping `{ url, token }` des URLs BRUTES d'un contenu pour
+   * `metadata.trackingLinks` — rend le lien cliquable + tracé `/l/<token>` côté client
+   * SANS réécrire le contenu (l'aperçu vidéo et l'URL lisible sont préservés).
+   * Délègue à la source UNIQUE `TrackingLinkService.collectContentTrackingLinks`
+   * (partagée avec posts/stories/commentaires). Jamais bloquant : le helper avale
+   * toute erreur de tracking et retourne `[]`.
+   */
+  private async buildRawUrlTrackingLinks(
+    content: string,
+    conversationId: string,
+    senderId?: string
+  ): Promise<Array<{ url: string; token: string }>> {
+    return this.trackingLinkService.collectContentTrackingLinks({
+      content,
+      conversationId,
+      createdBy: senderId,
+    });
+  }
+
+  /**
    * Get encryption context for a conversation
    * Determines if and how a message should be encrypted
    */
@@ -380,6 +400,18 @@ export class MessageProcessor {
       ? await this.capturePostReplyTo(data.storyReplyToId)
       : null;
 
+    // Tracking des URLs brutes du message : mapping `url → token` rangé dans
+    // `metadata.trackingLinks`. Le client rend le lien (texte + façade vidéo) vers
+    // `/l/<token>` (capture du clic + redirection) tout en gardant l'URL/aperçu.
+    // Ignoré pour les messages chiffrés (contenu vide côté serveur).
+    const trackingLinks = encryptionContext.isEncrypted
+      ? []
+      : await this.buildRawUrlTrackingLinks(processedContent, data.conversationId, data.senderId);
+
+    const messageMetadata: Record<string, unknown> = {};
+    if (postReplyTo) messageMetadata.postReplyTo = postReplyTo;
+    if (trackingLinks.length > 0) messageMetadata.trackingLinks = trackingLinks;
+
     // ÉTAPE 3: Créer le message avec le contenu traité et encryption.
     //
     // Phase 4 §6.2 — INSERT direct + catch P2002 atomique. Le findUnique
@@ -397,7 +429,9 @@ export class MessageProcessor {
       messageSource: data.messageSource || 'user',
       replyToId: data.replyToId,
       storyReplyToId: data.storyReplyToId || null,
-      ...(postReplyTo ? { metadata: { postReplyTo } } : {}),
+      ...(Object.keys(messageMetadata).length > 0
+        ? { metadata: messageMetadata as Prisma.InputJsonValue }
+        : {}),
       forwardedFromId: data.forwardedFromId,
       forwardedFromConversationId: data.forwardedFromConversationId,
       isEncrypted: encryptionContext.isEncrypted,

@@ -97,7 +97,7 @@ public struct APIPostTranslationEntry: Codable, Sendable {
     public let createdAt: String?
 }
 
-public struct APIPost: Decodable, Sendable {
+public struct APIPost: Sendable {
     public let id: String
     public let type: String?
     public let visibility: String?
@@ -141,6 +141,84 @@ public struct APIPost: Decodable, Sendable {
     public let currentUserReactions: [String]?
     public let mentionedUsers: [MentionedUser]?
     public let viaUsername: String?
+    /// Outbound-link tracking mappings minted by the gateway. Parsed from the
+    /// top-level `trackingLinks` (socket `post:created` / `story:created` /
+    /// `comment:added`) OR from `metadata.trackingLinks` (REST / feed). `nil`
+    /// when the payload predates the feature — renderer falls back to raw URLs.
+    public var trackingLinks: [TrackedLink]? = nil
+
+    /// `[rawURL: token]` lookup derived from `trackingLinks`. Empty when none.
+    public var trackedLinkMap: [String: String] { (trackingLinks ?? []).trackedLinkMap }
+}
+
+extension APIPost: Decodable {
+    private enum CodingKeys: String, CodingKey {
+        case id, type, visibility, content, originalLanguage, createdAt, updatedAt, expiresAt
+        case author, likeCount, commentCount, repostCount, viewCount
+        case postOpenCount, qualifiedViewCount, playCount, impressionCount
+        case bookmarkCount, shareCount, reactionSummary, isPinned, isEdited
+        case media, comments, repostOf, originalRepostOfId, isQuote, moodEmoji
+        case audioUrl, audioDuration, storyEffects, translations
+        case isLikedByMe, isBookmarkedByMe, isRepostedByMe, isViewedByMe
+        case currentUserReactions, mentionedUsers, viaUsername
+        case trackingLinks, metadata
+    }
+
+    /// Minimal `metadata` envelope to recover `trackingLinks` on REST/feed
+    /// payloads (socket payloads hoist it top-level). Decoded tolerantly.
+    private struct PostMetadataEnvelope: Decodable {
+        let trackingLinks: [TrackedLink]?
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        type = try c.decodeIfPresent(String.self, forKey: .type)
+        visibility = try c.decodeIfPresent(String.self, forKey: .visibility)
+        content = try c.decodeIfPresent(String.self, forKey: .content)
+        originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
+        expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        author = try c.decode(APIAuthor.self, forKey: .author)
+        likeCount = try c.decodeIfPresent(Int.self, forKey: .likeCount)
+        commentCount = try c.decodeIfPresent(Int.self, forKey: .commentCount)
+        repostCount = try c.decodeIfPresent(Int.self, forKey: .repostCount)
+        viewCount = try c.decodeIfPresent(Int.self, forKey: .viewCount)
+        postOpenCount = try c.decodeIfPresent(Int.self, forKey: .postOpenCount)
+        qualifiedViewCount = try c.decodeIfPresent(Int.self, forKey: .qualifiedViewCount)
+        playCount = try c.decodeIfPresent(Int.self, forKey: .playCount)
+        impressionCount = try c.decodeIfPresent(Int.self, forKey: .impressionCount)
+        bookmarkCount = try c.decodeIfPresent(Int.self, forKey: .bookmarkCount)
+        shareCount = try c.decodeIfPresent(Int.self, forKey: .shareCount)
+        reactionSummary = try c.decodeIfPresent([String: Int].self, forKey: .reactionSummary)
+        isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned)
+        isEdited = try c.decodeIfPresent(Bool.self, forKey: .isEdited)
+        media = try c.decodeIfPresent([APIPostMedia].self, forKey: .media)
+        comments = try c.decodeIfPresent([APIPostComment].self, forKey: .comments)
+        repostOf = try c.decodeIfPresent(APIRepostOf.self, forKey: .repostOf)
+        originalRepostOfId = try c.decodeIfPresent(String.self, forKey: .originalRepostOfId)
+        isQuote = try c.decodeIfPresent(Bool.self, forKey: .isQuote)
+        moodEmoji = try c.decodeIfPresent(String.self, forKey: .moodEmoji)
+        audioUrl = try c.decodeIfPresent(String.self, forKey: .audioUrl)
+        audioDuration = try c.decodeIfPresent(Int.self, forKey: .audioDuration)
+        storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
+        translations = try c.decodeIfPresent([String: APIPostTranslationEntry].self, forKey: .translations)
+        isLikedByMe = try c.decodeIfPresent(Bool.self, forKey: .isLikedByMe)
+        isBookmarkedByMe = try c.decodeIfPresent(Bool.self, forKey: .isBookmarkedByMe)
+        isRepostedByMe = try c.decodeIfPresent(Bool.self, forKey: .isRepostedByMe)
+        isViewedByMe = try c.decodeIfPresent(Bool.self, forKey: .isViewedByMe)
+        currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
+        mentionedUsers = try c.decodeIfPresent([MentionedUser].self, forKey: .mentionedUsers)
+        viaUsername = try c.decodeIfPresent(String.self, forKey: .viaUsername)
+        // Outbound-link tracking: prefer hoisted top-level `trackingLinks`
+        // (socket), else recover from the REST `metadata` envelope. Tolerant.
+        if let topLevel = try? c.decodeIfPresent([TrackedLink].self, forKey: .trackingLinks), !topLevel.isEmpty {
+            trackingLinks = topLevel
+        } else {
+            trackingLinks = (try? c.decodeIfPresent(PostMetadataEnvelope.self, forKey: .metadata))??.trackingLinks
+        }
+    }
 }
 
 public struct APIPostViewer: Decodable, Sendable {
@@ -334,6 +412,8 @@ extension APIPost {
         feedPost.impressionCount = impressionCount ?? 0
         feedPost.qualifiedViewCount = qualifiedViewCount ?? 0
         feedPost.playCount = playCount ?? 0
+        // Outbound-link tracking map (runtime-only, like the counters above).
+        feedPost.trackedLinkMap = trackedLinkMap
         return feedPost
     }
 

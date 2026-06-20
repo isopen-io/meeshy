@@ -263,6 +263,21 @@ struct PostDetailView: View {
         EmbeddableVideoResolver.resolve(in: effectiveContent)
     }
 
+    /// `[rawURL: token]` outbound-link tracking map du post (nil si aucun lien
+    /// tracké → pas de réécriture dans le renderer).
+    private var postTrackedLinks: [String: String]? {
+        let map = displayPost?.trackedLinkMap ?? [:]
+        return map.isEmpty ? nil : map
+    }
+
+    /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
+    /// première URL du contenu via `trackedLinkMap`. `nil` → watchURL.
+    private var embedTrackedURL: URL? {
+        guard let raw = LinkPreviewFetcher.firstURL(in: effectiveContent),
+              let token = displayPost?.trackedLinkMap[raw] else { return nil }
+        return URL(string: "https://meeshy.me/l/\(token)")
+    }
+
     private var textTruncation: (text: String, isTruncated: Bool) {
         let words = effectiveContent.split(separator: " ", omittingEmptySubsequences: true)
         if words.count <= 60 { return (effectiveContent, false) }
@@ -899,27 +914,22 @@ struct PostDetailView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
 
-            // Content with truncation
+            // Content with truncation — le corps passe par `MessageTextRenderer`
+            // pour rendre les URLs cliquables + trackées (`/l/<token>`). Le lien
+            // a priorité sur le tap d'expansion (défaut SwiftUI pour `.link`).
             let truncation = textTruncation
-            Group {
-                if truncation.isTruncated && !isTextExpanded {
-                    Text(truncation.text + "... ")
-                        .font(.callout)
-                        .foregroundColor(theme.textPrimary)
-                    + Text(String(localized: "feed.post.detail.see_more", defaultValue: "voir plus", bundle: .main))
+            let bodyText = (truncation.isTruncated && !isTextExpanded)
+                ? truncation.text + "..."
+                : effectiveContent
+            VStack(alignment: .leading, spacing: 2) {
+                MessageTextRenderer.render(bodyText, fontSize: 16, color: theme.textPrimary, accentColor: Color(hex: accentColor), trackedLinks: postTrackedLinks)
+                    .tint(Color(hex: accentColor))
+                if truncation.isTruncated {
+                    Text(isTextExpanded
+                        ? String(localized: "feed.post.detail.see_less", defaultValue: "voir moins", bundle: .main)
+                        : String(localized: "feed.post.detail.see_more", defaultValue: "voir plus", bundle: .main))
                         .font(.callout.weight(.semibold))
                         .foregroundColor(Color(hex: accentColor))
-                } else if truncation.isTruncated && isTextExpanded {
-                    Text(effectiveContent + " ")
-                        .font(.callout)
-                        .foregroundColor(theme.textPrimary)
-                    + Text(String(localized: "feed.post.detail.see_less", defaultValue: "voir moins", bundle: .main))
-                        .font(.callout.weight(.semibold))
-                        .foregroundColor(Color(hex: accentColor))
-                } else {
-                    Text(effectiveContent)
-                        .font(.callout)
-                        .foregroundColor(theme.textPrimary)
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
@@ -976,7 +986,7 @@ struct PostDetailView: View {
 
             // Embed vidéo (YouTube) détecté dans le contenu du post.
             if let embeddedVideo {
-                VideoEmbedContainer(video: embeddedVideo, accent: Color(hex: accentColor))
+                VideoEmbedContainer(video: embeddedVideo, accent: Color(hex: accentColor), trackedURL: embedTrackedURL)
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
             }

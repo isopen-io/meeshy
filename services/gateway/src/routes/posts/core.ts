@@ -11,6 +11,22 @@ import { NotificationService } from '../../services/notifications/NotificationSe
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 
+/**
+ * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
+ * socket d'un post/story/status — miroir exact du hoist `trackingLinks` des
+ * messages (`MessageHandler`). Le destinataire rend le lien (texte + façade
+ * vidéo) vers `/l/<token>` sans réécrire l'URL. Les réponses REST exposent déjà
+ * `metadata` ; ce hoist ne sert que les payloads temps réel. No-op si absent.
+ */
+function hoistTrackingLinks<T extends Record<string, unknown>>(post: T): T {
+  const metadata = post?.metadata as Record<string, unknown> | null | undefined;
+  const tl = metadata?.trackingLinks;
+  if (Array.isArray(tl) && tl.length > 0) {
+    return { ...post, trackingLinks: tl } as T;
+  }
+  return post;
+}
+
 export function registerCoreRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -64,7 +80,7 @@ export function registerCoreRoutes(
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         const postType = parsed.data.type ?? 'POST';
-        const broadcastPost = post as unknown as Post;
+        const broadcastPost = hoistTrackingLinks(post) as unknown as Post;
         if (postType === 'STORY') {
           socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id).catch(() => {});
         } else if (postType === 'STATUS') {

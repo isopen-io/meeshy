@@ -658,6 +658,13 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// `nil` for ordinary messages.
     public var callSummary: CallSummaryMetadata?
 
+    /// `[rawURL: token]` outbound-link tracking map carried from the gateway
+    /// (`APIMessage.trackedLinkMap`). Empty when the message has no tracked
+    /// links. Consumed by the bubble renderer (tappable `/l/<token>` rewrite)
+    /// and the embedded-video façade destination. Backward-compatible: cached
+    /// rows predating the field decode to `[:]`.
+    public var trackedLinkMap: [String: String] = [:]
+
     public enum DeliveryStatus: String, Codable, Sendable {
         case sending    // optimistic, not yet sent
         case invisible  // < 200ms, status hidden in UI (debounce — spec §6.2)
@@ -715,7 +722,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
                 deliveredCount: Int = 0, readCount: Int = 0,
                 cachedTimeString: String? = nil,
-                callSummary: CallSummaryMetadata? = nil) {
+                callSummary: CallSummaryMetadata? = nil,
+                trackedLinkMap: [String: String] = [:]) {
         self.id = id; self.clientMessageId = clientMessageId
         self.conversationId = conversationId; self.senderId = senderId
         self.content = content
@@ -735,6 +743,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.deliveredCount = deliveredCount; self.readCount = readCount
         self.cachedTimeString = cachedTimeString
         self.callSummary = callSummary
+        self.trackedLinkMap = trackedLinkMap
         self.effects = effects
     }
 
@@ -751,6 +760,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case deliveredToAllAt, readByAllAt, deliveredCount, readCount
         case cachedTimeString
         case callSummary
+        case trackedLinkMap
         // Legacy keys for migration from old cached data
         case isViewOnce, isBlurred
     }
@@ -801,6 +811,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         // Tolerant: a malformed / future-shape call-summary blob must not fail
         // the whole cached-message decode (mirrors the APIMessage path).
         callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .callSummary)
+        // Backward-compatible: rows cached before this field decode to `[:]`.
+        trackedLinkMap = try c.decodeIfPresent([String: String].self, forKey: .trackedLinkMap) ?? [:]
         // Legacy migration: merge old isViewOnce/isBlurred bools into effects
         if let legacyViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce), legacyViewOnce {
             effects.flags.insert(.viewOnce)
@@ -854,6 +866,9 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encode(readCount, forKey: .readCount)
         try c.encodeIfPresent(cachedTimeString, forKey: .cachedTimeString)
         try c.encodeIfPresent(callSummary, forKey: .callSummary)
+        if !trackedLinkMap.isEmpty {
+            try c.encode(trackedLinkMap, forKey: .trackedLinkMap)
+        }
     }
 
     public var text: String { content }

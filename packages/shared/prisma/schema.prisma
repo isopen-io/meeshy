@@ -2769,6 +2769,12 @@ model Post {
   /// Chaque langue est ajoutée au premier accès d'un viewer dans cette langue.
   translations     Json?
 
+  /// Métadonnées structurées libres (parité avec Message.metadata). Contient
+  /// notamment `trackingLinks: [{ url, token }]` — mapping des URLs brutes du
+  /// contenu vers leur token `/l/<token>` (clic tracé + redirection) sans
+  /// réécrire le contenu (aperçu vidéo + URL lisible préservés).
+  metadata         Json?
+
   // ============================================
   // CONTEXTE
   // ============================================
@@ -3021,6 +3027,10 @@ model PostComment {
   /// Chaque langue est ajoutée au premier accès d'un viewer dans cette langue.
   /// { "en": { text, translationModel, confidenceScore, createdAt }, ... }
   translations     Json?
+
+  /// Métadonnées structurées libres (parité avec Message.metadata / Post.metadata).
+  /// Contient `trackingLinks: [{ url, token }]` (clic tracé `/l/<token>` sans réécriture).
+  metadata         Json?
 
   /// Compteurs dénormalisés
   likeCount     Int @default(0)

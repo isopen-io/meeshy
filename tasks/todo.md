@@ -1,45 +1,49 @@
-# Republications — implémentation complète (story + status)
+# Liens YouTube dans posts & messages : cliquables + tracés /l/token + façade player
 
-## Cause racine confirmée
-- **Story republiée = vide** : `StoryViewModel.swift` passe `repostOfId: nil` EN DUR à tous les `createStory()` (491/585/740/959) → le `vm.repostOfId` du composer reposting n'est jamais transmis ; et les médias source ne sont pas dupliqués → canvas vide.
-- **Status republié** : `viaUsername` strippé par Zod (absent de `CreatePostSchema`) → attribution perdue ; `audioUrl` non transmis → voix perdue.
-- **Chemin générique `repostPost` (PostService.ts:1369)** ne copie QUE `content`+`repostOfId` ; seul story→POST fait un snapshot. → tout repost de source éphémère (STORY/STATUS) hors story→POST = vide.
-- `repostOfInclude` (gateway), `APIRepostOf` + `RepostContent` (SDK) n'ont pas `moodEmoji`.
+## Diagnostic (fait, preuves sur simulateur iPhone 16 Pro)
+- Player YouTube inline (WKWebView, `YouTubeEmbedPlayerView`) renvoie `onerror:152` pour TOUTES les vidéos
+  (vérification d'origine/referrer YouTube). Même Safari-du-simulateur → `153` sur l'embed direct.
+  Aucun handler `onError` → boîte noire morte. Séquence prouvée : `apiready → onready → play() → onerror:152`.
+- Posts (`FeedPostCard`, `PostDetailView`) : corps en `Text(...)` brut → liens NON cliquables.
+- Messages : liens cliquables (`MessageTextRenderer`) mais URL brute → pas de `/l/token`.
+- Infra serveur DÉJÀ présente : `POST /tracking-links` (mint, dédup, renvoie `https://meeshy.me/l/<token>`),
+  `GET /l/:token` (capture clic IP/UA/device/referrer/user + 302 vers l'URL finale).
 
-## Plan (TDD, compact entre phases)
+## Décisions (user)
+1. Player = **façade** → tap ouvre le lien tracké (pas de WKWebView inline).
+2. Tracking = **mint à l'envoi côté gateway** → token dans `Message.metadata`/`Post` → clients rendent `/l/<token>`.
 
-### Phase 1 — Gateway (foundation)
-- [ ] RED : tests `repostPost` STATUS→STATUS (snapshot moodEmoji+content+audio) et STORY→STORY (dup média+storyEffects)
-- [ ] GREEN : généraliser le snapshot `repostPost` aux sources ÉPHÉMÈRES (STORY||STATUS), tout targetType — copier média+audio+storyEffects+moodEmoji+content faithfully
-- [ ] Ajouter `moodEmoji` à `repostOfInclude`
-- [ ] Vérifier suite `PostService.test.ts` verte (aucune régression)
+## Increment A — iOS façade (FAIT ✅ vérifié simulateur : tap embed = la vidéo s'ouvre/joue)
+- [x] Instrumentation diagnostique retirée (fichier player supprimé)
+- [x] `VideoEmbedContainer` → façade : aperçu PRÉSERVÉ, tap ouvre la vidéo (openURL)
+- [x] Player WKWebView inline supprimé (`YouTubeEmbedPlayerView`/Controller/Model/fullscreen)
+- [x] `EmbeddedVideo.watchURL` (SDK atome) + helper pur app `VideoEmbedDestination` (tracké sinon watch)
+- [x] Tests : watchURL (SDK) + VideoEmbedDestination (app)
+- [x] Build OK + vérif simulateur (aperçu intact, tap = ouvre/joue la vidéo)
+- [ ] (déplacé en C) Posts cliquables via `MessageTextRenderer` — fait avec le rendu tracké
 
-### Phase 2 — SDK
-- [ ] `APIRepostOf` + `RepostContent` + mapping `toFeedPost` : ajouter `moodEmoji`
-- [ ] `StatusService.create` + `StatusViewModel.setStatus` : transmettre `audioUrl` + `repostOfId`
+## Increment B — Gateway mint à l'envoi (généralisé, réutilise l'existant)
+- [x] `TrackingLinkService.processMessageLinks` : option `rewriteToShortLink=false` (mint sans réécrire → aperçu préservé) — PAS de méthode parallèle
+- [x] `MessageProcessor.buildRawUrlTrackingLinks` (helper réutilisant la méthode ci-dessus, jamais bloquant)
+- [x] Message create : `metadata.trackingLinks = [{url, token}]` (ignoré si chiffré) — compile 0 erreur
+- [x] Sérialisation ack (`...message` spread inclut metadata)
+- [x] REST list sérialise `metadata.trackingLinks` (messages.ts L931)
+- [x] Broadcast socket `message:new` : `trackingLinks` hissé top-level (miroir postReplyTo)
+- [ ] Post create (PostService) : même helper généralisé → metadata.trackingLinks
+- [ ] Stories / commentaires : même helper (généralisation demandée)
+- [ ] Tests gateway (mint mapping-only, dédup, skip m+token/déjà-tracké)
 
-### Phase 3 — iOS
-- [ ] Status republish (StatusBubbleOverlay → composer → setStatus) : forwarder audioUrl + repostOfId (attribution via repostOf.author)
-- [ ] Réexposer le FAB reshare story → `PostService.repost(targetType: .story)` (snapshot serveur, pas de composer)
-- [ ] Build iOS vert
+## ⚠️ Contrainte env vérif e2e
+Le simulateur est connecté au gateway **PRODUCTION** (gate.meeshy.me). Mes changements gateway sont
+locaux → pas live pour le simulateur. Vérif e2e du `/l/token` = soit déployer (staging), soit pointer
+l'app sur un gateway local (env Localhost + lancer le gateway). À décider avec le user.
 
-### Phase 4 — Vérification
-- [ ] Tests gateway verts + build iOS vert
-- [ ] Commits isolés par phase, push
+## Increment C — iOS rendu tracé
+- [ ] SDK : parse `metadata.trackingLinks` dans les modèles message/post
+- [ ] `MessageTextRenderer` : mappe URL détectée → `/l/<token>` comme cible du lien
+- [ ] Façade ouvre `/l/<token>` quand dispo
+- [ ] Tests + vérif simulateur (clic = passe par /l/token → capture → redirige)
 
-## Review — TERMINÉ 2026-06-18
-
-3 commits poussés sur `main` (`0cf03b8ec..1aefa0326`) :
-- `c6209dfcc` gateway — snapshot généralisé aux sources éphémères + moodEmoji dans repostOfInclude (86/86 tests, tsc 0)
-- `01a1d8482` SDK — moodEmoji repostOf + forward audioUrl/repostOfId + via dérivé de repostOf.author (63 tests verts)
-- `1aefa0326` iOS — FAB reshare story réexposé (chemin serveur) + status audio/attribution + moodEmoji repostView (build app 79s, TEST BUILD SUCCEEDED)
-
-**Résultat clé** : l'attribution « via @X » du viewer story (StoryViewerView+Sidebar:557-566) était DORMANTE car l'ancien composer forçait `repostOfId: nil`. Le snapshot serveur pose désormais `repostOfId` → canvas source dupliqué + rendu + mention « via @Windie ». Bug « story vide » résolu à la racine.
-
-**Vérifié** : gateway (jest+tsc), SDK (xcodebuild test), app+tests (build-for-testing). NON vérifié : runtime device (impossible ici).
-
-**Restes mineurs (follow-up, non bloquants)** :
-- createPost (status republish) n'incrémente pas `repostCount` de la source (seul repostPost le fait) — métrique, non user-visible.
-- Pas d'insert optimiste de la story reshared dans la tray (apparaît au prochain reload) — aligné sur repostAsPostDirect.
-
-**NON committé** (agent Codex parallèle, laissé tel quel) : PostService.ts (bookmarkCount), interactions.ts, post.ts, SocialSocketManager.swift, Fastfile.
+## Notes
+- Réutiliser `Message.metadata` (Json) — pas de nouvelle colonne (cf. lessons).
+- Façade : `VideoEmbedThumbnail` (SDK atome) prend déjà un `onTap` → l'app passe l'action d'ouverture.

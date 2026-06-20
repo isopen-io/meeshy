@@ -9,6 +9,21 @@ import { resolveMentionedUsers, MentionService } from '../../services/MentionSer
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 
+/**
+ * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
+ * socket d'un commentaire — miroir exact du hoist des messages / posts. Permet
+ * au destinataire de rendre le lien cliquable/tracé vers `/l/<token>` sans
+ * réécrire l'URL. No-op si le commentaire ne porte aucun lien tracé.
+ */
+function hoistCommentTrackingLinks<T extends Record<string, unknown>>(comment: T): T {
+  const metadata = comment?.metadata as Record<string, unknown> | null | undefined;
+  const tl = metadata?.trackingLinks;
+  if (Array.isArray(tl) && tl.length > 0) {
+    return { ...comment, trackingLinks: tl } as T;
+  }
+  return comment;
+}
+
 export function registerCommentRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -139,7 +154,7 @@ export function registerCommentRoutes(
       if (socialEvents && post) {
         socialEvents.broadcastCommentAdded({
           postId,
-          comment,
+          comment: hoistCommentTrackingLinks(comment as unknown as Record<string, unknown>) as unknown as typeof comment,
           commentCount: post.commentCount,
         }, post.authorId).catch(() => {});
       }

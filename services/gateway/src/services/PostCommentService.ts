@@ -1,9 +1,19 @@
 import type { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import { authorSelect, NOT_DELETED } from './posts/postIncludes';
+import { TrackingLinkService } from './TrackingLinkService';
 
 export class PostCommentService {
-  constructor(private readonly prisma: PrismaClient) {}
+  private readonly trackingLinkService: TrackingLinkService;
+
+  constructor(
+    private readonly prisma: PrismaClient,
+    // Source UNIQUE du mapping `metadata.trackingLinks` partagée avec
+    // messages/posts/stories. Injectable pour les tests ; défaut = même prisma.
+    trackingLinkService?: TrackingLinkService,
+  ) {
+    this.trackingLinkService = trackingLinkService ?? new TrackingLinkService(prisma);
+  }
 
   async addComment(
     postId: string,
@@ -46,6 +56,7 @@ export class PostCommentService {
         effectFlags: true,
         parentId: true,
         createdAt: true,
+        metadata: true,
         author: { select: authorSelect },
       },
     });
@@ -61,6 +72,31 @@ export class PostCommentService {
         where: { id: parentId },
         data: { replyCount: { increment: 1 } },
       });
+    }
+
+    // Tracking des URLs brutes du commentaire : même mécanisme que les messages
+    // et les posts — mapping `url → token` rangé dans `metadata.trackingLinks`
+    // SANS réécrire le contenu (aperçu vidéo + URL lisible préservés). Le client
+    // rend le lien vers `/l/<token>`. JAMAIS bloquant : le helper avale ses
+    // erreurs (→ []) et l'écriture metadata est gardée.
+    if (content) {
+      try {
+        const trackingLinks = await this.trackingLinkService.collectContentTrackingLinks({
+          content,
+          createdBy: authorId,
+        });
+        if (trackingLinks.length > 0) {
+          const existingMetadata = (comment.metadata as Record<string, unknown> | null) ?? {};
+          const metadata = { ...existingMetadata, trackingLinks } as Prisma.InputJsonValue;
+          await this.prisma.postComment.update({
+            where: { id: comment.id },
+            data: { metadata },
+          });
+          return { ...comment, metadata };
+        }
+      } catch {
+        // non-bloquant : un échec de tracking ne doit pas casser le commentaire
+      }
     }
 
     return comment;
@@ -103,6 +139,7 @@ export class PostCommentService {
         effectFlags: true,
         parentId: true,
         createdAt: true,
+        metadata: true,
         author: { select: authorSelect },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -161,6 +198,7 @@ export class PostCommentService {
         effectFlags: true,
         parentId: true,
         createdAt: true,
+        metadata: true,
         author: { select: authorSelect },
       },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],

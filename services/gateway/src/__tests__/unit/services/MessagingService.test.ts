@@ -52,7 +52,8 @@ jest.mock('../../../services/ConversationStatsService', () => ({
 jest.mock('../../../services/TrackingLinkService', () => ({
   TrackingLinkService: jest.fn().mockImplementation(() => ({
     findExistingTrackingLink: mockFindExistingTrackingLink,
-    createTrackingLink: mockCreateTrackingLink
+    createTrackingLink: mockCreateTrackingLink,
+    collectContentTrackingLinks: jest.fn(async () => [])
   }))
 }));
 

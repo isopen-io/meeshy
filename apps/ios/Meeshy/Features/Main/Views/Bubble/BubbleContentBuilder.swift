@@ -88,6 +88,11 @@ extension BubbleContent {
         }()
         let isEmojiOnly = emojiResult != .notEmojiOnly
         let firstLinkURL = LinkPreviewFetcher.firstURL(in: effective)
+        // Outbound-link tracking: resolve the embed façade destination ONCE here
+        // (firstLinkURL → token → /l/<token>) so the leaf views stay primitive.
+        let embedTrackedURL: URL? = firstLinkURL
+            .flatMap { message.trackedLinkMap[$0] }
+            .flatMap { URL(string: "https://meeshy.me/l/\($0)") }
         self.text = effective.isEmpty ? nil : Text(
             raw: effective,
             isEmojiOnly: isEmojiOnly,
@@ -96,7 +101,9 @@ extension BubbleContent {
             // `hasBubbleBodyContent` et le rendu du link preview sans re-scan.
             firstLinkURL: firstLinkURL,
             // Résolution embed vidéo (YouTube) au même endroit, une seule fois.
-            embeddedVideo: firstLinkURL.flatMap { EmbeddableVideoResolver.resolve(urlString: $0) }
+            embeddedVideo: firstLinkURL.flatMap { EmbeddableVideoResolver.resolve(urlString: $0) },
+            trackedLinks: message.trackedLinkMap,
+            embedTrackedURL: embedTrackedURL
         )
 
         // --- Translation panel ---

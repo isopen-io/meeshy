@@ -211,6 +211,17 @@ struct FeedPostCard: View {
         EmbeddableVideoResolver.resolve(in: effectiveContent)
     }
 
+    /// Teinte des liens cliquables dans le corps du post.
+    private var postLinkTint: Color { Color(hex: accentColor) }
+
+    /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
+    /// première URL du contenu via `post.trackedLinkMap`. `nil` → watchURL.
+    private var embedTrackedURL: URL? {
+        guard let raw = LinkPreviewFetcher.firstURL(in: effectiveContent),
+              let token = post.trackedLinkMap[raw] else { return nil }
+        return URL(string: "https://meeshy.me/l/\(token)")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Main content
@@ -220,13 +231,15 @@ struct FeedPostCard: View {
                     // Author header
                     authorHeader
 
-                    // Post content — tap text opens detail, "voir plus/moins" toggles expansion
+                    // Post content — tap text opens detail, "voir plus/moins" toggles expansion.
+                    // Le corps passe par `MessageTextRenderer` pour rendre les URLs
+                    // cliquables + trackées (`/l/<token>`) tout en gardant `onTapPost`
+                    // sur le texte non-lien (priorité au lien = défaut SwiftUI).
                     let truncation = truncatedContent
                     if isTextExpanded {
-                        Text(effectiveContent)
-                            .font(.subheadline)
-                            .foregroundColor(theme.textPrimary)
+                        MessageTextRenderer.render(effectiveContent, color: theme.textPrimary, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
                             .lineLimit(nil)
+                            .tint(postLinkTint)
                             .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
                             .accessibilityAction { onTapPost?(post) }
 
@@ -241,10 +254,9 @@ struct FeedPostCard: View {
                             .accessibilityAddTraits(.isButton)
                             .accessibilityHint(String(localized: "a11y.feed.post.see_less.hint", defaultValue: "Réduit le texte", bundle: .main))
                     } else {
-                        Text(truncation.text + (truncation.isTruncated ? "..." : ""))
-                            .font(.subheadline)
-                            .foregroundColor(theme.textPrimary)
+                        MessageTextRenderer.render(truncation.text + (truncation.isTruncated ? "..." : ""), color: theme.textPrimary, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
                             .lineLimit(nil)
+                            .tint(postLinkTint)
                             .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
                             .accessibilityAction { onTapPost?(post) }
 
@@ -308,7 +320,7 @@ struct FeedPostCard: View {
                 // Embed vidéo (YouTube) détecté dans le contenu : player façade
                 // (vignette → lecture inline), hors du geste d'ouverture du post.
                 if let embeddedVideo {
-                    VideoEmbedContainer(video: embeddedVideo, accent: Color(hex: accentColor))
+                    VideoEmbedContainer(video: embeddedVideo, accent: Color(hex: accentColor), trackedURL: embedTrackedURL)
                         .padding(.top, 8)
                 }
 

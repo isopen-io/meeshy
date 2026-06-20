@@ -456,6 +456,12 @@ public struct FeedPost: Identifiable, Sendable {
     public var originalLanguage: String?
     public var translations: [String: PostTranslation]?
     public var translatedContent: String?
+    /// `[rawURL: token]` outbound-link tracking map carried from
+    /// `APIPost.trackedLinkMap`. Empty when the post has no tracked links.
+    /// Runtime-only (set via `toFeedPost`, like the engagement counters) —
+    /// consumed by the post body renderer (`/l/<token>` rewrite) and the
+    /// embedded-video façade destination. Backward-compatible by construction.
+    public var trackedLinkMap: [String: String] = [:]
 
     public var hasMedia: Bool { !media.isEmpty }
     public var mediaUrl: String? { media.first?.url }

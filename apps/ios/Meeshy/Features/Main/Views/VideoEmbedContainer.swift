@@ -2,153 +2,55 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Orchestre la façade embed vidéo : vignette → (au tap) player WKWebView.
-/// Single-active + call-aware via la coordination existante :
-///  - `start()` est gardé par `MediaSessionCoordinator.isCallActive` (pas de lecture pendant un appel).
-///  - `PlaybackCoordinator.willStartPlaying(external:)` coupe audio / autres externes / vidéo native.
-///  - À l'arrivée d'un appel, `CallManager` appelle `PlaybackCoordinator.stopAll()` qui invoque notre `stop()`.
-@MainActor
-final class VideoEmbedModel: ObservableObject, StoppablePlayer {
-
-    enum Phase: Equatable { case idle, loading, playing, paused }
-
-    @Published private(set) var phase: Phase = .idle
-    let controller = YouTubeEmbedController()
-
-    private var registered = false
-
-    func start() {
-        guard phase == .idle else { return }
-        guard !MediaSessionCoordinator.shared.isCallActive else { return }
-        if !registered {
-            PlaybackCoordinator.shared.registerExternal(self)
-            registered = true
-        }
-        PlaybackCoordinator.shared.willStartPlaying(external: self)
-        MediaSessionCoordinator.shared.activatePlaybackSync(options: [.duckOthers])
-        phase = .loading
-    }
-
-    func onState(_ state: YouTubeEmbedPlayerView.State) {
-        switch state {
-        case .ready:
-            controller.play()
-        case .playing:
-            phase = .playing
-        case .paused:
-            if phase != .idle { phase = .paused }
-        case .ended:
-            stop()
-        }
-    }
-
-    /// StoppablePlayer — appelé par le coordinateur quand un autre média démarre ou sur appel.
-    func stop() {
-        controller.pause()
-        if phase != .idle {
-            phase = .idle
-            MediaSessionCoordinator.shared.deactivatePlaybackSync()
-        }
-    }
-
-    /// onDisappear (cellules recyclées en messages, scroll-off en feed/détail).
-    func teardown() {
-        stop()
-        if registered {
-            PlaybackCoordinator.shared.unregisterExternal(self)
-            registered = false
-        }
+/// Décision UX produit (app-side) : quelle URL ouvrir pour un embed vidéo.
+/// Priorité au lien de tracking `/l/token` (capture + redirection) quand il existe,
+/// sinon la `watchURL` canonique. Helper pur → testable sans SwiftUI.
+enum VideoEmbedDestination {
+    static func url(for video: EmbeddedVideo, trackedURL: URL?) -> URL {
+        trackedURL ?? video.watchURL
     }
 }
 
+/// Façade d'aperçu vidéo (YouTube) dans les messages & posts.
+///
+/// On PRÉSERVE l'aperçu riche (`VideoEmbedThumbnail` : vignette 16:9 + bouton play + badge
+/// provider). Seul le geste change : au tap on **ouvre la vidéo via un lien** plutôt que de
+/// tenter une lecture inline en `WKWebView`.
+///
+/// Pourquoi pas de lecture inline : YouTube bloque l'IFrame Player embarqué par vérification
+/// d'origine/referrer (erreurs 15x — `onerror:152` prouvé sur simulateur pour TOUTES les
+/// vidéos, et `153` même dans Safari du simulateur). L'ancien player donnait donc une boîte
+/// noire morte sans recours. Ouvrir le lien (Safari / app YouTube) lit la vidéo de façon fiable.
+///
+/// URL ouverte : le lien de tracking `/l/<token>` (minté côté gateway à l'envoi) quand il est
+/// disponible — il capture le clic puis redirige vers la page finale ; sinon la `watchURL`
+/// canonique reconstruite depuis le `videoId`.
 struct VideoEmbedContainer: View {
     let video: EmbeddedVideo
     let accent: Color
+    /// Lien de tracking `https://meeshy.me/l/<token>` associé à cette vidéo (capture + 302).
+    /// `nil` → fallback direct sur la `watchURL` (avant câblage du tracking gateway).
+    let trackedURL: URL?
 
-    @StateObject private var model = VideoEmbedModel()
-    @State private var showFullscreen = false
-    @State private var fullscreenStart = 0
+    @Environment(\.openURL) private var openURL
 
-    init(video: EmbeddedVideo, accent: Color) {
+    init(video: EmbeddedVideo, accent: Color, trackedURL: URL? = nil) {
         self.video = video
         self.accent = accent
+        self.trackedURL = trackedURL
     }
 
-    var body: some View {
-        Group {
-            if model.phase == .idle {
-                VideoEmbedThumbnail(
-                    thumbnailURLString: video.thumbnailURL().absoluteString,
-                    providerLabel: "YouTube",
-                    accent: accent
-                ) { model.start() }
-            } else {
-                ZStack(alignment: .topTrailing) {
-                    YouTubeEmbedPlayerView(
-                        videoId: video.videoId,
-                        startSeconds: video.startSeconds ?? 0,
-                        controller: model.controller,
-                        onStateChange: { state in model.onState(state) }
-                    )
-                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                    Button {
-                        model.controller.currentTime { seconds in
-                            fullscreenStart = seconds
-                            model.controller.pause()
-                            showFullscreen = true
-                        }
-                    } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(.black.opacity(0.5), in: Circle())
-                    }
-                    .padding(8)
-                    .accessibilityLabel("Plein écran")
-                }
-            }
-        }
-        .onDisappear { model.teardown() }
-        .fullScreenCover(isPresented: $showFullscreen) {
-            YouTubeFullscreenView(video: video, startSeconds: fullscreenStart) {
-                showFullscreen = false
-            }
-        }
-    }
-}
-
-private struct YouTubeFullscreenView: View {
-    let video: EmbeddedVideo
-    let startSeconds: Int
-    let onClose: () -> Void
-
-    @StateObject private var model = VideoEmbedModel()
+    /// Destination ouverte au tap : lien tracké si fourni, sinon la watch URL canonique.
+    private var destinationURL: URL { VideoEmbedDestination.url(for: video, trackedURL: trackedURL) }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            Color.black.ignoresSafeArea()
-            YouTubeEmbedPlayerView(
-                videoId: video.videoId,
-                startSeconds: startSeconds,
-                controller: model.controller,
-                onStateChange: { state in model.onState(state) }
-            )
-            .aspectRatio(16.0 / 9.0, contentMode: .fit)
-
-            Button(action: { model.teardown(); onClose() }) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(12)
-                    .background(.black.opacity(0.5), in: Circle())
-            }
-            .padding(16)
-            .accessibilityLabel("Fermer")
+        VideoEmbedThumbnail(
+            thumbnailURLString: video.thumbnailURL().absoluteString,
+            providerLabel: "YouTube",
+            accent: accent
+        ) {
+            HapticFeedback.light()
+            openURL(destinationURL)
         }
-        .onAppear { model.start() }
-        .onDisappear { model.teardown() }
     }
 }

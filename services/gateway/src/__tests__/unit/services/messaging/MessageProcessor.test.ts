@@ -24,10 +24,12 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 
 const mockFindExistingTrackingLink = jest.fn() as jest.Mock<any>;
 const mockCreateTrackingLink = jest.fn() as jest.Mock<any>;
+const mockCollectContentTrackingLinks = jest.fn(async () => []) as jest.Mock<any>;
 jest.mock('../../../../services/TrackingLinkService', () => ({
   TrackingLinkService: jest.fn().mockImplementation(() => ({
     findExistingTrackingLink: (...a: any[]) => mockFindExistingTrackingLink(...a),
     createTrackingLink: (...a: any[]) => mockCreateTrackingLink(...a),
+    collectContentTrackingLinks: (...a: any[]) => mockCollectContentTrackingLinks(...a),
   })),
 }));
 

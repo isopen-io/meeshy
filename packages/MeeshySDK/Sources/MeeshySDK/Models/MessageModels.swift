@@ -1,5 +1,31 @@
 import Foundation
 
+// MARK: - Outbound Link Tracking
+
+/// A single raw-URL → tracking-token mapping attached to a message or post by
+/// the gateway. The client never rewrites the message content; instead it
+/// resolves `https://meeshy.me/l/<token>` as the tappable destination for the
+/// raw URL (capture + 302 redirect to the original page), keeping the displayed
+/// text and any video preview intact. Optional everywhere → older payloads
+/// without this field decode unchanged (rollout-safe).
+public struct TrackedLink: Codable, Sendable, Equatable {
+    public let url: String
+    public let token: String
+
+    public init(url: String, token: String) {
+        self.url = url
+        self.token = token
+    }
+}
+
+extension Sequence where Element == TrackedLink {
+    /// Collapses a list of `{ url, token }` mappings into a `[url: token]`
+    /// lookup. Last token wins on a duplicate URL (gateway sends one per URL).
+    public var trackedLinkMap: [String: String] {
+        reduce(into: [:]) { $0[$1.url] = $1.token }
+    }
+}
+
 // MARK: - API Message Models
 
 public struct APIMessageSenderUser: Decodable, Sendable {
@@ -382,6 +408,17 @@ public struct APIMessage: Sendable {
     /// Structured per-type payload. For call-summary system messages this decodes
     /// into a `CallSummaryMetadata`; absent / non-call metadata yields `nil`.
     public let callSummary: CallSummaryMetadata?
+    /// Outbound-link tracking mappings minted by the gateway. Parsed from the
+    /// top-level `trackingLinks` (socket `message:new`) OR from
+    /// `metadata.trackingLinks` (REST). `nil` when the payload predates the
+    /// feature — the renderer then falls back to the raw URLs. Defaulted so the
+    /// memberwise initializer stays source-compatible with existing call sites.
+    public var trackingLinks: [TrackedLink]? = nil
+
+    /// `[rawURL: token]` lookup derived from `trackingLinks`. Empty when no
+    /// tracking data is present. Consumed by `MessageTextRenderer` (tappable
+    /// link rewrite) and `VideoEmbedContainer` (façade destination).
+    public var trackedLinkMap: [String: String] { (trackingLinks ?? []).trackedLinkMap }
 }
 
 extension APIMessage: Decodable {
@@ -396,8 +433,17 @@ extension APIMessage: Decodable {
         case deliveredToAllAt, readByAllAt, deliveredCount, readCount
         case effectFlags, translations, mentionedUsers
         case metadata
+        case trackingLinks
         // MongoDB fallback
         case _id
+    }
+
+    /// Minimal shape of the `metadata` JSON blob needed to extract
+    /// `trackingLinks` on REST payloads (socket payloads put it top-level).
+    /// Decoded with `try?` so a non-conforming metadata object never fails the
+    /// whole message decode.
+    private struct MessageMetadataEnvelope: Decodable {
+        let trackingLinks: [TrackedLink]?
     }
 
     public init(from decoder: Decoder) throws {
@@ -452,6 +498,15 @@ extension APIMessage: Decodable {
         // Tolerant: a present-but-non-call metadata object must not fail the
         // whole message decode, so swallow shape mismatches into nil.
         callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .metadata)
+        // Outbound-link tracking: prefer the top-level `trackingLinks` (socket
+        // `message:new`); otherwise read it from the `metadata` envelope (REST).
+        // Both decodes are tolerant so a malformed shape leaves the field nil
+        // (renderer falls back to raw URLs) without failing the message.
+        if let topLevel = try? c.decodeIfPresent([TrackedLink].self, forKey: .trackingLinks), !topLevel.isEmpty {
+            trackingLinks = topLevel
+        } else {
+            trackingLinks = (try? c.decodeIfPresent(MessageMetadataEnvelope.self, forKey: .metadata))??.trackingLinks
+        }
     }
 }
 
@@ -695,7 +750,8 @@ extension APIMessage {
                 || (currentUsername != nil && resolvedUsername?.lowercased() == currentUsername?.lowercased()),
             deliveredToAllAt: deliveredToAllAt, readByAllAt: readByAllAt,
             deliveredCount: deliveredCount ?? 0, readCount: readCount ?? 0,
-            callSummary: callSummary
+            callSummary: callSummary,
+            trackedLinkMap: trackedLinkMap
         )
     }
 }
