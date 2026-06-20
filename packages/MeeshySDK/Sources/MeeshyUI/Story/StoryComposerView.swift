@@ -702,11 +702,18 @@ public struct StoryComposerView: View {
             slideStrip
                 .frame(maxWidth: .infinity)
 
-            HStack(spacing: 8) {
-                visibilityMenu
-                previewButton
-                publishButton
-                overflowMenu
+            // Unified Liquid Glass action group (iOS 26 GlassEffectContainer →
+            // adjacent glass morphs into one continuous surface; iOS 16–25 falls
+            // back to material/solid via the adaptiveGlass wrappers). Publish keeps
+            // the primary brand tint via prominent glass; overflow (⋯) sits last,
+            // right of Publish.
+            AdaptiveGlassContainer(spacing: 6) {
+                HStack(spacing: 6) {
+                    visibilityMenu
+                    previewButton
+                    publishButton
+                    overflowMenu
+                }
             }
             .padding(.trailing, 16)
         }
@@ -722,13 +729,8 @@ public struct StoryComposerView: View {
             Image(systemName: "xmark")
                 .font(.system(size: 15, weight: .bold))
                 .foregroundColor(.white)
-                .frame(width: 34, height: 34)
-                .background(
-                    Circle()
-                        .fill(.black.opacity(0.55))
-                        .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
-                )
-                .frame(width: 44, height: 44)
+                .frame(width: 36, height: 36)
+                .adaptiveGlass(in: Circle())
                 .contentShape(Circle())
         }
     }
@@ -744,13 +746,8 @@ public struct StoryComposerView: View {
             Image(systemName: "play.fill")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(.white)
-                .frame(width: 32, height: 32)
-                .background(
-                    Circle()
-                        .fill(.black.opacity(0.55))
-                        .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
-                )
-                .frame(width: 44, height: 44)
+                .frame(width: 36, height: 36)
+                .adaptiveGlass(in: Circle())
                 .contentShape(Circle())
         }
     }
@@ -773,8 +770,8 @@ public struct StoryComposerView: View {
             .fixedSize()
             .foregroundColor(.white)
             .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(Capsule().fill(MeeshyColors.brandGradient))
+            .padding(.vertical, 9)
+            .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
         }
         .disabled(isPublishing)
     }
@@ -857,13 +854,8 @@ public struct StoryComposerView: View {
             Image(systemName: "ellipsis")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundColor(.white)
-                .frame(width: 32, height: 32)
-                .background(
-                    Circle()
-                        .fill(.black.opacity(0.55))
-                        .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
-                )
-                .frame(width: 44, height: 44)
+                .frame(width: 36, height: 36)
+                .adaptiveGlass(in: Circle())
                 .contentShape(Circle())
         }
     }

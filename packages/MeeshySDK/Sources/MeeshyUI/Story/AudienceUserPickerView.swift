@@ -98,7 +98,9 @@ public struct AudienceUserPickerView: View {
             if !vm.selectedUsers.isEmpty { selectedChips }
             resultsList
         }
-        .background(Color(.systemBackground))
+        // Translucent + partial-height sheet so the story composer header stays
+        // visible above it. Version gating lives in Compatibility/.
+        .modifier(AudiencePickerPresentationStyle())
     }
 
     private var header: some View {
@@ -179,9 +181,11 @@ public struct AudienceUserPickerView: View {
             ForEach(vm.results) { user in
                 Button { vm.toggle(user) } label: { row(user) }
                     .buttonStyle(.plain)
+                    .listRowBackground(Color.clear)
             }
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
     }
 
     private func row(_ user: UserSearchResult) -> some View {
