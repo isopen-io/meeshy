@@ -855,7 +855,7 @@ struct SplashScreen: View {
 
                 // App Name
                 Text("Meeshy")
-                    .font(.system(size: 46, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(46, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
@@ -871,8 +871,8 @@ struct SplashScreen: View {
                     .padding(.bottom, 8)
 
                 // Tagline
-                Text(String(localized: "Break the language barrier", defaultValue: "Break the language barrier"))
-                    .font(.system(size: 16, weight: .medium))
+                Text(String(localized: "splash.tagline", bundle: .main))
+                    .font(MeeshyFont.relative(16, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .frame(height: 40)
                     .opacity(showSubtitle ? 1 : 0)
@@ -883,11 +883,11 @@ struct SplashScreen: View {
                 // Footer : version + signature + brand logo
                 VStack(spacing: 6) {
                     Text("Meeshy \(appVersion) · \(buildNumber)")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(MeeshyFont.relative(12, weight: .medium, design: .rounded))
                         .foregroundColor(theme.textMuted.opacity(0.7))
 
-                    Text(String(localized: "splash.madeWithLove", defaultValue: "Made with ❤️ by Services CEO", bundle: .main))
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                    Text(String(localized: "splash.madeWithLove", bundle: .main))
+                        .font(MeeshyFont.relative(11, weight: .medium, design: .rounded))
                         .foregroundColor(theme.textMuted.opacity(0.7))
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
