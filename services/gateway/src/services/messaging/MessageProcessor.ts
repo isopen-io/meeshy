@@ -13,6 +13,7 @@ import { EncryptionService } from '../EncryptionService';
 import { NotificationService, protectedPreview } from '../notifications/NotificationService';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { AttachmentService } from '../attachments';
+import { attachmentFullSelect } from '../attachments/attachmentIncludes';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { shouldProcessAudioAttachment } from '../../utils/transcription';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
@@ -497,7 +498,11 @@ export class MessageProcessor {
                       }
                     }
                   }
-                }
+                },
+                // Parité avec le chemin REST (messages.ts) : le snapshot du
+                // message cité doit porter ses pièces jointes, sinon l'aperçu
+                // de citation n'affiche rien sur les messages reçus en socket.
+                attachments: { select: attachmentFullSelect, take: 4 }
               }
             }
           }
@@ -551,7 +556,10 @@ export class MessageProcessor {
                       }
                     }
                   }
-                }
+                },
+                // Parité REST : porter les pièces jointes du message cité
+                // (sinon l'aperçu de citation est vide via le dédup socket).
+                attachments: { select: attachmentFullSelect, take: 4 }
               }
             }
           }
