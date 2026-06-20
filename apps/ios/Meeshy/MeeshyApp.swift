@@ -794,14 +794,6 @@ struct SplashScreen: View {
 
     private var isDark: Bool { theme.mode.isDark }
 
-    private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-    }
-
-    private var buildNumber: String {
-        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-    }
-
     var body: some View {
         ZStack {
             // Animated gradient background
@@ -870,40 +862,20 @@ struct SplashScreen: View {
                     .offset(y: showTitle ? 0 : -40)
                     .padding(.bottom, 8)
 
-                // Tagline (shared baseline — see BrandTagline)
-                BrandTagline()
+                // Tagline
+                Text(String(localized: "splash.tagline", bundle: .main))
+                    .font(MeeshyFont.relative(16, weight: .medium))
+                    .foregroundColor(theme.textMuted)
                     .frame(height: 40)
                     .opacity(showSubtitle ? 1 : 0)
                     .offset(y: showSubtitle ? 0 : -20)
 
                 Spacer()
 
-                // Footer : version + signature + brand logo
-                VStack(spacing: 6) {
-                    Text("Meeshy \(appVersion) · \(buildNumber)")
-                        .font(MeeshyFont.relative(12, weight: .medium, design: .rounded))
-                        .foregroundColor(theme.textMuted.opacity(0.7))
-
-                    Text(String(localized: "splash.madeWithLove", bundle: .main))
-                        .font(MeeshyFont.relative(11, weight: .medium, design: .rounded))
-                        .foregroundColor(theme.textMuted.opacity(0.7))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-
-                    Image("AppIconFooter")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 21, height: 21)
-                        .foregroundColor(MeeshyColors.error)
-                        .opacity(0.9)
-                        .padding(.top, 2)
-                        .accessibilityHidden(true)
-                }
-                .opacity(showSubtitle ? 1 : 0)
-                .padding(.bottom, 24)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(Text("Meeshy version \(appVersion), build \(buildNumber). Made with love by Services CEO."))
+                // Footer : version + signature + brand logo (shared — see BrandSignature)
+                BrandSignature()
+                    .opacity(showSubtitle ? 1 : 0)
+                    .padding(.bottom, 24)
             }
         }
         .onAppear {

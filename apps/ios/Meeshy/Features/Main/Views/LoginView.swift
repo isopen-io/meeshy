@@ -148,9 +148,9 @@ struct LoginView: View {
                         .opacity(showFields ? 1 : 0)
                 }
 
-                // Baseline de marque partagée avec le splash (BrandTagline).
-                BrandTagline()
-                    .padding(.horizontal, MeeshySpacing.xxxl)
+                // Signature de marque partagée avec le splash (BrandSignature) :
+                // version + « Fait avec ❤️ par Services CEO » + logo.
+                BrandSignature()
                     .padding(.bottom, MeeshySpacing.xxxl)
                     .opacity(showFields ? 1 : 0)
             }
