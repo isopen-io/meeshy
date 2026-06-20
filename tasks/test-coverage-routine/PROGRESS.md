@@ -155,7 +155,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
 | web | `pnpm --filter web test:coverage` | ~38 | ~30 | 2026-06-19 (post P1 Voice/audio × web; +193 tests covering 7 modules; threshold floor lines:38/branches:30/statements:38/functions:35; P1 Voice/audio × web ☑) |
-| gateway | `pnpm --filter gateway test:coverage` | 56.45 | 51.98 | 2026-06-20 (post P2 Notifications × gateway; NotificationFormatter.ts☑ SocketNotificationService.ts☑ FirebaseNotificationService.ts☑ +56 new tests; threshold floor ratcheted lines:56/branches:51/statements:56/functions:56) |
+| gateway | `pnpm --filter gateway test:coverage` | 51.95 | 49.61 | 2026-06-20 (post P2 Notifications × gateway; NotificationFormatter.ts☑ SocketNotificationService.ts☑ FirebaseNotificationService.ts☑ +56 new tests; CI-measured: stmts:51.88/branch:49.61/lines:51.95/funcs:51.4; threshold floor ratcheted lines:51/branches:49/statements:51/functions:51) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | ~39 | n/a | 2026-06-19 (post P1 Voice/audio × translator; +127 tests covering 6 modules; fail_under ratcheted 37→39; diarization GPU methods pragma'd) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |
