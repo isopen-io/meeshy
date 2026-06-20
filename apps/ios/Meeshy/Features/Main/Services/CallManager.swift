@@ -1195,6 +1195,8 @@ final class CallManager: ObservableObject {
     /// `true` entre un tap « revenir » (restore) et la fermeture effective du PiP,
     /// pour distinguer ce chemin de la croix système (qui retombe sur la pilule).
     private var pipRestoring = false
+    private weak var pipConfiguredTrack: AnyObject?
+    private weak var pipConfiguredSource: UIView?
 
     /// Le PiP vidéo système peut s'activer : appel vidéo, track distant présent,
     /// caméra distante allumée, sur un appareil compatible (≠ iOS-app-on-Mac).
@@ -1206,8 +1208,16 @@ final class CallManager: ObservableObject {
     /// `sourceView` vidéo inline). No-op si l'appel n'est pas éligible.
     func attachSystemPiP(sourceView: UIView) {
         guard canActivateSystemPiP, let track = remoteVideoTrack else { return }
+        let trackObject = track as AnyObject
+        // Idempotence : `configure()` reconstruit le controller AVKit. Ne le refaire
+        // que si la sourceView ou le track distant a changé (ce dernier peut être
+        // recréé sur ICE restart / renégociation) — sinon chaque re-render SwiftUI
+        // casserait un PiP en cours.
+        guard pipConfiguredSource !== sourceView || pipConfiguredTrack !== trackObject else { return }
+        pipConfiguredSource = sourceView
+        pipConfiguredTrack = trackObject
         pip.configure(
-            sourceView: sourceView, remoteTrack: track as AnyObject, autoStart: true,
+            sourceView: sourceView, remoteTrack: trackObject, autoStart: true,
             onStart: { [weak self] in self?.isSystemPiPActive = true },
             onRestoreUI: { [weak self] in
                 self?.pipRestoring = true
@@ -1233,6 +1243,8 @@ final class CallManager: ObservableObject {
         pip.tearDown()
         isSystemPiPActive = false
         pipRestoring = false
+        pipConfiguredTrack = nil
+        pipConfiguredSource = nil
     }
 
     // MARK: - Media Controls

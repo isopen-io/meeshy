@@ -42,6 +42,13 @@ struct CallView: View {
 
     var body: some View {
         ZStack {
+            // PiP système — ancre invisible plein écran : `sourceView` d'où la
+            // fenêtre PiP émerge. `attachSystemPiP` se gate sur canActivateSystemPiP
+            // (no-op hors appel vidéo), donc inoffensive ici en permanence.
+            PiPSourceAnchor()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
+
             // Background: full-screen LOCAL self-preview ONLY while waiting to
             // connect (ringing/offering/connecting) — the user sees themselves
             // before the peer's video arrives. Once `.connected`/`.reconnecting`,
@@ -820,6 +827,21 @@ struct CallView: View {
     /// row when it fits the width, and only falls back to a horizontal scroll on
     /// narrow widths / large Dynamic Type — so the camera-flip and other controls
     /// are evenly centred rather than left-anchored in a scroll view.
+    /// Ancre invisible servant de `sourceView` au PiP système (le rect d'où la
+    /// fenêtre flottante émerge). Enregistrée auprès de `CallManager` à chaque
+    /// apparition/mise à jour ; `attachSystemPiP` est idempotent + auto-gated.
+    private struct PiPSourceAnchor: UIViewRepresentable {
+        func makeUIView(context: Context) -> UIView {
+            let view = UIView()
+            view.backgroundColor = .clear
+            view.isUserInteractionEnabled = false
+            return view
+        }
+        func updateUIView(_ uiView: UIView, context: Context) {
+            CallManager.shared.attachSystemPiP(sourceView: uiView)
+        }
+    }
+
     private var controlBar: some View {
         // Adjacent glass circles must share a container (glass can't sample
         // glass). `AdaptiveGlassContainer` (SDK Compatibility) is a GlassEffect-
@@ -899,6 +921,23 @@ struct CallView: View {
                     : (callManager.isVideoEnabled ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main) : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main))
             ) {
                 callManager.toggleVideo()
+            }
+
+            // PiP système — réduire en fenêtre vidéo flottante. Visible seulement
+            // si éligible (appel vidéo + track distant + caméra distante allumée +
+            // appareil compatible). En audio, le « réduire » reste le chevron →
+            // pilule in-app, pas une fenêtre vidéo.
+            if callManager.canActivateSystemPiP {
+                callControlButton(
+                    icon: "pip.enter",
+                    color: .white,
+                    bgColor: .white,
+                    isActive: callManager.isSystemPiPActive,
+                    caption: String(localized: "call.control.pip.caption", defaultValue: "PiP", bundle: .main),
+                    label: String(localized: "call.control.pip", defaultValue: "Réduire en Picture-in-Picture", bundle: .main)
+                ) {
+                    callManager.startSystemPiP()
+                }
             }
 
             // End call
