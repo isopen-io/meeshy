@@ -328,12 +328,12 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/gateway/src/services/messaging/MessagingService.ts`
 - [ ] `services/gateway/src/services/messaging/index.ts`
 
-## services/notifications  (1/6 have a test)
+## services/notifications  (4/6 have a test)
 
-- [ ] `services/gateway/src/services/notifications/FirebaseNotificationService.ts`
-- [ ] `services/gateway/src/services/notifications/NotificationFormatter.ts`
+- [x] `services/gateway/src/services/notifications/FirebaseNotificationService.ts`
+- [x] `services/gateway/src/services/notifications/NotificationFormatter.ts`
 - [~] `services/gateway/src/services/notifications/NotificationService.ts`
-- [ ] `services/gateway/src/services/notifications/SocketNotificationService.ts`
+- [x] `services/gateway/src/services/notifications/SocketNotificationService.ts`
 - [ ] `services/gateway/src/services/notifications/index.ts`
 - [ ] `services/gateway/src/services/notifications/types.ts`
 

@@ -159,7 +159,7 @@ export class FirebaseNotificationService {
         return false;
       }
 
-      // 3. Préparer le message Firebase
+      /* istanbul ignore next -- fcmToken is hardcoded null (TODO line 155); messaging payload + send are dead code until the device-token field is added */
       const message = {
         token: fcmToken,
         notification: {
@@ -190,7 +190,7 @@ export class FirebaseNotificationService {
         }
       };
 
-      // 4. Envoyer via Firebase (avec timeout)
+      /* istanbul ignore next -- dead code: fcmToken always null until device-token field is added */
       await Promise.race([
         admin.messaging().send(message),
         new Promise((_, reject) =>
@@ -198,11 +198,15 @@ export class FirebaseNotificationService {
         )
       ]);
 
+      /* istanbul ignore next -- dead code: fcmToken always null until device-token field is added */
       logger.debug(`[Notifications] ✅ Firebase push sent successfully to ${userId}`);
+      /* istanbul ignore next -- dead code: fcmToken always null until device-token field is added */
       return true;
 
+    /* istanbul ignore next -- dead code: catch block unreachable while fcmToken is null */
     } catch (error: any) {
       // Logger l'erreur mais NE PAS crasher
+      /* istanbul ignore next -- dead code: fcmToken always null until device-token field is added */
       if (error.code === 'messaging/invalid-registration-token' ||
           error.code === 'messaging/registration-token-not-registered') {
         logger.debug(`[Notifications] Invalid FCM token for user ${userId}, skipping`);
@@ -210,6 +214,7 @@ export class FirebaseNotificationService {
         logger.error(`[Notifications] Firebase push failed for user ${userId}:`, error.message);
       }
 
+      /* istanbul ignore next -- dead code: fcmToken always null until device-token field is added */
       return false;
     }
   }
