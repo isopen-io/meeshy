@@ -45,6 +45,9 @@ public struct ChatBubble: View {
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 .padding()
+                .accessibilityLabel(isMe
+                    ? String(format: String(localized: "accessibility.message_from_me", defaultValue: "Mon message : %@", bundle: .main), text)
+                    : String(format: String(localized: "accessibility.message_from_other", defaultValue: "Message : %@", bundle: .main), text))
                 .background(bubbleBackground)
                 .foregroundColor(isMe ? .white : theme.textPrimary)
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))

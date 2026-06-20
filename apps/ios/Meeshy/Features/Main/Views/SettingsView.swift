@@ -146,7 +146,7 @@ struct SettingsView: View {
 
             Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
-            VStack(spacing: 20) {
+            VStack(spacing: MeeshySpacing.xl) {
                 profileCard
                 accountSection
                 appearanceSection
@@ -198,9 +198,9 @@ struct SettingsView: View {
                     .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(theme.textMuted)
             }
-            .padding(16)
+            .padding(MeeshySpacing.lg)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .fill(theme.inputBackground)
             )
         }
@@ -655,8 +655,8 @@ struct SettingsView: View {
         color: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: color))
@@ -671,10 +671,10 @@ struct SettingsView: View {
                 content()
             }
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .fill(theme.surfaceGradient(tint: color))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                             .stroke(theme.border(tint: color), lineWidth: 1)
                     )
             )

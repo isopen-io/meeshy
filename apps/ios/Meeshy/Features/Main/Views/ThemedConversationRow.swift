@@ -125,12 +125,12 @@ struct ThemedConversationRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: MeeshySpacing.md) {
             // Dynamic Avatar
             avatarView
 
             // Content
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 // Tags row (if any)
                 if !conversation.tags.isEmpty || conversation.encryptionMode != nil {
                     tagsRow
@@ -193,8 +193,8 @@ struct ThemedConversationRow: View {
                     .accessibilityHidden(true)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.md)
         .background(
             ZStack {
                 backgroundSecondary
@@ -207,7 +207,7 @@ struct ThemedConversationRow: View {
                 }
             }
         )
-        .clipShape(RoundedRectangle(cornerRadius: 14 * (1 - swipeProgress), style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md * (1 - swipeProgress), style: .continuous))
         .overlay(alignment: .leading) {
             if isSelected {
                 RoundedRectangle(cornerRadius: 1.5, style: .continuous)
@@ -221,7 +221,7 @@ struct ThemedConversationRow: View {
             }
         }
         .overlay(
-            RoundedRectangle(cornerRadius: 14 * (1 - swipeProgress), style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md * (1 - swipeProgress), style: .continuous)
                 .strokeBorder(
                     isSelected
                         ? accent.opacity(0.45 * (1 - swipeProgress))
@@ -633,7 +633,7 @@ private struct ConversationAvatarView: View {
 
     private var groupContextMenuItems: [AvatarContextMenuItem] {
         var items: [AvatarContextMenuItem] = []
-        items.append(AvatarContextMenuItem(label: String(localized: "Infos conversation", bundle: .main), icon: "info.circle.fill") {
+        items.append(AvatarContextMenuItem(label: String(localized: "conversation.info", defaultValue: "Infos conversation", bundle: .main), icon: "info.circle.fill") {
             onViewConversationInfo?()
         })
         let sharableTypes: [MeeshyConversation.ConversationType] = [.group, .public, .global, .broadcast]
@@ -725,7 +725,7 @@ struct ConversationTitleLabel: View {
     }
 
     var body: some View {
-        HStack(spacing: spacing) {
+        HStack(spacing: MeeshySpacing.sm) {
             if let favorite {
                 Text(favorite)
                     .accessibilityLabel(Text(String(
