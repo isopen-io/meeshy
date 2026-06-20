@@ -6,6 +6,7 @@
  */
 
 import { PrismaClient, PostVisibility } from '@meeshy/shared/prisma/client';
+import { doUsersShareCommunity } from './communityVisibility';
 
 export type PostVisibilityRecord = {
   authorId: string;
@@ -16,11 +17,12 @@ export type PostVisibilityRecord = {
 /**
  * Checks whether `userId` is allowed to see `post` based on its visibility setting.
  *
- * PUBLIC  → everyone
- * FRIENDS → post author + accepted friends of author
- * PRIVATE → author only
- * ONLY    → userId must be in visibilityUserIds
- * EXCEPT  → userId must NOT be in visibilityUserIds, AND must be a friend
+ * PUBLIC    → everyone
+ * COMMUNITY → author + members sharing at least one community with the author
+ * FRIENDS   → post author + accepted friends of author
+ * PRIVATE   → author only
+ * ONLY      → userId must be in visibilityUserIds
+ * EXCEPT    → userId must NOT be in visibilityUserIds, AND must be a friend
  */
 export async function canUserViewPost(
   prisma: PrismaClient,
@@ -38,6 +40,9 @@ export async function canUserViewPost(
 
     case PostVisibility.ONLY:
       return post.visibilityUserIds.includes(userId);
+
+    case PostVisibility.COMMUNITY:
+      return doUsersShareCommunity(prisma, post.authorId, userId);
 
     case PostVisibility.FRIENDS:
     case PostVisibility.EXCEPT: {

@@ -114,12 +114,30 @@ describe('canUserViewPost', () => {
     });
   });
 
-  describe('COMMUNITY visibility (default → false)', () => {
-    it('returns false for non-author users (hits default case)', async () => {
-      const prisma = makePrisma();
+  describe('COMMUNITY visibility (shared community)', () => {
+    it('returns true when viewer shares a community with the author', async () => {
+      const prisma = {
+        friendRequest: { findFirst: jest.fn() },
+        communityMember: {
+          findMany: jest.fn().mockResolvedValue([{ communityId: 'c1' }]),
+          findFirst: jest.fn().mockResolvedValue({ id: 'm1' }),
+        },
+      };
+      const post = makePost({ visibility: PostVisibility.COMMUNITY });
+      expect(await canUserViewPost(prisma as any, post, 'viewer-1')).toBe(true);
+      expect(prisma.friendRequest.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('returns false when viewer shares no community with the author', async () => {
+      const prisma = {
+        friendRequest: { findFirst: jest.fn() },
+        communityMember: {
+          findMany: jest.fn().mockResolvedValue([{ communityId: 'c1' }]),
+          findFirst: jest.fn().mockResolvedValue(null),
+        },
+      };
       const post = makePost({ visibility: PostVisibility.COMMUNITY });
       expect(await canUserViewPost(prisma as any, post, 'viewer-1')).toBe(false);
-      expect(prisma.friendRequest.findFirst).not.toHaveBeenCalled();
     });
   });
 });
