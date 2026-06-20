@@ -36,9 +36,7 @@ import { getOrCreateWebSessionKey } from '@/lib/anonymous-session';
  *
  * Mounted at `/feeds/post/[postId]` — the URL minted by the gateway
  * for share intents and parsed by the iOS universal-link handler.
- * The v2 mirror at `/v2/feeds/post/[postId]` is kept for backwards
- * compatibility with already-distributed tracking links but new links
- * are minted against this path.
+ * This is the canonical (and only) post detail renderer.
  */
 export default function PostDetailPage() {
   const params = useParams();
