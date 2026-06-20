@@ -440,12 +440,12 @@ struct RootView: View {
         .adaptiveOnChange(of: router.sceneTitle) { _, title in
             UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
-                .first?.title = "Meeshy — \(title)"
+                .first?.title = String(format: String(localized: "root.scene_title_format", defaultValue: "Meeshy — %@", bundle: .main), title)
         }
         .onAppear {
             UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
-                .first?.title = "Meeshy — Conversations"
+                .first?.title = String(localized: "root.scene_title_default", defaultValue: "Meeshy — Conversations", bundle: .main)
         }
         .task {
             // Connect Socket.IO early so the backend knows we're online
@@ -1475,6 +1475,7 @@ struct RootView: View {
                     // Badge
                     if !showMenu && notificationManager.unreadCount > 0 {
                         NotificationBadge(count: notificationManager.unreadCount)
+                            .accessibilityLabel(String(format: String(localized: "a11y.notifications.unread_count", defaultValue: "%d notifications non lues", bundle: .main), notificationManager.unreadCount))
                     }
                 }
             }
@@ -1506,7 +1507,7 @@ struct RootView: View {
 
             // Menu items configuration
             let menuItemSize: CGFloat = 46
-            let menuSpacing: CGFloat = 12
+            let menuSpacing: CGFloat = MeeshySpacing.md
 
             // Determine if menu should expand up or down
             let expandDown = pos.y < 0.5
@@ -1518,12 +1519,12 @@ struct RootView: View {
             // Menu items — boutons d'action. Le profil n'a PAS d'item dédié : il
             // s'ouvre via le 2e tap (ou le long-press) sur le bouton avatar. Le
             // DERNIER bouton est la roue dentée (→ préférences générales).
-            let menuItems: [(icon: String, color: String, action: () -> Void)] = [
-                ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.links) }),
-                ("bell.fill", "FF6B6B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.notifications) }),
-                ("person.2.fill", "6366F1", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.contacts()) }),
-                ("person.3.fill", "2ECC71", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) }),
-                ("gearshape.fill", "64748B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.settings) })
+            let menuItems: [(icon: String, color: String, label: String, action: () -> Void)] = [
+                ("link.badge.plus", "F8B500", String(localized: "menu.links", defaultValue: "Liens", bundle: .main), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.links) }),
+                ("bell.fill", "FF6B6B", String(localized: "menu.notifications", defaultValue: "Notifications", bundle: .main), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.notifications) }),
+                ("person.2.fill", "6366F1", String(localized: "menu.contacts", defaultValue: "Contacts", bundle: .main), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.contacts()) }),
+                ("person.3.fill", "2ECC71", String(localized: "menu.communities", defaultValue: "Communautés", bundle: .main), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) }),
+                ("gearshape.fill", "64748B", String(localized: "menu.settings", defaultValue: "Réglages", bundle: .main), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.settings) })
             ]
 
             ForEach(Array(menuItems.enumerated()), id: \.offset) { index, item in
@@ -1534,15 +1535,20 @@ struct RootView: View {
                 let itemY = menuStartY + yOffset
 
                 // Special handling for notifications badge
-                if item.icon == "bell.fill" {
-                    ThemedActionButton(icon: item.icon, color: item.color, badge: notificationManager.unreadCount, action: item.action)
-                        .position(x: menuX, y: itemY)
-                        .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
-                } else {
-                    ThemedActionButton(icon: item.icon, color: item.color, action: item.action)
-                        .position(x: menuX, y: itemY)
-                        .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
+                Group {
+                    if item.icon == "bell.fill" {
+                        ThemedActionButton(icon: item.icon, color: item.color, badge: notificationManager.unreadCount, action: item.action)
+                    } else {
+                        ThemedActionButton(icon: item.icon, color: item.color, action: item.action)
+                    }
                 }
+                .position(x: menuX, y: itemY)
+                .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
+                .accessibilityLabel(item.label)
+                .accessibilityValue(item.icon == "bell.fill" && notificationManager.unreadCount > 0
+                    ? String(format: String(localized: "a11y.notifications.unread_count", defaultValue: "%d notifications non lues", bundle: .main), notificationManager.unreadCount)
+                    : "")
+                .meeshyTapTarget()
             }
         }
         .ignoresSafeArea()

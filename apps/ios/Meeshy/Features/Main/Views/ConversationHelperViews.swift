@@ -115,7 +115,9 @@ struct ThemedBackButton: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: compactMode)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showsPill)
         }
-        .accessibilityLabel(showsPill ? "Retour, \(unreadCount) messages non lus dans les autres conversations" : "Retour")
+        .accessibilityLabel(showsPill
+            ? String(format: String(localized: "accessibility.back_with_unread", defaultValue: "Retour, %d messages non lus dans les autres conversations", bundle: .main), unreadCount)
+            : String(localized: "accessibility.back", defaultValue: "Retour", bundle: .main))
     }
 }
 
@@ -153,6 +155,8 @@ struct ThemedAvatarButton: View {
             .shadow(color: Color(hex: color).opacity(isExpanded ? 0.6 : 0.4), radius: isExpanded ? 12 : 8, y: 3)
             .scaleEffect(isPressed ? 0.9 : (isExpanded ? 1.1 : 1))
         }
+        .accessibilityLabel(String(format: String(localized: "accessibility.user_profile_of", defaultValue: "Profil de %@", bundle: .main), name))
+        .accessibilityHint(String(localized: "accessibility.user_profile.hint", defaultValue: "Ouvre les détails du profil", bundle: .main))
     }
 }
 

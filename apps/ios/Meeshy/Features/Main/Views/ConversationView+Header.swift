@@ -242,6 +242,7 @@ private struct HeaderCallButtonsView: View {
             }
         } label: {
             callGlyph("phone.fill")
+                .meeshyTapTarget()
         }
         .accessibilityLabel(String(localized: "call.start.menu", defaultValue: "Appeler", bundle: .main))
         .accessibilityHint(String(localized: "call.start.menu.hint", defaultValue: "Choisir un appel vocal ou vidéo", bundle: .main))

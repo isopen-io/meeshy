@@ -1547,6 +1547,7 @@ struct ConversationView: View {
         } label: {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 13, weight: .semibold))
+                .meeshyTapTarget()
                 .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
