@@ -117,6 +117,10 @@ final class CallManager: ObservableObject {
     @Published private(set) var currentCallId: String?
     @Published private(set) var connectionQuality: PeerConnectionState = .new
     @Published var displayMode: CallDisplayMode = .fullScreen
+    /// Une fenêtre PiP SYSTÈME (AVPictureInPicture) est affichée. Orthogonal à
+    /// `displayMode` : tant qu'il est vrai, la `FloatingCallPillView` in-app est
+    /// masquée pour éviter le doublon visuel au retour au premier plan.
+    @Published private(set) var isSystemPiPActive: Bool = false
     @Published private(set) var activeAudioEffect: AudioEffectConfig?
     @Published private(set) var hasLocalVideoTrack = false
     @Published private(set) var hasRemoteVideoTrack = false
@@ -1181,6 +1185,56 @@ final class CallManager: ObservableObject {
         Logger.calls.info("Call ended by local: \(callId ?? "(pre-ACK)")")
     }
 
+    // MARK: - System Picture-in-Picture
+
+    #if canImport(WebRTC)
+    private let pip: PiPCallProviding = PiPCallController.shared
+    #else
+    private let pip: PiPCallProviding = NoOpPiPController()
+    #endif
+    /// `true` entre un tap « revenir » (restore) et la fermeture effective du PiP,
+    /// pour distinguer ce chemin de la croix système (qui retombe sur la pilule).
+    private var pipRestoring = false
+
+    /// Le PiP vidéo système peut s'activer : appel vidéo, track distant présent,
+    /// caméra distante allumée, sur un appareil compatible (≠ iOS-app-on-Mac).
+    var canActivateSystemPiP: Bool {
+        isVideoEnabled && hasRemoteVideoTrack && isRemoteVideoEnabled && pip.isPiPSupported
+    }
+
+    /// Configure le PiP système pour cet appel (appelé par la vue avec la
+    /// `sourceView` vidéo inline). No-op si l'appel n'est pas éligible.
+    func attachSystemPiP(sourceView: UIView) {
+        guard canActivateSystemPiP, let track = remoteVideoTrack else { return }
+        pip.configure(
+            sourceView: sourceView, remoteTrack: track as AnyObject, autoStart: true,
+            onStart: { [weak self] in self?.isSystemPiPActive = true },
+            onRestoreUI: { [weak self] in
+                self?.pipRestoring = true
+                self?.displayMode = .fullScreen
+            },
+            onStop: { [weak self] in
+                guard let self else { return }
+                self.isSystemPiPActive = false
+                if self.pipRestoring {
+                    self.pipRestoring = false   // restore : déjà repassé en .fullScreen
+                } else {
+                    self.displayMode = .pip     // croix système → la pilule reprend
+                }
+            }
+        )
+    }
+
+    /// Démarre le PiP manuellement (bouton). No-op si impossible/déjà actif.
+    func startSystemPiP() { pip.start() }
+
+    /// Libère le PiP (fin d'appel / éligibilité perdue).
+    func detachSystemPiP() {
+        pip.tearDown()
+        isSystemPiPActive = false
+        pipRestoring = false
+    }
+
     // MARK: - Media Controls
 
     func toggleMute() {
@@ -1880,6 +1934,7 @@ final class CallManager: ObservableObject {
         isRemoteVideoEnabled = true
         videoSurvivalController.reset()
         isVideoSuspended = false
+        detachSystemPiP()
         webRTCService.close()
         deactivateAudioSession()
         callState = .ended(reason: reason)

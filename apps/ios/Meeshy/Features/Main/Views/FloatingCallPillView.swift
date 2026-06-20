@@ -56,7 +56,7 @@ struct FloatingCallPillView: View {
     private let pillHeight: CGFloat = 64
 
     var body: some View {
-        if callManager.displayMode == .pip && callManager.callState.isActive {
+        if callManager.displayMode == .pip && callManager.callState.isActive && !callManager.isSystemPiPActive {
             pillContent
                 // Pilule verre + contrôles blancs : on épingle le verre en
                 // sombre pour rester lisible quel que soit le mode système.

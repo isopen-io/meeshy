@@ -10,18 +10,16 @@
 //  les décisions produit (quand démarrer, que faire au restore/stop) passent
 //  par des callbacks injectés.
 //
-//  Gates de compatibilité : `isPictureInPictureSupported()` ET `!isiOSAppOnMac`
-//  (le PiP `ContentSource`+`AVSampleBufferDisplayLayer` est cassé sur Mac).
+//  Le protocole `PiPCallProviding` est WebRTC-free (UIView + AnyObject) pour que
+//  `CallManager`/`CallView` l'utilisent sans `#if`. L'implémentation et le choix
+//  du singleton sont gardés `#if canImport(WebRTC)` ; sinon `NoOpPiPController`.
 //
 
 import AVKit
 import UIKit
 import os
 
-#if canImport(WebRTC)
-@preconcurrency import WebRTC
-
-// MARK: - Protocol
+// MARK: - Protocol (WebRTC-free, toujours compilé)
 
 @MainActor
 protocol PiPCallProviding: AnyObject {
@@ -30,23 +28,38 @@ protocol PiPCallProviding: AnyObject {
     /// Une fenêtre PiP système est actuellement affichée.
     var isPiPActive: Bool { get }
 
-    /// Prépare le PiP pour un appel vidéo donné. `sourceView` = la vue vidéo
-    /// inline à l'écran (d'où le PiP « émerge »). `onRestoreUI` est appelé quand
-    /// l'utilisateur tape pour revenir ; `onStop` quand le PiP se ferme.
+    /// Prépare le PiP. `sourceView` = la vue vidéo inline à l'écran (d'où le PiP
+    /// « émerge »). `remoteTrack` est un `RTCVideoTrack` (typé `AnyObject` pour
+    /// garder le protocole WebRTC-free). `onStart` est appelé quand le PiP
+    /// démarre, `onRestoreUI` quand l'utilisateur tape pour revenir, `onStop`
+    /// quand il se ferme.
     func configure(sourceView: UIView,
-                   remoteTrack: RTCVideoTrack,
+                   remoteTrack: AnyObject,
                    autoStart: Bool,
+                   onStart: @escaping @MainActor () -> Void,
                    onRestoreUI: @escaping @MainActor () -> Void,
                    onStop: @escaping @MainActor () -> Void)
-    /// Démarre le PiP manuellement (bouton). No-op si impossible/déjà actif.
     func start()
-    /// Arrête le PiP (revient plein écran).
     func stop()
-    /// Détache le renderer et libère le controller (fin d'appel).
     func tearDown()
 }
 
-// MARK: - Controller
+/// Repli no-op : WebRTC absent (CI) ou PiP non supporté.
+@MainActor
+final class NoOpPiPController: PiPCallProviding {
+    var isPiPSupported: Bool { false }
+    var isPiPActive: Bool { false }
+    func configure(sourceView: UIView, remoteTrack: AnyObject, autoStart: Bool,
+                   onStart: @escaping @MainActor () -> Void,
+                   onRestoreUI: @escaping @MainActor () -> Void,
+                   onStop: @escaping @MainActor () -> Void) {}
+    func start() {}
+    func stop() {}
+    func tearDown() {}
+}
+
+#if canImport(WebRTC)
+@preconcurrency import WebRTC
 
 @MainActor
 final class PiPCallController: NSObject, PiPCallProviding {
@@ -61,6 +74,7 @@ final class PiPCallController: NSObject, PiPCallProviding {
     private let surfaceView = PiPVideoSampleBufferView(frame: CGRect(x: 0, y: 0, width: 160, height: 240))
     private var renderer: PiPVideoRenderer?
     private weak var remoteTrack: RTCVideoTrack?
+    private var onStart: (@MainActor () -> Void)?
     private var onRestoreUI: (@MainActor () -> Void)?
     private var onStop: (@MainActor () -> Void)?
 
@@ -73,13 +87,15 @@ final class PiPCallController: NSObject, PiPCallProviding {
     // MARK: PiPCallProviding
 
     func configure(sourceView: UIView,
-                   remoteTrack: RTCVideoTrack,
+                   remoteTrack: AnyObject,
                    autoStart: Bool,
+                   onStart: @escaping @MainActor () -> Void,
                    onRestoreUI: @escaping @MainActor () -> Void,
                    onStop: @escaping @MainActor () -> Void) {
-        guard isPiPSupported else { return }
+        guard isPiPSupported, let track = remoteTrack as? RTCVideoTrack else { return }
         tearDown()
-        self.remoteTrack = remoteTrack
+        self.remoteTrack = track
+        self.onStart = onStart
         self.onRestoreUI = onRestoreUI
         self.onStop = onStop
 
@@ -116,6 +132,7 @@ final class PiPCallController: NSObject, PiPCallProviding {
         pipController = nil
         videoCallViewController = nil
         remoteTrack = nil
+        onStart = nil
         onRestoreUI = nil
         onStop = nil
     }
@@ -144,9 +161,10 @@ extension PiPCallController: AVPictureInPictureControllerDelegate {
 
     func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
         attachRenderer()
+        onStart?()
     }
 
-    /// Tap « revenir » (flèche) → on restaure le plein écran (le delta vs le X).
+    /// Tap « revenir » (flèche) → restaurer le plein écran (le delta vs le X).
     func pictureInPictureController(
         _ controller: AVPictureInPictureController,
         restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
@@ -155,7 +173,7 @@ extension PiPCallController: AVPictureInPictureControllerDelegate {
         completionHandler(true)
     }
 
-    /// Fermeture (X système OU restore) → détache le renderer et notifie.
+    /// Fermeture (X système OU après restore) → détache le renderer et notifie.
     func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
         detachRenderer()
         onStop?()
