@@ -12,6 +12,7 @@
 		0135B9488688ACDA9A26DB98 /* ReplyThreadLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6004F67A016838BA122ED6E /* ReplyThreadLoaderTests.swift */; };
 		031EA7F524ECB3B634B6CFAD /* FeedViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7789A854759F389975CB9906 /* FeedViewModelTests.swift */; };
 		B1405EFA6179220F5EBF24B4 /* MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17BCBE9DBF14D8BB0E17EC99 /* MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift */; };
+		LOCC0001000100010001BLD /* MeeshyTests/Unit/LocalizationConsistencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = LOCC0001000100010001REF /* MeeshyTests/Unit/LocalizationConsistencyTests.swift */; };
 		0CA1A0DE0000000000000001 /* ReelsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA1A0DE0000000000000002 /* ReelsViewModelTests.swift */; };
 		0CA1B0DE0000000000000003 /* VideoEmbedModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA1B0DE0000000000000004 /* VideoEmbedModelTests.swift */; };
 		044D99CB3F85BD65437758B8 /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71C9C50ECED369B628670C7 /* ThreadView.swift */; };
@@ -708,6 +709,7 @@
 		75BB3BB6E01A899FDB29E8A8 /* ConversationCommandHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationCommandHandler.swift; sourceTree = "<group>"; };
 		7789A854759F389975CB9906 /* FeedViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeedViewModelTests.swift; sourceTree = "<group>"; };
 		17BCBE9DBF14D8BB0E17EC99 /* MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift; sourceTree = SOURCE_ROOT; };
+		LOCC0001000100010001REF /* MeeshyTests/Unit/LocalizationConsistencyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/LocalizationConsistencyTests.swift; sourceTree = SOURCE_ROOT; };
 		0CA1A0DE0000000000000002 /* ReelsViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReelsViewModelTests.swift; sourceTree = "<group>"; };
 		0CA1B0DE0000000000000004 /* VideoEmbedModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoEmbedModelTests.swift; sourceTree = "<group>"; };
 		7A27F2AB5AC64E0CA5724730 /* MultiAttachmentSendPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiAttachmentSendPlanner.swift; sourceTree = "<group>"; };
@@ -1770,6 +1772,7 @@
 				931AA0F3F0BB4DA4A5292189 /* MeeshyTests/Unit/Views/Bubble/MessageOverlayLayoutEngineTests.swift */,
 				68F3549575D94405B9476C73 /* MeeshyTests/Unit/Views/Bubble/MessageFrameTrackerTests.swift */,
 				17BCBE9DBF14D8BB0E17EC99 /* MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift */,
+				LOCC0001000100010001REF /* MeeshyTests/Unit/LocalizationConsistencyTests.swift */,
 				E101FEA7BBFB4FDC8474B10C /* MeeshyTests/Unit/Views/Bubble/MessageRowEnvelopeTests.swift */,
 				BBLE0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleEquatableTests.swift */,
 				BBLI0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/ThemedMessageBubbleEquatableTests.swift */,
@@ -2792,6 +2795,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				LOCC0001000100010001BLD /* MeeshyTests/Unit/LocalizationConsistencyTests.swift in Sources */,
 				MOCK0001000100010001001 /* MockMessageSocket.swift in Sources */,
 				MOCK0002000200020002001 /* MockSocialSocket.swift in Sources */,
 				MOCK0003000300030003001 /* MockAuthManager.swift in Sources */,
