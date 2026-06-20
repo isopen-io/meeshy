@@ -700,6 +700,7 @@ public struct StoryComposerView: View {
                 .frame(maxWidth: .infinity)
 
             HStack(spacing: 8) {
+                visibilityMenu
                 previewButton
                 publishButton
                 overflowMenu
@@ -775,6 +776,31 @@ public struct StoryComposerView: View {
         .disabled(isPublishing)
     }
 
+    private var visibilityMenu: some View {
+        Menu {
+            ForEach(PostVisibility.composerSelectableCases, id: \.rawValue) { mode in
+                Button {
+                    visibility = mode.rawValue
+                } label: {
+                    Label(mode.label, systemImage: visibility == mode.rawValue ? "checkmark" : mode.icon)
+                }
+            }
+        } label: {
+            let current = PostVisibility(rawValue: visibility) ?? .public
+            HStack(spacing: 4) {
+                Image(systemName: current.icon)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(current.label)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .adaptiveGlass(in: Capsule(), tint: .white.opacity(0.18))
+        }
+    }
+
     private var overflowMenu: some View {
         Menu {
             // Slide tools
@@ -801,19 +827,6 @@ public struct StoryComposerView: View {
 
             Button { saveDraft() } label: {
                 Label(String(localized: "story.composer.saveDraft", defaultValue: "Sauvegarder le brouillon", bundle: .module), systemImage: "square.and.arrow.down")
-            }
-            Menu {
-                Button { visibility = "PUBLIC" } label: {
-                    Label(String(localized: "story.composer.visibility.public", defaultValue: "Public", bundle: .module), systemImage: visibility == "PUBLIC" ? "checkmark" : "globe")
-                }
-                Button { visibility = "FRIENDS" } label: {
-                    Label(String(localized: "story.composer.visibility.friends", defaultValue: "Amis", bundle: .module), systemImage: visibility == "FRIENDS" ? "checkmark" : "person.2")
-                }
-                Button { visibility = "PRIVATE" } label: {
-                    Label(String(localized: "story.composer.visibility.private", defaultValue: "Privé", bundle: .module), systemImage: visibility == "PRIVATE" ? "checkmark" : "lock")
-                }
-            } label: {
-                Label(String(localized: "story.composer.visibility", defaultValue: "Visibilité", bundle: .module), systemImage: "eye")
             }
             Divider()
             Button(role: .destructive) {
