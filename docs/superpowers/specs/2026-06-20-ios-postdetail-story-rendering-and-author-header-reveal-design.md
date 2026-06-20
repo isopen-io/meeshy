@@ -46,11 +46,9 @@ Deux demandes utilisateur, traitées ensemble car elles touchent la même page :
 | Audience des stats dans le reveal | **Auteur uniquement** (miroir exact de `authorReachLine`). Non-auteur → ligne 2 = juste `@pseudo` (ou rien si pas de pseudo). |
 | Lecture story en Détail | **Inline avec audio actif** (`mute: false`). Le canvas joue en place. |
 | Tap sur le canvas | **Aucun** (supprimé suite à la revue — voir « Revue challengeante »). La lecture inline avec audio suffit ; le tap→plein écran nécessiterait de synthétiser un `StoryGroup` + scoper un `StoryViewModel`, hors périmètre. |
-| Légende texte au-dessus du canvas | **Masquée pour les stories** (audit pro : le canvas porte déjà le texte → anti double-texte). Header auteur conservé. |
-| Détection story (gate) | **`post.isStory` seul** (SSoT serveur). Le disjoint `storyEffects != nil` est retiré (un STATUS peut porter `storyEffects` → faux positif). |
+| Légende texte au-dessus du canvas | **Conservée** (`textZone` : header auteur + légende), comme le fait `repostEmbed`. |
 | Où vivent les nouveaux champs story | **`FeedPost`** (SDK), champs **optionnels** → rollout-safe + round-trip cache. |
 | Correctif gateway | **Aucun** — `GET /posts/:id` renvoie déjà `storyEffects`/`audioUrl` (vérifié — voir « Revue challengeante »). |
-| Audit pro pré-implémentation | 3 revues parallèles → **GO-WITH-CHANGES** : sonde de visibilité en espace nommé + viewport mesuré (pas `UIScreen`), header dégraissé + Dynamic-Type, gate `isStory`, légende masquée. Détail dans le plan §« Pro-review outcomes ». |
 
 ## Architecture
 

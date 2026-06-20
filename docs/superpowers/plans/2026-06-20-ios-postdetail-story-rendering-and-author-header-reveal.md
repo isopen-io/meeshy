@@ -486,18 +486,14 @@ git commit -m "feat(ios): PostReachFormatter + StoryCanvasVisibility pure helper
 
 In `PostDetailView.swift`, DELETE the `compactCount` helper (lines 235-240) and replace its two call sites in `authorReachLine` (lines 812, 815) `Self.compactCount(...)` → `PostReachFormatter.compact(...)`. (This removes the soon-unused private func to avoid a warning-as-failure build.)
 
-- [ ] **Step 2: Remove the language-flags strip from the header reveal**
-
-PRO-REVIEW FIX (H2 overcrowding): `authorRevealView` currently also packs a trailing language-flags + `translate` strip (lines 692-733) into the SAME `HStack` as the author chip. In a 44pt collapsed header (~263pt usable, back button + ⋯ on the sides), adding pseudo+stats next to that strip clips, especially at large Dynamic Type. The flags/translate remain available in the inline `textZone`. DELETE the entire `let flags = buildAvailableFlags()` / `if !flags.isEmpty ...` block (lines 692-733) from `authorRevealView`, leaving only the author-chip `Button { … }`.
-
-- [ ] **Step 3: Build to confirm `authorReachLine` + reveal still compile**
+- [ ] **Step 2: Build to confirm `authorReachLine` still compiles**
 
 Run: `./apps/ios/meeshy.sh build`
-Expected: BUILD SUCCEEDED (inline reach line unchanged visually; reveal now author-chip only).
+Expected: BUILD SUCCEEDED (inline reach line unchanged visually).
 
-- [ ] **Step 4: Add the reveal secondary line (Dynamic-Type aware)**
+- [ ] **Step 3: Add the reveal secondary line**
 
-In `authorRevealView(_:)`, replace the `VStack(alignment: .leading, spacing: 1)` block (lines 675-683) — currently name + relative time — with name + the shared reach line. Fonts stay Dynamic-Type-aware (`.caption2`, NOT fixed point sizes) with `.minimumScaleFactor` + `.lineLimit(1)` so the narrow header never clips:
+In `authorRevealView(_:)`, replace the `VStack(alignment: .leading, spacing: 1)` block (lines 675-683) — currently name + relative time — with name + the shared reach line:
 
 ```swift
                     VStack(alignment: .leading, spacing: 1) {
@@ -524,17 +520,15 @@ In `authorRevealView(_:)`, replace the `VStack(alignment: .leading, spacing: 1)`
                                         Text("·").font(.caption2).foregroundColor(theme.textMuted)
                                     }
                                     HStack(spacing: 3) {
-                                        Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
-                                        Text(views).font(.caption2.weight(.medium))
+                                        Image(systemName: "eye.fill").font(.system(size: 9, weight: .semibold))
+                                        Text(views).font(.system(size: 10, weight: .medium))
                                         Text("·").font(.caption2)
-                                        Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
-                                        Text(impressions).font(.caption2.weight(.medium))
+                                        Image(systemName: "chart.bar.fill").font(.system(size: 9, weight: .semibold))
+                                        Text(impressions).font(.system(size: 10, weight: .medium))
                                     }
                                     .foregroundColor(theme.textMuted)
                                 }
                             }
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
                             .accessibilityElement(children: .ignore)
                             .accessibilityLabel(String(localized: "feed.post.reach", defaultValue: "Vues et impressions", bundle: .main))
                             .accessibilityValue("\(post.postOpenCount) · \(post.impressionCount)")
@@ -542,13 +536,13 @@ In `authorRevealView(_:)`, replace the `VStack(alignment: .leading, spacing: 1)`
                     }
 ```
 
-- [ ] **Step 5: Build + run to verify the reveal**
+- [ ] **Step 4: Build + run to verify the reveal**
 
 Run: `./apps/ios/meeshy.sh build`
 Expected: BUILD SUCCEEDED.
-Then `./apps/ios/meeshy.sh run`, open a post detail you authored, scroll until the author zone leaves the screen, and confirm the header center shows **avatar + name** (line 1) and **@pseudo · 👁 N · 📊 N** (line 2), no language flags, no clipping. Open someone else's post → line 2 shows `@pseudo` only. Re-run at `accessibilityExtraExtraExtraLarge` (Settings → Accessibility → Larger Text) and confirm the line scales/truncates instead of clipping.
+Then `./apps/ios/meeshy.sh run`, open a post detail you authored, scroll until the author zone leaves the screen, and confirm the header center shows **avatar + name** (line 1) and **@pseudo · 👁 N · 📊 N** (line 2). Open someone else's post → line 2 shows `@pseudo` only.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add apps/ios/Meeshy/Features/Main/Views/PostDetailView.swift
@@ -565,17 +559,13 @@ git commit -m "feat(ios): collapsed header reveal shows @pseudo + author stats"
 **Interfaces:**
 - Consumes: `StoryReaderRepresentable(feedPost:preferredContentLanguages:mute:isPaused:)` (Task 3), `StoryCanvasVisibility.isVisible(...)` (Task 4), `FeedPost.isStory`/`.storyEffects` (Task 1), `CallManager.shared.$callState` (`callState.isActive: Bool`, existing).
 
-- [ ] **Step 1: Add pause state + preference keys**
+- [ ] **Step 1: Add pause state + a frame preference key**
 
 In `PostDetailView.swift`, near the other `@State` (after line 28 `headerScrollOffset`), add:
 
 ```swift
     @State private var storyCanvasVisible: Bool = true
     @State private var isCallActive: Bool = false
-    /// ScrollView viewport height, measured (NOT UIScreen — wrong on iPad
-    /// multitasking / Stage Manager / iOS-app-on-Mac). Used to decide whether
-    /// the story canvas is on-screen so its audio pauses when scrolled away.
-    @State private var scrollViewportHeight: CGFloat = 0
 ```
 
 At the BOTTOM of the file (top level, after the `struct PostDetailView` closing brace, alongside other file-private types), add:
@@ -585,70 +575,42 @@ private struct StoryCanvasFrameKey: PreferenceKey {
     static var defaultValue: CGRect = .zero
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
 }
-
-private struct ScrollViewportHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
 ```
 
 - [ ] **Step 2: Add the `storyCanvasSection` builder**
-
-PRO-REVIEW FIX (H1/M3): the canvas frame is read in the EXISTING named scroll
-coordinate space (`Self.scrollSpace`, declared at `PostDetailView.swift:436`), where
-`0` = top of the scroll viewport — same space the existing sentinel uses. Visibility is
-tested against the MEASURED viewport height (Step 4), not `UIScreen`. A story with neither
-effects nor media falls back to an "unavailable" placeholder instead of an empty black box.
 
 In `PostDetailView`, near `detailMediaSection` (before line 1342), add:
 
 ```swift
     @ViewBuilder
     private func storyCanvasSection(_ post: FeedPost) -> some View {
-        if post.storyEffects == nil && !post.hasMedia {
-            // Defensive empty state (e.g. expired story with no resolvable assets).
-            HStack {
-                Image(systemName: "sparkles.rectangle.stack")
-                Text(String(localized: "feed.post.detail.story_unavailable",
-                            defaultValue: "Story indisponible", bundle: .main))
+        StoryReaderRepresentable(
+            feedPost: post,
+            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
+            mute: false,
+            isPaused: !storyCanvasVisible || isCallActive
+        )
+        .aspectRatio(9.0 / 16.0, contentMode: .fit)
+        .frame(maxWidth: 460)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: StoryCanvasFrameKey.self, value: geo.frame(in: .global))
             }
-            .font(.footnote)
-            .foregroundColor(theme.textMuted)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 32)
-        } else {
-            StoryReaderRepresentable(
-                feedPost: post,
-                preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
-                mute: false,
-                isPaused: !storyCanvasVisible || isCallActive
+        )
+        .onPreferenceChange(StoryCanvasFrameKey.self) { frame in
+            storyCanvasVisible = StoryCanvasVisibility.isVisible(
+                canvasFrame: frame,
+                viewportHeight: UIScreen.main.bounds.height
             )
-            .aspectRatio(9.0 / 16.0, contentMode: .fit)
-            .frame(maxWidth: 460)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .background(
-                GeometryReader { geo in
-                    Color.clear.preference(key: StoryCanvasFrameKey.self,
-                                           value: geo.frame(in: .named(Self.scrollSpace)))
-                }
-            )
-            .onPreferenceChange(StoryCanvasFrameKey.self) { frame in
-                // viewport height 0 before first measurement → treat as visible
-                let h = scrollViewportHeight > 0 ? scrollViewportHeight : frame.maxY + 1
-                storyCanvasVisible = StoryCanvasVisibility.isVisible(canvasFrame: frame, viewportHeight: h)
-            }
         }
     }
 ```
 
 - [ ] **Step 3: Gate ZONE 2 on story vs media**
-
-PRO-REVIEW FIX (M1): gate on `post.isStory` ALONE (server single source of truth).
-The `|| storyEffects != nil` disjunct is dropped — the gateway sets `storyEffects` without
-gating on type, so a STATUS/mood post could carry it and would wrongly render a 9:16 canvas.
 
 In `postDetailContent(_:)`, replace the ZONE 2 block (lines 336-341):
 
@@ -665,7 +627,7 @@ with:
 
 ```swift
         // ZONE 2: Story canvas (inline reader) OR standard media
-        if post.isStory {
+        if post.isStory || post.storyEffects != nil {
             storyCanvasSection(post)
         } else if post.hasMedia {
             detailMediaSection(post.media)
@@ -674,26 +636,9 @@ with:
         }
 ```
 
-- [ ] **Step 4: Suppress the duplicate caption for stories + measure viewport + drive `isCallActive`**
+- [ ] **Step 4: Drive `isCallActive` from the call state**
 
-(4a) PRO-REVIEW FIX (H3, user decision): for a story the caption text is already baked into
-the canvas overlays, so hide the plain `post.content` body in `textZone`. In `textZone(_:)`,
-wrap the content-body block (the `let truncation = textTruncation` … through the embedded-video
-`if let embeddedVideo { … }`, lines ~920-992) in `if !post.isStory { … }`. Keep the author-header
-`HStack` (avatar/name/reach/flags, lines 832-915) ALWAYS visible.
-
-(4b) Measure the scroll viewport height. On the `ScrollView` (line 418), add:
-
-```swift
-                    .background(
-                        GeometryReader { geo in
-                            Color.clear.preference(key: ScrollViewportHeightKey.self, value: geo.size.height)
-                        }
-                    )
-                    .onPreferenceChange(ScrollViewportHeightKey.self) { scrollViewportHeight = $0 }
-```
-
-(4c) Drive `isCallActive`. After the existing `.onAppear` on the `ScrollViewReader` (lines 450-459), add:
+In `body`, on the `ScrollViewReader { … }` (or the outer `VStack`), add a call-state subscription. Attach after the existing `.onAppear` on the `ScrollViewReader` (line 450-459):
 
 ```swift
                 .onReceive(CallManager.shared.$callState) { state in
@@ -701,7 +646,7 @@ wrap the content-body block (the `let truncation = textTruncation` … through t
                 }
 ```
 
-> NOTE for implementer: `CallManager.shared.callState.isActive` is the verified accessor (used at `FloatingCallPillView.swift:59`, `ConversationView+Header.swift:192`). `CallManager` is in the `Meeshy` app module (same target — no import). `$callState` is `@MainActor`-published, so `.onReceive` on the view is concurrency-safe and emits the current value on subscribe (initializes `isCallActive`).
+> NOTE for implementer: confirm `CallManager.shared.callState.isActive` is the right accessor (used at `FloatingCallPillView.swift:59`, `ConversationView+Header.swift:192`). If `CallManager` is not already imported in this file, it is in the `Meeshy` app module (no import needed — same target).
 
 - [ ] **Step 5: Build**
 
@@ -711,10 +656,10 @@ Expected: BUILD SUCCEEDED.
 - [ ] **Step 6: Run + manual verification**
 
 Run: `./apps/ios/meeshy.sh run`. Then:
-1. Open a STORY in the detail page (e.g. tap a story-repost's author chip, which pushes `.postDetail(repost.id)`, or via a `/story/<id>` deep link that falls back to detail). Confirm the 9:16 canvas plays inline **with audio**, the author **header** sits above it, and the plain caption is **NOT** duplicated above the canvas (text lives only in the canvas).
+1. Open a STORY in the detail page (e.g. tap a story-repost's author chip, which pushes `.postDetail(repost.id)`, or via a `/story/<id>` deep link that falls back to detail). Confirm the 9:16 canvas plays inline **with audio**, the author header + caption sit above it.
 2. Scroll down to the comments until the canvas is fully off-screen → audio STOPS. Scroll back up → it resumes.
 3. (If feasible) start/receive a call while a story detail is open → canvas pauses.
-4. Open a NORMAL post with images → still renders `detailMediaSection` (no regression). Open a STATUS/mood post → it does NOT render a story canvas.
+4. Open a NORMAL post with images → still renders `detailMediaSection` (no regression).
 
 - [ ] **Step 7: Commit**
 
@@ -747,18 +692,8 @@ Run: `git diff --name-only main...HEAD -- services/` → expected: empty (no gat
 
 ---
 
-## Pro-review outcomes (2026-06-20)
-
-Three parallel expert reviews (performance/SOTA/compat, integration blast-radius, functionality). Verdict: **GO-WITH-CHANGES**, all folded into the tasks above. Confirmed SAFE (verified against code, not assumed): cache backward-compat (`decodeIfPresent`), socket handlers preserve `storyEffects` (full `toFeedPost`), optimistic edit preserves it (snapshot copy), gate-vs-repost safe, Prisme Linguistique reaches both canvas text AND audio, Swift 6 isolation safe (`CallManager` @MainActor + `onReceive` on main), iOS 16 preference approach is correct SOTA (scroll-visibility APIs are iOS 18+), `onPlaybackTime` correctly left unwired (anti-thermal), `setPaused(true)` stops display-link AND audio. Changes applied: visibility probe uses the named scroll space + measured viewport (Task 6 S2/S4a/S4b), header de-cluttered + Dynamic-Type (Task 5 S2/S4), gate tightened to `isStory` (Task 6 S3), caption suppressed for stories (Task 6 S4a), empty-state guard (Task 6 S2).
-
-## User decisions (2026-06-20)
-
-- **Audio on open: KEEP autoplay-with-sound** (`mute: false`). The user accepts that this ducks third-party audio (`.playback`+`.duckOthers`, same path as the fullscreen viewer) and plays through the silent switch. Off-screen/call pausing (Task 6) still applies so it never plays for content the user can't see.
-- **Story caption: HIDE** the plain `post.content` body for stories (Task 6 S4a) — the canvas already renders the text.
-
 ## Notes / Out of Scope
 
 - `compactCount` remains duplicated in `ReelFeedCard.swift` and `FeedPostCard.swift` — NOT unified here (separate views, out of scope). A future cleanup could route all three through `PostReachFormatter.compact`.
 - Tap → fullscreen `StoryViewer` from detail is OUT (requires synthesizing a `StoryGroup` + `StoryViewModel`). The inline reader with audio satisfies the requirement.
-- **`PostRecord` (GRDB) does not carry `storyEffects`** (it already has `audioUrl`). Review flagged this, but NO current path reconstructs a `FeedPost` from `PostRecord` (the detail reads `CacheCoordinator.feed`, which DOES carry it via Task 1). So this is NOT a live bug — left as an optional future-hardening follow-up (`storyEffectsJson: Data?` on `PostRecord`) if an offline-from-GRDB rebuild path is ever added.
-- **Expired-story deep link**: a 24h-expired story opened via `/story/<id>` fallback has dead CDN URLs; the Step-2 empty guard only covers "no effects AND no media". Detecting expiry needs async media resolution — deeper, out of scope. Documented limitation.
+- `AVAudioSession` policy: if inline playback interrupts the user's other audio surprisingly, align the session category with the `StoryViewer`'s policy (verify at run, Task 6 Step 6).
