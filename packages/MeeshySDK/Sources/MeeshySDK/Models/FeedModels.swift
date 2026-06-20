@@ -463,6 +463,14 @@ public struct FeedPost: Identifiable, Sendable {
     /// embedded-video façade destination. Backward-compatible by construction.
     public var trackedLinkMap: [String: String] = [:]
 
+    /// Story canvas payload (`StoryEffects`) when this post is a story. `nil`
+    /// for normal posts. Mirrors `RepostContent.storyEffects`. Carried on the
+    /// domain model (not just the API model) so the post-detail story canvas
+    /// survives the `CacheCoordinator.feed` round-trip.
+    public var storyEffects: StoryEffects? = nil
+    /// Legacy voice-note audio URL for story/status posts. `nil` for normal posts.
+    public var audioUrl: String? = nil
+
     public var hasMedia: Bool { !media.isEmpty }
     public var mediaUrl: String? { media.first?.url }
     public var isTranslated: Bool { translatedContent != nil }
@@ -527,6 +535,7 @@ extension FeedPost: Codable {
         case id, author, authorId, authorUsername, authorAvatarURL, type, content, timestamp, likes, isLiked
         case comments, commentCount, repost, repostAuthor, isQuote, media
         case originalLanguage, translations, translatedContent
+        case storyEffects, audioUrl
     }
 
     public init(from decoder: Decoder) throws {
@@ -550,6 +559,8 @@ extension FeedPost: Codable {
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
         translations = try c.decodeIfPresent([String: PostTranslation].self, forKey: .translations)
         translatedContent = try c.decodeIfPresent(String.self, forKey: .translatedContent)
+        storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
+        audioUrl = try c.decodeIfPresent(String.self, forKey: .audioUrl)
         let stableId = authorId.isEmpty ? author : authorId
         authorColor = DynamicColorGenerator.colorForPost(authorId: stableId, type: type, originalLanguage: originalLanguage)
     }
@@ -575,6 +586,8 @@ extension FeedPost: Codable {
         try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
         try c.encodeIfPresent(translations, forKey: .translations)
         try c.encodeIfPresent(translatedContent, forKey: .translatedContent)
+        try c.encodeIfPresent(storyEffects, forKey: .storyEffects)
+        try c.encodeIfPresent(audioUrl, forKey: .audioUrl)
     }
 }
 
@@ -598,6 +611,10 @@ public extension FeedPost {
     var isReel: Bool {
         (type ?? "").uppercased() == "REEL"
     }
+
+    /// True when the server marks this post as a story (`type == "STORY"`).
+    /// Mirrors `isReel`; used by `PostDetailView` to render the inline canvas.
+    var isStory: Bool { (type ?? "").uppercased() == "STORY" }
 
     /// Media surfaced first when the reel opens full-screen: the first video,
     /// else the first audio, else the first image. `nil` when the post is not a
