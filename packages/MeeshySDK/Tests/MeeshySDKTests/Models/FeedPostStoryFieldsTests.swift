@@ -38,4 +38,54 @@ final class FeedPostStoryFieldsTests: XCTestCase {
         XCTAssertNil(decoded.storyEffects)
         XCTAssertNil(decoded.audioUrl)
     }
+
+    // Mirror of PostModelsTests.makeDecoder — handles ISO8601 with fractional seconds.
+    private func makeDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let str = try container.decode(String.self)
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = formatter.date(from: str) { return date }
+            formatter.formatOptions = [.withInternetDateTime]
+            if let date = formatter.date(from: str) { return date }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Bad date: \(str)")
+        }
+        return decoder
+    }
+
+    func test_toFeedPost_mapsTopLevelStoryEffectsAndAudio() throws {
+        let json = """
+        {
+          "id": "p1",
+          "content": "caption",
+          "type": "STORY",
+          "createdAt": "2026-06-20T10:00:00.000Z",
+          "author": { "id": "u1", "name": "Marie", "username": "marie" },
+          "storyEffects": {},
+          "audioUrl": "https://cdn/voice.mp3"
+        }
+        """
+        let api = try makeDecoder().decode(APIPost.self, from: Data(json.utf8))
+        let post = api.toFeedPost(preferredLanguages: ["fr"])
+        XCTAssertNotNil(post.storyEffects)
+        XCTAssertEqual(post.audioUrl, "https://cdn/voice.mp3")
+        XCTAssertTrue(post.isStory)
+    }
+
+    func test_storyItem_fromFeedPost_carriesCanvasFields() {
+        var post = FeedPost(author: "Marie", authorId: "u1", type: "STORY", content: "caption")
+        post.storyEffects = StoryEffects()
+        post.audioUrl = "https://cdn/voice.mp3"
+        post.media = [FeedMedia.image()]
+
+        let item = StoryItem(feedPost: post)
+
+        XCTAssertEqual(item.id, post.id)
+        XCTAssertEqual(item.content, "caption")
+        XCTAssertEqual(item.media.count, 1)
+        XCTAssertNotNil(item.storyEffects)
+        XCTAssertEqual(item.audioUrl, "https://cdn/voice.mp3")
+    }
 }

@@ -695,3 +695,24 @@ public enum ReelComposition {
         (!forcePlainPost && suggestsReel(mimeTypes: mimeTypes)) ? .reel : .post
     }
 }
+
+// MARK: - StoryItem bridge
+
+public extension StoryItem {
+    /// Synthesize a `StoryItem` from a story `FeedPost` (post-detail inline
+    /// rendering). Mirrors the `RepostContent` bridge used by
+    /// `StoryReaderRepresentable.init(repost:)`. `FeedPost` has no `expiresAt`,
+    /// which is irrelevant to in-place playback.
+    init(feedPost: FeedPost) {
+        self.init(
+            id: feedPost.id,
+            content: feedPost.content,
+            media: feedPost.media,
+            storyEffects: feedPost.storyEffects,
+            createdAt: feedPost.timestamp,
+            expiresAt: nil,
+            audioUrl: feedPost.audioUrl,
+            isViewed: false
+        )
+    }
+}

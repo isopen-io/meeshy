@@ -412,6 +412,10 @@ extension APIPost {
         feedPost.impressionCount = impressionCount ?? 0
         feedPost.qualifiedViewCount = qualifiedViewCount ?? 0
         feedPost.playCount = playCount ?? 0
+        // Story canvas + legacy audio (top-level story posts). The init keeps a
+        // stable signature, so we set these post-construction like the counters.
+        feedPost.storyEffects = storyEffects
+        feedPost.audioUrl = audioUrl
         // Outbound-link tracking map (runtime-only, like the counters above).
         feedPost.trackedLinkMap = trackedLinkMap
         return feedPost
