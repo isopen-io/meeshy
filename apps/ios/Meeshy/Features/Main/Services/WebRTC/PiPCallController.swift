@@ -134,6 +134,24 @@ final class PiPCallController: NSObject, PiPCallProviding {
         pipController?.stopPictureInPicture()
     }
 
+    func updateRemoteTrack(_ remoteTrack: AnyObject) {
+        guard pipController != nil,
+              let newTrack = remoteTrack as? RTCVideoTrack,
+              newTrack !== self.remoteTrack else { return }
+        // Ré-attache le renderer (s'il est actif) au nouveau track sans toucher
+        // au controller AVKit → le PiP en cours ne saute pas.
+        if let renderer {
+            self.remoteTrack?.remove(renderer)
+            newTrack.add(renderer)
+        }
+        self.remoteTrack = newTrack
+    }
+
+    func setMaxFrameRate(_ fps: Int) {
+        desiredFrameRate = fps
+        renderer?.setMaxFrameRate(fps)
+    }
+
     func tearDown() {
         // Si un PiP est actif (ex : l'appel se termine pendant que la fenêtre
         // flotte par-dessus une autre app), l'arrêter AVANT de libérer le
@@ -155,7 +173,7 @@ final class PiPCallController: NSObject, PiPCallProviding {
 
     private func attachRenderer() {
         guard renderer == nil, let remoteTrack else { return }
-        let renderer = PiPVideoRenderer(displayLayer: surfaceView.displayLayer)
+        let renderer = PiPVideoRenderer(displayLayer: surfaceView.displayLayer, maxFrameRate: desiredFrameRate)
         remoteTrack.add(renderer)
         self.renderer = renderer
     }

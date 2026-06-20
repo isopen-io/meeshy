@@ -1237,6 +1237,10 @@ final class CallManager: ObservableObject {
                 }
             }
         )
+        // Aligne le framerate sur l'état thermique courant dès la config (le
+        // handler thermal ignore les changements hors-appel → évite un héritage
+        // périmé entre deux appels).
+        pip.setMaxFrameRate(pipFrameRate(for: ProcessInfo.processInfo.thermalState))
     }
 
     /// Démarre le PiP manuellement (bouton). No-op si impossible/déjà actif.
@@ -1249,6 +1253,16 @@ final class CallManager: ObservableObject {
         pipRestoring = false
         pipConfiguredTrack = nil
         pipConfiguredSource = nil
+    }
+
+    /// Framerate cible du PiP selon l'état thermique (vignette petite → throttle
+    /// agressif sous stress). Partagé par la config et le handler thermal.
+    private func pipFrameRate(for state: ProcessInfo.ThermalState) -> Int {
+        switch state {
+        case .critical: return 8
+        case .serious: return 10
+        default: return 15
+        }
     }
 
     // MARK: - Media Controls
@@ -2543,6 +2557,9 @@ extension CallManager: ThermalStateMonitorDelegate {
     nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {
         Task { @MainActor [weak self] in
             guard let self, self.callState == .connected else { return }
+            // PiP : framerate thermal-aware (la vignette est petite → throttle
+            // agressif possible). Restauré à 15 fps dès le retour en nominal/fair.
+            self.pip.setMaxFrameRate(self.pipFrameRate(for: state))
             if state == .critical {
                 self.webRTCService.videoFilters.reset()
                 self.activeAudioEffect = nil
@@ -2688,7 +2705,17 @@ extension CallManager: WebRTCServiceDelegate {
 
     nonisolated func webRTCService(_ service: WebRTCService, didReceiveRemoteVideoTrack track: Any) {
         Task { @MainActor [weak self] in
-            self?.hasRemoteVideoTrack = true
+            guard let self else { return }
+            self.hasRemoteVideoTrack = true
+            // Robustesse — track distant recréé (ICE restart) : ré-attache le
+            // renderer PiP au nouveau track sans reconstruire le controller AVKit
+            // (no-op si le PiP n'est pas configuré). On relit `remoteVideoTrack`
+            // sur le MainActor (déjà à jour côté client) plutôt que de capturer
+            // le param non-Sendable `track` à travers la frontière d'isolation.
+            if let current = self.remoteVideoTrack {
+                self.pip.updateRemoteTrack(current as AnyObject)
+                if self.pipConfiguredTrack != nil { self.pipConfiguredTrack = current as AnyObject }
+            }
             Logger.calls.info("Remote video track received in CallManager")
         }
     }
