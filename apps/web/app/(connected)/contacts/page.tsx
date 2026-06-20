@@ -1,13 +1,30 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Card, Input, Skeleton, PageHeader, EmptyState, ContactCard, FriendRequestCard, BlockedUserCard } from '@/components/v2';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { Footer } from '@/components/layout/Footer';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { OnlineIndicator } from '@/components/ui/online-indicator';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 
 import { useContactsV2, useFriendRequestsV2, useBlockedUsersV2 } from '@/hooks/v2';
+import type { ContactV2 } from '@/hooks/v2/use-contacts-v2';
 import { useUser } from '@/stores';
 import { useI18n } from '@/hooks/useI18n';
 import { apiService } from '@/services/api.service';
+import type { ContactTab, ContactSortOption, FriendRequest } from '@/types/contacts';
+import type { BlockedUser, User } from '@meeshy/shared/types';
 import {
   Users,
   UserCheck,
@@ -16,47 +33,97 @@ import {
   ShieldBan,
   Share2,
   Search,
-  SortAsc,
   RefreshCw,
   ArrowUpDown,
+  MoreVertical,
+  MessageSquare,
+  Eye,
+  UserPlus,
+  X,
+  Ban,
+  CheckCircle,
 } from 'lucide-react';
-import type { ContactTab, ContactSortOption } from '@/types/contacts';
-import type { ContactAction } from '@/components/v2/ContactCard';
-import type { FriendRequestAction } from '@/components/v2/FriendRequestCard';
 
-const TABS: { key: ContactTab; icon: React.ElementType; colorVar: string }[] = [
-  { key: 'all', icon: Users, colorVar: '--gp-terracotta' },
-  { key: 'connected', icon: UserCheck, colorVar: '--gp-deep-teal' },
-  { key: 'pending', icon: Clock, colorVar: '--gp-golden' },
-  { key: 'refused', icon: UserX, colorVar: '--gp-error' },
-  { key: 'blocked', icon: ShieldBan, colorVar: '--gp-text-muted' },
-  { key: 'affiliates', icon: Share2, colorVar: '--gp-deep-teal' },
-];
+// ─── Helpers ─────────────────────────────────────────────────────────────
 
-const SORT_OPTIONS: { key: ContactSortOption; labelKey: string }[] = [
-  { key: 'name', labelKey: 'sort.alphabetical' },
-  { key: 'lastSeen', labelKey: 'sort.lastSeen' },
-  { key: 'recentlyAdded', labelKey: 'sort.recentlyAdded' },
-];
+type TFn = (key: string, params?: Record<string, unknown>) => string;
 
-function ContactSkeleton() {
+function getInitials(name: string): string {
+  const cleaned = name.replace(/^@/, '').trim();
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function userDisplayName(u?: User | null): string {
+  if (!u) return '';
+  const full = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
+  return u.displayName || full || u.username || '';
+}
+
+function formatLastSeen(t: TFn, locale: string, isOnline: boolean, lastActiveAt?: string): string {
+  if (isOnline) return t('status.online');
+  if (!lastActiveAt) return t('status.neverSeen');
+  const last = new Date(lastActiveAt).getTime();
+  if (Number.isNaN(last)) return t('status.offline');
+  const diffMin = Math.floor((Date.now() - last) / 60_000);
+  if (diffMin < 1) return t('status.justNow');
+  if (diffMin < 60) return t('status.minutesAgo', { count: diffMin });
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return t('status.hoursAgo', { count: diffH });
+  const diffD = Math.floor(diffH / 24);
+  if (diffD < 7) return t('status.daysAgo', { count: diffD });
+  return t('status.lastSeenDate', { date: new Date(lastActiveAt).toLocaleDateString(locale) });
+}
+
+// ─── Row primitives (links dashboard-v1 aesthetic) ─────────────────────────
+
+function RowShell({
+  avatar,
+  name,
+  username,
+  meta,
+  isOnline,
+  actions,
+}: {
+  avatar?: string | null;
+  name: string;
+  username?: string;
+  meta?: string;
+  isOnline?: boolean;
+  actions?: React.ReactNode;
+}) {
   return (
-    <div className="p-4 flex items-center gap-4">
-      <Skeleton variant="circular" className="w-12 h-12" />
-      <div className="flex-1">
-        <Skeleton className="h-4 w-32 mb-2" />
-        <Skeleton className="h-3 w-24" />
+    <li className="flex items-center gap-4 p-4">
+      <div className="relative flex-shrink-0">
+        <Avatar className="h-12 w-12">
+          {avatar ? <AvatarImage src={avatar} alt="" /> : null}
+          <AvatarFallback>{getInitials(name || username || '?')}</AvatarFallback>
+        </Avatar>
+        {typeof isOnline === 'boolean' && (
+          <span className="absolute -bottom-0.5 -right-0.5 rounded-full ring-2 ring-white dark:ring-gray-950">
+            <OnlineIndicator isOnline={isOnline} size="md" />
+          </span>
+        )}
       </div>
-    </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-foreground truncate">{name}</p>
+        {username && <p className="text-sm text-muted-foreground truncate">{username}</p>}
+        {meta && <p className="text-xs text-muted-foreground/80 truncate">{meta}</p>}
+      </div>
+      {actions && <div className="flex-shrink-0">{actions}</div>}
+    </li>
   );
 }
 
-export default function V2ContactsPage() {
+// ─── Page ──────────────────────────────────────────────────────────────────
+
+export default function ContactsPage() {
   const router = useRouter();
   const user = useUser();
   const { t, locale } = useI18n('contacts');
   const [activeTab, setActiveTab] = useState<ContactTab>('all');
-  const [showSortMenu, setShowSortMenu] = useState(false);
 
   const {
     contacts,
@@ -101,409 +168,398 @@ export default function V2ContactsPage() {
     await Promise.all([refreshContacts(), refreshRequests(), refreshBlocked()]);
   }, [refreshContacts, refreshRequests, refreshBlocked]);
 
-  const handleContactAction = useCallback(
-    async (action: ContactAction, contactId: string, requestId?: string) => {
-      switch (action) {
-        case 'add':
-          await sendRequest(contactId);
-          break;
-        case 'cancel':
-          if (requestId) await cancelRequest(requestId);
-          break;
-        case 'message': {
-          try {
-            const response = await apiService.post<{ id: string }>('/conversations', {
-              type: 'direct',
-              participantIds: [contactId],
-            });
-            const data = response as { data?: { success?: boolean; data?: { id: string } } };
-            if (data?.data?.data?.id) {
-              router.push(`/conversations/${data.data.data.id}`);
-            }
-          } catch {
-            // toast handled by apiService
-          }
-          break;
-        }
-        case 'block':
-          await blockUser(contactId);
-          break;
-        case 'viewProfile':
-          router.push(`/u/${contactId}`);
-          break;
-        case 'call':
-          // Future: implement calling
-          break;
+  const messageContact = useCallback(
+    async (contactId: string) => {
+      try {
+        const response = await apiService.post<{ id: string }>('/conversations', {
+          type: 'direct',
+          participantIds: [contactId],
+        });
+        const data = response as { data?: { success?: boolean; data?: { id: string } } };
+        if (data?.data?.data?.id) router.push(`/conversations/${data.data.data.id}`);
+      } catch {
+        // toast handled by apiService
       }
     },
-    [sendRequest, cancelRequest, blockUser, router]
+    [router]
   );
 
-  const handleFriendRequestAction = useCallback(
-    async (action: FriendRequestAction, requestId: string, userId?: string) => {
-      switch (action) {
-        case 'accept':
-          await acceptRequest(requestId);
-          break;
-        case 'reject':
-          await rejectRequest(requestId);
-          break;
-        case 'cancel':
-          await cancelRequest(requestId);
-          break;
-        case 'resend':
-          if (userId) await sendRequest(userId);
-          break;
-      }
-    },
-    [acceptRequest, rejectRequest, cancelRequest, sendRequest]
-  );
-
-  const connectedUserIds = new Set(
-    connected.map((r) =>
-      r.senderId === user?.id ? r.receiverId : r.senderId
-    )
+  const connectedUserIds = useMemo(
+    () =>
+      new Set(connected.map((r) => (r.senderId === user?.id ? r.receiverId : r.senderId))),
+    [connected, user?.id]
   );
 
   const displayContacts = searchQuery.length >= 2 ? searchResults : contacts;
 
-  const tabCounts: Record<ContactTab, number> = {
-    all: displayContacts.length,
-    connected: requestStats.connected,
-    pending: requestStats.pending,
-    refused: requestStats.refused,
-    blocked: blockedUsers.length,
-    affiliates: 0,
-  };
+  const stats = useMemo(
+    () => ({
+      total: contacts.length,
+      online: onlineContacts.length,
+      connected: requestStats.connected,
+      pending: requestStats.pending,
+      blocked: blockedUsers.length,
+    }),
+    [contacts.length, onlineContacts.length, requestStats, blockedUsers.length]
+  );
 
-  return (
-    <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors duration-300">
-      <PageHeader
-        title={t('title')}
-        actionButtons={
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowSortMenu(!showSortMenu)}
-                aria-label={t('sort.label') || 'Sort'}
-              >
-                <ArrowUpDown className="w-4 h-4" />
-              </Button>
-              {showSortMenu && (
+  const TABS: { key: ContactTab; icon: React.ElementType; count: number; activeClass: string }[] = [
+    { key: 'all', icon: Users, count: displayContacts.length, activeClass: 'data-[state=active]:bg-blue-500' },
+    { key: 'connected', icon: UserCheck, count: requestStats.connected, activeClass: 'data-[state=active]:bg-emerald-500' },
+    { key: 'pending', icon: Clock, count: requestStats.pending, activeClass: 'data-[state=active]:bg-amber-500' },
+    { key: 'refused', icon: UserX, count: requestStats.refused, activeClass: 'data-[state=active]:bg-rose-500' },
+    { key: 'blocked', icon: ShieldBan, count: blockedUsers.length, activeClass: 'data-[state=active]:bg-gray-600' },
+    { key: 'affiliates', icon: Share2, count: 0, activeClass: 'data-[state=active]:bg-indigo-500' },
+  ];
+
+  const SORT_OPTIONS: { key: ContactSortOption; labelKey: string }[] = [
+    { key: 'name', labelKey: 'sort.alphabetical' },
+    { key: 'lastSeen', labelKey: 'sort.lastSeen' },
+    { key: 'recentlyAdded', labelKey: 'sort.recentlyAdded' },
+  ];
+
+  // ─── Row renderers ───────────────────────────────────────────────────────
+
+  const renderContactRow = useCallback(
+    (contact: ContactV2) => {
+      const pendingReq = getPendingRequestWithUser(contact.id);
+      const isFriend = connectedUserIds.has(contact.id);
+      return (
+        <RowShell
+          key={contact.id}
+          avatar={contact.avatar}
+          name={contact.name}
+          username={contact.username}
+          meta={formatLastSeen(t, locale, contact.isOnline, contact.lastActiveAt)}
+          isOnline={contact.isOnline}
+          actions={
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label={t('actions.menu')}>
+                  <MoreVertical className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => messageContact(contact.id)}>
+                  <MessageSquare className="mr-2 h-4 w-4" />
+                  {t('actions.message')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push(`/u/${contact.id}`)}>
+                  <Eye className="mr-2 h-4 w-4" />
+                  {t('actions.viewProfile')}
+                </DropdownMenuItem>
+                {!isFriend &&
+                  (pendingReq ? (
+                    <DropdownMenuItem onClick={() => cancelRequest(pendingReq.id)}>
+                      <X className="mr-2 h-4 w-4" />
+                      {t('actions.cancel')}
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onClick={() => sendRequest(contact.id)}>
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      {t('actions.add')}
+                    </DropdownMenuItem>
+                  ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => blockUser(contact.id)}
+                  className="text-rose-600 focus:text-rose-600"
+                >
+                  <Ban className="mr-2 h-4 w-4" />
+                  {t('actions.block')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          }
+        />
+      );
+    },
+    [t, locale, getPendingRequestWithUser, connectedUserIds, messageContact, router, cancelRequest, sendRequest, blockUser]
+  );
+
+  const renderRequestRow = useCallback(
+    (request: FriendRequest, variant: 'connected' | 'pending' | 'refused') => {
+      const isIncoming = request.receiverId === user?.id;
+      const other: User | undefined = isIncoming ? request.sender : request.receiver;
+      const otherId = isIncoming ? request.senderId : request.receiverId;
+      const name = userDisplayName(other) || otherId;
+      return (
+        <RowShell
+          key={request.id}
+          avatar={other?.avatar}
+          name={name}
+          username={other?.username ? `@${other.username}` : undefined}
+          isOnline={other?.isOnline}
+          actions={
+            <div className="flex items-center gap-2">
+              {variant === 'pending' && isIncoming && (
                 <>
-                  <div
-                    role="presentation"
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowSortMenu(false)}
-                  />
-                  <div className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-lg py-1 bg-[var(--gp-surface-elevated)] border border-[var(--gp-border)] shadow-lg">
-                    {SORT_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.key}
-                        className={`w-full px-4 py-2.5 text-sm text-left flex items-center gap-2 hover:bg-[var(--gp-hover)] ${
-                          sortBy === opt.key
-                            ? 'text-[var(--gp-terracotta)] font-medium'
-                            : 'text-[var(--gp-text-primary)]'
-                        }`}
-                        onClick={() => {
-                          setSortBy(opt.key);
-                          setShowSortMenu(false);
-                        }}
-                      >
-                        <SortAsc className="w-4 h-4" />
-                        {t(opt.labelKey)}
-                      </button>
-                    ))}
-                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => acceptRequest(request.id)}
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    <CheckCircle className="mr-1 h-4 w-4" />
+                    {t('actions.accept')}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => rejectRequest(request.id)}>
+                    {t('actions.reject')}
+                  </Button>
                 </>
               )}
-            </div>
-            <Button variant="ghost" size="sm" onClick={handleRefreshAll}>
-              <RefreshCw className="w-4 h-4" />
-            </Button>
-          </div>
-        }
-      >
-        <div className="mt-4">
-          <Input
-            placeholder={t('searchPlaceholder')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            icon={<Search className="w-4 h-4" />}
-          />
-        </div>
-
-        {/* Tabs */}
-        <div className="mt-4 flex gap-1 overflow-x-auto pb-1 scrollbar-none">
-          {TABS.map(({ key, icon: Icon }) => (
-            <button
-              key={key}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                activeTab === key
-                  ? 'bg-[var(--gp-terracotta)] text-white'
-                  : 'text-[var(--gp-text-muted)] hover:bg-[var(--gp-hover)]'
-              }`}
-              onClick={() => setActiveTab(key)}
-            >
-              <Icon className="w-4 h-4" />
-              {t(`tabs.${key}`)}
-              {tabCounts[key] > 0 && (
-                <span
-                  className={`ml-1 text-xs px-1.5 py-0.5 rounded-full ${
-                    activeTab === key
-                      ? 'bg-white/20'
-                      : 'bg-[var(--gp-parchment)]'
-                  }`}
-                >
-                  {tabCounts[key]}
-                </span>
+              {variant === 'pending' && !isIncoming && (
+                <Button size="sm" variant="outline" onClick={() => cancelRequest(request.id)}>
+                  <X className="mr-1 h-4 w-4" />
+                  {t('actions.cancel')}
+                </Button>
               )}
-            </button>
-          ))}
+              {variant === 'connected' && (
+                <Button size="sm" variant="outline" onClick={() => messageContact(otherId)}>
+                  <MessageSquare className="mr-1 h-4 w-4" />
+                  {t('actions.message')}
+                </Button>
+              )}
+              {variant === 'refused' && (
+                <Button size="sm" variant="outline" onClick={() => sendRequest(otherId)}>
+                  {t('actions.resend')}
+                </Button>
+              )}
+            </div>
+          }
+        />
+      );
+    },
+    [user?.id, t, acceptRequest, rejectRequest, cancelRequest, messageContact, sendRequest]
+  );
+
+  const renderBlockedRow = useCallback(
+    (blocked: BlockedUser) => {
+      const name = blocked.displayName || blocked.username || blocked.id;
+      return (
+        <RowShell
+          key={blocked.id}
+          avatar={blocked.avatar}
+          name={name}
+          username={blocked.username ? `@${blocked.username}` : undefined}
+          actions={
+            <Button size="sm" variant="outline" onClick={() => unblockUser(blocked.id)}>
+              {t('actions.unblock')}
+            </Button>
+          }
+        />
+      );
+    },
+    [t, unblockUser]
+  );
+
+  // ─── List content per tab ────────────────────────────────────────────────
+
+  const emptyState = (title: string, description: string) => (
+    <Card className="border-2 border-dashed border-gray-300 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50">
+      <CardContent className="flex flex-col items-center justify-center py-16 px-6 text-center">
+        <div className="relative mb-6">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 blur-3xl rounded-full" />
+          <div className="relative p-6 bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 rounded-3xl">
+            <Users className="h-16 w-16 text-blue-600 dark:text-blue-400" />
+          </div>
         </div>
-      </PageHeader>
+        <h3 className="text-2xl font-bold text-foreground mb-3">{title}</h3>
+        <p className="text-muted-foreground text-base max-w-md">{description}</p>
+      </CardContent>
+    </Card>
+  );
 
-      <main className="max-w-2xl mx-auto px-6 py-6">
-        {/* Error */}
-        {contactsError && (
-          <div
-            className="p-4 mb-4 rounded-xl"
-            style={{
-              background: 'color-mix(in srgb, var(--gp-error) 15%, transparent)',
-            }}
-          >
-            <p style={{ color: 'var(--gp-error)' }}>{contactsError}</p>
-          </div>
-        )}
+  const listCard = (children: React.ReactNode) => (
+    <Card className="border-2 shadow-lg bg-white dark:bg-gray-950 overflow-hidden">
+      <ul role="list" className="divide-y divide-gray-100 dark:divide-gray-800">
+        {children}
+      </ul>
+    </Card>
+  );
 
-        {/* Loading */}
-        {isLoading && (
-          <Card variant="outlined" hover={false} className="divide-y divide-[var(--gp-border)]">
-            <ContactSkeleton />
-            <ContactSkeleton />
-            <ContactSkeleton />
-          </Card>
-        )}
+  const loadingCard = (
+    <Card className="border-2 bg-white dark:bg-gray-950">
+      <CardContent className="flex flex-col items-center justify-center py-16">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-primary" />
+        <p className="mt-4 text-muted-foreground font-medium">{t('loading')}</p>
+      </CardContent>
+    </Card>
+  );
 
-        {/* ===== TAB: ALL ===== */}
-        {!isLoading && activeTab === 'all' && (
-          <>
-            {displayContacts.length === 0 ? (
-              searchQuery ? (
-                <EmptyState
-                  icon="🔍"
-                  title={t('messages.noContactsFound')}
-                  description={t('messages.noContactsFoundDescription')}
-                />
-              ) : (
-                <EmptyState
-                  icon="👥"
-                  title={t('messages.noContacts')}
-                  description={t('messages.noContactsDescription')}
-                />
-              )
-            ) : (
-              <>
-                {/* Online contacts */}
-                {onlineContacts.length > 0 && !searchQuery && (
-                  <section className="mb-6">
-                    <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)] uppercase tracking-wider">
-                      {t('sections.online')} ({onlineContacts.length})
-                    </h2>
-                    <Card
-                      variant="outlined"
-                      hover={false}
-                      className="divide-y divide-[var(--gp-border)]"
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-950 dark:to-gray-900 flex flex-col">
+      <DashboardLayout
+        title={t('title')}
+        className="!bg-none !bg-transparent !h-auto !max-w-none !px-0"
+      >
+        <div className="relative z-10 space-y-8 pb-8 w-full py-8 px-4 md:px-8">
+          {/* Hero */}
+          <header className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 p-8 md:p-12 text-white shadow-2xl">
+            <div className="absolute inset-0 bg-black/10" />
+            <div className="relative z-10">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 bg-white/20 backdrop-blur-sm rounded-2xl">
+                  <Users className="h-8 w-8" />
+                </div>
+                <h1 className="text-4xl md:text-5xl font-bold">{t('title')}</h1>
+              </div>
+              <p className="text-lg md:text-xl text-blue-100 max-w-2xl">{t('subtitle')}</p>
+            </div>
+            <div className="absolute -right-12 -bottom-12 w-48 h-48 bg-white/10 rounded-full blur-3xl" />
+            <div className="absolute -left-12 -top-12 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl" />
+          </header>
+
+          {/* Controls: tabs + stats + search */}
+          <Card className="border-2 shadow-lg bg-white dark:bg-gray-950">
+            <CardContent className="p-6 space-y-6">
+              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ContactTab)}>
+                <TabsList className="w-full grid grid-cols-3 md:grid-cols-6 h-auto p-1.5 bg-gray-100 dark:bg-gray-800 gap-1">
+                  {TABS.map(({ key, icon: Icon, count, activeClass }) => (
+                    <TabsTrigger
+                      key={key}
+                      value={key}
+                      className={`${activeClass} data-[state=active]:text-white py-2 px-2 rounded-lg font-medium transition-all flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2`}
                     >
-                      {onlineContacts.map((contact) => {
-                        const pendingReq = getPendingRequestWithUser(contact.id);
-                        return (
-                          <ContactCard
-                            key={contact.id}
-                            contact={contact}
-                            hasPendingRequest={!!pendingReq}
-                            pendingRequestId={pendingReq?.id}
-                            isFriend={connectedUserIds.has(contact.id)}
-                            onAction={handleContactAction}
-                            t={t}
-                            locale={locale}
-                          />
-                        );
-                      })}
-                    </Card>
-                  </section>
-                )}
+                      <Icon className="h-4 w-4" />
+                      <span className="text-xs md:text-sm">{t(`tabs.${key}`)}</span>
+                      {count > 0 && (
+                        <span className="text-[10px] md:text-xs px-1.5 rounded-full bg-black/10">
+                          {count}
+                        </span>
+                      )}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
 
-                {/* Offline contacts / All when searching */}
-                <section>
-                  {!searchQuery && offlineContacts.length > 0 && (
-                    <h2 className="text-sm font-semibold mb-3 px-1 text-[var(--gp-text-muted)] uppercase tracking-wider">
-                      {t('sections.offline')} ({offlineContacts.length})
-                    </h2>
+              {/* Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-muted-foreground">{t('stats.totalContacts')}</p>
+                  <p className="text-2xl font-bold text-foreground">{stats.total}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-muted-foreground">{t('stats.online')}</p>
+                  <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{stats.online}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-muted-foreground">{t('stats.connected')}</p>
+                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.connected}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-muted-foreground">{t('stats.pending')}</p>
+                  <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{stats.pending}</p>
+                </div>
+              </div>
+
+              {/* Search + sort */}
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <Input
+                    type="search"
+                    placeholder={t('searchPlaceholder')}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    aria-label={t('searchPlaceholder')}
+                    className="pl-10 h-12 text-base border-2 focus:border-primary"
+                  />
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="h-12 px-5 gap-2">
+                      <ArrowUpDown className="h-4 w-4" />
+                      {t('sort.label') || 'Trier'}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {SORT_OPTIONS.map((opt) => (
+                      <DropdownMenuItem
+                        key={opt.key}
+                        onClick={() => setSortBy(opt.key)}
+                        className={sortBy === opt.key ? 'font-semibold text-primary' : ''}
+                      >
+                        {t(opt.labelKey)}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button variant="outline" className="h-12 px-4" onClick={handleRefreshAll} aria-label={t('actions.menu')}>
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Error */}
+          {contactsError && (
+            <Card className="border-2 border-rose-300 bg-rose-50 dark:bg-rose-950/30">
+              <CardContent className="p-4">
+                <p className="text-rose-700 dark:text-rose-300" role="alert">{contactsError}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Lists */}
+          <section aria-label={t(`tabs.${activeTab}`)} aria-live="polite">
+            {isLoading ? (
+              loadingCard
+            ) : activeTab === 'all' ? (
+              displayContacts.length === 0 ? (
+                emptyState(
+                  searchQuery ? t('messages.noContactsFound') : t('messages.noContacts'),
+                  searchQuery ? t('messages.noContactsFoundDescription') : t('messages.noContactsDescription')
+                )
+              ) : (
+                <div className="space-y-4">
+                  {!searchQuery && onlineContacts.length > 0 && (
+                    <>
+                      <h2 className="text-sm font-semibold px-1 text-muted-foreground uppercase tracking-wider">
+                        {t('sections.online')} ({onlineContacts.length})
+                      </h2>
+                      {listCard(onlineContacts.map(renderContactRow))}
+                      {offlineContacts.length > 0 && (
+                        <h2 className="text-sm font-semibold px-1 pt-2 text-muted-foreground uppercase tracking-wider">
+                          {t('sections.offline')} ({offlineContacts.length})
+                        </h2>
+                      )}
+                    </>
                   )}
-                  <Card
-                    variant="outlined"
-                    hover={false}
-                    className="divide-y divide-[var(--gp-border)]"
-                  >
-                    {(searchQuery ? displayContacts : offlineContacts).map((contact) => {
-                      const pendingReq = getPendingRequestWithUser(contact.id);
-                      return (
-                        <ContactCard
-                          key={contact.id}
-                          contact={contact}
-                          hasPendingRequest={!!pendingReq}
-                          pendingRequestId={pendingReq?.id}
-                          isFriend={connectedUserIds.has(contact.id)}
-                          onAction={handleContactAction}
-                          t={t}
-                          locale={locale}
-                        />
-                      );
-                    })}
-                  </Card>
-                </section>
-              </>
-            )}
-          </>
-        )}
-
-        {/* ===== TAB: CONNECTED ===== */}
-        {!isLoading && activeTab === 'connected' && (
-          <>
-            {connected.length === 0 ? (
-              <EmptyState
-                icon="🤝"
-                title={t('messages.noConnectedContacts')}
-                description={t('messages.noConnectedContactsDescription')}
-              />
+                  {listCard((searchQuery ? displayContacts : offlineContacts).map(renderContactRow))}
+                </div>
+              )
+            ) : activeTab === 'connected' ? (
+              connected.length === 0
+                ? emptyState(t('messages.noConnectedContacts'), t('messages.noConnectedContactsDescription'))
+                : listCard(connected.map((r) => renderRequestRow(r, 'connected')))
+            ) : activeTab === 'pending' ? (
+              pending.length === 0
+                ? emptyState(t('messages.noPendingRequests'), t('messages.noPendingRequestsDescription'))
+                : listCard(pending.map((r) => renderRequestRow(r, 'pending')))
+            ) : activeTab === 'refused' ? (
+              refused.length === 0
+                ? emptyState(t('messages.noRefusedRequests'), t('messages.noRefusedRequestsDescription'))
+                : listCard(refused.map((r) => renderRequestRow(r, 'refused')))
+            ) : activeTab === 'blocked' ? (
+              blockedUsers.length === 0
+                ? emptyState(t('messages.noBlockedUsers'), t('messages.noBlockedUsersDescription'))
+                : listCard(blockedUsers.map(renderBlockedRow))
             ) : (
-              <Card
-                variant="outlined"
-                hover={false}
-                className="divide-y divide-[var(--gp-border)]"
-              >
-                {connected.map((request) => (
-                  <FriendRequestCard
-                    key={request.id}
-                    request={request}
-                    currentUserId={user?.id}
-                    onAction={handleFriendRequestAction}
-                    t={t}
-                    locale={locale}
-                  />
-                ))}
-              </Card>
+              emptyState(t('messages.noAffiliateContacts'), t('messages.noAffiliateContactsDescription'))
             )}
-          </>
-        )}
 
-        {/* ===== TAB: PENDING ===== */}
-        {!isLoading && activeTab === 'pending' && (
-          <>
-            {pending.length === 0 ? (
-              <EmptyState
-                icon="⏳"
-                title={t('messages.noPendingRequests')}
-                description={t('messages.noPendingRequestsDescription')}
-              />
-            ) : (
-              <Card
-                variant="outlined"
-                hover={false}
-                className="divide-y divide-[var(--gp-border)]"
-              >
-                {pending.map((request) => (
-                  <FriendRequestCard
-                    key={request.id}
-                    request={request}
-                    currentUserId={user?.id}
-                    onAction={handleFriendRequestAction}
-                    t={t}
-                    locale={locale}
-                  />
-                ))}
-              </Card>
+            {isSearching && (
+              <div className="flex justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary border-t-transparent" />
+              </div>
             )}
-          </>
-        )}
+          </section>
+        </div>
+      </DashboardLayout>
 
-        {/* ===== TAB: REFUSED ===== */}
-        {!isLoading && activeTab === 'refused' && (
-          <>
-            {refused.length === 0 ? (
-              <EmptyState
-                icon="❌"
-                title={t('messages.noRefusedRequests')}
-                description={t('messages.noRefusedRequestsDescription')}
-              />
-            ) : (
-              <Card
-                variant="outlined"
-                hover={false}
-                className="divide-y divide-[var(--gp-border)]"
-              >
-                {refused.map((request) => (
-                  <FriendRequestCard
-                    key={request.id}
-                    request={request}
-                    currentUserId={user?.id}
-                    onAction={handleFriendRequestAction}
-                    t={t}
-                    locale={locale}
-                  />
-                ))}
-              </Card>
-            )}
-          </>
-        )}
-
-        {/* ===== TAB: BLOCKED ===== */}
-        {!isLoading && activeTab === 'blocked' && (
-          <>
-            {blockedUsers.length === 0 ? (
-              <EmptyState
-                icon="🛡️"
-                title={t('messages.noBlockedUsers')}
-                description={t('messages.noBlockedUsersDescription')}
-              />
-            ) : (
-              <Card
-                variant="outlined"
-                hover={false}
-                className="divide-y divide-[var(--gp-border)]"
-              >
-                {blockedUsers.map((blockedUser) => (
-                  <BlockedUserCard
-                    key={blockedUser.id}
-                    user={blockedUser}
-                    onUnblock={unblockUser}
-                    t={t}
-                  />
-                ))}
-              </Card>
-            )}
-          </>
-        )}
-
-        {/* ===== TAB: AFFILIATES ===== */}
-        {!isLoading && activeTab === 'affiliates' && (
-          <EmptyState
-            icon="🔗"
-            title={t('messages.noAffiliateContacts')}
-            description={t('messages.noAffiliateContactsDescription')}
-          />
-        )}
-
-        {/* Loading search indicator */}
-        {isSearching && (
-          <div className="flex justify-center py-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-2 border-[var(--gp-terracotta)] border-t-transparent" />
-          </div>
-        )}
-      </main>
+      <div className="w-screen relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] mt-16">
+        <Footer />
+      </div>
     </div>
   );
 }
