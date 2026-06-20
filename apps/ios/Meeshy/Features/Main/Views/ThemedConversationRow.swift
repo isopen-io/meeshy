@@ -730,7 +730,6 @@ struct ConversationTitleLabel: View {
                 Text(favorite)
                     .accessibilityLabel(Text(String(
                         localized: "conversation.favorite.a11y",
-                        ,
                         bundle: .main
                     )))
             }
