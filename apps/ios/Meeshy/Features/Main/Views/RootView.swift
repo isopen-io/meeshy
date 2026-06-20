@@ -1520,11 +1520,11 @@ struct RootView: View {
             // s'ouvre via le 2e tap (ou le long-press) sur le bouton avatar. Le
             // DERNIER bouton est la roue dentée (→ préférences générales).
             let menuItems: [(icon: String, color: String, label: String, action: () -> Void)] = [
-                ("link.badge.plus", "F8B500", String(localized: "menu.links", defaultValue: "Liens", bundle: .main), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.links) }),
-                ("bell.fill", "FF6B6B", String(localized: "menu.notifications", defaultValue: "Notifications", bundle: .main), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.notifications) }),
-                ("person.2.fill", "6366F1", String(localized: "menu.contacts", defaultValue: "Contacts", bundle: .main), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.contacts()) }),
-                ("person.3.fill", "2ECC71", String(localized: "menu.communities", defaultValue: "Communautés", bundle: .main), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) }),
-                ("gearshape.fill", "64748B", String(localized: "menu.settings", defaultValue: "Réglages", bundle: .main), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.settings) })
+                ("link.badge.plus", "F8B500", String(localized: "root.menu.links", defaultValue: "Mes liens"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.links) }),
+                ("bell.fill", "FF6B6B", String(localized: "root.menu.notifications", defaultValue: "Notifications"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.notifications) }),
+                ("person.2.fill", "6366F1", String(localized: "root.menu.contacts", defaultValue: "Contacts"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.contacts()) }),
+                ("person.3.fill", "2ECC71", String(localized: "root.menu.communities", defaultValue: "Communautés"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) }),
+                ("gearshape.fill", "64748B", String(localized: "root.menu.settings", defaultValue: "Réglages"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.settings) })
             ]
 
             ForEach(Array(menuItems.enumerated()), id: \.offset) { index, item in
@@ -1545,10 +1545,7 @@ struct RootView: View {
                 .position(x: menuX, y: itemY)
                 .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
                 .accessibilityLabel(item.label)
-                .accessibilityValue(item.icon == "bell.fill" && notificationManager.unreadCount > 0
-                    ? String(format: String(localized: "a11y.notifications.unread_count", defaultValue: "%d notifications non lues", bundle: .main), notificationManager.unreadCount)
-                    : "")
-                .meeshyTapTarget()
+                .accessibilityHint(String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section"))
             }
         }
         .ignoresSafeArea()

@@ -75,8 +75,8 @@ struct ConversationListView: View {
     // review finding 2026-06-10) — they aren't in `renderFingerprint`. Both
     // change only on explicit user action (rare), and the gate keeps unaffected
     // rows static, so observing them is free on the hot scroll path.
-    @ObservedObject var lockManager = ConversationLockManager.shared
-    @ObservedObject var blockService = BlockService.shared
+    private var lockManager: ConversationLockManager { ConversationLockManager.shared }
+    private var blockService: BlockService { BlockService.shared }
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet de la liste. La présence est rafraîchie lors des refreshs naturels.
     private var presenceManager: PresenceManager { PresenceManager.shared }
