@@ -565,7 +565,7 @@ struct StoryViewerView: View {
                     authorHandle: wrapper.authorHandle
                 ),
                 onPublishSlide: { _, _, _, _, _ in },
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility in
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
                     viewModel.publishStoryInBackground(
                         slides: slides,
                         slideImages: slideImages,
@@ -573,7 +573,8 @@ struct StoryViewerView: View {
                         loadedVideoURLs: loadedVideoURLs,
                         loadedAudioURLs: loadedAudioURLs,
                         originalLanguage: originalLanguage,
-                        visibility: visibility
+                        visibility: visibility,
+                        visibilityUserIds: visibilityUserIds
                     )
                     repostStoryComposerSource = nil
                 },

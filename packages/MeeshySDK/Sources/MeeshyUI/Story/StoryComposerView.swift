@@ -211,6 +211,8 @@ public struct StoryComposerView: View {
     @State private var mediaLoadProgress: Double = 0
     @State private var mediaLoadLabel: String = ""
     @State private var visibility: String = "PUBLIC"
+    @State private var visibilityUserIds: [String] = []
+    @State private var audiencePickerMode: PostVisibility?
     @State private var lostMediaCount: Int = 0  // > 0 triggers an alert after restoreDraft
 
     // MARK: - Transition effects (local until synced to effects)
@@ -237,14 +239,15 @@ public struct StoryComposerView: View {
         _ loadedVideoURLs: [String: URL],
         _ loadedAudioURLs: [String: URL],
         _ originalLanguage: String?,
-        _ visibility: String
+        _ visibility: String,
+        _ visibilityUserIds: [String]
     ) -> Void
     public var onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     public var onDismiss: () -> Void
 
     public init(
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String) -> Void,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String]) -> Void,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -264,7 +267,7 @@ public struct StoryComposerView: View {
     public init(
         viewModel: StoryComposerViewModel,
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String) -> Void,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String]) -> Void,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void = { _, _, _, _, _ in },
         onDismiss: @escaping () -> Void
     ) {
@@ -778,19 +781,21 @@ public struct StoryComposerView: View {
 
     private var visibilityMenu: some View {
         Menu {
-            ForEach(PostVisibility.composerSelectableCases, id: \.rawValue) { mode in
+            ForEach(PostVisibility.composerSelectableCases) { mode in
                 Button {
                     visibility = mode.rawValue
+                    if mode.requiresUserSelection { audiencePickerMode = mode }
                 } label: {
                     Label(mode.label, systemImage: visibility == mode.rawValue ? "checkmark" : mode.icon)
                 }
             }
         } label: {
             let current = PostVisibility(rawValue: visibility) ?? .public
+            let showCount = current.requiresUserSelection && !visibilityUserIds.isEmpty
             HStack(spacing: 4) {
                 Image(systemName: current.icon)
                     .font(.system(size: 12, weight: .semibold))
-                Text(current.label)
+                Text(showCount ? "\(current.label) (\(visibilityUserIds.count))" : current.label)
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
             }
@@ -798,6 +803,11 @@ public struct StoryComposerView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .adaptiveGlass(in: Capsule(), tint: .white.opacity(0.18))
+        }
+        .sheet(item: $audiencePickerMode) { mode in
+            AudienceUserPickerView(mode: mode, initialSelection: visibilityUserIds) { ids in
+                visibilityUserIds = ids
+            }
         }
     }
 
@@ -2124,7 +2134,9 @@ public struct StoryComposerView: View {
             guard !Task.isCancelled else { return }
             clearAllDrafts()
             HapticFeedback.success()
-            onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs, storyLanguage, visibility)
+            let mode = PostVisibility(rawValue: visibility) ?? .public
+            let ids = mode.requiresUserSelection ? visibilityUserIds : []
+            onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs, storyLanguage, visibility, ids)
         }
     }
 
