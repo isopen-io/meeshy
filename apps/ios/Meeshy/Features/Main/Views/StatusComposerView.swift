@@ -2,31 +2,6 @@ import SwiftUI
 import Combine
 import MeeshyUI
 
-enum StatusVisibility: String, CaseIterable {
-    case `public` = "PUBLIC"
-    case friends = "FRIENDS"
-    case except = "EXCEPT"
-    case only = "ONLY"
-
-    var label: String {
-        switch self {
-        case .public: return String(localized: "status.composer.visibility.public", defaultValue: "Public", bundle: .main)
-        case .friends: return String(localized: "status.composer.visibility.friends", defaultValue: "Amis", bundle: .main)
-        case .except: return String(localized: "status.composer.visibility.except", defaultValue: "Sauf...", bundle: .main)
-        case .only: return String(localized: "status.composer.visibility.only", defaultValue: "Seulement...", bundle: .main)
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .public: return "globe"
-        case .friends: return "person.2.fill"
-        case .except: return "person.fill.xmark"
-        case .only: return "person.fill.checkmark"
-        }
-    }
-}
-
 struct StatusComposerView: View {
     @ObservedObject var viewModel: StatusViewModel
     var initialEmoji: String? = nil
@@ -47,7 +22,7 @@ struct StatusComposerView: View {
     @State private var statusText = ""
     @State private var isPublishing = false
     @AppStorage("lastStatusVisibility") private var lastVisibility: String = "PUBLIC"
-    @State private var selectedVisibility: StatusVisibility = .public
+    @State private var selectedVisibility: PostVisibility = .public
     @State private var selectedUserIds: [String] = []
     @State private var didApplyInitialValues = false
     /// `clientMutationId` of a mood recovered from the offline queue (pre-filled
@@ -120,7 +95,8 @@ struct StatusComposerView: View {
                         guard let draft = await viewModel.recoverUnsentStatus() else { return }
                         if selectedEmoji == nil, let emoji = draft.moodEmoji { selectedEmoji = emoji }
                         if statusText.isEmpty { statusText = draft.content }
-                        if let vis = StatusVisibility(rawValue: draft.visibility) { selectedVisibility = vis }
+                        if let vis = PostVisibility(rawValue: draft.visibility),
+                           PostVisibility.composerSelectableCases.contains(vis) { selectedVisibility = vis }
                         // Restore the audience too, else an ONLY/EXCEPT mood would
                         // re-send with an empty list and the gateway would reject it.
                         if let ids = draft.visibilityUserIds { selectedUserIds = ids }
@@ -234,7 +210,7 @@ struct StatusComposerView: View {
                     emoji: emoji,
                     content: statusText.isEmpty ? nil : statusText,
                     visibility: selectedVisibility.rawValue,
-                    visibilityUserIds: (selectedVisibility == .except || selectedVisibility == .only) ? selectedUserIds : nil,
+                    visibilityUserIds: selectedVisibility.requiresUserSelection ? selectedUserIds : nil,
                     viaUsername: viaUsername,
                     audioUrl: repostAudioUrl,
                     repostOfId: repostOfId
@@ -261,7 +237,7 @@ struct StatusComposerView: View {
     private var visibilityPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(StatusVisibility.allCases, id: \.rawValue) { vis in
+                ForEach(PostVisibility.composerSelectableCases, id: \.rawValue) { vis in
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             selectedVisibility = vis
@@ -290,8 +266,11 @@ struct StatusComposerView: View {
             .padding(.horizontal, 4)
         }
         .onAppear {
-            if let vis = StatusVisibility(rawValue: lastVisibility) {
+            if let vis = PostVisibility(rawValue: lastVisibility),
+               PostVisibility.composerSelectableCases.contains(vis) {
                 selectedVisibility = vis
+            } else {
+                selectedVisibility = .public
             }
         }
     }
