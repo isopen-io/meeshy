@@ -151,8 +151,12 @@ struct LoginView: View {
                 // Signature de marque partagée avec le splash (BrandSignature) :
                 // version + « Fait avec ❤️ par Services CEO » + logo.
                 BrandSignature()
-                    .padding(.bottom, MeeshySpacing.xxxl)
+                    .padding(.top, MeeshySpacing.md)
                     .opacity(showFields ? 1 : 0)
+
+                // 3e spacer (avec ceux du haut et du milieu) : remonte l'ensemble de
+                // la page et décolle la signature du bord bas.
+                Spacer()
             }
         }
         .sheet(isPresented: $showForgotPassword) {
