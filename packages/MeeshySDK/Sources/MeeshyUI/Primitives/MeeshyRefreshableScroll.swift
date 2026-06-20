@@ -87,7 +87,18 @@ public struct MeeshyRefreshableScroll<Content: View>: View {
             .padding(.top, topPadding)
         }
         .coordinateSpace(name: coordinateSpaceName)
+        // iOS 16–17: the sentinel preference drives both the collapsing header and
+        // the pull-to-refresh phase.
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
+            onScrollOffsetChange?(offset)
+            updatePullingPhase(scrollOffset: offset)
+        }
+        // iOS 18+: `.onPreferenceChange` no longer re-fires on scroll. Read
+        // `contentOffset.y` natively and negate it to recover the sentinel's `minY`
+        // sign (0 at rest, negative scrolling up, positive while pulling down) so
+        // both the header collapse and the pull indicator keep working.
+        .trackScrollContentOffset { contentOffsetY in
+            let offset = -contentOffsetY
             onScrollOffsetChange?(offset)
             updatePullingPhase(scrollOffset: offset)
         }

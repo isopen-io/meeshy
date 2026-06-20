@@ -224,7 +224,8 @@ struct ProfileView: View {
             .padding(.top, 0)
         }
         .coordinateSpace(name: "scroll")
-        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }      // iOS 16–17
+        .trackScrollContentOffset { scrollOffset = -$0 }                               // iOS 18+ (preference path is dead there)
     }
 
     // MARK: - Banner & Avatar Section

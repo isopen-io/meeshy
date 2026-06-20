@@ -97,8 +97,14 @@ extension View {
     /// tabs stay silent) to drive the hub's collapsing header.
     func reportsContactsScroll(active: Bool, onChange: @escaping (CGFloat) -> Void) -> some View {
         coordinateSpace(name: ContactsScrollOffset.space)
+            // iOS 16–17: the sentinel preference drives the offset.
             .onPreferenceChange(ContactsScrollOffsetKey.self) { value in
                 if active { onChange(value) }
+            }
+            // iOS 18+: `.onPreferenceChange` no longer re-fires on scroll, so read
+            // `contentOffset.y` natively (negated to match the sentinel's minY sign).
+            .trackScrollContentOffset { value in
+                if active { onChange(-value) }
             }
     }
 }
