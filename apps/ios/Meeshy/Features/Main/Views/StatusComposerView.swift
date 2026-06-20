@@ -24,6 +24,7 @@ struct StatusComposerView: View {
     @AppStorage("lastStatusVisibility") private var lastVisibility: String = "PUBLIC"
     @State private var selectedVisibility: PostVisibility = .public
     @State private var selectedUserIds: [String] = []
+    @State private var audiencePickerMode: PostVisibility?
     @State private var didApplyInitialValues = false
     /// `clientMutationId` of a mood recovered from the offline queue (pre-filled
     /// as a draft). Set when the composer opens onto a stuck unsent mood; the
@@ -243,12 +244,14 @@ struct StatusComposerView: View {
                             selectedVisibility = vis
                             lastVisibility = vis.rawValue
                         }
+                        if vis.requiresUserSelection { audiencePickerMode = vis }
                         HapticFeedback.light()
                     } label: {
+                        let showCount = vis.requiresUserSelection && selectedVisibility == vis && !selectedUserIds.isEmpty
                         HStack(spacing: 4) {
                             Image(systemName: vis.icon)
                                 .font(.system(size: 11))
-                            Text(vis.label)
+                            Text(showCount ? "\(vis.label) (\(selectedUserIds.count))" : vis.label)
                                 .font(.system(size: 12, weight: .medium))
                         }
                         .foregroundColor(selectedVisibility == vis ? .white : theme.textSecondary)
@@ -264,6 +267,11 @@ struct StatusComposerView: View {
                 }
             }
             .padding(.horizontal, 4)
+        }
+        .sheet(item: $audiencePickerMode) { mode in
+            AudienceUserPickerView(mode: mode, initialSelection: selectedUserIds) { ids in
+                selectedUserIds = ids
+            }
         }
         .onAppear {
             if let vis = PostVisibility(rawValue: lastVisibility),
