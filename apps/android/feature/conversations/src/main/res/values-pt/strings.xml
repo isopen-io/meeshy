@@ -2,6 +2,7 @@
 <resources>
     <string name="conversations_title">Meeshy</string>
     <string name="conversations_logout">Sair</string>
+    <string name="conversations_contacts">Contatos</string>
     <string name="conversations_empty">Ainda não há conversas</string>
     <string name="conversations_retry">Tentar novamente</string>
     <string name="conversations_no_messages">Ainda não há mensagens</string>
