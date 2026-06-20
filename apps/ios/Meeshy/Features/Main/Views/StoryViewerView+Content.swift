@@ -844,12 +844,18 @@ extension StoryViewerView {
                 // réseau/CPU gaspillés pour un viewer mort).
                 guard !Task.isCancelled else { return }
                 let mediaType = story.media.first(where: { $0.url == urlString })?.type
-                if mediaType == .video || mediaType == .audio {
-                    // Video/Audio: download data to disk cache + preroll player
-                    _ = try? await imageStore.data(for: urlString)
+                if mediaType == .video {
+                    // Le canvas relit la vidéo via `CacheCoordinator.shared.video`
+                    // (`videoLocalFileURL(for:)`). Le prefetch DOIT peupler CE
+                    // store — pas `images` — sinon le canvas tombe en cache-miss
+                    // et re-télécharge ce qui vient d'être préchargé.
+                    _ = try? await CacheCoordinator.shared.video.data(for: urlString)
                     if let url = URL(string: urlString) {
                         await StoryMediaLoader.shared.preloadAndCachePlayer(url: url)
                     }
+                } else if mediaType == .audio {
+                    // Idem : le lecteur audio relit via le store `audio`.
+                    _ = try? await CacheCoordinator.shared.audio.data(for: urlString)
                 } else {
                     // Image: use image(for:) to populate UIImage NSCache for instant display
                     _ = await imageStore.image(for: urlString)
