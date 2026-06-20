@@ -39,6 +39,11 @@ protocol PiPCallProviding: AnyObject {
                    onStart: @escaping @MainActor () -> Void,
                    onRestoreUI: @escaping @MainActor () -> Void,
                    onStop: @escaping @MainActor () -> Void)
+    /// Ré-attache le renderer à un nouveau track distant (ICE restart) sans
+    /// reconstruire le controller. No-op si le PiP n'est pas configuré.
+    func updateRemoteTrack(_ remoteTrack: AnyObject)
+    /// Ajuste le framerate du PiP (thermal-aware).
+    func setMaxFrameRate(_ fps: Int)
     func start()
     func stop()
     func tearDown()
@@ -53,6 +58,8 @@ final class NoOpPiPController: PiPCallProviding {
                    onStart: @escaping @MainActor () -> Void,
                    onRestoreUI: @escaping @MainActor () -> Void,
                    onStop: @escaping @MainActor () -> Void) {}
+    func updateRemoteTrack(_ remoteTrack: AnyObject) {}
+    func setMaxFrameRate(_ fps: Int) {}
     func start() {}
     func stop() {}
     func tearDown() {}
@@ -77,6 +84,7 @@ final class PiPCallController: NSObject, PiPCallProviding {
     private var onStart: (@MainActor () -> Void)?
     private var onRestoreUI: (@MainActor () -> Void)?
     private var onStop: (@MainActor () -> Void)?
+    private var desiredFrameRate = 15
 
     override init() {
         isPiPSupported = AVPictureInPictureController.isPictureInPictureSupported()

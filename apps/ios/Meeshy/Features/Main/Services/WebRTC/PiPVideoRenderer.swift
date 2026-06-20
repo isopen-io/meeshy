@@ -27,7 +27,7 @@ nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked
     private let displayLayer: AVSampleBufferDisplayLayer
     private let converter: VideoFrameConverter
     private let queue = DispatchQueue(label: "me.meeshy.pip.render", qos: .userInteractive)
-    private let minIntervalNs: UInt64
+    private var minIntervalNs: UInt64
     private let onRotation: (@Sendable (Int) -> Void)?
 
     private var lastEnqueueNs: UInt64 = 0
@@ -77,6 +77,12 @@ nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked
             self.lastEnqueueNs = 0
             self.lastRotation = -1
         }
+    }
+
+    /// Ajuste le framerate cible (thermal-aware). Muté sur la serial queue.
+    func setMaxFrameRate(_ fps: Int) {
+        let interval = UInt64(1_000_000_000 / max(1, fps))
+        queue.async { [weak self] in self?.minIntervalNs = interval }
     }
 
     // MARK: - Surface d'enqueue (iOS 16 vs 17+)
