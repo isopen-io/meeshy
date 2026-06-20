@@ -8,6 +8,7 @@ import type { Server as SocketIOServer, Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { getCommunityCoMemberIds } from '../../services/posts/communityVisibility';
 import type {
   Post,
   PostComment,
@@ -136,6 +137,10 @@ export class SocialEventsHandler {
     visibility: string,
     visibilityUserIds: string[] = []
   ): Promise<string[]> {
+    if (visibility === 'COMMUNITY') {
+      return getCommunityCoMemberIds(this.prisma, authorId);
+    }
+
     const friendIds = await this.getFriendIds(authorId);
 
     switch (visibility) {
