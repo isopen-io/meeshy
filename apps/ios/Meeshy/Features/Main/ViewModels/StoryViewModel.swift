@@ -131,7 +131,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             loadedVideoURLs: media.loadedVideoURLs,
             loadedAudioURLs: media.loadedAudioURLs,
             originalLanguage: nil,
-            visibility: item.visibility
+            visibility: item.visibility,
+            visibilityUserIds: item.visibilityUserIds ?? []
         )
 
         let ids = try await runStoryUpload(
@@ -214,6 +215,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let loadedAudioURLs: [String: URL]
         let originalLanguage: String?
         let visibility: String
+        let visibilityUserIds: [String]
         /// IDs of slide-Posts already created server-side. Tracked so that:
         /// (a) `retryUpload()` skips them (otherwise a partial-failure retry creates
         ///     duplicate slides — what was previously committed plus the same again),
@@ -490,6 +492,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 content: content,
                 storyEffects: effects,
                 visibility: visibility,
+                visibilityUserIds: nil,
                 originalLanguage: originalLanguage,
                 mediaIds: uploadResult.map { [$0.id] },
                 repostOfId: nil
@@ -584,6 +587,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             content: content,
             storyEffects: updatedEffects,
             visibility: visibility,
+            visibilityUserIds: nil,
             originalLanguage: originalLanguage,
             mediaIds: allMediaIds.isEmpty ? nil : allMediaIds,
             repostOfId: nil
@@ -604,7 +608,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
-        visibility: String = "PUBLIC"
+        visibility: String = "PUBLIC",
+        visibilityUserIds: [String] = []
     ) {
         guard activeUpload == nil else { return }
 
@@ -621,7 +626,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     loadedImages: loadedImages,
                     loadedVideoURLs: loadedVideoURLs,
                     loadedAudioURLs: loadedAudioURLs,
-                    visibility: visibility
+                    visibility: visibility,
+                    visibilityUserIds: visibilityUserIds
                 )
             }
             showStoryComposer = false
@@ -646,7 +652,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             loadedVideoURLs: loadedVideoURLs,
             loadedAudioURLs: loadedAudioURLs,
             originalLanguage: originalLanguage,
-            visibility: visibility
+            visibility: visibility,
+            visibilityUserIds: visibilityUserIds
         )
         activeUpload = upload
         showStoryComposer = false
@@ -674,7 +681,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedImages: [String: UIImage],
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL],
-        visibility: String
+        visibility: String,
+        visibilityUserIds: [String]
     ) async {
         // 1. Re-key slide backgrounds.
         let bgImages = Dictionary(
@@ -743,7 +751,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             slidesPayload: payload,
             repostOfId: nil,
             mediaReferences: mediaReferences,
-            tempStoryId: tempStoryId
+            tempStoryId: tempStoryId,
+            visibilityUserIds: visibilityUserIds
         )
         _ = await StoryPublishQueue.shared.enqueue(item)
 
@@ -958,6 +967,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 content: slide.content,
                 storyEffects: updatedEffects,
                 visibility: upload.visibility,
+                visibilityUserIds: upload.visibilityUserIds,
                 originalLanguage: upload.originalLanguage,
                 mediaIds: allMediaIds.isEmpty ? nil : allMediaIds,
                 repostOfId: nil
