@@ -141,16 +141,11 @@ struct StoryTrayView: View {
                 ForEach(Array(viewModel.storyGroups.filter { $0.id != currentUserId && !$0.isFullyExpired() }.enumerated()), id: \.element.id) { visibleIndex, group in
                     Group {
                         if visibleIndex < staggerCap {
-                            storyRing(group: group, userId: group.id)
+                            storyRingCell(for: group)
                                 .staggeredAppear(index: visibleIndex, baseDelay: 0.05)
                         } else {
-                            storyRing(group: group, userId: group.id)
+                            storyRingCell(for: group)
                         }
-                    }
-                    .onTapGesture {
-                        HapticFeedback.medium()
-                        Logger.messages.info("[StoryTrayView] tap ring group.id=\(group.id, privacy: .public) username=\(group.username, privacy: .public)")
-                        onViewStory(group.id)
                     }
                 }
             }
@@ -179,12 +174,44 @@ struct StoryTrayView: View {
 
     // MARK: - Story Ring
 
-    private func storyRing(group: StoryGroup, userId: String) -> some View {
-        VStack(spacing: 5) {
+    /// Full-size trail ring — thin wrapper over the shared `StoryRingCell` so
+    /// the grande trail and the pinned mini-trail render an identical cell,
+    /// only differing by `context` size.
+    private func storyRingCell(for group: StoryGroup) -> some View {
+        StoryRingCell(
+            group: group,
+            onViewStory: { onViewStory(group.id) },
+            onShowProfile: { selectedProfileUser = .from(storyGroup: group) }
+        )
+    }
+
+}
+
+// MARK: - Story Ring Cell (shared by grande + compact pinned trail)
+
+/// One story group rendered as avatar ring + (optional) username, sharing the
+/// exact same `MeeshyAvatar` atom across the full-size trail and the compact
+/// pinned mini-trail. `context` drives the size (`.storyTray` 88pt vs
+/// `.storyTrayCompact` 44pt); all proportional metrics derive from it.
+struct StoryRingCell: View {
+    let group: StoryGroup
+    var context: AvatarContext = .storyTray
+    var showsUsername: Bool = true
+    let onViewStory: () -> Void
+    let onShowProfile: () -> Void
+
+    private var theme: ThemeManager { ThemeManager.shared }
+    private var presenceManager: PresenceManager { PresenceManager.shared }
+    @EnvironmentObject private var statusViewModel: StatusViewModel
+
+    private var isCompact: Bool { context.size <= 44 }
+
+    var body: some View {
+        VStack(spacing: isCompact ? 4 : 5) {
             ZStack {
                 MeeshyAvatar(
                     name: group.username,
-                    context: .storyTray,
+                    context: context,
                     accentColor: group.avatarColor,
                     avatarURL: latestStoryThumbnailURL(group),
                     storyState: group.hasUnviewed ? .unread : .read,
@@ -193,46 +220,55 @@ struct StoryTrayView: View {
                     onMoodTap: statusViewModel.moodTapHandler(for: group.id),
                     contextMenuItems: [
                         AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
-                            onViewStory(userId)
+                            onViewStory()
                         },
                         AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                            selectedProfileUser = .from(storyGroup: group)
+                            onShowProfile()
                         }
                     ]
                 )
 
-                // Story count dots (multiple stories indicator)
+                // Story count dots (multiple stories indicator) — offset scales
+                // with the avatar so it stays pinned to the bottom edge.
                 if group.stories.count > 1 {
                     storyCountDots(count: group.stories.count, unviewed: group.hasUnviewed)
-                        .offset(y: 28)
+                        .offset(y: context.size * 0.318)
                 }
             }
 
-            Text(group.username)
-                .font(.system(size: 10, weight: group.hasUnviewed ? .semibold : .medium))
-                .foregroundColor(group.hasUnviewed ? theme.textPrimary : theme.textMuted)
-                .lineLimit(1)
-                .frame(width: 96)
-        }
-    }
-
-    // MARK: - Story Count Dots
-
-    private func storyCountDots(count: Int, unviewed: Bool) -> some View {
-        HStack(spacing: 3) {
-            ForEach(0..<min(count, 5), id: \.self) { _ in
-                Circle()
-                    .fill(unviewed ? Color.white.opacity(0.85) : Color.white.opacity(0.25))
-                    .frame(width: 4, height: 4)
-            }
-            if count > 5 {
-                Text("+")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(.white.opacity(0.5))
+            if showsUsername {
+                Text(group.username)
+                    .font(.system(size: isCompact ? 9 : 10, weight: group.hasUnviewed ? .semibold : .medium))
+                    .foregroundColor(group.hasUnviewed ? theme.textPrimary : theme.textMuted)
+                    .lineLimit(1)
+                    .frame(width: isCompact ? 56 : 96)
             }
         }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            HapticFeedback.medium()
+            Logger.messages.info("[StoryRingCell] tap ring group.id=\(group.id, privacy: .public) username=\(group.username, privacy: .public)")
+            onViewStory()
+        }
     }
+}
 
+// MARK: - Story Count Dots (shared)
+
+@ViewBuilder
+fileprivate func storyCountDots(count: Int, unviewed: Bool) -> some View {
+    HStack(spacing: 3) {
+        ForEach(0..<min(count, 5), id: \.self) { _ in
+            Circle()
+                .fill(unviewed ? Color.white.opacity(0.85) : Color.white.opacity(0.25))
+                .frame(width: 4, height: 4)
+        }
+        if count > 5 {
+            Text("+")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundColor(.white.opacity(0.5))
+        }
+    }
 }
 
 // MARK: - Thumbnail Helper
@@ -477,5 +513,120 @@ private struct StoryUploadOverlay: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Pinned Mini Story Trail (revealed inside the collapsed header)
+
+/// Compact story trail pinned *inside* the header, below the title + actions.
+/// It fades/slides in as the full-size `StoryTrayView` scrolls up under the
+/// header so the stories stay reachable without taking a full row. Per product
+/// decision the connected user's avatar is replaced by a single leading "+"
+/// (add a story); everyone else's rings render at half size
+/// (`.storyTrayCompact`, 44pt) with the same design and horizontal scroll.
+struct PinnedStoryTrailBand: View {
+    @ObservedObject var viewModel: StoryViewModel
+    /// Same negative scroll offset the `CollapsibleHeader` consumes (0 at rest,
+    /// more negative as the content scrolls up).
+    let scrollOffset: CGFloat
+    var onViewStory: (String) -> Void
+
+    private var theme: ThemeManager { ThemeManager.shared }
+    @EnvironmentObject private var statusViewModel: StatusViewModel
+    @State private var selectedProfileUser: ProfileSheetUser?
+
+    // Layout-derived: the full trail (120pt + 8 top pad) sits under the 64pt
+    // expanded header and is fully hidden behind the 44pt collapsed header after
+    // ~148pt of scroll. Reveal the mini-trail over the last ~70pt of that travel.
+    private static let revealStart: CGFloat = 78
+    private static let revealEnd: CGFloat = 148
+    private static let bandHeight: CGFloat = 80
+
+    private var reveal: CGFloat {
+        CollapsibleHeaderMetrics.pinnedAccessoryReveal(
+            scrollOffset: scrollOffset,
+            start: Self.revealStart,
+            end: Self.revealEnd
+        )
+    }
+
+    private var visibleGroups: [StoryGroup] {
+        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+        return viewModel.storyGroups.filter { $0.id != currentUserId && !$0.isFullyExpired() }
+    }
+
+    var body: some View {
+        let groups = visibleGroups
+        // Occupy space only while revealing AND there is at least one peer story
+        // to surface — otherwise the grande "+Moi" near the top already covers
+        // adding a story, so a pinned band would be redundant.
+        if reveal > 0.001 && !groups.isEmpty {
+            band(groups: groups)
+                .frame(height: Self.bandHeight * reveal, alignment: .top)
+                .opacity(Double(reveal))
+                .clipped()
+                .allowsHitTesting(reveal > 0.6)
+                .sheet(item: $selectedProfileUser) { user in
+                    UserProfileSheet(
+                        user: user,
+                        moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
+                        onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+                    )
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                }
+        }
+    }
+
+    private func band(groups: [StoryGroup]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 12) {
+                addStoryButton
+                ForEach(groups, id: \.id) { group in
+                    StoryRingCell(
+                        group: group,
+                        context: .storyTrayCompact,
+                        onViewStory: { onViewStory(group.id) },
+                        onShowProfile: { selectedProfileUser = .from(storyGroup: group) }
+                    )
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(bandBackground)
+    }
+
+    private var addStoryButton: some View {
+        Button {
+            guard viewModel.activeUpload == nil else { return }
+            viewModel.showStoryComposer = true
+            HapticFeedback.medium()
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(Color.white)
+                .frame(width: 44, height: 44)
+                .background(
+                    Circle()
+                        .fill(MeeshyColors.brandGradient)
+                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "story.tray.addStory", defaultValue: "Ajouter une story"))
+    }
+
+    /// Solid-ish header surface so list rows scrolling under the band stay
+    /// masked — the header bar above fades to clear at its bottom edge, the band
+    /// picks the readable blur back up.
+    private var bandBackground: some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .overlay(theme.backgroundPrimary.opacity(0.6))
+            .overlay(alignment: .bottom) { Divider().opacity(0.4) }
+            .allowsHitTesting(false)
     }
 }

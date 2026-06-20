@@ -6,6 +6,7 @@ import MeeshySDK
 public enum AvatarContext: Sendable {
     // Stories
     case storyTray              // 88pt (doubled 2026-05-27 — story trail = primary CTA)
+    case storyTrayCompact       // 44pt (pinned mini-trail revealed in the collapsed header)
     case storyViewer            // 44pt
 
     // Feed
@@ -42,7 +43,7 @@ public enum AvatarContext: Sendable {
     public var size: CGFloat {
         switch self {
         case .storyTray: return 88  // doubled 2026-05-27 (user request — trail = primary CTA)
-        case .storyViewer, .conversationHeaderCollapsed,
+        case .storyTrayCompact, .storyViewer, .conversationHeaderCollapsed,
              .conversationHeaderExpanded, .postAuthor, .userListItem, .notification:
             return 44
         case .conversationList: return 52
@@ -106,7 +107,7 @@ public enum AvatarContext: Sendable {
     /// reconnaissable comme story non lue) sans animation GPU continue.
     public var animatesStoryRing: Bool {
         switch self {
-        case .storyTray, .storyViewer, .feedComposer, .postAuthor,
+        case .storyTray, .storyTrayCompact, .storyViewer, .feedComposer, .postAuthor,
              .profileBanner, .profileSheet, .profileEdit,
              .conversationHeaderExpanded:
             return true
@@ -119,7 +120,7 @@ public enum AvatarContext: Sendable {
     /// pendant le scroll.
     public var animatesMoodBadge: Bool {
         switch self {
-        case .storyTray, .feedComposer, .postAuthor,
+        case .storyTray, .storyTrayCompact, .feedComposer, .postAuthor,
              .profileBanner, .profileSheet,
              .conversationHeaderExpanded, .conversationHeaderCollapsed:
             return true
@@ -152,6 +153,9 @@ public enum AvatarContext: Sendable {
     public var ringWidth: CGFloat {
         switch self {
         case .storyTray: return 0.7
+        // Compact pinned trail (44pt) — keep the thin story aesthetic but a
+        // touch crisper so the ring stays readable at half the trail size.
+        case .storyTrayCompact: return 1.5
         default: return size <= 32 ? 1.5 : 2.5
         }
     }

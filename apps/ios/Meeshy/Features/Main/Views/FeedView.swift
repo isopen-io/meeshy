@@ -456,6 +456,17 @@ struct FeedView: View {
                     backArrowColor: MeeshyColors.indigo500,
                     backgroundColor: theme.backgroundPrimary
                 )
+                // Compact story trail pinned below the header — reveals as the
+                // full-size trail scrolls up under the header.
+                PinnedStoryTrailBand(
+                    viewModel: storyViewModel,
+                    scrollOffset: headerScrollOffset,
+                    onViewStory: { userId in
+                        selectedStoryUserId = userId
+                        storyViewerSingleGroup = false
+                        showStoryViewer = true
+                    }
+                )
                 Spacer()
             }
 

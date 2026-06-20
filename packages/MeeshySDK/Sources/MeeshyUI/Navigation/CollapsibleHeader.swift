@@ -3,6 +3,23 @@ import SwiftUI
 public enum CollapsibleHeaderMetrics {
     public static var expandedHeight: CGFloat { 64 }
     public static var collapsedHeight: CGFloat { 44 }
+
+    /// Reveal curve [0, 1] for a pinned accessory rendered *below* the header
+    /// bar (e.g. a compact story trail that takes over once the full-size one
+    /// has scrolled up under the header). `scrollOffset` is the same negative
+    /// offset the header consumes (0 at rest, more negative as content scrolls
+    /// up); `start`/`end` are the scroll distances (positive points) at which
+    /// the accessory begins and finishes revealing. Pure so it is testable off
+    /// the MainActor under MeeshyUI's default isolation.
+    nonisolated public static func pinnedAccessoryReveal(
+        scrollOffset: CGFloat,
+        start: CGFloat,
+        end: CGFloat
+    ) -> CGFloat {
+        let scrolled = -scrollOffset
+        guard end > start else { return scrolled >= end ? 1 : 0 }
+        return min(1, max(0, (scrolled - start) / (end - start)))
+    }
 }
 
 public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, TrailingContent: View, CenterContent: View>: View {
