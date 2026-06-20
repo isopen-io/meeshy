@@ -27,58 +27,63 @@ struct ProfileUserPostsList: View {
         _viewModel = StateObject(wrappedValue: ProfileUserPostsViewModel(userId: userId))
     }
 
+    // NOTE: This view is injected as content INSIDE `UserProfileSheet`'s outer
+    // ScrollView. It MUST NOT wrap its content in its own ScrollView — a vertical
+    // ScrollView nested in a vertical ScrollView breaks both the scroll gesture
+    // and the parent's scrollOffset (the collapsible header would never collapse
+    // on the Posts tab). The content flows directly in the parent's single
+    // scroll container. Pull-to-refresh is intentionally dropped here (the outer
+    // ScrollView owns scrolling); SWR + the visit revalidate covers freshness.
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            LazyVStack(spacing: 12) {
-                if viewModel.posts.isEmpty {
-                    if viewModel.isLoading {
-                        ProgressView()
-                            .padding(.top, 40)
-                    } else {
-                        emptyState
-                    }
+        LazyVStack(spacing: 12) {
+            if viewModel.posts.isEmpty {
+                if viewModel.isLoading {
+                    ProgressView()
+                        .padding(.top, 40)
                 } else {
-                    ForEach(viewModel.posts) { post in
-                        FeedPostCard(
-                            post: post,
-                            isLiked: viewModel.likedOverrides[post.id],
-                            displayLikeCount: viewModel.displayLikeCount(for: post),
-                            isBookmarked: viewModel.isBookmarked(post),
-                            onLike: { postId in
-                                Task { await viewModel.toggleLike(postId) }
-                            },
-                            onBookmark: { postId in
-                                Task { await viewModel.toggleBookmark(postId) }
-                            },
-                            onTapPost: { tapped in
-                                onOpenPost?(tapped)
-                            },
-                            onReport: { postId in
-                                Task {
-                                    try? await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
-                                    FeedbackToastManager.shared.showSuccess(String(localized: "profile.posts.report.success", defaultValue: "Signalement envoye", bundle: .main))
-                                }
+                    emptyState
+                }
+            } else {
+                ForEach(viewModel.posts) { post in
+                    FeedPostCard(
+                        post: post,
+                        isLiked: viewModel.likedOverrides[post.id],
+                        displayLikeCount: viewModel.displayLikeCount(for: post),
+                        isBookmarked: viewModel.isBookmarked(post),
+                        onLike: { postId in
+                            Task { await viewModel.toggleLike(postId) }
+                        },
+                        onBookmark: { postId in
+                            Task { await viewModel.toggleBookmark(postId) }
+                        },
+                        onTapPost: { tapped in
+                            onOpenPost?(tapped)
+                        },
+                        onReport: { postId in
+                            Task {
+                                try? await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
+                                FeedbackToastManager.shared.showSuccess(String(localized: "profile.posts.report.success", defaultValue: "Signalement envoye", bundle: .main))
                             }
-                        )
-                        .equatable()
-                    }
-
-                    if viewModel.hasMore {
-                        Color.clear
-                            .frame(height: 1)
-                            .onAppear {
-                                Task { await viewModel.loadMore() }
-                            }
-                        if viewModel.isLoading {
-                            ProgressView().padding()
                         }
+                    )
+                    .equatable()
+                }
+
+                if viewModel.hasMore {
+                    // Infinite-scroll sentinel — works inside the parent LazyVStack.
+                    Color.clear
+                        .frame(height: 1)
+                        .onAppear {
+                            Task { await viewModel.loadMore() }
+                        }
+                    if viewModel.isLoading {
+                        ProgressView().padding()
                     }
                 }
             }
-            .padding(.top, 8)
-            .padding(.bottom, 24)
         }
-        .refreshable { await viewModel.refresh() }
+        .padding(.top, 8)
+        .padding(.bottom, 24)
         .task { await viewModel.loadInitial() }
     }
 
@@ -104,8 +109,8 @@ final class ProfileUserPostsViewModel: ObservableObject {
     @Published var hasMore = true
     /// Optimistic like state keyed by postId (nil = use post.isLiked).
     @Published var likedOverrides: [String: Bool] = [:]
-    /// Optimistic bookmark state keyed by postId.
-    @Published var bookmarkedIds: Set<String> = []
+    /// Optimistic bookmark state keyed by postId (nil = use post.isBookmarkedByMe).
+    @Published var bookmarkedOverrides: [String: Bool] = [:]
 
     private let userId: String
     private let cacheKey: String
@@ -127,11 +132,17 @@ final class ProfileUserPostsViewModel: ObservableObject {
     private var preferredLanguages: [String] { languageProvider.preferredLanguages }
 
     func isBookmarked(_ post: FeedPost) -> Bool {
-        bookmarkedIds.contains(post.id)
+        // Optimistic override wins while in flight; otherwise fall back to the
+        // server-enriched flag so a server-bookmarked post renders correctly on
+        // first paint AND an optimistic un-bookmark still wins until refresh.
+        bookmarkedOverrides[post.id] ?? post.isBookmarkedByMe
     }
 
     func displayLikeCount(for post: FeedPost) -> Int? {
         guard let liked = likedOverrides[post.id] else { return nil }
+        // No override needed when the optimistic value equals server truth —
+        // let the card render `post.likes` / `post.isLiked` directly.
+        if liked == post.isLiked { return nil }
         let base = post.likes - (post.isLiked ? 1 : 0)
         return base + (liked ? 1 : 0)
     }
@@ -186,7 +197,22 @@ final class ProfileUserPostsViewModel: ObservableObject {
             nextCursor = response.pagination?.nextCursor
             hasMore = response.pagination?.hasMore ?? false
 
-            try? await CacheCoordinator.shared.feed.save(posts, for: cacheKey)
+            // Prune optimistic overrides for posts no longer present, and drop
+            // any override whose value now matches server truth (so the next
+            // refresh reads `post.isLiked` / `post.isBookmarkedByMe` directly).
+            let ids = Set(posts.map(\.id))
+            likedOverrides = likedOverrides.filter { ids.contains($0.key) }
+            bookmarkedOverrides = bookmarkedOverrides.filter { ids.contains($0.key) }
+            for post in posts {
+                if likedOverrides[post.id] == post.isLiked { likedOverrides[post.id] = nil }
+                if bookmarkedOverrides[post.id] == post.isBookmarkedByMe { bookmarkedOverrides[post.id] = nil }
+            }
+
+            // The live VM keeps the full paginated list in memory; the cache is
+            // bounded to the NEWEST 100. GRDBCacheStore.save keeps `suffix(100)`
+            // (oldest, posts are newest-first) so we persist `prefix(100)` to
+            // avoid trimming the newest posts on cold start.
+            try? await CacheCoordinator.shared.feed.save(Array(posts.prefix(100)), for: cacheKey)
         } catch {
             FeedbackToastManager.shared.showError(String(localized: "profile.posts.loadError", defaultValue: "Erreur lors du chargement des publications", bundle: .main))
         }
@@ -213,16 +239,18 @@ final class ProfileUserPostsViewModel: ObservableObject {
     }
 
     func toggleBookmark(_ postId: String) async {
-        let wasBookmarked = bookmarkedIds.contains(postId)
-        if wasBookmarked { bookmarkedIds.remove(postId) } else { bookmarkedIds.insert(postId) }
+        guard let post = posts.first(where: { $0.id == postId }) else { return }
+        let current = bookmarkedOverrides[postId] ?? post.isBookmarkedByMe
+        let next = !current
+        bookmarkedOverrides[postId] = next
         do {
-            if wasBookmarked {
+            if current {
                 try await postService.removeBookmark(postId: postId)
             } else {
                 try await postService.bookmark(postId: postId)
             }
         } catch {
-            if wasBookmarked { bookmarkedIds.insert(postId) } else { bookmarkedIds.remove(postId) }
+            bookmarkedOverrides[postId] = current
             FeedbackToastManager.shared.showError(String(localized: "profile.posts.bookmarkError", defaultValue: "Erreur", bundle: .main))
         }
     }

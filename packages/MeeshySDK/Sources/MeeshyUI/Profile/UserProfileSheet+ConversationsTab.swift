@@ -20,6 +20,7 @@ extension UserProfileSheet {
                 Image(systemName: isInteractionDisabled ? "nosign" : "bubble.left.and.bubble.right")
                     .font(.system(size: 28))
                     .foregroundColor(theme.textMuted.opacity(isInteractionDisabled ? 0.3 : 0.5))
+                    .accessibilityHidden(true)
 
                 if !isCurrentUser, !isInteractionDisabled {
                     sendMessageButtonCompact
@@ -29,7 +30,7 @@ extension UserProfileSheet {
                      ? String(localized: "profile.conversations.interactionsDisabled", defaultValue: "Interactions desactivees", bundle: .module)
                      : String(localized: "profile.conversations.noShared", defaultValue: "Aucune conversation en commun", bundle: .module))
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(theme.textMuted.opacity(0.7))
+                    .foregroundColor(theme.textSecondary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 24)

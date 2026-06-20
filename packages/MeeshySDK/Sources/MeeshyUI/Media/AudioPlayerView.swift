@@ -1119,6 +1119,7 @@ public struct AudioPlayerView: View {
             playButtonLabel
         }
         .disabled(isDownloading)
+        .accessibilityLabel(String(localized: "media.audio.play", defaultValue: "Lire l'audio", bundle: .module))
     }
 
     private var isDownloading: Bool {

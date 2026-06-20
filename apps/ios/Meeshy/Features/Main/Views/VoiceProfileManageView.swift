@@ -249,7 +249,7 @@ struct VoiceProfileManageView: View {
                     .foregroundColor(theme.textSecondary)
             }
             Spacer()
-            Toggle("", isOn: Binding(
+            Toggle(String(localized: "voice.profile.cloningEnabled", defaultValue: "Clonage vocal actif", bundle: .main), isOn: Binding(
                 get: { viewModel.isCloningEnabled },
                 set: { newValue in
                     Task { await viewModel.toggleCloning(enabled: newValue) }
@@ -264,6 +264,7 @@ struct VoiceProfileManageView: View {
                 .fill(theme.backgroundSecondary)
         )
         .padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Voice Public Toggle
@@ -279,7 +280,7 @@ struct VoiceProfileManageView: View {
                     .foregroundColor(theme.textSecondary)
             }
             Spacer()
-            Toggle("", isOn: Binding(
+            Toggle(String(localized: "voice.makePublic", defaultValue: "Rendre mon profil vocal public", bundle: .main), isOn: Binding(
                 get: { viewModel.isVoicePublic },
                 set: { newValue in
                     Task { await viewModel.toggleVoicePublic(enabled: newValue) }
@@ -370,7 +371,10 @@ struct VoiceProfileManageView: View {
                 Image(systemName: "trash")
                     .font(.system(size: 13))
                     .foregroundColor(MeeshyColors.error.opacity(0.7))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
+            .accessibilityLabel(String(localized: "voice.profile.deleteSample", defaultValue: "Supprimer l'échantillon", bundle: .main))
         }
         .padding(.vertical, 6)
     }

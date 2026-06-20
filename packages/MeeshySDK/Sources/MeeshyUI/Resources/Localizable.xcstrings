@@ -36,21 +36,11 @@
         }
       }
     },
-    "" : {
-
-    },
-    "@%@" : {
-
-    },
-    "*" : {
-
-    },
-    "/" : {
-
-    },
-    "#%@" : {
-
-    },
+    "" : {},
+    "@%@" : {},
+    "*" : {},
+    "/" : {},
+    "#%@" : {},
     "%@  %@" : {
       "localizations" : {
         "fr" : {
@@ -101,9 +91,7 @@
         }
       }
     },
-    "%@ partage sa position" : {
-
-    },
+    "%@ partage sa position" : {},
     "%@. %@" : {
       "localizations" : {
         "fr" : {
@@ -124,21 +112,11 @@
         }
       }
     },
-    "%@s" : {
-
-    },
-    "%lld" : {
-
-    },
-    "%lld éléments actifs" : {
-
-    },
-    "%lld lignes de plus" : {
-
-    },
-    "%lld messages" : {
-
-    },
+    "%@s" : {},
+    "%lld" : {},
+    "%lld éléments actifs" : {},
+    "%lld lignes de plus" : {},
+    "%lld messages" : {},
     "%lld non lue%@" : {
       "localizations" : {
         "fr" : {
@@ -149,12 +127,8 @@
         }
       }
     },
-    "%lld pages" : {
-
-    },
-    "%lld sous-titres" : {
-
-    },
+    "%lld pages" : {},
+    "%lld sous-titres" : {},
     "%lld trait%@" : {
       "localizations" : {
         "fr" : {
@@ -185,78 +159,30 @@
         }
       }
     },
-    "%lld%%" : {
-
-    },
-    "%lld°" : {
-
-    },
-    "%llds" : {
-
-    },
-    "%llds max" : {
-
-    },
-    "🏘️" : {
-
-    },
-    "1min" : {
-
-    },
-    "5min" : {
-
-    },
-    "10s" : {
-
-    },
-    "30s" : {
-
-    },
-    "Aa" : {
-
-    },
-    "Absent" : {
-
-    },
-    "Actif" : {
-
-    },
-    "Activer lecture en boucle" : {
-
-    },
-    "Activer picture in picture" : {
-
-    },
-    "Admin" : {
-
-    },
-    "Admins" : {
-
-    },
-    "AirPlay" : {
-
-    },
-    "Ajouter le tag %@" : {
-
-    },
-    "Ajouter un tag..." : {
-
-    },
-    "Analyse de l'audio…" : {
-
-    },
-    "Annuler" : {
-
-    },
-    "Astuce : poignées disponibles sur la timeline principale." : {
-
-    },
-    "Aucun élément" : {
-
-    },
-    "Aucun membre trouve" : {
-
-    },
+    "%lld%%" : {},
+    "%lld°" : {},
+    "%llds" : {},
+    "%llds max" : {},
+    "🏘️" : {},
+    "1min" : {},
+    "5min" : {},
+    "10s" : {},
+    "30s" : {},
+    "Aa" : {},
+    "Absent" : {},
+    "Actif" : {},
+    "Activer lecture en boucle" : {},
+    "Activer picture in picture" : {},
+    "Admin" : {},
+    "Admins" : {},
+    "AirPlay" : {},
+    "Ajouter le tag %@" : {},
+    "Ajouter un tag..." : {},
+    "Analyse de l'audio…" : {},
+    "Annuler" : {},
+    "Astuce : poignées disponibles sur la timeline principale." : {},
+    "Aucun élément" : {},
+    "Aucun membre trouve" : {},
     "audio.editor.apply" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -2830,18 +2756,10 @@
         }
       }
     },
-    "Bannir" : {
-
-    },
-    "Cette conversation disparaitra definitivement de votre liste. Les autres membres ne seront pas affectes." : {
-
-    },
-    "Cette conversation sera fermee pour tous les membres. Plus personne ne pourra ecrire." : {
-
-    },
-    "Choisir ou créer une catégorie..." : {
-
-    },
+    "Bannir" : {},
+    "Cette conversation disparaitra definitivement de votre liste. Les autres membres ne seront pas affectes." : {},
+    "Cette conversation sera fermee pour tous les membres. Plus personne ne pourra ecrire." : {},
+    "Choisir ou créer une catégorie..." : {},
     "common.cancel" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -8198,51 +8116,21 @@
         }
       }
     },
-    "Couleur" : {
-
-    },
-    "Couleur du trait" : {
-
-    },
-    "Couper le son" : {
-
-    },
-    "Creator" : {
-
-    },
-    "Créer \"%@\"" : {
-
-    },
-    "Créer la catégorie %@" : {
-
-    },
-    "Créer le tag %@" : {
-
-    },
-    "Desactive" : {
-
-    },
-    "Desactiver lecture en boucle" : {
-
-    },
-    "Deutsch" : {
-
-    },
-    "Diviser au point de lecture" : {
-
-    },
-    "Easing" : {
-
-    },
-    "Echantillon %lld" : {
-
-    },
-    "Effacer" : {
-
-    },
-    "Effacer la saisie" : {
-
-    },
+    "Couleur" : {},
+    "Couleur du trait" : {},
+    "Couper le son" : {},
+    "Creator" : {},
+    "Créer \"%@\"" : {},
+    "Créer la catégorie %@" : {},
+    "Créer le tag %@" : {},
+    "Desactive" : {},
+    "Desactiver lecture en boucle" : {},
+    "Deutsch" : {},
+    "Diviser au point de lecture" : {},
+    "Easing" : {},
+    "Echantillon %lld" : {},
+    "Effacer" : {},
+    "Effacer la saisie" : {},
     "emoji.category.animals" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -8488,72 +8376,28 @@
         }
       }
     },
-    "En ligne" : {
-
-    },
-    "English" : {
-
-    },
-    "Espanol" : {
-
-    },
-    "Expire %@" : {
-
-    },
-    "Export %lld %%" : {
-
-    },
-    "Export impossible" : {
-
-    },
-    "Expulser" : {
-
-    },
-    "Faites glisser vers le bas pour réduire ou fermer." : {
-
-    },
-    "Faites glisser vers le haut pour afficher les options de l'outil." : {
-
-    },
-    "Faites glisser vers le haut pour agrandir, vers le bas pour réduire ou replier." : {
-
-    },
-    "Ferme l'éditeur et masque le clavier" : {
-
-    },
-    "Ferme les contrôles de dessin" : {
-
-    },
-    "Fermer" : {
-
-    },
-    "Filtre %@" : {
-
-    },
-    "Fond" : {
-
-    },
-    "Francais" : {
-
-    },
-    "Hors ligne" : {
-
-    },
-    "Hors zone visible" : {
-
-    },
-    "Image" : {
-
-    },
-    "Indisponible" : {
-
-    },
-    "Invite par %@" : {
-
-    },
-    "Italiano" : {
-
-    },
+    "En ligne" : {},
+    "English" : {},
+    "Espanol" : {},
+    "Expire %@" : {},
+    "Export %lld %%" : {},
+    "Export impossible" : {},
+    "Expulser" : {},
+    "Faites glisser vers le bas pour réduire ou fermer." : {},
+    "Faites glisser vers le haut pour afficher les options de l'outil." : {},
+    "Faites glisser vers le haut pour agrandir, vers le bas pour réduire ou replier." : {},
+    "Ferme l'éditeur et masque le clavier" : {},
+    "Ferme les contrôles de dessin" : {},
+    "Fermer" : {},
+    "Filtre %@" : {},
+    "Fond" : {},
+    "Francais" : {},
+    "Hors ligne" : {},
+    "Hors zone visible" : {},
+    "Image" : {},
+    "Indisponible" : {},
+    "Invite par %@" : {},
+    "Italiano" : {},
     "joinFlow.close.accessibilityLabel" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -9954,9 +9798,7 @@
         }
       }
     },
-    "Kind" : {
-
-    },
+    "Kind" : {},
     "languagePicker.search" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -10027,21 +9869,11 @@
         }
       }
     },
-    "Langue du contenu" : {
-
-    },
-    "Langue parlée" : {
-
-    },
-    "Langues: %@" : {
-
-    },
-    "Les messages sont traduits automatiquement" : {
-
-    },
-    "Location: %@" : {
-
-    },
+    "Langue du contenu" : {},
+    "Langue parlée" : {},
+    "Langues: %@" : {},
+    "Les messages sont traduits automatiquement" : {},
+    "Location: %@" : {},
     "location.fullscreen.directions" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -10217,9 +10049,7 @@
         }
       }
     },
-    "Lu" : {
-
-    },
+    "Lu" : {},
     "media.audio.cancel" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12173,33 +12003,15 @@
         }
       }
     },
-    "Membres" : {
-
-    },
-    "min %llds" : {
-
-    },
-    "Mode annonce" : {
-
-    },
-    "Moderateur" : {
-
-    },
-    "Moderateurs" : {
-
-    },
-    "mshy_" : {
-
-    },
-    "Muet" : {
-
-    },
-    "Nederlands" : {
-
-    },
-    "Nom de la catégorie" : {
-
-    },
+    "Membres" : {},
+    "min %llds" : {},
+    "Mode annonce" : {},
+    "Moderateur" : {},
+    "Moderateurs" : {},
+    "mshy_" : {},
+    "Muet" : {},
+    "Nederlands" : {},
+    "Nom de la catégorie" : {},
     "notifications.category.all" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -13110,36 +12922,16 @@
         }
       }
     },
-    "Nouvelle catégorie" : {
-
-    },
-    "Ouvrir l'outil %@" : {
-
-    },
-    "Pause" : {
-
-    },
-    "Placez la tête de lecture puis divisez la vidéo en segments." : {
-
-    },
-    "Play" : {
-
-    },
-    "Poignée de la barre d'outils" : {
-
-    },
-    "Polski" : {
-
-    },
-    "Portugues" : {
-
-    },
-    "Premier plan" : {
-
-    },
-    "Préparation…" : {
-
-    },
+    "Nouvelle catégorie" : {},
+    "Ouvrir l'outil %@" : {},
+    "Pause" : {},
+    "Placez la tête de lecture puis divisez la vidéo en segments." : {},
+    "Play" : {},
+    "Poignée de la barre d'outils" : {},
+    "Polski" : {},
+    "Portugues" : {},
+    "Premier plan" : {},
+    "Préparation…" : {},
     "profile.action.acceptConnection" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -14925,12 +14717,8 @@
         }
       }
     },
-    "Promouvoir Admin" : {
-
-    },
-    "Promouvoir Moderateur" : {
-
-    },
+    "Promouvoir Admin" : {},
+    "Promouvoir Moderateur" : {},
     "pull_refresh.armed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -14964,21 +14752,11 @@
         }
       }
     },
-    "Reactiver le son" : {
-
-    },
-    "Read" : {
-
-    },
-    "Recherche…" : {
-
-    },
-    "Rechercher un membre..." : {
-
-    },
-    "Rechercher une langue" : {
-
-    },
+    "Reactiver le son" : {},
+    "Read" : {},
+    "Recherche…" : {},
+    "Rechercher un membre..." : {},
+    "Rechercher une langue" : {},
     "Recommandé pour %@ : %@" : {
       "localizations" : {
         "fr" : {
@@ -14989,63 +14767,25 @@
         }
       }
     },
-    "Recommencer" : {
-
-    },
-    "Réinitialiser" : {
-
-    },
-    "Reprendre l'édition ?" : {
-
-    },
-    "Restaurer" : {
-
-    },
-    "Retirer la catégorie %@" : {
-
-    },
-    "Retirer le tag %@" : {
-
-    },
-    "Retour" : {
-
-    },
-    "Retrograder Membre" : {
-
-    },
-    "Rotation" : {
-
-    },
-    "Ruler" : {
-
-    },
-    "Safe area" : {
-
-    },
-    "Segment %lld" : {
-
-    },
-    "Segment sélectionné" : {
-
-    },
-    "Sélectionner la catégorie %@" : {
-
-    },
-    "Seuls les admins peuvent ecrire" : {
-
-    },
-    "Si un compte existe avec %@, un lien de reinitialisation a ete envoye." : {
-
-    },
-    "Son" : {
-
-    },
-    "Sortir du picture in picture" : {
-
-    },
-    "Sticker %@" : {
-
-    },
+    "Recommencer" : {},
+    "Réinitialiser" : {},
+    "Reprendre l'édition ?" : {},
+    "Restaurer" : {},
+    "Retirer la catégorie %@" : {},
+    "Retirer le tag %@" : {},
+    "Retour" : {},
+    "Retrograder Membre" : {},
+    "Rotation" : {},
+    "Ruler" : {},
+    "Safe area" : {},
+    "Segment %lld" : {},
+    "Segment sélectionné" : {},
+    "Sélectionner la catégorie %@" : {},
+    "Seuls les admins peuvent ecrire" : {},
+    "Si un compte existe avec %@, un lien de reinitialisation a ete envoye." : {},
+    "Son" : {},
+    "Sortir du picture in picture" : {},
+    "Sticker %@" : {},
     "story.audioEditor.retranscribe" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -20956,69 +20696,27 @@
         }
       }
     },
-    "Supprimer" : {
-
-    },
-    "Supprimer le trait" : {
-
-    },
-    "Supprimer pour moi" : {
-
-    },
-    "Supprimer pour moi ?" : {
-
-    },
-    "Supprimer pour tous" : {
-
-    },
-    "Tap to open full map" : {
-
-    },
-    "Terminer" : {
-
-    },
-    "Terminer l'édition du dessin" : {
-
-    },
-    "Terminer l'édition du texte" : {
-
-    },
-    "Timeline" : {
-
-    },
-    "Touchez deux fois pour fermer." : {
-
-    },
-    "Touchez deux fois pour ouvrir." : {
-
-    },
-    "Tout le monde" : {
-
-    },
-    "Toute la vidéo" : {
-
-    },
-    "Traduction automatique" : {
-
-    },
-    "Traduction disponible" : {
-
-    },
-    "Transcription: %@" : {
-
-    },
-    "Transitions" : {
-
-    },
-    "Turkce" : {
-
-    },
-    "Une session d'édition non terminée a été retrouvée pour cette vidéo." : {
-
-    },
-    "Vidéo" : {
-
-    },
+    "Supprimer" : {},
+    "Supprimer le trait" : {},
+    "Supprimer pour moi" : {},
+    "Supprimer pour moi ?" : {},
+    "Supprimer pour tous" : {},
+    "Tap to open full map" : {},
+    "Terminer" : {},
+    "Terminer l'édition du dessin" : {},
+    "Terminer l'édition du texte" : {},
+    "Timeline" : {},
+    "Touchez deux fois pour fermer." : {},
+    "Touchez deux fois pour ouvrir." : {},
+    "Tout le monde" : {},
+    "Toute la vidéo" : {},
+    "Traduction automatique" : {},
+    "Traduction disponible" : {},
+    "Transcription: %@" : {},
+    "Transitions" : {},
+    "Turkce" : {},
+    "Une session d'édition non terminée a été retrouvée pour cette vidéo." : {},
+    "Vidéo" : {},
     "voiceProfile.age.birthDate" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -22944,9 +22642,7 @@
         }
       }
     },
-    "Volume" : {
-
-    },
+    "Volume" : {},
     "Vous avez rejoint %@ en tant que %@" : {
       "localizations" : {
         "fr" : {
@@ -22957,20 +22653,115 @@
         }
       }
     },
-    "Русский" : {
-
+    "Русский" : {},
+    "العربية" : {},
+    "한국어" : {},
+    "中文" : {},
+    "日本語" : {},
+    "media.audio.play" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio abspielen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play audio"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reproducir audio"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lire l'audio"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reproduzir áudio"
+          }
+        }
+      }
     },
-    "العربية" : {
-
+    "profile.avatar.viewFullscreen.hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffnet das Foto im Vollbild"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the photo fullscreen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre la foto en pantalla completa"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvre la photo en plein écran"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre a foto em tela cheia"
+          }
+        }
+      }
     },
-    "한국어" : {
-
-    },
-    "中文" : {
-
-    },
-    "日本語" : {
-
+    "profile.banner.label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profilbanner"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profile banner"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Banner de perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bannière de profil"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Banner de perfil"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

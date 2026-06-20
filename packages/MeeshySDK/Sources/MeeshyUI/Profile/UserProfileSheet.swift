@@ -200,6 +200,10 @@ public struct UserProfileSheet: View {
             compactPinnedBar
                 .opacity(Double(ProfileHeaderMetrics.progress(offset: scrollOffset)))
                 .allowsHitTesting(ProfileHeaderMetrics.progress(offset: scrollOffset) > 0.5)
+                // Hide the compact identity from VoiceOver while the header is
+                // still mostly expanded — the expanded identity is the primary
+                // and reads name/@username; avoids a duplicate identity element.
+                .accessibilityHidden(ProfileHeaderMetrics.progress(offset: scrollOffset) <= 0.5)
         }
         .task {
             await loadDataIfNeeded()
@@ -260,8 +264,17 @@ public struct UserProfileSheet: View {
             let fetchedUser = try await UserService.shared.getProfile(idOrUsername: idOrUsername)
             internalFullUser = fetchedUser
             UserDisplayNameCache.shared.trackFromUser(fetchedUser)
-            let cacheKey = fetchedUser.id ?? idOrUsername
+            // `MeeshyUser.id` is non-optional — save under the resolved id.
+            let cacheKey = fetchedUser.id
             try await CacheCoordinator.shared.profiles.save([fetchedUser], for: cacheKey)
+            // When opened by username, the lookup key differs from the resolved
+            // id. Persist under the username too so a future username-open hits
+            // the cache instead of cold-fetching, and touch both keys so the
+            // 30-day TTL is extended on the entry that actually holds the data.
+            if idOrUsername != cacheKey {
+                try? await CacheCoordinator.shared.profiles.save([fetchedUser], for: idOrUsername)
+            }
+            await CacheCoordinator.shared.profiles.touch(for: cacheKey)
             await SearchIndex.shared.indexUsers([fetchedUser])
         } catch let error as APIError {
             if case .serverError(403, _) = error {
@@ -441,7 +454,7 @@ public struct UserProfileSheet: View {
     func bioCard(_ bio: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(bio)
-                .font(.system(size: 14))
+                .font(.callout)
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(5)
         }

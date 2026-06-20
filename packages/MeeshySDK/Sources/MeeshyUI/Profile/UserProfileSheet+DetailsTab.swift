@@ -236,6 +236,7 @@ extension UserProfileSheet {
             .padding(14)
             .background(theme.surfaceGradient(tint: resolvedAccent))
             .glassCard(cornerRadius: 16)
+            .accessibilityElement(children: .contain)
             .accessibilityLabel(String(localized: "profile.voice.title", defaultValue: "Voix", bundle: .module))
         }
     }
@@ -309,7 +310,7 @@ extension UserProfileSheet {
                 .font(.system(size: 15, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
             Text(label)
-                .font(.system(size: 9, weight: .medium))
+                .font(.caption2)
                 .foregroundColor(theme.textMuted)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)

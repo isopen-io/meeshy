@@ -14,10 +14,12 @@ extension UserProfileSheet {
 
     // MARK: - Big collapsible header
 
-    /// Banner + identity + compact details. Interpolates between the expanded
-    /// state (full banner + 80pt avatar + name + bio + chips) and the collapsed
-    /// state (banner shrunk toward `collapsedBar`, avatar shrunk, details faded)
-    /// driven by `ProfileHeaderMetrics.progress(offset: scrollOffset)`.
+    /// Banner + identity only (réduit). Interpolates between the expanded
+    /// state (full banner + avatar + name + @pseudo) and the collapsed state
+    /// (banner shrunk toward `collapsedBar`, avatar/name faded — the compact
+    /// pinned bar takes over). Bio, languages, country and the rest live in the
+    /// Détails tab, not the header. Driven by
+    /// `ProfileHeaderMetrics.progress(offset: scrollOffset)`.
     @ViewBuilder
     var bigCollapsibleHeader: some View {
         let progress = ProfileHeaderMetrics.progress(offset: scrollOffset)
@@ -36,13 +38,6 @@ extension UserProfileSheet {
                 // the compact pinned bar takes over once mostly collapsed.
                 .scaleEffect(1 - 0.12 * progress, anchor: .top)
                 .opacity(1 - Double(progress))
-
-            compactIdentityBlock
-                .opacity(1 - Double(progress))
-                // Collapse its height to 0 as we scroll so the tab bar reaches
-                // the pinned position smoothly.
-                .frame(maxHeight: progress > 0.8 ? 0 : nil)
-                .clipped()
         }
     }
 
@@ -62,6 +57,13 @@ extension UserProfileSheet {
                             .frame(height: ProfileHeaderMetrics.expandedBanner)
                             .clipped()
                             .onTapGesture {
+                                openFullscreenImage(url: bannerURL, fallback: displayUser.resolvedDisplayName)
+                            }
+                            // Expose the banner tap to VoiceOver (raw onTapGesture isn't).
+                            .accessibilityElement()
+                            .accessibilityLabel(String(localized: "profile.banner.label", defaultValue: "Bannière de profil", bundle: .module))
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityAction {
                                 openFullscreenImage(url: bannerURL, fallback: displayUser.resolvedDisplayName)
                             }
                     case .failure:
@@ -97,9 +99,18 @@ extension UserProfileSheet {
                     .frame(width: 150)
                     .offset(x: 100, y: 20)
             }
+            // Decorative ambient orbs — not meaningful to VoiceOver.
+            .accessibilityHidden(true)
         )
         .clipped()
         .onTapGesture {
+            openFullscreenImage(url: displayUser.bannerURL, fallback: displayUser.resolvedDisplayName)
+        }
+        // Expose the banner tap to VoiceOver (raw onTapGesture isn't).
+        .accessibilityElement()
+        .accessibilityLabel(String(localized: "profile.banner.label", defaultValue: "Bannière de profil", bundle: .module))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction {
             openFullscreenImage(url: displayUser.bannerURL, fallback: displayUser.resolvedDisplayName)
         }
     }
@@ -113,9 +124,15 @@ extension UserProfileSheet {
                 .onTapGesture {
                     openFullscreenImage(url: displayUser.avatarURL, fallback: displayUser.resolvedDisplayName)
                 }
+                // Expose the avatar tap to VoiceOver (a raw onTapGesture isn't).
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint(String(localized: "profile.avatar.viewFullscreen.hint", defaultValue: "Ouvre la photo en plein écran", bundle: .module))
+                .accessibilityAction {
+                    openFullscreenImage(url: displayUser.avatarURL, fallback: displayUser.resolvedDisplayName)
+                }
 
             Text(displayUser.resolvedDisplayName)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .font(.system(.title3, design: .rounded).weight(.bold))
                 .foregroundColor(theme.textPrimary)
 
             Text("@\(displayUser.username)")
@@ -123,6 +140,9 @@ extension UserProfileSheet {
                 .foregroundColor(Color(hex: resolvedAccent))
         }
         .padding(.top, 4)
+        // Gate the expanded identity from VoiceOver once the compact pinned bar
+        // becomes the primary (mostly collapsed) — avoids a duplicate name/@user.
+        .accessibilityHidden(ProfileHeaderMetrics.progress(offset: scrollOffset) > 0.5)
     }
 
     @ViewBuilder
@@ -148,58 +168,6 @@ extension UserProfileSheet {
 
     var presenceFromUser: PresenceState {
         displayUser.isOnline == true ? .online : .offline
-    }
-
-    // MARK: - Compact identity block (between banner and tab bar)
-
-    /// The condensed details strip that sits under name/@pseudo while expanded:
-    /// bio (2 lines) + a compact chips row (languages + country flag + mood).
-    /// Fades out as the header collapses. Kept minimal vertically.
-    @ViewBuilder
-    var compactIdentityBlock: some View {
-        VStack(spacing: 8) {
-            if let bio = displayUser.bio, !bio.isEmpty {
-                Text(bio)
-                    .font(.system(size: 13))
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 24)
-            }
-
-            compactChipsRow
-        }
-        .padding(.top, 8)
-        .padding(.bottom, 4)
-    }
-
-    @ViewBuilder
-    private var compactChipsRow: some View {
-        let sysLang = LanguageDisplay.from(code: displayUser.systemLanguage)
-        let regLang = LanguageDisplay.from(code: displayUser.regionalLanguage)
-        let hasCountry = displayUser.registrationCountry != nil
-        let hasMood = (moodEmoji?.isEmpty == false)
-
-        if sysLang != nil || regLang != nil || hasCountry || hasMood {
-            HStack(spacing: 8) {
-                languagePills
-                if let country = displayUser.registrationCountry {
-                    let countryName = CountryFlag.name(for: country) ?? country
-                    let flag = CountryFlag.emoji(for: country)
-                    infoChip(icon: flag, text: countryName)
-                }
-                if let mood = moodEmoji, !mood.isEmpty {
-                    Text(mood)
-                        .font(.system(size: 16))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(theme.surface(tint: resolvedAccent, intensity: 0.12))
-                        .clipShape(Capsule())
-                }
-            }
-            .padding(.horizontal, 20)
-        }
     }
 
     // MARK: - Pinned tab bar (section header — pins on scroll)
@@ -287,6 +255,6 @@ extension UserProfileSheet {
             Divider().opacity(0.3)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("@\(displayUser.username)"))
+        .accessibilityLabel(Text("\(displayUser.resolvedDisplayName), @\(displayUser.username)"))
     }
 }
