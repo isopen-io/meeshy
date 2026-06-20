@@ -1251,3 +1251,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   5. formatRelativeTime branches: instant = diffMs < 60000, minutes = diffMs < 3600000, hours = diffMs < 86400000, yesterday = diffDays === 1, days = diffDays < 7, else toLocaleDateString.
 - Next slice: P2 Feed/posts/stories × gateway (next ☐ cell top-to-bottom in feature matrix)
 - Commit: 0beea05a (branch claude/coverage/p2-notifications-web)
+- Commit: squash-merge SHA 4db3bfe6f3381a7d2aad36acd8494fa9a6e20471 (PR #727 → main, 2026-06-20T10:02Z)

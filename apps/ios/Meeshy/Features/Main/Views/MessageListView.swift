@@ -68,6 +68,9 @@ struct BubbleSwipeContainer<Content: View>: View {
 
             content()
                 .offset(x: offset)
+                .accessibilityAction(named: String(localized: "a11y.message.actions.reply", bundle: .main)) { onSwipeReply() }
+                .accessibilityAction(named: String(localized: "a11y.message.actions.forward", bundle: .main)) { onSwipeForward() }
+                .accessibilityAction(named: String(localized: "a11y.message.actions.long_press", bundle: .main)) { onLongPress() }
                 .background(
                     GeometryReader { proxy in
                         Color.clear.preference(
