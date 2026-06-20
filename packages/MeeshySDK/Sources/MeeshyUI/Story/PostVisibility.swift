@@ -3,13 +3,15 @@ import SwiftUI
 /// Mode de publication d'un post (story/status/post). Source unique côté UI ;
 /// la valeur transmise au SDK est `rawValue` (String). Aligné sur le backend
 /// `PostVisibility` (packages/shared/prisma/schema.prisma).
-public enum PostVisibility: String, CaseIterable, Sendable, Codable {
+public enum PostVisibility: String, CaseIterable, Sendable, Codable, Identifiable {
     case `public`  = "PUBLIC"
     case community = "COMMUNITY"
     case friends   = "FRIENDS"
     case except    = "EXCEPT"
     case only      = "ONLY"
     case `private` = "PRIVATE"
+
+    public nonisolated var id: String { rawValue }
 
     /// EXCEPT/ONLY nécessitent une sélection d'utilisateurs (picker = incrément 2).
     public nonisolated var requiresUserSelection: Bool {
@@ -44,6 +46,6 @@ public enum PostVisibility: String, CaseIterable, Sendable, Codable {
     /// Modes proposés dans les composers (incrément 1) — EXCEPT/ONLY masqués
     /// jusqu'au picker d'utilisateurs (incrément 2).
     public nonisolated static var composerSelectableCases: [PostVisibility] {
-        [.public, .community, .friends, .private]
+        [.public, .community, .friends, .except, .only, .private]
     }
 }

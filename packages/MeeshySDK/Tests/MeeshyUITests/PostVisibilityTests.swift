@@ -20,11 +20,16 @@ final class PostVisibilityTests: XCTestCase {
         XCTAssertFalse(PostVisibility.private.requiresUserSelection)
     }
 
-    func test_composerSelectableCases_excludesExceptAndOnly() {
+    func test_composerSelectableCases_includesExceptAndOnly() {
         let cases = PostVisibility.composerSelectableCases
-        XCTAssertEqual(cases, [.public, .community, .friends, .private])
-        XCTAssertFalse(cases.contains(.except))
-        XCTAssertFalse(cases.contains(.only))
+        XCTAssertEqual(cases, [.public, .community, .friends, .except, .only, .private])
+        XCTAssertTrue(cases.contains(.except))
+        XCTAssertTrue(cases.contains(.only))
+    }
+
+    func test_identifiable_idIsRawValue() {
+        XCTAssertEqual(PostVisibility.only.id, "ONLY")
+        XCTAssertEqual(PostVisibility.except.id, "EXCEPT")
     }
 
     func test_icon_nonEmptyForEveryCase() {
