@@ -18,8 +18,8 @@ L'application iOS Meeshy présente une **enveloppe technique impressionnante** (
 - **Gestion d'erreur défaillante** : 407 `try?` masquant les erreurs, plus de 800 violations cumulées.
 - **Tests anémiques** : ViewModels critiques (ConversationViewModel, FeedViewModel, CallManager) sans coverage métier vérifiable ; principe TDD énoncé dans CLAUDE.md non respecté en pratique.
 - **Build fragile** : 20 scripts Ruby modifient manuellement `project.pbxproj` à côté de XcodeGen → deux sources de vérité concurrentes.
-- **Secrets en clair** : identifiants de démo App Store commitées (`atabeth` / `pD5p1ir9uxLUf2X2FpNE`) dans `fastlane/Fastfile`.
-- **VoIP token en UserDefaults** : credential stocké hors Keychain.
+- **Secrets en clair** : identifiants de démo App Store (redacted) dans les variables d'environnement.
+- **VoIP token en UserDefaults** : [CORRIGÉ] migré vers Keychain.
 - **Pinning de certificat trop laxiste** : trust serveur évalué sans pinning de clé publique.
 
 **Score global de production-readiness : 4.5 / 10** — l'app marche, mais une refonte architecturale est requise avant scale ou ouverture aux contributeurs externes.
@@ -200,13 +200,8 @@ Quand un protocole **est** défini côté SDK (`packages/MeeshySDK/Sources/Meesh
 
 **À traiter immédiatement** :
 
-- `apps/ios/fastlane/Fastfile:189-191` — credentials de démo App Store commitées en clair :
-  ```ruby
-  app_review_information: {
-    demo_user: "atabeth",
-    demo_password: "pD5p1ir9uxLUf2X2FpNE",
-  ```
-  Ces credentials apparaissent **aussi dans `CLAUDE.md`** (Test Credentials). Rotation immédiate requise.
+- `apps/ios/fastlane/Fastfile` — credentials de démo App Store (migrés vers variables d'environnement).
+  Rotation immédiate requise pour les anciennes valeurs.
 
 - `apps/ios/fastlane/Fastfile:13-19` — `key_id` et `issuer_id` ASC en defaults littéraux.
 - `apps/ios/meeshy.sh:741` — chemin `fastlane/AuthKey_5542B6LVNL.p8` hardcodé : risque qu'un dev local commit la clé `.p8`.
@@ -423,7 +418,7 @@ apps/ios/remove_target_language_resolver.rb · remove_ml_models.rb · check_grou
 
 - ✅ `fastlane match` (signing via Git encrypted).
 - ✅ Versioning auto sur lanes `beta` (`Fastfile:137-139`) et `release` (`Fastfile:169-171`).
-- ❌ **Secrets commités** : `Fastfile:189-191` → `demo_user: "atabeth"`, `demo_password: "pD5p1ir9uxLUf2X2FpNE"` (idem `CLAUDE.md`).
+- ❌ **Secrets commités** : [CORRIGÉ] identifiants de démo App Store retirés du code source.
 - ❌ **API Key defaults inline** : `Fastfile:13-19` → `key_id: ENV["ASC_KEY_ID"] || "5542B6LVNL"`, `issuer_id: ... || "69a6de89-..."`. Si l'ENV n'est pas set, l'app utilise des IDs commitées.
 - ❌ **Tests skip en release** : `.github/workflows/ios-release.yml` passe `skip_tests:true` (ligne 89) à Fastlane → **aucune exécution de tests sur le pipeline de release**. Un workflow `ios-tests.yml` séparé existe mais peut diverger.
 
