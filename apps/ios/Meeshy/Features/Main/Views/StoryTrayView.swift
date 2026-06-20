@@ -55,7 +55,8 @@ struct StoryTrayView: View {
             UserProfileSheet(
                 user: user,
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                postsContent: { uid in AnyView(ProfileUserPostsList(userId: uid)) }
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -570,7 +571,8 @@ struct PinnedStoryTrailBand: View {
                     UserProfileSheet(
                         user: user,
                         moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-                        onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+                        onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                        postsContent: { uid in AnyView(ProfileUserPostsList(userId: uid)) }
                     )
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)

@@ -12,9 +12,15 @@ extension iPadRootView {
                 UserProfileSheet(
                     user: user,
                     moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-                    onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+                    onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                    postsContent: { uid in
+                        AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
+                            router.deepLinkProfileUser = nil
+                            router.push(.postDetail(post.id, post))
+                        }))
+                    }
                 )
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large, .medium])
                 .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showSharePicker) {

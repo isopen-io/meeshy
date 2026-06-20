@@ -410,9 +410,15 @@ struct FeedPostCard: View {
                 storyRingState: isPostAuthor ? authorStoryRing : nil,
                 onViewStory: isPostAuthor ? onViewAuthorStory.map { handler in
                     { selectedProfileUser = nil; handler() }
-                } : nil
+                } : nil,
+                postsContent: { uid in
+                    AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { tapped in
+                        selectedProfileUser = nil
+                        onTapPost?(tapped)
+                    }))
+                }
             )
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $showFullscreenGallery) {
