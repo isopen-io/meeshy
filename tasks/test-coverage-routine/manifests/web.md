@@ -983,7 +983,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/web/hooks/use-network-status.ts`
 - [ ] `apps/web/hooks/use-participant-management.ts`
 - [ ] `apps/web/hooks/use-phone-validation.ts`
-- [~] `apps/web/hooks/use-post-translation.ts`
+- [x] `apps/web/hooks/use-post-translation.ts`
 - [ ] `apps/web/hooks/use-preferences.ts`
 - [ ] `apps/web/hooks/use-prefetch-on-hover.ts`
 - [ ] `apps/web/hooks/use-prefetch.ts`
@@ -1078,8 +1078,8 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/web/hooks/queries/use-conversation-preferences-query.ts`
 - [~] `apps/web/hooks/queries/use-conversations-pagination-rq.ts`
 - [~] `apps/web/hooks/queries/use-conversations-query.ts`
-- [~] `apps/web/hooks/queries/use-feed-query.ts`
-- [ ] `apps/web/hooks/queries/use-feed-variants.ts`
+- [x] `apps/web/hooks/queries/use-feed-query.ts`
+- [x] `apps/web/hooks/queries/use-feed-variants.ts`
 - [ ] `apps/web/hooks/queries/use-message-status-details.ts`
 - [~] `apps/web/hooks/queries/use-messages-query.ts`
 - [ ] `apps/web/hooks/queries/use-notifications-manager-rq.tsx`
@@ -1247,10 +1247,10 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/web/services/permissions.service.ts`
 - [ ] `apps/web/services/phone-password-reset.service.ts`
 - [ ] `apps/web/services/phone-transfer.service.ts`
-- [~] `apps/web/services/posts.service.ts`
+- [x] `apps/web/services/posts.service.ts`
 - [ ] `apps/web/services/push-token.service.ts`
 - [ ] `apps/web/services/report.service.ts`
-- [ ] `apps/web/services/story.service.ts`
+- [x] `apps/web/services/story.service.ts`
 - [ ] `apps/web/services/tracking-links.ts`
 - [~] `apps/web/services/translation.service.ts`
 - [ ] `apps/web/services/tusUploadService.ts`
