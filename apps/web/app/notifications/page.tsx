@@ -100,9 +100,11 @@ function NotificationsPageContent() {
                   {t('pageTitle')}
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  {unreadCount > 0
-                    ? t('unreadCount.active', { count: String(unreadCount), total: String(notifications.length) })
-                    : t('unreadCount.empty')
+                  {notifications.length === 0
+                    ? t('unreadCount.empty')
+                    : unreadCount > 0
+                      ? t('unreadCount.active', { count: String(unreadCount), total: String(notifications.length) })
+                      : t('unreadCount.allRead', { total: String(notifications.length), plural: notifications.length > 1 ? 's' : '' })
                   }
                 </p>
               </div>

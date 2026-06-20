@@ -377,6 +377,35 @@ export function buildNotificationTitle(
     case NotificationTypeEnum.SYSTEM:
       return t('titles.system');
 
+    case NotificationTypeEnum.POST_LIKE:
+      return t('titles.postLike', { sender: actorName });
+    case NotificationTypeEnum.POST_COMMENT:
+      return t('titles.postComment', { sender: actorName });
+    case NotificationTypeEnum.POST_REPOST:
+      return t('titles.postRepost', { sender: actorName });
+    case NotificationTypeEnum.COMMENT_REPLY:
+      return t('titles.commentReply', { sender: actorName });
+    case NotificationTypeEnum.COMMENT_LIKE:
+      return t('titles.commentLike', { sender: actorName });
+    case NotificationTypeEnum.COMMENT_REACTION:
+      return t('titles.commentReaction', { sender: actorName });
+    case NotificationTypeEnum.STORY_REACTION:
+      return t('titles.storyReaction', { sender: actorName });
+    case NotificationTypeEnum.STATUS_REACTION:
+      return t('titles.statusReaction', { sender: actorName });
+    case NotificationTypeEnum.FRIEND_REQUEST:
+      return t('titles.contactRequest', { sender: actorName });
+    case NotificationTypeEnum.FRIEND_ACCEPTED:
+      return t('titles.contactAccepted', { sender: actorName });
+    case NotificationTypeEnum.FRIEND_NEW_POST:
+      return t('titles.friendNewPost', { sender: actorName });
+    case NotificationTypeEnum.FRIEND_NEW_STORY:
+      return t('titles.friendNewStory', { sender: actorName });
+    case NotificationTypeEnum.FRIEND_NEW_MOOD:
+      return t('titles.friendNewMood', { sender: actorName });
+    case NotificationTypeEnum.LOGIN_NEW_DEVICE:
+      return t('titles.loginNewDevice');
+
     default:
       return t('titles.default');
   }
@@ -387,10 +416,28 @@ export function buildNotificationTitle(
  * Utilise getActorDisplayName pour afficher le bon nom
  * Supporte les traductions i18n avec la fonction t fournie
  */
+/**
+ * Types dont le titre explicite (like/réaction) se suffit à lui-même :
+ * le `content` backend duplique le titre → corps vide pour éviter la redondance.
+ */
+const TITLE_SELF_SUFFICIENT_CONTENT = new Set<string>([
+  NotificationTypeEnum.POST_LIKE,
+  NotificationTypeEnum.POST_REPOST,
+  NotificationTypeEnum.COMMENT_LIKE,
+  NotificationTypeEnum.COMMENT_REACTION,
+  NotificationTypeEnum.STORY_REACTION,
+  NotificationTypeEnum.STATUS_REACTION,
+]);
+
 export function buildNotificationContent(
   notification: Notification,
   t?: TranslateFunction
 ): string {
+  // Titre déjà explicite (ex. « @X a aimé votre publication ») → pas de corps redondant.
+  if (typeof notification.type === 'string' && TITLE_SELF_SUFFICIENT_CONTENT.has(notification.type)) {
+    return '';
+  }
+
   // Pour les réactions : afficher le contenu du message original (stocké dans metadata)
   if (
     notification.type === NotificationTypeEnum.MESSAGE_REACTION ||

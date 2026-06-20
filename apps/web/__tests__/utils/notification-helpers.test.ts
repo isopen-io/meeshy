@@ -500,4 +500,53 @@ describe('notification-helpers - Structure Groupée V2', () => {
       expect(result).not.toMatch(/^\d+d$/);
     });
   });
+
+  describe('buildNotificationTitle - types sociaux (i18n)', () => {
+    const tt = (key: string, params?: Record<string, string>) =>
+      params && params.sender ? `${key}|${params.sender}` : key;
+    const mk = (type: NotificationTypeEnum): Notification => ({
+      id: 'n', userId: 'u', type, priority: 'normal', content: '',
+      actor: { id: 'a', username: 'bob', displayName: 'Bob', avatar: null },
+      context: {}, metadata: {},
+      state: { isRead: false, readAt: null, createdAt: new Date() },
+      delivery: { emailSent: false, pushSent: false },
+    });
+
+    it('post_like → titre explicite', () => {
+      expect(buildNotificationTitle(mk(NotificationTypeEnum.POST_LIKE), tt)).toBe('titles.postLike|Bob');
+    });
+    it('comment_reaction → titre explicite', () => {
+      expect(buildNotificationTitle(mk(NotificationTypeEnum.COMMENT_REACTION), tt)).toBe('titles.commentReaction|Bob');
+    });
+    it('comment_reply → titre explicite', () => {
+      expect(buildNotificationTitle(mk(NotificationTypeEnum.COMMENT_REPLY), tt)).toBe('titles.commentReply|Bob');
+    });
+    it('friend_request réutilise la clé contactRequest', () => {
+      expect(buildNotificationTitle(mk(NotificationTypeEnum.FRIEND_REQUEST), tt)).toBe('titles.contactRequest|Bob');
+    });
+    it('login_new_device → titre sans sender', () => {
+      expect(buildNotificationTitle(mk(NotificationTypeEnum.LOGIN_NEW_DEVICE), tt)).toBe('titles.loginNewDevice');
+    });
+  });
+
+  describe('buildNotificationContent - corps non redondant', () => {
+    const tt = (key: string) => key;
+    const mk = (type: NotificationTypeEnum, content: string): Notification => ({
+      id: 'n', userId: 'u', type, priority: 'normal', content,
+      actor: { id: 'a', username: 'bob', displayName: 'Bob', avatar: null },
+      context: {}, metadata: {},
+      state: { isRead: false, readAt: null, createdAt: new Date() },
+      delivery: { emailSent: false, pushSent: false },
+    });
+
+    it('post_like → corps vide (le titre suffit)', () => {
+      expect(buildNotificationContent(mk(NotificationTypeEnum.POST_LIKE, 'a réagi ❤️ à votre publication'), tt)).toBe('');
+    });
+    it('comment_reaction → corps vide', () => {
+      expect(buildNotificationContent(mk(NotificationTypeEnum.COMMENT_REACTION, 'X a réagi à votre commentaire'), tt)).toBe('');
+    });
+    it('comment_reply → conserve le commentaire en corps', () => {
+      expect(buildNotificationContent(mk(NotificationTypeEnum.COMMENT_REPLY, '😂 exactement'), tt)).toBe('😂 exactement');
+    });
+  });
 });
