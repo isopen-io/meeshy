@@ -652,7 +652,7 @@ extension StoryBackgroundLayer {
                                        fitOverride: self.transform3D.videoFitMode)
                 break
             }
-            storyMediaLog.info("bg video path=cache-miss → fetch async")
+            storyMediaLog.info("bg video path=cache-miss → stream remote + cache bg")
 
             // Cache miss : placeholder ThumbHash dans un sublayer si dispo,
             // sinon on garde le layer transparent (le parent porte le fond
@@ -670,16 +670,27 @@ extension StoryBackgroundLayer {
             }
             backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
 
-            // Précache async puis play. AVPlayerLayer s'ajoute par-dessus
-            // le placeholder, qui disparaît visuellement quand la vidéo joue.
+            // Stream l'URL distante IMMÉDIATEMENT : `AVPlayer` fait du
+            // progressive/range loading (l'endpoint sert `Accept-Ranges: bytes`
+            // / 206), donc la 1ère frame arrive en ~centaines de ms quelle que
+            // soit la taille du fichier. L'AVPlayerLayer s'ajoute par-dessus le
+            // placeholder ThumbHash, qui disparaît visuellement quand la vidéo
+            // joue. Bloquer sur un download INTÉGRAL (`videoLocalFileURLAwait`)
+            // rendait les grosses stories injouables sur réseau device
+            // (cellulaire/wifi) : un clip de 30+ Mo ne finissait pas de descendre
+            // avant l'auto-advance de la slide → la vidéo n'apparaissait jamais
+            // (ne marchait que sur le réseau rapide du simulateur, et le failsafe
+            // 2s faisait avancer la barre sur le flou). Régression 2026-05-20
+            // (f917d30b94) ; on restaure le streaming d'avant.
             let fitOverride = self.transform3D.videoFitMode
-            Task { @MainActor [weak self] in
-                let started = CFAbsoluteTimeGetCurrent()
-                let url = await CacheCoordinator.videoLocalFileURLAwait(for: remoteURL) ?? remoteURL
-                let elapsed = Int((CFAbsoluteTimeGetCurrent() - started) * 1000)
-                storyMediaLog.info("bg video fetch done in \(elapsed, privacy: .public)ms → \(url.isFileURL ? "local" : "REMOTE-FALLBACK", privacy: .public)")
-                self?.attachBackgroundPlayer(url: url, looping: looping, mute: mute,
-                                              fitOverride: fitOverride)
+            attachBackgroundPlayer(url: remoteURL, looping: looping, mute: mute,
+                                   fitOverride: fitOverride)
+            // Peuple le cache disque HORS du chemin de lecture pour qu'une
+            // revisite joue depuis un fichier local. Détaché + priorité utility
+            // pour ne jamais concurrencer le stream live.
+            let cacheKey = remoteURL.absoluteString
+            Task.detached(priority: .utility) {
+                _ = try? await CacheCoordinator.shared.video.data(for: cacheKey)
             }
         }
 
@@ -729,10 +740,14 @@ extension StoryBackgroundLayer {
 
 extension StoryBackgroundLayer {
 
-    /// Attache un AVPlayer pour une URL `file://` locale. Factorisé pour les
-    /// deux chemins (cache chaud immédiat / cache froid après fetch async).
-    /// Garantit que l'URL passée est un fichier local — les URLs HTTPS doivent
-    /// être pré-cachées en amont via `videoLocalFileURLAwait`.
+    /// Attache un AVPlayer pour une URL vidéo. Factorisé pour les trois chemins :
+    /// `file://` (composer / cache disque déjà téléchargé), cache disque chaud,
+    /// et URL distante HTTPS streamée en direct. `AVPlayerItem(url:)` gère les
+    /// trois — pour une URL distante, `AVPlayer` fait du progressive/range
+    /// loading (premier frame en ~centaines de ms) et le cache disque se peuple
+    /// en arrière-plan via le caller. NE PAS bloquer sur un download intégral
+    /// avant d'appeler ceci (régression 2026-05-20 → grosses stories injouables
+    /// sur réseau device).
     @MainActor
     func attachBackgroundPlayer(url: URL, looping: Bool, mute: Bool, fitOverride: String? = nil) {
         let item = AVPlayerItem(url: url)

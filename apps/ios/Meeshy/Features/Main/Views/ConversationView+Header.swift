@@ -250,7 +250,7 @@ private struct HeaderCallButtonsView: View {
 
     private func callGlyph(_ systemName: String) -> some View {
         Image(systemName: systemName)
-            .font(.system(size: 12, weight: .semibold))
+            .font(MeeshyFont.relative(12, weight: .semibold))
             .foregroundStyle(
                 LinearGradient(
                     colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
@@ -258,6 +258,7 @@ private struct HeaderCallButtonsView: View {
                 )
             )
             .frame(width: 30, height: 30)
+            .meeshyTapTarget()
             .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.4), interactive: true)
     }
 }
@@ -342,6 +343,7 @@ private struct ConversationHeaderAvatarView: View {
                             composerState.showOptions = false
                         }
                     },
+                    accessibilityLabel: String(localized: "a11y.avatar.close_options", bundle: .main),
                     onViewStory: {
                         headerState.storyUserIdForHeader = userId
                         headerState.showStoryViewerFromHeader = true
@@ -369,6 +371,7 @@ private struct ConversationHeaderAvatarView: View {
                                             composerState.showOptions = false
                                         }
                                     },
+                                    accessibilityLabel: String(localized: "a11y.avatar.close_options", bundle: .main),
                                     onViewStory: {
                                         headerState.storyUserIdForHeader = member.id
                                         headerState.showStoryViewerFromHeader = true
@@ -392,7 +395,8 @@ private struct ConversationHeaderAvatarView: View {
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                                 composerState.showOptions = false
                             }
-                        }
+                        },
+                        accessibilityLabel: String(localized: "a11y.avatar.close_options", bundle: .main)
                     )
                 }
             }
@@ -413,6 +417,7 @@ private struct ConversationHeaderAvatarView: View {
                         composerState.showOptions = true
                     }
                 },
+                accessibilityLabel: String(localized: "a11y.avatar.open_options", bundle: .main),
                 onViewStory: isDirect ? {
                     if let userId = conversation?.participantUserId {
                         headerState.storyUserIdForHeader = userId

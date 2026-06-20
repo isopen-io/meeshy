@@ -46,6 +46,48 @@ final class DiskCacheStoreAdoptionTests: XCTestCase {
             "Source must be removed after move")
     }
 
+    // MARK: - Non-destructive seed (local-first: author keeps the source file)
+
+    func test_seed_existingLocalFile_makesKeyCached() async throws {
+        let localURL = tempDir.appendingPathComponent("publish-source.m4a")
+        try Data([0x01, 0x02, 0x03, 0x04]).write(to: localURL)
+
+        let canonicalKey = "https://gate.meeshy.me/api/v1/attachments/file/story.m4a"
+        await store.seed(copyingLocalFile: localURL, for: canonicalKey)
+
+        let cached = await store.isCached(canonicalKey)
+        XCTAssertTrue(cached, "isCached must be true after seed — la story de l'auteur joue depuis le disque")
+    }
+
+    func test_seed_preservesSourceFile() async throws {
+        // Contrairement à `adopt` (move), `seed` COPIE : la source reste en place
+        // car elle peut être encore référencée par la preview live du composer.
+        let localURL = tempDir.appendingPathComponent("still-needed.m4a")
+        try Data([0xAA, 0xBB, 0xCC]).write(to: localURL)
+
+        let canonicalKey = "https://gate.meeshy.me/api/v1/attachments/file/kept.m4a"
+        await store.seed(copyingLocalFile: localURL, for: canonicalKey)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: localURL.path),
+            "seed must NOT remove the source (non-destructive copy)")
+        let cached = await store.isCached(canonicalKey)
+        XCTAssertTrue(cached, "and the cache must still hold the copy")
+    }
+
+    func test_seed_calledTwice_isIdempotent_keepsFirst() async throws {
+        let localURL1 = tempDir.appendingPathComponent("seed-v1.m4a")
+        try Data([0x01]).write(to: localURL1)
+        let canonicalKey = "https://gate.meeshy.me/api/v1/attachments/file/idem.m4a"
+        await store.seed(copyingLocalFile: localURL1, for: canonicalKey)
+
+        let localURL2 = tempDir.appendingPathComponent("seed-v2.m4a")
+        try Data([0x02]).write(to: localURL2)
+        await store.seed(copyingLocalFile: localURL2, for: canonicalKey)
+
+        let data = try await store.data(for: canonicalKey)
+        XCTAssertEqual(data, Data([0x01]), "first seeded version must win (idempotent)")
+    }
+
     // MARK: - Idempotence
 
     func test_adopt_calledTwice_isIdempotent() async throws {

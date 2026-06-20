@@ -115,9 +115,7 @@ struct ThemedBackButton: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: compactMode)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showsPill)
         }
-        .accessibilityLabel(showsPill
-            ? String(format: String(localized: "accessibility.back_with_unread", defaultValue: "Retour, %d messages non lus dans les autres conversations", bundle: .main), unreadCount)
-            : String(localized: "accessibility.back", defaultValue: "Retour", bundle: .main))
+        .accessibilityLabel(showsPill ? String(format: String(localized: "a11y.back.with_unread", bundle: .main), unreadCount) : String(localized: "a11y.back", bundle: .main))
     }
 }
 
@@ -196,7 +194,7 @@ struct ThemedComposerButton: View {
                     .shadow(color: Color(hex: colors[0]).opacity(isActive ? 0.5 : 0.2), radius: isActive ? 10 : 6, y: 3)
 
                 Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(MeeshyFont.relative(18, weight: .semibold))
                     .foregroundColor(isActive ? .white : Color(hex: colors[0]))
                     .rotationEffect(rotateIcon ? .degrees(45) : .degrees(0))
                     .offset(x: rotateIcon ? -1 : 0, y: rotateIcon ? 1 : 0)

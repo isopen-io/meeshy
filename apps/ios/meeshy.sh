@@ -855,9 +855,9 @@ do_release() {
     warn "This will : sync certificates · build Release IPA (~15 min) · upload to $lane_label"
     echo ""
 
-    ASC_KEY_FILEPATH="$key_file" \
-    ASC_KEY_ID="5542B6LVNL" \
-    ASC_ISSUER_ID="69a6de89-ae7a-47e3-e053-5b8c7c11a4d1" \
+    ASC_KEY_FILEPATH="${ASC_KEY_FILEPATH:-$key_file}" \
+    ASC_KEY_ID="${ASC_KEY_ID:-5542B6LVNL}" \
+    ASC_ISSUER_ID="${ASC_ISSUER_ID:-69a6de89-ae7a-47e3-e053-5b8c7c11a4d1}" \
         bundle exec fastlane "$lane" "${fastlane_args[@]}"
     local rc=$?
 

@@ -373,11 +373,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         for urlString in Set(urls) {
             let mediaType = story.media.first(where: { $0.url == urlString })?.type
 
-            if mediaType == .video || mediaType == .audio {
-                _ = try? await imageCache.data(for: urlString)
+            if mediaType == .video {
+                // Peupler le store `video` (celui que le canvas relit), pas
+                // `images` — sinon cache-miss + re-download au moment de jouer.
+                _ = try? await CacheCoordinator.shared.video.data(for: urlString)
                 if prerollPlayer, let url = URL(string: urlString) {
                     await StoryMediaLoader.shared.preloadAndCachePlayer(url: url)
                 }
+            } else if mediaType == .audio {
+                _ = try? await CacheCoordinator.shared.audio.data(for: urlString)
             } else {
                 _ = await imageCache.image(for: urlString)
             }
