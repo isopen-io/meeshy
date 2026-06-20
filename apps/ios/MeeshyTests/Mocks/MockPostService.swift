@@ -81,6 +81,8 @@ final class MockPostService: PostServiceProviding {
 
     var shareCallCount = 0
     var lastSharePostId: String?
+    var lastShareGenerateLink: Bool?
+    var lastSharePlatform: String?
 
     var createStoryCallCount = 0
     var lastCreateStoryContent: String?
@@ -230,6 +232,8 @@ final class MockPostService: PostServiceProviding {
     func share(postId: String, platform: String?, generateLink: Bool) async throws -> PostShareResult {
         shareCallCount += 1
         lastSharePostId = postId
+        lastSharePlatform = platform
+        lastShareGenerateLink = generateLink
         try shareResult.get()
         return PostShareResult(
             shared: true,
@@ -401,6 +405,8 @@ final class MockPostService: PostServiceProviding {
         shareResult = .success(())
         shareCallCount = 0
         lastSharePostId = nil
+        lastShareGenerateLink = nil
+        lastSharePlatform = nil
 
         createStoryResult = .success(stubPost)
         createStoryCallCount = 0

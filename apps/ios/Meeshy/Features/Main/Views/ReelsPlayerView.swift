@@ -75,6 +75,13 @@ struct ReelsPlayerView: View {
     /// action rail, scrub) is hidden for distraction-free viewing. Toggled on
     /// by a long-press; any tap restores it (mirrors the Story viewer).
     @State private var chromeHidden = false
+    /// Set once `ReelsViewModel.shareLink(for:)` returns — the `.sheet(item:)`
+    /// presents the system share UI (the same `meeshy.me/l/<token>` link the
+    /// feed shares) and clears it on dismiss. Aligns the reel share with the feed.
+    @State private var shareableLink: ShareableLink?
+    /// Reel ids whose share request is currently in flight, so a double-tap of the
+    /// share button can't fire two mints (mirrors the feed's `postShareInFlightIds`).
+    @State private var shareInFlightIds: Set<String> = []
 
     var body: some View {
         ZStack {
@@ -124,6 +131,11 @@ struct ReelsPlayerView: View {
                 onCommentSent: { postId in viewModel.didSendComment(postId: postId) }
             )
         }
+        .sheet(item: $shareableLink) { link in
+            // Same `meeshy.me/l/<token>` URL the feed shares — the gateway already
+            // recorded the (deduplicated) share + minted the caller's TrackingLink.
+            ShareSheet(activityItems: [link.url])
+        }
         // Call-aware : un appel entrant pendant un réel ouvert doit le mettre en
         // pause (vidéo + audio) — la session audio appartient alors à l'appel. Le
         // viewer étant immobile, aucune `drive`-pass n'est rappelée ; on pause donc
@@ -168,6 +180,28 @@ struct ReelsPlayerView: View {
             mediaDurationMs: durMs, completed: completed, samples: drained.samples)
     }
 
+    // MARK: Share
+
+    /// Reel share — mirrors the feed's `sharePostWithLink`. Guards against a
+    /// double-tap, fires haptic immediately, then mints the deduplicated tracking
+    /// link via the view-model and presents the system share sheet. On failure it
+    /// still surfaces the raw post URL so the user always has something to share.
+    @MainActor
+    private func shareReel(_ reel: FeedPost) {
+        guard !shareInFlightIds.contains(reel.id) else { return }
+        shareInFlightIds.insert(reel.id)
+        HapticFeedback.light()
+        Task {
+            defer { Task { @MainActor in shareInFlightIds.remove(reel.id) } }
+            if let shortUrl = await viewModel.shareLink(for: reel),
+               let url = URL(string: shortUrl) {
+                shareableLink = ShareableLink(url: url)
+            } else if let raw = ShareableLink.fallback(forPostId: reel.id) {
+                shareableLink = raw
+            }
+        }
+    }
+
     // MARK: Pager
 
     private var pager: some View {
@@ -179,7 +213,7 @@ struct ReelsPlayerView: View {
                 viewModel: viewModel,
                 chromeHidden: $chromeHidden,
                 onComment: { commentsReel = reel },
-                onShare: { viewModel.share(reel) },
+                onShare: { shareReel(reel) },
                 onTapAuthorName: { openProfile(for: reel) },
                 onTapAvatar: { openAvatarDestination(for: reel) }
             )
