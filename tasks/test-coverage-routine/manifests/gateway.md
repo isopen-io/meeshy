@@ -82,9 +82,9 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/mentions.ts`
 - [ ] `services/gateway/src/routes/message-read-status.ts`
 - [ ] `services/gateway/src/routes/messages.ts`
-- [~] `services/gateway/src/routes/notifications.ts`
+- [x] `services/gateway/src/routes/notifications.ts`
 - [ ] `services/gateway/src/routes/password-reset.ts`
-- [ ] `services/gateway/src/routes/push-tokens.ts`
+- [x] `services/gateway/src/routes/push-tokens.ts`
 - [ ] `services/gateway/src/routes/reactions.ts`
 - [ ] `services/gateway/src/routes/signal-protocol.ts`
 - [ ] `services/gateway/src/routes/translation-jobs.ts`
@@ -331,9 +331,9 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 ## services/notifications  (1/6 have a test)
 
 - [ ] `services/gateway/src/services/notifications/FirebaseNotificationService.ts`
-- [ ] `services/gateway/src/services/notifications/NotificationFormatter.ts`
+- [x] `services/gateway/src/services/notifications/NotificationFormatter.ts`
 - [~] `services/gateway/src/services/notifications/NotificationService.ts`
-- [ ] `services/gateway/src/services/notifications/SocketNotificationService.ts`
+- [x] `services/gateway/src/services/notifications/SocketNotificationService.ts`
 - [ ] `services/gateway/src/services/notifications/index.ts`
 - [ ] `services/gateway/src/services/notifications/types.ts`
 
@@ -440,6 +440,6 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/validation/mentions-schemas.ts`
 - [ ] `services/gateway/src/validation/message-read-status-schemas.ts`
 - [ ] `services/gateway/src/validation/messages-schemas.ts`
-- [ ] `services/gateway/src/validation/notification-schemas.ts`
+- [x] `services/gateway/src/validation/notification-schemas.ts`
 - [ ] `services/gateway/src/validation/socket-event-schemas.ts`
 - [ ] `services/gateway/src/validation/two-factor-schemas.ts`
