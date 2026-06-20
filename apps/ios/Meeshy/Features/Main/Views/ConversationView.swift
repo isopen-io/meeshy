@@ -237,7 +237,7 @@ struct ConversationView: View {
     /// path — safe (même pattern que ConversationListView). Seuls les blocages
     /// SORTANTS sont connus du client ; un blocage entrant remonte en erreur
     /// d'envoi côté gateway.
-    @ObservedObject var blockService = BlockService.shared
+    private var blockService: BlockService { BlockService.shared }
     /// Texte du composer, ISOLÉ de l'arbre racine : tenu via `@State` (stockage
     /// stable) mais JAMAIS lu dans ce body ni observé ici — seul
     /// `ComposerTextHost` (+Composer) s'y abonne, donc la frappe ne ré-évalue
@@ -836,6 +836,7 @@ struct ConversationView: View {
                         scrollState.scrollToMessageTrigger += 1
                     } else {
                         await viewModel.loadMessagesAround(messageId: messageId)
+                        if Task.isCancelled { return }
                         try? await Task.sleep(nanoseconds: 100_000_000)
                         guard !Task.isCancelled else { return }
                         scrollState.scrollToMessageId = messageId
@@ -1555,6 +1556,7 @@ struct ConversationView: View {
         }
         .accessibilityLabel(String(localized: "conversation.view.search_in_conversation", bundle: .main))
         .accessibilityHint(String(localized: "accessibility.search.hint", bundle: .main))
+        .accessibilityIdentifier("conversation.header.search")
     }
 
     @ViewBuilder

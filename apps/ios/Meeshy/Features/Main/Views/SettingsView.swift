@@ -88,9 +88,9 @@ struct SettingsView: View {
                             .font(MeeshyFont.relative(14, weight: .medium))
                             .foregroundStyle(.white)
                     }
-                    .padding(.horizontal, 32)
-                    .padding(.vertical, 24)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .padding(.horizontal, MeeshySpacing.xxxl)
+                    .padding(.vertical, MeeshySpacing.xxl)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                 }
                 .transition(.opacity)
                 .animation(.easeInOut(duration: 0.18), value: isLoggingOut)
@@ -146,7 +146,7 @@ struct SettingsView: View {
 
             Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
-            VStack(spacing: 20) {
+            VStack(spacing: MeeshySpacing.xl) {
                 profileCard
                 accountSection
                 appearanceSection
@@ -161,8 +161,8 @@ struct SettingsView: View {
 
                 Spacer().frame(height: 40)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
         }
         .coordinateSpace(name: "scroll")
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }
@@ -198,9 +198,9 @@ struct SettingsView: View {
                     .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(theme.textMuted)
             }
-            .padding(16)
+            .padding(MeeshySpacing.lg)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .fill(theme.inputBackground)
             )
         }
@@ -621,12 +621,12 @@ struct SettingsView: View {
             }
             .foregroundColor(MeeshyColors.error)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, MeeshySpacing.md + 2)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .fill(MeeshyColors.error.opacity(0.1))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                             .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1)
                     )
             )
@@ -655,7 +655,7 @@ struct SettingsView: View {
         color: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(12, weight: .semibold))
@@ -665,16 +665,16 @@ struct SettingsView: View {
                     .foregroundColor(Color(hex: color))
                     .tracking(1.2)
             }
-            .padding(.leading, 4)
+            .padding(.leading, MeeshySpacing.xs)
 
             VStack(spacing: 0) {
                 content()
             }
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .fill(theme.surfaceGradient(tint: color))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                             .stroke(theme.border(tint: color), lineWidth: 1)
                     )
             )
@@ -687,13 +687,13 @@ struct SettingsView: View {
         color: String,
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(Color(hex: color))
                 .frame(width: 28, height: 28)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                         .fill(Color(hex: color).opacity(0.12))
                 )
                 .accessibilityHidden(true)
