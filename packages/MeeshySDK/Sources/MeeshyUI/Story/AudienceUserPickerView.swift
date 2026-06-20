@@ -86,27 +86,39 @@ public struct AudienceUserPickerView: View {
     }
 
     public var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                searchField
-                if !vm.selectedUsers.isEmpty { selectedChips }
-                resultsList
-            }
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.cancel", defaultValue: "Annuler")) { dismiss() }
+        // Custom header (not a NavigationStack toolbar): the picker is presented
+        // as a `.sheet` from the story composer, which is itself a
+        // `.statusBarHidden()` fullScreenCover — that zeroes the SwiftUI safe-area
+        // insets, so a NavigationStack bar renders its toolbar buttons in a
+        // clipped/off-screen region (Annuler/OK invisible). An explicit header row
+        // always renders regardless of the host's safe-area state.
+        VStack(spacing: 0) {
+            header
+            searchField
+            if !vm.selectedUsers.isEmpty { selectedChips }
+            resultsList
+        }
+        .background(Color(.systemBackground))
+    }
+
+    private var header: some View {
+        ZStack {
+            Text(title)
+                .font(.system(size: 16, weight: .semibold))
+                .lineLimit(1)
+            HStack {
+                Button(String(localized: "common.cancel", defaultValue: "Annuler")) { dismiss() }
+                Spacer()
+                Button(String(localized: "common.done", defaultValue: "OK")) {
+                    onDone(vm.selectedIds)
+                    dismiss()
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "common.done", defaultValue: "OK")) {
-                        onDone(vm.selectedIds)
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                }
+                .fontWeight(.semibold)
             }
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 18)
+        .padding(.bottom, 10)
     }
 
     private var searchField: some View {
