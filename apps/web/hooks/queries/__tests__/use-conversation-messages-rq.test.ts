@@ -8,7 +8,7 @@
  */
 
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import React from 'react';
 import type { Message } from '@meeshy/shared/types';
 
@@ -32,6 +32,7 @@ jest.mock('@/utils/logger', () => ({
 }));
 
 import { useConversationMessagesRQ } from '../use-conversation-messages-rq';
+import { conversationsService } from '@/services/conversations.service';
 
 function makeMessage(overrides: Partial<Message> & { id: string }): Message {
   return {
@@ -173,6 +174,41 @@ describe('useConversationMessagesRQ — B1 dedup', () => {
         expect(ids).toContain('msg-3');
         expect(ids).not.toContain('temp-xyz');
       });
+    });
+  });
+
+  // Régression : « quand je reçois un message, ça apparaît puis disparaît ».
+  // Socket.IO est la source de vérité ; un refetch au focus/reconnexion remplace
+  // les pages du cache infini par une lecture serveur qui peut être en retard de
+  // réplica (read-after-write) et donc effacer le message fraîchement reçu.
+  describe('réception temps réel — survit à un refetch au focus fenêtre', () => {
+    it('ne refetch PAS au focus et préserve le message ajouté via socket', async () => {
+      const getMessages = conversationsService.getMessages as jest.Mock;
+      getMessages.mockClear();
+
+      const { result } = await setup();
+      expect(getMessages).toHaveBeenCalledTimes(1); // chargement initial
+
+      // Un message arrive via socket (handleNewMessage → addMessage côté app)
+      act(() => { result.current.addMessage(makeMessage({ id: 'srv-realtime', content: 'reçu' })); });
+      await waitFor(() =>
+        expect(result.current.messages.map(m => m.id)).toContain('srv-realtime')
+      );
+
+      // Le focus revient sur l'onglet. Sans le fix, refetchOnWindowFocus relancerait
+      // getMessages (qui renvoie [] ici, simulant un read serveur en retard) et
+      // effacerait le message → « apparaît puis disparaît ».
+      act(() => {
+        focusManager.setFocused(false);
+        focusManager.setFocused(true);
+      });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      // Le message reçu est toujours là, et aucun refetch destructeur n'a eu lieu.
+      expect(result.current.messages.map(m => m.id)).toContain('srv-realtime');
+      expect(getMessages).toHaveBeenCalledTimes(1);
+
+      focusManager.setFocused(undefined as unknown as boolean);
     });
   });
 });

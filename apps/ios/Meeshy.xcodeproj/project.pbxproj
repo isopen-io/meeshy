@@ -11,6 +11,7 @@
 		00CDA82D2AC8F3D9847F02C4 /* StatsTimelineChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA306483025A83773D87DED /* StatsTimelineChart.swift */; };
 		0135B9488688ACDA9A26DB98 /* ReplyThreadLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6004F67A016838BA122ED6E /* ReplyThreadLoaderTests.swift */; };
 		031EA7F524ECB3B634B6CFAD /* FeedViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7789A854759F389975CB9906 /* FeedViewModelTests.swift */; };
+		B1405EFA6179220F5EBF24B4 /* MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17BCBE9DBF14D8BB0E17EC99 /* MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift */; };
 		0CA1A0DE0000000000000001 /* ReelsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA1A0DE0000000000000002 /* ReelsViewModelTests.swift */; };
 		0CA1B0DE0000000000000003 /* VideoEmbedModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA1B0DE0000000000000004 /* VideoEmbedModelTests.swift */; };
 		044D99CB3F85BD65437758B8 /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71C9C50ECED369B628670C7 /* ThreadView.swift */; };
@@ -134,6 +135,7 @@
 		AA00BB11CC22DD33EE44002A /* PostModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE44001A /* PostModels.swift */; };
 		AA00BB11CC22DD33EE44002B /* StoryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE44001B /* StoryModels.swift */; };
 		AA00BB11CC22DD33EE440070 /* PostDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440080 /* PostDetailView.swift */; };
+		4ACB6E94F109C35C1479F09F /* PostDetailReachAndVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A57C111D90BEEAFF9BEE822 /* PostDetailReachAndVisibility.swift */; };
 		AA00BB11CC22DD33EE4400A1 /* ReelsPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE4400B1 /* ReelsPlayerView.swift */; };
 		AA00BB11CC22DD33EE4400A2 /* ReelsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE4400B2 /* ReelsViewModel.swift */; };
 		AA00BB11CC22DD33EE440071 /* BookmarksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440081 /* BookmarksView.swift */; };
@@ -443,7 +445,6 @@
 		MOCK000B000B000B000B001 /* MockBlockService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000B000B000B000B000 /* MockBlockService.swift */; };
 		MOCK000C000C000C000C001 /* MockLanguageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000C000C000C000C000 /* MockLanguageProvider.swift */; };
 		MPHK000000002F01 /* MediaPipelineHook.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHK000000001F01 /* MediaPipelineHook.swift */; };
-		PIPRND00000002F01 /* PiPVideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = PIPRND00000001F01 /* PiPVideoRenderer.swift */; };
 		VFCONV000000002F01 /* VideoFrameConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = VFCONV000000001F01 /* VideoFrameConverter.swift */; };
 		MPHT000000002F01 /* MediaPipelineHookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHT000000001F01 /* MediaPipelineHookTests.swift */; };
 		MSTS02002002002002001 /* MessageStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MSTS01001001001001001 /* MessageStoreTests.swift */; };
@@ -567,7 +568,6 @@
 		WT86A001000100010001B001 /* WebRTCServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = WT86A001000100010001F001 /* WebRTCServiceTests.swift */; };
 		WTTT000000002F01 /* WebRTCTypesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = WTTT000000001F01 /* WebRTCTypesTests.swift */; };
 		WV4400000000002F44 /* WebRTCVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WV4400000000001F44 /* WebRTCVideoView.swift */; };
-		PIPSBV00000002F01 /* PiPVideoSampleBufferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = PIPSBV00000001F01 /* PiPVideoSampleBufferView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -703,6 +703,7 @@
 		750FE2A49FB88DF459390587 /* ThemedConversationRow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ThemedConversationRow.swift; sourceTree = "<group>"; };
 		75BB3BB6E01A899FDB29E8A8 /* ConversationCommandHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationCommandHandler.swift; sourceTree = "<group>"; };
 		7789A854759F389975CB9906 /* FeedViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeedViewModelTests.swift; sourceTree = "<group>"; };
+		17BCBE9DBF14D8BB0E17EC99 /* MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift; sourceTree = SOURCE_ROOT; };
 		0CA1A0DE0000000000000002 /* ReelsViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReelsViewModelTests.swift; sourceTree = "<group>"; };
 		0CA1B0DE0000000000000004 /* VideoEmbedModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoEmbedModelTests.swift; sourceTree = "<group>"; };
 		7A27F2AB5AC64E0CA5724730 /* MultiAttachmentSendPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiAttachmentSendPlanner.swift; sourceTree = "<group>"; };
@@ -752,6 +753,7 @@
 		AA00BB11CC22DD33EE440032 /* FeedPostCard+Media.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FeedPostCard+Media.swift"; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440033 /* FeedCommentsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedCommentsSheet.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440080 /* PostDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostDetailView.swift; sourceTree = "<group>"; };
+		7A57C111D90BEEAFF9BEE822 /* PostDetailReachAndVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostDetailReachAndVisibility.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE4400B1 /* ReelsPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelsPlayerView.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE4400B2 /* ReelsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelsViewModel.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440081 /* BookmarksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarksView.swift; sourceTree = "<group>"; };
@@ -1050,7 +1052,6 @@
 		MOCK000B000B000B000B000 /* MockBlockService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBlockService.swift; sourceTree = "<group>"; };
 		MOCK000C000C000C000C000 /* MockLanguageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockLanguageProvider.swift; sourceTree = "<group>"; };
 		MPHK000000001F01 /* MediaPipelineHook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHook.swift; sourceTree = "<group>"; };
-		PIPRND00000001F01 /* PiPVideoRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiPVideoRenderer.swift; sourceTree = "<group>"; };
 		VFCONV000000001F01 /* VideoFrameConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFrameConverter.swift; sourceTree = "<group>"; };
 		MPHT000000001F01 /* MediaPipelineHookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHookTests.swift; sourceTree = "<group>"; };
 		MSTS01001001001001001 /* MessageStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStoreTests.swift; sourceTree = "<group>"; };
@@ -1173,7 +1174,6 @@
 		WT86A001000100010001F001 /* WebRTCServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCServiceTests.swift; sourceTree = "<group>"; };
 		WTTT000000001F01 /* WebRTCTypesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCTypesTests.swift; sourceTree = "<group>"; };
 		WV4400000000001F44 /* WebRTCVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCVideoView.swift; sourceTree = "<group>"; };
-		PIPSBV00000001F01 /* PiPVideoSampleBufferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiPVideoSampleBufferView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1439,6 +1439,7 @@
 				EE88FF99AA00BB11CC220002 /* EmojiPickerSheet.swift */,
 				AA00BB11CC22DD33EE440033 /* FeedCommentsSheet.swift */,
 				AA00BB11CC22DD33EE440080 /* PostDetailView.swift */,
+				7A57C111D90BEEAFF9BEE822 /* PostDetailReachAndVisibility.swift */,
 				AA00BB11CC22DD33EE4400B1 /* ReelsPlayerView.swift */,
 				AA00BB11CC22DD33EE440081 /* BookmarksView.swift */,
 				EDIT001A001A001A001A0001 /* EditProfileView.swift */,
@@ -1516,7 +1517,6 @@
 				VF4200000000001F42 /* VideoFiltersPanel.swift */,
 				CE4300000000001F43 /* CallEffectsOverlay.swift */,
 				WV4400000000001F44 /* WebRTCVideoView.swift */,
-				PIPSBV00000001F01 /* PiPVideoSampleBufferView.swift */,
 				IC3900000000001F39 /* IncomingCallView.swift */,
 				3D8B8C79D3A388D45C5B5EEF /* UserStatsView.swift */,
 				3CA306483025A83773D87DED /* StatsTimelineChart.swift */,
@@ -1759,6 +1759,7 @@
 				BFMT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleFooterModelTests.swift */,
 				931AA0F3F0BB4DA4A5292189 /* MeeshyTests/Unit/Views/Bubble/MessageOverlayLayoutEngineTests.swift */,
 				68F3549575D94405B9476C73 /* MeeshyTests/Unit/Views/Bubble/MessageFrameTrackerTests.swift */,
+				17BCBE9DBF14D8BB0E17EC99 /* MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift */,
 				E101FEA7BBFB4FDC8474B10C /* MeeshyTests/Unit/Views/Bubble/MessageRowEnvelopeTests.swift */,
 				BBLE0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleEquatableTests.swift */,
 				BBLI0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/ThemedMessageBubbleEquatableTests.swift */,
@@ -2222,7 +2223,6 @@
 				P2PWRTC000000001F01 /* P2PWebRTCClient.swift */,
 				CMCFG000000001F01 /* CallMediaConfig.swift */,
 				MPHK000000001F01 /* MediaPipelineHook.swift */,
-				PIPRND00000001F01 /* PiPVideoRenderer.swift */,
 				VFCONV000000001F01 /* VideoFrameConverter.swift */,
 			);
 			path = WebRTC;
@@ -2438,6 +2438,7 @@
 				NEWCONV002A3B4C5D6E7F8901 /* NewConversationView.swift in Sources */,
 				AA00BB11CC22DD33EE440023 /* FeedCommentsSheet.swift in Sources */,
 				AA00BB11CC22DD33EE440070 /* PostDetailView.swift in Sources */,
+				4ACB6E94F109C35C1479F09F /* PostDetailReachAndVisibility.swift in Sources */,
 				AA00BB11CC22DD33EE4400A1 /* ReelsPlayerView.swift in Sources */,
 				AA00BB11CC22DD33EE4400A2 /* ReelsViewModel.swift in Sources */,
 				AA00BB11CC22DD33EE440072 /* PostTranslationSheet.swift in Sources */,
@@ -2647,7 +2648,6 @@
 				P2PWRTC000000002F01 /* P2PWebRTCClient.swift in Sources */,
 				CMCFG000000002F01 /* CallMediaConfig.swift in Sources */,
 				MPHK000000002F01 /* MediaPipelineHook.swift in Sources */,
-				PIPRND00000002F01 /* PiPVideoRenderer.swift in Sources */,
 				VFCONV000000002F01 /* VideoFrameConverter.swift in Sources */,
 				CEQ000000002F01 /* CallEventQueue.swift in Sources */,
 				AEFX000100010001000100B0 /* AudioEffectTypes.swift in Sources */,
@@ -2658,7 +2658,6 @@
 				VF4200000000002F42 /* VideoFiltersPanel.swift in Sources */,
 				CE4300000000002F43 /* CallEffectsOverlay.swift in Sources */,
 				WV4400000000002F44 /* WebRTCVideoView.swift in Sources */,
-				PIPSBV00000002F01 /* PiPVideoSampleBufferView.swift in Sources */,
 				IC3900000000002F39 /* IncomingCallView.swift in Sources */,
 				2A62EA2A80A8037FCA288EE2 /* OnboardingAnimations.swift in Sources */,
 				2D6AD43B267CD9FA109110AF /* OnboardingStepViews.swift in Sources */,
@@ -2811,6 +2810,7 @@
 				E941B8BFDFFF2E342CA6DCCF /* ConversationViewModelTests.swift in Sources */,
 				FB41480E2ACB451CBEA4AE9B /* ConversationViewModelOtherUnreadTests.swift in Sources */,
 				031EA7F524ECB3B634B6CFAD /* FeedViewModelTests.swift in Sources */,
+				B1405EFA6179220F5EBF24B4 /* MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift in Sources */,
 				0CA1A0DE0000000000000001 /* ReelsViewModelTests.swift in Sources */,
 				0CA1B0DE0000000000000003 /* VideoEmbedModelTests.swift in Sources */,
 				34135EFA521513464A6DEE23 /* GlobalSearchViewModelTests.swift in Sources */,
