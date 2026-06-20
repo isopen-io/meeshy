@@ -328,7 +328,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/gateway/src/services/messaging/MessagingService.ts`
 - [ ] `services/gateway/src/services/messaging/index.ts`
 
-## services/notifications  (3/6 have a test)
+## services/notifications  (4/6 have a test)
 
 - [ ] `services/gateway/src/services/notifications/FirebaseNotificationService.ts`
 - [x] `services/gateway/src/services/notifications/NotificationFormatter.ts`
@@ -336,14 +336,17 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `services/gateway/src/services/notifications/SocketNotificationService.ts`
 - [ ] `services/gateway/src/services/notifications/index.ts`
 - [ ] `services/gateway/src/services/notifications/types.ts`
+- [x] `services/gateway/src/services/notifications/reactionNotify.ts`
 
-## services/posts  (1/5 have a test)
+## services/posts  (6/7 have a test)
 
-- [ ] `services/gateway/src/services/posts/PostAudioService.ts`
-- [ ] `services/gateway/src/services/posts/PostTranslationService.ts`
-- [ ] `services/gateway/src/services/posts/StoryTextObjectTranslationService.ts`
+- [x] `services/gateway/src/services/posts/PostAudioService.ts`
+- [x] `services/gateway/src/services/posts/PostTranslationService.ts`
+- [x] `services/gateway/src/services/posts/StoryTextObjectTranslationService.ts`
 - [~] `services/gateway/src/services/posts/postIncludes.ts`
-- [ ] `services/gateway/src/services/posts/postVisibility.ts`
+- [x] `services/gateway/src/services/posts/postVisibility.ts`
+- [x] `services/gateway/src/services/posts/postReplySnapshot.ts`
+- [x] `services/gateway/src/services/posts/reelAffinity.ts`
 
 ## services/preferences  (1/2 have a test)
 

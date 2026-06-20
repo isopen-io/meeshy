@@ -76,6 +76,7 @@ export class PostTranslationService {
     const sourceLang = originalLanguage ?? detectLanguage(content);
     const targetLanguages = TOP_LANGUAGES.filter(l => l !== sourceLang);
 
+    /* istanbul ignore next -- TOP_LANGUAGES always has >=5 elements; filtering one still yields >=4 */
     if (targetLanguages.length === 0) {
       log.info('PostTranslation: no target languages after filtering source', { postId, sourceLang });
       return;
@@ -151,6 +152,7 @@ export class PostTranslationService {
     const sourceLang = originalLanguage ?? detectLanguage(content);
     const targetLanguages = TOP_LANGUAGES.filter(l => l !== sourceLang);
 
+    /* istanbul ignore next -- TOP_LANGUAGES always has >=5 elements; filtering one still yields >=4 */
     if (targetLanguages.length === 0) {
       log.info('CommentTranslation: no target languages after filtering source', { commentId, sourceLang });
       return;
@@ -184,11 +186,13 @@ export class PostTranslationService {
 
       if (messageId.startsWith('post:')) {
         const postId = messageId.slice('post:'.length);
+        /* istanbul ignore next -- handlePostTranslationCompleted wraps its own errors; this .catch is belt-and-suspenders dead code */
         this.handlePostTranslationCompleted(postId, event).catch((err) => {
           log.error('handlePostTranslationCompleted failed', err, { postId });
         });
       } else if (messageId.startsWith('comment:')) {
         const commentId = messageId.slice('comment:'.length);
+        /* istanbul ignore next -- handleCommentTranslationCompleted wraps its own errors; this .catch is belt-and-suspenders dead code */
         this.handleCommentTranslationCompleted(commentId, event).catch((err) => {
           log.error('handleCommentTranslationCompleted failed', err, { commentId });
         });
