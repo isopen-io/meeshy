@@ -299,6 +299,8 @@ services/gateway/src/services/notifications/NotificationServiceExtensions.ts.old
 # Dossier de debug temporaire
 apps/web/components/debug/
 
+# Local coverage reports from test-coverage-routine
+services/gateway/coverage-p2/
 
 # User uploaded files (avatars, images, etc.)
 apps/web/public/u/
