@@ -26,6 +26,10 @@ struct PostDetailView: View {
     @State private var composerFocusTrigger: Bool = false
     @State private var isTextExpanded = false
     @State private var headerScrollOffset: CGFloat = 0
+    // Inline story canvas playback gating (audio active → pause when off-screen / in call).
+    @State private var storyCanvasVisible: Bool = true
+    @State private var isCallActive: Bool = false
+    @State private var scrollViewportHeight: CGFloat = 0
     private static let scrollSpace = "postDetailScroll"
     /// Set once `PostService.share(... generateLink: true)` returns — the
     /// `.sheet(item:)` further down presents the system share UI as soon
@@ -232,13 +236,6 @@ struct PostDetailView: View {
         return me == post.authorId
     }
 
-    /// Compact count format (1.2k / 3.4M) — mirrors `ReelFeedCard.compactCount`.
-    private static func compactCount(_ value: Int) -> String {
-        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
-        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        return "\(value)"
-    }
-
     // MARK: - Prisme Linguistique
 
     private var currentDisplayLangCode: String {
@@ -333,8 +330,10 @@ struct PostDetailView: View {
         // ZONE 1: Text
         textZone(post)
 
-        // ZONE 2: Media
-        if post.hasMedia {
+        // ZONE 2: Story canvas (inline reader) OR standard media
+        if post.isStory {
+            storyCanvasSection(post)
+        } else if post.hasMedia {
             detailMediaSection(post.media)
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
@@ -437,6 +436,12 @@ struct PostDetailView: View {
                     .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
                         headerScrollOffset = offset
                     }
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear.preference(key: ScrollViewportHeightKey.self, value: geo.size.height)
+                        }
+                    )
+                    .onPreferenceChange(ScrollViewportHeightKey.self) { scrollViewportHeight = $0 }
                     // Floating translucent header pinned to the top. `safeAreaInset`
                     // reserves the header height for the content (author block stays
                     // visible right below it at rest) while letting the content scroll
@@ -456,6 +461,9 @@ struct PostDetailView: View {
                                 composerFocusTrigger.toggle()
                             }
                         }
+                    }
+                    .onReceive(CallManager.shared.$callState) { state in
+                        isCallActive = state.isActive
                     }
                 } // ScrollViewReader
             } else if viewModel.isLoading {
@@ -677,9 +685,40 @@ struct PostDetailView: View {
                             .font(.subheadline.weight(.bold))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(1)
-                        Text(RelativeTimeFormatter.shortString(for: post.timestamp))
-                            .font(.caption2)
-                            .foregroundColor(theme.textMuted)
+                        let reach = PostReachFormatter.components(
+                            username: post.authorUsername,
+                            isAuthor: isPostAuthor,
+                            openCount: post.postOpenCount,
+                            impressionCount: post.impressionCount
+                        )
+                        if reach.pseudo != nil || reach.views != nil {
+                            HStack(spacing: 4) {
+                                if let pseudo = reach.pseudo {
+                                    Text(pseudo)
+                                        .font(.caption2)
+                                        .foregroundColor(theme.textMuted)
+                                        .lineLimit(1)
+                                }
+                                if let views = reach.views, let impressions = reach.impressions {
+                                    if reach.pseudo != nil {
+                                        Text("·").font(.caption2).foregroundColor(theme.textMuted)
+                                    }
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
+                                        Text(views).font(.caption2.weight(.medium))
+                                        Text("·").font(.caption2)
+                                        Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
+                                        Text(impressions).font(.caption2.weight(.medium))
+                                    }
+                                    .foregroundColor(theme.textMuted)
+                                }
+                            }
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(String(localized: "feed.post.reach", defaultValue: "Vues et impressions", bundle: .main))
+                            .accessibilityValue("\(post.postOpenCount) · \(post.impressionCount)")
+                        }
                     }
                 }
             }
@@ -688,49 +727,6 @@ struct PostDetailView: View {
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel(String(format: String(localized: "a11y.post.author_profile", defaultValue: "Profil de %@", bundle: .main), post.author))
             .accessibilityHint(String(localized: "a11y.post.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
-
-            // Détails de langue insérés dans le header (miroir du bloc auteur inline) :
-            // drapeaux tappables + icône translate. Hors du Button profil pour que les
-            // gestes de langue ne déclenchent pas l'ouverture du profil.
-            let flags = buildAvailableFlags()
-            if !flags.isEmpty || (post.translations != nil && !post.translations!.isEmpty) {
-                HStack(spacing: 5) {
-                    ForEach(flags, id: \.self) { code in
-                        let display = LanguageDisplay.from(code: code)
-                        let isActive = code == secondaryLangCode
-                        VStack(spacing: 1) {
-                            Text(display?.flag ?? "?")
-                                .font(isActive ? .caption : .caption2)
-                                .scaleEffect(isActive ? 1.05 : 1.0)
-                            if isActive {
-                                RoundedRectangle(cornerRadius: 1)
-                                    .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
-                                    .frame(width: 10, height: 1.5)
-                            }
-                        }
-                        .animation(.easeInOut(duration: 0.2), value: isActive)
-                        .onTapGesture { handleFlagTap(code) }
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityLabel(String(format: String(localized: "a11y.post.show_language", defaultValue: "Afficher en %@", bundle: .main), display?.name ?? code))
-                        .accessibilityValue(isActive ? String(localized: "a11y.post.language_shown", defaultValue: "Affichée", bundle: .main) : "")
-                        .meeshyTapTarget(44)
-                    }
-                    if post.translations != nil, !post.translations!.isEmpty {
-                        Image(systemName: "translate")
-                            .font(.caption2.weight(.medium))
-                            .foregroundColor(MeeshyColors.indigo400)
-                            .onTapGesture {
-                                HapticFeedback.light()
-                                showTranslationSheet = true
-                            }
-                            .accessibilityAddTraits(.isButton)
-                            .accessibilityLabel(String(localized: "a11y.post.translations", defaultValue: "Traductions", bundle: .main))
-                            .accessibilityHint(String(localized: "a11y.post.translations.hint", defaultValue: "Affiche les langues disponibles", bundle: .main))
-                            .meeshyTapTarget(44)
-                    }
-                }
-            }
         }
     }
 
@@ -809,10 +805,10 @@ struct PostDetailView: View {
                     }
                     HStack(spacing: 3) {
                         Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
-                        Text(Self.compactCount(post.postOpenCount)).font(.caption2.weight(.medium))
+                        Text(PostReachFormatter.compact(post.postOpenCount)).font(.caption2.weight(.medium))
                         Text("·").font(.caption2)
                         Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
-                        Text(Self.compactCount(post.impressionCount)).font(.caption2.weight(.medium))
+                        Text(PostReachFormatter.compact(post.impressionCount)).font(.caption2.weight(.medium))
                     }
                     .foregroundColor(theme.textMuted)
                     .accessibilityElement(children: .ignore)
@@ -914,6 +910,10 @@ struct PostDetailView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
 
+            // Story caption lives inside the canvas overlays → suppress the plain
+            // body (caption + secondary translation + embed) for stories to avoid
+            // showing the same text twice.
+            if !post.isStory {
             // Content with truncation — le corps passe par `MessageTextRenderer`
             // pour rendre les URLs cliquables + trackées (`/l/<token>`). Le lien
             // a priorité sur le tap d'expansion (défaut SwiftUI pour `.link`).
@@ -990,6 +990,7 @@ struct PostDetailView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
             }
+            } // if !post.isStory
         }
     }
 
@@ -1334,6 +1335,48 @@ struct PostDetailView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
+    }
+
+    // MARK: - Story Canvas (inline reader)
+
+    /// Renders a story post's canvas inline via `StoryReaderRepresentable`
+    /// (audio active). Pauses when scrolled off-screen or during a call.
+    /// Empty guard covers an expired/asset-less story (no black box).
+    @ViewBuilder
+    private func storyCanvasSection(_ post: FeedPost) -> some View {
+        if post.storyEffects == nil && !post.hasMedia {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles.rectangle.stack")
+                Text(String(localized: "feed.post.detail.story_unavailable", defaultValue: "Story indisponible", bundle: .main))
+            }
+            .font(.footnote)
+            .foregroundColor(theme.textMuted)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 32)
+        } else {
+            StoryReaderRepresentable(
+                feedPost: post,
+                preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
+                mute: false,
+                isPaused: !storyCanvasVisible || isCallActive
+            )
+            .aspectRatio(9.0 / 16.0, contentMode: .fit)
+            .frame(maxWidth: 460)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(key: StoryCanvasFrameKey.self,
+                                           value: geo.frame(in: .named(Self.scrollSpace)))
+                }
+            )
+            .onPreferenceChange(StoryCanvasFrameKey.self) { frame in
+                let h = scrollViewportHeight > 0 ? scrollViewportHeight : frame.maxY + 1
+                storyCanvasVisible = StoryCanvasVisibility.isVisible(canvasFrame: frame, viewportHeight: h)
+            }
+        }
     }
 
     // MARK: - Media Views
@@ -1698,4 +1741,16 @@ struct PostDetailView: View {
             focusTrigger: $composerFocusTrigger
         )
     }
+}
+
+// MARK: - Story canvas visibility preference keys
+
+private struct StoryCanvasFrameKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
+}
+
+private struct ScrollViewportHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
