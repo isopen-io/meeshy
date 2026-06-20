@@ -141,12 +141,14 @@ public struct CreateStoryRequest: Encodable {
     public let content: String?
     public let storyEffects: StoryEffects?
     public let visibility: String
+    public let visibilityUserIds: [String]?
     public let originalLanguage: String?
     public let mediaIds: [String]?
     public let repostOfId: String?
 
-    public init(content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil) {
+    public init(content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil) {
         self.content = content; self.storyEffects = storyEffects; self.visibility = visibility
+        self.visibilityUserIds = visibilityUserIds
         self.originalLanguage = originalLanguage; self.mediaIds = mediaIds
         self.repostOfId = repostOfId
     }

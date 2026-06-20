@@ -24,6 +24,7 @@ final class TimelinePublisher {
             content: nil,
             storyEffects: slide.effects,
             visibility: visibility,
+            visibilityUserIds: nil,
             originalLanguage: nil,
             mediaIds: nil,
             repostOfId: nil
@@ -40,7 +41,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     private(set) var lastStoryEffects: StoryEffects?
 
     func createStory(content: String?, storyEffects: StoryEffects?, visibility: String,
-                     originalLanguage: String?, mediaIds: [String]?, repostOfId: String?) async throws -> APIPost {
+                     visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?) async throws -> APIPost {
         createStoryCallCount += 1
         lastStoryEffects = storyEffects
         return try createStoryResult.get()

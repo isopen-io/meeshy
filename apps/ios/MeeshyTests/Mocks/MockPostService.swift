@@ -244,7 +244,7 @@ final class MockPostService: PostServiceProviding {
     }
 
     func createStory(content: String?, storyEffects: StoryEffects?, visibility: String,
-                     originalLanguage: String?, mediaIds: [String]?,
+                     visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?,
                      repostOfId: String?) async throws -> APIPost {
         createStoryCallCount += 1
         lastCreateStoryContent = content
