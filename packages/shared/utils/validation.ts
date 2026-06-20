@@ -239,6 +239,7 @@ export const updateUserProfileSchema = z.object({
   ).optional(),
   customDestinationLanguage: z.union([z.literal(''), z.null(), z.string().min(2).max(5)]).optional(),
   autoTranslateEnabled: z.boolean().optional(),
+  voicePublic: z.boolean().optional(),
 }).strict();
 
 /**

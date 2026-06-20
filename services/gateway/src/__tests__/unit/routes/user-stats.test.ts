@@ -75,7 +75,7 @@ describe('computeUserStats', () => {
       totalConversations: 12,
       totalTranslations: 150,
       friendRequestsReceived: 60,
-      languages: ['fr', 'en', 'es', null],
+      languages: ['fr', 'en', 'es'],
       createdAt,
     });
 
@@ -85,7 +85,6 @@ describe('computeUserStats', () => {
     expect(stats.totalConversations).toBe(12);
     expect(stats.totalTranslations).toBe(150);
     expect(stats.friendRequestsReceived).toBe(60);
-    // null language dropped from groupBy
     expect(stats.languages).toEqual(['fr', 'en', 'es']);
     expect(stats.languagesUsed).toBe(3);
     expect(stats.memberDays).toBe(10);
@@ -144,6 +143,15 @@ describe('computeUserStats', () => {
         })
       );
     }
+  });
+
+  it('preserves legacy behavior: languagesUsed counts groupBy rows including a null group, languages drops nulls', async () => {
+    const stats = await computeUserStats(
+      buildPrisma({ languages: ['fr', 'en', null] }),
+      'u1'
+    );
+    expect(stats.languages).toEqual(['fr', 'en']);
+    expect(stats.languagesUsed).toBe(3);
   });
 
   it('treats a missing user as zero member days', async () => {

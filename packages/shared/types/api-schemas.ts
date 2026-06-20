@@ -3236,7 +3236,8 @@ export const updateUserRequestSchema = {
     regionalLanguage: { type: 'string', minLength: 2, maxLength: 5, description: 'Regional language code' },
     customDestinationLanguage: { type: 'string', maxLength: 5, nullable: true, description: 'Custom destination language (empty string allowed)' },
     autoTranslateEnabled: { type: 'boolean', description: 'Enable auto-translation' },
-    timezone: { type: 'string', description: 'User timezone (IANA format)' }
+    timezone: { type: 'string', description: 'User timezone (IANA format)' },
+    voicePublic: { type: 'boolean', description: 'Expose the cloned voice sample on the public profile' }
   }
 } as const;
 

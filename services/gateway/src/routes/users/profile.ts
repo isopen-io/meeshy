@@ -197,6 +197,17 @@ export async function updateUserProfile(fastify: FastifyInstance) {
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
 
+      // Toggle de la visibilité publique du profil vocal. `updateMany` est
+      // volontairement utilisé pour ne PAS lever P2025 quand l'utilisateur n'a
+      // pas encore de modèle vocal : la requête affecte 0 ligne et le toggle est
+      // un no-op silencieux (l'utilisateur n'a rien à exposer).
+      if (body.voicePublic !== undefined) {
+        await fastify.prisma.userVoiceModel.updateMany({
+          where: { userId },
+          data: { voicePublicAt: body.voicePublic ? new Date() : null },
+        });
+      }
+
       // B3 (5.3) — un changement de langue doit rafraîchir le snapshot
       // `resolvedLanguages` des sockets connectés du user, sinon SOCKET_LANG_FILTER
       // continue de filtrer sur l'ancienne langue jusqu'à reconnexion. Best-effort.
@@ -774,10 +785,15 @@ export async function getUserByUsername(fastify: FastifyInstance) {
                 lastName: { type: 'string' },
                 displayName: { type: 'string' },
                 avatar: { type: 'string', nullable: true },
+                banner: { type: 'string', nullable: true },
                 bio: { type: 'string', nullable: true },
                 role: { type: 'string' },
                 isOnline: { type: 'boolean' },
                 lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
+                voicePublic: { type: 'boolean' },
+                voiceSampleUrl: { type: 'string', nullable: true },
+                voiceSampleDurationMs: { type: 'number', nullable: true },
+                voiceQuality: { type: 'number', nullable: true },
                 createdAt: { type: 'string', format: 'date-time' }
               }
             }
@@ -812,7 +828,8 @@ export async function getUserByUsername(fastify: FastifyInstance) {
           role: true,
           isOnline: true,
           lastActiveAt: true,
-          createdAt: true
+          createdAt: true,
+          voiceModel: { select: voiceModelSelect }
         }
       });
 
@@ -823,7 +840,7 @@ export async function getUserByUsername(fastify: FastifyInstance) {
 
       fastify.log.info(`[USER_PROFILE_U] User found: ${user.username} (${user.id})`);
 
-      return sendSuccess(reply, user);
+      return sendSuccess(reply, withVoiceFields(user));
 
     } catch (error) {
       logError(fastify.log, 'Get user profile error:', error);
@@ -864,8 +881,13 @@ export async function getUserById(fastify: FastifyInstance) {
                 avatar: { type: 'string', nullable: true },
                 bio: { type: 'string', nullable: true },
                 role: { type: 'string' },
+                banner: { type: 'string', nullable: true },
                 isOnline: { type: 'boolean' },
                 lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
+                voicePublic: { type: 'boolean' },
+                voiceSampleUrl: { type: 'string', nullable: true },
+                voiceSampleDurationMs: { type: 'number', nullable: true },
+                voiceQuality: { type: 'number', nullable: true },
                 systemLanguage: { type: 'string' },
                 regionalLanguage: { type: 'string' },
                 customDestinationLanguage: { type: 'string', nullable: true },
@@ -922,7 +944,8 @@ export async function getUserById(fastify: FastifyInstance) {
           isActive: true,
           deactivatedAt: true,
           createdAt: true,
-          updatedAt: true
+          updatedAt: true,
+          voiceModel: { select: voiceModelSelect }
         }
       });
 
@@ -934,7 +957,7 @@ export async function getUserById(fastify: FastifyInstance) {
       fastify.log.info(`[USER_PROFILE] User found: ${user.username} (${user.id})`);
 
       const publicUserProfile = {
-        ...user,
+        ...withVoiceFields(user),
         // TODO: Load from UserPreferences.application
         autoTranslateEnabled: true,
         email: '',
@@ -951,6 +974,58 @@ export async function getUserById(fastify: FastifyInstance) {
       return sendInternalError(reply, 'Internal server error');
     }
   });
+}
+
+// Shared Prisma select fragment for a user's public voice profile.
+// Selected via the `voiceModel` relation; `voicePublicAt` gates exposure.
+const voiceModelSelect = {
+  voicePublicAt: true,
+  referenceAudioUrl: true,
+  totalDurationMs: true,
+  qualityScore: true,
+} as const;
+
+export type VoiceModelFields = {
+  voicePublicAt: Date | null;
+  referenceAudioUrl: string | null;
+  totalDurationMs: number | null;
+  qualityScore: number | null;
+};
+
+export type PublicVoiceFields =
+  | { voicePublic: false }
+  | {
+      voicePublic: true;
+      voiceSampleUrl: string;
+      voiceSampleDurationMs: number | null;
+      voiceQuality: number | null;
+    };
+
+/**
+ * Maps a user's (optional) voice model to public-safe voice fields and strips
+ * the raw `voiceModel` relation so internal columns never leak.
+ *
+ * A voice profile is exposed only when the user opted in (`voicePublicAt`
+ * non-null) AND a reference audio URL exists. Block-relationship ACL is a
+ * documented follow-up (see CLAUDE task notes) — this gates purely on opt-in.
+ */
+export function deriveVoiceFields(voiceModel: VoiceModelFields | null | undefined): PublicVoiceFields {
+  if (voiceModel && voiceModel.voicePublicAt != null && voiceModel.referenceAudioUrl) {
+    return {
+      voicePublic: true,
+      voiceSampleUrl: voiceModel.referenceAudioUrl,
+      voiceSampleDurationMs: voiceModel.totalDurationMs ?? null,
+      voiceQuality: voiceModel.qualityScore ?? null,
+    };
+  }
+  return { voicePublic: false };
+}
+
+export function withVoiceFields<T extends { voiceModel?: VoiceModelFields | null }>(
+  user: T
+): Omit<T, 'voiceModel'> & PublicVoiceFields {
+  const { voiceModel, ...rest } = user;
+  return { ...rest, ...deriveVoiceFields(voiceModel) };
 }
 
 // Shared Prisma select & profile builder for dedicated lookup endpoints
@@ -972,12 +1047,13 @@ const publicUserSelect = {
   isActive: true,
   deactivatedAt: true,
   createdAt: true,
-  updatedAt: true
+  updatedAt: true,
+  voiceModel: { select: voiceModelSelect }
 } as const;
 
 function buildPublicProfile(user: Record<string, unknown>) {
   return {
-    ...user,
+    ...withVoiceFields(user as { voiceModel?: VoiceModelFields | null }),
     autoTranslateEnabled: true,
     email: '',
     phoneNumber: undefined,
