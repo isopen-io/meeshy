@@ -109,9 +109,10 @@ nonisolated final class VideoFrameConverter: VideoSampleBufferMaking, @unchecked
             Logger.pip.error("CMVideoFormatDescription create failed status=\(status, privacy: .public)")
             return nil
         }
-        // Cardinal borné (paliers de résolution × formats) — purge défensive
-        // contre une source pathologique.
-        if formatCache.count > 8 { formatCache.removeAll(keepingCapacity: true) }
+        // Cardinal borné (paliers de résolution × formats discrets) — purge
+        // défensive à 16 contre une source pathologique. On en voit rarement
+        // plus de 5-6 paliers réseau : seuil à 8 provoquait du thrashing inutile.
+        if formatCache.count > 16 { formatCache.removeAll(keepingCapacity: true) }
         formatCache[key] = created
         return created
     }
@@ -134,6 +135,7 @@ nonisolated final class VideoFrameConverter: VideoSampleBufferMaking, @unchecked
 
     fileprivate func dequeueNV12Buffer(width: Int, height: Int) -> CVPixelBuffer? {
         lock.lock()
+        defer { lock.unlock() }
         if nv12Pool == nil || width != nv12PoolWidth || height != nv12PoolHeight {
             let bufferAttrs: [String: Any] = [
                 kCVPixelBufferWidthKey as String: width,
@@ -145,7 +147,6 @@ nonisolated final class VideoFrameConverter: VideoSampleBufferMaking, @unchecked
             var pool: CVPixelBufferPool?
             let status = CVPixelBufferPoolCreate(kCFAllocatorDefault, poolAttrs as CFDictionary, bufferAttrs as CFDictionary, &pool)
             guard status == kCVReturnSuccess, let created = pool else {
-                lock.unlock()
                 Logger.pip.warning("NV12 pool create failed status=\(status, privacy: .public)")
                 return nil
             }
@@ -153,9 +154,7 @@ nonisolated final class VideoFrameConverter: VideoSampleBufferMaking, @unchecked
             nv12PoolWidth = width
             nv12PoolHeight = height
         }
-        let pool = nv12Pool
-        lock.unlock()
-        guard let pool else { return nil }
+        guard let pool = nv12Pool else { return nil }
         var buffer: CVPixelBuffer?
         guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buffer) == kCVReturnSuccess else { return nil }
         return buffer
@@ -217,6 +216,10 @@ extension VideoFrameConverter {
         let chromaHeight = Int(i420.chromaHeight)
         if let dstC = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 1) {
             let dstStride = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 1)
+            // NV12 : le plan chroma entrelacé fait 2·chromaWidth octets par ligne.
+            // Garde défensive contre un stride insuffisant (sinon débordement
+            // d'écriture sur `dstRow[2*column+1]`).
+            guard dstStride >= chromaWidth * 2 else { return nil }
             let dst = dstC.bindMemory(to: UInt8.self, capacity: dstStride * chromaHeight)
             let srcU = i420.dataU
             let srcV = i420.dataV

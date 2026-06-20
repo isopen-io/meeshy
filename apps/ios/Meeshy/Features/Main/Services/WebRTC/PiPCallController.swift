@@ -127,6 +127,12 @@ final class PiPCallController: NSObject, PiPCallProviding {
     }
 
     func tearDown() {
+        // Si un PiP est actif (ex : l'appel se termine pendant que la fenêtre
+        // flotte par-dessus une autre app), l'arrêter AVANT de libérer le
+        // controller — sinon la fenêtre système reste orpheline à l'écran.
+        if let pipController, pipController.isPictureInPictureActive {
+            pipController.stopPictureInPicture()
+        }
         detachRenderer()
         pipController?.delegate = nil
         pipController = nil

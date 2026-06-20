@@ -1226,6 +1226,10 @@ final class CallManager: ObservableObject {
             onStop: { [weak self] in
                 guard let self else { return }
                 self.isSystemPiPActive = false
+                // Appel terminé pendant le PiP : ne pas forcer .pip (laisser le
+                // panneau de fin d'appel en .fullScreen). detachSystemPiP a déjà
+                // remis les flags au repos dans ce cas.
+                guard self.callState.isActive else { self.pipRestoring = false; return }
                 if self.pipRestoring {
                     self.pipRestoring = false   // restore : déjà repassé en .fullScreen
                 } else {
