@@ -163,8 +163,9 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/users/:id/stats',
     {
+      onRequest: [fastify.authenticate],
       schema: {
-        description: 'Get public statistics for any user by MongoDB ObjectId or username',
+        description: 'Get statistics for any user by MongoDB ObjectId or username (auth required)',
         tags: ['user-stats'],
         summary: 'Public user stats',
         params: {
