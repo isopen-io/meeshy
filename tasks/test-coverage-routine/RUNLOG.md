@@ -1283,3 +1283,29 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   2. `PostTranslationService.ts` istanbul ignore annotations: TOP_LANGUAGES = ['fr','en','es','ar','pt'] always has 5 elements; after filtering one source language, still ≥4 remain. The `if (length === 0)` blocks are structurally dead. The belt-and-suspenders `.catch` on private handlers are unreachable because `handlePostTranslationCompleted` and `handleCommentTranslationCompleted` each have their own try/catch that swallows all errors.
   3. `postReplySnapshot.ts` was a new file created during this run (implementation matching the pre-existing test file).
 - Next slice: P2 Feed/posts/stories × web (next ☐ cell in feature matrix)
+
+## 2026-06-20T17:00Z — P2 Feed/posts/stories × web (services + hooks sub-unit)
+- Targeted: `apps/web/services/posts.service.ts`, `apps/web/services/story.service.ts`, `apps/web/hooks/queries/use-feed-query.ts` (usePrefetchPost gap), `apps/web/hooks/use-post-translation.ts` (fallback branches), `apps/web/hooks/queries/use-feed-variants.ts`
+- Result: ◐ partial — sub-unit done; P2 Feed × web ☐→◐ (complex hooks remain for next run)
+- Coverage (targeted files):
+  - `posts.service.ts`: 100% stmts / 96.66% branch (L277 dead-code ternary: `qs ? \`?${qs}\` : ''` — limit always set) / 100% funcs / 100% lines ✓
+  - `story.service.ts`: 100% stmts / 100% branch / 100% funcs / 100% lines ✓
+  - `use-feed-query.ts`: 100% stmts / 100% branch / 100% funcs / 100% lines ✓
+  - `use-post-translation.ts`: 100% stmts / 100% branch / 100% funcs / 100% lines ✓
+  - `use-feed-variants.ts`: 100% stmts / 100% branch / 100% funcs / 100% lines ✓
+  - **All files composite: 100% stmts / 98.97% branch / 100% funcs / 100% lines**
+- Tests added: 89 tests across 5 test files (all passing)
+  - `__tests__/services/posts.service.test.ts` (MODIFIED, +49 tests): getStatusesDiscover (no-params, cursor+limit), getCommunityPosts (no-filters, cursor+limit), getPostViews (default/custom limit+offset), getStoryAudioLibrary (no-query, with-query, custom-limit), trackStoryAudioUse, repost-default-empty-body, recordAnonymousView (success + fetch-reject fire-and-forget)
+  - `__tests__/services/story.service.test.ts` (NEW, 21 tests): getStories (data-array, null-response→[]), createStory (minimum, all-fields, null-data→throw), deleteStory, recordView, reactToStory, removeReaction, getViewers (data, null→fallback, custom-limit+offset)
+  - `__tests__/hooks/queries/use-feed-query.test.tsx` (MODIFIED, +2 tests): usePrefetchPost returns function; invocation calls getPost
+  - `__tests__/hooks/use-post-translation.test.tsx` (MODIFIED, +4 tests): resolvePreferredLanguage fallbacks (systemLanguage='', regionalLanguage='', all-empty→'fr'), findTranslation empty-text branch
+  - `__tests__/hooks/queries/use-feed-variants.test.tsx` (NEW, ~13 tests): useStatusesQuery (enabled/disabled), useStatusesDiscoverQuery (enabled/disabled), useUserPostsQuery (with-userId, empty-userId, disabled), useBookmarksQuery (enabled/disabled), usePostViewersQuery (with-postId, empty-postId, disabled, custom-limit)
+- Production code changes: NONE — test-only diff
+- manifests/web.md: ticked [x] for use-post-translation.ts, use-feed-query.ts, use-feed-variants.ts, posts.service.ts, story.service.ts
+- Reviewer: PASS (rounds: 1) — behavior-first assertions; factory functions (makePost); no shared mutable state; resolvePreferredLanguage fallbacks tested via Object.assign restore pattern; Prisme rule verified (no match → original, no fallback-to-first); !!userId/!!postId enabled branches covered; fire-and-forget error-swallow covered
+- Notes:
+  1. posts.service.ts L277: `qs ? \`?${qs}\` : ''` in getStoryAudioLibrary — the '' branch is dead code because `params` always has `limit` set before `qs = params.toString()`. 96.66% branch is honest and above 92% floor. No istanbul ignore needed.
+  2. use-post-translation.ts: deviceLocale (4th Prisme priority) is not implemented in this hook — it lives at the gateway/user-preferences layer. The hook's resolvePreferredLanguage implements only systemLanguage > regionalLanguage > customDestinationLanguage > 'fr'. All 3 explicit tiers + fallback covered.
+  3. Pre-existing web suite failures (19 suites) remain unchanged — pre-existing issue from missing @meeshy/shared dist on pnpm env; zero new failures introduced.
+  4. Next sub-slice (next run): use-post-mutations.ts, use-post-socket-cache-sync.ts, use-reactions-query.ts, use-stories.ts, use-stories-realtime.ts, use-feed-realtime.ts, lib/story-transforms.ts
+- Commit: (see below)
