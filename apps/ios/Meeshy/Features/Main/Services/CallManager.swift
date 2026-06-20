@@ -1163,14 +1163,21 @@ final class CallManager: ObservableObject {
             _ = userId  // Référencé pour cohérence avec l'API legacy emitCallEnd(callId:toUserId:)
         }
 
-        if let uuid = activeCallUUID {
-            let endAction = CXEndCallAction(call: uuid)
+        // H1 — rendre le teardown local atomique vis-à-vis de CallKit. On capture
+        // l'UUID, puis on exécute `endCallInternal` EN PREMIER pour que `callState`
+        // soit `.ended` AVANT de demander à CallKit de raccrocher. Le loop-back
+        // `CXEndCallAction` ré-entre dans `endCall()`, et son `guard callState.isActive`
+        // (en tête de méthode) rejette alors de façon fiable la ré-entrée — pas de
+        // double teardown. (`endCallInternal` nil-e `activeCallUUID`, d'où la capture
+        // locale ci-dessus.)
+        let endUUID = activeCallUUID
+        endCallInternal(reason: .local)
+        if let endUUID {
+            let endAction = CXEndCallAction(call: endUUID)
             callController.request(CXTransaction(action: endAction)) { error in
                 if let error { Logger.calls.error("CallKit end failed: \(error.localizedDescription)") }
             }
         }
-
-        endCallInternal(reason: .local)
         Logger.calls.info("Call ended by local: \(callId ?? "(pre-ACK)")")
     }
 
@@ -2390,15 +2397,53 @@ final class CallManager: ObservableObject {
         let fromUserId = AuthManager.shared.currentUser?.id ?? ""
         // §3.5 — the answer belongs to the offer's generation (the current
         // high-water mark, advanced when the offer was accepted).
+        let generation = negotiationId
+        let payload: [String: Any] = [
+            "sdp": sdp.sdp, "to": toUserId, "from": fromUserId, "negotiationId": generation
+        ]
+        // PERF-004 — first attempt awaited inline so CXAnswerCallAction.fulfill()
+        // is paired with a relayed answer in the common case.
         let acked = await MessageSocketManager.shared.emitCallSignalWithAck(
-            callId: callId,
-            type: "answer",
-            payload: ["sdp": sdp.sdp, "to": toUserId, "from": fromUserId, "negotiationId": negotiationId]
+            callId: callId, type: "answer", payload: payload
         )
-        if !acked {
-            Logger.calls.warning("SDP answer ACK timed out (3s) for call: \(callId) — proceeding optimistically")
+        if acked { return true }
+        // H3 — an un-ACK'd answer used to be dropped silently, leaving the peer
+        // stuck on "Connexion…" until the reliability watchdog fired. The offer
+        // already retries (`emitOfferWithRetry`); mirror it for the answer, but
+        // in the BACKGROUND so the CallKit fulfill window isn't blocked. The
+        // gateway dedupes the duplicate by `negotiationId` (§3.5), so a re-sent
+        // answer never causes glare.
+        Logger.calls.warning("[CALL-DIAG] answer ACK timed out (attempt 1) call=\(callId) — retrying in background")
+        Task { [weak self] in
+            await self?.emitAnswerRetry(callId: callId, payload: payload, generation: generation)
         }
-        return acked
+        return false
+    }
+
+    /// H3 — bounded exponential backoff for the SDP answer (attempts 2…4, the
+    /// first having run inline in `emitCallAnswer`). Stops early if the call
+    /// ended or a newer negotiation superseded this answer (epoch), so a stale
+    /// answer never lands on the peer after a renegotiation.
+    private func emitAnswerRetry(callId: String, payload: [String: Any], generation: Int) async {
+        var delayMs: UInt64 = 500
+        for attempt in 2...4 {
+            guard currentCallId == callId, generation >= negotiationId else {
+                Logger.calls.info("[CALL-DIAG] answer gen=\(generation) superseded/cancelled — stop retry")
+                return
+            }
+            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+            delayMs *= 2
+            guard currentCallId == callId, generation >= negotiationId else { return }
+            let acked = await MessageSocketManager.shared.emitCallSignalWithAck(
+                callId: callId, type: "answer", payload: payload
+            )
+            if acked {
+                Logger.calls.info("[CALL-DIAG] answer ACK'd on attempt \(attempt)")
+                return
+            }
+            Logger.calls.warning("[CALL-DIAG] answer ACK timed out (attempt \(attempt)/4) call=\(callId)")
+        }
+        Logger.calls.error("[CALL-DIAG] answer never ACK'd after 4 attempts — relying on gateway replay (§4.6)")
     }
 
     // Audit P3 — `toUserId` was accepted by the previous signature and
