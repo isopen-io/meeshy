@@ -73,10 +73,15 @@ export const SendMessageBodySchema = z.object({
       `Le message ne peut pas dépasser ${MESSAGE_LIMITS.MAX_MESSAGE_LENGTH} caractères`,
     )
     .optional(),
-  // Phase 4 §6.2 — mandatory `cid_<uuid v4 lowercase>` idempotency key.
+  // Phase 4 §6.2 — `cid_<uuid v4 lowercase>` idempotency key. OPTIONAL:
+  // only clients needing sync/dedup (app, web) send it. Scripts and
+  // integrations may omit it; the message is then simply not deduped
+  // (MessageProcessor persists clientMessageId as null). When provided it
+  // must still be well-formed.
   clientMessageId: z
     .string()
-    .regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format (expected cid_<uuid v4 lowercase>)'),
+    .regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format (expected cid_<uuid v4 lowercase>)')
+    .optional(),
   originalLanguage: CommonSchemas.language.optional(),
   messageType: CommonSchemas.messageType.optional(),
   replyToId: z.string().optional(),
@@ -1347,12 +1352,11 @@ export function registerMessagesRoutes(
       },
       body: {
         type: 'object',
-        required: ['clientMessageId'],
         properties: {
           content: { type: 'string', description: 'Message content' },
           clientMessageId: {
             type: 'string',
-            description: 'Phase 4 idempotency key, format cid_<uuid v4 lowercase>',
+            description: 'Optional Phase 4 idempotency key, format cid_<uuid v4 lowercase>. Only clients needing dedup/sync send it.',
             pattern: '^cid_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
           },
           originalLanguage: { type: 'string', description: 'Language code (e.g., fr, en)', default: 'fr' },

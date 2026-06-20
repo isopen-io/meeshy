@@ -104,7 +104,7 @@ struct MeeshyApp: App {
                 .overlay(alignment: .top) {
                     if let toast = toastManager.currentToast {
                         FeedbackToastView(toast: toast)
-                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .transition(.feedbackToastReveal)
                             .padding(.top, MeeshySpacing.xxl)
                             .onTapGesture {
                                 if let action = toastManager.onTapAction {
@@ -116,7 +116,7 @@ struct MeeshyApp: App {
                             .zIndex(999)
                     }
                 }
-                .animation(MeeshyAnimation.springDefault, value: toastManager.currentToast)
+                .meeshyAnimation(MeeshyAnimation.springBouncy, value: toastManager.currentToast)
                 .sheet(isPresented: $showCrashSheet) {
                     CrashReportSheet(reports: crashReportsToShow)
                 }
