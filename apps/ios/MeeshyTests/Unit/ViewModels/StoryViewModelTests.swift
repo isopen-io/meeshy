@@ -1055,7 +1055,8 @@ final class StoryViewModelTests: XCTestCase {
             loadedImages: [:],
             loadedVideoURLs: [:],
             loadedAudioURLs: [:],
-            visibility: "PUBLIC"
+            visibility: "PUBLIC",
+            visibilityUserIds: []
         )
 
         let count = await StoryPublishQueue.shared.count
@@ -1079,7 +1080,8 @@ final class StoryViewModelTests: XCTestCase {
             loadedImages: [:],
             loadedVideoURLs: [:],
             loadedAudioURLs: [:],
-            visibility: "PUBLIC"
+            visibility: "PUBLIC",
+            visibilityUserIds: []
         )
 
         XCTAssertNil(sut.activeUpload,
