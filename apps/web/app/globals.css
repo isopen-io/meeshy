@@ -612,6 +612,11 @@
   contain-intrinsic-size: 0 72px;
 }
 
+.notification-item {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 84px;
+}
+
 /**
  * Respect de prefers-reduced-motion
  * (Web Interface Guidelines - Animation)
