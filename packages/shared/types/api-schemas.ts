@@ -723,6 +723,7 @@ export const messageSchema = {
     // Delivery Status
     deliveredCount: { type: 'number', description: 'Number of recipients who received the message' },
     readCount: { type: 'number', description: 'Number of recipients who read the message' },
+    recipientCount: { type: 'number', description: 'Number of active recipients (participants excluding the sender) — all-or-nothing denominator' },
     deliveredToAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Delivered to all timestamp' },
     readByAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Read by all timestamp' },
 

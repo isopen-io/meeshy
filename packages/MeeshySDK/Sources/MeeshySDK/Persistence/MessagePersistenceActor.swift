@@ -530,7 +530,19 @@ public actor MessagePersistenceActor {
     /// posts a refresh for real changes — delivery/read events routinely
     /// target conversations whose rows are already past the transition.
     private func batchDeliverySync(conversationId: String, event: MessageEvent) throws -> Bool {
-        try dbWriter.write { db -> Bool in
+        // Read frontier carried by the event (the peer's read/deliver moment).
+        // A message created AFTER it cannot have been received/read yet, so it
+        // must be skipped — otherwise a message sent right after the peer read
+        // would falsely advance to delivered/read. Mirrors the frontier guard in
+        // ConversationSyncEngine.applyReadReceipt (the cache path).
+        let frontier: Date? = {
+            switch event {
+            case .delivered(_, let at): return at
+            case .readBy(_, let at): return at
+            default: return nil
+            }
+        }()
+        return try dbWriter.write { db -> Bool in
             let records = try MessageRecord
                 .filter(Column("conversationId") == conversationId)
                 .filter([MessageState.sending.rawValue, MessageState.sent.rawValue]
@@ -539,6 +551,7 @@ public actor MessagePersistenceActor {
 
             var didChange = false
             for var record in records {
+                if let frontier, record.createdAt > frontier { continue }
                 var machine = MessageStateMachine(
                     state: record.state, retryCount: record.retryCount,
                     serverId: record.serverId
@@ -547,6 +560,20 @@ public actor MessagePersistenceActor {
                     record.state = machine.state
                     record.deliveredAt = machine.deliveredAt
                     record.readAt = machine.readAt
+                    // The caller (ConversationSocketHandler) only feeds this batch
+                    // a delivered/read event once the WHOLE group has received /
+                    // read (all-or-nothing). This path advances `state` but does
+                    // NOT carry per-row counters, so stamp the unambiguous "all"
+                    // markers the display resolver trusts — otherwise a real-time
+                    // group delivery/read would transiently regress to a single
+                    // check until the sibling counters write lands.
+                    if machine.state == .read {
+                        let at = machine.readAt ?? Date()
+                        record.readByAllAt = at
+                        record.deliveredToAllAt = record.deliveredToAllAt ?? machine.deliveredAt ?? at
+                    } else if machine.state == .delivered {
+                        record.deliveredToAllAt = machine.deliveredAt ?? Date()
+                    }
                     record.updatedAt = Date()
                     record.changeVersion += 1
                     try record.update(db)
@@ -1297,7 +1324,15 @@ public actor MessagePersistenceActor {
                             longitude: apiAtt.longitude,
                             thumbnailColor: thumbColor,
                             transcription: embeddedTranscription,
-                            audioTranslations: embeddedAudioTranslations
+                            audioTranslations: embeddedAudioTranslations,
+                            deliveredToAllAt: apiAtt.deliveredToAllAt,
+                            viewedByAllAt: apiAtt.viewedByAllAt,
+                            downloadedByAllAt: apiAtt.downloadedByAllAt,
+                            listenedByAllAt: apiAtt.listenedByAllAt,
+                            watchedByAllAt: apiAtt.watchedByAllAt,
+                            viewedCount: apiAtt.viewedCount,
+                            downloadedCount: apiAtt.downloadedCount,
+                            consumedCount: apiAtt.consumedCount
                         )
                     }
                     return try? encoder.encode(ui)
@@ -1528,8 +1563,20 @@ public actor MessagePersistenceActor {
                     }
                     existing.deliveredCount = deliveredCount
                     existing.readCount = readCount
-                    existing.deliveredToAllAt = api.deliveredToAllAt
-                    existing.readByAllAt = api.readByAllAt
+                    // `deliveredToAllAt` / `readByAllAt` are the unambiguous
+                    // "every recipient has received / read" markers that the live
+                    // all-or-nothing path stamps locally (and that the delivery
+                    // resolver trusts). Coalesce rather than hard-assign so a REST
+                    // refresh — which currently returns null for these (the
+                    // gateway no longer computes them under the cursor model) —
+                    // never CLEARS a marker the live path already confirmed. A
+                    // genuine server value, if ever provided, still wins.
+                    existing.deliveredToAllAt = api.deliveredToAllAt ?? existing.deliveredToAllAt
+                    existing.readByAllAt = api.readByAllAt ?? existing.readByAllAt
+                    // Authoritative recipient denominator: adopt a positive server
+                    // value, but never let a refresh that omits it (socket-origin
+                    // row, older gateway) clear a count already learned.
+                    if let rc = api.recipientCount, rc > 0 { existing.recipientCount = rc }
                     existing.state = max(existing.state, computedState)
                     // Self-heal rows that were upserted before we resolved
                     // sender.userId — their `senderId` column held the
@@ -1654,7 +1701,8 @@ public actor MessagePersistenceActor {
                         layoutVersion: 0, layoutMaxWidth: nil,
                         cachedTimeString: timeString,
                         changeVersion: 0,
-                        callSummaryJson: callSummaryJson
+                        callSummaryJson: callSummaryJson,
+                        recipientCount: api.recipientCount ?? 0
                     )
                     try record.insert(db)
                     changedConvIds.insert(api.conversationId)

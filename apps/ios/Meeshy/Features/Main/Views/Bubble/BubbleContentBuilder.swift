@@ -18,7 +18,8 @@ extension BubbleContent {
         currentUserId: String,
         timeString: String? = nil,
         isEditSaving: Bool = false,
-        hasEditHistory: Bool = false
+        hasEditHistory: Bool = false,
+        recipientCount: Int = 1
     ) {
         self.messageId = message.id
         self.isMe = message.isMe
@@ -189,9 +190,23 @@ extension BubbleContent {
         let resolvedTimeString = timeString
             ?? message.cachedTimeString
             ?? MessageRecord.computeTimeString(for: message.createdAt)
+        // The footer checkmark must EXACTLY represent the real state of every
+        // other interlocutor. `message.deliveryStatus` is promoted to
+        // delivered/read as soon as a SINGLE recipient does so — correct for a
+        // 1:1 but misleading in a group. Re-resolve with the recipient count so
+        // ✓✓ (delivered) / indigo ✓✓ (read) only light up once ALL recipients
+        // have received / read. `recipientCount <= 1` trusts the stored status.
         self.meta = Meta(
             timeString: resolvedTimeString,
-            deliveryStatus: message.isMe ? message.deliveryStatus : nil
+            deliveryStatus: message.isMe
+                ? DeliveryStatusResolver.resolve(
+                    status: message.deliveryStatus,
+                    deliveredCount: message.deliveredCount,
+                    readCount: message.readCount,
+                    recipientCount: recipientCount,
+                    deliveredToAllAt: message.deliveredToAllAt,
+                    readByAllAt: message.readByAllAt)
+                : nil
         )
     }
 

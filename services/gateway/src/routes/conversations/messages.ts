@@ -223,6 +223,27 @@ export function buildAfterWatermarkClause(after?: string): { createdAt: { gt: Da
 }
 
 /**
+ * Active-recipient denominator for a message's all-or-nothing delivery
+ * indicator: the count of active participants EXCLUDING the message's sender.
+ * Mirrors `MessageReadStatusService.totalMembers`. Returned to clients per
+ * message so the sender's ✓✓ / read tier lights up only once EVERY recipient
+ * has received / read it, using the server's authoritative count instead of a
+ * possibly-stale local member count.
+ *
+ * @param activeParticipantIds set of `Participant.id` for active members
+ * @param senderParticipantId  the message's raw `senderId` (a `Participant.id`)
+ */
+export function computeRecipientCount(
+  activeParticipantIds: Set<string>,
+  senderParticipantId: string
+): number {
+  return Math.max(
+    0,
+    activeParticipantIds.size - (activeParticipantIds.has(senderParticipantId) ? 1 : 0)
+  );
+}
+
+/**
  * Enregistre les routes de base de gestion des messages (GET, POST, mark-read, mark-unread)
  */
 export function registerMessagesRoutes(
@@ -878,7 +899,7 @@ export function registerMessagesRoutes(
       // Enrichir les messages avec les vrais statuts de lecture depuis les cursors
       // Les champs dénormalisés (deliveredCount, readCount) ne sont jamais mis à jour en DB
       // On les calcule dynamiquement ici depuis ConversationReadCursor
-      const readStatusMap = new Map<string, { deliveredCount: number; readCount: number }>();
+      const readStatusMap = new Map<string, { deliveredCount: number; readCount: number; recipientCount: number }>();
       if (messages.length > 0 && authRequest.authContext?.userId) {
         try {
           const [activeParticipants, cursors] = await Promise.all([
@@ -902,7 +923,12 @@ export function registerMessagesRoutes(
               if (cursor.lastDeliveredAt && cursor.lastDeliveredAt >= msg.createdAt) deliveredCount++;
               if (cursor.lastReadAt && cursor.lastReadAt >= msg.createdAt) readCount++;
             }
-            readStatusMap.set(msg.id, { deliveredCount, readCount });
+            // Authoritative all-or-nothing denominator: active participants
+            // EXCLUDING this message's sender. Lets the client render the group
+            // ✓✓ / read tier from the real recipient count instead of a stale
+            // local memberCount.
+            const recipientCount = computeRecipientCount(activeIds, msg.senderId);
+            readStatusMap.set(msg.id, { deliveredCount, readCount, recipientCount });
           }
         } catch (err) {
           logger.warn('[CONVERSATIONS] Failed to compute read statuses:', err);
@@ -964,6 +990,10 @@ export function registerMessagesRoutes(
           readByAllAt: message.readByAllAt,
           deliveredCount: readStatusMap.get(message.id)?.deliveredCount ?? message.deliveredCount ?? 0,
           readCount: readStatusMap.get(message.id)?.readCount ?? message.readCount ?? 0,
+          // Server-authoritative active-recipient denominator (participants
+          // excluding the sender). `0` when not computed (no auth context) — the
+          // client then falls back to its local member count.
+          recipientCount: readStatusMap.get(message.id)?.recipientCount ?? 0,
 
           // Réactions (dénormalisées - toujours incluses)
           reactionSummary: message.reactionSummary,

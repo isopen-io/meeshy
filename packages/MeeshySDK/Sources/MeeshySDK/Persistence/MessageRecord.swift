@@ -61,6 +61,11 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     public var readCount: Int
     public var deliveredToAllAt: Date?
     public var readByAllAt: Date?
+    /// Server's authoritative active-recipient denominator (participants
+    /// excluding the sender), persisted so the all-or-nothing indicator survives
+    /// a cache reload with the real count instead of the client `memberCount`.
+    /// `0` = the server did not provide it; the display then falls back.
+    public var recipientCount: Int
 
     // Timestamps
     public var createdAt: Date
@@ -125,7 +130,8 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         layoutVersion: Int, layoutMaxWidth: Double?,
         cachedTimeString: String? = nil,
         changeVersion: Int64,
-        callSummaryJson: Data? = nil
+        callSummaryJson: Data? = nil,
+        recipientCount: Int = 0
     ) {
         self.localId = localId
         self.serverId = serverId
@@ -185,6 +191,7 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         self.cachedTimeString = cachedTimeString
         self.changeVersion = changeVersion
         self.callSummaryJson = callSummaryJson
+        self.recipientCount = recipientCount
     }
 
     // MARK: - Timestamp pre-compute helper
