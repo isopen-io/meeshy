@@ -1364,3 +1364,7 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   4. Global threshold ratcheted: lines 52→59, branches 49→55, statements 52→59, functions 51→59.
   5. Next run: P2 Calls × gateway sub-slice 2/2 — routes/calls.ts (1082 lines, 0% → ≥92%).
 - Commit: 7f52d7365 (branch claude/coverage/p2-calls-gateway, pushed to origin)
+- CI: 15/15 checks passed (Test Python translator completed 04:50Z; Test gateway ✅; all others ✅ or skipped/neutral).
+  Threshold calibration note: thresholds in jest.config.json rolled back from locally-measured 59/55/59/59 to CI-measured 54/51/54/53 — CI runs 25 pre-existing TS-error suites that reduce global coverage ~5% vs local.
+- Squash-merge: PR #738 → main sha 32d2cb321b76f559a31e9444f1c067f19ad452cc (2026-06-21T05:00Z)
+- Next run: P2 Calls × gateway sub-slice 2/2 — routes/calls.ts (1082 lines, 0% → ≥92%).
