@@ -866,12 +866,16 @@ struct CommentsSheetView: View {
     private func pendingCommentMedia(from attachment: ComposerAttachment) -> PendingCommentMedia? {
         guard let url = attachment.url else { return nil }
         let feedType: FeedMediaType
+        let fallbackMime: String
         switch attachment.type {
-        case .image: feedType = .image
-        case .video: feedType = .video
-        case .voice: feedType = .audio
+        case .image: feedType = .image; fallbackMime = "image/jpeg"
+        case .video: feedType = .video; fallbackMime = "video/mp4"
+        case .voice: feedType = .audio; fallbackMime = "audio/mp4"
         case .file, .location: return nil
         }
+        // `ComposerAttachment` ne porte pas de mimeType — on le dérive de l'extension
+        // du fichier local (fallback par type sinon).
+        let mimeType = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? fallbackMime
         let optimistic = FeedMedia(
             type: feedType,
             url: url.absoluteString,
@@ -881,7 +885,7 @@ struct CommentsSheetView: View {
         )
         return PendingCommentMedia(
             fileURL: url,
-            mimeType: attachment.mimeType,
+            mimeType: mimeType,
             mobileTranscription: nil,
             optimistic: optimistic
         )
