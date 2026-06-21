@@ -299,4 +299,85 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
         XCTAssertNil(coordinator.engineForBubble,
                      "engineForBubble must be nil under a mock engine — the cast to AudioPlaybackManager fails")
     }
+
+    // MARK: - playPrevious — Now Playing "previous track"
+
+    /// Past the restart threshold, `playPrevious()` restarts the CURRENT track
+    /// (standard media-player convention): it seeks to 0 and does NOT start a
+    /// different audio.
+    func test_playPrevious_pastThreshold_restartsCurrentTrack() async {
+        let (sut, engine) = makeSUT()
+        sut.play(current: makeQueuedAudio(attachmentId: "a1", fileUrl: "https://cdn/a1.m4a"),
+                 tail: [], conversationName: "T", conversationArtworkURL: nil)
+        let playsBefore = engine.playCallCount
+        engine.duration = 30
+        engine.currentTime = ConversationAudioCoordinator.previousRestartThreshold + 1
+        await Task.yield()
+
+        sut.playPrevious()
+        await Task.yield()
+
+        XCTAssertEqual(engine.seekFractions.last, 0)
+        XCTAssertEqual(engine.playCallCount, playsBefore,
+                       "restart must not start a different track")
+        XCTAssertEqual(sut.activeContext?.attachmentId, "a1")
+    }
+
+    /// Below the threshold with history present, `playPrevious()` re-heads the
+    /// previously played track and keeps the just-left one available as next.
+    func test_playPrevious_belowThreshold_replaysPreviousTrack() async {
+        let (sut, engine) = makeSUT()
+        let a1 = makeQueuedAudio(attachmentId: "a1", fileUrl: "https://cdn/a1.m4a")
+        let a2 = makeQueuedAudio(attachmentId: "a2", fileUrl: "https://cdn/a2.m4a")
+        sut.play(current: a1, tail: [a2], conversationName: "T", conversationArtworkURL: nil)
+
+        sut.playNext()              // advance a1 -> a2, pushing a1 onto history
+        await Task.yield()
+        XCTAssertEqual(sut.activeContext?.attachmentId, "a2")
+
+        engine.duration = 30
+        engine.currentTime = 1      // below threshold
+        await Task.yield()
+
+        let playsBefore = engine.playCallCount
+        sut.playPrevious()
+        await Task.yield()
+
+        XCTAssertEqual(sut.activeContext?.attachmentId, "a1",
+                       "previous must re-head the prior track")
+        XCTAssertEqual(engine.lastPlayedUrl, "https://cdn/a1.m4a")
+        XCTAssertEqual(engine.playCallCount, playsBefore + 1)
+        XCTAssertFalse(sut.hasPrevious, "history is consumed by stepping back")
+    }
+
+    /// With no history (still on the first track), below-threshold
+    /// `playPrevious()` falls back to restarting the current track.
+    func test_playPrevious_noHistory_restartsCurrentTrack() async {
+        let (sut, engine) = makeSUT()
+        sut.play(current: makeQueuedAudio(attachmentId: "a1", fileUrl: "https://cdn/a1.m4a"),
+                 tail: [], conversationName: "T", conversationArtworkURL: nil)
+        let playsBefore = engine.playCallCount
+        engine.duration = 30
+        engine.currentTime = 1
+        await Task.yield()
+
+        sut.playPrevious()
+        await Task.yield()
+
+        XCTAssertEqual(engine.seekFractions.last, 0)
+        XCTAssertEqual(engine.playCallCount, playsBefore)
+        XCTAssertEqual(sut.activeContext?.attachmentId, "a1")
+    }
+
+    func test_hasPrevious_falseInitially_trueAfterAdvance() async {
+        let (sut, _) = makeSUT()
+        let a1 = makeQueuedAudio(attachmentId: "a1", fileUrl: "https://cdn/a1.m4a")
+        let a2 = makeQueuedAudio(attachmentId: "a2", fileUrl: "https://cdn/a2.m4a")
+        sut.play(current: a1, tail: [a2], conversationName: "T", conversationArtworkURL: nil)
+        XCTAssertFalse(sut.hasPrevious)
+
+        sut.playNext()
+        await Task.yield()
+        XCTAssertTrue(sut.hasPrevious)
+    }
 }

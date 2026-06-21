@@ -79,6 +79,10 @@ public final class ConversationAudioCoordinator: ObservableObject {
     /// VM-side `listenedAttachmentIds` set updates. Cleared on a fresh
     /// `play(...)` so replaying a track later in a new session still works.
     private var consumedAttachmentIds: Set<String> = []
+    /// Tracks already played (advanced-past) so `playPrevious()` can walk back —
+    /// the queue itself is forward-only. Most-recent is `history.last`. Capped
+    /// at `Self.maxHistory`; reset on a fresh `play(...)` / `close()`.
+    private var history: [QueuedAudio] = []
     private var currentName: String = ""
     private var currentArtwork: String?
     private var cancellables = Set<AnyCancellable>()
@@ -105,6 +109,12 @@ public final class ConversationAudioCoordinator: ObservableObject {
     var _remoteCommandTokens: [Any] = []
 
     private static let log = Logger(subsystem: "me.meeshy.app", category: "audio-coordinator")
+
+    /// Beyond this elapsed time, `playPrevious()` restarts the CURRENT track
+    /// (standard media-player convention) instead of jumping to the prior one.
+    static let previousRestartThreshold: TimeInterval = 3.0
+    /// Cap on the played-history stack (lock-screen "previous" depth).
+    private static let maxHistory = 100
 
     // MARK: - Init
 
@@ -140,6 +150,8 @@ public final class ConversationAudioCoordinator: ObservableObject {
         // BUG C — a fresh play session starts a new lifecycle: previously
         // consumed ids must be forgotten so the user can replay them.
         consumedAttachmentIds = []
+        // A fresh session has no "previous" — drop the prior session's history.
+        history = []
         currentName = conversationName
         currentArtwork = conversationArtworkURL
         startCurrentHead()
@@ -157,10 +169,44 @@ public final class ConversationAudioCoordinator: ObservableObject {
     }
     public func playNext() { advanceQueue() }
 
+    /// `true` when a prior track is available to jump back to. Drives the
+    /// lock-screen `previousTrackCommand` enablement.
+    public var hasPrevious: Bool { !history.isEmpty }
+
+    /// Lock-screen / AirPods "previous". Mirrors the standard media convention:
+    /// past `previousRestartThreshold` it restarts the current track; otherwise
+    /// it pops the played-history stack and re-heads the prior track. With no
+    /// history it falls back to restarting the current track from 0.
+    public func playPrevious() {
+        guard !CallManager.shared.isCallActiveForAudioGuard else {
+            Self.log.info("playPrevious() ignored: a CallKit call is active")
+            return
+        }
+        guard activeContext != nil else { return }
+
+        if currentTime > Self.previousRestartThreshold {
+            engine.seek(to: 0)
+            return
+        }
+
+        guard let previous = history.popLast() else {
+            engine.seek(to: 0)
+            return
+        }
+
+        // Re-insert the current head so the just-left track becomes "next"
+        // again, then head the popped previous track.
+        queue.insert(previous, at: 0)
+        queueCount = queue.count
+        consumedAttachmentIds.remove(previous.attachmentId)
+        startCurrentHead()
+    }
+
     public func close() {
         engine.stop()
         queue = []
         queueCount = 0
+        history = []
         activeContext = nil
     }
 
@@ -216,6 +262,10 @@ public final class ConversationAudioCoordinator: ObservableObject {
             // BUG C — record the consumed id so a re-emitted `$messages` can't
             // re-`appendUpcoming` it before the VM updates `listenedAttachmentIds`.
             consumedAttachmentIds.insert(finishedHead.attachmentId)
+            // Remember the track we just left so `playPrevious()` can return to
+            // it. Keep the stack bounded (drop the oldest beyond the cap).
+            history.append(finishedHead)
+            if history.count > Self.maxHistory { history.removeFirst() }
             attachmentFinishedSubject.send(AttachmentFinishedEvent(
                 attachmentId: finishedHead.attachmentId,
                 conversationId: finishedHead.conversationId

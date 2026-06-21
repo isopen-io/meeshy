@@ -2,6 +2,7 @@ import SwiftUI
 import AVFoundation
 import Combine
 import os
+import UIKit
 import MeeshySDK
 
 // MARK: - Audio Playback Manager
@@ -32,7 +33,16 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// the moment the coordinator swaps the loaded attachment. Without this,
     /// mutations stayed invisible to SwiftUI's dependency tracking and a
     /// rapid double-tap on the play button could resolve to a stale id.
-    @Published public var attachmentId: String?
+    @Published public var attachmentId: String? {
+        didSet {
+            // Track switch (the shared engine is reassigned to a new audio
+            // while the previous one is still loaded mid-playback): snapshot the
+            // outgoing track's position so "resume where you stopped" survives
+            // tapping another audio or skipping forward — not just pause/stop.
+            guard oldValue != attachmentId, let outgoing = oldValue, player != nil else { return }
+            saveResumePosition(currentTime, forAttachment: outgoing, totalDuration: duration)
+        }
+    }
 
     private var player: AVAudioPlayer?
     private var timer: Timer? {
@@ -65,12 +75,16 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         nonisolated(unsafe) var timer: Timer?
         nonisolated(unsafe) var loadTask: Task<Void, Never>?
         nonisolated(unsafe) var sessionRequested = false
+        /// Block-based `willResignActive` observer token. Removed in `deinit`
+        /// (thread-safe) so the lifecycle hook never outlives the engine.
+        nonisolated(unsafe) var lifecycleObserver: NSObjectProtocol?
     }
     private let cleanupHandle = CleanupHandle()
 
     public override init() {
         super.init()
         PlaybackCoordinator.shared.register(self)
+        observeAppLifecycle()
     }
 
     /// Designated init that lets callers opt out of `PlaybackCoordinator`
@@ -84,6 +98,22 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         super.init()
         if registerWithCoordinator {
             PlaybackCoordinator.shared.register(self)
+        }
+        observeAppLifecycle()
+    }
+
+    /// Persists the current playback position when the app resigns active
+    /// (incoming call, app switcher, lock, imminent termination). This is the
+    /// belt that covers an app kill mid-playback — pause/stop already persist
+    /// on their own paths. No-op for engines without a loaded `attachmentId`
+    /// (preview/owned dummies).
+    private func observeAppLifecycle() {
+        cleanupHandle.lifecycleObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.persistPosition() }
         }
     }
 
@@ -181,6 +211,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             player?.rate = Float(speed.rawValue)
             player?.prepareToPlay()
             duration = player?.duration ?? 0
+            applyResumePositionIfAvailable()
             player?.play()
             isPlaying = true
             isLoading = false
@@ -211,6 +242,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     }
 
     public func stop() {
+        persistPosition()
         resetState()
         currentUrl = nil
         releaseSession()
@@ -223,6 +255,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             isPlaying = false
             timer?.invalidate()
             reportListenProgress(complete: false)
+            persistPosition()
         } else {
             // BUG A (round 4) — gate ONLY the resume branch. Pausing is always
             // allowed; resuming during a call must not steal the VoIP session.
@@ -272,6 +305,11 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     private func handlePlaybackFinished() {
         let finishedUrl = currentUrl
         reportListenProgress(complete: true)
+        // Natural end → forget the saved position so a later re-listen starts
+        // from 0 instead of resuming at the very end.
+        if let attId = attachmentId {
+            AudioPlaybackPositionStore.shared.clear(for: attId)
+        }
         timer?.invalidate()
         timer = nil
         player = nil
@@ -306,6 +344,54 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
                 endpoint: "/attachments/\(attId)/status",
                 body: body
             )
+        }
+    }
+
+    // MARK: - Playback position persistence
+    //
+    // Resume-where-you-stopped: a saved position is honored only when it sits
+    // comfortably inside the track. We never resume within `resumeEdgeGuard`
+    // of either edge — a position glued to 0 adds nothing, and one glued to
+    // the end would replay the last instant then immediately finish.
+
+    /// Tracks shorter than this are never resumed (a 1s voice note is replayed
+    /// whole). Also gates `persistPosition` so we don't store noise.
+    private static let minResumableDuration: TimeInterval = 2.0
+    /// Dead-zone at both ends of the track, in seconds.
+    private static let resumeEdgeGuard: TimeInterval = 1.0
+
+    /// Seeks to the saved resume position (if any) BEFORE playback starts.
+    /// Called from `playData(_:)` once `duration` is known and the player is
+    /// prepared but not yet playing.
+    private func applyResumePositionIfAvailable() {
+        guard let attId = attachmentId,
+              let player,
+              duration >= Self.minResumableDuration,
+              let saved = AudioPlaybackPositionStore.shared.position(for: attId),
+              saved > Self.resumeEdgeGuard,
+              saved < duration - Self.resumeEdgeGuard else { return }
+        player.currentTime = saved
+        currentTime = saved
+        progress = duration > 0 ? saved / duration : 0
+    }
+
+    /// Persists the current elapsed time for the active attachment, or clears
+    /// it when playback sits at either edge (nothing meaningful to resume).
+    /// Safe no-op when no attachment is loaded.
+    private func persistPosition() {
+        guard let attId = attachmentId else { return }
+        saveResumePosition(currentTime, forAttachment: attId, totalDuration: duration)
+    }
+
+    /// Saves `elapsed` as the resume point for `id`, or clears any stored
+    /// position when `elapsed` sits at either edge of the track (nothing
+    /// meaningful to resume). Short tracks are never stored.
+    private func saveResumePosition(_ elapsed: TimeInterval, forAttachment id: String, totalDuration: TimeInterval) {
+        guard totalDuration >= Self.minResumableDuration else { return }
+        if elapsed > Self.resumeEdgeGuard && elapsed < totalDuration - Self.resumeEdgeGuard {
+            AudioPlaybackPositionStore.shared.save(elapsed, for: id)
+        } else {
+            AudioPlaybackPositionStore.shared.clear(for: id)
         }
     }
 
@@ -354,6 +440,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     deinit {
         cleanupHandle.timer?.invalidate()
         cleanupHandle.loadTask?.cancel()
+        if let observer = cleanupHandle.lifecycleObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
         // Dealloc avec session encore tenue (chemin sans `stop()` — vue
         // détruite sans onDisappear) : sans cette libération le refcount du
         // MediaSessionCoordinator ne retombait jamais à 0 → session audio
