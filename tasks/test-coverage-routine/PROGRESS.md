@@ -155,7 +155,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
 | web | `pnpm --filter web test:coverage` | 42.42 | 34.51 | 2026-06-21 (post P2 Calls × web sub-slice 1; +tests for adaptive-degradation/call-store/use-call-quality/use-video-call/use-call-banner; stmts:41.66/branch:34.51/funcs:38.96/lines:42.42; threshold floor unchanged lines:42/branches:34/statements:41/functions:38 — integer floors same) |
-| gateway | `pnpm --filter gateway test:coverage` | 54.78→≥55 | 52.09→≥54 | 2026-06-21 (post P2 Rate limiting × gateway; +232 tests covering 5 rate-limiting modules to 100% line / 98.5–100% branch; threshold floor ratcheted lines:54→55/branches:52→54/statements:54→55/functions:54) |
+| gateway | `pnpm --filter gateway test:coverage` | 54.78→55.27 | 52.09→52.64 | 2026-06-21 (post P2 Rate limiting × gateway; +232 tests covering 5 rate-limiting modules to 100% line / 98.5–100% branch; CI-measured lines=55.27%/branches=52.64%/stmts=55.1%/funcs=55.39%; threshold floor ratcheted lines:54→55/branches:52→52/statements:54→55/functions:54→55) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | ~39 | n/a | 2026-06-19 (post P1 Voice/audio × translator; +127 tests covering 6 modules; fail_under ratcheted 37→39; diarization GPU methods pragma'd) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |
