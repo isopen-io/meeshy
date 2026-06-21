@@ -1426,4 +1426,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   1. `call-store.ts` global functions 97.72% is above 92% target — the missing function is the `sendBeacon` path in the beforeunload handler, which is covered by a conditional test (navigator.sendBeacon mock present/absent).
   2. Next run: P2 Calls × web sub-slice 2 — webrtc-service.ts (37%/25% → ≥92%) + video-calls UI components. Or pivot to P2 Rate limiting × gateway if WebRTC complexity deems it blocked.
   3. Pre-flight: no open coverage PR found; branch claude/coverage/p2-calls-web created fresh off main.
-- Commit: (see PR claude/coverage/p2-calls-web)
+- Commit: d877835c (PR #744 → main 2026-06-21T10:38:16Z, squash-merged by jcnm)
