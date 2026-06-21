@@ -32,11 +32,16 @@ routing, disambiguated at the handler by `PostMedia.commentId` (zero translator/
 - [ ] SDK tests (decode roundtrip)
 
 ## Layer 5 — iOS app (apps/ios)
-- [ ] Unified comment row component: inline media (reuse BubbleAttachmentView/media viewers) + fullscreen, likes, language flags, reply/replies/voir
-- [ ] Comment composer: enable single media (photo/camera/file/voice) for `.comment` mode; TUS upload (uploadcontext=comment); send via addComment(mediaId)
-- [ ] Wire unified component into FeedCommentsSheet + other comment surfaces
-- [ ] socket comment:media-updated → update cached comment media
-- [ ] iOS tests
+- [x] CommentMediaView: inline image/video/audio + fullscreen (reuse ProgressiveCachedImage/MeeshyVideoPlayer/AudioPlayerView/ConversationMediaGalleryView) + audio Prisme
+- [x] CommentRowView renders comment.media.first inline (used by FeedCommentsSheet AND PostDetailView via ThreadedCommentSection → unified)
+- [x] Send pipeline: CommentMediaUploader (TUS uploadcontext=comment) + FeedCommentsSheet.sendComment(text:media:) optimistic + addComment(mediaId:mobileTranscription:)
+- [x] socket comment:media-updated → applyCommentMediaUpdate (FeedCommentsSheet + PostDetailViewModel)
+- [x] FeedComment.media flows through all mappers (toFeedPost, loadReplies, commentAdded socket, PostDetailViewModel)
+- [x] PostServiceProviding convenience extension (text-only addComment) + mocks updated
+- [ ] FOLLOW-UP (user's keyboard/composer branch): wire composer media-attach UI → sendComment(media:)
+- [ ] FOLLOW-UP: StoryCommentRowView media (separate story-overlay component)
+- [ ] FOLLOW-UP: CommentRecord GRDB media column (cold-start persistence)
+- [ ] iOS tests (cannot compile Swift in this Linux env — pending CI/macOS)
 
 ## Notes
 - User will provide a branch later for keyboard/composer updates → realign callbacks then.

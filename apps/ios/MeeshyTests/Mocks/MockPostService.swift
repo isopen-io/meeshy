@@ -65,6 +65,7 @@ final class MockPostService: PostServiceProviding {
     var lastAddCommentPostId: String?
     var lastAddCommentContent: String?
     var lastAddCommentParentId: String?
+    var lastAddCommentMediaId: String?
 
     var likeCommentCallCount = 0
     var lastLikeCommentPostId: String?
@@ -192,11 +193,14 @@ final class MockPostService: PostServiceProviding {
         try bookmarkResult.get()
     }
 
-    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int? = nil) async throws -> APIPostComment {
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+                    mediaId: String?, mobileTranscription: MobileTranscriptionPayload?,
+                    originalLanguage: String?) async throws -> APIPostComment {
         addCommentCallCount += 1
         lastAddCommentPostId = postId
         lastAddCommentContent = content
         lastAddCommentParentId = parentId
+        lastAddCommentMediaId = mediaId
         return try addCommentResult.get()
     }
 
@@ -385,6 +389,7 @@ final class MockPostService: PostServiceProviding {
         lastAddCommentPostId = nil
         lastAddCommentContent = nil
         lastAddCommentParentId = nil
+        lastAddCommentMediaId = nil
 
         likeCommentResult = .success(())
         likeCommentCallCount = 0

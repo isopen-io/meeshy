@@ -60,6 +60,16 @@ public protocol PostServiceProviding: Sendable {
     func recordEngagement(_ sessions: [EngagementSession]) async throws
 }
 
+public extension PostServiceProviding {
+    /// Convenience texte-seul (média = nil). Préserve les appels existants depuis
+    /// que `addComment` porte `mediaId` / `mobileTranscription` / `originalLanguage`
+    /// (les protocoles Swift ne supportent pas les valeurs par défaut).
+    func addComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async throws -> APIPostComment {
+        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
+                             mediaId: nil, mobileTranscription: nil, originalLanguage: nil)
+    }
+}
+
 public final class PostService: PostServiceProviding, @unchecked Sendable {
     public static let shared = PostService()
     private let api: APIClientProviding
@@ -101,9 +111,9 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(postId)/bookmark", method: "POST")
     }
 
-    public func addComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil,
-                           mediaId: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil,
-                           originalLanguage: String? = nil) async throws -> APIPostComment {
+    public func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+                           mediaId: String?, mobileTranscription: MobileTranscriptionPayload?,
+                           originalLanguage: String?) async throws -> APIPostComment {
         let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags,
                                         mediaId: mediaId, mobileTranscription: mobileTranscription,
                                         originalLanguage: originalLanguage)

@@ -191,7 +191,8 @@ class PostDetailViewModel: ObservableObject {
                         likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: c.parentId,
                         originalLanguage: c.originalLanguage, translatedContent: translatedContent,
-                        currentUserReactions: c.currentUserReactions
+                        currentUserReactions: c.currentUserReactions,
+                        media: (c.media ?? []).map { $0.toFeedMedia() }
                     )
                 }
             }.value
@@ -258,7 +259,8 @@ class PostDetailViewModel: ObservableObject {
                         likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: commentId,
                         originalLanguage: c.originalLanguage, translatedContent: translated,
-                        currentUserReactions: c.currentUserReactions
+                        currentUserReactions: c.currentUserReactions,
+                        media: (c.media ?? []).map { $0.toFeedMedia() }
                     )
                 }
             }.value
@@ -564,7 +566,8 @@ class PostDetailViewModel: ObservableObject {
                     content: data.comment.content, timestamp: data.comment.createdAt,
                     likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
                     parentId: parentId,
-                    currentUserReactions: data.comment.currentUserReactions
+                    currentUserReactions: data.comment.currentUserReactions,
+                    media: (data.comment.media ?? []).map { $0.toFeedMedia() }
                 )
                 if let parentId {
                     if self.expandedThreads.contains(parentId) {
@@ -583,6 +586,27 @@ class PostDetailViewModel: ObservableObject {
                     }
                 }
                 self.post?.commentCount = data.commentCount
+            }
+            .store(in: &socketCancellables)
+
+        // Pipeline audio d'un média de commentaire terminé → remplace le média
+        // (transcription / variantes TTS prêtes) du commentaire en cache, qu'il
+        // soit top-level ou réponse. Miroir du handler de CommentsSheetView.
+        socialSocket.commentMediaUpdated
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] data in
+                guard let self else { return }
+                let media = (data.comment.media ?? []).map { $0.toFeedMedia() }
+                guard !media.isEmpty else { return }
+                let commentId = data.commentId
+                if let parentId = data.comment.parentId, var existing = self.repliesMap[parentId],
+                   let idx = existing.firstIndex(where: { $0.id == commentId }) {
+                    existing[idx].media = media
+                    self.repliesMap[parentId] = existing
+                } else if let idx = self.comments.firstIndex(where: { $0.id == commentId }) {
+                    self.comments[idx].media = media
+                }
             }
             .store(in: &socketCancellables)
 
