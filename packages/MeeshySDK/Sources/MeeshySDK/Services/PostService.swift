@@ -102,6 +102,9 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     }
 
     public func addComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async throws -> APIPostComment {
+        // `attachmentIds` is carried by `CreateCommentRequest` (defaulting nil)
+        // so the wire contract is ready; it is wired through once the gateway
+        // comment-attachment endpoint ships.
         let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags)
         let response: APIResponse<APIPostComment> = try await api.post(endpoint: "/posts/\(postId)/comments", body: body)
         return response.data
