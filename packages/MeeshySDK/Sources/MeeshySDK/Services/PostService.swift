@@ -39,7 +39,7 @@ public protocol PostServiceProviding: Sendable {
     func removeBookmark(postId: String) async throws
     func getPost(postId: String) async throws -> APIPost
     func getComments(postId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
-    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?) async throws -> APIPostComment
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, mediaId: String?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?) async throws -> APIPostComment
     func likeComment(postId: String, commentId: String) async throws
     func unlikeComment(postId: String, commentId: String) async throws
     func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool) async throws -> APIPost
@@ -101,8 +101,12 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(postId)/bookmark", method: "POST")
     }
 
-    public func addComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async throws -> APIPostComment {
-        let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags)
+    public func addComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil,
+                           mediaId: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil,
+                           originalLanguage: String? = nil) async throws -> APIPostComment {
+        let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags,
+                                        mediaId: mediaId, mobileTranscription: mobileTranscription,
+                                        originalLanguage: originalLanguage)
         let response: APIResponse<APIPostComment> = try await api.post(endpoint: "/posts/\(postId)/comments", body: body)
         return response.data
     }

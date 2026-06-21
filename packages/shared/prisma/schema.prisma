@@ -18,11 +18,11 @@ datasource db {
 enum UserRole {
   USER
   ADMIN
-  MODERATOR  // Modérateur global (anciennement MODO)
+  MODERATOR // Modérateur global (anciennement MODO)
   BIGBOSS
   AUDIT
   ANALYST
-  AGENT      // Utilisateur géré par une IA (SAV, FAQ, etc.)
+  AGENT // Utilisateur géré par une IA (SAV, FAQ, etc.)
 }
 
 // ============================================
@@ -134,10 +134,10 @@ model User {
   phoneVerificationExpiry DateTime? // Expiration du code (10 min par défaut)
 
   // Pending email/phone change (requires verification before becoming active)
-  pendingEmail                String? // Nouvel email en attente de vérification
+  pendingEmail                   String? // Nouvel email en attente de vérification
   pendingEmailVerificationToken  String? // Token pour vérifier le nouvel email
   pendingEmailVerificationExpiry DateTime? // Expiration du token
-  pendingPhoneNumber          String? // Nouveau téléphone en attente de vérification
+  pendingPhoneNumber             String? // Nouveau téléphone en attente de vérification
   pendingPhoneVerificationCode   String? // Code SMS pour le nouveau téléphone
   pendingPhoneVerificationExpiry DateTime? // Expiration du code
 
@@ -146,7 +146,7 @@ model User {
   phoneTransferredAt         DateTime? // Date du transfert de numéro
 
   twoFactorSecret        String? // TOTP secret (base32 encoded)
-  twoFactorBackupCodes   String[] @default([]) // Hashed backup codes for 2FA recovery
+  twoFactorBackupCodes   String[]  @default([]) // Hashed backup codes for 2FA recovery
   twoFactorPendingSecret String? // Temporary secret during 2FA setup (before confirmation)
   twoFactorEnabledAt     DateTime? // Date when 2FA was enabled
 
@@ -272,16 +272,16 @@ model User {
   sharedConversations ConversationShare[] @relation("ConversationSharer")
 
   // Social (Posts, Stories, Status/Moods)
-  posts              Post[]            @relation("UserPosts")
-  postComments       PostComment[]     @relation("UserPostComments")
-  commentReactions   CommentReaction[] @relation("UserPostCommentReactions")
-  postReactionsAuthored PostReaction[] @relation("UserPostReactionsAuthored")
-  commentMentions    CommentMention[]  @relation("UserCommentMentions")
-  postMentions       PostMention[]     @relation("UserPostMentions")
-  postViews          PostView[]        @relation("UserPostViews")
-  postImpressions    PostImpression[]  @relation("UserPostImpressions")
-  postBookmarks      PostBookmark[]    @relation("UserPostBookmarks")
-  postEngagements    PostEngagement[]  @relation("UserPostEngagements")
+  posts                 Post[]            @relation("UserPosts")
+  postComments          PostComment[]     @relation("UserPostComments")
+  commentReactions      CommentReaction[] @relation("UserPostCommentReactions")
+  postReactionsAuthored PostReaction[]    @relation("UserPostReactionsAuthored")
+  commentMentions       CommentMention[]  @relation("UserCommentMentions")
+  postMentions          PostMention[]     @relation("UserPostMentions")
+  postViews             PostView[]        @relation("UserPostViews")
+  postImpressions       PostImpression[]  @relation("UserPostImpressions")
+  postBookmarks         PostBookmark[]    @relation("UserPostBookmarks")
+  postEngagements       PostEngagement[]  @relation("UserPostEngagements")
 
   // Story audio library
   storyAudioUploads StoryBackgroundAudio[] @relation("StoryAudioUploads")
@@ -289,23 +289,23 @@ model User {
   // Agent global profile (1:1)
   agentGlobalProfile AgentGlobalProfile?
   // Agent user roles (per-conversation control profiles)
-  agentUserRoles AgentUserRole[]
+  agentUserRoles     AgentUserRole[]
 
   // Unified participant model (replaces conversations + anonymousParticipants)
   participations Participant[]
 
   @@index([isOnline, lastActiveAt(sort: Desc)]) // Optimisation: présence — "utilisateurs en ligne triés par activité"
   @@index([systemLanguage]) // Prisme Linguistique: language extraction queries et Optimisation: utilisateurs par langue (broadcast ciblé)
-  @@index([deviceLocale])   // Prisme Linguistique: 4th-priority locale resolution
+  @@index([deviceLocale]) // Prisme Linguistique: 4th-priority locale resolution
   @@index([lastActiveAt]) // Optimisation: utilisateurs actifs récemment 
   @@index([isActive, lastActiveAt]) // Optimisation: utilisateurs actifs triés
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
 model Conversation {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
   /// Identifiant lisible par l'homme (ex: "mee_meeshy", "general", "mee_support")
-  identifier    String   @unique
+  identifier    String    @unique
   /// direct, group, public, global
   type          String
   title         String?
@@ -314,14 +314,14 @@ model Conversation {
   avatar        String?
   /// Conversation banner/cover image
   banner        String?
-  communityId   String?  @db.ObjectId
-  isActive      Boolean  @default(true)
+  communityId   String?   @db.ObjectId
+  isActive      Boolean   @default(true)
   /// Conversation closed for all — no one can write, messages stay readable
-  closedAt  DateTime?
-  closedBy  String?   @db.ObjectId
+  closedAt      DateTime?
+  closedBy      String?   @db.ObjectId
   /// Denormalized member count for performance
-  memberCount   Int      @default(0)
-  lastMessageAt DateTime @default(now())
+  memberCount   Int       @default(0)
+  lastMessageAt DateTime  @default(now())
 
   // ============================================
   // WRITE PERMISSIONS
@@ -358,10 +358,10 @@ model Conversation {
   /// Auto-translation (disabled for E2EE mode)
   autoTranslateEnabled Boolean @default(true)
 
-  preferences           ConversationPreference[]
-  shareLinks            ConversationShareLink[]
-  community             Community?               @relation(fields: [communityId], references: [id])
-  messages              Message[]
+  preferences ConversationPreference[]
+  shareLinks  ConversationShareLink[]
+  community   Community?               @relation(fields: [communityId], references: [id])
+  messages    Message[]
 
   // Status tracking relations
   messageStatusEntries    MessageStatusEntry[]
@@ -378,12 +378,12 @@ model Conversation {
   shares ConversationShare[] @relation("SharedConversation")
 
   // Agent service
-  agentConfig     AgentConfig?
-  agentAnalytic   AgentAnalytic?
-  agentScanLogs   AgentScanLog[]
-  agentUserRoles  AgentUserRole[]
+  agentConfig              AgentConfig?
+  agentAnalytic            AgentAnalytic?
+  agentScanLogs            AgentScanLog[]
+  agentUserRoles           AgentUserRole[]
   agentConversationSummary AgentConversationSummary?
-  agentAnalysisSnapshots AgentAnalysisSnapshot[]
+  agentAnalysisSnapshots   AgentAnalysisSnapshot[]
   conversationMessageStats ConversationMessageStats?
 
   // Unified participant model (replaces members + anonymousParticipants)
@@ -463,14 +463,14 @@ model ConversationShareLink {
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
-  creator               User                   @relation("ShareLinkCreator", fields: [createdBy], references: [id])
-  conversation          Conversation           @relation(fields: [conversationId], references: [id])
+  creator      User         @relation("ShareLinkCreator", fields: [createdBy], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
 }
 
 /// Unified participant in a conversation (registered user, anonymous, or bot)
 model Participant {
-  id             String  @id @default(auto()) @map("_id") @db.ObjectId
-  conversationId String  @db.ObjectId
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String @db.ObjectId
   /// "user" | "anonymous" | "bot"
   type           String
 
@@ -481,7 +481,7 @@ model Participant {
   avatar      String?
 
   /// admin, moderator, member
-  role        String                   @default("member")
+  role        String                 @default("member")
   permissions ParticipantPermissions
 
   /// ISO 639-1 language code
@@ -511,7 +511,7 @@ model Participant {
   conversation Conversation @relation(fields: [conversationId], references: [id])
   user         User?        @relation(fields: [userId], references: [id])
 
-  sentMessages            Message[]              @relation("MessageSender")
+  sentMessages            Message[]                @relation("MessageSender")
   reactions               Reaction[]
   statusEntries           MessageStatusEntry[]
   readCursors             ConversationReadCursor[]
@@ -671,14 +671,14 @@ model Message {
   /// }
   translations Json?
 
-  attachments     MessageAttachment[]
-  reactions       Reaction[]            @relation("MessageReactions")
-  mentions        Mention[]             @relation("MessageMentions")
-  notifications   Notification[]        @relation("NotificationMessage")
-  replyTo         Message?              @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  replies         Message[]             @relation("MessageReplies")
-  sender          Participant           @relation("MessageSender", fields: [senderId], references: [id])
-  conversation    Conversation          @relation(fields: [conversationId], references: [id])
+  attachments   MessageAttachment[]
+  reactions     Reaction[]          @relation("MessageReactions")
+  mentions      Mention[]           @relation("MessageMentions")
+  notifications Notification[]      @relation("NotificationMessage")
+  replyTo       Message?            @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies       Message[]           @relation("MessageReplies")
+  sender        Participant         @relation("MessageSender", fields: [senderId], references: [id])
+  conversation  Conversation        @relation(fields: [conversationId], references: [id])
 
   // Per-user deletions ("delete for me" feature)
   userDeletions UserMessageDeletion[]
@@ -753,8 +753,8 @@ model MessageAttachment {
   height        Int?
   thumbnailPath String? // Miniature générée pour images
   thumbnailUrl  String?
-  thumbHash     String?   // ThumbHash base64 (~33 chars) — placeholder image instantane
-  imageVariants Json?     // Variantes WebP responsive (D4) : [{ width, height, url, size, format }] — images non chiffrées uniquement
+  thumbHash     String? // ThumbHash base64 (~33 chars) — placeholder image instantane
+  imageVariants Json? // Variantes WebP responsive (D4) : [{ width, height, url, size, format }] — images non chiffrées uniquement
 
   // Métadonnées spécifiques audio/vidéo
   duration   Int? // Durée en MILLISECONDES (précision complète)
@@ -915,7 +915,7 @@ model MessageAttachment {
 /// Per-message status entry for each user
 /// One record per user per message - detailed tracking
 model MessageStatusEntry {
-  id             String  @id @default(auto()) @map("_id") @db.ObjectId
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
   messageId      String @db.ObjectId
   conversationId String @db.ObjectId
   participantId  String @db.ObjectId
@@ -963,7 +963,7 @@ model MessageStatusEntry {
 /// Per-attachment status entry for each user
 /// Tracks viewed, downloaded, listened, watched status per attachment
 model AttachmentStatusEntry {
-  id             String  @id @default(auto()) @map("_id") @db.ObjectId
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
   attachmentId   String @db.ObjectId
   messageId      String @db.ObjectId
   conversationId String @db.ObjectId
@@ -1042,7 +1042,7 @@ model AttachmentStatusEntry {
 
 /// Reaction on an individual attachment (separate from message reactions)
 model AttachmentReaction {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
   attachmentId  String   @db.ObjectId
   messageId     String   @db.ObjectId
   participantId String   @db.ObjectId
@@ -1065,7 +1065,7 @@ model AttachmentReaction {
 /// Conversation-level read cursor (optimized for unread count queries)
 /// Kept for performance - aggregated view of MessageStatusEntry
 model ConversationReadCursor {
-  id             String  @id @default(auto()) @map("_id") @db.ObjectId
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
   conversationId String @db.ObjectId
   participantId  String @db.ObjectId
 
@@ -1092,13 +1092,13 @@ model ConversationReadCursor {
   @@unique([conversationId, participantId], name: "conversation_participant_cursor")
   @@index([participantId])
   @@index([unreadCount])
-  @@index([participantId, lastReadAt])   // Optimisation: batch unread count par participant
+  @@index([participantId, lastReadAt]) // Optimisation: batch unread count par participant
   @@index([conversationId, participantId, lastReadAt]) // Optimisation: requêtes curseur combinées
 }
 
 /// Réaction emoji sur un message par un utilisateur
 model Reaction {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
   messageId     String   @db.ObjectId
   participantId String   @db.ObjectId
   emoji         String // Emoji libre (ex: 🎉, ❤️, 🔥, ⭐)
@@ -1155,10 +1155,10 @@ model PostReaction {
 
 /// Mention d'un participant dans un message
 model Mention {
-  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
-  messageId            String   @db.ObjectId
-  mentionedParticipantId String @db.ObjectId
-  mentionedAt          DateTime @default(now())
+  id                     String   @id @default(auto()) @map("_id") @db.ObjectId
+  messageId              String   @db.ObjectId
+  mentionedParticipantId String   @db.ObjectId
+  mentionedAt            DateTime @default(now())
 
   message              Message     @relation("MessageMentions", fields: [messageId], references: [id], onDelete: Cascade)
   mentionedParticipant Participant @relation(fields: [mentionedParticipantId], references: [id], onDelete: Cascade)
@@ -1191,27 +1191,27 @@ model FriendRequest {
 /// DEPRECATED: Use UserPreferences.notification JSON instead
 /// Kept temporarily for backward compatibility
 model NotificationPreference {
-  id                        String    @id @default(auto()) @map("_id") @db.ObjectId
-  userId                    String    @unique @db.ObjectId
-  newMessage                Boolean   @default(true)
-  messageReply              Boolean   @default(true)
-  messageMention            Boolean   @default(true)
-  newConversation           Boolean   @default(true)
-  conversationInvite        Boolean   @default(true)
-  friendRequest             Boolean   @default(true)
-  friendRequestAccepted     Boolean   @default(true)
-  groupInvite               Boolean   @default(true)
-  missedCall                Boolean   @default(true)
-  voicemailReceived         Boolean   @default(true)
-  soundEnabled              Boolean   @default(true)
-  vibrationEnabled          Boolean   @default(true)
-  dndEnabled                Boolean   @default(false)
-  dndStartTime              String?
-  dndEndTime                String?
-  emailNotifications        Boolean   @default(true)
-  pushNotifications         Boolean   @default(true)
-  createdAt                 DateTime  @default(now())
-  updatedAt                 DateTime  @updatedAt
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId                String   @unique @db.ObjectId
+  newMessage            Boolean  @default(true)
+  messageReply          Boolean  @default(true)
+  messageMention        Boolean  @default(true)
+  newConversation       Boolean  @default(true)
+  conversationInvite    Boolean  @default(true)
+  friendRequest         Boolean  @default(true)
+  friendRequestAccepted Boolean  @default(true)
+  groupInvite           Boolean  @default(true)
+  missedCall            Boolean  @default(true)
+  voicemailReceived     Boolean  @default(true)
+  soundEnabled          Boolean  @default(true)
+  vibrationEnabled      Boolean  @default(true)
+  dndEnabled            Boolean  @default(false)
+  dndStartTime          String?
+  dndEndTime            String?
+  emailNotifications    Boolean  @default(true)
+  pushNotifications     Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   @@map("notification_preferences")
 }
@@ -1219,26 +1219,26 @@ model NotificationPreference {
 /// Notification pour un utilisateur - Structure groupée
 /// IMPORTANT: Le titre est construit dynamiquement côté frontend via i18n
 model Notification {
-  id       String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId   String   @db.ObjectId
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  userId   String @db.ObjectId
   /// Type de notification (new_message, missed_call, etc.) - utilisé pour construire le titre via i18n
   type     String
   /// Contenu principal ou preview du message
   content  String
-  priority String   @default("normal")
+  priority String @default("normal")
 
   // ===== CHAMPS GROUPÉS LOGIQUEMENT =====
 
   /// ACTOR - Qui a déclenché la notification { id, username, displayName, avatar }
-  actor    Json?
+  actor Json?
 
   /// CONTEXT - Où c'est arrivé { conversationId, conversationTitle, conversationType, messageId, callSessionId, etc. }
   /// Note: Nullable temporairement pour supporter les anciennes données avant migration
-  context  Json?     @default("{}")
+  context Json? @default("{}")
 
   /// METADATA - Données type-spécifiques structurées { action, messagePreview, attachments, reactionEmoji, callType, etc. }
   /// Note: Nullable temporairement pour supporter les anciennes données avant migration
-  metadata Json?     @default("{}")
+  metadata Json? @default("{}")
 
   /// STATE - État de lecture
   /// Note: isRead, readAt, createdAt gardés à la racine pour performance des indexes
@@ -1249,7 +1249,7 @@ model Notification {
 
   /// DELIVERY - Suivi multi-canal { emailSent, pushSent }
   /// Note: Nullable temporairement pour supporter les anciennes données avant migration
-  delivery Json?     @default("{\"emailSent\":false,\"pushSent\":false}")
+  delivery Json? @default("{\"emailSent\":false,\"pushSent\":false}")
 
   // ===== RELATIONS =====
   /// Optional messageId pour faciliter les queries (duplique context.messageId)
@@ -1460,8 +1460,8 @@ enum TrackingTargetType {
 }
 
 model TrackingLink {
-  id             String    @id @default(auto()) @map("_id") @db.ObjectId
-  token          String    @unique // Token de 6 caractères (ex: "a1b2c3")
+  id             String             @id @default(auto()) @map("_id") @db.ObjectId
+  token          String             @unique // Token de 6 caractères (ex: "a1b2c3")
   /// Type de cible interne (post, reel, story, …) — EXTERNAL pour un lien web brut.
   targetType     TrackingTargetType @default(EXTERNAL)
   /// ObjectId de la cible interne (postId, conversationId, userId…). null si EXTERNAL.
@@ -1473,22 +1473,22 @@ model TrackingLink {
   /// émet un index unique NON partiel qui traiterait tous les `null` comme égaux et
   /// casserait la création de liens EXTERNAL multiples (même précédent que
   /// `Message.clientMessageId`).
-  targetId       String?   @db.ObjectId
+  targetId       String?            @db.ObjectId
   name           String? // Nom du lien (max 32 caractères)
   campaign       String? // UTM campaign name
   source         String? // UTM source (e.g., facebook, newsletter)
   medium         String? // UTM medium (e.g., social, email, cpc)
   originalUrl    String // URL originale complète
   shortUrl       String // URL courte générée (meeshy.me/l/<token>)
-  createdBy      String?   @db.ObjectId // Utilisateur qui a créé le lien (null si anonyme)
-  conversationId String?   @db.ObjectId // Conversation où le lien a été partagé
-  messageId      String?   @db.ObjectId // Message contenant le lien
-  totalClicks    Int       @default(0) // Nombre total de clics
-  uniqueClicks   Int       @default(0) // Nombre de clics uniques (par IP/fingerprint)
-  isActive       Boolean   @default(true) // Le lien est-il actif
+  createdBy      String?            @db.ObjectId // Utilisateur qui a créé le lien (null si anonyme)
+  conversationId String?            @db.ObjectId // Conversation où le lien a été partagé
+  messageId      String?            @db.ObjectId // Message contenant le lien
+  totalClicks    Int                @default(0) // Nombre total de clics
+  uniqueClicks   Int                @default(0) // Nombre de clics uniques (par IP/fingerprint)
+  isActive       Boolean            @default(true) // Le lien est-il actif
   expiresAt      DateTime? // Date d'expiration (null = pas d'expiration)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
   lastClickedAt  DateTime? // Date du dernier clic
 
   clicks  TrackingLinkClick[]
@@ -1497,9 +1497,9 @@ model TrackingLink {
 
 /// Clic sur un lien de tracking
 model TrackingLinkClick {
-  id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  trackingLinkId    String   @db.ObjectId
-  participantId     String?  @db.ObjectId // Participant who clicked (null if untracked)
+  id                String  @id @default(auto()) @map("_id") @db.ObjectId
+  trackingLinkId    String  @db.ObjectId
+  participantId     String? @db.ObjectId // Participant who clicked (null if untracked)
   ipAddress         String? // Adresse IP du visiteur
   country           String? // Pays d'origine
   city              String? // Ville
@@ -1514,30 +1514,30 @@ model TrackingLinkClick {
   deviceFingerprint String? // Empreinte unique du device
 
   // Rich tracking - données navigateur client-side
-  screenResolution    String?  // ex: "1920x1080"
-  viewportSize        String?  // ex: "1440x900"
-  pixelRatio          Float?   // ex: 2.0
-  colorDepth          Int?     // ex: 24
-  timezone            String?  // ex: "Europe/Paris"
-  connectionType      String?  // ex: "4g", "wifi", "ethernet"
-  connectionSpeed     Float?   // downlink en Mbps
+  screenResolution    String? // ex: "1920x1080"
+  viewportSize        String? // ex: "1440x900"
+  pixelRatio          Float? // ex: 2.0
+  colorDepth          Int? // ex: 24
+  timezone            String? // ex: "Europe/Paris"
+  connectionType      String? // ex: "4g", "wifi", "ethernet"
+  connectionSpeed     Float? // downlink en Mbps
   touchSupport        Boolean? // écran tactile
-  platform            String?  // ex: "MacIntel", "Win32", "Linux armv81"
+  platform            String? // ex: "MacIntel", "Win32", "Linux armv81"
   cookiesEnabled      Boolean?
-  hardwareConcurrency Int?     // nombre de cœurs CPU
-  deviceMemory        Float?   // RAM en GB
-  socialSource        String?  // source sociale détectée: whatsapp, telegram, facebook, etc.
+  hardwareConcurrency Int? // nombre de cœurs CPU
+  deviceMemory        Float? // RAM en GB
+  socialSource        String? // source sociale détectée: whatsapp, telegram, facebook, etc.
 
   // UTM params capturés depuis l'URL du clic (si présents)
-  utmClickSource      String?  // utm_source du lien cliqué
-  utmClickMedium      String?  // utm_medium du lien cliqué
-  utmClickCampaign    String?  // utm_campaign du lien cliqué
-  utmClickTerm        String?  // utm_term du lien cliqué
-  utmClickContent     String?  // utm_content du lien cliqué
+  utmClickSource   String? // utm_source du lien cliqué
+  utmClickMedium   String? // utm_medium du lien cliqué
+  utmClickCampaign String? // utm_campaign du lien cliqué
+  utmClickTerm     String? // utm_term du lien cliqué
+  utmClickContent  String? // utm_content du lien cliqué
 
-  redirectStatus    String?   @default("pending") // pending | confirmed | failed
+  redirectStatus String? @default("pending") // pending | confirmed | failed
 
-  clickedAt         DateTime @default(now())
+  clickedAt DateTime @default(now())
 
   trackingLink TrackingLink @relation(fields: [trackingLinkId], references: [id])
   participant  Participant? @relation(fields: [participantId], references: [id])
@@ -1574,26 +1574,26 @@ model AdminAuditLog {
 }
 
 model AdminBroadcast {
-  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  id                 String    @id @default(auto()) @map("_id") @db.ObjectId
   name               String
   subject            String
   body               String
-  sourceLanguage     String   @default("en")
-  targeting          Json     // { languages?: string[], countries?: string[], activityStatus: "active"|"inactive"|"all", inactiveSinceDays?: number }
-  translatedSubjects Json?    // Record<lang, translatedSubject>
-  translatedBodies   Json?    // Record<lang, translatedBody>
-  status             String   @default("DRAFT") // DRAFT | TRANSLATING | READY | SENDING | SENT | FAILED
-  totalRecipients    Int      @default(0)
-  sentCount          Int      @default(0)
-  failedCount        Int      @default(0)
-  targetLanguages    String[] @default([])
-  createdById        String   @db.ObjectId
-  sentById           String?  @db.ObjectId
+  sourceLanguage     String    @default("en")
+  targeting          Json // { languages?: string[], countries?: string[], activityStatus: "active"|"inactive"|"all", inactiveSinceDays?: number }
+  translatedSubjects Json? // Record<lang, translatedSubject>
+  translatedBodies   Json? // Record<lang, translatedBody>
+  status             String    @default("DRAFT") // DRAFT | TRANSLATING | READY | SENDING | SENT | FAILED
+  totalRecipients    Int       @default(0)
+  sentCount          Int       @default(0)
+  failedCount        Int       @default(0)
+  targetLanguages    String[]  @default([])
+  createdById        String    @db.ObjectId
+  sentById           String?   @db.ObjectId
   sentAt             DateTime?
   completedAt        DateTime?
   errorMessage       String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@index([status])
   @@index([createdById])
@@ -1672,8 +1672,8 @@ model CallSession {
   /// Cumulative data transferred during the call, in bytes, as reported by the
   /// client's WebRTC stats at teardown (last `call:quality-report`). Used to
   /// surface "data spent" in the call-summary message. Null when never reported.
-  bytesSent     Int?
-  bytesReceived Int?
+  bytesSent      Int?
+  bytesReceived  Int?
   /// Overall network quality tier observed during the call:
   /// excellent | good | fair | poor. Null when never reported (e.g. missed).
   networkQuality String?
@@ -2656,20 +2656,20 @@ model UserMessageDeletion {
 /// Stores push notification tokens for mobile/web devices
 /// Supports APNS (iOS), FCM (Firebase - iOS/Android/Web), and VoIP (iOS calls)
 model PushToken {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String   @db.ObjectId
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @db.ObjectId
 
   /// The push notification token from the device
-  token     String
+  token String
 
   /// Token type: apns (Apple Push), fcm (Firebase Cloud Messaging), voip (Apple VoIP Push)
-  type      String   @default("fcm")
+  type String @default("fcm")
 
   /// Platform: ios, android, web
-  platform  String
+  platform String
 
   /// Unique device identifier (for managing multiple devices per user)
-  deviceId  String?
+  deviceId String?
 
   /// Device name/model for user identification (e.g., "iPhone 15 Pro", "Pixel 8")
   deviceName String?
@@ -2678,7 +2678,7 @@ model PushToken {
   appVersion String?
 
   /// App bundle ID (e.g., "com.meeshy.app", "com.meeshy.app.voip")
-  bundleId   String?
+  bundleId String?
 
   /// APNs environment for this token: "development" (sandbox) or "production".
   /// Required to route APNs sends to the correct Apple endpoint
@@ -2687,10 +2687,10 @@ model PushToken {
   /// come from TestFlight/App Store builds. Sending a sandbox token to the
   /// production endpoint (or vice versa) returns BadDeviceToken from Apple.
   /// Null/missing = "production" (safe default for legacy rows).
-  apnsEnvironment String?  @default("production")
+  apnsEnvironment String? @default("production")
 
   /// Whether this token is currently active/valid
-  isActive  Boolean  @default(true)
+  isActive Boolean @default(true)
 
   /// Last time this token was successfully used to send a notification
   lastUsedAt DateTime?
@@ -2724,29 +2724,29 @@ model PushToken {
 
 /// Type de contenu social
 enum PostType {
-  POST   // Permanent — feed classique (texte, media, reposts, commentaires)
-  REEL   // Permanent — feed immersif plein écran (vidéo / images / audio). Type choisi au front à la création (média → REEL par défaut) ; l'auteur peut forcer POST.
-  STORY  // Éphémère 21h — image/texte/vidéo/lien avec effets et audio
+  POST // Permanent — feed classique (texte, media, reposts, commentaires)
+  REEL // Permanent — feed immersif plein écran (vidéo / images / audio). Type choisi au front à la création (média → REEL par défaut) ; l'auteur peut forcer POST.
+  STORY // Éphémère 21h — image/texte/vidéo/lien avec effets et audio
   STATUS // Éphémère 1h  — mood textuel avec audio optionnel
 }
 
 /// Visibilité d'un post
 enum PostVisibility {
-  PUBLIC    // Visible par tous
-  FRIENDS   // Amis uniquement
+  PUBLIC // Visible par tous
+  FRIENDS // Amis uniquement
   COMMUNITY // Membres de la communauté uniquement
-  PRIVATE   // Brouillon / seulement l'auteur
-  EXCEPT    // Amis sauf ceux dans visibilityUserIds
-  ONLY      // Uniquement les utilisateurs dans visibilityUserIds
+  PRIVATE // Brouillon / seulement l'auteur
+  EXCEPT // Amis sauf ceux dans visibilityUserIds
+  ONLY // Uniquement les utilisateurs dans visibilityUserIds
 }
 
 /// Contenu social unifié (posts permanents, stories éphémères, status/moods)
 model Post {
-  id             String         @id @default(auto()) @map("_id") @db.ObjectId
-  authorId       String         @db.ObjectId
-  type           PostType
-  visibility     PostVisibility @default(PUBLIC)
-  visibilityUserIds String[] @default([]) @db.ObjectId
+  id                String         @id @default(auto()) @map("_id") @db.ObjectId
+  authorId          String         @db.ObjectId
+  type              PostType
+  visibility        PostVisibility @default(PUBLIC)
+  visibilityUserIds String[]       @default([]) @db.ObjectId
 
   // ============================================
   // CONTENU
@@ -2776,7 +2776,7 @@ model Post {
   /// notamment `trackingLinks: [{ url, token }]` — mapping des URLs brutes du
   /// contenu vers leur token `/l/<token>` (clic tracé + redirection) sans
   /// réécrire le contenu (aperçu vidéo + URL lisible préservés).
-  metadata         Json?
+  metadata Json?
 
   // ============================================
   // CONTEXTE
@@ -2788,13 +2788,13 @@ model Post {
   // REPOST / QUOTE
   // ============================================
   /// Post original si repost/quote
-  repostOfId String?  @db.ObjectId
+  repostOfId         String? @db.ObjectId
   /// Racine de la chaîne de reposts. Pointe vers l'auteur original quand
   /// le post intermédiaire (repostOf) est lui-même un repost.
   /// null si ce post n'est pas un repost.
-  originalRepostOfId String?  @db.ObjectId
+  originalRepostOfId String? @db.ObjectId
   /// true = quote (avec contenu ajouté), false = repost simple
-  isQuote    Boolean  @default(false)
+  isQuote            Boolean @default(false)
 
   // ============================================
   // STORY-SPECIFIC
@@ -2836,7 +2836,7 @@ model Post {
   /// Compteurs agrégés par emoji: { "❤️": 12, "🔥": 5, "😂": 3 }
   reactionSummary Json?
   /// Total réactions (dénormalisé)
-  reactionCount   Int  @default(0)
+  reactionCount   Int   @default(0)
   /// Détail des réactions: [{ userId, emoji, createdAt }]
   reactions       Json? @default("[]")
 
@@ -2849,13 +2849,13 @@ model Post {
   // ============================================
   // COMPTEURS DÉNORMALISÉS
   // ============================================
-  likeCount       Int @default(0)
-  commentCount    Int @default(0)
-  repostCount     Int @default(0)
-  viewCount       Int @default(0)
-  impressionCount Int @default(0)
-  bookmarkCount   Int @default(0)
-  shareCount      Int @default(0)
+  likeCount          Int @default(0)
+  commentCount       Int @default(0)
+  repostCount        Int @default(0)
+  viewCount          Int @default(0)
+  impressionCount    Int @default(0)
+  bookmarkCount      Int @default(0)
+  shareCount         Int @default(0)
   /// Compteurs d'engagement dénormalisés — alimentés UNIQUEMENT à l'INSERT d'une
   /// PostEngagement (jamais aux updates/retries idempotents). N'altèrent pas viewCount.
   postOpenCount      Int @default(0)
@@ -2876,21 +2876,21 @@ model Post {
   // ============================================
   // RELATIONS
   // ============================================
-  author    User       @relation("UserPosts", fields: [authorId], references: [id])
-  community Community? @relation("CommunityPosts", fields: [communityId], references: [id])
-  repostOf  Post?      @relation("PostReposts", fields: [repostOfId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  reposts   Post[]     @relation("PostReposts")
-  media     PostMedia[]
-  comments  PostComment[]
-  views       PostView[]
+  author         User                @relation("UserPosts", fields: [authorId], references: [id])
+  community      Community?          @relation("CommunityPosts", fields: [communityId], references: [id])
+  repostOf       Post?               @relation("PostReposts", fields: [repostOfId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reposts        Post[]              @relation("PostReposts")
+  media          PostMedia[]
+  comments       PostComment[]
+  views          PostView[]
   anonymousOpens AnonymousPostOpen[]
-  impressions PostImpression[]
-  bookmarks   PostBookmark[]
-  engagements PostEngagement[]
+  impressions    PostImpression[]
+  bookmarks      PostBookmark[]
+  engagements    PostEngagement[]
   /// Réactions table (Phase 3 — source de vérité moderne, remplace progressivement reactions: Json[])
-  postReactions PostReaction[] @relation("PostReactionsTable")
+  postReactions  PostReaction[]      @relation("PostReactionsTable")
   /// Mentions dans le corps du post
-  postMentions  PostMention[]  @relation("PostMentions")
+  postMentions   PostMention[]       @relation("PostMentions")
 
   @@index([authorId, type, createdAt])
   @@index([communityId, type, createdAt])
@@ -2918,21 +2918,21 @@ model AnonymousPostOpen {
 
 /// Bibliothèque de sons d'arrière-plan pour les stories
 model StoryBackgroundAudio {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  uploaderId  String   @db.ObjectId
-  uploader    User     @relation("StoryAudioUploads", fields: [uploaderId], references: [id])
-  fileUrl     String
-  title       String
-  duration    Int
-  usageCount  Int      @default(0)
-  isPublic    Boolean  @default(true)
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  uploaderId      String   @db.ObjectId
+  uploader        User     @relation("StoryAudioUploads", fields: [uploaderId], references: [id])
+  fileUrl         String
+  title           String
+  duration        Int
+  usageCount      Int      @default(0)
+  isPublic        Boolean  @default(true)
   /// Généré automatiquement par le pipeline TTS depuis un audio existant
-  isAutoGenerated Boolean @default(false)
+  isAutoGenerated Boolean  @default(false)
   /// Code langue source de l'audio original
   sourceLanguage  String?
   /// ID StoryBackgroundAudio original si cette entrée est une variante de langue
-  variantOf       String? @db.ObjectId
-  createdAt   DateTime @default(now())
+  variantOf       String?  @db.ObjectId
+  createdAt       DateTime @default(now())
 
   @@index([usageCount])
   @@index([uploaderId])
@@ -2941,34 +2941,40 @@ model StoryBackgroundAudio {
 /// Media attaché à un post (images, vidéos, audio, documents)
 /// postId est nullable : null = media uploadé mais pas encore lié à un post (pending)
 model PostMedia {
-  id           String  @id @default(auto()) @map("_id") @db.ObjectId
-  postId       String? @db.ObjectId
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  postId    String? @db.ObjectId
+  /// Quand non-null, ce média appartient à un commentaire (PostComment) et non à
+  /// un post. `postId` et `commentId` sont mutuellement exclusifs : un PostMedia
+  /// est rattaché soit à un post soit à un commentaire. Permet de réutiliser tout
+  /// le pipeline média (upload TUS, transcription/traduction audio, viewers) pour
+  /// les commentaires. Un commentaire ne porte QU'UN SEUL média.
+  commentId String? @db.ObjectId
 
   // Fichier
   fileName     String
   originalName String
   mimeType     String
-  fileSize     Int      // bytes
+  fileSize     Int // bytes
   filePath     String
   fileUrl      String
 
   // Metadata visuelle (images/vidéos)
-  width        Int?
-  height       Int?
+  width         Int?
+  height        Int?
   thumbnailPath String?
   thumbnailUrl  String?
-  thumbHash    String?  // Base64-encoded ThumbHash (~28 chars) — instant placeholder
+  thumbHash     String? // Base64-encoded ThumbHash (~28 chars) — instant placeholder
 
   // Metadata audio/vidéo
-  duration     Int?     // ms
-  codec        String?
+  duration Int? // ms
+  codec    String?
 
   // Ordering dans le carousel
-  order        Int      @default(0)
+  order Int @default(0)
 
   // Description
-  caption      String?
-  alt          String?  // Accessibilité
+  caption String?
+  alt     String? // Accessibilité
 
   // Transcription audio (même structure que Attachment.transcription)
   /// Structure: {
@@ -2984,9 +2990,9 @@ model PostMedia {
   /// }
   transcription Json?
   /// Code langue du média ex: "fr", "en" (pour variantes TTS/sous-titres)
-  language    String?
+  language      String?
   /// ID PostMedia source si ce média est une variante générée automatiquement
-  variantOf   String?   @db.ObjectId
+  variantOf     String? @db.ObjectId
 
   // Traductions audio par langue (même structure que Attachment.translations)
   /// Structure: {
@@ -3007,20 +3013,22 @@ model PostMedia {
   /// }
   translations Json?
 
-  createdAt    DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  post Post? @relation(fields: [postId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  post    Post?        @relation(fields: [postId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  comment PostComment? @relation("CommentMedia", fields: [commentId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   @@index([postId, order])
+  @@index([commentId, order])
 }
 
 /// Commentaire sur un post (hiérarchique — réponses imbriquées)
 model PostComment {
-  id               String   @id @default(auto()) @map("_id") @db.ObjectId
-  postId           String   @db.ObjectId
-  authorId         String   @db.ObjectId
+  id       String  @id @default(auto()) @map("_id") @db.ObjectId
+  postId   String  @db.ObjectId
+  authorId String  @db.ObjectId
   /// null = top-level, sinon réponse à un autre commentaire
-  parentId         String?  @db.ObjectId
+  parentId String? @db.ObjectId
 
   content          String
   /// Langue originale du commentaire (ISO 639-1, détectée automatiquement)
@@ -3033,7 +3041,7 @@ model PostComment {
 
   /// Métadonnées structurées libres (parité avec Message.metadata / Post.metadata).
   /// Contient `trackingLinks: [{ url, token }]` (clic tracé `/l/<token>` sans réécriture).
-  metadata         Json?
+  metadata Json?
 
   /// Compteurs dénormalisés
   likeCount     Int @default(0)
@@ -3052,12 +3060,16 @@ model PostComment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  post      Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author    User             @relation("UserPostComments", fields: [authorId], references: [id])
-  parent    PostComment?     @relation("CommentReplies", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  replies   PostComment[]    @relation("CommentReplies")
+  post      Post              @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User              @relation("UserPostComments", fields: [authorId], references: [id])
+  parent    PostComment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies   PostComment[]     @relation("CommentReplies")
   reactions CommentReaction[] @relation("PostCommentReactions")
   mentions  CommentMention[]  @relation("CommentMentions")
+  /// Média unique attaché au commentaire (image/vidéo/audio). Réutilise PostMedia
+  /// via le FK nullable `commentId`. Relation array pour cohérence Prisma mais
+  /// la couche API/app n'en lie jamais plus d'un.
+  media     PostMedia[]       @relation("CommentMedia")
 
   @@index([postId, createdAt])
   @@index([parentId])
@@ -3177,53 +3189,53 @@ model AccountDeletionRequest {
 // =============================================================================
 
 model AgentGlobalProfile {
-  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId             String   @unique @db.ObjectId
-  user               User     @relation(fields: [userId], references: [id])
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @unique @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id])
 
-  personaSummary     String?
-  tone               String?
-  vocabularyLevel    String?
-  typicalLength      String?
-  emojiUsage         String?
-  catchphrases       String[]
-  topicsOfExpertise  String[]
-  topicsAvoided      String[]
-  responsePatterns   String[]
+  personaSummary    String?
+  tone              String?
+  vocabularyLevel   String?
+  typicalLength     String?
+  emojiUsage        String?
+  catchphrases      String[]
+  topicsOfExpertise String[]
+  topicsAvoided     String[]
+  responsePatterns  String[]
   /// Emojis frequently used in messages
-  commonEmojis       String[]
+  commonEmojis      String[]
   /// Emojis frequently used as reactions
-  reactionPatterns   String[]
+  reactionPatterns  String[]
 
-  messagesAnalyzed   Int      @default(0)
-  confidence         Float    @default(0)
-  locked             Boolean  @default(false)
+  messagesAnalyzed Int     @default(0)
+  confidence       Float   @default(0)
+  locked           Boolean @default(false)
 
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([updatedAt])
 }
 
 model AgentConfig {
-  id                       String   @id @default(auto()) @map("_id") @db.ObjectId
-  conversationId           String   @db.ObjectId
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String    @db.ObjectId
   /// Enabled by default for all conversations (Animator)
-  enabled                  Boolean  @default(true)
+  enabled        Boolean   @default(true)
   /// Set at scan start and refreshed at each LangGraph node boundary ("time since last
   /// progress"). Cleared to null when the scan finishes or is stopped. Treated as "not
   /// running" once it is older than SCAN_STALE_MS (3 min) — see @meeshy/shared types/agent.ts.
-  scanStartedAt            DateTime?
+  scanStartedAt  DateTime?
   /// Current node/step in the agent workflow (LangGraph node)
-  currentNode              String?
-  configuredBy             String?  @db.ObjectId
+  currentNode    String?
+  configuredBy   String?   @db.ObjectId
 
   /// Type of agent behavior: "support", "faq", "personal", "animator"
-  agentType                String   @default("personal")
+  agentType         String  @default("personal")
   /// Number of previous messages to include in context
-  contextWindowSize        Int      @default(50)
+  contextWindowSize Int     @default(50)
   /// If true, the agent tries to use the full history (sliding window still recommended for tokens)
-  useFullHistory           Boolean  @default(false)
+  useFullHistory    Boolean @default(false)
 
   manualUserIds            String[] @db.ObjectId
   autoPickupEnabled        Boolean  @default(true)
@@ -3233,52 +3245,52 @@ model AgentConfig {
   excludedRoles            String[]
   excludedUserIds          String[] @db.ObjectId
 
-  triggerOnTimeout         Boolean  @default(true)
-  timeoutSeconds           Int      @default(300)
-  triggerOnUserMessage     Boolean  @default(false)
-  triggerFromUserIds       String[] @db.ObjectId
-  triggerOnReplyTo         Boolean  @default(true)
+  triggerOnTimeout     Boolean  @default(true)
+  timeoutSeconds       Int      @default(300)
+  triggerOnUserMessage Boolean  @default(false)
+  triggerFromUserIds   String[] @db.ObjectId
+  triggerOnReplyTo     Boolean  @default(true)
 
   /// Scheduler configuration for autonomous scanning
-  scanIntervalMinutes      Int      @default(3)
-  minResponsesPerCycle     Int      @default(2)
-  maxResponsesPerCycle     Int      @default(12)
-  reactionsEnabled         Boolean  @default(true)
-  maxReactionsPerCycle     Int      @default(4)
+  scanIntervalMinutes  Int     @default(3)
+  minResponsesPerCycle Int     @default(2)
+  maxResponsesPerCycle Int     @default(12)
+  reactionsEnabled     Boolean @default(true)
+  maxReactionsPerCycle Int     @default(4)
 
-  agentInstructions        String?
-  webSearchEnabled         Boolean  @default(true)
+  agentInstructions String?
+  webSearchEnabled  Boolean @default(true)
 
   /// Minimum words per generated message
-  minWordsPerMessage       Int      @default(3)
+  minWordsPerMessage    Int     @default(3)
   /// Maximum words per generated message
-  maxWordsPerMessage       Int      @default(400)
+  maxWordsPerMessage    Int     @default(400)
   /// LLM temperature for generation (0.0-2.0)
-  generationTemperature    Float    @default(0.8)
+  generationTemperature Float   @default(0.8)
   /// Enable LLM-based quality gate check
-  qualityGateEnabled       Boolean  @default(true)
+  qualityGateEnabled    Boolean @default(true)
   /// Minimum quality score to accept a message (0.0-1.0)
-  qualityGateMinScore      Float    @default(0.5)
+  qualityGateMinScore   Float   @default(0.5)
 
   /// Daily scheduling — weekday
-  weekdayMaxMessages       Int      @default(10)
-  weekendMaxMessages       Int      @default(25)
-  weekdayMaxUsers          Int      @default(4)
-  weekendMaxUsers          Int      @default(6)
+  weekdayMaxMessages Int @default(10)
+  weekendMaxMessages Int @default(25)
+  weekdayMaxUsers    Int @default(4)
+  weekendMaxUsers    Int @default(6)
 
   /// Burst scheduling
-  burstEnabled             Boolean  @default(true)
-  burstSize                Int      @default(4)
-  burstIntervalMinutes     Int      @default(5)
-  quietIntervalMinutes     Int      @default(90)
+  burstEnabled         Boolean @default(true)
+  burstSize            Int     @default(4)
+  burstIntervalMinutes Int     @default(5)
+  quietIntervalMinutes Int     @default(90)
 
   /// Inactivity threshold in days
-  inactivityDaysThreshold  Int      @default(3)
+  inactivityDaysThreshold Int @default(3)
 
   /// Reactivity rules
-  prioritizeTaggedUsers    Boolean  @default(true)
-  prioritizeRepliedUsers   Boolean  @default(true)
-  reactionBoostFactor      Float    @default(1.5)
+  prioritizeTaggedUsers  Boolean @default(true)
+  prioritizeRepliedUsers Boolean @default(true)
+  reactionBoostFactor    Float   @default(1.5)
 
   /// Conversation types eligible for scanning
   eligibleConversationTypes String[] @default(["group", "channel", "public", "global"])
@@ -3288,44 +3300,44 @@ model AgentConfig {
   messageFreshnessHours     Int      @default(22)
 
   /// Delay distribution: minimum delay in minutes before sending
-  minDelayMinutes          Int?
+  minDelayMinutes            Int?
   /// Delay distribution: maximum delay in minutes before sending
-  maxDelayMinutes          Int?
+  maxDelayMinutes            Int?
   /// Spread messages evenly over the day instead of bursts
-  spreadOverDayEnabled     Boolean  @default(true)
+  spreadOverDayEnabled       Boolean @default(true)
   /// Max messages per user per 10-minute window
   maxMessagesPerUserPer10Min Int?
 
   /// Probability per scan that the agent injects a fresh topic via web search
   /// (0.0-1.0). At 0.2, ~1 out of 5 scans surfaces hot news/research tied to
   /// the conversation theme. Requires webSearchEnabled = true.
-  freshTopicProbability    Float    @default(0.2)
+  freshTopicProbability   Float    @default(0.2)
   /// Topic seeds for fresh-topic mode (e.g. ["ai", "microservices", "news"]).
   /// @deprecated Remplacé par freshTopicBlockedSlugs (sémantique inverse).
   /// Retiré dans une PR cleanup post-migration UI. Ne plus lire dans le strategist.
-  freshTopicCategoryHints  String[] @default([])
+  freshTopicCategoryHints String[] @default([])
   /// Slugs de topics bloqués sur cette conv (blacklist). Vide = tous topics
   /// actifs du catalogue éligibles. Nouveau topic créé après config = auto-actif.
-  freshTopicBlockedSlugs   String[] @default([])
+  freshTopicBlockedSlugs  String[] @default([])
 
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  conversation             Conversation @relation(fields: [conversationId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
 
   @@unique([conversationId])
 }
 
 model AgentUserRole {
-  id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId            String   @db.ObjectId
-  conversationId    String   @db.ObjectId
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String @db.ObjectId
+  conversationId String @db.ObjectId
 
-  user              User         @relation(fields: [userId], references: [id])
-  conversation      Conversation @relation(fields: [conversationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
 
-  origin            String
-  archetypeId       String?
+  origin      String
+  archetypeId String?
 
   personaSummary    String
   tone              String
@@ -3338,58 +3350,58 @@ model AgentUserRole {
   catchphrases      String[]
   responseTriggers  String[]
   silenceTriggers   String[]
-  commonEmojis      String[]  @default([])
-  reactionPatterns  String[]  @default([])
+  commonEmojis      String[] @default([])
+  reactionPatterns  String[] @default([])
 
   // ── Psychological Dimensions (23 traits) ──
-  traitVerbosity            String?
-  traitVerbosityScore       Int?
-  traitFormality            String?
-  traitFormalityScore       Int?
-  traitResponseSpeed        String?
-  traitResponseSpeedScore   Int?
-  traitInitiativeRate       String?
-  traitInitiativeRateScore  Int?
-  traitClarity              String?
-  traitClarityScore         Int?
-  traitArgumentation        String?
-  traitArgumentationScore   Int?
+  traitVerbosity           String?
+  traitVerbosityScore      Int?
+  traitFormality           String?
+  traitFormalityScore      Int?
+  traitResponseSpeed       String?
+  traitResponseSpeedScore  Int?
+  traitInitiativeRate      String?
+  traitInitiativeRateScore Int?
+  traitClarity             String?
+  traitClarityScore        Int?
+  traitArgumentation       String?
+  traitArgumentationScore  Int?
 
-  traitSocialStyle          String?
-  traitSocialStyleScore     Int?
-  traitAssertiveness        String?
-  traitAssertivenessScore   Int?
-  traitAgreeableness        String?
-  traitAgreeablenessScore   Int?
-  traitHumor                String?
-  traitHumorScore           Int?
-  traitEmotionality         String?
-  traitEmotionalityScore    Int?
-  traitOpenness             String?
-  traitOpennessScore        Int?
-  traitConfidence           String?
-  traitConfidenceScore      Int?
-  traitCreativity           String?
-  traitCreativityScore      Int?
-  traitPatience             String?
-  traitPatienceScore        Int?
-  traitAdaptability         String?
-  traitAdaptabilityScore    Int?
+  traitSocialStyle        String?
+  traitSocialStyleScore   Int?
+  traitAssertiveness      String?
+  traitAssertivenessScore Int?
+  traitAgreeableness      String?
+  traitAgreeablenessScore Int?
+  traitHumor              String?
+  traitHumorScore         Int?
+  traitEmotionality       String?
+  traitEmotionalityScore  Int?
+  traitOpenness           String?
+  traitOpennessScore      Int?
+  traitConfidence         String?
+  traitConfidenceScore    Int?
+  traitCreativity         String?
+  traitCreativityScore    Int?
+  traitPatience           String?
+  traitPatienceScore      Int?
+  traitAdaptability       String?
+  traitAdaptabilityScore  Int?
 
-  traitEmpathy              String?
-  traitEmpathyScore         Int?
-  traitPoliteness           String?
-  traitPolitenessScore      Int?
-  traitLeadership           String?
-  traitLeadershipScore      Int?
-  traitConflictStyle        String?
-  traitConflictStyleScore   Int?
-  traitSupportiveness       String?
-  traitSupportivenessScore  Int?
-  traitDiplomacy            String?
-  traitDiplomacyScore       Int?
-  traitTrustLevel           String?
-  traitTrustLevelScore      Int?
+  traitEmpathy             String?
+  traitEmpathyScore        Int?
+  traitPoliteness          String?
+  traitPolitenessScore     Int?
+  traitLeadership          String?
+  traitLeadershipScore     Int?
+  traitConflictStyle       String?
+  traitConflictStyleScore  Int?
+  traitSupportiveness      String?
+  traitSupportivenessScore Int?
+  traitDiplomacy           String?
+  traitDiplomacyScore      Int?
+  traitTrustLevel          String?
+  traitTrustLevelScore     Int?
 
   traitEmotionalStability      String?
   traitEmotionalStabilityScore Int?
@@ -3400,70 +3412,70 @@ model AgentUserRole {
   traitStressResponse          String?
   traitStressResponseScore     Int?
 
-  dominantEmotions          String[]  @default([])
-  engagementLevel           String?
-  sentimentScore            Float?
+  dominantEmotions String[] @default([])
+  engagementLevel  String?
+  sentimentScore   Float?
 
   /// Conversation-level overrides (take priority over AgentGlobalProfile)
-  overrideTone             String?
-  overrideVocabularyLevel  String?
-  overrideTypicalLength    String?
-  overrideEmojiUsage       String?
+  overrideTone               String?
+  overrideVocabularyLevel    String?
+  overrideTypicalLength      String?
+  overrideEmojiUsage         String?
   overrideMinWordsPerMessage Int?
   overrideMaxWordsPerMessage Int?
 
-  messagesAnalyzed  Int      @default(0)
-  confidence        Float    @default(0.0)
-  locked            Boolean  @default(false)
+  messagesAnalyzed Int     @default(0)
+  confidence       Float   @default(0.0)
+  locked           Boolean @default(false)
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([userId, conversationId])
   @@index([conversationId])
 }
 
 model AgentConversationSummary {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  conversationId  String   @db.ObjectId
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String @db.ObjectId
 
-  summary         String
-  currentTopics   String[]
-  overallTone     String
-  lastMessageId   String   @db.ObjectId
-  messageCount    Int
+  summary       String
+  currentTopics String[]
+  overallTone   String
+  lastMessageId String   @db.ObjectId
+  messageCount  Int
 
-  healthScore               Int?
-  engagementLevel           String?
-  conflictLevel             String?
-  dynamique                 String?
-  dominantEmotions          String[]  @default([])
+  healthScore      Int?
+  engagementLevel  String?
+  conflictLevel    String?
+  dynamique        String?
+  dominantEmotions String[] @default([])
 
-  conversation    Conversation @relation(fields: [conversationId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
 
-  updatedAt       DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 
   @@unique([conversationId])
 }
 
 model AgentAnalysisSnapshot {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  conversationId  String   @db.ObjectId
-  snapshotDate    DateTime
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String   @db.ObjectId
+  snapshotDate   DateTime
 
-  overallTone     String
-  healthScore     Int?
-  engagementLevel String?
-  conflictLevel   String?
-  topTopics       String[]
-  dominantEmotions String[]
+  overallTone            String
+  healthScore            Int?
+  engagementLevel        String?
+  conflictLevel          String?
+  topTopics              String[]
+  dominantEmotions       String[]
   messageCountAtSnapshot Int
 
   participantSnapshots Json
 
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  conversation    Conversation @relation(fields: [conversationId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
 
   @@unique([conversationId, snapshotDate])
   @@index([conversationId])
@@ -3471,115 +3483,115 @@ model AgentAnalysisSnapshot {
 }
 
 model ConversationMessageStats {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  conversationId  String   @unique @db.ObjectId
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String @unique @db.ObjectId
 
-  totalMessages   Int      @default(0)
-  totalWords      Int      @default(0)
-  totalCharacters Int      @default(0)
+  totalMessages   Int @default(0)
+  totalWords      Int @default(0)
+  totalCharacters Int @default(0)
 
-  textMessages    Int      @default(0)
-  imageCount      Int      @default(0)
-  audioCount      Int      @default(0)
-  videoCount      Int      @default(0)
-  fileCount       Int      @default(0)
-  locationCount   Int      @default(0)
+  textMessages  Int @default(0)
+  imageCount    Int @default(0)
+  audioCount    Int @default(0)
+  videoCount    Int @default(0)
+  fileCount     Int @default(0)
+  locationCount Int @default(0)
 
-  participantStats Json    @default("{}")
-  dailyActivity   Json     @default("{}")
-  hourlyDistribution Json  @default("{}")
+  participantStats     Json @default("{}")
+  dailyActivity        Json @default("{}")
+  hourlyDistribution   Json @default("{}")
   languageDistribution Json @default("{}")
 
-  updatedAt       DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 
-  conversation    Conversation @relation(fields: [conversationId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
 }
 
 model AgentLlmConfig {
-  id               String   @id @default(auto()) @map("_id") @db.ObjectId
-  provider         String   @default("openai")
-  model            String   @default("gpt-4o-mini")
-  apiKeyEncrypted  String
-  baseUrl          String?
-  maxTokens        Int      @default(1024)
-  temperature      Float    @default(0.7)
+  id              String  @id @default(auto()) @map("_id") @db.ObjectId
+  provider        String  @default("openai")
+  model           String  @default("gpt-4o-mini")
+  apiKeyEncrypted String
+  baseUrl         String?
+  maxTokens       Int     @default(1024)
+  temperature     Float   @default(0.7)
 
-  dailyBudgetUsd   Float    @default(20.0)
-  maxCostPerCall   Float    @default(0.05)
+  dailyBudgetUsd Float @default(20.0)
+  maxCostPerCall Float @default(0.05)
 
-  fallbackProvider String?
-  fallbackModel    String?
+  fallbackProvider        String?
+  fallbackModel           String?
   fallbackApiKeyEncrypted String?
 
-  configuredBy     String   @db.ObjectId
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  configuredBy String   @db.ObjectId
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model AgentAnalytic {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  conversationId  String   @db.ObjectId
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String @db.ObjectId
 
-  messagesSent    Int      @default(0)
-  totalWordsSent  Int      @default(0)
-  avgConfidence   Float    @default(0.0)
-  lastResponseAt  DateTime?
+  messagesSent   Int       @default(0)
+  totalWordsSent Int       @default(0)
+  avgConfidence  Float     @default(0.0)
+  lastResponseAt DateTime?
 
-  updatedAt       DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 
-  conversation    Conversation @relation(fields: [conversationId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
 
   @@unique([conversationId])
 }
 
 model AgentGlobalConfig {
-  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  id                        String   @id @default(auto()) @map("_id") @db.ObjectId
   /// Global system prompt for all agent interactions
-  systemPrompt          String   @default("Tu es un systeme d'animation de conversations. Ton role est de maintenir des echanges naturels et engageants en imitant le style des utilisateurs inactifs.")
+  systemPrompt              String   @default("Tu es un systeme d'animation de conversations. Ton role est de maintenir des echanges naturels et engageants en imitant le style des utilisateurs inactifs.")
   /// Global kill switch
-  enabled               Boolean  @default(true)
+  enabled                   Boolean  @default(true)
   /// Sequential scan of conversations (one by one with random interval)
-  globalScanEnabled     Boolean  @default(false)
+  globalScanEnabled         Boolean  @default(false)
   /// Minimum interval between two sequential scans (seconds)
-  globalScanMinInterval Int      @default(60)
+  globalScanMinInterval     Int      @default(60)
   /// Maximum interval between two sequential scans (seconds)
-  globalScanMaxInterval Int      @default(300)
+  globalScanMaxInterval     Int      @default(300)
   /// Default LLM provider
-  defaultProvider       String   @default("openai")
+  defaultProvider           String   @default("openai")
   /// Default LLM model
-  defaultModel          String   @default("gpt-4o-mini")
+  defaultModel              String   @default("gpt-4o-mini")
   /// Fallback provider
-  fallbackProvider      String?
+  fallbackProvider          String?
   /// Fallback model
-  fallbackModel         String?
+  fallbackModel             String?
   /// Daily budget in USD across all conversations
-  globalDailyBudgetUsd  Float    @default(10.0)
+  globalDailyBudgetUsd      Float    @default(10.0)
   /// Max concurrent LLM calls
-  maxConcurrentCalls    Int      @default(5)
+  maxConcurrentCalls        Int      @default(5)
   /// Conversation types eligible for periodic scan
   eligibleConversationTypes String[] @default(["group", "channel", "public", "global"])
   /// Only scan conversations with messages newer than N hours
-  messageFreshnessHours Int      @default(22)
+  messageFreshnessHours     Int      @default(22)
   /// Max conversations per scan cycle (0 = unlimited)
-  maxConversationsPerCycle Int    @default(0)
+  maxConversationsPerCycle  Int      @default(0)
   /// Global daily limit for scanned conversations (weekday)
-  weekdayMaxConversations Int    @default(50)
+  weekdayMaxConversations   Int      @default(50)
   /// Global daily limit for scanned conversations (weekend)
-  weekendMaxConversations Int    @default(100)
+  weekendMaxConversations   Int      @default(100)
 
-  updatedAt             DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 }
 
 model AgentScanLog {
-  id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  conversationId    String   @db.ObjectId
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String @db.ObjectId
 
-  trigger           String   @default("auto")
-  triggeredBy       String?  @db.ObjectId
+  trigger     String  @default("auto")
+  triggeredBy String? @db.ObjectId
 
-  startedAt         DateTime @default(now())
-  completedAt       DateTime?
-  durationMs        Int      @default(0)
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  durationMs  Int       @default(0)
 
   activityScore     Float    @default(0)
   messagesInWindow  Int      @default(0)
@@ -3587,22 +3599,22 @@ model AgentScanLog {
   controlledUserIds String[] @db.ObjectId
   configSnapshot    Json?
 
-  nodeResults       Json?
+  nodeResults Json?
 
-  outcome           String   @default("skipped")
-  messagesSent      Int      @default(0)
-  reactionsSent     Int      @default(0)
-  messagesRejected  Int      @default(0)
-  userIdsUsed       String[] @db.ObjectId
+  outcome          String   @default("skipped")
+  messagesSent     Int      @default(0)
+  reactionsSent    Int      @default(0)
+  messagesRejected Int      @default(0)
+  userIdsUsed      String[] @db.ObjectId
 
-  totalInputTokens  Int      @default(0)
-  totalOutputTokens Int      @default(0)
-  totalLatencyMs    Int      @default(0)
-  estimatedCostUsd  Float    @default(0)
+  totalInputTokens  Int   @default(0)
+  totalOutputTokens Int   @default(0)
+  totalLatencyMs    Int   @default(0)
+  estimatedCostUsd  Float @default(0)
 
-  configChangedAt   DateTime?
+  configChangedAt DateTime?
 
-  conversation      Conversation @relation(fields: [conversationId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
 
   @@index([conversationId])
   @@index([startedAt])
@@ -3648,7 +3660,7 @@ model AgentTopicCatalog {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  usageLogs           AgentTopicUsageLog[]
+  usageLogs AgentTopicUsageLog[]
 
   @@index([isActive])
 }
@@ -3656,11 +3668,11 @@ model AgentTopicCatalog {
 /// Tracks topic provocations per conversation for cooldown enforcement.
 /// Cleaned up by topic-usage-cleanup cron (30j retention).
 model AgentTopicUsageLog {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  topicId        String   @db.ObjectId
+  id             String            @id @default(auto()) @map("_id") @db.ObjectId
+  topicId        String            @db.ObjectId
   topic          AgentTopicCatalog @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  conversationId String   @db.ObjectId
-  usedAt         DateTime @default(now())
+  conversationId String            @db.ObjectId
+  usedAt         DateTime          @default(now())
 
   @@index([conversationId, topicId, usedAt(sort: Desc)])
   @@index([usedAt])
@@ -3668,20 +3680,20 @@ model AgentTopicUsageLog {
 
 /// Reference: SOTA audit Pilier 4 — outbox-based ghost file cleanup.
 model OrphanMediaCleanup {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
   /// Canonical /api/v1/attachments/file/<encoded> URL. Same shape as
   /// PostMedia.fileUrl so MediaService can resolve and delete the file.
-  fileUrl       String
+  fileUrl      String
   /// Free-form context label (e.g. "repost-snapshot", "tus-upload",
   /// "audio-output") so operators can grep the collection and reason about
   /// which flow is producing orphans.
-  source        String   @default("unknown")
-  createdAt     DateTime @default(now())
+  source       String   @default("unknown")
+  createdAt    DateTime @default(now())
   /// Earliest time the worker may delete this row + file. Set by the
   /// producer based on the worst-case duration of the surrounding
   /// transaction (default 1 hour for repost-snapshot, longer for slow
   /// audio pipelines if needed).
-  cleanupAfter  DateTime
+  cleanupAfter DateTime
 
   @@index([cleanupAfter])
   @@index([source])
@@ -3731,13 +3743,13 @@ model MutationLog {
 
 /// Mention d'un utilisateur dans un commentaire de post
 model CommentMention {
-  id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  commentId         String   @db.ObjectId
-  mentionedUserId   String   @db.ObjectId
-  mentionedAt       DateTime @default(now())
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  commentId       String   @db.ObjectId
+  mentionedUserId String   @db.ObjectId
+  mentionedAt     DateTime @default(now())
 
-  comment        PostComment @relation("CommentMentions", fields: [commentId], references: [id], onDelete: Cascade)
-  mentionedUser  User        @relation("UserCommentMentions", fields: [mentionedUserId], references: [id], onDelete: Cascade)
+  comment       PostComment @relation("CommentMentions", fields: [commentId], references: [id], onDelete: Cascade)
+  mentionedUser User        @relation("UserCommentMentions", fields: [mentionedUserId], references: [id], onDelete: Cascade)
 
   @@unique([commentId, mentionedUserId], name: "comment_user_mention_unique")
   @@index([commentId])
@@ -3747,13 +3759,13 @@ model CommentMention {
 
 /// Mention d'un utilisateur dans le corps d'un post
 model PostMention {
-  id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  postId            String   @db.ObjectId
-  mentionedUserId   String   @db.ObjectId
-  mentionedAt       DateTime @default(now())
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  postId          String   @db.ObjectId
+  mentionedUserId String   @db.ObjectId
+  mentionedAt     DateTime @default(now())
 
-  post           Post @relation("PostMentions", fields: [postId], references: [id], onDelete: Cascade)
-  mentionedUser  User @relation("UserPostMentions", fields: [mentionedUserId], references: [id], onDelete: Cascade)
+  post          Post @relation("PostMentions", fields: [postId], references: [id], onDelete: Cascade)
+  mentionedUser User @relation("UserPostMentions", fields: [mentionedUserId], references: [id], onDelete: Cascade)
 
   @@unique([postId, mentionedUserId], name: "post_user_mention_unique")
   @@index([postId])

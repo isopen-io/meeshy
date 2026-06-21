@@ -84,6 +84,12 @@ export interface PostComment {
   readonly deletedAt?: string | Date | null;
   readonly createdAt: string | Date;
   readonly author?: PostAuthor;
+  /**
+   * Média unique attaché au commentaire (image/vidéo/audio). Réutilise le modèle
+   * {@link PostMedia} via le FK `commentId`. Un commentaire ne porte qu'un seul
+   * média ; la relation reste un tableau pour cohérence avec le pipeline posts.
+   */
+  readonly media?: readonly PostMedia[];
 }
 
 export interface Post {
@@ -308,6 +314,17 @@ export interface CommentTranslationUpdatedEventData {
     readonly confidenceScore?: number;
     readonly createdAt: string;
   };
+}
+
+/**
+ * Émis (`comment:media-updated`) quand le pipeline audio d'un média de commentaire
+ * a produit une transcription ou des traductions. Le client remplace le commentaire
+ * en cache par cette version enrichie (média transcrit/traduit).
+ */
+export interface CommentMediaUpdatedEventData {
+  readonly postId: string;
+  readonly commentId: string;
+  readonly comment: PostComment;
 }
 
 export interface CommentReactionAggregation {
