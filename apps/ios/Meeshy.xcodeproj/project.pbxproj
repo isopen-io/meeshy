@@ -54,6 +54,10 @@
 		443B3C791B4DDEDC517D35DF /* MockCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11B9A13244FA9699333355B /* MockCacheService.swift */; };
 		447EB12B85279B3E448C2456 /* BlockedTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8711AA999D4B45FFEA4492 /* BlockedTab.swift */; };
 		44C6640DF69BEB3FF362DE4A /* ContactsHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B77619804147529F134986 /* ContactsHubView.swift */; };
+		83BD51218A1F70484C0E2E41 /* CallsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778C4719074ED676630AE6B2 /* CallsTab.swift */; };
+		51B8DB24C49E4007DCE3460C /* ContactsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20FBA05C1AAA4EE765F12DA3 /* ContactsSection.swift */; };
+		154D81017A2D9E725E1BB2B0 /* KeypadTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */; };
+		2D3563D04A488B10C2B3D2CE /* KeypadViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB2A3B95A3287DB42D5FF468 /* KeypadViewModel.swift */; };
 		46B9CEA8F388C548AEED4A2E /* MockVoIPTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE78D3B42AA19F0490A676B0 /* MockVoIPTokenStore.swift */; };
 		470F5AC07EAF99E5F119C3E6 /* MeeshyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC091A1BD89E4244D04EAED9 /* MeeshyApp.swift */; };
 		4A2C3C40E1AC07C9F9EDD570 /* CommentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6365D304746755CB4497B79 /* CommentStore.swift */; };
@@ -331,6 +335,7 @@
 		DLNK0001000100010001001 /* DeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DLNK0001000100010001000 /* DeepLinkTests.swift */; };
 		DRRT01001001001001002 /* DraftStoreReplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DRRT01001001001001001 /* DraftStoreReplyTests.swift */; };
 		DSCV0001000100010001001 /* DiscoverViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DSCV0001000100010001000 /* DiscoverViewModelTests.swift */; };
+		5C2F9A90859A929847D5CBD7 /* KeypadViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5EB1C8E0E7ADA2081B50F4B /* KeypadViewModelTests.swift */; };
 		DSTV002A002A002A002A0002 /* DataStorageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DSTV001A001A001A001A0001 /* DataStorageView.swift */; };
 		E1491C65FE46FF6941B00642 /* E2EAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 409C08F1FC8A1E6C810690CF /* E2EAPI.swift */; };
 		E2EA0000000004F010 /* E2EAPIEncryptionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2EA0000000003F010 /* E2EAPIEncryptionTests.swift */; };
@@ -949,6 +954,7 @@
 		DLNK001A001A001A001A0001 /* DeepLinkRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRouter.swift; sourceTree = "<group>"; };
 		DRRT01001001001001001 /* DraftStoreReplyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftStoreReplyTests.swift; sourceTree = "<group>"; };
 		DSCV0001000100010001000 /* DiscoverViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverViewModelTests.swift; sourceTree = "<group>"; };
+		C5EB1C8E0E7ADA2081B50F4B /* KeypadViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeypadViewModelTests.swift; sourceTree = "<group>"; };
 		DSTV001A001A001A001A0001 /* DataStorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataStorageView.swift; sourceTree = "<group>"; };
 		E101FEA7BBFB4FDC8474B10C /* MeeshyTests/Unit/Views/Bubble/MessageRowEnvelopeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/MessageRowEnvelopeTests.swift; sourceTree = SOURCE_ROOT; };
 		E2EA0000000003F010 /* E2EAPIEncryptionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = E2EAPIEncryptionTests.swift; sourceTree = "<group>"; };
@@ -978,6 +984,10 @@
 		F71C9C50ECED369B628670C7 /* ThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadView.swift; sourceTree = "<group>"; };
 		F724878269B34D64666FE22F /* SharePickerViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharePickerViewModelTests.swift; sourceTree = "<group>"; };
 		F7B77619804147529F134986 /* ContactsHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsHubView.swift; sourceTree = "<group>"; };
+		778C4719074ED676630AE6B2 /* CallsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallsTab.swift; sourceTree = "<group>"; };
+		20FBA05C1AAA4EE765F12DA3 /* ContactsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsSection.swift; sourceTree = "<group>"; };
+		B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeypadTab.swift; sourceTree = "<group>"; };
+		EB2A3B95A3287DB42D5FF468 /* KeypadViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeypadViewModel.swift; sourceTree = "<group>"; };
 		F7C8FDC10EBAC576B77E8347 /* MediaPostCell.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MediaPostCell.swift; sourceTree = "<group>"; };
 		F96C9A03A8540DCCEB3528A8 /* AuthServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthServiceTests.swift; sourceTree = "<group>"; };
 		FBCF87A60F92454FA8977EA8 /* StoryViewerView+Sidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryViewerView+Sidebar.swift"; sourceTree = "<group>"; };
@@ -1690,6 +1700,7 @@
 				PDTL0001000100010001000 /* PostDetailViewModelTests.swift */,
 				EMVF0001000100010001000 /* EmailVerificationViewModelTests.swift */,
 				DSCV0001000100010001000 /* DiscoverViewModelTests.swift */,
+				C5EB1C8E0E7ADA2081B50F4B /* KeypadViewModelTests.swift */,
 				BLKD0001000100010001000 /* BlockedViewModelTests.swift */,
 				VPMT0001000100010001000 /* VoiceProfileManageViewModelTests.swift */,
 				VPWT0001000100010001000 /* VoiceProfileWizardViewModelTests.swift */,
@@ -1805,6 +1816,10 @@
 				4B8711AA999D4B45FFEA4492 /* BlockedTab.swift */,
 				F573D0F41F068B1CDCAB79C6 /* BlockedViewModel.swift */,
 				F7B77619804147529F134986 /* ContactsHubView.swift */,
+				778C4719074ED676630AE6B2 /* CallsTab.swift */,
+				20FBA05C1AAA4EE765F12DA3 /* ContactsSection.swift */,
+				B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */,
+				EB2A3B95A3287DB42D5FF468 /* KeypadViewModel.swift */,
 				73E4ECF08EDFD91908B42081 /* ContactsListTab.swift */,
 				B00553F0559287EB62084EAD /* ContactsListViewModel.swift */,
 				674A915642772CC82D9344C6 /* ContactsShared.swift */,
@@ -2719,6 +2734,10 @@
 				447EB12B85279B3E448C2456 /* BlockedTab.swift in Sources */,
 				D90603ED4F5C335BE9FA78D9 /* BlockedViewModel.swift in Sources */,
 				44C6640DF69BEB3FF362DE4A /* ContactsHubView.swift in Sources */,
+				83BD51218A1F70484C0E2E41 /* CallsTab.swift in Sources */,
+				51B8DB24C49E4007DCE3460C /* ContactsSection.swift in Sources */,
+				154D81017A2D9E725E1BB2B0 /* KeypadTab.swift in Sources */,
+				2D3563D04A488B10C2B3D2CE /* KeypadViewModel.swift in Sources */,
 				F7273BAD84FB8B7281518D59 /* ContactsListTab.swift in Sources */,
 				3171CBE21C1C4D6409B2DE3D /* ContactsListViewModel.swift in Sources */,
 				55E92C6A456D714A38A06932 /* ContactsShared.swift in Sources */,
@@ -2911,6 +2930,7 @@
 				PDTL0001000100010001001 /* PostDetailViewModelTests.swift in Sources */,
 				EMVF0001000100010001001 /* EmailVerificationViewModelTests.swift in Sources */,
 				DSCV0001000100010001001 /* DiscoverViewModelTests.swift in Sources */,
+				5C2F9A90859A929847D5CBD7 /* KeypadViewModelTests.swift in Sources */,
 				BLKD0001000100010001001 /* BlockedViewModelTests.swift in Sources */,
 				VPMT0001000100010001001 /* VoiceProfileManageViewModelTests.swift in Sources */,
 				VPWT0001000100010001001 /* VoiceProfileWizardViewModelTests.swift in Sources */,

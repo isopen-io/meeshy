@@ -4,6 +4,23 @@ import MeeshyUI
 
 // MARK: - Tab Definitions
 
+/// Top-level tabs of the People hub. The three primary surfaces of the
+/// redesigned contact view: the call journal, the dial pad, and the contact
+/// directory (which itself nests the `ContactsTab` sub-tabs).
+enum PeopleTab: String, CaseIterable, Hashable {
+    case calls = "Appels"
+    case keypad = "Clavier"
+    case contacts = "Contacts"
+
+    var icon: String {
+        switch self {
+        case .calls: return "phone.fill"
+        case .keypad: return "circle.grid.3x3.fill"
+        case .contacts: return "person.2.fill"
+        }
+    }
+}
+
 enum ContactsTab: String, CaseIterable, Hashable {
     case contacts = "Contacts"
     case requests = "Demandes"
