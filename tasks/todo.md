@@ -61,6 +61,15 @@ Code écrit selon les patterns existants ; build `./apps/ios/meeshy.sh test` + S
   configurée de l'utilisateur (priorité 1 Prisme) d'abord, clavier en simple fallback
   (anonymes / langue non supportée). Les autres composers partaient déjà de `resolve()` = "fr".
 
+### Revue de code (high effort) — corrections
+- **MEDIUM corrigé** : `playPrevious()` en mode « restart » faisait seulement `engine.seek(to: 0)`,
+  qui ne relance pas la lecture. Si l'audio était en pause, « précédent » (écran verrouillé)
+  rembobinait sans rejouer. Ajout de `restartCurrent()` (seek 0 + reprise si en pause). Test ajouté.
+- **LOW corrigé** : `AudioPlaybackPositions.pruned` triait par `updatedAt` seul (tie non
+  déterministe si deux écritures au même instant). Tie-break par clé → éviction déterministe.
+- Vérifiés OK : mapping waveform borné, observer `willResignActive` sans fuite (token retiré en
+  deinit), `didSet attachmentId` cohérent (pas de double-persist), reorder langue Prisme correct.
+
 ### Validation
 - ⚠️ Build/tests iOS NON exécutés ici (container Linux ; Xcode/simulateur = macOS requis).
   À lancer sur Mac/CI : `./apps/ios/meeshy.sh test` (app) + `xcodebuild test -scheme MeeshySDK-Package` (SDK).

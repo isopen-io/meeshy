@@ -185,12 +185,12 @@ public final class ConversationAudioCoordinator: ObservableObject {
         guard activeContext != nil else { return }
 
         if currentTime > Self.previousRestartThreshold {
-            engine.seek(to: 0)
+            restartCurrent()
             return
         }
 
         guard let previous = history.popLast() else {
-            engine.seek(to: 0)
+            restartCurrent()
             return
         }
 
@@ -200,6 +200,15 @@ public final class ConversationAudioCoordinator: ObservableObject {
         queueCount = queue.count
         consumedAttachmentIds.remove(previous.attachmentId)
         startCurrentHead()
+    }
+
+    /// Restarts the current track from the beginning. As a transport command
+    /// (lock screen / AirPods), it must also RESUME playback if the engine was
+    /// paused — seeking alone would leave a paused track silently rewound, so
+    /// "previous" would appear to do nothing.
+    private func restartCurrent() {
+        engine.seek(to: 0)
+        if !isPlaying { engine.togglePlayPause() }
     }
 
     public func close() {

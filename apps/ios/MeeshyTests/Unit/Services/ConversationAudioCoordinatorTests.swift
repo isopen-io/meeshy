@@ -323,6 +323,27 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
         XCTAssertEqual(sut.activeContext?.attachmentId, "a1")
     }
 
+    /// A transport "previous" must RESUME playback, not just rewind: past the
+    /// threshold while paused, `playPrevious()` seeks to 0 AND restarts the
+    /// engine (otherwise the lock-screen button appears to do nothing).
+    func test_playPrevious_pastThreshold_whilePaused_resumesPlayback() async {
+        let (sut, engine) = makeSUT()
+        sut.play(current: makeQueuedAudio(attachmentId: "a1", fileUrl: "https://cdn/a1.m4a"),
+                 tail: [], conversationName: "T", conversationArtworkURL: nil)
+        engine.duration = 30
+        engine.currentTime = ConversationAudioCoordinator.previousRestartThreshold + 1
+        engine.isPlaying = false   // user paused on the lock screen
+        await Task.yield()
+
+        let togglesBefore = engine.togglePlayPauseCallCount
+        sut.playPrevious()
+        await Task.yield()
+
+        XCTAssertEqual(engine.seekFractions.last, 0)
+        XCTAssertEqual(engine.togglePlayPauseCallCount, togglesBefore + 1,
+                       "restart while paused must resume playback")
+    }
+
     /// Below the threshold with history present, `playPrevious()` re-heads the
     /// previously played track and keeps the just-left one available as next.
     func test_playPrevious_belowThreshold_replaysPreviousTrack() async {

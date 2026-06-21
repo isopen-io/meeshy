@@ -52,10 +52,17 @@ public struct AudioPlaybackPositions: Codable, Equatable, Sendable {
 
     /// Caps the dictionary at `max` entries, evicting the least-recently
     /// updated ones first. Returns `self` untouched when already within budget.
+    /// Ties on `updatedAt` (two writes in the same instant) break on the key so
+    /// eviction is deterministic rather than dependent on unstable sort order.
     public func pruned(max: Int) -> AudioPlaybackPositions {
         guard entries.count > max, max >= 0 else { return self }
         let kept = entries
-            .sorted { $0.value.updatedAt > $1.value.updatedAt }
+            .sorted { lhs, rhs in
+                if lhs.value.updatedAt != rhs.value.updatedAt {
+                    return lhs.value.updatedAt > rhs.value.updatedAt
+                }
+                return lhs.key > rhs.key
+            }
             .prefix(max)
         return AudioPlaybackPositions(entries: Dictionary(uniqueKeysWithValues: kept.map { ($0.key, $0.value) }))
     }
