@@ -540,24 +540,8 @@ build_destination() {
     esac
 }
 
-# Regenerate Meeshy.xcodeproj from project.yml so newly added source files are
-# always included — the pbxproj is a generated artifact (XcodeGen, deterministic
-# so a no-op yields no git churn). Skips gracefully if xcodegen is absent.
-regenerate_project() {
-    if command -v xcodegen >/dev/null 2>&1; then
-        if xcodegen generate >/dev/null 2>&1; then
-            log "Project regenerated from project.yml (xcodegen)"
-        else
-            warn "xcodegen generate failed — building the committed project as-is"
-        fi
-    else
-        warn "xcodegen not found — 'brew install xcodegen' to auto-sync new files"
-    fi
-}
-
 do_build() {
     wait_for_existing_build
-    regenerate_project
 
     if [ "$CLEAN" = true ]; then
         do_clean

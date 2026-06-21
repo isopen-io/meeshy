@@ -8,9 +8,8 @@ options:
 settings:
   SWIFT_VERSION: "6.0"
   IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+  PRODUCT_NAME: Meeshy
   TARGETED_DEVICE_FAMILY: "1,2"
-  MARKETING_VERSION: "1.0.0"
-  CURRENT_PROJECT_VERSION: "1188"
   # Swift 6.2 Approachable Concurrency (WWDC25).
   # - SWIFT_APPROACHABLE_CONCURRENCY umbrella flag (includes Sendable
   #   inference from captures, global-actor usability, etc.)
@@ -24,13 +23,6 @@ settings:
   SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
   SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT: "YES"
 
-packages:
-  MeeshySDK:
-    path: ../../packages/MeeshySDK
-  Firebase:
-    url: https://github.com/firebase/firebase-ios-sdk
-    exactVersion: 12.12.1
-
 targets:
   Meeshy:
     type: application
@@ -40,15 +32,6 @@ targets:
       - path: Meeshy
         excludes:
           - "**/*.md"
-          # Dead/obsolete sources the hand-maintained pbxproj never compiled.
-          # Globbing them in breaks the build, so keep them excluded (parity
-          # with the previous project):
-          #  - APIClient: duplicates MeeshySDK's APIClient/APIResponse<T>
-          #  - MemberManagementSection: references an internal `accentColor`
-          #  - GlobalEnvironment: unused View extension
-          - "Features/Main/Services/APIClient.swift"
-          - "Features/Main/Components/MemberManagementSection.swift"
-          - "Features/Main/Components/GlobalEnvironment.swift"
     settings:
       INFOPLIST_FILE: Meeshy/Info.plist
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app
@@ -60,20 +43,6 @@ targets:
     dependencies:
       - target: MeeshyWidgets
       - target: MeeshyNotificationExtension
-      - package: MeeshySDK
-        product: MeeshySDK
-      - package: MeeshySDK
-        product: MeeshyUI
-      - package: Firebase
-        product: FirebaseCore
-      - package: Firebase
-        product: FirebaseAnalytics
-      - package: Firebase
-        product: FirebaseCrashlytics
-      - package: Firebase
-        product: FirebaseMessaging
-      - package: Firebase
-        product: FirebasePerformance
 
   MeeshyWidgets:
     type: app-extension
@@ -98,9 +67,6 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.notification-service
       CODE_SIGN_STYLE: Automatic
       CODE_SIGN_ENTITLEMENTS: MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements
-    dependencies:
-      - package: MeeshySDK
-        product: MeeshySDK
 
   # P4.3 step 1 — MeeshyTests is the unit-test bundle that previously was
   # only declared inside Meeshy.xcodeproj/project.pbxproj (via 20+ Ruby
@@ -134,11 +100,6 @@ targets:
     dependencies:
       - target: Meeshy
 
-schemes:
-  Meeshy:
-    build:
-      targets:
-        Meeshy: all
-    test:
-      targets:
-        - MeeshyTests
+scheme:
+  testTargets:
+    - MeeshyTests
