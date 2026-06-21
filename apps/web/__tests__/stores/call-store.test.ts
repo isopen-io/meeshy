@@ -7,6 +7,16 @@ import { act } from '@testing-library/react';
 import { useCallStore } from '../../stores/call-store';
 import type { CallSession, CallParticipant, CallControls } from '@meeshy/shared/types/video-call';
 
+// Mock socket service for heartbeat tests
+const mockSocketEmit = jest.fn();
+const mockGetSocket = jest.fn();
+
+jest.mock('@/services/meeshy-socketio.service', () => ({
+  meeshySocketIOService: {
+    getSocket: () => mockGetSocket(),
+  },
+}));
+
 // Mock MediaStream and RTCPeerConnection
 class MockMediaStream {
   private tracks: MediaStreamTrack[] = [];
