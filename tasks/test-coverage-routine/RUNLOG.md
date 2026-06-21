@@ -1480,7 +1480,7 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   - utils/rate-limiter.ts             line 73.91% → 100%, branch 61.19% → 98.5%
   - utils/socket-rate-limiter.ts      line 0% → 100%, branch 0% → 100%
   - ALL FILES combined:               line 100%, branch 99.34%
-  - Gateway full suite after ratchet:  line ~61%, branch ~57% (threshold floor ratcheted lines:54→61/branches:52→56/statements:54→60/functions:54→61)
+  - Gateway full suite after ratchet:  CI-measured lines=55.27% / branches=52.64% / stmts=55.1% / funcs=55.39% (threshold floor ratcheted lines:54→55/branches:52→52/stmts:54→55/funcs:54→55)
 - Tests added: 232 (+160 net new — 72 already from existing test file)
   - `src/__tests__/unit/config/message-limits.test.ts` (new, 14 tests)
   - `src/__tests__/unit/utils/socket-rate-limiter.test.ts` (new, 52 tests)
@@ -1495,3 +1495,8 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   1. Line 150 in rate-limiter.ts (RedisStore `ttl > 0 ? now+ttl : now+windowMs` false branch) is the one remaining uncovered branch (98.5%/file, 99.34%/slice). The false branch fires when pttl returns ≤0 after increment — requires pexpire to fail silently or a race; MockRedis always yields positive TTL. Genuine defensive guard, not testable with current mock infrastructure; no istanbul ignore added.
   2. `getSocketRateLimiter()` singleton: destroy() called in tests but module-level `rateLimiterInstance` not reset to null — subsequent calls in same Jest worker return destroyed instance. Tests only call it once, so no issue in practice; isolated per Jest file.
   3. Auth factory key generator tests cover isolation by identity (same bucket for same IP/token, separate bucket for different) and all fallback paths (missing IP → 'unknown', missing tokenId → '', missing email → '').
+  4. ⚠ First push used over-ratcheted thresholds (61/56/60/61) measured from `jest` without `--coverage`. CI runs `jest --coverage` (collectCoverageFrom counts all files → lower global average). Corrected to CI-measured values (55/52/55/55) in 2nd push. Lesson: always calibrate against CI-measured values, not local `jest` without `--coverage`.
+- Commit: 7c5fea62af1b2eaa1efeefe63c33de25b921ad41 (branch claude/coverage/p2-rate-limiting-gateway — corrected thresholds pushed 2026-06-21T16:38Z)
+- CI: All checks passed — Security✅ Quality(bun)✅ Trivy(neutral) Prisma✅ Test shared✅ Test agent✅ Audio Pipeline Tests✅ Test web✅ TTS/STT Integration✅ Voice API Tests✅ Test gateway✅ Build(bun)✅ Test Python(translator)✅(in-progress at merge time, non-blocking) Summary✅
+- Squash-merge: PR #748 → main sha ec90dfff090deb7e0b08a2d08e87400cb4d5d884 (2026-06-21T16:50Z)
+- Next slice: P2 Admin & moderation × gateway (next ☐ cell in feature matrix)
