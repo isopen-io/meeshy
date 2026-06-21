@@ -1360,7 +1360,8 @@ extension StoryViewerView {
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: commentId,
                     originalLanguage: c.originalLanguage, translatedContent: translated,
-                    currentUserReactions: c.currentUserReactions
+                    currentUserReactions: c.currentUserReactions,
+                    media: (c.media ?? []).map { $0.toFeedMedia() }
                 )
             }
             storyCommentRepliesMap[commentId] = replies
@@ -1566,7 +1567,8 @@ extension StoryViewerView {
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: c.parentId,
                     originalLanguage: c.originalLanguage, translatedContent: translated,
-                    currentUserReactions: c.currentUserReactions
+                    currentUserReactions: c.currentUserReactions,
+                    media: (c.media ?? []).map { $0.toFeedMedia() }
                 )
             }
             storyComments = comments
@@ -1645,7 +1647,10 @@ struct StoryCommentRowView: View, Equatable {
         lhs.likeCount == rhs.likeCount &&
         lhs.isInFlight == rhs.isInFlight &&
         lhs.comment.content == rhs.comment.content &&
-        lhs.comment.translatedContent == rhs.comment.translatedContent
+        lhs.comment.translatedContent == rhs.comment.translatedContent &&
+        lhs.comment.media.first?.id == rhs.comment.media.first?.id &&
+        lhs.comment.media.first?.transcription?.text == rhs.comment.media.first?.transcription?.text &&
+        lhs.comment.media.first?.translatedAudios.count == rhs.comment.media.first?.translatedAudios.count
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1683,6 +1688,19 @@ struct StoryCommentRowView: View, Equatable {
             VStack(alignment: .leading, spacing: 4) {
                 headerRow
                 contentText
+                // Média unique du commentaire (image/vidéo/audio) — inline + plein
+                // écran, identique aux autres surfaces de commentaires.
+                if let media = comment.media.first {
+                    CommentMediaView(
+                        media: media,
+                        accentColor: comment.authorColor,
+                        authorName: comment.author,
+                        authorAvatarURL: comment.authorAvatarURL,
+                        authorColor: comment.authorColor,
+                        sentAt: comment.timestamp
+                    )
+                    .padding(.top, 2)
+                }
                 actionRow
             }
 

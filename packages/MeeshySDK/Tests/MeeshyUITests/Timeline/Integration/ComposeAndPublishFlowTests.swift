@@ -77,7 +77,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         throw NSError(domain: "mock", code: -1)
     }
     func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
-                    mediaId: String?, mobileTranscription: MobileTranscriptionPayload?,
+                    attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
                     originalLanguage: String?) async throws -> APIPostComment {
         throw NSError(domain: "mock", code: -1)
     }

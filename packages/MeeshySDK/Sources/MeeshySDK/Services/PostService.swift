@@ -39,7 +39,7 @@ public protocol PostServiceProviding: Sendable {
     func removeBookmark(postId: String) async throws
     func getPost(postId: String) async throws -> APIPost
     func getComments(postId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
-    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, mediaId: String?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?) async throws -> APIPostComment
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?) async throws -> APIPostComment
     func likeComment(postId: String, commentId: String) async throws
     func unlikeComment(postId: String, commentId: String) async throws
     func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool) async throws -> APIPost
@@ -61,12 +61,12 @@ public protocol PostServiceProviding: Sendable {
 }
 
 public extension PostServiceProviding {
-    /// Convenience texte-seul (média = nil). Préserve les appels existants depuis
-    /// que `addComment` porte `mediaId` / `mobileTranscription` / `originalLanguage`
-    /// (les protocoles Swift ne supportent pas les valeurs par défaut).
+    /// Convenience texte-seul (attachements = nil). Préserve les appels existants
+    /// depuis que `addComment` porte `attachmentIds` / `mobileTranscription` /
+    /// `originalLanguage` (les protocoles Swift ne supportent pas les valeurs par défaut).
     func addComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async throws -> APIPostComment {
         try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
-                             mediaId: nil, mobileTranscription: nil, originalLanguage: nil)
+                             attachmentIds: nil, mobileTranscription: nil, originalLanguage: nil)
     }
 }
 
@@ -112,10 +112,10 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     }
 
     public func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
-                           mediaId: String?, mobileTranscription: MobileTranscriptionPayload?,
+                           attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
                            originalLanguage: String?) async throws -> APIPostComment {
         let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags,
-                                        mediaId: mediaId, mobileTranscription: mobileTranscription,
+                                        attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
                                         originalLanguage: originalLanguage)
         let response: APIResponse<APIPostComment> = try await api.post(endpoint: "/posts/\(postId)/comments", body: body)
         return response.data

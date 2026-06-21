@@ -505,20 +505,35 @@ class TranslatorEngine:
                 # Les modèles PyTorch ne sont PAS thread-safe, donc on sérialise les inférences
                 model_lock = self.model_loader.get_model_inference_lock(model_type)
 
-                with model_lock:
-                    logger.info(f"🔒 [MODEL_LOCK] Lock acquis pour modèle '{model_type}'")
+                # ═══════════════════════════════════════════════════════════════
+                # ISOLATION AUDIO ↔ TEXTE (anti-famine)
+                # Le verrou d'inférence est acquis/libéré PAR CHUNK, et non pour
+                # l'intégralité du batch. Un long job audio (un message vocal peut
+                # générer des centaines de segments) libère ainsi le modèle entre
+                # chaque chunk : une traduction texte temps réel en attente peut
+                # s'intercaler au lieu d'attendre tout le batch (→ plus de timeout
+                # ZMQ côté gateway, plus de traductions perdues). Chaque appel
+                # `reusable_pipeline(chunk)` reste atomique et sérialisé par le lock,
+                # donc la thread-safety PyTorch est préservée.
+                # ═══════════════════════════════════════════════════════════════
+                n_chunks = (len(texts) + batch_size - 1) // batch_size
+                logger.info(
+                    f"🔒 [MODEL_LOCK] Inférence batch '{model_type}' en {n_chunks} chunk(s) "
+                    f"(lock acquis/libéré par chunk)"
+                )
 
-                    # OPTIMISATION: Traitement direct SANS timeout wrapper (overhead supprimé)
-                    with create_inference_context():
-                        for i in range(0, len(texts), batch_size):
-                            chunk = texts[i:i + batch_size]
+                # OPTIMISATION: Traitement direct SANS timeout wrapper (overhead supprimé)
+                with create_inference_context():
+                    for i in range(0, len(texts), batch_size):
+                        chunk = texts[i:i + batch_size]
 
-                            # ═══════════════════════════════════════════════════════════════
-                            # OPTIMISATIONS NLLB AVANCÉES:
-                            # - num_beams=1: Greedy decoding (4x plus rapide que beam search)
-                            # - do_sample=False: Désactive sampling (déterministe)
-                            # - max_length=256: Optimisé pour segments courts
-                            # ═══════════════════════════════════════════════════════════════
+                        # ═══════════════════════════════════════════════════════════════
+                        # OPTIMISATIONS NLLB AVANCÉES:
+                        # - num_beams=1: Greedy decoding (4x plus rapide que beam search)
+                        # - do_sample=False: Désactive sampling (déterministe)
+                        # - max_length=256: Optimisé pour segments courts
+                        # ═══════════════════════════════════════════════════════════════
+                        with model_lock:
                             results = reusable_pipeline(
                                 chunk,
                                 src_lang=nllb_source,
@@ -529,16 +544,17 @@ class TranslatorEngine:
                                 # early_stopping retiré: incompatible avec num_beams=1
                             )
 
-                            for result in results:
-                                if isinstance(result, dict) and 'translation_text' in result:
-                                    all_results.append(result['translation_text'])
-                                elif isinstance(result, list) and len(result) > 0:
-                                    all_results.append(result[0].get('translation_text', '[No-Result]'))
-                                else:
-                                    all_results.append('[Batch-No-Result]')
+                        # Agrégation des résultats HORS lock (le modèle est libre
+                        # pour une autre traduction pendant qu'on formate la sortie).
+                        for result in results:
+                            if isinstance(result, dict) and 'translation_text' in result:
+                                all_results.append(result['translation_text'])
+                            elif isinstance(result, list) and len(result) > 0:
+                                all_results.append(result[0].get('translation_text', '[No-Result]'))
+                            else:
+                                all_results.append('[Batch-No-Result]')
 
-                # Lock automatiquement libéré ici (sortie du with)
-                logger.info(f"🔓 [MODEL_LOCK] Lock libéré pour modèle '{model_type}'")
+                logger.info(f"🔓 [MODEL_LOCK] Batch '{model_type}' terminé (lock libéré entre chunks)")
 
                 logger.info(f"[BATCH-SYNC] ✅ Sortie inference_context, {len(all_results)} résultats")
 

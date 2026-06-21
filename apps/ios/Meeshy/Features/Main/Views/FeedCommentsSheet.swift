@@ -1,5 +1,8 @@
 import SwiftUI
 import Combine
+import PhotosUI
+import UniformTypeIdentifiers
+import CoreLocation
 import MeeshySDK
 import MeeshyUI
 
@@ -161,6 +164,16 @@ struct CommentsSheetView: View {
     /// Tracks current composer text so `MentionSuggestionPanel` can pass it
     /// back to `insertMention(_:into:)` without needing to own the text field.
     @State private var composerText: String = ""
+
+    // MARK: Comment attachments (UI composer parity with messages)
+    /// Media the user staged from the composer carousel (photo / video / file /
+    /// location / voice). Surfaced to `UniversalComposerBar` as
+    /// `externalAttachments` and previewed via `commentAttachmentsPreview`.
+    @State private var commentAttachments: [ComposerAttachment] = []
+    @State private var showCommentPhotoPicker: Bool = false
+    @State private var commentPhotoItems: [PhotosPickerItem] = []
+    @State private var showCommentFilePicker: Bool = false
+    @State private var showCommentLocationPicker: Bool = false
 
     @StateObject private var mentionController: MentionComposerController
 
@@ -678,31 +691,217 @@ struct CommentsSheetView: View {
             style: .light,
             mode: .comment,
             accentColor: accentColor,
+            // Opt comments into the attachment carousel + voice (parity with
+            // message-with-attachments). Pickers are wired below.
+            forceShowAttachment: true,
+            forceShowVoice: true,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
-            onSend: { text in sendComment(text: text) },
+            onSendMessage: { text, attachments, _ in
+                submitComment(text: text, attachments: attachments)
+            },
+            onLocationRequest: { showCommentLocationPicker = true },
             textBinding: $composerText,
             replyBanner: replyingTo.map { AnyView(commentReplyBanner($0)) },
+            customAttachmentsPreview: commentAttachments.isEmpty
+                ? nil
+                : AnyView(commentAttachmentsPreview),
             onTextChange: { text in
                 mentionController.handleQuery(in: text)
             },
+            onPhotoLibrary: { showCommentPhotoPicker = true },
+            onFilePicker: { showCommentFilePicker = true },
+            onRecentMediaSelected: { pick in ingestCommentRecentMedia(pick) },
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects,
+            externalAttachments: commentAttachments,
             focusTrigger: $composerFocusTrigger
+        )
+        .photosPicker(
+            isPresented: $showCommentPhotoPicker,
+            selection: $commentPhotoItems,
+            maxSelectionCount: 10,
+            matching: .any(of: [.images, .videos])
+        )
+        .fileImporter(
+            isPresented: $showCommentFilePicker,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: true
+        ) { result in
+            handleCommentFileImport(result)
+        }
+        .sheet(isPresented: $showCommentLocationPicker) {
+            LocationPickerView(accentColor: accentColor) { coordinate, _ in
+                commentAttachments.append(
+                    ComposerAttachment.location(lat: coordinate.latitude, lng: coordinate.longitude)
+                )
+                showCommentLocationPicker = false
+            }
+        }
+        .adaptiveOnChange(of: commentPhotoItems) { _, items in
+            handleCommentPhotoSelection(items)
+        }
+    }
+
+    // MARK: - Comment Attachments Preview (custom chips with remove)
+
+    private var commentAttachmentsPreview: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(commentAttachments) { attachment in
+                    HStack(spacing: 6) {
+                        Image(systemName: commentAttachmentIcon(attachment.type))
+                            .font(.caption)
+                            .foregroundColor(Color(hex: attachment.thumbnailColor))
+                        Text(attachment.name)
+                            .font(.caption.weight(.medium))
+                            .lineLimit(1)
+                            .frame(maxWidth: 120)
+                        Button {
+                            HapticFeedback.light()
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                                commentAttachments.removeAll { $0.id == attachment.id }
+                            }
+                            if let url = attachment.url { try? FileManager.default.removeItem(at: url) }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.caption2.weight(.bold))
+                                .foregroundColor(theme.textMuted)
+                                .frame(width: 18, height: 18)
+                                .background(Circle().fill(theme.textMuted.opacity(0.15)))
+                        }
+                        .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pi\u{00E8}ce jointe", bundle: .main))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(theme.inputBackground)
+                            .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
+                    )
+                    .foregroundColor(theme.textPrimary)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func commentAttachmentIcon(_ type: ComposerAttachmentType) -> String {
+        switch type {
+        case .voice: return "mic.fill"
+        case .location: return "location.fill"
+        case .image: return "photo.fill"
+        case .file: return "doc.fill"
+        case .video: return "video.fill"
+        }
+    }
+
+    // MARK: - Comment Attachment Pickers
+
+    private func handleCommentPhotoSelection(_ items: [PhotosPickerItem]) {
+        guard !items.isEmpty else { return }
+        Task {
+            for item in items {
+                let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
+                guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+                let ext = isVideo ? "mov" : "jpg"
+                let url = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("comment_\(UUID().uuidString).\(ext)")
+                guard (try? data.write(to: url)) != nil else { continue }
+                let attachment: ComposerAttachment = isVideo
+                    ? ComposerAttachment(
+                        id: "video-\(UUID().uuidString)", type: .video,
+                        name: String(localized: "attachment.label.video", defaultValue: "Video", bundle: .main),
+                        url: url, size: data.count, thumbnailColor: "FF6B6B")
+                    : ComposerAttachment.image(url: url)
+                await MainActor.run { commentAttachments.append(attachment) }
+            }
+            await MainActor.run { commentPhotoItems = [] }
+        }
+    }
+
+    /// Ingests a photo/video tapped in the inline recent-media strip into the
+    /// staged comment attachments.
+    private func ingestCommentRecentMedia(_ pick: RecentMediaPick) {
+        switch pick {
+        case .image(let image):
+            guard let data = image.jpegData(compressionQuality: 0.9) else { return }
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("comment_\(UUID().uuidString).jpg")
+            guard (try? data.write(to: url)) != nil else { return }
+            commentAttachments.append(ComposerAttachment.image(url: url))
+        case .video(let url):
+            commentAttachments.append(
+                ComposerAttachment(
+                    id: "video-\(UUID().uuidString)", type: .video,
+                    name: String(localized: "attachment.label.video", defaultValue: "Video", bundle: .main),
+                    url: url, thumbnailColor: "FF6B6B"
+                )
+            )
+        }
+    }
+
+    private func handleCommentFileImport(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result else { return }
+        for url in urls {
+            let didAccess = url.startAccessingSecurityScopedResource()
+            defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+            let dest = FileManager.default.temporaryDirectory
+                .appendingPathComponent("comment_\(UUID().uuidString)_\(url.lastPathComponent)")
+            try? FileManager.default.copyItem(at: url, to: dest)
+            let size = (try? FileManager.default.attributesOfItem(atPath: dest.path))?[.size] as? Int
+            commentAttachments.append(
+                ComposerAttachment.file(url: dest, name: url.lastPathComponent, size: size)
+            )
+        }
+    }
+
+    // MARK: - Comment Send (optimistic, with single media)
+
+    /// Construit un `PendingCommentMedia` (image/vidéo/audio) depuis une pièce jointe
+    /// stagée par le composer. Renvoie nil pour les types hors périmètre (file/location)
+    /// ou sans fichier local (ex. voix timer-only). L'`optimistic` pointe sur le fichier
+    /// local pour l'affichage inline immédiat avant confirmation serveur.
+    private func pendingCommentMedia(from attachment: ComposerAttachment) -> PendingCommentMedia? {
+        guard let url = attachment.url else { return nil }
+        let feedType: FeedMediaType
+        switch attachment.type {
+        case .image: feedType = .image
+        case .video: feedType = .video
+        case .voice: feedType = .audio
+        case .file, .location: return nil
+        }
+        let optimistic = FeedMedia(
+            type: feedType,
+            url: url.absoluteString,
+            thumbnailColor: attachment.thumbnailColor,
+            duration: attachment.duration.map { Int($0) },
+            fileName: attachment.name
+        )
+        return PendingCommentMedia(
+            fileURL: url,
+            mimeType: attachment.mimeType,
+            mobileTranscription: nil,
+            optimistic: optimistic
         )
     }
 
-    /// Envoi d'un commentaire avec, optionnellement, UN média (image/vidéo/audio).
-    ///
-    /// Optimistic-first : la ligne (avec son média local pour affichage inline
-    /// immédiat) apparaît tout de suite sous son parent (réponse) ou en tête de
-    /// liste. Le média éventuel est uploadé via TUS (`uploadContext: "comment"`),
-    /// puis `addComment(mediaId:)` le lie au commentaire. La ligne serveur réconcilie
-    /// le temp (réponse REST OU event socket `comment:added`) ; un échec rollback.
-    ///
-    /// Le paramètre `media` est nil avec le composer texte actuel ; la mise à jour
-    /// clavier/composer fournira le média sélectionné via ce même point d'entrée.
-    func sendComment(text: String, media: PendingCommentMedia? = nil) {
+    /// Poste un commentaire de façon optimiste, avec optionnellement UN média
+    /// (image/vidéo/audio — un commentaire ne porte qu'un seul média). Le texte
+    /// suit le flux reconcile/rollback existant ; le média est uploadé via TUS
+    /// (`uploadContext: "comment"` → PostMedia) puis lié via `addComment(attachmentIds:)`.
+    /// Les attachements file/location et la voix sans fichier sont ignorés (hors périmètre).
+    /// Un commentaire média-seul (sans texte) est autorisé.
+    private func submitComment(text: String, attachments: [ComposerAttachment]) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Un seul média par commentaire : on prend le premier image/vidéo/audio valide.
+        let media: PendingCommentMedia? = attachments.lazy.compactMap { pendingCommentMedia(from: $0) }.first
+        commentAttachments.removeAll()
+
+        // Rien à envoyer (ni texte ni média exploitable).
+        guard !trimmed.isEmpty || media != nil else { return }
+
         let parentId = replyingTo?.id
         let effects = commentEffects
         let blur = commentBlurEnabled
@@ -714,6 +913,10 @@ struct CommentsSheetView: View {
         let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
         let effectFlags = flags > 0 ? Int(flags) : nil
 
+        // Optimistic: insert the comment (with its local media for instant inline
+        // display) IMMEDIATELY — reply under its parent, else top-level — without
+        // waiting for the network. The confirmed server row reconciles it (REST
+        // response OR the `comment:added` socket event); a failure rolls it back.
         let tempId = "tmp_\(UUID().uuidString)"
         let me = AuthManager.shared.currentUser
         let optimistic = FeedComment(
@@ -721,7 +924,7 @@ struct CommentsSheetView: View {
             author: me?.displayName ?? me?.username ?? "",
             authorId: me?.id ?? "",
             authorAvatarURL: me?.avatar,
-            content: text, timestamp: Date(),
+            content: trimmed, timestamp: Date(),
             likes: 0, replies: 0, parentId: parentId,
             effectFlags: effectFlags ?? 0,
             media: media.map { [$0.optimistic] } ?? []
@@ -747,10 +950,12 @@ struct CommentsSheetView: View {
 
         Task {
             do {
-                let mediaId: String? = media != nil ? try await CommentMediaUploader.upload(media!) : nil
+                let attachmentIds: [String]? = media != nil
+                    ? [try await CommentMediaUploader.upload(media!)]
+                    : nil
                 let apiComment = try await PostService.shared.addComment(
-                    postId: post.id, content: text, parentId: parentId, effectFlags: effectFlags,
-                    mediaId: mediaId, mobileTranscription: media?.mobileTranscription,
+                    postId: post.id, content: trimmed, parentId: parentId, effectFlags: effectFlags,
+                    attachmentIds: attachmentIds, mobileTranscription: media?.mobileTranscription,
                     originalLanguage: lang
                 )
                 let feedComment = FeedComment(

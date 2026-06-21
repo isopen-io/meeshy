@@ -229,14 +229,15 @@ export const CreateCommentSchema = z.object({
   /// Optional — when omitted the translation pipeline detects the language
   /// from the content as a fallback.
   originalLanguage: z.string().min(2).max(16).optional(),
-  /// ID d'un PostMedia déjà uploadé (uploadcontext=comment, postId/commentId=null
-  /// pending) à attacher au commentaire. Un commentaire ne porte QU'UN SEUL média.
-  mediaId: z.string().optional(),
+  /// IDs de PostMedia déjà uploadés (uploadcontext=comment, postId/commentId=null
+  /// pending) à attacher. Wire aligné sur le contrat message-with-attachments
+  /// (tableau), MAIS un commentaire ne porte QU'UN SEUL média → borné à 1.
+  attachmentIds: z.array(z.string()).max(1).optional(),
   /// Transcription Whisper produite côté mobile pour un média audio (évite la
   /// re-transcription serveur). Même structure que pour les posts.
   mobileTranscription: MobileTranscriptionSchema.optional(),
 }).refine(
-  (data) => (data.content?.trim().length ?? 0) > 0 || !!data.mediaId,
+  (data) => (data.content?.trim().length ?? 0) > 0 || (data.attachmentIds?.length ?? 0) > 0,
   { message: 'A comment must have text content or an attached media' },
 );
 

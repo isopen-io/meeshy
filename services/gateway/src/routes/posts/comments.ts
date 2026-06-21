@@ -129,7 +129,8 @@ export function registerCommentRoutes(
             parsed.data.parentId,
             parsed.data.effectFlags,
             parsed.data.originalLanguage,
-            parsed.data.mediaId,
+            // Un seul média par commentaire : on lie le premier id du tableau.
+            parsed.data.attachmentIds?.[0],
             parsed.data.mobileTranscription,
           );
           if (!c) throw new Error('POST_NOT_FOUND');

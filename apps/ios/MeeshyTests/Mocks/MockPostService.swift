@@ -65,7 +65,7 @@ final class MockPostService: PostServiceProviding {
     var lastAddCommentPostId: String?
     var lastAddCommentContent: String?
     var lastAddCommentParentId: String?
-    var lastAddCommentMediaId: String?
+    var lastAddCommentAttachmentIds: [String]?
 
     var likeCommentCallCount = 0
     var lastLikeCommentPostId: String?
@@ -194,13 +194,13 @@ final class MockPostService: PostServiceProviding {
     }
 
     func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
-                    mediaId: String?, mobileTranscription: MobileTranscriptionPayload?,
+                    attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
                     originalLanguage: String?) async throws -> APIPostComment {
         addCommentCallCount += 1
         lastAddCommentPostId = postId
         lastAddCommentContent = content
         lastAddCommentParentId = parentId
-        lastAddCommentMediaId = mediaId
+        lastAddCommentAttachmentIds = attachmentIds
         return try addCommentResult.get()
     }
 
@@ -389,7 +389,7 @@ final class MockPostService: PostServiceProviding {
         lastAddCommentPostId = nil
         lastAddCommentContent = nil
         lastAddCommentParentId = nil
-        lastAddCommentMediaId = nil
+        lastAddCommentAttachmentIds = nil
 
         likeCommentResult = .success(())
         likeCommentCallCount = 0
