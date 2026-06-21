@@ -3944,6 +3944,12 @@ class ConversationViewModel: ObservableObject {
 // MARK: - ConversationSocketDelegate Conformance
 
 extension ConversationViewModel: ConversationSocketDelegate {
+    /// Read-receipt precision gate input: the scroll controller pushes the
+    /// near-bottom flag here via `onNearBottomChanged`, so the socket handler can
+    /// refuse to auto-mark-read a message that landed off-screen while the user
+    /// was reading history.
+    var isViewportAtBottom: Bool { isCurrentlyNearBottom }
+
     func handleParticipantRoleUpdated(participantId: String, newRole: String) {
         Logger.socket.info("Participant \(participantId) role changed to \(newRole)")
         _topActiveMembers = nil

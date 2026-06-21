@@ -18,6 +18,7 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
     var messageTranslatedAudiosByAttachment: [String: [MessageTranslatedAudio]] = [:]
     var activeLiveLocations: [ActiveLiveLocation] = []
     var isConversationClosed: Bool = false
+    var isViewportAtBottom: Bool = true
 
     private var _messageIdIndex: [String: Int]?
 
@@ -101,16 +102,21 @@ final class ConversationSocketHandlerTests: XCTestCase {
     // MARK: - Factory
 
     private func makeSUT(
-        messageSocket: MockMessageSocket = MockMessageSocket()
+        messageSocket: MockMessageSocket = MockMessageSocket(),
+        isApplicationActive: Bool = true
     ) -> (
         sut: ConversationSocketHandler,
         delegate: MockConversationSocketDelegate,
         socket: MockMessageSocket
     ) {
+        // The XCTest host never reaches `.active`, so the production foreground
+        // probe would block the read-receipt gate. Inject a known value; tests
+        // exercising the gate flip it explicitly.
         let sut = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: currentUserId,
-            messageSocket: messageSocket
+            messageSocket: messageSocket,
+            isApplicationActive: { isApplicationActive }
         )
         let delegate = MockConversationSocketDelegate()
         sut.delegate = delegate
@@ -224,6 +230,53 @@ final class ConversationSocketHandlerTests: XCTestCase {
             delegate.markAsReadCallCount, 1,
             "Inbound message in an active conversation must auto-trigger markAsRead so the sender's checkmark turns purple"
         )
+    }
+
+    // MARK: - messageReceived: Read-receipt PRECISION gate
+    //
+    // Being subscribed to the socket is not proof the user is reading. A read
+    // receipt may only be emitted when the app is foregrounded AND the viewport
+    // is at the bottom (the new message is visible). Otherwise the receipt would
+    // be FALSE — the sender's check would turn indigo "read" although nobody read
+    // anything. The positive control (active + at-bottom ⇒ markAsRead fires) is
+    // `test_messageReceived_fromOtherUser_appendsToDelegate` above.
+
+    func test_messageReceived_backgrounded_doesNotMarkAsRead() async throws {
+        let (sut, delegate, socket) = makeSUT(isApplicationActive: false)
+        _ = sut
+
+        let apiMsg = makeAPIMessage(id: "bg_msg", senderId: otherUserId, content: "Ping")
+        socket.simulateMessage(apiMsg)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(
+            delegate.markAsReadCallCount, 0,
+            "A message arriving while the app is backgrounded must NOT emit a read receipt"
+        )
+        XCTAssertEqual(
+            delegate.lastUnreadMessage?.id, "bg_msg",
+            "The unread anchor is still set — only the receipt is gated, not the UI signal"
+        )
+    }
+
+    func test_messageReceived_scrolledAway_doesNotMarkAsRead() async throws {
+        let (sut, delegate, socket) = makeSUT(isApplicationActive: true)
+        _ = sut
+        // User is reading history near the top — the new message lands
+        // off-screen at the bottom.
+        delegate.isViewportAtBottom = false
+
+        let apiMsg = makeAPIMessage(id: "up_msg", senderId: otherUserId, content: "Ping")
+        socket.simulateMessage(apiMsg)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(
+            delegate.markAsReadCallCount, 0,
+            "A message landing off-screen while scrolled up must NOT emit a read receipt"
+        )
+        XCTAssertEqual(delegate.lastUnreadMessage?.id, "up_msg")
     }
 
     // MARK: - messageReceived: From Self (no new append)
@@ -1042,7 +1095,8 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let sut = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: currentUserId,
-            messageSocket: socket
+            messageSocket: socket,
+            isApplicationActive: { true }
         )
         let delegate = MockConversationSocketDelegate()
         sut.delegate = delegate

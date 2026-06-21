@@ -107,6 +107,43 @@ branche compteurs à froid.
   *eventually-exact*. ✅
 - **Détail « qui a lu »** (sheet) : fetch REST dédié, exact à l'ouverture. ✅
 
+## 5bis. PRÉCISION DES ACCUSÉS ÉMIS (truthfulness)
+
+T1/T2 portent sur ce que l'expéditeur AFFICHE. Mais l'indicateur n'est exact que
+si les accusés qui le nourrissent sont eux-mêmes véridiques (dualité). Le trigger
+historique émettait `markAsRead` sur **chaque** message entrant tant que le
+handler socket était abonné, sur l'hypothèse fausse « abonné ⟹ l'utilisateur
+lit ». Deux faux accusés en résultaient : app en arrière-plan (téléphone en
+poche) et utilisateur scrollé en haut (message hors écran).
+
+**Fonction de décision (`ReadReceiptGate.shouldEmitAutoRead`)** :
+```
+émettre ⟺ isApplicationActive ∧ isViewportAtBottom
+```
+
+| Signal | Source app-side |
+|---|---|
+| `isApplicationActive` | `UIApplication.applicationState == .active` (injecté, testable) |
+| `isViewportAtBottom` | `ConversationViewModel.isCurrentlyNearBottom` (poussé par le scroll controller) |
+
+> **T3 (soundness des accusés).** Un accusé de lecture n'est émis QUE si
+> l'utilisateur pouvait réellement voir le message (app au premier plan ET
+> message visible au bas du viewport). Donc jamais de faux « lu » côté émission.
+
+**Preuve** : le seul site d'auto-émission (handler, message entrant) est gardé
+par `shouldEmitAutoRead`. `false` ⟹ aucune émission. Les trois autres écritures
+de lecture (ouverture de conversation, scroll-retour-bas, retour foreground) sont
+soit des gestes utilisateur (app `.active` par construction), soit elles-mêmes
+gardées par `isCurrentlyNearBottom`. ∎
+
+**Complétude (eventually-read)** : un accusé différé (gate `false`) est
+re-émis — sans nouvel entrant — quand l'utilisateur (a) scrolle au bas
+(`onNearBottomChanged` false→true → `markAsRead`) ou (b) ramène l'app au premier
+plan (`scenePhase == .active ∧ isCurrentlyNearBottom → markAsRead`).
+`markAsRead` est idempotent (dedup gateway 2 s + cache local-first), donc les
+re-émissions sont sûres. Soundness > couverture : au pire un « lu » légitime est
+**retardé**, jamais émis à tort.
+
 ## 6. Pièces jointes — état honnête
 
 **Backend (exact)** : `AttachmentStatusEntry` (par user×attachment : `viewedAt`,
@@ -143,7 +180,7 @@ message**.
 | **Précision message** (palier exact) | ✅ Exact à froid + sur transitions ; partiel groupe = palier exact, compteur convergent. |
 | **Pièce jointe — lu/reçu (niveau message)** | ✅ Couvert par l'indicateur message. |
 | **Pièce jointe — consommation (vue/DL/écoute par tous)** | ❌ **Non surfacé iOS** — donnée backend exacte, mais pas de modèle/UI. Pas de garantie possible avant l'incrément §6. |
-| **Précision de lecture (faux accusés émis)** | ⚠️ Hors périmètre actuel — gating foreground/viewport non livré (spec). N'affecte pas T1/T2 (qui portent sur l'AFFICHAGE de l'expéditeur), mais sur la *justesse des accusés émis*. |
+| **Précision de lecture (faux accusés émis)** | ✅ **Livré** (T3) — `ReadReceiptGate` : un accusé n'est émis que si app `.active` ET viewport au bas. Les lectures différées se complètent au retour foreground / scroll-bas. |
 
 **Réponse à « aura-t-on TOUJOURS un état exact ? »** :
 - Pour l'**indicateur message de l'expéditeur** : **OUI, prouvablement sound**
@@ -157,4 +194,5 @@ message**.
 - A1 : faire porter par le REST `/messages` le `recipientCount` (totalMembers
   serveur) par message → supprime la dépendance au `memberCount` client et rend la
   branche compteurs inconditionnellement sound (aligne froid sur live).
-- Précision lecture (§ verdict ligne 5) : gating foreground + viewport.
+- Précision lecture : **livrée** (T3, `ReadReceiptGate` — gating foreground +
+  viewport, lectures différées re-émises au foreground / scroll-bas).

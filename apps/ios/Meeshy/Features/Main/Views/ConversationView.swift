@@ -217,6 +217,7 @@ struct ConversationView: View {
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) var colorScheme
     var isDark: Bool { colorScheme == .dark }
@@ -930,6 +931,18 @@ struct ConversationView: View {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
                 }
             }
+            .adaptiveOnChange(of: scenePhase) { _, phase in
+                // Read-receipt precision: messages that arrived while the app was
+                // backgrounded were deliberately NOT auto-marked read (the user
+                // wasn't looking). On return to the foreground, if the user is at
+                // the bottom they now see the latest message — re-emit the read so
+                // the deferred receipt completes. If scrolled up, the message is
+                // still off-screen and stays unread until they scroll down. The
+                // gateway-level dedup makes a redundant call harmless.
+                if phase == .active && scrollState.isNearBottom {
+                    viewModel.markAsRead()
+                }
+            }
             .adaptiveOnChange(of: viewModel.accessRevoked) { _, revoked in
                 // Server signalled the user no longer has access to this
                 // conversation (kicked, group deleted, blocked, etc.). The
@@ -1065,10 +1078,19 @@ struct ConversationView: View {
                     await viewModel.loadOlderMessages()
                 },
                 onNearBottomChanged: { nearBottom in
+                    let wasNearBottom = scrollState.isNearBottom
                     if scrollState.isNearBottom != nearBottom {
                         scrollState.isNearBottom = nearBottom
                     }
                     viewModel.isCurrentlyNearBottom = nearBottom
+                    // Read-receipt precision: a message that arrived while the
+                    // user was scrolled up was deliberately NOT auto-marked read
+                    // (it was off-screen). Scrolling back to the bottom means the
+                    // user now sees it — re-emit the read so the deferred receipt
+                    // completes. Idempotent; only on the false→true edge.
+                    if nearBottom && !wasNearBottom {
+                        viewModel.markAsRead()
+                    }
                 },
                 onStoryReplyTap: { storyId in
                     // Open the story viewer at the slide that originated the
