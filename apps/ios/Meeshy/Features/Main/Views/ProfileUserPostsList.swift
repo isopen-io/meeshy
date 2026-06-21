@@ -172,8 +172,9 @@ struct ProfileUserPostsList: View {
                 Task { await viewModel.report(id) }
             },
             onSeeMore: {
-                // "Voir plus" expands the text inline AND counts a post view.
-                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+                // "Voir plus" expands the text inline AND counts a post view —
+                // throttled to once per hour per user+post (shared with open).
+                recordView(post.id)
             }
         )
         .equatable()
@@ -182,17 +183,26 @@ struct ProfileUserPostsList: View {
     // MARK: - Open / view tracking
 
     private func openPost(_ post: FeedPost) {
-        Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+        recordView(post.id)
         onOpenPost?(post)
     }
 
     private func openReel(_ post: FeedPost) {
-        Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+        recordView(post.id)
         if let onOpenReel {
             onOpenReel(post, viewModel.reels)
         } else {
             onOpenPost?(post)
         }
+    }
+
+    /// Counts ONE post view (open or "voir plus") through the persistent 1-hour
+    /// per-(user, post) throttle: the local guard is checked and written BEFORE
+    /// anything reaches the backend, so reopening or tapping "voir plus" again
+    /// within the hour sends nothing — even across app launches.
+    private func recordView(_ postId: String) {
+        guard PostViewThrottle.shared.shouldRecordView(postId: postId) else { return }
+        Task { try? await PostService.shared.viewPost(postId: postId, duration: nil) }
     }
 
     // MARK: - Share
@@ -223,6 +233,59 @@ struct ProfileUserPostsList: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
+    }
+}
+
+// MARK: - Post View Throttle (persistent, per user+post, 1 hour)
+//
+// Product rule (app-side, not an SDK atom): a post "view" — opening the post OR
+// tapping "voir plus" — is counted at most ONCE per hour per signed-in user per
+// post, even across reopens and app launches. The local guard is persisted to
+// UserDefaults and checked/written BEFORE anything is sent to the backend, so
+// the network increment only happens when the throttle actually allows it.
+@MainActor
+final class PostViewThrottle {
+    static let shared = PostViewThrottle()
+
+    private let defaults: UserDefaults
+    private let storageKey = "meeshy.postViewThrottle.v1"
+    private let ttl: TimeInterval = 3600
+    /// key = "<userId>:<postId>" → last recorded view (epoch seconds).
+    private var timestamps: [String: Date]
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        if let raw = defaults.dictionary(forKey: storageKey) as? [String: TimeInterval] {
+            timestamps = raw.mapValues { Date(timeIntervalSince1970: $0) }
+        } else {
+            timestamps = [:]
+        }
+    }
+
+    private func key(for postId: String) -> String {
+        let uid = AuthManager.shared.currentUser?.id ?? "anon"
+        return "\(uid):\(postId)"
+    }
+
+    /// Returns `true` (and records "now", persisted) when no view has been
+    /// counted for this user+post within the last hour; returns `false` (skip
+    /// the increment + network call) otherwise.
+    func shouldRecordView(postId: String) -> Bool {
+        let k = key(for: postId)
+        let now = Date()
+        if let last = timestamps[k], now.timeIntervalSince(last) < ttl {
+            return false
+        }
+        timestamps[k] = now
+        persist()
+        return true
+    }
+
+    private func persist() {
+        // Prune expired entries opportunistically so the store stays bounded.
+        let cutoff = Date().addingTimeInterval(-ttl)
+        timestamps = timestamps.filter { $0.value >= cutoff }
+        defaults.set(timestamps.mapValues { $0.timeIntervalSince1970 }, forKey: storageKey)
     }
 }
 
