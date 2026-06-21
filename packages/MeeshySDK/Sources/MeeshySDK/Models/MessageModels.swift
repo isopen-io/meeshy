@@ -633,7 +633,11 @@ extension APIMessage {
                 thumbnailUrl: apiAtt.thumbnailUrl, thumbHash: apiAtt.thumbHash, duration: apiAtt.duration, uploadedBy: senderId,
                 latitude: apiAtt.latitude, longitude: apiAtt.longitude,
                 thumbnailColor: thumbnailColor,
-                imageVariants: apiAtt.imageVariants
+                imageVariants: apiAtt.imageVariants,
+                deliveredToAllAt: apiAtt.deliveredToAllAt, viewedByAllAt: apiAtt.viewedByAllAt,
+                downloadedByAllAt: apiAtt.downloadedByAllAt, listenedByAllAt: apiAtt.listenedByAllAt,
+                watchedByAllAt: apiAtt.watchedByAllAt, viewedCount: apiAtt.viewedCount,
+                downloadedCount: apiAtt.downloadedCount, consumedCount: apiAtt.consumedCount
             )
         }
 

@@ -47,6 +47,10 @@ struct MessageInfoSheet: View {
     @State private var appearAnimation = false
     @State private var receipts: [ParticipantReceipt] = []
     @State private var isLoadingReceipts = false
+    /// Active-recipient denominator fetched alongside read receipts. Falls back
+    /// to the message's server-projected `recipientCount` when the read-status
+    /// request hasn't resolved (or failed).
+    @State private var totalMembers: Int = 0
 
     // MARK: - Computed Properties
 
@@ -113,6 +117,7 @@ struct MessageInfoSheet: View {
                     senderSection
                     statusTimeline
                     messagePreview
+                    attachmentConsumptionSection
                     participantReceiptsSection
                 }
                 .padding(.horizontal, 20)
@@ -333,6 +338,129 @@ struct MessageInfoSheet: View {
         }
     }
 
+    // MARK: - Attachment Consumption
+
+    /// Active-recipient denominator for the all-or-nothing attachment status:
+    /// the read-status fetch's `totalMembers` when available, else the message's
+    /// server-projected `recipientCount`. `0` → unknown (count shown bare).
+    private var recipientDenominator: Int {
+        totalMembers > 0 ? totalMembers : message.recipientCount
+    }
+
+    @ViewBuilder
+    private var attachmentConsumptionSection: some View {
+        if !message.attachments.isEmpty {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(String(localized: "message-info.attachment-status", defaultValue: "Pieces jointes", bundle: .main))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(theme.textSecondary)
+
+                ForEach(message.attachments) { attachment in
+                    attachmentConsumptionRow(for: attachment)
+                }
+            }
+            .padding(14)
+            .background(sectionBackground)
+            .opacity(appearAnimation ? 1 : 0)
+            .offset(y: appearAnimation ? 0 : 15)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.08), value: appearAnimation)
+        }
+    }
+
+    private func attachmentConsumptionRow(for attachment: MeeshyMessageAttachment) -> some View {
+        let status = AttachmentConsumptionResolver.resolve(
+            mimeType: attachment.mimeType,
+            recipientCount: recipientDenominator,
+            viewedCount: attachment.viewedCount ?? 0,
+            downloadedCount: attachment.downloadedCount ?? 0,
+            consumedCount: attachment.consumedCount ?? 0,
+            viewedByAllAt: attachment.viewedByAllAt,
+            downloadedByAllAt: attachment.downloadedByAllAt,
+            listenedByAllAt: attachment.listenedByAllAt,
+            watchedByAllAt: attachment.watchedByAllAt
+        )
+        let byAll = status.isCompleteByAll
+
+        return HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill((byAll ? accentColor : theme.textMuted).opacity(byAll ? 0.15 : 0.08))
+                    .frame(width: 32, height: 32)
+                Image(systemName: consumptionIcon(for: status.action))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(byAll ? accentColor : theme.textMuted)
+            }
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(attachmentDisplayName(attachment))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+                Text(consumptionLabel(for: status))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(byAll ? theme.textSecondary : theme.textMuted)
+            }
+
+            Spacer()
+
+            if byAll {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(accentColor)
+                    .accessibilityHidden(true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func attachmentDisplayName(_ attachment: MeeshyMessageAttachment) -> String {
+        if !attachment.originalName.isEmpty { return attachment.originalName }
+        switch attachment.type {
+        case .image: return String(localized: "attachment.kind.photo", defaultValue: "Photo", bundle: .main)
+        case .video: return String(localized: "attachment.kind.video", defaultValue: "Video", bundle: .main)
+        case .audio: return String(localized: "message-info.voice-message", defaultValue: "Message vocal", bundle: .main)
+        case .file: return String(localized: "attachment.kind.file", defaultValue: "Fichier", bundle: .main)
+        case .location: return String(localized: "attachment.kind.location", defaultValue: "Position", bundle: .main)
+        }
+    }
+
+    private func consumptionIcon(for action: AttachmentConsumptionResolver.Action) -> String {
+        switch action {
+        case .viewed: return "eye.fill"
+        case .downloaded: return "arrow.down.circle.fill"
+        case .listened: return "waveform"
+        case .watched: return "play.circle.fill"
+        }
+    }
+
+    private func consumptionVerb(for action: AttachmentConsumptionResolver.Action) -> String {
+        switch action {
+        case .viewed: return String(localized: "message-info.consumption.viewed", defaultValue: "Vu", bundle: .main)
+        case .downloaded: return String(localized: "message-info.consumption.downloaded", defaultValue: "Telecharge", bundle: .main)
+        case .listened: return String(localized: "message-info.consumption.listened", defaultValue: "Ecoute", bundle: .main)
+        case .watched: return String(localized: "message-info.consumption.watched", defaultValue: "Regarde", bundle: .main)
+        }
+    }
+
+    private func consumptionLabel(for status: AttachmentConsumptionResolver.Status) -> String {
+        let verb = consumptionVerb(for: status.action)
+        if status.isCompleteByAll {
+            let base = String(format: String(localized: "message-info.consumption.by-all", defaultValue: "%@ par tous", bundle: .main), verb)
+            if let at = status.byAllAt {
+                return "\(base) \u{00B7} \(timeFormatter.string(from: at))"
+            }
+            return base
+        }
+        if status.recipientCount > 0 {
+            return String(format: String(localized: "message-info.consumption.by-count", defaultValue: "%1$@ par %2$d/%3$d", bundle: .main), verb, status.count, status.recipientCount)
+        }
+        if status.count > 0 {
+            return String(format: String(localized: "message-info.consumption.by-some", defaultValue: "%1$@ par %2$d", bundle: .main), verb, status.count)
+        }
+        return String(localized: "message-info.consumption.none", defaultValue: "Pas encore consulte", bundle: .main)
+    }
+
     // MARK: - Message Content Preview
 
     private var messagePreview: some View {
@@ -538,6 +666,7 @@ struct MessageInfoSheet: View {
                 endpoint: "/messages/\(message.id)/read-status"
             )
             let status = response.data
+            totalMembers = status.totalMembers
 
             var allReceipts: [String: ParticipantReceipt] = [:]
 

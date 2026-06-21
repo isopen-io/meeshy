@@ -1005,6 +1005,22 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public var transcription: EmbeddedTranscription?
     public var audioTranslations: [String: EmbeddedAudioTranslation]?
 
+    // ===== CONSUMPTION AGGREGATES (all-or-nothing) =====
+    // Server-computed denormalized state surfaced in the message-info sheet:
+    // who has viewed / downloaded / listened / watched this attachment. The
+    // `…ByAllAt` markers are stamped by the gateway only once EVERY active
+    // recipient has completed that action (WhatsApp-style). Optional so old
+    // cached `attachmentsJson` blobs (written before these shipped) decode to
+    // nil. Vit dans attachmentsJson (Codable synthétisé), pas de colonne GRDB.
+    public var deliveredToAllAt: Date?
+    public var viewedByAllAt: Date?
+    public var downloadedByAllAt: Date?
+    public var listenedByAllAt: Date?
+    public var watchedByAllAt: Date?
+    public var viewedCount: Int?
+    public var downloadedCount: Int?
+    public var consumedCount: Int?
+
     /// Lightweight Codable transcription embedded in attachmentsJson.
     public struct EmbeddedTranscription: Codable, Sendable {
         public var text: String
@@ -1064,7 +1080,11 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
                 audioTranslations: [String: EmbeddedAudioTranslation]? = nil,
                 imageVariants: [MeeshyImageVariant]? = nil,
                 reactionSummary: [String: Int]? = nil,
-                currentUserReactions: [String]? = nil) {
+                currentUserReactions: [String]? = nil,
+                deliveredToAllAt: Date? = nil, viewedByAllAt: Date? = nil,
+                downloadedByAllAt: Date? = nil, listenedByAllAt: Date? = nil,
+                watchedByAllAt: Date? = nil, viewedCount: Int? = nil,
+                downloadedCount: Int? = nil, consumedCount: Int? = nil) {
         self.id = id; self.messageId = messageId; self.fileName = fileName; self.originalName = originalName
         self.mimeType = mimeType; self.fileSize = fileSize; self.filePath = filePath; self.fileUrl = fileUrl
         self.title = title; self.alt = alt; self.caption = caption
@@ -1081,6 +1101,14 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
         self.imageVariants = imageVariants
         self.reactionSummary = reactionSummary
         self.currentUserReactions = currentUserReactions
+        self.deliveredToAllAt = deliveredToAllAt
+        self.viewedByAllAt = viewedByAllAt
+        self.downloadedByAllAt = downloadedByAllAt
+        self.listenedByAllAt = listenedByAllAt
+        self.watchedByAllAt = watchedByAllAt
+        self.viewedCount = viewedCount
+        self.downloadedCount = downloadedCount
+        self.consumedCount = consumedCount
     }
 
     public static func image(color: String = "4ECDC4") -> MeeshyMessageAttachment {

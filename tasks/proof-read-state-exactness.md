@@ -158,25 +158,31 @@ re-émissions sont sûres. Soundness > couverture : au pire un « lu » légitim
 watchedByAllAt, viewedCount, downloadedCount, consumedCount}` **calculés** par le
 gateway.
 
-**iOS (trou)** : `MeeshyMessageAttachment` (SDK) **n'expose AUCUN** de ces champs ;
-l'UI n'a **aucun indicateur par pièce jointe**. La coche vit **uniquement au niveau
-message**.
+**iOS — livré (2026-06-21)** : le gap est fermé. `APIMessageAttachment` décodait
+déjà ces champs (R5/R7) ; ils sont désormais portés par `MeeshyMessageAttachment`
+(SDK, 8 champs optionnels), threadés dans les **deux** sites de construction
+(`toMessage` + l'`attachmentsJson` de l'actor de persistance), donc persistés en
+GRDB sans migration (blob Codable). Un resolver pur `AttachmentConsumptionResolver`
+(SDK, 12 tests) choisit l'action primaire selon le type média (image→vue,
+audio→écoutée, vidéo→regardée, fichier→téléchargée) et applique la règle
+all-or-nothing (`…ByAllAt` ou `count ≥ recipientCount`). Le `MessageInfoSheet`
+affiche une section « Pièces jointes » : une ligne par pièce jointe avec
+l'action, `X/Y` (dénominateur = `totalMembers` du read-status, fallback
+`message.recipientCount`) et une coche indigo quand tous l'ont consommée.
 
-**Conséquence pour la preuve** :
-- L'état « message lu/reçu » (donc *le message porteur de la pièce jointe a été
-  lu/reçu* au sens messagerie) est couvert par T1/T2 — même garantie que le texte.
-- L'état de **consommation** d'une pièce jointe (vue/téléchargée/écoutée/regardée
-  par tous) **n'est ni transporté ni affiché sur iOS** ⟹ **aucune garantie
-  d'exactitude ne peut être faite pour une UI inexistante.** Seul le view-once
-  (`viewOnceCount`) est transporté et pilote la bulle « burned ».
+**Soundness consommation (T4)** : `isCompleteByAll` ne déclare « par tous » que via
+le marqueur serveur `…ByAllAt` (calculé par `updateAttachmentComputedStatus`,
+dénominateur serveur = participants actifs hors auteur) OU via `count ≥
+recipientCount > 0`. Jamais de sur-déclaration sur dénominateur inconnu (`0`). Le
+gateway calcule les agrégats — **pas de dépendance A1 côté attachment**.
 
-**Pour étendre la preuve aux pièces jointes** (incrément spécifié) :
-1. Exposer `viewedByAllAt/…/viewedCount/…` dans `MeeshyMessageAttachment` (SDK) +
-   décodage REST.
-2. Consommer `message:attachment-updated` pour les compteurs live par pièce jointe.
-3. Indicateur par pièce jointe + resolver dédié (même schéma all-or-nothing,
-   dénominateur `N(c)`), avec marqueurs `…ByAllAt` comme signal « tous » (le
-   gateway les calcule déjà — pas de dépendance A1 côté attachment).
+**Limite honnête restante** : le sheet lit les agrégats du dernier chargement
+REST/GRDB (rafraîchis au cycle REST). Il n'y a pas encore de **live-refresh** de la
+consommation via `message:attachment-updated` pendant que le sheet est ouvert
+(le sheet est modal et recharge à l'ouverture — parité avec les accusés de lecture
+existants). Granularité : **agrégats** (combien / par tous), pas le détail
+per-participant « qui exactement a vu » (nécessiterait un endpoint dédié
+`getAttachmentStatusDetails`, déjà présent côté service mais non exposé en route).
 
 ## 7. Verdict honnête
 

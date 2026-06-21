@@ -1324,7 +1324,15 @@ public actor MessagePersistenceActor {
                             longitude: apiAtt.longitude,
                             thumbnailColor: thumbColor,
                             transcription: embeddedTranscription,
-                            audioTranslations: embeddedAudioTranslations
+                            audioTranslations: embeddedAudioTranslations,
+                            deliveredToAllAt: apiAtt.deliveredToAllAt,
+                            viewedByAllAt: apiAtt.viewedByAllAt,
+                            downloadedByAllAt: apiAtt.downloadedByAllAt,
+                            listenedByAllAt: apiAtt.listenedByAllAt,
+                            watchedByAllAt: apiAtt.watchedByAllAt,
+                            viewedCount: apiAtt.viewedCount,
+                            downloadedCount: apiAtt.downloadedCount,
+                            consumedCount: apiAtt.consumedCount
                         )
                     }
                     return try? encoder.encode(ui)
