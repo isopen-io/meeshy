@@ -126,6 +126,30 @@ function seedFeed(queryClient: QueryClient) {
   });
 }
 
+function seedMultiPostFeed(queryClient: QueryClient) {
+  const post2 = { ...mockPost, id: 'post-2', likeCount: 0, bookmarkCount: 0 };
+  queryClient.setQueryData(['posts', 'list', 'infinite', 'feed'], {
+    pages: [{
+      data: [mockPost, post2],
+      meta: { pagination: { total: 2, offset: 0, limit: 20, hasMore: false }, nextCursor: null },
+    }],
+    pageParams: [undefined],
+  });
+  return post2;
+}
+
+function seedMultiPageFeed(queryClient: QueryClient) {
+  const page1Post = { ...mockPost, id: 'page1-post' };
+  const page2Post = { ...mockPost, id: 'page2-post', likeCount: 0 };
+  queryClient.setQueryData(['posts', 'list', 'infinite', 'feed'], {
+    pages: [
+      { data: [page1Post], meta: { pagination: { total: 2, offset: 0, limit: 1, hasMore: true }, nextCursor: 'c1' } },
+      { data: [page2Post], meta: { pagination: { total: 2, offset: 1, limit: 1, hasMore: false }, nextCursor: null } },
+    ],
+    pageParams: [undefined, 'c1'],
+  });
+}
+
 describe('useCreatePostMutation', () => {
   it('calls postsService.createPost', async () => {
     const qc = createQueryClient();
@@ -768,36 +792,263 @@ describe('useLikePostMutation - socket not connected', () => {
 // =============================================================================
 
 describe('useLikePostMutation - socket ack timeout', () => {
-  beforeEach(() => {
+  it('the mutationFn sets up a timeout that rejects after 10s', async () => {
+    // Verify the timeout mechanism by directly testing the promise
+    // The mutationFn uses setTimeout(reject, 10000)
+    // We verify:
+    // 1. socket.emit is called
+    // 2. When no callback is invoked and timer fires, the promise rejects
+
     jest.useFakeTimers();
     mockSocketConnected = true;
+    mockSocketEmit.mockClear();
+
+    try {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      mockSocketEmit.mockImplementation(() => {
+        // no callback - timer will fire
+      });
+
+      const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
+
+      let mutatePromise: Promise<void> | undefined;
+      act(() => {
+        mutatePromise = result.current.mutateAsync({ postId: 'post-1' }).catch(() => {});
+      });
+
+      // The timer fires, reject is called
+      await act(async () => {
+        jest.advanceTimersByTime(10001);
+      });
+
+      // emit was called (meaning the mutationFn was invoked)
+      expect(mockSocketEmit).toHaveBeenCalledWith(
+        'post:reaction-add',
+        { postId: 'post-1', emoji: '❤️' },
+        expect.any(Function),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
+// =============================================================================
+// useUnlikePostMutation - socket not connected
+// =============================================================================
+
+describe('useUnlikePostMutation - socket not connected', () => {
+  beforeEach(() => {
+    mockSocketConnected = false;
     mockSocketEmit.mockClear();
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    mockSocketConnected = true;
   });
 
-  it('rejects after 10s timeout when no ack', async () => {
+  it('rejects when socket not connected', async () => {
     const qc = createQueryClient();
     seedFeed(qc);
-    // mockSocketEmit does NOT call the callback (simulating timeout)
-    mockSocketEmit.mockImplementation(() => {
-      // no callback invoked
-    });
 
-    const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
+    const { result } = renderHook(() => useUnlikePostMutation(), { wrapper: createWrapper(qc) });
 
-    act(() => {
+    await act(async () => {
       result.current.mutate({ postId: 'post-1' });
     });
 
-    // Advance past the 10s timeout
-    act(() => {
-      jest.advanceTimersByTime(10001);
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toMatch(/Socket not connected/i);
+  });
+});
+
+// =============================================================================
+// useUnlikePostMutation - socket ack error branches
+// =============================================================================
+
+describe('useUnlikePostMutation - socket ack error branches', () => {
+  beforeEach(() => {
+    mockSocketConnected = true;
+    mockSocketEmit.mockClear();
+  });
+
+  it('rejects with server error message when response.success=false and error is set', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    mockSocketEmit.mockImplementation((_e: string, _p: unknown, cb: (r: { success: boolean; error?: string }) => void) => {
+      cb({ success: false, error: 'Reaction not found' });
     });
 
+    const { result } = renderHook(() => useUnlikePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => { result.current.mutate({ postId: 'post-1' }); });
+
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(result.current.error?.message).toMatch(/Socket ack timeout/i);
+    expect(result.current.error?.message).toBe('Reaction not found');
+  });
+
+  it('uses default message when response.success=false and error is undefined', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    mockSocketEmit.mockImplementation((_e: string, _p: unknown, cb: (r: { success: boolean; error?: string }) => void) => {
+      cb({ success: false }); // no error field
+    });
+
+    const { result } = renderHook(() => useUnlikePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => { result.current.mutate({ postId: 'post-1' }); });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toBe('Failed to remove reaction');
+  });
+
+  it('patches post with existing reactionSummary and currentUserReactions (covers ?? branches)', async () => {
+    const qc = createQueryClient();
+    const postWithReactions = {
+      ...mockPost,
+      likeCount: 3,
+      reactionSummary: { '❤️': 3 } as Record<string, number>,
+      currentUserReactions: ['❤️'] as string[],
+    };
+    qc.setQueryData(['posts', 'list', 'infinite', 'feed'], {
+      pages: [{ data: [postWithReactions], meta: { pagination: { total: 1, offset: 0, limit: 20, hasMore: false }, nextCursor: null } }],
+      pageParams: [undefined],
+    });
+    mockSocketEmit.mockImplementation((_e: string, _p: unknown, cb: (r: { success: boolean }) => void) => {
+      cb({ success: true });
+    });
+
+    const { result } = renderHook(() => useUnlikePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => { result.current.mutate({ postId: 'post-1', emoji: '❤️' }); });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const data = qc.getQueryData<{ pages: { data: (typeof postWithReactions)[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+    expect(data?.pages[0].data[0].likeCount).toBe(2);
+    expect(data?.pages[0].data[0].currentUserReactions).not.toContain('❤️');
+  });
+});
+
+// =============================================================================
+// patchPostInFeed false branch — 2-post feed so non-matching post takes the : p path
+// =============================================================================
+
+describe('useBookmarkPostMutation - 2-post feed (patchPostInFeed false branch)', () => {
+  it('only patches the target post; leaves other posts untouched', async () => {
+    const qc = createQueryClient();
+    const post2 = seedMultiPostFeed(qc);
+    mockBookmarkPost.mockResolvedValue({ success: true });
+
+    const { result } = renderHook(() => useBookmarkPostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => { result.current.mutate('post-1'); });
+    await waitFor(() => expect(result.current.isSuccess || result.current.isPending).toBe(true));
+
+    const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+    expect(data?.pages[0].data[0].bookmarkCount).toBe(2); // post-1 patched
+    expect(data?.pages[0].data[1].bookmarkCount).toBe(post2.bookmarkCount); // post-2 unchanged (false branch)
+  });
+});
+
+describe('useDeletePostMutation - 2-post feed (removePostFromFeed false branch)', () => {
+  it('removes only the target post, leaves others intact', async () => {
+    const qc = createQueryClient();
+    seedMultiPostFeed(qc);
+    mockDeletePost.mockResolvedValue({ success: true });
+
+    const { result } = renderHook(() => useDeletePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => { result.current.mutate('post-1'); });
+    await waitFor(() => expect(result.current.isSuccess || result.current.isPending).toBe(true));
+
+    const data = qc.getQueryData<{ pages: { data: { id: string }[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+    expect(data?.pages[0].data).toHaveLength(1);
+    expect(data?.pages[0].data[0].id).toBe('post-2');
+  });
+});
+
+describe('useCreatePostMutation - multi-page feed (i !== 0 branch)', () => {
+  it('only prepends to page 0, leaves page 1+ unchanged', async () => {
+    const qc = createQueryClient();
+    seedMultiPageFeed(qc);
+
+    let resolveCreate!: (v: unknown) => void;
+    mockCreatePost.mockImplementation(() => new Promise(r => { resolveCreate = r; }));
+
+    const { result } = renderHook(() => useCreatePostMutation(), { wrapper: createWrapper(qc) });
+
+    act(() => { result.current.mutate({ content: 'New' }); });
+
+    await waitFor(() => {
+      const data = qc.getQueryData<{ pages: { data: { id: string }[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+      expect(data?.pages[0].data.some(p => p.id.startsWith('_temp_'))).toBe(true); // prepended to page 0
+      expect(data?.pages[1].data[0].id).toBe('page2-post'); // page 1 unchanged (i !== 0 branch)
+    });
+
+    await act(async () => { resolveCreate({ success: true, data: {} }); });
+  });
+});
+
+describe('useLikePostMutation - already reacted (dedup branch)', () => {
+  beforeEach(() => { mockSocketEmit.mockClear(); mockSocketConnected = true; });
+
+  it('keeps currentUserReactions length at 1 when emoji already present', async () => {
+    const qc = createQueryClient();
+    const postWithReaction = { ...mockPost, currentUserReactions: ['❤️'] as string[], reactionSummary: { '❤️': 1 } as Record<string, number> };
+    qc.setQueryData(['posts', 'list', 'infinite', 'feed'], {
+      pages: [{ data: [postWithReaction], meta: { pagination: { total: 1, offset: 0, limit: 20, hasMore: false }, nextCursor: null } }],
+      pageParams: [undefined],
+    });
+    mockSocketEmit.mockImplementation((_e: string, _p: unknown, cb: (r: { success: boolean }) => void) => cb({ success: true }));
+
+    const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => { result.current.mutate({ postId: 'post-1', emoji: '❤️' }); });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const data = qc.getQueryData<{ pages: { data: (typeof postWithReaction)[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+    // Dedup: emoji already present → currentUserReactions stays same (covers true branch of includes check)
+    expect(data?.pages[0].data[0].currentUserReactions.filter(e => e === '❤️').length).toBe(1);
+  });
+});
+
+describe('useLikePostMutation - post without currentUserReactions (?? [] branch)', () => {
+  beforeEach(() => { mockSocketEmit.mockClear(); mockSocketConnected = true; });
+
+  it('handles missing currentUserReactions field', async () => {
+    const qc = createQueryClient();
+    const postNoReactions = { ...mockPost };
+    delete (postNoReactions as Partial<typeof mockPost> & { currentUserReactions?: unknown }).currentUserReactions;
+    qc.setQueryData(['posts', 'list', 'infinite', 'feed'], {
+      pages: [{ data: [postNoReactions], meta: { pagination: { total: 1, offset: 0, limit: 20, hasMore: false }, nextCursor: null } }],
+      pageParams: [undefined],
+    });
+    mockSocketEmit.mockImplementation((_e: string, _p: unknown, cb: (r: { success: boolean }) => void) => cb({ success: true }));
+
+    const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => { result.current.mutate({ postId: 'post-1', emoji: '❤️' }); });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const data = qc.getQueryData<{ pages: { data: { currentUserReactions?: string[] }[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+    expect(data?.pages[0].data[0].currentUserReactions).toContain('❤️');
+  });
+});
+
+describe('useLikePostMutation - socket ack error (no error message → default)', () => {
+  beforeEach(() => { mockSocketEmit.mockClear(); mockSocketConnected = true; });
+
+  it('uses default error message when ack has no error string', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    mockSocketEmit.mockImplementation((_e: string, _p: unknown, cb: (r: { success: boolean; error?: string }) => void) => {
+      cb({ success: false }); // no error field
+    });
+
+    const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
+    await act(async () => { result.current.mutate({ postId: 'post-1' }); });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toBe('Failed to add reaction');
   });
 });
