@@ -1101,10 +1101,18 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             await recomputeTotalUnread()
         }
 
-        // Update delivery status of own messages in the message cache
+        // Update delivery status of own messages in the message cache.
+        // WhatsApp-style all-or-nothing: the double-gray "delivered" / indigo
+        // "read" indicator must represent EVERY recipient, never a single member
+        // of a group. `summary.totalMembers` is the active recipient count
+        // (sender excluded); a 0 denominator falls back to legacy "any > 0" so
+        // 1:1 keeps working.
         let summary = event.summary
-        let newStatus: MeeshyMessage.DeliveryStatus = summary.readCount > 0 ? .read
-            : summary.deliveredCount > 0 ? .delivered : .sent
+        let newStatus = DeliveryStatusResolver.fromCounts(
+            deliveredCount: summary.deliveredCount,
+            readCount: summary.readCount,
+            recipientCount: summary.totalMembers
+        )
 
         await cache.messages.update(for: event.conversationId) { messages in
             Self.applyReadReceipt(

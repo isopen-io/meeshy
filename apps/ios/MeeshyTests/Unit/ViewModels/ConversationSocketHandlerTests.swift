@@ -740,6 +740,43 @@ final class ConversationSocketHandlerTests: XCTestCase {
         try await actor.insertOptimistic(record)
         await actor.start()
 
+        // ALL recipients received (2/2) → delivered-to-all fires.
+        let event: ReadStatusUpdateEvent = JSONStub.decode("""
+        {
+            "conversationId":"\(conversationId)",
+            "participantId":"participant-other",
+            "userId":"\(otherUserId)",
+            "type":"received",
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "summary":{"totalMembers":2,"deliveredCount":2,"readCount":0}
+        }
+        """)
+        socket.readStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 600_000_000)
+
+        let after = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: "msg1")
+        }
+        // .delivered event transitions the row to .delivered state and sets deliveredAt.
+        XCTAssertNotNil(after?.deliveredAt, "msg1 must transition to delivered via bufferBatchDelivery")
+    }
+
+    /// WhatsApp-style all-or-nothing: a PARTIAL group delivery (1 of 2 members)
+    /// must NOT advance the sender's checkmark — showing ✓✓ "delivered" while
+    /// only one of several recipients has received would misrepresent reality.
+    func test_readStatusUpdated_partialGroupDelivery_doesNotTransition() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+        _ = delegate
+
+        var record = makeSeedRecord(localId: "msg1", senderId: currentUserId, content: "Hello")
+        record.state = .sent
+        try await actor.insertOptimistic(record)
+        await actor.start()
+
+        // Only 1 of 2 recipients received → not delivered-to-all.
         let event: ReadStatusUpdateEvent = JSONStub.decode("""
         {
             "conversationId":"\(conversationId)",
@@ -757,8 +794,10 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let after = try await db.read { db in
             try MessageRecord.fetchOne(db, key: "msg1")
         }
-        // .delivered event transitions the row to .delivered state and sets deliveredAt.
-        XCTAssertNotNil(after?.deliveredAt, "msg1 must transition to delivered via bufferBatchDelivery")
+        XCTAssertNil(after?.deliveredAt,
+            "a partial group delivery (1/2) must NOT mark the message delivered-to-all")
+        XCTAssertEqual(after?.state, .sent,
+            "the row must stay at .sent until EVERY recipient has received it")
     }
 
     func test_readStatusUpdated_fromSelf_ignored() async throws {

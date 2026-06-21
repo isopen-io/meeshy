@@ -628,14 +628,28 @@ final class ConversationSocketHandler {
             .filter { ($0.userId ?? $0.participantId) != userId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self else { return }
+                guard let self, let persistence = self.persistence else { return }
                 let summary = event.summary
-                if let persistence = self.persistence {
-                    // Batch-update delivery state; store observation will rebuild
-                    // the message list with updated deliveryStatus for all rows.
-                    let deliveryEvent: MessageEvent = summary.readCount > 0
-                        ? .readBy(userId: userId, at: Date())
-                        : .delivered(count: summary.deliveredCount, at: Date())
+                // WhatsApp-style all-or-nothing: the sender's ✓✓ / read indicator
+                // must reflect EVERY recipient, never a single member of a group.
+                // `totalMembers` is the active recipient count (sender excluded);
+                // a partial summary advances NOTHING — the bubbles stay at their
+                // current (lower) state until the whole group catches up. A 0
+                // denominator falls back to legacy "any > 0" so 1:1 keeps working.
+                let n = summary.totalMembers
+                let allRead = n > 0 ? summary.readCount >= n : summary.readCount > 0
+                let allDelivered = n > 0 ? summary.deliveredCount >= n : summary.deliveredCount > 0
+                let deliveryEvent: MessageEvent?
+                if allRead {
+                    deliveryEvent = .readBy(userId: userId, at: Date())
+                } else if allDelivered {
+                    deliveryEvent = .delivered(count: summary.deliveredCount, at: Date())
+                } else {
+                    deliveryEvent = nil
+                }
+                // Batch-update delivery state; store observation will rebuild
+                // the message list with updated deliveryStatus for all rows.
+                if let deliveryEvent {
                     Task { await persistence.bufferBatchDelivery(conversationId: convId, event: deliveryEvent) }
                 }
             }

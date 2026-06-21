@@ -435,6 +435,11 @@ final class MessageListViewController: UIViewController {
             // sees the bubble depend only on these primitive inputs (Equatable),
             // so VM @Published changes elsewhere don't re-render this cell.
             let vm = self.conversationViewModel
+            // Recipient denominator for the all-or-nothing delivery indicator:
+            // active conversation members EXCLUDING me. Direct chats resolve to 1
+            // (the stored status is trusted verbatim); groups require EVERY
+            // recipient before the bubble shows ✓✓ (delivered) / indigo ✓✓ (read).
+            let recipients = direct ? 1 : max(1, (vm?.currentConversation?.memberCount ?? 2) - 1)
             let translations = vm?.messageTranslations[message.id] ?? []
             let preferred = vm?.preferredTranslation(for: message.id)
             let transcription = vm?.messageTranscriptions[message.id]
@@ -547,6 +552,7 @@ final class MessageListViewController: UIViewController {
                     EquatableMessageBubble(bubble: ThemedMessageBubble(
                         message: message,
                         contactColor: accent,
+                        recipientCount: recipients,
                         isDirect: direct,
                         isDark: dark,
                         transcription: transcription,

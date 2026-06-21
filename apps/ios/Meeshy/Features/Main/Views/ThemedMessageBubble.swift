@@ -41,6 +41,12 @@ struct ThemedMessageBubble: View {
 
     let message: Message
     let contactColor: String
+    /// Active conversation members EXCLUDING me (the sender) — the denominator
+    /// for the WhatsApp-style all-or-nothing delivery indicator. Defaults to `1`
+    /// so preview / overlay / onboarding call sites render as a 1:1 (the stored
+    /// status is trusted verbatim). The live conversation list passes the real
+    /// recipient count so a group's ✓✓ / read only lights up once ALL received.
+    var recipientCount: Int = 1
     var isDirect: Bool = false
     var isDark: Bool = ThemeManager.shared.mode.isDark
     var transcription: MessageTranscription? = nil
@@ -175,7 +181,8 @@ struct ThemedMessageBubble: View {
             activeDisplayLangCode: resolvedActiveDisplayLangCode,
             currentUserId: currentUserId,
             isEditSaving: isEditSaving,
-            hasEditHistory: hasEditHistory
+            hasEditHistory: hasEditHistory,
+            recipientCount: recipientCount
         )
 
         // Kind dispatch (mirrors legacy `body`):
@@ -339,6 +346,14 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.message.id == rhs.message.id &&
         lhs.message.updatedAt == rhs.message.updatedAt &&
         lhs.message.deliveryStatus == rhs.message.deliveryStatus &&
+        // Per-recipient counts + denominator drive the all-or-nothing delivery
+        // indicator (DeliveryStatusResolver). A group's ✓✓ / read can change
+        // without `deliveryStatus` or `updatedAt` moving (the raw status was
+        // already promoted at cold-start while counts catch up), so they MUST be
+        // part of the equality gate or the checkmark would never refresh.
+        lhs.message.deliveredCount == rhs.message.deliveredCount &&
+        lhs.message.readCount == rhs.message.readCount &&
+        lhs.recipientCount == rhs.recipientCount &&
         lhs.message.attachments.count == rhs.message.attachments.count &&
         lhs.message.reactions.count == rhs.message.reactions.count &&
         lhs.message.viewOnceCount == rhs.message.viewOnceCount &&
