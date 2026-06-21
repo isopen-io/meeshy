@@ -56,10 +56,10 @@ export function ReelsFeedScreen() {
     if (index > reels.length - 1 && reels.length > 0) setIndex(reels.length - 1);
   }, [reels.length, index]);
 
-  // Pull more reels as we approach the tail of the thread.
+  // Pull more reels as we reach i = N - 3 in the thread.
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = reelsQuery;
   useEffect(() => {
-    if (index >= reels.length - 2 && hasNextPage && !isFetchingNextPage) {
+    if (reels.length > 0 && index >= reels.length - 3 && hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
     }
   }, [index, reels.length, hasNextPage, isFetchingNextPage, fetchNextPage]);

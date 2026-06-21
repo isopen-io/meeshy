@@ -29,7 +29,13 @@ export default function StoryPage() {
   const { recordView } = useRecordStoryViewMutation();
   const deleteStoryMutation = useDeleteStoryMutation();
 
-  const stories = useMemo(() => (post ? [postToStoryData(post)] : []), [post]);
+  // Only a STORY drives the ephemeral viewer; any other post type (stale link)
+  // is treated as unavailable rather than forced into the 24h-story chrome.
+  const postIsStory = post?.type === 'STORY';
+  const stories = useMemo(
+    () => (post && postIsStory ? [postToStoryData(post)] : []),
+    [post, postIsStory],
+  );
 
   const close = useCallback(() => {
     if (window.history.length > 1) router.back();
@@ -78,11 +84,15 @@ export default function StoryPage() {
         </>
       ) : (
         <>
-          <h1 className="text-lg font-semibold">{isError ? 'Story indisponible' : 'Cette story n’existe plus'}</h1>
+          <h1 className="text-lg font-semibold">
+            {isError ? 'Story indisponible' : post && !postIsStory ? 'Ce contenu n’est pas une story' : 'Cette story n’existe plus'}
+          </h1>
           <p className="max-w-sm text-center text-sm text-white/70">
             {isError
               ? 'Cette story est privée ou a expiré.'
-              : 'La story que vous cherchez a peut-être expiré (les stories durent 24h).'}
+              : post && !postIsStory
+                ? 'Le lien pointe vers une publication, pas vers une story.'
+                : 'La story que vous cherchez a peut-être expiré (les stories durent 24h).'}
           </p>
           <button
             onClick={close}

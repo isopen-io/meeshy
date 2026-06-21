@@ -51,24 +51,34 @@ export default function ReelPage() {
   const unbookmarkMutation = useUnbookmarkPostMutation();
   const shareMutation = useSharePostMutation();
 
+  // Only a REEL seeds the immersive player; any other post type (stale/scraped
+  // link) is treated as unavailable rather than forced into reel chrome.
+  const seedIsReel = seed?.type === 'REEL';
+
   // Thread = seed reel first (excluded by the gateway), then the affinity reels.
   const thread = useMemo(() => {
-    if (!seed) return [] as Post[];
+    if (!seed || !seedIsReel) return [] as Post[];
     const others = affinityReels.filter((p) => p.id !== seed.id);
     return [seed, ...others];
-  }, [seed, affinityReels]);
+  }, [seed, seedIsReel, affinityReels]);
 
   const [index, setIndex] = useState(0);
+
+  // Reset to the seed when the route changes — Next.js reuses this mounted
+  // component when navigating between two /reel/:id deep links.
+  useEffect(() => {
+    setIndex(0);
+  }, [postId]);
 
   // Clamp index if the thread shrinks (e.g. cache eviction).
   useEffect(() => {
     if (index > thread.length - 1 && thread.length > 0) setIndex(thread.length - 1);
   }, [thread.length, index]);
 
-  // Pull more affinity pages as we approach the tail of the thread.
+  // Pull more affinity pages as we reach i = N - 3 in the thread.
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = reelsQuery;
   useEffect(() => {
-    if (index >= thread.length - 2 && hasNextPage && !isFetchingNextPage) {
+    if (thread.length > 0 && index >= thread.length - 3 && hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
     }
   }, [index, thread.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
@@ -139,9 +149,15 @@ export default function ReelPage() {
         </>
       ) : (
         <>
-          <h1 className="text-lg font-semibold">{isError ? 'Reel indisponible' : 'Ce reel n’existe plus'}</h1>
+          <h1 className="text-lg font-semibold">
+            {isError ? 'Reel indisponible' : seed && !seedIsReel ? 'Ce contenu n’est pas un reel' : 'Ce reel n’existe plus'}
+          </h1>
           <p className="max-w-sm text-center text-sm text-white/70">
-            {isError ? 'Ce reel est privé ou a été supprimé.' : 'Le reel que vous cherchez est introuvable.'}
+            {isError
+              ? 'Ce reel est privé ou a été supprimé.'
+              : seed && !seedIsReel
+                ? 'Le lien pointe vers une publication, pas vers un reel.'
+                : 'Le reel que vous cherchez est introuvable.'}
           </p>
           <button
             onClick={close}

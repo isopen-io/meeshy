@@ -28,7 +28,11 @@ export function useReelsFeedQuery(options: UseReelsFeedQueryOptions = {}) {
     queryFn: ({ pageParam }) =>
       postsService.getReelsFeed({ seed, cursor: pageParam as string | undefined, limit }),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage.pagination?.nextCursor ?? undefined,
+    // Only advance when the gateway says there's more AND hands back a cursor —
+    // guards against a fetch loop if it ever returns a stale cursor with
+    // hasMore:false.
+    getNextPageParam: (lastPage) =>
+      lastPage.pagination?.hasMore ? lastPage.pagination?.nextCursor ?? undefined : undefined,
     enabled,
   });
 }
