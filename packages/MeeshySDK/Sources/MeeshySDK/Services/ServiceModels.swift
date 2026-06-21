@@ -97,11 +97,17 @@ public struct CreateCommentRequest: Encodable {
     public let content: String
     public let parentId: String?
     public let effectFlags: Int?
+    /// IDs of media pre-uploaded via the attachments pipeline. Mirrors the
+    /// message-with-attachments contract. Omitted from the payload when empty
+    /// so the existing text-only comment endpoint stays untouched until the
+    /// gateway gains attachment support.
+    public let attachmentIds: [String]?
 
-    public init(content: String, parentId: String? = nil, effectFlags: Int? = nil) {
+    public init(content: String, parentId: String? = nil, effectFlags: Int? = nil, attachmentIds: [String]? = nil) {
         self.content = content
         self.parentId = parentId
         self.effectFlags = effectFlags
+        self.attachmentIds = (attachmentIds?.isEmpty == false) ? attachmentIds : nil
     }
 }
 

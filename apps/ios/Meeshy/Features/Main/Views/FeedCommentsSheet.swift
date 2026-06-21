@@ -1,5 +1,8 @@
 import SwiftUI
 import Combine
+import PhotosUI
+import UniformTypeIdentifiers
+import CoreLocation
 import MeeshySDK
 import MeeshyUI
 
@@ -161,6 +164,16 @@ struct CommentsSheetView: View {
     /// Tracks current composer text so `MentionSuggestionPanel` can pass it
     /// back to `insertMention(_:into:)` without needing to own the text field.
     @State private var composerText: String = ""
+
+    // MARK: Comment attachments (UI composer parity with messages)
+    /// Media the user staged from the composer carousel (photo / video / file /
+    /// location / voice). Surfaced to `UniversalComposerBar` as
+    /// `externalAttachments` and previewed via `commentAttachmentsPreview`.
+    @State private var commentAttachments: [ComposerAttachment] = []
+    @State private var showCommentPhotoPicker: Bool = false
+    @State private var commentPhotoItems: [PhotosPickerItem] = []
+    @State private var showCommentFilePicker: Bool = false
+    @State private var showCommentLocationPicker: Bool = false
 
     @StateObject private var mentionController: MentionComposerController
 
@@ -664,114 +677,273 @@ struct CommentsSheetView: View {
             style: .light,
             mode: .comment,
             accentColor: accentColor,
+            // Opt comments into the attachment carousel + voice (parity with
+            // message-with-attachments). Pickers are wired below.
+            forceShowAttachment: true,
+            forceShowVoice: true,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
-            onSend: { text in
-                let parentId = replyingTo?.id
-                let effects = commentEffects
-                let blur = commentBlurEnabled
-                replyingTo = nil
-                commentEffects = .none
-                commentBlurEnabled = false
-                mentionController.clearDraft()
-
-                let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
-                let effectFlags = flags > 0 ? Int(flags) : nil
-
-                // Optimistic: insert the comment in its place IMMEDIATELY — a reply
-                // goes under its parent (sub-message), otherwise it's a top-level
-                // row — WITHOUT waiting for the network. The confirmed server row
-                // reconciles it (REST response OR the `comment:added` socket event,
-                // whichever lands first); a failure rolls it back.
-                let tempId = "tmp_\(UUID().uuidString)"
-                let me = AuthManager.shared.currentUser
-                let optimistic = FeedComment(
-                    id: tempId,
-                    author: me?.displayName ?? me?.username ?? "",
-                    authorId: me?.id ?? "",
-                    authorAvatarURL: me?.avatar,
-                    content: text, timestamp: Date(),
-                    likes: 0, replies: 0, parentId: parentId,
-                    effectFlags: effectFlags ?? 0
+            onSendMessage: { text, attachments, _ in
+                submitComment(text: text, attachments: attachments)
+            },
+            onLocationRequest: { showCommentLocationPicker = true },
+            textBinding: $composerText,
+            replyBanner: replyingTo.map { AnyView(commentReplyBanner($0)) },
+            customAttachmentsPreview: commentAttachments.isEmpty
+                ? nil
+                : AnyView(commentAttachmentsPreview),
+            onTextChange: { text in
+                mentionController.handleQuery(in: text)
+            },
+            onPhotoLibrary: { showCommentPhotoPicker = true },
+            onFilePicker: { showCommentFilePicker = true },
+            isBlurEnabled: $commentBlurEnabled,
+            pendingEffects: $commentEffects,
+            externalAttachments: commentAttachments,
+            focusTrigger: $composerFocusTrigger
+        )
+        .photosPicker(
+            isPresented: $showCommentPhotoPicker,
+            selection: $commentPhotoItems,
+            maxSelectionCount: 10,
+            matching: .any(of: [.images, .videos])
+        )
+        .fileImporter(
+            isPresented: $showCommentFilePicker,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: true
+        ) { result in
+            handleCommentFileImport(result)
+        }
+        .sheet(isPresented: $showCommentLocationPicker) {
+            LocationPickerView(accentColor: accentColor) { coordinate, _ in
+                commentAttachments.append(
+                    ComposerAttachment.location(lat: coordinate.latitude, lng: coordinate.longitude)
                 )
+                showCommentLocationPicker = false
+            }
+        }
+        .adaptiveOnChange(of: commentPhotoItems) { _, items in
+            handleCommentPhotoSelection(items)
+        }
+    }
+
+    // MARK: - Comment Attachments Preview (custom chips with remove)
+
+    private var commentAttachmentsPreview: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(commentAttachments) { attachment in
+                    HStack(spacing: 6) {
+                        Image(systemName: commentAttachmentIcon(attachment.type))
+                            .font(.caption)
+                            .foregroundColor(Color(hex: attachment.thumbnailColor))
+                        Text(attachment.name)
+                            .font(.caption.weight(.medium))
+                            .lineLimit(1)
+                            .frame(maxWidth: 120)
+                        Button {
+                            HapticFeedback.light()
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                                commentAttachments.removeAll { $0.id == attachment.id }
+                            }
+                            if let url = attachment.url { try? FileManager.default.removeItem(at: url) }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.caption2.weight(.bold))
+                                .foregroundColor(theme.textMuted)
+                                .frame(width: 18, height: 18)
+                                .background(Circle().fill(theme.textMuted.opacity(0.15)))
+                        }
+                        .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pi\u{00E8}ce jointe", bundle: .main))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(theme.inputBackground)
+                            .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
+                    )
+                    .foregroundColor(theme.textPrimary)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func commentAttachmentIcon(_ type: ComposerAttachmentType) -> String {
+        switch type {
+        case .voice: return "mic.fill"
+        case .location: return "location.fill"
+        case .image: return "photo.fill"
+        case .file: return "doc.fill"
+        case .video: return "video.fill"
+        }
+    }
+
+    // MARK: - Comment Attachment Pickers
+
+    private func handleCommentPhotoSelection(_ items: [PhotosPickerItem]) {
+        guard !items.isEmpty else { return }
+        Task {
+            for item in items {
+                let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
+                guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+                let ext = isVideo ? "mov" : "jpg"
+                let url = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("comment_\(UUID().uuidString).\(ext)")
+                guard (try? data.write(to: url)) != nil else { continue }
+                let attachment: ComposerAttachment = isVideo
+                    ? ComposerAttachment(
+                        id: "video-\(UUID().uuidString)", type: .video,
+                        name: String(localized: "attachment.label.video", defaultValue: "Video", bundle: .main),
+                        url: url, size: data.count, thumbnailColor: "FF6B6B")
+                    : ComposerAttachment.image(url: url)
+                await MainActor.run { commentAttachments.append(attachment) }
+            }
+            await MainActor.run { commentPhotoItems = [] }
+        }
+    }
+
+    private func handleCommentFileImport(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result else { return }
+        for url in urls {
+            let didAccess = url.startAccessingSecurityScopedResource()
+            defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+            let dest = FileManager.default.temporaryDirectory
+                .appendingPathComponent("comment_\(UUID().uuidString)_\(url.lastPathComponent)")
+            try? FileManager.default.copyItem(at: url, to: dest)
+            let size = (try? FileManager.default.attributesOfItem(atPath: dest.path))?[.size] as? Int
+            commentAttachments.append(
+                ComposerAttachment.file(url: dest, name: url.lastPathComponent, size: size)
+            )
+        }
+    }
+
+    // MARK: - Comment Send (optimistic, with attachment scaffold)
+
+    /// Posts a comment optimistically. Text follows the existing reconcile/roll-back
+    /// flow. Staged media (`attachments`) is collected here for parity with the
+    /// message-with-attachments composer; the actual upload + `attachmentIds`
+    /// transmission lands once the gateway comment-attachment endpoint ships
+    /// (the wire contract is ready via `CreateCommentRequest.attachmentIds`).
+    /// Until then, attachment-only comments are surfaced as "coming soon"
+    /// rather than silently dropped.
+    private func submitComment(text: String, attachments: [ComposerAttachment]) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hadAttachments = !attachments.isEmpty
+
+        // Clear the staged media tray regardless of outcome — it has been handed
+        // to the send pipeline (or surfaced as not-yet-supported below).
+        commentAttachments.removeAll()
+
+        guard !trimmed.isEmpty else {
+            if hadAttachments {
+                FeedbackToastManager.shared.show(
+                    String(localized: "feed.comments.attachments_coming_soon",
+                           defaultValue: "Les pi\u{00E8}ces jointes en commentaire arrivent bient\u{00F4}t",
+                           bundle: .main)
+                )
+            }
+            return
+        }
+
+        let parentId = replyingTo?.id
+        let effects = commentEffects
+        let blur = commentBlurEnabled
+        replyingTo = nil
+        commentEffects = .none
+        commentBlurEnabled = false
+        mentionController.clearDraft()
+
+        let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
+        let effectFlags = flags > 0 ? Int(flags) : nil
+
+        // Optimistic: insert the comment in its place IMMEDIATELY — a reply
+        // goes under its parent (sub-message), otherwise it's a top-level
+        // row — WITHOUT waiting for the network. The confirmed server row
+        // reconciles it (REST response OR the `comment:added` socket event,
+        // whichever lands first); a failure rolls it back.
+        let tempId = "tmp_\(UUID().uuidString)"
+        let me = AuthManager.shared.currentUser
+        let optimistic = FeedComment(
+            id: tempId,
+            author: me?.displayName ?? me?.username ?? "",
+            authorId: me?.id ?? "",
+            authorAvatarURL: me?.avatar,
+            content: trimmed, timestamp: Date(),
+            likes: 0, replies: 0, parentId: parentId,
+            effectFlags: effectFlags ?? 0
+        )
+        if let parentId {
+            var existing = repliesMap[parentId] ?? []
+            existing.insert(optimistic, at: 0)
+            repliesMap[parentId] = existing
+            expandedThreads.insert(parentId)
+            var current = liveComments ?? post.comments
+            if let idx = current.firstIndex(where: { $0.id == parentId }) {
+                current[idx].replies += 1
+                liveComments = current
+            }
+        } else {
+            var current = liveComments ?? post.comments
+            current.insert(optimistic, at: 0)
+            liveComments = current
+        }
+        liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
+
+        Task {
+            do {
+                let apiComment = try await PostService.shared.addComment(postId: post.id, content: trimmed, parentId: parentId, effectFlags: effectFlags)
+                let feedComment = FeedComment(
+                    id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
+                    authorAvatarURL: apiComment.author.avatar,
+                    content: apiComment.content, timestamp: apiComment.createdAt,
+                    likes: 0, replies: 0,
+                    parentId: parentId,
+                    effectFlags: apiComment.effectFlags ?? effectFlags ?? 0
+                )
+                // Swap the optimistic temp for the server row (no count
+                // change). Idempotent if the socket event already did it.
                 if let parentId {
                     var existing = repliesMap[parentId] ?? []
-                    existing.insert(optimistic, at: 0)
+                    if let idx = existing.firstIndex(where: { $0.id == tempId }) {
+                        existing[idx] = feedComment
+                    } else if !existing.contains(where: { $0.id == feedComment.id }) {
+                        existing.insert(feedComment, at: 0)
+                    }
                     repliesMap[parentId] = existing
-                    expandedThreads.insert(parentId)
+                } else {
                     var current = liveComments ?? post.comments
-                    if let idx = current.firstIndex(where: { $0.id == parentId }) {
-                        current[idx].replies += 1
+                    if let idx = current.firstIndex(where: { $0.id == tempId }) {
+                        current[idx] = feedComment
+                    } else if !current.contains(where: { $0.id == feedComment.id }) {
+                        current.insert(feedComment, at: 0)
+                    }
+                    liveComments = current
+                }
+                onCommentSent?(post.id)
+            } catch {
+                // Roll back the optimistic row + counts.
+                if let parentId {
+                    var existing = repliesMap[parentId] ?? []
+                    existing.removeAll { $0.id == tempId }
+                    repliesMap[parentId] = existing
+                    var current = liveComments ?? post.comments
+                    if let idx = current.firstIndex(where: { $0.id == parentId }), current[idx].replies > 0 {
+                        current[idx].replies -= 1
                         liveComments = current
                     }
                 } else {
                     var current = liveComments ?? post.comments
-                    current.insert(optimistic, at: 0)
+                    current.removeAll { $0.id == tempId }
                     liveComments = current
                 }
-                liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
-
-                Task {
-                    do {
-                        let apiComment = try await PostService.shared.addComment(postId: post.id, content: text, parentId: parentId, effectFlags: effectFlags)
-                        let feedComment = FeedComment(
-                            id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
-                            authorAvatarURL: apiComment.author.avatar,
-                            content: apiComment.content, timestamp: apiComment.createdAt,
-                            likes: 0, replies: 0,
-                            parentId: parentId,
-                            effectFlags: apiComment.effectFlags ?? effectFlags ?? 0
-                        )
-                        // Swap the optimistic temp for the server row (no count
-                        // change). Idempotent if the socket event already did it.
-                        if let parentId {
-                            var existing = repliesMap[parentId] ?? []
-                            if let idx = existing.firstIndex(where: { $0.id == tempId }) {
-                                existing[idx] = feedComment
-                            } else if !existing.contains(where: { $0.id == feedComment.id }) {
-                                existing.insert(feedComment, at: 0)
-                            }
-                            repliesMap[parentId] = existing
-                        } else {
-                            var current = liveComments ?? post.comments
-                            if let idx = current.firstIndex(where: { $0.id == tempId }) {
-                                current[idx] = feedComment
-                            } else if !current.contains(where: { $0.id == feedComment.id }) {
-                                current.insert(feedComment, at: 0)
-                            }
-                            liveComments = current
-                        }
-                        onCommentSent?(post.id)
-                    } catch {
-                        // Roll back the optimistic row + counts.
-                        if let parentId {
-                            var existing = repliesMap[parentId] ?? []
-                            existing.removeAll { $0.id == tempId }
-                            repliesMap[parentId] = existing
-                            var current = liveComments ?? post.comments
-                            if let idx = current.firstIndex(where: { $0.id == parentId }), current[idx].replies > 0 {
-                                current[idx].replies -= 1
-                                liveComments = current
-                            }
-                        } else {
-                            var current = liveComments ?? post.comments
-                            current.removeAll { $0.id == tempId }
-                            liveComments = current
-                        }
-                        liveCommentCount = max((liveCommentCount ?? post.comments.count) - 1, 0)
-                        FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
-                    }
-                }
-            },
-            textBinding: $composerText,
-            replyBanner: replyingTo.map { AnyView(commentReplyBanner($0)) },
-            onTextChange: { text in
-                mentionController.handleQuery(in: text)
-            },
-            isBlurEnabled: $commentBlurEnabled,
-            pendingEffects: $commentEffects,
-            focusTrigger: $composerFocusTrigger
-        )
+                liveCommentCount = max((liveCommentCount ?? post.comments.count) - 1, 0)
+                FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
+            }
+        }
     }
 }
 

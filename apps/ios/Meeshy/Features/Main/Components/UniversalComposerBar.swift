@@ -63,6 +63,16 @@ struct UniversalComposerBar: View {
     /// view-once but NOT file/photo attachments.
     var forceHideAttachment: Bool = false
 
+    /// Opt-in override that enables the attachment carousel even when `mode`
+    /// would otherwise hide it (e.g. comments). The host MUST wire the attachment
+    /// callbacks (`onPhotoLibrary`, `onFilePicker`, …) for the carousel to offer
+    /// anything. `forceHideAttachment` still wins if both are set.
+    var forceShowAttachment: Bool = false
+
+    /// Opt-in override that enables voice recording even when `mode` would hide
+    /// it (e.g. comments).
+    var forceShowVoice: Bool = false
+
     // MARK: - Language
 
     var selectedLanguage: String = "fr"
@@ -232,6 +242,17 @@ struct UniversalComposerBar: View {
 
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
+    /// Tracks the system keyboard so the attachment carousel can be sized to the
+    /// exact space the keyboard last occupied (seamless keyboard <-> carousel swap).
+    @StateObject private var keyboardObserver = KeyboardObserver()
+
+    /// Height for the attachment carousel — matches the last known keyboard
+    /// height, with a sane fallback before the keyboard has ever appeared.
+    var attachmentPanelHeight: CGFloat {
+        let h = keyboardObserver.lastKnownHeight
+        return h > 120 ? h : 300
+    }
+
     // MARK: - Recording constants
 
     /// Minimum duration below which the send button is disabled to prevent
@@ -242,8 +263,11 @@ struct UniversalComposerBar: View {
 
     var resolvedPlaceholder: String { mode?.placeholder ?? placeholder }
     var resolvedMaxLength: Int? { mode?.maxLength ?? maxLength }
-    var resolvedShowVoice: Bool { mode?.showVoice ?? showVoice }
-    var resolvedShowAttachment: Bool { forceHideAttachment ? false : (mode?.showAttachment ?? showAttachment) }
+    var resolvedShowVoice: Bool { forceShowVoice || (mode?.showVoice ?? showVoice) }
+    var resolvedShowAttachment: Bool {
+        if forceHideAttachment { return false }
+        return forceShowAttachment || (mode?.showAttachment ?? showAttachment)
+    }
     private var resolvedShowLanguage: Bool { mode?.showLanguageSelector ?? showLanguageSelector }
     private var resolvedHideEphemeral: Bool {
         if let mode { return !mode.showEphemeral }
@@ -311,8 +335,15 @@ struct UniversalComposerBar: View {
                             }
                             .onEnded { value in
                                 if value.translation.height > 80 {
-                                    // Swipe down: collapse keyboard / minimize
+                                    // Swipe down: dismiss whichever input surface
+                                    // is up — the keyboard or the attachment
+                                    // carousel — and optionally minimize.
                                     isFocused = false
+                                    if showAttachOptions {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                            showAttachOptions = false
+                                        }
+                                    }
                                     if startMinimized {
                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                             isMinimized = true
@@ -485,19 +516,24 @@ struct UniversalComposerBar: View {
                         )
                 } else {
                     HStack(alignment: .bottom, spacing: 12) {
-                        // Left: (+) attach button with ladder overlay above it
+                        // Left: (+) attach / keyboard toggle button
                         if resolvedShowAttachment {
                             attachButton
-                                .overlay(alignment: .bottom) {
-                                    if showAttachOptions {
-                                        attachmentLadder
-                                            .transition(.opacity.combined(with: .move(edge: .bottom)))
-                                    }
-                                }
                         }
 
-                        // Center: text field
+                        // Center: text field. While the carousel is up, an
+                        // overlay intercepts taps to bring the keyboard back
+                        // (the field isn't focused then). When the keyboard is
+                        // already up there is no overlay, so the TextField keeps
+                        // its native tap-to-place-cursor behaviour.
                         textInputField
+                            .overlay {
+                                if showAttachOptions {
+                                    Color.clear
+                                        .contentShape(Rectangle())
+                                        .onTapGesture { focusTextField() }
+                                }
+                            }
 
                         // Right: send (when content) or hidden (idle)
                         actionButton
@@ -507,11 +543,22 @@ struct UniversalComposerBar: View {
                     .padding(.vertical, 10)
                     .transition(.opacity)
                 }
+
+                // Attachment carousel — slides up in the keyboard's place when
+                // the (+) toggle is active. Sized to the last known keyboard
+                // height so swapping keyboard <-> carousel keeps the input row
+                // perfectly still.
+                if showAttachOptions && !effectiveIsRecording {
+                    attachmentCarouselPanel
+                        .frame(height: attachmentPanelHeight)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
             .background(composerBackground)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEphemeralPicker)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showPermanentEffectsPicker)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showAttachOptions)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: allAttachments.count)
         .animation(
             reduceMotion
@@ -953,16 +1000,29 @@ struct UniversalComposerBar: View {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             isMinimized = false
         }
-        // Show keyboard + open attach menu after a short delay
+        // Show keyboard after a short delay. The attachment carousel and the
+        // keyboard are now mutually exclusive surfaces, so expanding goes
+        // straight to the keyboard — the user opens the carousel via (+).
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             isFocused = true
-            if resolvedShowAttachment {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showAttachOptions = true
-                }
-            }
         }
         onExpand?()
+    }
+
+    // MARK: - Focus the text field (bring the keyboard back)
+
+    /// Brings the system keyboard back, dismissing the attachment carousel if it
+    /// was open. Wired to a tap on the text field so the user can always summon
+    /// the keyboard by tapping where they type — even mid-carousel.
+    func focusTextField() {
+        if showAttachOptions {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                showAttachOptions = false
+            }
+        }
+        if !isFocused {
+            isFocused = true
+        }
     }
 
     // ========================================================================
