@@ -58,7 +58,15 @@ extension CachePolicy {
     public static let mediaAudio = CachePolicy(ttl: .months(6), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Audio", maxBytes: 200_000_000))
     public static let mediaVideo = CachePolicy(ttl: .months(6), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Video", maxBytes: 500_000_000))
     public static let thumbnails = CachePolicy(ttl: .days(7), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Thumbnails", maxBytes: 50_000_000))
-    public static let feedPosts = CachePolicy(ttl: .hours(6), staleTTL: .minutes(2), maxItemCount: 100, storageLocation: .grdb)
+    /// Fil d'actualité. TTL 7 jours : une fois un post chargé, il reste servable
+    /// (et disponible hors-ligne) pendant 7 jours sans nouveau téléchargement du
+    /// payload liste — les médias (images 1 an / vidéo-audio 6 mois) ne sont jamais
+    /// re-téléchargés dans cette fenêtre. La fenêtre fraîche de 5 min garde l'UI
+    /// instantanée au cold-start / réouverture rapide ; au-delà, SWR sert le cache
+    /// immédiatement et revalide en silence (les events socket du feed gardent la
+    /// liste vivante entre-temps). Avant : TTL 6 h → expiration et refetch bloquant
+    /// plusieurs fois par jour, contraire à « ne pas re-télécharger sur 7 jours ».
+    public static let feedPosts = CachePolicy(ttl: .days(7), staleTTL: .minutes(5), maxItemCount: 100, storageLocation: .grdb)
     public static let comments = CachePolicy(ttl: .hours(1), staleTTL: .minutes(2), maxItemCount: 500, storageLocation: .grdb)
     public static let stories = CachePolicy(ttl: .hours(24), staleTTL: .minutes(5), maxItemCount: nil, storageLocation: .grdb)
     public static let notifications = CachePolicy(ttl: .hours(24), staleTTL: .minutes(2), maxItemCount: 200, storageLocation: .grdb)

@@ -93,13 +93,12 @@ struct ThemedFeedOverlay: View {
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
+    /// Présentation unifiée du story viewer (`.fullScreenCover(item:)` au root).
+    /// Remplace l'ancien cover local `(isPresented:)` + `selectedStoryUserId`
+    /// séparé, dont la capture périmée d'uid provoquait l'écran noir « introuvable ».
+    @EnvironmentObject var storyViewerCoordinator: StoryViewerCoordinator
     @State private var composerText = ""
     @FocusState private var isComposerFocused: Bool
-    @State private var showStoryViewer = false
-    @State private var selectedStoryUserId: String?
-    /// `true` quand le viewer est ouvert depuis l'avatar d'un auteur de post
-    /// (contexte « personne précise ») ; `false` depuis le tray (flux).
-    @State private var storyViewerSingleGroup = false
     @State private var showStatusComposer = false
     @State private var showFullComposer = false
     @State private var pendingAttachmentType: String?
@@ -378,14 +377,10 @@ struct ThemedFeedOverlay: View {
             // scrolls up under the header. Mirrors `FeedView` and the chats list.
             accessory: {
                 AnyView(
+                    // Lancement unifié via StoryViewerCoordinator (chemin unique trail).
                     PinnedStoryTrailBand(
                         viewModel: storyViewModel,
-                        scrollOffset: headerScrollOffset,
-                        onViewStory: { userId in
-                            selectedStoryUserId = userId
-                            storyViewerSingleGroup = false
-                            showStoryViewer = true
-                        }
+                        scrollOffset: headerScrollOffset
                     )
                 )
             }
@@ -514,9 +509,10 @@ struct ThemedFeedOverlay: View {
             },
             authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),
             onViewAuthorStory: {
-                selectedStoryUserId = post.authorId
-                storyViewerSingleGroup = true
-                showStoryViewer = true
+                // Contexte « personne précise » → singleGroup, via le coordinator unique.
+                storyViewerCoordinator.present(
+                    StoryViewerRequest(id: post.authorId, startAtFirstUnviewed: true, singleGroup: true)
+                )
             }
         )
     }
@@ -566,12 +562,9 @@ struct ThemedFeedOverlay: View {
                     topPadding: CollapsibleHeaderMetrics.expandedHeight
                 ) {
                 LazyVStack(spacing: 14) {
-                    // Story Tray
-                    StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
-                        selectedStoryUserId = userId
-                        storyViewerSingleGroup = false
-                        showStoryViewer = true
-                    }, onAddStatus: {
+                    // Story Tray — lancement unifié via StoryViewerCoordinator
+                    // (même chemin que la liste de conversations), pas de cover local.
+                    StoryTrayView(viewModel: storyViewModel, onAddStatus: {
                         showStatusComposer = true
                     })
 
@@ -737,23 +730,9 @@ struct ThemedFeedOverlay: View {
                 onDismiss: { editingPost = nil }
             )
         }
-        .fullScreenCover(isPresented: $showStoryViewer) {
-            StoryViewerContainer(
-                viewModel: storyViewModel,
-                userId: selectedStoryUserId,
-                isPresented: $showStoryViewer,
-                onReplyToStory: { replyContext in
-                    showStoryViewer = false
-                    router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
-                },
-                singleGroup: storyViewerSingleGroup,
-                startAtFirstUnviewed: true,
-                presentationSource: "FeedOverlay"
-            )
-            .environmentObject(router)
-            .environmentObject(statusViewModel)
-            .environmentObject(conversationListViewModel)
-        }
+        // Story viewer : présentation unifiée via StoryViewerCoordinator au root
+        // (`.fullScreenCover(item:)`). L'ancien cover local `(isPresented:)` +
+        // `selectedStoryUserId` séparé est supprimé (capture périmée d'uid → écran noir).
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)
                 .presentationDetents([.medium])
