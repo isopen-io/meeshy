@@ -847,24 +847,27 @@ struct ConversationView: View {
             }
             .onAppear {
                 if let context = replyContext { composerState.pendingReplyReference = context.toReplyReference }
-                // Language priority: active keyboard layout > user's primary
-                // content language (Prisme Linguistique source of truth) >
-                // existing composer default.
+                // Language priority (Prisme Linguistique): the user's primary
+                // configured content language is the source of truth and wins
+                // the compose default. The active keyboard layout is only a
+                // FALLBACK — used for anonymous users or unsupported content
+                // languages. It must NEVER override the in-app preference, the
+                // same way `deviceLocale` ranks last in language resolution.
                 //
-                // Locale.current is intentionally NOT consulted here: it
-                // reflects the device's UI language, which is decoupled from
-                // the user's chosen content language (CLAUDE.md "Prisme
-                // Linguistique"). A French-speaker on an English iPhone must
-                // compose in French unless their keyboard says otherwise.
-                if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
+                // Locale.current is likewise NOT consulted: it reflects the
+                // device's UI language, decoupled from the chosen content
+                // language. A French-speaker on an English keyboard / English
+                // iPhone composes in French; live detection corrects in-flight
+                // if they actually type another language.
+                if let userLang = AuthManager.shared.currentUser?
+                        .preferredContentLanguages.first,
+                   LanguageOption.defaults.contains(where: { $0.code == userLang }) {
+                    composerState.selectedLanguage = userLang
+                } else if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
                     let code = String(kbd.prefix(2))
                     if LanguageOption.defaults.contains(where: { $0.code == code }) {
                         composerState.selectedLanguage = code
                     }
-                } else if let userLang = AuthManager.shared.currentUser?
-                            .preferredContentLanguages.first,
-                          LanguageOption.defaults.contains(where: { $0.code == userLang }) {
-                    composerState.selectedLanguage = userLang
                 }
                 // Brancher la persistance du brouillon (immédiate à chaque
                 // fin de mot / champ vidé, débouncée 400 ms en milieu de mot

@@ -1367,27 +1367,37 @@ public struct AudioPlayerView: View {
     }
 
     // MARK: - Waveform Progress
+
+    /// Number of waveform bars. Higher density reads as a finer, more faithful
+    /// envelope (thin capsules) rather than a row of chunky squares. Single
+    /// source of truth: the render loop AND `loadWaveformSamples` must request
+    /// the same count so cache keys and indices line up.
+    private var waveformBarCount: Int { context.isCompact ? 48 : 72 }
+
     private var waveformProgress: some View {
         GeometryReader { geo in
-            let barCount = context.isCompact ? 25 : 35
-            let spacing: CGFloat = 2
-            let totalSpacing = spacing * CGFloat(barCount - 1)
-            let barWidth = max(2, (geo.size.width - totalSpacing) / CGFloat(barCount))
+            let barCount = waveformBarCount
+            // Thin bars with a tight gap. The bar width is derived from the
+            // available width so the strip always fills edge-to-edge; the gap
+            // is a fraction of the slot so dense layouts don't collapse.
+            let slot = geo.size.width / CGFloat(barCount)
+            let barWidth = max(1.5, slot * 0.62)
 
-            HStack(spacing: spacing) {
+            HStack(spacing: 0) {
                 ForEach(0..<barCount, id: \.self) { i in
-                    let fraction = Double(i) / Double(barCount)
+                    let fraction = (Double(i) + 0.5) / Double(barCount)
                     let isPlayed = fraction <= player.progress
                     let h = waveformHeight(index: i, total: barCount)
 
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(isPlayed ? accent : (isDark ? Color.white.opacity(0.18) : Color.black.opacity(0.1)))
+                    Capsule(style: .continuous)
+                        .fill(isPlayed ? accent : (isDark ? Color.white.opacity(0.20) : Color.black.opacity(0.12)))
                         .frame(width: barWidth, height: h)
+                        .frame(width: slot, height: 24, alignment: .center)
                 }
             }
-            .frame(height: 22, alignment: .center)
+            .frame(height: 24, alignment: .center)
         }
-        .frame(height: 22)
+        .frame(height: 24)
         .overlay(
             GeometryReader { geo in
                 Color.clear
@@ -1565,20 +1575,33 @@ public struct AudioPlayerView: View {
             )
     }
 
+    /// Bar height in points. Maps the normalized amplitude (0–1) to the strip
+    /// height with a mild perceptual curve (`pow 0.65`) so quiet passages stay
+    /// visible instead of collapsing to the floor next to a few loud peaks —
+    /// the envelope reads truer to the ear. Falls back to a smooth procedural
+    /// shape until the real samples finish decoding.
     private func waveformHeight(index: Int, total: Int) -> CGFloat {
+        let minHeight: CGFloat = 2
+        let maxHeight: CGFloat = 22
         let samples = waveformAnalyzer.samples
-        if !samples.isEmpty && index < samples.count {
-            let sample = CGFloat(samples[index])
-            return max(3, sample * 18)
+        if !samples.isEmpty {
+            // Map the bar index onto the sample array so the render density and
+            // the sample count can differ without dropping or duplicating data.
+            let sampleIndex = min(samples.count - 1, index * samples.count / max(1, total))
+            let normalized = Double(max(0, min(1, samples[sampleIndex])))
+            let curved = pow(normalized, 0.65)
+            return max(minHeight, CGFloat(curved) * maxHeight)
         }
         let seed = Double(index * 7 + 3)
-        let base = 4.0 + sin(seed) * 5 + cos(seed * 0.5) * 3.5
-        return CGFloat(max(3, min(18, base)))
+        let base = 5.0 + sin(seed) * 6 + cos(seed * 0.5) * 4.0
+        return CGFloat(max(minHeight, min(maxHeight, base)))
     }
 
     private func loadWaveformSamples() {
         guard waveformAnalyzer.samples.isEmpty else { return }
-        let barCount = context.isCompact ? 25 : 35
+        // Decode at a higher resolution than we render so the perceived detail
+        // stays crisp; `waveformHeight` down-maps bar index → sample index.
+        let barCount = max(96, waveformBarCount)
         let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
         Task {
             if let data = try? await CacheCoordinator.shared.audio.data(for: resolved) {

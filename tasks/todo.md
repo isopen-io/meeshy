@@ -50,6 +50,17 @@ Code écrit selon les patterns existants ; build `./apps/ios/meeshy.sh test` + S
   ajouté au bridge `+NowPlaying`. Tests coordinator (3 cas + hasPrevious).
 - **Waveform** : déjà fidèle + cachée 1× sur iOS (`WaveformCache`) → aucune modif nécessaire.
 
+### Ajouts (retour utilisateur)
+- **Waveform plus fine/fidèle** (le rendu, pas la donnée) : les barres étaient grossières
+  (35 barres ~4px, coins carrés → effet « carrés »). Désormais 72/48 barres fines à bouts
+  arrondis (Capsule), décodées à ≥96 échantillons (down-map index→sample), hauteur sur 22pt
+  avec courbe perceptuelle `pow 0.65` pour ne pas écraser les passages calmes. Source unique
+  `waveformBarCount`. La donnée restait déjà fidèle (PCM `WaveformCache`).
+- **Langue par défaut du composer conversation = FR (Prisme)** : `ConversationView` onAppear
+  priorisait le **clavier** (anglais sur device/simu → « en »). Réordonné : langue de contenu
+  configurée de l'utilisateur (priorité 1 Prisme) d'abord, clavier en simple fallback
+  (anonymes / langue non supportée). Les autres composers partaient déjà de `resolve()` = "fr".
+
 ### Validation
 - ⚠️ Build/tests iOS NON exécutés ici (container Linux ; Xcode/simulateur = macOS requis).
   À lancer sur Mac/CI : `./apps/ios/meeshy.sh test` (app) + `xcodebuild test -scheme MeeshySDK-Package` (SDK).
