@@ -38,19 +38,19 @@ struct StatusComposerView: View {
             ZStack {
                 theme.backgroundGradient.ignoresSafeArea()
 
-                VStack(spacing: 24) {
+                VStack(spacing: MeeshySpacing.xxl) {
                     // Republication header
                     if let via = viaUsername {
-                        HStack(spacing: 6) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: "arrow.2.squarepath")
-                                .font(.system(size: 12))
+                                .font(MeeshyFont.relative(12))
                                 .foregroundColor(MeeshyColors.indigo400)
                             Text(String(localized: "status.composer.repost.via", defaultValue: "Status de @\(via)", bundle: .main))
-                                .font(.system(size: 13, weight: .medium))
+                                .font(MeeshyFont.relative(13, weight: .medium))
                                 .foregroundColor(theme.textSecondary)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.vertical, MeeshySpacing.sm)
                         .background(
                             Capsule()
                                 .fill(MeeshyColors.indigo500.opacity(0.1))
@@ -68,7 +68,7 @@ struct StatusComposerView: View {
 
                     Spacer()
                 }
-                .padding(20)
+                .padding(MeeshySpacing.xl)
             }
             .navigationTitle(viaUsername != nil ? String(localized: "status.composer.title.repost", defaultValue: "Republier un status", bundle: .main) : String(localized: "status.composer.title", defaultValue: "Status", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
@@ -111,12 +111,12 @@ struct StatusComposerView: View {
     // MARK: - Emoji Grid
 
     private var emojiGrid: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             Text(String(localized: "status.composer.mood.question", defaultValue: "Comment tu te sens ?", bundle: .main))
-                .font(.system(size: 16, weight: .semibold))
+                .font(MeeshyFont.relative(16, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
-            LazyVGrid(columns: columns, spacing: 16) {
+            LazyVGrid(columns: columns, spacing: MeeshySpacing.lg) {
                 ForEach(StatusViewModel.moodOptions, id: \.self) { emoji in
                     emojiButton(emoji)
                 }
@@ -136,10 +136,10 @@ struct StatusComposerView: View {
             }
         } label: {
             Text(emoji)
-                .font(.system(size: 36))
+                .font(MeeshyFont.relative(36))
                 .frame(width: 56, height: 56)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .fill(
                             selectedEmoji == emoji ?
                                 MeeshyColors.indigo500.opacity(0.15) :
@@ -147,7 +147,7 @@ struct StatusComposerView: View {
                         )
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(
                             selectedEmoji == emoji ?
                                 MeeshyColors.avatarRingGradient :
@@ -163,14 +163,14 @@ struct StatusComposerView: View {
 
     private var textInput: some View {
         TextField(String(localized: "status.composer.placeholder", defaultValue: "Comment tu vas ?", bundle: .main), text: $statusText)
-            .font(.system(size: 15))
+            .font(MeeshyFont.relative(15))
             .foregroundColor(theme.textPrimary)
-            .padding(14)
+            .padding(MeeshySpacing.md)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(theme.inputBorder, lineWidth: 1)
                     )
             )
@@ -184,9 +184,9 @@ struct StatusComposerView: View {
             .overlay(alignment: .bottomTrailing) {
                 if !statusText.isEmpty {
                     Text("\(statusText.count)/122")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(MeeshyFont.relative(10, weight: .medium))
                         .foregroundColor(statusText.count > 100 ? MeeshyColors.error : theme.textMuted)
-                        .padding(.trailing, 14)
+                        .padding(.trailing, MeeshySpacing.md)
                         .padding(.bottom, -18)
                 }
             }
@@ -226,7 +226,7 @@ struct StatusComposerView: View {
                     .scaleEffect(0.8)
             } else {
                 Text(String(localized: "status.composer.publish", defaultValue: "Publier", bundle: .main))
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundStyle(selectedEmoji != nil ? MeeshyColors.brandGradient : LinearGradient(colors: [theme.textMuted], startPoint: .leading, endPoint: .trailing))
             }
         }
@@ -237,7 +237,7 @@ struct StatusComposerView: View {
 
     private var visibilityPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(PostVisibility.composerSelectableCases, id: \.rawValue) { vis in
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -248,15 +248,15 @@ struct StatusComposerView: View {
                         HapticFeedback.light()
                     } label: {
                         let showCount = vis.requiresUserSelection && selectedVisibility == vis && !selectedUserIds.isEmpty
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: vis.icon)
-                                .font(.system(size: 11))
+                                .font(MeeshyFont.relative(11))
                             Text(showCount ? "\(vis.label) (\(selectedUserIds.count))" : vis.label)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(MeeshyFont.relative(12, weight: .medium))
                         }
                         .foregroundColor(selectedVisibility == vis ? .white : theme.textSecondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.vertical, MeeshySpacing.sm)
                         .background(
                             Capsule()
                                 .fill(selectedVisibility == vis ?
@@ -266,7 +266,7 @@ struct StatusComposerView: View {
                     }
                 }
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, MeeshySpacing.xs)
         }
         .sheet(item: $audiencePickerMode) { mode in
             AudienceUserPickerView(mode: mode, initialSelection: selectedUserIds) { ids in
