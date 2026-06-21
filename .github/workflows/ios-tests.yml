@@ -50,6 +50,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Generate Xcode project (xcodegen)
+        # The pbxproj is a generated artifact (project.yml globs the sources).
+        # Regenerating here guarantees every committed source file is in the
+        # build — a file added without a manual pbxproj entry can no longer
+        # break CI (this happened twice in one day before the migration).
+        run: |
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          cd apps/ios && xcodegen generate
+
       - name: Select Xcode 26.1.1 (Swift 6.2)
         run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer
 
