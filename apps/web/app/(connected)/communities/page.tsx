@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Card, Badge, Input, Label, Dialog, DialogHeader, DialogBody, DialogFooter, useToast, PageHeader } from '@/components/v2';
+import { Button, Card, Badge, Input, Label, Dialog, DialogHeader, DialogBody, DialogFooter, useToast } from '@/components/v2';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { Users } from 'lucide-react';
 import { useI18n } from '@/hooks/use-i18n';
 import {
   useCommunitiesQuery,
@@ -75,20 +77,42 @@ export default function V2CommunitiesPage() {
   };
 
   return (
-    <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors duration-300">
-      <PageHeader
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-950 dark:to-gray-900 flex flex-col">
+      <DashboardLayout
         title={t('v2.title')}
-        actionButtons={
-          <Button variant="primary" size="sm" onClick={() => setIsModalOpen(true)}>
-            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            {t('v2.create')}
-          </Button>
-        }
-      />
+        className="!bg-none !bg-transparent !h-auto !max-w-none !px-0"
+      >
+        <div className="relative z-10 space-y-8 pb-8 w-full py-8 px-4 md:px-8">
+          {/* Hero */}
+          <header className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 p-8 md:p-12 text-white shadow-2xl">
+            <div className="absolute inset-0 bg-black/10" />
+            <div className="relative z-10 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-3 bg-white/20 backdrop-blur-sm rounded-2xl">
+                    <Users className="h-8 w-8" />
+                  </div>
+                  <h1 className="text-4xl md:text-5xl font-bold">{t('v2.title')}</h1>
+                </div>
+                <p className="text-lg md:text-xl text-blue-100 max-w-2xl">
+                  Rejoignez des communautés et échangez sans barrière de langue.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="inline-flex items-center gap-2 self-start rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-indigo-700 shadow transition-colors hover:bg-blue-50 md:self-auto"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                {t('v2.create')}
+              </button>
+            </div>
+            <div className="absolute -right-12 -bottom-12 w-48 h-48 bg-white/10 rounded-full blur-3xl" />
+            <div className="absolute -left-12 -top-12 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl" />
+          </header>
 
-      <main className="max-w-2xl mx-auto px-6 py-8">
+          <div className="mx-auto w-full max-w-2xl">
         {/* My Communities */}
         <section className="mb-8">
           <h2 className="text-sm font-semibold mb-4 px-1 text-[var(--gp-text-muted)]">{t('v2.myCommunities')}</h2>
@@ -230,9 +254,10 @@ export default function V2CommunitiesPage() {
             )}
           </div>
         </section>
-      </main>
+          </div>
+        </div>
 
-      {/* Create Community Dialog */}
+        {/* Create Community Dialog */}
       <Dialog open={isModalOpen} onClose={() => setIsModalOpen(false)}>
         <DialogHeader>
           <h2 className="text-xl font-semibold text-[var(--gp-text-primary)]">
@@ -279,6 +304,7 @@ export default function V2CommunitiesPage() {
           </Button>
         </DialogFooter>
       </Dialog>
+      </DashboardLayout>
     </div>
   );
 }
