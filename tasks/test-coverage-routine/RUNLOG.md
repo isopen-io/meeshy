@@ -1401,3 +1401,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   4. GET /calls/active includes complex nested Prisma query; `expect.objectContaining` assertions verify the shape without brittleness.
   5. Pre-existing gateway failures: 25 failing suites (pre-existing TS errors in unrelated test files) — unchanged.
 - Next slice: P2 Rate limiting × gateway OR P2 Admin & moderation × gateway (next ☐ cell top-to-bottom in feature matrix)
+- Commit: 714087b7 (squash-merged as PR #740 → main sha 845b2e5a, 2026-06-21T09:30Z)
