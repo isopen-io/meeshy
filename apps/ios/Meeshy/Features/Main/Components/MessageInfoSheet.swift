@@ -91,38 +91,22 @@ struct MessageInfoSheet: View {
         }
     }
 
-    // MARK: - Date Formatting
-
-    private var dateFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "HH:mm, dd MMM yyyy"
-        return formatter
-    }
-
-    private var timeFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "HH:mm"
-        return formatter
-    }
-
     // MARK: - Body
 
     var body: some View {
         VStack(spacing: 0) {
             headerBar
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 20) {
+                VStack(spacing: MeeshySpacing.xl) {
                     senderSection
                     statusTimeline
                     messagePreview
                     attachmentConsumptionSection
                     participantReceiptsSection
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 32)
+                .padding(.horizontal, MeeshySpacing.xl)
+                .padding(.top, MeeshySpacing.sm)
+                .padding(.bottom, MeeshySpacing.xxxl)
             }
         }
         .background(sheetBackground)
@@ -164,7 +148,7 @@ struct MessageInfoSheet: View {
     private var headerBar: some View {
         HStack {
             Text(String(localized: "message-info.title", defaultValue: "Infos du message", bundle: .main))
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(17, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -174,7 +158,7 @@ struct MessageInfoSheet: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 28, height: 28)
                     .background(
@@ -182,17 +166,18 @@ struct MessageInfoSheet: View {
                             .fill(theme.textMuted.opacity(0.12))
                     )
             }
+            .meeshyTapTarget()
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
-        .padding(.bottom, 12)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.top, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.md)
     }
 
     // MARK: - Sender Section
 
     private var senderSection: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: message.senderName ?? "?",
                 context: .messageBubble,
@@ -202,17 +187,17 @@ struct MessageInfoSheet: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(message.senderName ?? String(localized: "common.me", defaultValue: "Moi", bundle: .main))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
 
-                Text(String(format: String(localized: "message-info.sent-at", defaultValue: "Envoye a %@", bundle: .main), dateFormatter.string(from: sentTimestamp)))
-                    .font(.system(size: 12, weight: .medium))
+                Text(String(format: String(localized: "message-info.sent-at", defaultValue: "Envoye a %@", bundle: .main), sentTimestamp.formatted(.dateTime.hour().minute().day().month(.abbreviated).year())))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(theme.textSecondary)
             }
 
             Spacer()
         }
-        .padding(14)
+        .padding(MeeshySpacing.md)
         .background(sectionBackground)
         .opacity(appearAnimation ? 1 : 0)
         .offset(y: appearAnimation ? 0 : 10)
@@ -224,16 +209,16 @@ struct MessageInfoSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             // Section header
             Text(String(localized: "message-info.delivery-status", defaultValue: "Statut de livraison", bundle: .main))
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(theme.textSecondary)
-                .padding(.bottom, 14)
+                .padding(.bottom, MeeshySpacing.md)
 
             // Sent step (always shown)
             timelineStep(
                 icon: "checkmark",
                 iconColor: theme.textMuted,
                 label: String(localized: "message-detail.views.sent", defaultValue: "Envoye", bundle: .main),
-                timestamp: timeFormatter.string(from: sentTimestamp),
+                timestamp: sentTimestamp.formatted(date: .omitted, time: .shortened),
                 isActive: true,
                 hasNextStep: true
             )
@@ -246,7 +231,7 @@ struct MessageInfoSheet: View {
                 icon: "checkmark.circle",
                 iconColor: isDelivered ? Color(hex: "8E8E93") : theme.textMuted.opacity(0.3),
                 label: String(localized: "message-detail.views.delivered", defaultValue: "Distribue", bundle: .main),
-                timestamp: deliveredTimestamp.map { timeFormatter.string(from: $0) },
+                timestamp: deliveredTimestamp?.formatted(date: .omitted, time: .shortened),
                 isActive: isDelivered,
                 hasNextStep: true
             )
@@ -259,7 +244,7 @@ struct MessageInfoSheet: View {
                 icon: "checkmark.circle.fill",
                 iconColor: isRead ? Color(hex: "34B7F1") : theme.textMuted.opacity(0.3),
                 label: String(localized: "message-detail.views.read", defaultValue: "Lu", bundle: .main),
-                timestamp: readTimestamp.map { timeFormatter.string(from: $0) },
+                timestamp: readTimestamp?.formatted(date: .omitted, time: .shortened),
                 isActive: isRead,
                 hasNextStep: false
             )
@@ -287,23 +272,23 @@ struct MessageInfoSheet: View {
                     .frame(width: 32, height: 32)
 
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundColor(iconColor)
             }
 
             // Label and timestamp
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.system(size: 14, weight: isActive ? .semibold : .regular))
+                    .font(MeeshyFont.relative(14, weight: isActive ? .semibold : .regular))
                     .foregroundColor(isActive ? theme.textPrimary : theme.textMuted)
 
                 if let timestamp {
                     Text(timestamp)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
                         .foregroundColor(isActive ? theme.textSecondary : theme.textMuted)
                 } else {
                     Text(String(localized: "common.pending", defaultValue: "En attente", bundle: .main))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                         .foregroundColor(theme.textMuted.opacity(0.6))
                         .italic()
                 }
@@ -350,16 +335,16 @@ struct MessageInfoSheet: View {
     @ViewBuilder
     private var attachmentConsumptionSection: some View {
         if !message.attachments.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                 Text(String(localized: "message-info.attachment-status", defaultValue: "Pieces jointes", bundle: .main))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundColor(theme.textSecondary)
 
                 ForEach(message.attachments) { attachment in
                     attachmentConsumptionRow(for: attachment)
                 }
             }
-            .padding(14)
+            .padding(MeeshySpacing.md)
             .background(sectionBackground)
             .opacity(appearAnimation ? 1 : 0)
             .offset(y: appearAnimation ? 0 : 15)
@@ -387,18 +372,18 @@ struct MessageInfoSheet: View {
                     .fill((byAll ? accentColor : theme.textMuted).opacity(byAll ? 0.15 : 0.08))
                     .frame(width: 32, height: 32)
                 Image(systemName: consumptionIcon(for: status.action))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundColor(byAll ? accentColor : theme.textMuted)
             }
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(attachmentDisplayName(attachment))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
                 Text(consumptionLabel(for: status))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(byAll ? theme.textSecondary : theme.textMuted)
             }
 
@@ -406,7 +391,7 @@ struct MessageInfoSheet: View {
 
             if byAll {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(accentColor)
                     .accessibilityHidden(true)
             }
@@ -448,7 +433,7 @@ struct MessageInfoSheet: View {
         if status.isCompleteByAll {
             let base = String(format: String(localized: "message-info.consumption.by-all", defaultValue: "%@ par tous", bundle: .main), verb)
             if let at = status.byAllAt {
-                return "\(base) \u{00B7} \(timeFormatter.string(from: at))"
+                return "\(base) \u{00B7} \(at.formatted(date: .omitted, time: .shortened))"
             }
             return base
         }
@@ -464,12 +449,12 @@ struct MessageInfoSheet: View {
     // MARK: - Message Content Preview
 
     private var messagePreview: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(String(localized: "message-info.content", defaultValue: "Contenu", bundle: .main))
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(theme.textSecondary)
 
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.sm) {
                 // Type icon
                 messageTypeIcon
                     .frame(width: 32, height: 32)
@@ -482,23 +467,23 @@ struct MessageInfoSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     if let typeLabel = attachmentTypeLabel {
                         Text(typeLabel)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MeeshyFont.relative(13, weight: .semibold))
                             .foregroundColor(accentColor)
 
                         if !message.content.isEmpty {
                             Text(message.content)
-                                .font(.system(size: 13))
+                                .font(MeeshyFont.relative(13))
                                 .foregroundColor(theme.textSecondary)
                                 .lineLimit(2)
                         }
                     } else if !message.content.isEmpty {
                         Text(message.content)
-                            .font(.system(size: 13))
+                            .font(MeeshyFont.relative(13))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(2)
                     } else {
                         Text(String(localized: "message-info.empty", defaultValue: "Message vide", bundle: .main))
-                            .font(.system(size: 13))
+                            .font(MeeshyFont.relative(13))
                             .foregroundColor(theme.textMuted)
                             .italic()
                     }
@@ -509,17 +494,17 @@ struct MessageInfoSheet: View {
 
             // Edited indicator
             if message.isEdited {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "pencil")
-                        .font(.system(size: 10))
+                        .font(MeeshyFont.relative(10))
                     Text(String(localized: "message-info.edited", defaultValue: "Modifie", bundle: .main))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                 }
                 .foregroundColor(theme.textMuted)
                 .padding(.leading, 42)
             }
         }
-        .padding(14)
+        .padding(MeeshySpacing.md)
         .background(sectionBackground)
         .opacity(appearAnimation ? 1 : 0)
         .offset(y: appearAnimation ? 0 : 20)
@@ -531,27 +516,27 @@ struct MessageInfoSheet: View {
         switch message.messageType {
         case .text:
             Image(systemName: "text.bubble.fill")
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(accentColor)
         case .image:
             Image(systemName: "photo.fill")
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(accentColor)
         case .video:
             Image(systemName: "video.fill")
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(accentColor)
         case .audio:
             Image(systemName: "waveform")
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(accentColor)
         case .file:
             Image(systemName: "doc.fill")
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(accentColor)
         case .location:
             Image(systemName: "location.fill")
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(accentColor)
         }
     }
@@ -604,13 +589,13 @@ struct MessageInfoSheet: View {
                 .padding(14)
                 .background(sectionBackground)
             } else if !receipts.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                     Text(String(localized: "message-info.participants", defaultValue: "Participants", bundle: .main))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(theme.textSecondary)
 
                     ForEach(receipts) { receipt in
-                        HStack(spacing: 10) {
+                        HStack(spacing: MeeshySpacing.sm) {
                             MeeshyAvatar(
                                 name: receipt.name,
                                 context: .messageBubble,
@@ -620,21 +605,21 @@ struct MessageInfoSheet: View {
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(receipt.name)
-                                    .font(.system(size: 13, weight: .medium))
+                                    .font(MeeshyFont.relative(13, weight: .medium))
                                     .foregroundColor(theme.textPrimary)
 
-                                HStack(spacing: 8) {
+                                HStack(spacing: MeeshySpacing.sm) {
                                     if let readAt = receipt.readAt {
-                                        Label(timeFormatter.string(from: readAt), systemImage: "checkmark.circle.fill")
-                                            .font(.system(size: 10))
+                                        Label(readAt.formatted(date: .omitted, time: .shortened), systemImage: "checkmark.circle.fill")
+                                            .font(MeeshyFont.relative(10))
                                             .foregroundColor(MeeshyColors.readReceipt)
                                     } else if let deliveredAt = receipt.deliveredAt {
-                                        Label(timeFormatter.string(from: deliveredAt), systemImage: "checkmark.circle")
-                                            .font(.system(size: 10))
+                                        Label(deliveredAt.formatted(date: .omitted, time: .shortened), systemImage: "checkmark.circle")
+                                            .font(MeeshyFont.relative(10))
                                             .foregroundColor(theme.textMuted)
                                     } else {
                                         Text(String(localized: "common.pending", defaultValue: "En attente", bundle: .main))
-                                            .font(.system(size: 10))
+                                            .font(MeeshyFont.relative(10))
                                             .foregroundColor(theme.textMuted)
                                             .italic()
                                     }
@@ -643,10 +628,10 @@ struct MessageInfoSheet: View {
 
                             Spacer()
                         }
-                        .padding(.vertical, 4)
+                        .padding(.vertical, MeeshySpacing.xs)
                     }
                 }
-                .padding(14)
+                .padding(MeeshySpacing.md)
                 .background(sectionBackground)
                 .opacity(appearAnimation ? 1 : 0)
                 .offset(y: appearAnimation ? 0 : 25)
