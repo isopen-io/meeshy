@@ -15,6 +15,15 @@ import { logger } from '../utils/logger';
 import { CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
 import { buildCallSummaryWithMetadata, callSummaryClientMessageId } from '@meeshy/shared/utils/call-summary';
 import { TURNCredentialService } from './TURNCredentialService';
+import {
+  buildCallHistoryItem,
+  type CallHistoryItem,
+  type CallHistoryPeer,
+  type CallHistoryRow
+} from './callHistory';
+
+/** Call journal sliding window: 3 months. */
+const CALL_HISTORY_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
 
 /** Floor a finite, non-negative byte counter; anything else → null. */
 const clampNonNegativeInt = (value?: number | null): number | null =>
@@ -928,6 +937,112 @@ export class CallService {
     });
 
     return call;
+  }
+
+  /**
+   * Paginated call journal for a user: the terminal (ended/missed/rejected/
+   * failed) calls in conversations they belong to, newest first, over a 3-month
+   * sliding window. Cursor-paginated by call id.
+   *
+   * Peer resolution: for a direct (P2P) conversation the "other party" is the
+   * conversation's other member — resolved from the conversation roster, not the
+   * call participants — so a missed outgoing call (callee never joined) still
+   * shows who was dialed. Group calls carry no peer (the conversation
+   * name/avatar identifies them).
+   */
+  async listHistory(
+    userId: string,
+    options: { limit: number; cursor?: string; filter: 'all' | 'missed' }
+  ): Promise<{ items: CallHistoryItem[]; hasMore: boolean; nextCursor?: string }> {
+    const { limit, cursor, filter } = options;
+    const windowStart = new Date(Date.now() - CALL_HISTORY_WINDOW_MS);
+
+    const where: Prisma.CallSessionWhereInput = {
+      startedAt: { gte: windowStart },
+      status: { in: TERMINAL_STATUSES },
+      conversation: { participants: { some: { userId, isActive: true } } }
+    };
+    if (filter === 'missed') {
+      // A missed call: an incoming call that rang out unanswered. Keyed on the
+      // distinct `missed` status so calls the user actively rejected
+      // (status `rejected`) and the user's own unanswered outgoing calls are
+      // excluded.
+      where.status = CallStatus.missed;
+      where.initiatorId = { not: userId };
+    }
+
+    const rows = await this.prisma.callSession.findMany({
+      where,
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      select: {
+        id: true,
+        conversationId: true,
+        mode: true,
+        status: true,
+        endReason: true,
+        initiatorId: true,
+        startedAt: true,
+        answeredAt: true,
+        endedAt: true,
+        duration: true,
+        bytesSent: true,
+        bytesReceived: true,
+        metadata: true,
+        conversation: { select: { type: true, title: true, avatar: true } }
+      }
+    });
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const nextCursor = hasMore ? page[page.length - 1]?.id : undefined;
+
+    // Resolve all direct-call peers in a single batched roster query.
+    const directConvIds = Array.from(
+      new Set(page.filter((r) => r.conversation.type === 'direct').map((r) => r.conversationId))
+    );
+    const peerByConv = new Map<string, CallHistoryPeer>();
+    if (directConvIds.length > 0) {
+      const members = await this.prisma.participant.findMany({
+        where: { conversationId: { in: directConvIds }, userId: { not: userId } },
+        select: {
+          conversationId: true,
+          user: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatar: true,
+              phoneNumber: true,
+              isOnline: true
+            }
+          }
+        }
+      });
+      for (const m of members) {
+        if (m.user && !peerByConv.has(m.conversationId)) {
+          peerByConv.set(m.conversationId, {
+            userId: m.user.id,
+            username: m.user.username,
+            displayName: m.user.displayName ?? null,
+            avatar: m.user.avatar ?? null,
+            phoneNumber: m.user.phoneNumber ?? null,
+            isOnline: m.user.isOnline
+          });
+        }
+      }
+    }
+
+    const items = page.map((row) =>
+      buildCallHistoryItem(
+        row as CallHistoryRow,
+        userId,
+        row.conversation.type === 'direct' ? peerByConv.get(row.conversationId) ?? null : null
+      )
+    );
+
+    return { items, hasMore, nextCursor };
   }
 
   /**

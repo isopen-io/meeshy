@@ -111,6 +111,17 @@ export const getActiveCallSchema = z.object({
 export const getActiveCallForUserSchema = z.object({});
 
 /**
+ * GET /api/calls/history - Paginated call journal (query params)
+ * Parsed in-handler (mirrors the feed route), so this is the query shape only.
+ */
+export const callHistoryQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(30),
+  cursor: objectIdSchema.optional(),
+  filter: z.enum(['all', 'missed']).default('all')
+});
+export type CallHistoryQueryInput = z.infer<typeof callHistoryQuerySchema>;
+
+/**
  * Socket.IO Event: call:initiate
  */
 export const socketInitiateCallSchema = z.object({
