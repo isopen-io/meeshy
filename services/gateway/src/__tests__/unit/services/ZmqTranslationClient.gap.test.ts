@@ -14,6 +14,9 @@
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { EventEmitter } from 'events';
+// Seuils de tolérance ZMQ (source de vérité) — évite que ces tests dérivent quand
+// les défauts changent. Aucune env var posée en test → valeurs par défaut.
+import { ZMQ_TOLERANCE_DEFAULTS } from '../../../services/zmq-translation/zmqToleranceConfig';
 
 // ── Mock zeromq ──────────────────────────────────────────────────────────────
 const mockPushSocket = {
@@ -258,7 +261,8 @@ describe('ZmqTranslationClient — gap-fill', () => {
   // ── Circuit breaker ───────────────────────────────────────────────────────────
   describe('Circuit breaker', () => {
     async function openCircuitBreaker() {
-      for (let i = 0; i < 5; i++) {
+      // CB_FAILURE_THRESHOLD erreurs consécutives ouvrent le breaker (valeur source).
+      for (let i = 0; i < ZMQ_TOLERANCE_DEFAULTS.cbFailureThreshold; i++) {
         (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([makeTranslationErrorBuf(`cb-task-${i}`)]);
         jest.advanceTimersByTime(100);
         await Promise.resolve();
@@ -300,15 +304,16 @@ describe('ZmqTranslationClient — gap-fill', () => {
     });
 
     it('should open the circuit breaker after CB_FAILURE_THRESHOLD consecutive errors', async () => {
-      // 4 errors should NOT open the CB (threshold is 5)
-      for (let i = 0; i < 4; i++) {
+      const threshold = ZMQ_TOLERANCE_DEFAULTS.cbFailureThreshold;
+      // threshold-1 errors should NOT open the CB.
+      for (let i = 0; i < threshold - 1; i++) {
         (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([makeTranslationErrorBuf(`pre-task-${i}`)]);
         jest.advanceTimersByTime(100);
         await Promise.resolve();
         await Promise.resolve();
       }
 
-      // Still open (4 errors < 5 threshold)
+      // Still closed (threshold-1 errors < threshold).
       await expect(
         client.sendTranslationRequest({
           messageId: 'msg-pre',
@@ -319,8 +324,8 @@ describe('ZmqTranslationClient — gap-fill', () => {
         })
       ).resolves.toBe('gap-uuid-0001');
 
-      // 5th error opens the CB
-      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([makeTranslationErrorBuf('pre-task-4')]);
+      // The threshold-th error opens the CB.
+      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([makeTranslationErrorBuf(`pre-task-${threshold - 1}`)]);
       jest.advanceTimersByTime(100);
       await Promise.resolve();
       await Promise.resolve();
@@ -429,15 +434,15 @@ describe('ZmqTranslationClient — gap-fill', () => {
         conversationId: 'conv-ex'
       });
 
-      // ZMQ_MAX_RETRIES=3: initial + 3 retries = 4 timer firings.
+      // Initial attempt + ZMQ_MAX_RETRIES retries = maxRetries+1 timer firings.
       // The polling setInterval (100ms) fires ~300× per 30s advance, flooding
       // the microtask queue with receive-rejection microtasks before the retry
       // chain gets to run.  We drain them all (700 flush iterations is well
-      // above 300×2 setInterval microtasks + 4 retry-chain microtasks).
-      // On the 4th firing (retries===ZMQ_MAX_RETRIES) the else-branch emits
+      // above 300×2 setInterval microtasks + retry-chain microtasks).
+      // On the last firing (retries===ZMQ_MAX_RETRIES) the else-branch emits
       // the error synchronously inside advanceTimersByTime.
       const flush = async () => { for (let j = 0; j < 700; j++) await Promise.resolve(); };
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < ZMQ_TOLERANCE_DEFAULTS.maxRetries + 1; i++) {
         jest.advanceTimersByTime(30_001);
         await flush();
       }
