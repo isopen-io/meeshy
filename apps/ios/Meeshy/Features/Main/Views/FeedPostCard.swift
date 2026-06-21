@@ -268,12 +268,21 @@ struct FeedPostCard: View {
                             Text(String(localized: "feed.post.see_more", defaultValue: "voir plus", bundle: .main))
                                 .font(.subheadline.weight(.medium))
                                 .foregroundColor(theme.textMuted)
-                                .onTapGesture {
-                                    withAnimation(.easeInOut(duration: 0.25)) {
-                                        isTextExpanded = true
-                                    }
-                                    onSeeMore?()
-                                }
+                                // Cible de touche 44pt (HIG) sans gonfler le texte visuellement.
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
+                                .textSelection(.disabled)
+                                .highPriorityGesture(
+                                    TapGesture()
+                                        .onEnded {
+                                            HapticFeedback.light()
+                                            withAnimation(.easeInOut(duration: 0.25)) {
+                                                isTextExpanded = true
+                                            }
+                                            onSeeMore?()
+                                        }
+                                )
+                                .accessibilityIdentifier("feed.post.see_more")
                                 .accessibilityAddTraits(.isButton)
                                 .accessibilityHint(String(localized: "a11y.feed.post.see_more.hint", defaultValue: "Affiche le texte complet", bundle: .main))
                         }

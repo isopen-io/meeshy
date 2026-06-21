@@ -60,26 +60,40 @@ struct BubbleExpandableText: View, Equatable {
                     .textSelection(.enabled)
 
                 // Bouton texte « Voir plus » aligné en bas à droite (spec produit).
-                // Hit-area élargie via `.frame(minHeight: 28).contentShape(Rectangle())`
-                // pour rester au-dessus du minimum thumb-friendly (24pt).
-                // `.buttonStyle(.plain)` est OBLIGATOIRE pour que le tap survive au
-                // `.simultaneousGesture(LongPressGesture(0.35))` que `BubbleSwipeContainer`
-                // pose sur la bulle — sans lui le default style entre en arbitrage avec
-                // le long-press parent et le tap est souvent avalé.
-                Button {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        isExpanded = true
-                    }
-                } label: {
-                    Text(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(textColor.opacity(0.6))
-                        .frame(maxWidth: .infinity, minHeight: 28, alignment: .trailing)
-                        .padding(.top, 2)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
+                //
+                // AMÉLIORATION FIABILITÉ (Task ExpandableTextFix) :
+                // 1. Décalage horizontal (`.padding(.trailing, 48)`) pour garantir
+                //    l'exclusion de la zone de contact du coin inférieur droit.
+                //    L'overlay des réactions (bouton "+") fait 40pt de large et
+                //    déborde de 4pt vers l'extérieur : 48pt assure une séparation
+                //    géométrique absolue.
+                // 2. Utilisation de `.highPriorityGesture` avec un `TapGesture`
+                //    pour garantir que le tap gagne sur le `LongPressGesture`
+                //    simultané du parent (`BubbleSwipeContainer`) et sur la
+                //    sélection de texte (`.textSelection(.enabled)`).
+                // 3. `.textSelection(.disabled)` explicite sur le bouton pour
+                //    qu'un tap imprécis ne déclenche pas le mode sélection.
+                Text(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(textColor.opacity(0.6))
+                    // Hit-area élargie à 44pt (HIG) sans gonfler visuellement le texte.
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
+                    .padding(.top, 2)
+                    .padding(.trailing, 48)
+                    .contentShape(Rectangle())
+                    .textSelection(.disabled)
+                    .highPriorityGesture(
+                        TapGesture()
+                            .onEnded {
+                                HapticFeedback.light()
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    isExpanded = true
+                                }
+                            }
+                    )
+                    .accessibilityIdentifier("bubble.expand.more")
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
             }
         } else {
             // Déplié (ou court) : on affiche le message COMPLET sans aucun
