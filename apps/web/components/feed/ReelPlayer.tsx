@@ -93,6 +93,8 @@ export interface ReelPlayerProps {
   isLiked: boolean;
   isBookmarked: boolean;
   userLanguage?: string;
+  /** When true the player fills its (relatively-positioned) parent instead of the viewport. */
+  embedded?: boolean;
   onPrev: () => void;
   onNext: () => void;
   onClose: () => void;
@@ -118,6 +120,7 @@ export function ReelPlayer({
   isLiked,
   isBookmarked,
   userLanguage,
+  embedded = false,
   onPrev,
   onNext,
   onClose,
@@ -202,7 +205,9 @@ export function ReelPlayer({
 
   return (
     <section
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black select-none"
+      className={`${
+        embedded ? 'absolute inset-0' : 'fixed inset-0 z-50'
+      } flex items-center justify-center bg-black select-none`}
       aria-label={`Reel ${index + 1} sur ${total}`}
       onWheel={onWheel}
     >
