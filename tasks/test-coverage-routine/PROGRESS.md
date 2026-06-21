@@ -63,7 +63,7 @@ A run targets **one (feature × app) cell**. Pick the highest-priority `☐` cel
 | P2 | **Feed / posts / stories / reactions** | ☑ sub: PostAudioService.ts☑ PostTranslationService.ts☑ StoryTextObjectTranslationService.ts☑ postReplySnapshot.ts☑ postVisibility.ts☑ reelAffinity.ts☑ reactionNotify.ts☑ | ⊘ | ☑ sub: posts.service.ts☑ story.service.ts☑ use-feed-query.ts☑ use-feed-variants.ts☑ use-post-translation.ts☑ use-post-mutations.ts☑ use-post-socket-cache-sync.ts☑ use-reactions-query.ts☑ use-stories.ts☑ use-stories-realtime.ts☑ use-feed-realtime.ts☑ lib/story-transforms.ts☑ | ☐ | ☐ | ☐ |
 | P2 | **Calls** (WebRTC, call lifecycle, ICE restart) | ☑ sub: call-schemas.ts☑ CallService.ts☑ CallCleanupService.ts☑ routes/calls.ts☑ | ⊘ | ☑ sub: adaptive-degradation.ts☑(100%/96%) call-store.ts☑(100%/100%) use-call-quality.ts☑(100%/100%) use-video-call.ts☑(100%/97%) use-call-banner.ts☑(100%/100%) webrtc-service.ts☑(99.35%/98.80%) | ☐ | ⊘ | ⊘ |
 | P2 | **Rate limiting** (message/api/socket limits, Redis fallback) | ☑ sub: rate-limiter.ts (auth factories)☑ socket-rate-limiter.ts☑ message-limits.ts☑ middleware/rate-limit.ts☑ middleware/rate-limiter.ts☑ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ |
-| P2 | **Admin & moderation** | ☐ | ⊘ | ☐ | ⊘ | ⊘ | ⊘ |
+| P2 | **Admin & moderation** | ◐ sub: services/admin/*☑ middleware/admin-user-auth☑ validation/admin-schemas☑ routes/admin/* ☐ | ⊘ | ☐ | ⊘ | ⊘ | ⊘ |
 | P2 | **Theme/accent color** (ColorGeneration algorithm) | ⊘ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 | P2 | **Video/story export** (composition, export pipeline) | ⊘ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 
@@ -155,7 +155,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
 | web | `pnpm --filter web test:coverage` | 42.42 | 34.51 | 2026-06-21 (post P2 Calls × web sub-slice 1; +tests for adaptive-degradation/call-store/use-call-quality/use-video-call/use-call-banner; stmts:41.66/branch:34.51/funcs:38.96/lines:42.42; threshold floor unchanged lines:42/branches:34/statements:41/functions:38 — integer floors same) |
-| gateway | `pnpm --filter gateway test:coverage` | 54.78→55.27 | 52.09→52.64 | 2026-06-21 (post P2 Rate limiting × gateway; +232 tests covering 5 rate-limiting modules to 100% line / 98.5–100% branch; CI-measured lines=55.27%/branches=52.64%/stmts=55.1%/funcs=55.39%; threshold floor ratcheted lines:54→55/branches:52→52/statements:54→55/functions:54→55) |
+| gateway | `pnpm --filter gateway test:coverage` | 55.27→61.38 | 52.64→57.51 | 2026-06-21 (post P2 Admin & moderation × gateway sub-slice 1; +243 tests covering 6 services/admin + 1 middleware + 1 validation to ≥93% branch; local-measured stmts=61.12%/branches=57.51%/funcs=62.6%/lines=61.38%; threshold floor NOT ratcheted yet — awaiting CI measurement) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | ~39 | n/a | 2026-06-19 (post P1 Voice/audio × translator; +127 tests covering 6 modules; fail_under ratcheted 37→39; diarization GPU methods pragma'd) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |
