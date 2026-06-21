@@ -155,7 +155,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
 | web | `pnpm --filter web test:coverage` | 42.09 | 34.1 | 2026-06-21 (post P2 Feed/posts/stories × web remaining; +203 tests covering 7 modules; stmts:41.35/branch:34.1/funcs:38.66/lines:42.09; threshold floor ratcheted lines:38→42/branches:30→34/statements:38→41/functions:35→38; P2 Feed × web ☑) |
-| gateway | `pnpm --filter gateway test:coverage` | ~58+ | ~53+ | 2026-06-21 (post P2 Calls × gateway sub-slice 2/2; +56 tests, routes/calls.ts 100%/100%; CI-calibrated threshold floor ratcheted lines:54→56/branches:51→53/statements:54→56/functions:53→55; PR TBD) |
+| gateway | `pnpm --filter gateway test:coverage` | 54.78 | 52.09 | 2026-06-21 (post P2 Calls × gateway sub-slice 2/2; +56 tests, routes/calls.ts 100%/100%; CI-measured stmts:54.63/branch:52.09/funcs:54.01/lines:54.78; threshold floor lines:54/branches:52/statements:54/functions:54; PR #740) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | ~39 | n/a | 2026-06-19 (post P1 Voice/audio × translator; +127 tests covering 6 modules; fail_under ratcheted 37→39; diarization GPU methods pragma'd) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |

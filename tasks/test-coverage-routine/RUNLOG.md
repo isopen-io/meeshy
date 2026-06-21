@@ -1374,7 +1374,7 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Result: ☑ done — routes/calls.ts 100%/100% line+branch; P2 Calls × gateway cell flipped ◐→☑ (all 4 sub-files complete)
 - Coverage (per-file, local measurement):
   - `routes/calls.ts`: **100% stmts / 100% branches / 100% funcs / 100% lines** ✓ (target ≥92% both)
-  - Gateway global: CI-calibrated threshold ratcheted lines:54→56 / branches:51→53 / statements:54→56 / functions:53→55 (conservative +2 across board for 1082 added lines at 100%; local estimate ~61%/57%; CI estimate ~56%/53%)
+  - Gateway global (CI-measured): statements 54.63% / branches 52.09% / lines 54.78% / functions 54.01% — threshold ratcheted lines:54→54 / branches:51→52 / statements:54→54 / functions:53→54 (CI-calibrated values; initial +2 estimate was too aggressive — rolled back after CI run)
 - Tests added: 56 new tests in `src/__tests__/unit/routes/calls-routes.test.ts` (NEW)
   - Route registration (3): all 7 routes registered, POST /calls exists, GET /calls/active registered before GET /calls/:callId
   - POST /calls — initiateCall (7): 201 success, arg forwarding with participantId, DB lookup when participantId absent from authContext, 400 with parsed error code (colon split), no-colon fallback, missing-message fallback (non-Error thrown), error.details forwarded, multi-colon message split correctly
