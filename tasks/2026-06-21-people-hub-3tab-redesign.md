@@ -32,7 +32,40 @@ No Swift toolchain on the Linux runner → `./apps/ios/meeshy.sh build|test` cou
 be run here. Code written against existing proven patterns; **Xcode/CI must compile
 + run tests before merge.**
 
-## Phase 2 — full Call stack (next)
+## Phase 2 — full Call stack  ✅ (shipped)
+
+Delivered gateway → SDK → iOS. Note the IA refinement vs the 2026-06-07 plan:
+peer is resolved from the **conversation roster** (not CallParticipant), so missed
+incoming/outgoing calls — where the callee never joined — still show who was
+involved. `isVideo` = `CallSession.metadata.type === 'video'`.
+
+- **Gateway**: `GET /api/v1/calls/history?limit&cursor&filter=all|missed`,
+  cursor-paginated, 3-month window. Pure helpers in `callHistory.ts` (13 unit
+  tests, green) + `CallService.listHistory`. `missed` filter keyed on
+  `status='missed'` incoming (excludes rejected + own outgoing-unanswered).
+- **SDK**: `APICallRecord`/`CallDirection`/`CallHistoryPeer` + display accessors;
+  `CallHistoryService(+Providing)`; `CachePolicy.callHistory` +
+  `CacheCoordinator.callHistory` (encrypted, in init + invalidateAll).
+- **iOS**: `CallsViewModel` (cache-first), `CallsTab` journal (filter chips,
+  direction/video/duration rows, missed in red), `CallDetailSheet` (who/when/
+  type/duration/data/phone + redial), `CallStarter` (resolve-or-profile) wired to
+  journal redial + keypad result rows. `CallsViewModelTests` + mock.
+
+### Review (Phase 2)
+- Backend reviewed (independent agent): Prisma where/cursor/peer/route all sound;
+  refined `missed` filter to `status='missed'` (was `answeredAt: null`, which
+  wrongly included user-rejected calls). Accepted edge: anonymous direct peer →
+  `peer: null`.
+- iOS/SDK reviewed (independent agent): **no compile errors / logic bugs** — every
+  interface (CacheFirstLoader, LoadState exhaustiveness, GRDBCacheStore Date
+  round-trip, PaginatedAPIResponse, MeeshyAvatar contexts, CallStarter APIs,
+  `.sheet(item:)`, `[weak self]`/deinit, field parity) verified against real defs.
+- Reused, not reinvented: `EmptyStateView`, `MeeshyAvatar`, `CacheFirstLoader`,
+  `RelativeTimeFormatter`/`Date.relativeTimeString`, `CallManager.startCall`,
+  `ConversationService.findDirectWith`, existing pagination/response types.
+- Still unverifiable here: SDK/app Swift build + Xcode tests (no toolchain). Gateway
+  full `tsc`/integration need the network-blocked Prisma engine; pure helpers are
+  standalone-typechecked + unit-tested.
 
 Reuses the validated backend contract from the 2026-06-07 plan:
 1. **Gateway**: `GET /api/v1/calls/history?limit&cursor&filter=all|missed` →

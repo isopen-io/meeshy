@@ -963,9 +963,12 @@ export class CallService {
       conversation: { participants: { some: { userId, isActive: true } } }
     };
     if (filter === 'missed') {
-      // A missed call: someone else started it and it was never answered.
+      // A missed call: an incoming call that rang out unanswered. Keyed on the
+      // distinct `missed` status so calls the user actively rejected
+      // (status `rejected`) and the user's own unanswered outgoing calls are
+      // excluded.
+      where.status = CallStatus.missed;
       where.initiatorId = { not: userId };
-      where.answeredAt = null;
     }
 
     const rows = await this.prisma.callSession.findMany({
