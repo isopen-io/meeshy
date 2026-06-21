@@ -2,6 +2,68 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
+/// Bandeau réutilisable des pièces jointes stagées d'un commentaire (chips avec
+/// retrait). Partagé par toutes les surfaces de composer commentaire (feed/reels,
+/// post detail, stories) via `customAttachmentsPreview` de `UniversalComposerBar`.
+struct CommentAttachmentsTray: View {
+    let attachments: [ComposerAttachment]
+    let onRemove: (String) -> Void
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(attachments) { attachment in
+                    HStack(spacing: 6) {
+                        Image(systemName: icon(for: attachment.type))
+                            .font(.caption)
+                            .foregroundColor(Color(hex: attachment.thumbnailColor))
+                        Text(attachment.name)
+                            .font(.caption.weight(.medium))
+                            .lineLimit(1)
+                            .frame(maxWidth: 120)
+                        Button {
+                            HapticFeedback.light()
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                                onRemove(attachment.id)
+                            }
+                            if let url = attachment.url { try? FileManager.default.removeItem(at: url) }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.caption2.weight(.bold))
+                                .foregroundColor(theme.textMuted)
+                                .frame(width: 18, height: 18)
+                                .background(Circle().fill(theme.textMuted.opacity(0.15)))
+                        }
+                        .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pi\u{00E8}ce jointe", bundle: .main))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(theme.inputBackground)
+                            .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
+                    )
+                    .foregroundColor(theme.textPrimary)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func icon(for type: ComposerAttachmentType) -> String {
+        switch type {
+        case .voice: return "mic.fill"
+        case .location: return "location.fill"
+        case .image: return "photo.fill"
+        case .file: return "doc.fill"
+        case .video: return "video.fill"
+        }
+    }
+}
+
 /// Rendu inline du média unique d'un commentaire (image / vidéo / audio), avec
 /// lecture plein écran « comme dans une conversation ». Réutilise EXACTEMENT les
 /// mêmes building blocks que les médias de post/message :

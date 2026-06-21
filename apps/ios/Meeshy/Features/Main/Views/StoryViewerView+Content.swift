@@ -679,8 +679,8 @@ extension StoryViewerView {
 
     // MARK: - Actions
 
-    func sendComment(text: String, effectFlags: Int? = nil, parentId: String? = nil) {
-        guard !text.isEmpty, let story = currentStory else { return }
+    func sendComment(text: String, effectFlags: Int? = nil, parentId: String? = nil, pendingMedia: PendingCommentMedia? = nil) {
+        guard (!text.isEmpty || pendingMedia != nil), let story = currentStory else { return }
         EngagementTracker.shared.recordAction(.commented, surface: .storyViewer)
 
         // Optimistic local insert. Reply nesting is currently flat in the UI
@@ -699,7 +699,8 @@ extension StoryViewerView {
             content: text,
             parentId: parentId,
             effectFlags: effectFlags ?? 0,
-            originalLanguage: composerLanguage
+            originalLanguage: composerLanguage,
+            media: pendingMedia.map { [$0.optimistic] } ?? []
         )
 
         if let parentId {
@@ -719,15 +720,24 @@ extension StoryViewerView {
             storyCommentCount += 1
         }
 
-        // Send to API
+        // Send to API. Un média éventuel est uploadé (uploadContext=comment → PostMedia)
+        // puis transmis via `attachmentIds` ; la ligne serveur réconcilie via le socket
+        // `comment:added` (qui porte désormais le média). Le commentaire optimiste
+        // affiche déjà le média local.
         let language = composerLanguage
         Task {
+            var attachmentIds: [String]? = nil
+            if let pendingMedia, let uploadedId = try? await CommentMediaUploader.upload(pendingMedia) {
+                attachmentIds = [uploadedId]
+            }
             await StoryInteractionService().postComment(
                 storyId: story.id,
                 content: text,
                 originalLanguage: language,
                 effectFlags: effectFlags,
-                parentId: parentId
+                parentId: parentId,
+                attachmentIds: attachmentIds,
+                mobileTranscription: pendingMedia?.mobileTranscription
             )
         }
 

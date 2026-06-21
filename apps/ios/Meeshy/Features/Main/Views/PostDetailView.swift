@@ -1,5 +1,7 @@
 import SwiftUI
 import Combine
+import PhotosUI
+import UniformTypeIdentifiers
 import MeeshySDK
 import MeeshyUI
 
@@ -24,6 +26,12 @@ struct PostDetailView: View {
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false
+    // Comment attachments + real voice capture (parity with feed/reels composer).
+    @State private var commentAttachments: [ComposerAttachment] = []
+    @State private var showCommentPhotoPicker: Bool = false
+    @State private var commentPhotoItems: [PhotosPickerItem] = []
+    @State private var showCommentFilePicker: Bool = false
+    @StateObject private var audioRecorder = AudioRecorderManager()
     @State private var isTextExpanded = false
     @State private var headerScrollOffset: CGFloat = 0
     // Inline story canvas playback gating (audio active → pause when off-screen / in call).
@@ -1745,28 +1753,100 @@ struct PostDetailView: View {
             style: .light,
             mode: .comment,
             accentColor: accentColor,
+            forceShowAttachment: true,
+            forceShowVoice: true,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
-            onSend: { text in
-                let effects = commentEffects
-                let blur = commentBlurEnabled
-                commentEffects = .none
-                commentBlurEnabled = false
-                Task {
-                    let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
-                    let effectFlags = flags > 0 ? Int(flags) : nil
-                    if viewModel.replyingTo != nil {
-                        await viewModel.sendReply(text, effectFlags: effectFlags)
-                    } else {
-                        await viewModel.sendComment(text, effectFlags: effectFlags)
-                    }
-                }
-            },
+            onSendMessage: { text, attachments, _ in submitComment(text: text, attachments: attachments) },
             replyBanner: replyBannerView,
+            customAttachmentsPreview: commentAttachments.isEmpty
+                ? nil
+                : AnyView(CommentAttachmentsTray(attachments: commentAttachments) { id in
+                    commentAttachments.removeAll { $0.id == id }
+                  }),
+            onPhotoLibrary: { showCommentPhotoPicker = true },
+            onFilePicker: { showCommentFilePicker = true },
+            onStartRecording: { startCommentRecording() },
+            onStopRecordingToAttachment: { stopCommentRecordingToAttachment() },
+            onSendRecording: { stopAndSendCommentRecording() },
+            onCancelRecording: { audioRecorder.cancelRecording() },
+            externalIsRecording: audioRecorder.isRecording,
+            externalRecordingDuration: audioRecorder.duration,
+            externalAudioLevels: audioRecorder.audioLevels,
+            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
+            externalAttachments: commentAttachments,
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects,
             focusTrigger: $composerFocusTrigger
         )
+        .photosPicker(
+            isPresented: $showCommentPhotoPicker,
+            selection: $commentPhotoItems,
+            maxSelectionCount: 1,
+            matching: .any(of: [.images, .videos])
+        )
+        .fileImporter(
+            isPresented: $showCommentFilePicker,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: false
+        ) { result in
+            if case .success(let urls) = result {
+                commentAttachments = CommentComposerStaging.fileAttachments(from: urls)
+            }
+        }
+        .adaptiveOnChange(of: commentPhotoItems) { _, items in
+            Task {
+                commentAttachments = await CommentComposerStaging.photoAttachments(from: items)
+                await MainActor.run { commentPhotoItems = [] }
+            }
+        }
+    }
+
+    // MARK: - Comment send + voice (parity with feed/reels composer)
+
+    private func submitComment(text: String, attachments: [ComposerAttachment]) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let media = CommentComposerStaging.firstPendingMedia(in: attachments)
+        commentAttachments.removeAll()
+        guard !trimmed.isEmpty || media != nil else { return }
+        let effects = commentEffects
+        let blur = commentBlurEnabled
+        commentEffects = .none
+        commentBlurEnabled = false
+        let parentId = viewModel.replyingTo?.id
+        let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
+        let effectFlags = flags > 0 ? Int(flags) : nil
+        Task {
+            if let media {
+                await viewModel.submitCommentWithMedia(trimmed, effectFlags: effectFlags, parentId: parentId, pendingMedia: media)
+            } else if parentId != nil {
+                await viewModel.sendReply(trimmed, effectFlags: effectFlags)
+            } else {
+                await viewModel.sendComment(trimmed, effectFlags: effectFlags)
+            }
+        }
+    }
+
+    private func startCommentRecording() {
+        audioRecorder.startRecording()
+        HapticFeedback.medium()
+    }
+
+    @discardableResult
+    private func stopCommentRecordingToAttachment() -> Bool {
+        guard audioRecorder.duration > 0.5 else {
+            audioRecorder.cancelRecording()
+            return false
+        }
+        let duration = audioRecorder.duration
+        guard let url = audioRecorder.stopRecording() else { return false }
+        commentAttachments.append(CommentComposerStaging.voiceAttachment(duration: duration, url: url))
+        return true
+    }
+
+    private func stopAndSendCommentRecording() {
+        guard stopCommentRecordingToAttachment() else { return }
+        submitComment(text: "", attachments: commentAttachments)
     }
 }
 

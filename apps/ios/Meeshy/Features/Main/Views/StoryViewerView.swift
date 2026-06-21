@@ -1097,8 +1097,8 @@ struct StoryViewerView: View {
             dismissComposer: { dismissComposer() },
             goToPrevious: { goToPrevious() },
             goToNext: { goToNext() },
-            sendComment: { text, effectFlags, parentId in
-                sendComment(text: text, effectFlags: effectFlags, parentId: parentId)
+            sendComment: { text, effectFlags, parentId, pendingMedia in
+                sendComment(text: text, effectFlags: effectFlags, parentId: parentId, pendingMedia: pendingMedia)
             },
             makeStoryCommentRow: { comment, userLang in
                 makeStoryCommentRow(comment, userLang: userLang)

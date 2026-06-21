@@ -889,9 +889,7 @@ struct CommentsSheetView: View {
         }
         let duration = audioRecorder.duration
         guard let url = audioRecorder.stopRecording() else { return false }
-        var voice = ComposerAttachment.voice(duration: duration)
-        voice.url = url
-        commentAttachments.append(voice)
+        commentAttachments.append(CommentComposerStaging.voiceAttachment(duration: duration, url: url))
         return true
     }
 
@@ -904,38 +902,6 @@ struct CommentsSheetView: View {
 
     // MARK: - Comment Send (optimistic, with single media)
 
-    /// Construit un `PendingCommentMedia` (image/vidéo/audio) depuis une pièce jointe
-    /// stagée par le composer. Renvoie nil pour les types hors périmètre (file/location)
-    /// ou sans fichier local (ex. voix timer-only). L'`optimistic` pointe sur le fichier
-    /// local pour l'affichage inline immédiat avant confirmation serveur.
-    private func pendingCommentMedia(from attachment: ComposerAttachment) -> PendingCommentMedia? {
-        guard let url = attachment.url else { return nil }
-        let feedType: FeedMediaType
-        let fallbackMime: String
-        switch attachment.type {
-        case .image: feedType = .image; fallbackMime = "image/jpeg"
-        case .video: feedType = .video; fallbackMime = "video/mp4"
-        case .voice: feedType = .audio; fallbackMime = "audio/mp4"
-        case .file, .location: return nil
-        }
-        // `ComposerAttachment` ne porte pas de mimeType — on le dérive de l'extension
-        // du fichier local (fallback par type sinon).
-        let mimeType = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? fallbackMime
-        let optimistic = FeedMedia(
-            type: feedType,
-            url: url.absoluteString,
-            thumbnailColor: attachment.thumbnailColor,
-            duration: attachment.duration.map { Int($0) },
-            fileName: attachment.name
-        )
-        return PendingCommentMedia(
-            fileURL: url,
-            mimeType: mimeType,
-            mobileTranscription: nil,
-            optimistic: optimistic
-        )
-    }
-
     /// Poste un commentaire de façon optimiste, avec optionnellement UN média
     /// (image/vidéo/audio — un commentaire ne porte qu'un seul média). Le texte
     /// suit le flux reconcile/rollback existant ; le média est uploadé via TUS
@@ -945,7 +911,7 @@ struct CommentsSheetView: View {
     private func submitComment(text: String, attachments: [ComposerAttachment]) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         // Un seul média par commentaire : on prend le premier image/vidéo/audio valide.
-        let media: PendingCommentMedia? = attachments.lazy.compactMap { pendingCommentMedia(from: $0) }.first
+        let media: PendingCommentMedia? = CommentComposerStaging.firstPendingMedia(in: attachments)
         commentAttachments.removeAll()
 
         // Rien à envoyer (ni texte ni média exploitable).
