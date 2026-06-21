@@ -93,25 +93,39 @@ struct KeypadTab: View {
 
     @ViewBuilder
     private var hint: some View {
-        if viewModel.loadState == .loading {
+        switch viewModel.loadState {
+        case .loading:
             ProgressView()
                 .tint(MeeshyColors.indigo500)
                 .padding(.top, 28)
-        } else if !viewModel.input.isEmpty {
-            VStack(spacing: 6) {
-                Text(String(localized: "keypad.no-match.title", defaultValue: "Aucun contact trouve", bundle: .main))
-                    .font(.callout.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
-                Text(String(localized: "keypad.no-match.subtitle", defaultValue: "Composez un numero ou tapez un nom pour rechercher.", bundle: .main))
-                    .font(.footnote)
-                    .foregroundColor(theme.textMuted)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
-            }
-            .padding(.top, 24)
-        } else {
-            EmptyView()
+        case .loaded:
+            // A search actually ran and returned nothing.
+            hintMessage(
+                title: String(localized: "keypad.no-match.title", defaultValue: "Aucun contact trouve", bundle: .main),
+                subtitle: String(localized: "keypad.no-match.subtitle", defaultValue: "Verifiez le numero ou le nom saisi.", bundle: .main)
+            )
+        default:
+            // Idle / too-short / error: prompt without falsely claiming a
+            // completed search found nothing.
+            hintMessage(
+                title: String(localized: "keypad.prompt.title", defaultValue: "Composez un numero ou un nom", bundle: .main),
+                subtitle: String(localized: "keypad.prompt.subtitle", defaultValue: "Trouvez une personne par numero de telephone ou par nom.", bundle: .main)
+            )
         }
+    }
+
+    private func hintMessage(title: String, subtitle: String) -> some View {
+        VStack(spacing: 6) {
+            Text(title)
+                .font(.callout.weight(.semibold))
+                .foregroundColor(theme.textPrimary)
+            Text(subtitle)
+                .font(.footnote)
+                .foregroundColor(theme.textMuted)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+        }
+        .padding(.top, 24)
     }
 
     private func resultRow(_ user: UserSearchResult) -> some View {

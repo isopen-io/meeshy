@@ -127,6 +127,17 @@ final class KeypadViewModelTests: XCTestCase {
         XCTAssertEqual(sut.loadState, .loaded)
     }
 
+    func test_search_withShortPhoneNumber_doesNotHitNetwork() async {
+        let (sut, userService) = makeSUT()
+        sut.input = "06"
+
+        await sut.search()
+
+        XCTAssertEqual(userService.getProfileByPhoneCallCount, 0)
+        XCTAssertTrue(sut.matches.isEmpty)
+        XCTAssertEqual(sut.loadState, .idle)
+    }
+
     // MARK: - Name search
 
     func test_search_withName_searchesUsers() async {

@@ -59,6 +59,12 @@ final class KeypadViewModel: ObservableObject {
 
     // MARK: - Classification
 
+    /// Shortest numeric input that triggers a phone lookup. Below this we stay
+    /// idle rather than pinging `getProfileByPhone` for every leading digit.
+    private static let minPhoneDigits = 3
+    /// Shortest text input that triggers a name search.
+    private static let minNameLength = 2
+
     /// `true` when the trimmed input is composed solely of phone characters
     /// (digits, `+`, and common separators). Decides phone-exact lookup vs.
     /// name search.
@@ -67,6 +73,10 @@ final class KeypadViewModel: ObservableObject {
         guard !trimmed.isEmpty else { return false }
         let allowed = CharacterSet(charactersIn: "0123456789+ -().")
         return trimmed.unicodeScalars.allSatisfy { allowed.contains($0) }
+    }
+
+    private var digitCount: Int {
+        input.unicodeScalars.filter { CharacterSet.decimalDigits.contains($0) }.count
     }
 
     // MARK: - Search
@@ -83,7 +93,8 @@ final class KeypadViewModel: ObservableObject {
     }
 
     /// Resolves the current input. Tested directly (the view goes through
-    /// `scheduleSearch()` for debouncing).
+    /// `scheduleSearch()` for debouncing). `.loading` is set only when a network
+    /// call actually fires — short inputs stay `.idle`.
     func search() async {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -91,40 +102,54 @@ final class KeypadViewModel: ObservableObject {
             loadState = .idle
             return
         }
-        loadState = .loading
         if isPhoneNumber {
+            guard digitCount >= Self.minPhoneDigits else {
+                matches = []
+                loadState = .idle
+                return
+            }
+            loadState = .loading
             await lookupByPhone(trimmed)
         } else {
+            guard trimmed.count >= Self.minNameLength else {
+                matches = []
+                loadState = .idle
+                return
+            }
+            loadState = .loading
             await searchByName(trimmed)
         }
     }
 
     private func lookupByPhone(_ phone: String) async {
-        do {
-            let user = try await userService.getProfileByPhone(phone)
-            matches = [Self.result(from: user)]
-            loadState = .loaded
-        } catch {
-            // A 404 here simply means "no Meeshy user owns this number" — a
-            // normal, expected outcome of dialing, not an error state.
-            matches = []
-            loadState = .loaded
-        }
+        // A thrown error (typically 404) simply means "no Meeshy user owns this
+        // number" — a normal, expected outcome of dialing, not an error state.
+        let user = try? await userService.getProfileByPhone(phone)
+        // Drop results from a superseded query: the input may have changed (new
+        // keystroke) or been cleared while this lookup was in flight.
+        guard isCurrent(phone) else { return }
+        matches = user.map { [Self.result(from: $0)] } ?? []
+        loadState = .loaded
     }
 
     private func searchByName(_ query: String) async {
-        guard query.count >= 2 else {
-            matches = []
-            loadState = .idle
-            return
-        }
         do {
-            matches = try await userService.searchUsers(query: query, limit: 20, offset: 0)
+            let results = try await userService.searchUsers(query: query, limit: 20, offset: 0)
+            guard isCurrent(query) else { return }
+            matches = results
             loadState = .loaded
         } catch {
+            guard isCurrent(query) else { return }
             matches = []
             loadState = .error(error.localizedDescription)
         }
+    }
+
+    /// `true` when `query` still matches the live input — i.e. no newer
+    /// keystroke (or `clear()`) has superseded the search that produced it.
+    /// Guards against debounce races and out-of-order network completion.
+    private func isCurrent(_ query: String) -> Bool {
+        input.trimmingCharacters(in: .whitespacesAndNewlines) == query
     }
 
     private static func result(from user: MeeshyUser) -> UserSearchResult {
