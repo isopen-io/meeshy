@@ -697,6 +697,7 @@ struct CommentsSheetView: View {
             },
             onPhotoLibrary: { showCommentPhotoPicker = true },
             onFilePicker: { showCommentFilePicker = true },
+            onRecentMediaSelected: { pick in ingestCommentRecentMedia(pick) },
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects,
             externalAttachments: commentAttachments,
@@ -803,6 +804,27 @@ struct CommentsSheetView: View {
                 await MainActor.run { commentAttachments.append(attachment) }
             }
             await MainActor.run { commentPhotoItems = [] }
+        }
+    }
+
+    /// Ingests a photo/video tapped in the inline recent-media strip into the
+    /// staged comment attachments.
+    private func ingestCommentRecentMedia(_ pick: RecentMediaPick) {
+        switch pick {
+        case .image(let image):
+            guard let data = image.jpegData(compressionQuality: 0.9) else { return }
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("comment_\(UUID().uuidString).jpg")
+            guard (try? data.write(to: url)) != nil else { return }
+            commentAttachments.append(ComposerAttachment.image(url: url))
+        case .video(let url):
+            commentAttachments.append(
+                ComposerAttachment(
+                    id: "video-\(UUID().uuidString)", type: .video,
+                    name: String(localized: "attachment.label.video", defaultValue: "Video", bundle: .main),
+                    url: url, thumbnailColor: "FF6B6B"
+                )
+            )
         }
     }
 

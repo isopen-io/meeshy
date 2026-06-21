@@ -157,6 +157,7 @@ extension ConversationView {
                     composerState.showTextEmojiPicker.toggle()
                 }
             },
+            onRecentMediaSelected: { pick in ingestRecentMediaPick(pick) },
             injectedEmoji: $composerState.emojiToInject,
             ephemeralDuration: $viewModel.ephemeralDuration,
             hideEphemeral: composerState.editingMessageId != nil,
@@ -281,6 +282,17 @@ extension ConversationView {
             }, onCancel: {
                 scrollState.audioToEdit = nil
             })
+        }
+    }
+
+    // MARK: - Recent Media Strip Selection
+
+    /// Ingests a photo/video tapped in the composer's inline recent-media strip
+    /// through the same preparation pipeline as a camera capture.
+    func ingestRecentMediaPick(_ pick: RecentMediaPick) {
+        switch pick {
+        case .image(let image): handleCameraCapture(image)
+        case .video(let url): handleCameraVideo(url)
         }
     }
 

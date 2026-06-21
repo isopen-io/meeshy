@@ -133,6 +133,11 @@ struct UniversalComposerBar: View {
     /// Called when user taps emoji icon in ladder — parent should show EmojiFullPickerSheet
     var onRequestTextEmoji: (() -> Void)? = nil
 
+    /// Called when the user taps a thumbnail in the inline recent-media strip
+    /// (shown beneath the attachment carousel). When non-nil, the strip is
+    /// rendered; the host ingests the resolved photo/video like a camera capture.
+    var onRecentMediaSelected: ((RecentMediaPick) -> Void)? = nil
+
     /// Bind this to inject an emoji into the text field from outside (e.g. from parent's emoji picker)
     var injectedEmoji: Binding<String> = .constant("")
 

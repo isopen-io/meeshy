@@ -109,6 +109,17 @@ extension UniversalComposerBar {
                 .padding(.vertical, 12)
             }
 
+            // Inline recent photos/videos — selectable straight into the
+            // attachment tray, with a leading "+" to open the full library.
+            if let onRecentMediaSelected {
+                Divider().opacity(0.4).padding(.horizontal, 14)
+                RecentMediaStrip(
+                    accentColor: accentColor,
+                    onOpenLibrary: { fire { onPhotoLibrary?() } },
+                    onSelect: onRecentMediaSelected
+                )
+            }
+
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity)
