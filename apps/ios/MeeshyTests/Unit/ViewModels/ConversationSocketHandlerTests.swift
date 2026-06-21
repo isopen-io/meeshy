@@ -805,6 +805,47 @@ final class ConversationSocketHandlerTests: XCTestCase {
             "the row must stay at .sent until EVERY recipient has received it")
     }
 
+    /// Soundness (never over-claim): a message I sent AFTER the peer's read
+    /// moment must NOT be marked read by a batch read event, even when the
+    /// summary says read-by-all (that "all" refers to the older latest message).
+    /// Mirrors the cache-path frontier guard.
+    func test_readStatusUpdated_messageAfterFrontier_staysUnread() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+        _ = delegate
+
+        // Message created NOW (2026), well after the event's read frontier (2020).
+        var record = makeSeedRecord(localId: "msg1", senderId: currentUserId, content: "after")
+        record.state = .sent
+        record.createdAt = Date()
+        try await actor.insertOptimistic(record)
+        await actor.start()
+
+        let event: ReadStatusUpdateEvent = JSONStub.decode("""
+        {
+            "conversationId":"\(conversationId)",
+            "participantId":"participant-other",
+            "userId":"\(otherUserId)",
+            "type":"read",
+            "updatedAt":"2020-01-01T00:00:00.000Z",
+            "summary":{"totalMembers":2,"deliveredCount":2,"readCount":2}
+        }
+        """)
+        socket.readStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 600_000_000)
+
+        let after = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: "msg1")
+        }
+        XCTAssertNil(after?.readAt,
+            "a message sent AFTER the read frontier must NOT be marked read")
+        XCTAssertNil(after?.readByAllAt,
+            "and must NOT be stamped read-by-all")
+        XCTAssertEqual(after?.state, .sent)
+    }
+
     func test_readStatusUpdated_fromSelf_ignored() async throws {
         let (sut, delegate, socket) = makeSUT()
         _ = sut

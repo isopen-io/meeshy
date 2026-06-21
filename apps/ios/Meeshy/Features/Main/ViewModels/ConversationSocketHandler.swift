@@ -644,9 +644,9 @@ final class ConversationSocketHandler {
                     recipientCount: summary.totalMembers
                 ) {
                 case .read:
-                    deliveryEvent = .readBy(userId: userId, at: Date())
+                    deliveryEvent = .readBy(userId: userId, at: event.updatedAt)
                 case .delivered:
-                    deliveryEvent = .delivered(count: summary.deliveredCount, at: Date())
+                    deliveryEvent = .delivered(count: summary.deliveredCount, at: event.updatedAt)
                 default:
                     deliveryEvent = nil
                 }

@@ -530,7 +530,19 @@ public actor MessagePersistenceActor {
     /// posts a refresh for real changes — delivery/read events routinely
     /// target conversations whose rows are already past the transition.
     private func batchDeliverySync(conversationId: String, event: MessageEvent) throws -> Bool {
-        try dbWriter.write { db -> Bool in
+        // Read frontier carried by the event (the peer's read/deliver moment).
+        // A message created AFTER it cannot have been received/read yet, so it
+        // must be skipped — otherwise a message sent right after the peer read
+        // would falsely advance to delivered/read. Mirrors the frontier guard in
+        // ConversationSyncEngine.applyReadReceipt (the cache path).
+        let frontier: Date? = {
+            switch event {
+            case .delivered(_, let at): return at
+            case .readBy(_, let at): return at
+            default: return nil
+            }
+        }()
+        return try dbWriter.write { db -> Bool in
             let records = try MessageRecord
                 .filter(Column("conversationId") == conversationId)
                 .filter([MessageState.sending.rawValue, MessageState.sent.rawValue]
@@ -539,6 +551,7 @@ public actor MessagePersistenceActor {
 
             var didChange = false
             for var record in records {
+                if let frontier, record.createdAt > frontier { continue }
                 var machine = MessageStateMachine(
                     state: record.state, retryCount: record.retryCount,
                     serverId: record.serverId
