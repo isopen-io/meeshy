@@ -263,9 +263,27 @@ export function ReelPlayer({
           >
             <X className="h-5 w-5" />
           </button>
-          <span className="rounded-full bg-black/35 px-3 py-1 text-xs font-medium text-white backdrop-blur-sm tabular-nums">
-            {index + 1} / {total}
-          </span>
+          {/* Navigation arrows (replace the i/N counter) */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={goPrev}
+              disabled={!hasPrev}
+              aria-label="Reel précédent"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm transition-opacity disabled:opacity-30"
+            >
+              <ChevronUp className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={goNext}
+              disabled={!hasNext}
+              aria-label="Reel suivant"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm transition-opacity disabled:opacity-30"
+            >
+              <ChevronDown className="h-5 w-5" />
+            </button>
+          </div>
           {video ? (
             <button
               type="button"
@@ -308,27 +326,6 @@ export function ReelPlayer({
           {caption && <p className="mt-2 line-clamp-3 text-sm text-white/90">{caption}</p>}
         </div>
 
-        {/* Prev / Next chevrons */}
-        {hasPrev && (
-          <button
-            type="button"
-            onClick={goPrev}
-            aria-label="Reel précédent"
-            className="absolute left-1/2 top-3 -translate-x-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm md:left-auto md:right-3 md:top-1/3"
-          >
-            <ChevronUp className="h-5 w-5" />
-          </button>
-        )}
-        {hasNext && (
-          <button
-            type="button"
-            onClick={goNext}
-            aria-label="Reel suivant"
-            className="absolute left-1/2 bottom-3 -translate-x-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm md:left-auto md:right-3 md:bottom-1/3"
-          >
-            <ChevronDown className="h-5 w-5" />
-          </button>
-        )}
       </div>
     </section>
   );
