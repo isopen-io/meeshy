@@ -51,8 +51,8 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## middleware  (3/9 have a test)
 
-- [ ] `services/gateway/src/middleware/admin-permissions.middleware.ts`
-- [ ] `services/gateway/src/middleware/admin-user-auth.middleware.ts`
+- [x] `services/gateway/src/middleware/admin-permissions.middleware.ts`
+- [x] `services/gateway/src/middleware/admin-user-auth.middleware.ts`
 - [~] `services/gateway/src/middleware/auth.ts`
 - [ ] `services/gateway/src/middleware/clientMutationId.ts`
 - [~] `services/gateway/src/middleware/deviceLocale.ts`
@@ -290,12 +290,12 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## services/admin  (0/6 have a test)
 
-- [ ] `services/gateway/src/services/admin/broadcast-translation.service.ts`
-- [ ] `services/gateway/src/services/admin/permissions.service.ts`
-- [ ] `services/gateway/src/services/admin/report.service.ts`
-- [ ] `services/gateway/src/services/admin/user-audit.service.ts`
-- [ ] `services/gateway/src/services/admin/user-management.service.ts`
-- [ ] `services/gateway/src/services/admin/user-sanitization.service.ts`
+- [x] `services/gateway/src/services/admin/broadcast-translation.service.ts`
+- [x] `services/gateway/src/services/admin/permissions.service.ts`
+- [x] `services/gateway/src/services/admin/report.service.ts`
+- [x] `services/gateway/src/services/admin/user-audit.service.ts`
+- [x] `services/gateway/src/services/admin/user-management.service.ts`
+- [x] `services/gateway/src/services/admin/user-sanitization.service.ts`
 
 ## services/attachments  (6/8 have a test)
 
@@ -435,7 +435,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## validation  (1/11 have a test)
 
-- [ ] `services/gateway/src/validation/admin-schemas.ts`
+- [x] `services/gateway/src/validation/admin-schemas.ts`
 - [~] `services/gateway/src/validation/call-schemas.ts`
 - [ ] `services/gateway/src/validation/conversation-encryption-schemas.ts`
 - [ ] `services/gateway/src/validation/delete-account-schemas.ts`

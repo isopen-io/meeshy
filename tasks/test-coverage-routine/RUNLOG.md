@@ -1500,3 +1500,40 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - CI: All checks passed — Security✅ Quality(bun)✅ Trivy(neutral) Prisma✅ Test shared✅ Test agent✅ Audio Pipeline Tests✅ Test web✅ TTS/STT Integration✅ Voice API Tests✅ Test gateway✅ Build(bun)✅ Test Python(translator)✅(in-progress at merge time, non-blocking) Summary✅
 - Squash-merge: PR #748 → main sha ec90dfff090deb7e0b08a2d08e87400cb4d5d884 (2026-06-21T16:50Z)
 - Next slice: P2 Admin & moderation × gateway (next ☐ cell in feature matrix)
+
+## 2026-06-21T19:00Z — P2 Admin & moderation × gateway (sub-slice 1: services layer)
+- Targeted: `src/services/admin/` (6 files), `src/middleware/admin-user-auth.middleware.ts`, `src/validation/admin-schemas.ts`
+- Result: ◐ sub-slice 1 done — services+middleware+validation layer ≥92%; routes/admin/* (19 files) deferred to sub-slice 2
+- Coverage (slice-targeted files):
+  - middleware/admin-user-auth.middleware.ts:     100% stmts / 100% branch / 100% funcs / 100% lines
+  - services/admin/permissions.service.ts:         100% stmts / 100% branch / 100% funcs / 100% lines
+  - services/admin/user-sanitization.service.ts:  100% stmts / 100% branch / 100% funcs / 100% lines
+  - services/admin/user-audit.service.ts:          100% stmts / 100% branch / 100% funcs / 100% lines
+  - services/admin/user-management.service.ts:     100% stmts / 100% branch / 100% funcs / 100% lines
+  - validation/admin-schemas.ts:                   100% stmts / 100% branch / 100% funcs / 100% lines
+  - services/admin/report.service.ts:              100% stmts / 97.67% branch / 100% funcs / 100% lines
+  - services/admin/broadcast-translation.service.ts: 100% stmts / 93.75% branch / 100% funcs / 100% lines
+  - ALL FILES combined:                            100% stmts / 98.97% branch / 100% funcs / 100% lines ✓
+  - Gateway full suite (local): stmts=61.12% / branches=57.51% / funcs=62.6% / lines=61.38%
+- Tests added: 243 new tests across 8 new test files
+  - `src/__tests__/unit/services/admin/permissions.service.test.ts` (NEW, 64 tests): all 6 public methods — getPermissions (all 6 roles), hasPermission (all keys × all roles), canManageUser (BIGBOSS omnipotent, ADMIN vs higher/lower, same-role blocked), canViewSensitiveData, canModifyUser, canChangeRole
+  - `src/__tests__/unit/services/admin/user-sanitization.service.test.ts` (NEW, 28 tests): sanitizeUser sensitive/non-sensitive viewers, maskEmail edge cases (no @, single char), maskPhone edge cases (null/empty→null, short→***, spaces stripped), sanitizeUsers array, sanitizeAuditLog (full/masked IP, null IP, non-IPv4, preserve non-IP fields)
+  - `src/__tests__/unit/middleware/admin-user-auth.middleware.test.ts` (NEW, 15 tests): requireUserViewAccess / requireUserModifyAccess / requireUserDeleteAccess × 5 scenarios each (null authContext, unauthenticated, anonymous, no permission, has permission)
+  - `src/__tests__/unit/validation/admin-schemas.test.ts` (NEW, 57 tests): all 17 exported schemas — Analytics (3), AnonymousUsers, Broadcasts (5), Invitations (3), Languages (3), Messages (2), RankingsQuerySchema (limit/period/entityType/criterion transforms)
+  - `src/__tests__/unit/services/admin/user-audit.service.test.ts` (NEW, 31 tests): createAuditLog (stringify/parse cycle, null fields, entity always 'User'), getAuditLogsForUser (where/order/default-limit, JSON parsing, null), getAuditLogsByAdmin (adminId query, JSON parsing both changes+metadata), all 7 convenience methods (logViewUser, logCreateUser, logUpdateUser, logUpdateRole, logUpdateStatus, logResetPassword, logDeleteUser) × with/without optional reason
+  - `src/__tests__/unit/services/admin/report.service.test.ts` (NEW, 28 tests): full CRUD suite, updateReport terminal vs non-terminal status, getReportStats (zero case, averageResolutionTimeHours, null resolvedAt skipped), getRecentReports 24h window, assignModerator, getModeratorReports, getReportService singleton
+  - `src/__tests__/unit/services/admin/user-management.service.test.ts` (NEW, 30 tests): getUsers (all filter combinations: search/role/isActive true+false/emailVerified/phoneVerified true+false/twoFactorEnabled true+false/createdAfter+Before isolated/lastActiveAfter+Before isolated/sortBy+sortOrder/default sort), getUserById, createUser, updateUser, updateEmail (not-found/wrong-password/success), updateStatus (isActive toggle→deactivatedAt), deleteUser, restoreUser, toggleVoiceConsent (all 4 types × enabled/disabled)
+  - `src/__tests__/unit/services/admin/broadcast-translation.service.test.ts` (NEW, 13 tests): empty targets, source filtered from targets, batch success, null translated_text skip, non-array response, batch→individual retry, retry missing text, retry error (logs+continues), non-Error thrown, multi-batch (6 langs→2 batches), ML_API_URL env var
+- Reviewer: PASS (rounds: 1 — no tautologies, factory functions throughout, real @meeshy/shared types, no real timers/network, no secrets)
+- Production code changes:
+  - `src/services/admin/user-audit.service.ts`: `/* istanbul ignore next */` on empty `if (NODE_ENV === 'development') {}` block (literally empty body, true branch is dead code)
+- manifests/gateway.md: ticked [x] for admin-permissions.middleware.ts, admin-user-auth.middleware.ts, all 6 services/admin/*.ts, validation/admin-schemas.ts
+- PROGRESS.md: P2 Admin & moderation × gateway flipped ☐→◐; baselines table updated
+- Notes:
+  1. Routes/admin/* (19 files, 8600+ lines) deferred to sub-slice 2 — services layer alone already captures 8 high-value files at ≥92%.
+  2. Pre-existing ZmqTranslation failures (7 tests in 2 suites) verified pre-existing on main — not introduced by this PR.
+  3. Global threshold ratchet deferred until CI measures actual values to avoid over-ratcheting (lesson from P2 Rate limiting run).
+  4. admin-permissions.middleware.ts was already covered in P0 Auth × gateway (RunLog 2026-06-15T06:15Z) but not ticked in manifest; ticked now.
+- Commit: 07d6019d (branch claude/coverage/p2-admin-gateway)
+- PR: #753 (open — awaiting CI)
+- Next slice (after PR #753 merges): P2 Admin & moderation × gateway sub-slice 2 (routes/admin/* — 19 files)
