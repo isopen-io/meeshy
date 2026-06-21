@@ -98,20 +98,20 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/voice-profile.ts`
 - [ ] `services/gateway/src/routes/voice.ts`
 
-## routes/admin  (1/19 have a test)
+## routes/admin  (8/19 have a test)
 
 - [ ] `services/gateway/src/routes/admin/agent-topics.ts`
 - [ ] `services/gateway/src/routes/admin/agent.ts`
-- [ ] `services/gateway/src/routes/admin/analytics.ts`
-- [ ] `services/gateway/src/routes/admin/anonymous-users.ts`
-- [ ] `services/gateway/src/routes/admin/broadcasts.ts`
+- [x] `services/gateway/src/routes/admin/analytics.ts`
+- [x] `services/gateway/src/routes/admin/anonymous-users.ts`
+- [x] `services/gateway/src/routes/admin/broadcasts.ts`
 - [ ] `services/gateway/src/routes/admin/content.ts`
 - [ ] `services/gateway/src/routes/admin/dashboard.ts`
-- [ ] `services/gateway/src/routes/admin/index.ts`
-- [ ] `services/gateway/src/routes/admin/invitations.ts`
+- [x] `services/gateway/src/routes/admin/index.ts`
+- [x] `services/gateway/src/routes/admin/invitations.ts`
 - [~] `services/gateway/src/routes/admin/languages.ts`
-- [ ] `services/gateway/src/routes/admin/messages.ts`
-- [ ] `services/gateway/src/routes/admin/posts.ts`
+- [x] `services/gateway/src/routes/admin/messages.ts`
+- [x] `services/gateway/src/routes/admin/posts.ts`
 - [ ] `services/gateway/src/routes/admin/reports.ts`
 - [ ] `services/gateway/src/routes/admin/roles.ts`
 - [ ] `services/gateway/src/routes/admin/services/PermissionsService.ts`
