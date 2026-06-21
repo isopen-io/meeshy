@@ -54,6 +54,9 @@
 		443B3C791B4DDEDC517D35DF /* MockCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11B9A13244FA9699333355B /* MockCacheService.swift */; };
 		447EB12B85279B3E448C2456 /* BlockedTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8711AA999D4B45FFEA4492 /* BlockedTab.swift */; };
 		44C6640DF69BEB3FF362DE4A /* ContactsHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B77619804147529F134986 /* ContactsHubView.swift */; };
+		36EA1DD300DB95C44D3619FA /* CallsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB4BBA29AEC1D8D39E56ABAE /* CallsViewModel.swift */; };
+		6354817D4751DBCD1D41FA55 /* CallStarter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04C7F658F411CA89494B4204 /* CallStarter.swift */; };
+		1F26B618A56CEA57B8408E7B /* CallDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 658141E84AE3DB02533425BA /* CallDetailSheet.swift */; };
 		83BD51218A1F70484C0E2E41 /* CallsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778C4719074ED676630AE6B2 /* CallsTab.swift */; };
 		51B8DB24C49E4007DCE3460C /* ContactsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20FBA05C1AAA4EE765F12DA3 /* ContactsSection.swift */; };
 		154D81017A2D9E725E1BB2B0 /* KeypadTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */; };
@@ -335,6 +338,7 @@
 		DLNK0001000100010001001 /* DeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DLNK0001000100010001000 /* DeepLinkTests.swift */; };
 		DRRT01001001001001002 /* DraftStoreReplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DRRT01001001001001001 /* DraftStoreReplyTests.swift */; };
 		DSCV0001000100010001001 /* DiscoverViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DSCV0001000100010001000 /* DiscoverViewModelTests.swift */; };
+		84F7F4F68D86DBF31288E369 /* CallsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 685A93EB1B26AC66D11BA2F1 /* CallsViewModelTests.swift */; };
 		5C2F9A90859A929847D5CBD7 /* KeypadViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5EB1C8E0E7ADA2081B50F4B /* KeypadViewModelTests.swift */; };
 		DSTV002A002A002A002A0002 /* DataStorageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DSTV001A001A001A001A0001 /* DataStorageView.swift */; };
 		E1491C65FE46FF6941B00642 /* E2EAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 409C08F1FC8A1E6C810690CF /* E2EAPI.swift */; };
@@ -450,6 +454,7 @@
 		0CA1A0DE0000000000000003 /* MockReelFeedCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA1A0DE0000000000000004 /* MockReelFeedCache.swift */; };
 		MOCK0009000900090009001 /* MockStatusService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK0009000900090009000 /* MockStatusService.swift */; };
 		MOCK000A000A000A000A001 /* MockUserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000A000A000A000A000 /* MockUserService.swift */; };
+		5272EA9BC9720E2DAF8D073A /* MockCallHistoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33156577D70F643D24E1E15F /* MockCallHistoryService.swift */; };
 		MOCK000B000B000B000B001 /* MockBlockService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000B000B000B000B000 /* MockBlockService.swift */; };
 		MOCK000C000C000C000C001 /* MockLanguageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000C000C000C000C000 /* MockLanguageProvider.swift */; };
 		MPHK000000002F01 /* MediaPipelineHook.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHK000000001F01 /* MediaPipelineHook.swift */; };
@@ -954,6 +959,7 @@
 		DLNK001A001A001A001A0001 /* DeepLinkRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRouter.swift; sourceTree = "<group>"; };
 		DRRT01001001001001001 /* DraftStoreReplyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftStoreReplyTests.swift; sourceTree = "<group>"; };
 		DSCV0001000100010001000 /* DiscoverViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverViewModelTests.swift; sourceTree = "<group>"; };
+		685A93EB1B26AC66D11BA2F1 /* CallsViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallsViewModelTests.swift; sourceTree = "<group>"; };
 		C5EB1C8E0E7ADA2081B50F4B /* KeypadViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeypadViewModelTests.swift; sourceTree = "<group>"; };
 		DSTV001A001A001A001A0001 /* DataStorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataStorageView.swift; sourceTree = "<group>"; };
 		E101FEA7BBFB4FDC8474B10C /* MeeshyTests/Unit/Views/Bubble/MessageRowEnvelopeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/MessageRowEnvelopeTests.swift; sourceTree = SOURCE_ROOT; };
@@ -984,6 +990,9 @@
 		F71C9C50ECED369B628670C7 /* ThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadView.swift; sourceTree = "<group>"; };
 		F724878269B34D64666FE22F /* SharePickerViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharePickerViewModelTests.swift; sourceTree = "<group>"; };
 		F7B77619804147529F134986 /* ContactsHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsHubView.swift; sourceTree = "<group>"; };
+		AB4BBA29AEC1D8D39E56ABAE /* CallsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallsViewModel.swift; sourceTree = "<group>"; };
+		04C7F658F411CA89494B4204 /* CallStarter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallStarter.swift; sourceTree = "<group>"; };
+		658141E84AE3DB02533425BA /* CallDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDetailSheet.swift; sourceTree = "<group>"; };
 		778C4719074ED676630AE6B2 /* CallsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallsTab.swift; sourceTree = "<group>"; };
 		20FBA05C1AAA4EE765F12DA3 /* ContactsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsSection.swift; sourceTree = "<group>"; };
 		B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeypadTab.swift; sourceTree = "<group>"; };
@@ -1068,6 +1077,7 @@
 		0CA1A0DE0000000000000004 /* MockReelFeedCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockReelFeedCache.swift; sourceTree = "<group>"; };
 		MOCK0009000900090009000 /* MockStatusService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockStatusService.swift; sourceTree = "<group>"; };
 		MOCK000A000A000A000A000 /* MockUserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockUserService.swift; sourceTree = "<group>"; };
+		33156577D70F643D24E1E15F /* MockCallHistoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockCallHistoryService.swift; sourceTree = "<group>"; };
 		MOCK000B000B000B000B000 /* MockBlockService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBlockService.swift; sourceTree = "<group>"; };
 		MOCK000C000C000C000C000 /* MockLanguageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockLanguageProvider.swift; sourceTree = "<group>"; };
 		MPHK000000001F01 /* MediaPipelineHook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHook.swift; sourceTree = "<group>"; };
@@ -1700,6 +1710,7 @@
 				PDTL0001000100010001000 /* PostDetailViewModelTests.swift */,
 				EMVF0001000100010001000 /* EmailVerificationViewModelTests.swift */,
 				DSCV0001000100010001000 /* DiscoverViewModelTests.swift */,
+				685A93EB1B26AC66D11BA2F1 /* CallsViewModelTests.swift */,
 				C5EB1C8E0E7ADA2081B50F4B /* KeypadViewModelTests.swift */,
 				BLKD0001000100010001000 /* BlockedViewModelTests.swift */,
 				VPMT0001000100010001000 /* VoiceProfileManageViewModelTests.swift */,
@@ -1816,6 +1827,9 @@
 				4B8711AA999D4B45FFEA4492 /* BlockedTab.swift */,
 				F573D0F41F068B1CDCAB79C6 /* BlockedViewModel.swift */,
 				F7B77619804147529F134986 /* ContactsHubView.swift */,
+				AB4BBA29AEC1D8D39E56ABAE /* CallsViewModel.swift */,
+				04C7F658F411CA89494B4204 /* CallStarter.swift */,
+				658141E84AE3DB02533425BA /* CallDetailSheet.swift */,
 				778C4719074ED676630AE6B2 /* CallsTab.swift */,
 				20FBA05C1AAA4EE765F12DA3 /* ContactsSection.swift */,
 				B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */,
@@ -1991,6 +2005,7 @@
 				MOCK000C000C000C000C000 /* MockLanguageProvider.swift */,
 				MOCK0009000900090009000 /* MockStatusService.swift */,
 				MOCK000A000A000A000A000 /* MockUserService.swift */,
+				33156577D70F643D24E1E15F /* MockCallHistoryService.swift */,
 				MOCK000B000B000B000B000 /* MockBlockService.swift */,
 				TFA0MK01B001B001B001B001 /* MockTwoFactorService.swift */,
 				MCAE000100010001000100F0 /* MockCallAudioEffectsService.swift */,
@@ -2734,6 +2749,9 @@
 				447EB12B85279B3E448C2456 /* BlockedTab.swift in Sources */,
 				D90603ED4F5C335BE9FA78D9 /* BlockedViewModel.swift in Sources */,
 				44C6640DF69BEB3FF362DE4A /* ContactsHubView.swift in Sources */,
+				36EA1DD300DB95C44D3619FA /* CallsViewModel.swift in Sources */,
+				6354817D4751DBCD1D41FA55 /* CallStarter.swift in Sources */,
+				1F26B618A56CEA57B8408E7B /* CallDetailSheet.swift in Sources */,
 				83BD51218A1F70484C0E2E41 /* CallsTab.swift in Sources */,
 				51B8DB24C49E4007DCE3460C /* ContactsSection.swift in Sources */,
 				154D81017A2D9E725E1BB2B0 /* KeypadTab.swift in Sources */,
@@ -2847,6 +2865,7 @@
 				SPRT0001000100010001TST1 /* SyncPillRotatorTests.swift in Sources */,
 				MOCK0009000900090009001 /* MockStatusService.swift in Sources */,
 				MOCK000A000A000A000A001 /* MockUserService.swift in Sources */,
+				5272EA9BC9720E2DAF8D073A /* MockCallHistoryService.swift in Sources */,
 				MOCK000B000B000B000B001 /* MockBlockService.swift in Sources */,
 				D14C3755B0EF1D3FCE57FF8B /* ConversationListViewModelTests.swift in Sources */,
 				ABEF9530C003C1159F8B9049 /* ConversationSocketHandlerTests.swift in Sources */,
@@ -2930,6 +2949,7 @@
 				PDTL0001000100010001001 /* PostDetailViewModelTests.swift in Sources */,
 				EMVF0001000100010001001 /* EmailVerificationViewModelTests.swift in Sources */,
 				DSCV0001000100010001001 /* DiscoverViewModelTests.swift in Sources */,
+				84F7F4F68D86DBF31288E369 /* CallsViewModelTests.swift in Sources */,
 				5C2F9A90859A929847D5CBD7 /* KeypadViewModelTests.swift in Sources */,
 				BLKD0001000100010001001 /* BlockedViewModelTests.swift in Sources */,
 				VPMT0001000100010001001 /* VoiceProfileManageViewModelTests.swift in Sources */,

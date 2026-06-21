@@ -22,6 +22,7 @@ struct ContactsHubView: View {
     private let initialContactsSubTab: ContactsTab
 
     @StateObject private var keypadVM = KeypadViewModel()
+    @StateObject private var callsVM = CallsViewModel()
 
     init(initialTab: ContactsTab = .contacts) {
         initialContactsSubTab = initialTab
@@ -116,6 +117,7 @@ struct ContactsHubView: View {
     private var tabContent: some View {
         TabView(selection: $selectedTab) {
             CallsTab(
+                viewModel: callsVM,
                 isActive: selectedTab == .calls,
                 onScrollOffsetChange: { scrollOffset = $0 }
             )

@@ -70,6 +70,11 @@ extension CachePolicy {
     public static let comments = CachePolicy(ttl: .hours(1), staleTTL: .minutes(2), maxItemCount: 500, storageLocation: .grdb)
     public static let stories = CachePolicy(ttl: .hours(24), staleTTL: .minutes(5), maxItemCount: nil, storageLocation: .grdb)
     public static let notifications = CachePolicy(ttl: .hours(24), staleTTL: .minutes(2), maxItemCount: 200, storageLocation: .grdb)
+    /// Call journal. Calls are immutable once terminal, so a long TTL is safe;
+    /// the 5-min fresh window keeps the Calls tab instant on cold start / quick
+    /// reopen, then SWR serves cache + revalidates silently. The 3-month server
+    /// window bounds growth; `maxItemCount: 300` caps the local mirror.
+    public static let callHistory = CachePolicy(ttl: .days(30), staleTTL: .minutes(5), maxItemCount: 300, storageLocation: .grdb)
     public static let userStats = CachePolicy(ttl: .hours(6), staleTTL: .minutes(10), maxItemCount: 10, storageLocation: .grdb)
     public static let linksAndTokens = CachePolicy(ttl: .hours(12), staleTTL: .minutes(5), maxItemCount: 100, storageLocation: .grdb)
     public static let statuses = CachePolicy(ttl: .hours(1), staleTTL: .minutes(2), maxItemCount: 100, storageLocation: .grdb)

@@ -133,38 +133,75 @@ struct KeypadTab: View {
         let color = DynamicColorGenerator.colorForName(name)
         let isOnline = user.isOnline ?? false
 
-        return Button {
-            router.deepLinkProfileUser = ProfileSheetUser(username: user.username)
-            HapticFeedback.light()
-        } label: {
-            HStack(spacing: 14) {
-                MeeshyAvatar(
-                    name: name,
-                    context: .userListItem,
-                    accentColor: color,
-                    avatarURL: user.avatar,
-                    presenceState: isOnline ? .online : .offline
-                )
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(name)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(1)
-                    Text("@\(user.username)")
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+        return HStack(spacing: 14) {
+            Button {
+                openProfile(user)
+            } label: {
+                HStack(spacing: 14) {
+                    MeeshyAvatar(
+                        name: name,
+                        context: .userListItem,
+                        accentColor: color,
+                        avatarURL: user.avatar,
+                        presenceState: isOnline ? .online : .offline
+                    )
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(name)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(1)
+                        Text("@\(user.username)")
+                            .font(.caption.weight(.medium))
+                            .foregroundColor(theme.textMuted)
+                    }
+                    Spacer()
                 }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(theme.textMuted.opacity(0.5))
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .buttonStyle(.plain)
+
+            dialMenu(for: user, displayName: name)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(name)
+    }
+
+    private func dialMenu(for user: UserSearchResult, displayName: String) -> some View {
+        Menu {
+            Button {
+                startCall(user, displayName: displayName, isVideo: false)
+            } label: {
+                Label(String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main), systemImage: "phone.fill")
+            }
+            Button {
+                startCall(user, displayName: displayName, isVideo: true)
+            } label: {
+                Label(String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main), systemImage: "video.fill")
+            }
+        } label: {
+            Image(systemName: "phone.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(MeeshyColors.indigo500)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(MeeshyColors.indigo500.opacity(0.12)))
+        }
+        .accessibilityLabel(String(localized: "calls.call", defaultValue: "Appeler", bundle: .main))
+    }
+
+    private func startCall(_ user: UserSearchResult, displayName: String, isVideo: Bool) {
+        HapticFeedback.medium()
+        CallStarter.start(
+            userId: user.id,
+            displayName: displayName,
+            isVideo: isVideo,
+            onUnavailable: { openProfile(user) }
+        )
+    }
+
+    private func openProfile(_ user: UserSearchResult) {
+        router.deepLinkProfileUser = ProfileSheetUser(username: user.username)
+        HapticFeedback.light()
     }
 
     // MARK: - Keypad
