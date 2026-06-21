@@ -626,6 +626,12 @@ struct PostDetailView: View {
                     AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
                         selectedProfileUser = nil
                         router.push(.postDetail(post.id, post))
+                    }, onOpenReel: { reel, reels in
+                        selectedProfileUser = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            HapticFeedback.medium()
+                            ReelsPresenter.shared.present(posts: reels, startId: reel.id)
+                        }
                     }))
                 }
             )

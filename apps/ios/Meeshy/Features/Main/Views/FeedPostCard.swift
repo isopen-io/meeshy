@@ -40,6 +40,10 @@ struct FeedPostCard: View {
     var onSelectLanguage: ((String, String) -> Void)? = nil // (postId, language)
     var onTapPost: ((FeedPost) -> Void)? = nil
     var onTapRepost: ((String) -> Void)? = nil
+    /// Fired when the user taps "voir plus" to expand the truncated text. Lets a
+    /// host (e.g. the profile posts list) count a post view on expansion. The
+    /// inline expansion happens regardless; this is an additional side-effect.
+    var onSeeMore: (() -> Void)? = nil
     var onDelete: ((String) -> Void)? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
@@ -268,6 +272,7 @@ struct FeedPostCard: View {
                                     withAnimation(.easeInOut(duration: 0.25)) {
                                         isTextExpanded = true
                                     }
+                                    onSeeMore?()
                                 }
                                 .accessibilityAddTraits(.isButton)
                                 .accessibilityHint(String(localized: "a11y.feed.post.see_more.hint", defaultValue: "Affiche le texte complet", bundle: .main))
@@ -415,6 +420,12 @@ struct FeedPostCard: View {
                     AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { tapped in
                         selectedProfileUser = nil
                         onTapPost?(tapped)
+                    }, onOpenReel: { reel, reels in
+                        selectedProfileUser = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            HapticFeedback.medium()
+                            ReelsPresenter.shared.present(posts: reels, startId: reel.id)
+                        }
                     }))
                 }
             )
