@@ -724,9 +724,12 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let after2 = try await db.read { db in
             try MessageRecord.fetchOne(db, key: "msg2")
         }
-        // .read event transitions both rows; readAt is set.
+        // .read event (all recipients) transitions both rows; readAt + the
+        // unambiguous "read by all" marker the display resolver trusts are set.
         XCTAssertNotNil(after1?.readAt, "msg1 must transition to read state via bufferBatchDelivery")
         XCTAssertNotNil(after2?.readAt, "msg2 must transition to read state via bufferBatchDelivery")
+        XCTAssertNotNil(after1?.readByAllAt, "msg1 must be stamped read-by-all for the resolver")
+        XCTAssertNotNil(after2?.readByAllAt, "msg2 must be stamped read-by-all for the resolver")
     }
 
     func test_readStatusUpdated_deliveredStatus_updatesCorrectly() async throws {
@@ -758,8 +761,10 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let after = try await db.read { db in
             try MessageRecord.fetchOne(db, key: "msg1")
         }
-        // .delivered event transitions the row to .delivered state and sets deliveredAt.
+        // .delivered event (all recipients) transitions the row to .delivered
+        // state, sets deliveredAt + the "delivered to all" marker.
         XCTAssertNotNil(after?.deliveredAt, "msg1 must transition to delivered via bufferBatchDelivery")
+        XCTAssertNotNil(after?.deliveredToAllAt, "msg1 must be stamped delivered-to-all for the resolver")
     }
 
     /// WhatsApp-style all-or-nothing: a PARTIAL group delivery (1 of 2 members)

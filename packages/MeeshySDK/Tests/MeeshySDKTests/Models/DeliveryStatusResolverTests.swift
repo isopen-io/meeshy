@@ -112,7 +112,7 @@ final class DeliveryStatusResolverTests: XCTestCase {
         XCTAssertEqual(result, .delivered)
     }
 
-    // No markers (cold-start: the gateway never persists them) → counts decide.
+    // No markers (cold-start: gateway currently leaves them null) → counts decide.
     func test_resolve_group_noMarkers_partialRead_isSent() {
         let result = DeliveryStatusResolver.resolve(
             status: .read, deliveredCount: 1, readCount: 1, recipientCount: 10,

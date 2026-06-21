@@ -46,9 +46,10 @@ public enum DeliveryStatusResolver {
     ///     path. That path advances `state` without carrying per-row counters,
     ///     so without these a real-time group delivery/read would transiently
     ///     regress to a single check until the sibling counters write lands.
-    ///     Non-nil takes precedence over the count comparison. `nil` at
-    ///     cold-start (the gateway does not persist them), where the per-message
-    ///     counts are authoritative.
+    ///     Non-nil takes precedence over the count comparison. The gateway
+    ///     currently leaves these null (the cursor-based read model no longer
+    ///     computes them), so at cold-start the per-message counts are
+    ///     authoritative and the markers carry only locally-confirmed state.
     public static func resolve(
         status: MeeshyMessage.DeliveryStatus,
         deliveredCount: Int,

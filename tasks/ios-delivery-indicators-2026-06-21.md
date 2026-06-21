@@ -79,6 +79,17 @@ deux écrivains GRDB). Corrigé via les marqueurs **`deliveredToAllAt`/`readByAl
 - `ConversationSocketHandler` passe désormais par `DeliveryStatusResolver.fromCounts`
   (source unique du seuil — M2).
 
+### Correctif #2 (2ᵉ revue opus) — marqueurs « all » = signal local, jamais écrasé
+Les colonnes `deliveredToAllAt`/`readByAllAt` **sont** schéma-Prisma + projetées
+REST + décodées par `APIMessage` (elles ne sont `nil` qu'incidemment aujourd'hui :
+l'architecture curseur ne les calcule plus). `upsertFromAPIMessages` les écrivait
+**en dur** → un refresh REST renvoyant `nil` pouvait **effacer** un marqueur
+estampillé localement. Corrigé en **coalesce** (`api.x ?? existing.x`) : un refresh
+n'efface jamais une confirmation locale ; une vraie valeur serveur, si un jour
+fournie, l'emporte toujours. Commentaires faux (« le gateway ne persiste jamais »)
+rectifiés. Tests : `batchDeliverySync` estampille bien les marqueurs (assertions
+ajoutées aux tests handler 2/2).
+
 ### Garanties
 - **Cold-start (cas dominant : ouvrir un groupe)** : compteurs REST exacts +
   `recipientCount` ⇒ coche correcte immédiatement. Ne ment jamais.
@@ -104,6 +115,14 @@ n'est pas câblé), mais la **CI macOS doit valider**.
 2. **Consommateurs secondaires** (`MessageInfoSheet`, `MessageOverlayMenu`,
    `BubbleStandardLayout+Media`) lisent le `deliveryStatus` brut (correct 1:1,
    approximatif groupe). Les router via le resolver pour cohérence totale.
+3. **Gating de frontière du chemin GRDB batch** (pré-existant, signalé revue #1) :
+   `batchDeliverySync` applique l'événement à toutes les lignes `.sent`/`.sending`
+   **sans** gating `createdAt > frontier` (contrairement à `applyReadReceipt`).
+   Sous une course, un message envoyé juste après le moment de lecture du pair
+   pourrait être marqué lu. Pré-existant (l'ancien code stampait déjà `readAt`),
+   borné (`isMe` only, fenêtre étroite), et l'événement utilise `Date()` plutôt que
+   `event.updatedAt`. À traiter avec le travail de précision lecture (#1) : passer
+   `event.updatedAt` comme frontière + filtrer les lignes plus récentes.
 
 ## Revue
 - Revue opus demandée sur le diff (cf. directive utilisateur « challenge ta vision

@@ -1542,8 +1542,16 @@ public actor MessagePersistenceActor {
                     }
                     existing.deliveredCount = deliveredCount
                     existing.readCount = readCount
-                    existing.deliveredToAllAt = api.deliveredToAllAt
-                    existing.readByAllAt = api.readByAllAt
+                    // `deliveredToAllAt` / `readByAllAt` are the unambiguous
+                    // "every recipient has received / read" markers that the live
+                    // all-or-nothing path stamps locally (and that the delivery
+                    // resolver trusts). Coalesce rather than hard-assign so a REST
+                    // refresh — which currently returns null for these (the
+                    // gateway no longer computes them under the cursor model) —
+                    // never CLEARS a marker the live path already confirmed. A
+                    // genuine server value, if ever provided, still wins.
+                    existing.deliveredToAllAt = api.deliveredToAllAt ?? existing.deliveredToAllAt
+                    existing.readByAllAt = api.readByAllAt ?? existing.readByAllAt
                     existing.state = max(existing.state, computedState)
                     // Self-heal rows that were upserted before we resolved
                     // sender.userId — their `senderId` column held the
