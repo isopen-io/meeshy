@@ -36,6 +36,7 @@ final class MockSocialSocket: SocialSocketProviding, @unchecked Sendable {
     let storyTranslationUpdated = PassthroughSubject<SocketStoryTranslationUpdatedData, Never>()
     let postTranslationUpdated = PassthroughSubject<SocketPostTranslationUpdatedData, Never>()
     let commentTranslationUpdated = PassthroughSubject<SocketCommentTranslationUpdatedData, Never>()
+    let commentMediaUpdated = PassthroughSubject<SocketCommentMediaUpdatedData, Never>()
     let storyUpdated = PassthroughSubject<SocketStoryUpdatedData, Never>()
     let storyDeleted = PassthroughSubject<SocketStoryDeletedData, Never>()
     let commentReactionAdded = PassthroughSubject<SocketCommentReactionUpdateEvent, Never>()

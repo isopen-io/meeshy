@@ -2943,6 +2943,11 @@ model StoryBackgroundAudio {
 model PostMedia {
   id           String  @id @default(auto()) @map("_id") @db.ObjectId
   postId       String? @db.ObjectId
+  /// Quand non-null, ce média appartient à un commentaire (PostComment) et non à
+  /// un post. `postId` et `commentId` sont mutuellement exclusifs : permet de
+  /// réutiliser tout le pipeline média (upload TUS, transcription/traduction audio,
+  /// viewers) pour les commentaires. Un commentaire ne porte QU'UN SEUL média.
+  commentId    String? @db.ObjectId
 
   // Fichier
   fileName     String
@@ -3009,9 +3014,11 @@ model PostMedia {
 
   createdAt    DateTime @default(now())
 
-  post Post? @relation(fields: [postId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  post    Post?        @relation(fields: [postId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  comment PostComment? @relation("CommentMedia", fields: [commentId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   @@index([postId, order])
+  @@index([commentId, order])
 }
 
 /// Commentaire sur un post (hiérarchique — réponses imbriquées)
@@ -3058,6 +3065,10 @@ model PostComment {
   replies   PostComment[]    @relation("CommentReplies")
   reactions CommentReaction[] @relation("PostCommentReactions")
   mentions  CommentMention[]  @relation("CommentMentions")
+  /// Média unique attaché au commentaire (image/vidéo/audio). Réutilise PostMedia
+  /// via le FK nullable `commentId`. Relation array pour cohérence Prisma mais la
+  /// couche API/app n'en lie jamais plus d'un.
+  media     PostMedia[]       @relation("CommentMedia")
 
   @@index([postId, createdAt])
   @@index([parentId])

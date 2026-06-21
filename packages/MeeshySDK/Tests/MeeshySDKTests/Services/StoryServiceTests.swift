@@ -43,7 +43,8 @@ final class StoryServiceTests: XCTestCase {
             effectFlags: nil,
             createdAt: Date(),
             author: APIAuthor(id: "author2", username: "alice", displayName: "Alice", avatar: nil),
-            currentUserReactions: nil
+            currentUserReactions: nil,
+            media: nil
         )
     }
 

@@ -88,6 +88,10 @@ public struct APIPostComment: Decodable, Sendable {
     public let createdAt: Date
     public let author: APIAuthor
     public let currentUserReactions: [String]?
+    /// Média unique attaché au commentaire (image/vidéo/audio). Réutilise le modèle
+    /// `APIPostMedia` (mêmes champs Prisme : transcription/translations). Un commentaire
+    /// ne porte qu'un seul média ; le tableau reste pour parité avec les posts.
+    public let media: [APIPostMedia]?
 }
 
 public struct APIPostTranslationEntry: Codable, Sendable {
@@ -255,72 +259,75 @@ private func formatFileSize(_ bytes: Int) -> String {
     return String(format: "%.1f MB", Double(bytes) / 1048576)
 }
 
+extension APIPostMedia {
+    /// Single source of truth `APIPostMedia → FeedMedia` mapping, shared by post
+    /// media, repost media AND comment media. Carries the full Prisme Linguistique
+    /// payload (transcription + per-language TTS variants) so a comment's inline
+    /// media plays + switches language exactly like a message bubble or a reel.
+    public func toFeedMedia() -> FeedMedia {
+        let transcription: MessageTranscription? = self.transcription.map { t in
+            let segments: [MessageTranscriptionSegment] = (t.segments ?? []).map { seg in
+                MessageTranscriptionSegment(
+                    text: seg.text,
+                    startTime: seg.startTime,
+                    endTime: seg.endTime,
+                    speakerId: seg.speakerId
+                )
+            }
+            return MessageTranscription(
+                attachmentId: id,
+                text: t.resolvedText,
+                language: t.language ?? "und",
+                confidence: t.confidence,
+                durationMs: t.durationMs,
+                segments: segments,
+                speakerCount: t.speakerCount
+            )
+        }
+        let translatedAudios: [MessageTranslatedAudio] = (translations ?? [:]).compactMap { (lang, trans) in
+            guard let url = trans.url, !url.isEmpty else { return nil }
+            let segments = (trans.segments ?? []).map {
+                MessageTranscriptionSegment(
+                    text: $0.text,
+                    startTime: $0.startTime,
+                    endTime: $0.endTime,
+                    speakerId: $0.speakerId
+                )
+            }
+            return MessageTranslatedAudio(
+                id: "\(id)_\(lang)",
+                attachmentId: id,
+                targetLanguage: lang,
+                url: url,
+                transcription: trans.transcription ?? "",
+                durationMs: trans.durationMs ?? 0,
+                format: trans.format ?? "mp3",
+                cloned: trans.cloned ?? false,
+                quality: trans.quality ?? 0,
+                voiceModelId: trans.voiceModelId,
+                ttsModel: trans.ttsModel ?? "xtts",
+                segments: segments
+            )
+        }
+        return FeedMedia(
+            id: id, type: mediaType, url: fileUrl,
+            thumbnailUrl: thumbnailUrl, thumbHash: thumbHash,
+            thumbnailColor: thumbnailColorForMime(mimeType),
+            width: width, height: height,
+            duration: duration.map { $0 / 1000 },
+            fileName: originalName ?? fileName,
+            fileSize: fileSize.map { formatFileSize($0) },
+            transcription: transcription,
+            translatedAudios: translatedAudios
+        )
+    }
+}
+
 extension APIPost {
     public func toFeedPost(userLanguage: String? = nil, preferredLanguages: [String] = []) -> FeedPost {
         let langs = preferredLanguages.isEmpty ? (userLanguage.map { [$0] } ?? []) : preferredLanguages
 
-        let feedMedia: [FeedMedia] = (media ?? []).map { m in
-            let transcription: MessageTranscription? = m.transcription.map { t in
-                let segments: [MessageTranscriptionSegment] = (t.segments ?? []).map { seg in
-                    MessageTranscriptionSegment(
-                        text: seg.text,
-                        startTime: seg.startTime,
-                        endTime: seg.endTime,
-                        speakerId: seg.speakerId
-                    )
-                }
-                return MessageTranscription(
-                    attachmentId: m.id,
-                    text: t.resolvedText,
-                    language: t.language ?? "und",
-                    confidence: t.confidence,
-                    durationMs: t.durationMs,
-                    segments: segments,
-                    speakerCount: t.speakerCount
-                )
-            }
-            // Prisme Linguistique — per-language TTS variants of an audio media.
-            // The gateway sends `PostMedia.translations` as a [lang: AudioTranslation]
-            // map (translated transcription text + synthesized audio URL + timing
-            // segments). Mirror the message-bubble mapping so a reel audio player can
-            // switch language → transcript + translated audio, exactly like a bubble.
-            let translatedAudios: [MessageTranslatedAudio] = (m.translations ?? [:]).compactMap { (lang, trans) in
-                guard let url = trans.url, !url.isEmpty else { return nil }
-                let segments = (trans.segments ?? []).map {
-                    MessageTranscriptionSegment(
-                        text: $0.text,
-                        startTime: $0.startTime,
-                        endTime: $0.endTime,
-                        speakerId: $0.speakerId
-                    )
-                }
-                return MessageTranslatedAudio(
-                    id: "\(m.id)_\(lang)",
-                    attachmentId: m.id,
-                    targetLanguage: lang,
-                    url: url,
-                    transcription: trans.transcription ?? "",
-                    durationMs: trans.durationMs ?? 0,
-                    format: trans.format ?? "mp3",
-                    cloned: trans.cloned ?? false,
-                    quality: trans.quality ?? 0,
-                    voiceModelId: trans.voiceModelId,
-                    ttsModel: trans.ttsModel ?? "xtts",
-                    segments: segments
-                )
-            }
-            return FeedMedia(
-                id: m.id, type: m.mediaType, url: m.fileUrl,
-                thumbnailUrl: m.thumbnailUrl, thumbHash: m.thumbHash,
-                thumbnailColor: thumbnailColorForMime(m.mimeType),
-                width: m.width, height: m.height,
-                duration: m.duration.map { $0 / 1000 },
-                fileName: m.originalName ?? m.fileName,
-                fileSize: m.fileSize.map { formatFileSize($0) },
-                transcription: transcription,
-                translatedAudios: translatedAudios
-            )
-        }
+        let feedMedia: [FeedMedia] = (media ?? []).map { $0.toFeedMedia() }
 
         let feedComments: [FeedComment] = (comments ?? []).map { c in
             let commentTranslatedContent: String? = Self.resolveTranslation(
@@ -336,7 +343,8 @@ extension APIPost {
                         timestamp: c.createdAt, likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
                         originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent,
-                        currentUserReactions: c.currentUserReactions)
+                        currentUserReactions: c.currentUserReactions,
+                        media: (c.media ?? []).map { $0.toFeedMedia() })
         }
 
         var repost: RepostContent?

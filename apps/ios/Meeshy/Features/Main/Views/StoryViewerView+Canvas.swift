@@ -1,5 +1,7 @@
 import SwiftUI
 import UIKit
+import PhotosUI
+import UniformTypeIdentifiers
 import MeeshySDK
 import MeeshyUI
 
@@ -342,29 +344,42 @@ struct StoryComposerBarView: View {
 
     /// `parentId` non-nil quand l'utilisateur répond à un commentaire (via
     /// `replyingToStoryComment` set par l'overlay). Sinon nil → commentaire
-    /// top-level sur la story.
-    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?) -> Void
+    /// top-level sur la story. `pendingMedia` non-nil = commentaire avec UN média.
+    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?) -> Void
+
+    // Comment attachments + real voice capture (parity with feed/reels composer).
+    @State private var commentAttachments: [ComposerAttachment] = []
+    @State private var showCommentPhotoPicker: Bool = false
+    @State private var commentPhotoItems: [PhotosPickerItem] = []
+    @State private var showCommentFilePicker: Bool = false
+    @StateObject private var audioRecorder = AudioRecorderManager()
 
     var body: some View {
         UniversalComposerBar(
             style: .dark,
             mode: .comment,
             accentColor: replyingToStoryComment?.authorColor ?? accentColor,
+            forceShowAttachment: true,
+            forceShowVoice: true,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
-            onSend: { text in
-                let effects = commentEffects
-                let blur = commentBlurEnabled
-                commentEffects = .none
-                commentBlurEnabled = false
-                let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
-                let effectFlags = flags > 0 ? Int(flags) : nil
-                // Capture le parentId AVANT de clear le reply context, sinon
-                // la closure async perd la référence et envoie nil.
-                let parentId = replyingToStoryComment?.id
-                replyingToStoryComment = nil
-                sendComment(text, effectFlags, parentId)
-            },
+            onSendMessage: { text, attachments, _ in submitStoryComment(text: text, attachments: attachments) },
+            onStartRecording: { audioRecorder.startRecording(); HapticFeedback.medium() },
+            onStopRecordingToAttachment: { stopRecordingToAttachment() },
+            onSendRecording: { if stopRecordingToAttachment() { submitStoryComment(text: "", attachments: commentAttachments) } },
+            onCancelRecording: { audioRecorder.cancelRecording() },
+            externalIsRecording: audioRecorder.isRecording,
+            externalRecordingDuration: audioRecorder.duration,
+            externalAudioLevels: audioRecorder.audioLevels,
+            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
+            externalAttachments: commentAttachments,
+            onPhotoLibrary: { showCommentPhotoPicker = true },
+            onFilePicker: { showCommentFilePicker = true },
+            customAttachmentsPreview: commentAttachments.isEmpty
+                ? nil
+                : AnyView(CommentAttachmentsTray(attachments: commentAttachments) { id in
+                    commentAttachments.removeAll { $0.id == id }
+                  }),
             onFocusChange: { focused in
                 if focused {
                     isComposerEngaged = true
@@ -467,6 +482,57 @@ struct StoryComposerBarView: View {
                 hasComposerContent = hasContent
             }
         )
+        .photosPicker(
+            isPresented: $showCommentPhotoPicker,
+            selection: $commentPhotoItems,
+            maxSelectionCount: 1,
+            matching: .any(of: [.images, .videos])
+        )
+        .fileImporter(
+            isPresented: $showCommentFilePicker,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: false
+        ) { result in
+            if case .success(let urls) = result {
+                commentAttachments = CommentComposerStaging.fileAttachments(from: urls)
+            }
+        }
+        .adaptiveOnChange(of: commentPhotoItems) { _, items in
+            Task {
+                commentAttachments = await CommentComposerStaging.photoAttachments(from: items)
+                await MainActor.run { commentPhotoItems = [] }
+            }
+        }
+    }
+
+    /// Construit le média éventuel (un seul) + appelle le `sendComment` injecté avec
+    /// le pendingMedia. Capture `parentId` AVANT de clear le reply context.
+    private func submitStoryComment(text: String, attachments: [ComposerAttachment]) {
+        let media = CommentComposerStaging.firstPendingMedia(in: attachments)
+        commentAttachments.removeAll()
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty || media != nil else { return }
+        let effects = commentEffects
+        let blur = commentBlurEnabled
+        commentEffects = .none
+        commentBlurEnabled = false
+        let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
+        let effectFlags = flags > 0 ? Int(flags) : nil
+        let parentId = replyingToStoryComment?.id
+        replyingToStoryComment = nil
+        sendComment(trimmed, effectFlags, parentId, media)
+    }
+
+    @discardableResult
+    private func stopRecordingToAttachment() -> Bool {
+        guard audioRecorder.duration > 0.5 else {
+            audioRecorder.cancelRecording()
+            return false
+        }
+        let duration = audioRecorder.duration
+        guard let url = audioRecorder.stopRecording() else { return false }
+        commentAttachments.append(CommentComposerStaging.voiceAttachment(duration: duration, url: url))
+        return true
     }
 }
 
@@ -642,7 +708,7 @@ struct StoryCardView: View {
     let dismissComposer: () -> Void
     let goToPrevious: () -> Void
     let goToNext: () -> Void
-    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?) -> Void
+    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?) -> Void
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
     let toggleStoryCommentThread: (String) async -> Void
     let makeStoryExternalShareURL: (String) -> URL?

@@ -228,6 +228,9 @@ describe('PostAudioService — comprehensive', () => {
         data: {
           translations: expect.objectContaining({ fr: expect.any(Object) }),
         },
+        // `commentId` is read back to route the broadcast to the media owner
+        // (comment vs post). Null/absent → post path (this test).
+        select: { commentId: true },
       });
       expect(socialEvents.broadcastPostUpdated).toHaveBeenCalledTimes(1);
     });

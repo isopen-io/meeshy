@@ -97,17 +97,26 @@ public struct CreateCommentRequest: Encodable {
     public let content: String
     public let parentId: String?
     public let effectFlags: Int?
-    /// IDs of media pre-uploaded via the attachments pipeline. Mirrors the
-    /// message-with-attachments contract. Omitted from the payload when empty
-    /// so the existing text-only comment endpoint stays untouched until the
-    /// gateway gains attachment support.
+    /// IDs des PostMedia déjà uploadés (uploadContext=comment) à attacher au
+    /// commentaire. Wire aligné sur le contrat message-with-attachments (tableau),
+    /// MAIS un commentaire ne porte QU'UN SEUL média : le gateway borne à 1.
+    /// Omis du payload quand vide (endpoint texte-seul inchangé).
     public let attachmentIds: [String]?
+    /// Transcription Whisper produite côté mobile pour un média audio (skip
+    /// re-transcription serveur). Même structure que pour les posts.
+    public let mobileTranscription: MobileTranscriptionPayload?
+    public let originalLanguage: String?
 
-    public init(content: String, parentId: String? = nil, effectFlags: Int? = nil, attachmentIds: [String]? = nil) {
+    public init(content: String, parentId: String? = nil, effectFlags: Int? = nil,
+                attachmentIds: [String]? = nil,
+                mobileTranscription: MobileTranscriptionPayload? = nil,
+                originalLanguage: String? = nil) {
         self.content = content
         self.parentId = parentId
         self.effectFlags = effectFlags
         self.attachmentIds = (attachmentIds?.isEmpty == false) ? attachmentIds : nil
+        self.mobileTranscription = mobileTranscription
+        self.originalLanguage = originalLanguage
     }
 }
 

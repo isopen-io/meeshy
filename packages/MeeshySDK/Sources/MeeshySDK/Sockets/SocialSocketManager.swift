@@ -203,6 +203,15 @@ public struct SocketCommentTranslationUpdatedData: Decodable, Sendable {
     public let translation: SocketTranslationPayload
 }
 
+/// `comment:media-updated` — émis quand le pipeline audio d'un média de commentaire
+/// a produit une transcription/traductions. Porte le commentaire enrichi (média
+/// transcrit/traduit) à substituer en cache.
+public struct SocketCommentMediaUpdatedData: Decodable, Sendable {
+    public let postId: String
+    public let commentId: String
+    public let comment: APIPostComment
+}
+
 // MARK: - Protocol
 
 public protocol SocialSocketProviding: Sendable {
@@ -236,6 +245,7 @@ public protocol SocialSocketProviding: Sendable {
     var storyTranslationUpdated: PassthroughSubject<SocketStoryTranslationUpdatedData, Never> { get }
     var postTranslationUpdated: PassthroughSubject<SocketPostTranslationUpdatedData, Never> { get }
     var commentTranslationUpdated: PassthroughSubject<SocketCommentTranslationUpdatedData, Never> { get }
+    var commentMediaUpdated: PassthroughSubject<SocketCommentMediaUpdatedData, Never> { get }
     /// Fires on every reconnect (a `.connect` that follows a previous one).
     /// App-side feed handlers (FeedViewModel) observe this to backfill posts /
     /// reactions missed while the social socket was down.
@@ -292,6 +302,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public let storyTranslationUpdated = PassthroughSubject<SocketStoryTranslationUpdatedData, Never>()
     public let postTranslationUpdated = PassthroughSubject<SocketPostTranslationUpdatedData, Never>()
     public let commentTranslationUpdated = PassthroughSubject<SocketCommentTranslationUpdatedData, Never>()
+    public let commentMediaUpdated = PassthroughSubject<SocketCommentMediaUpdatedData, Never>()
 
     @Published public var isConnected = false
     @Published public var connectionState: ConnectionState = .disconnected
@@ -1064,6 +1075,13 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             guard let self else { return }
             self.decode(SocketCommentTranslationUpdatedData.self, from: data) { [weak self] payload in
                 self?.commentTranslationUpdated.send(payload)
+            }
+        }
+
+        socket.on("comment:media-updated") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(SocketCommentMediaUpdatedData.self, from: data) { [weak self] payload in
+                self?.commentMediaUpdated.send(payload)
             }
         }
 

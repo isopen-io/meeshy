@@ -58,13 +58,17 @@ final class StoryInteractionService {
         content: String,
         originalLanguage: String,
         effectFlags: Int? = nil,
-        parentId: String? = nil
+        parentId: String? = nil,
+        attachmentIds: [String]? = nil,
+        mobileTranscription: MobileTranscriptionPayload? = nil
     ) async {
         let body = StoryCommentBody(
             content: content,
             originalLanguage: originalLanguage,
             effectFlags: effectFlags,
-            parentId: parentId
+            parentId: parentId,
+            attachmentIds: (attachmentIds?.isEmpty == false) ? attachmentIds : nil,
+            mobileTranscription: mobileTranscription
         )
         do {
             let _: APIResponse<AnyCodable> = try await api.post(
@@ -132,9 +136,13 @@ final class StoryInteractionService {
         let originalLanguage: String
         let effectFlags: Int?
         let parentId: String?
+        /// IDs de PostMedia pré-uploadés (uploadContext=comment) — un seul média
+        /// par commentaire (le gateway borne à 1). Omis quand vide.
+        let attachmentIds: [String]?
+        let mobileTranscription: MobileTranscriptionPayload?
 
         enum CodingKeys: String, CodingKey {
-            case content, originalLanguage, effectFlags, parentId
+            case content, originalLanguage, effectFlags, parentId, attachmentIds, mobileTranscription
         }
 
         func encode(to encoder: Encoder) throws {
@@ -143,6 +151,8 @@ final class StoryInteractionService {
             try container.encode(originalLanguage, forKey: .originalLanguage)
             try container.encodeIfPresent(effectFlags, forKey: .effectFlags)
             try container.encodeIfPresent(parentId, forKey: .parentId)
+            try container.encodeIfPresent(attachmentIds, forKey: .attachmentIds)
+            try container.encodeIfPresent(mobileTranscription, forKey: .mobileTranscription)
         }
     }
 

@@ -291,3 +291,88 @@ describe('PostCommentService.getComments — pagination', () => {
     expect(where.AND.length).toBe(2);
   });
 });
+
+// ---------------------------------------------------------------------------
+// addComment — single-media attachment (reuses PostMedia via commentId FK)
+// ---------------------------------------------------------------------------
+
+const noopTrackingLinks = {
+  collectContentTrackingLinks: jest.fn().mockResolvedValue([]),
+} as any;
+
+const makePostMediaMock = () => ({
+  findUnique: jest.fn(),
+  findMany: jest.fn(),
+  update: jest.fn(),
+  create: jest.fn(),
+  delete: jest.fn(),
+  updateMany: jest.fn(),
+  deleteMany: jest.fn(),
+});
+
+const buildPrismaForAdd = (postMedia: ReturnType<typeof makePostMediaMock>) => {
+  const created = {
+    id: 'c-new', content: 'hi', originalLanguage: 'fr', translations: null,
+    likeCount: 0, replyCount: 0, effectFlags: 0, parentId: null,
+    createdAt: new Date('2025-01-01T00:00:00Z'), metadata: null,
+    author: { id: 'a1', username: 'al', displayName: 'Al', avatar: null },
+  };
+  return {
+    post: {
+      findFirst: jest.fn().mockResolvedValue({ id: 'post-1' }),
+      update: jest.fn().mockResolvedValue({}),
+    },
+    postComment: {
+      findFirst: jest.fn(),
+      create: jest.fn().mockResolvedValue(created),
+      update: jest.fn().mockResolvedValue({}),
+    },
+    postMedia,
+  } as unknown as PrismaClient;
+};
+
+describe('PostCommentService.addComment — media', () => {
+  it('links the pending media to the new comment via commentId and returns it', async () => {
+    const postMedia = makePostMediaMock();
+    postMedia.findUnique.mockResolvedValue({ id: 'm-1', postId: null, commentId: null });
+    postMedia.update.mockResolvedValue({});
+    postMedia.findMany.mockResolvedValue([{ id: 'm-1', mimeType: 'image/jpeg', fileUrl: 'http://x/m-1' }]);
+    const prisma = buildPrismaForAdd(postMedia);
+
+    const service = new PostCommentService(prisma, noopTrackingLinks);
+    const result: any = await service.addComment('post-1', 'a1', 'hi', undefined, 0, 'fr', 'm-1');
+
+    expect(postMedia.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'm-1' }, data: expect.objectContaining({ commentId: 'c-new' }) }),
+    );
+    expect(result.media).toHaveLength(1);
+    expect(result.media[0].id).toBe('m-1');
+  });
+
+  it('persists the mobile transcription on the linked audio media', async () => {
+    const postMedia = makePostMediaMock();
+    postMedia.findUnique.mockResolvedValue({ id: 'm-2', postId: null, commentId: null });
+    postMedia.update.mockResolvedValue({});
+    postMedia.findMany.mockResolvedValue([{ id: 'm-2', mimeType: 'audio/mp4', fileUrl: 'http://x/m-2' }]);
+    const prisma = buildPrismaForAdd(postMedia);
+
+    const service = new PostCommentService(prisma, noopTrackingLinks);
+    await service.addComment('post-1', 'a1', '', undefined, 0, 'fr', 'm-2', {
+      text: 'bonjour', language: 'fr', segments: [],
+    } as any);
+
+    const data = postMedia.update.mock.calls[0][0].data;
+    expect(data.commentId).toBe('c-new');
+    expect(data.transcription).toEqual(expect.objectContaining({ text: 'bonjour', source: 'mobile' }));
+  });
+
+  it('throws MEDIA_NOT_AVAILABLE when the media is already linked', async () => {
+    const postMedia = makePostMediaMock();
+    postMedia.findUnique.mockResolvedValue({ id: 'm-3', postId: 'other-post', commentId: null });
+    const prisma = buildPrismaForAdd(postMedia);
+
+    const service = new PostCommentService(prisma, noopTrackingLinks);
+    await expect(service.addComment('post-1', 'a1', 'hi', undefined, 0, 'fr', 'm-3'))
+      .rejects.toThrow('MEDIA_NOT_AVAILABLE');
+  });
+});
