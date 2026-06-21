@@ -7,16 +7,30 @@ import {
   useLikePostMutation,
   useUnlikePostMutation,
   useBookmarkPostMutation,
+  useUpdatePostMutation,
+  useUnbookmarkPostMutation,
+  useRepostMutation,
+  useSharePostMutation,
+  usePinPostMutation,
+  useTranslatePostMutation,
 } from '@/hooks/queries/use-post-mutations';
 
 const mockCreatePost = jest.fn();
 const mockDeletePost = jest.fn();
 const mockBookmarkPost = jest.fn();
+const mockUpdatePost = jest.fn();
+const mockUnbookmarkPost = jest.fn();
+const mockRepost = jest.fn();
+const mockSharePost = jest.fn();
+const mockPinPost = jest.fn();
+const mockUnpinPost = jest.fn();
+const mockTranslatePost = jest.fn();
 
 // Socket mock for post reaction mutations
 const mockSocketEmit = jest.fn();
+let mockSocketConnected = true;
 const mockSocket = {
-  connected: true,
+  get connected() { return mockSocketConnected; },
   emit: mockSocketEmit,
 };
 
@@ -39,13 +53,13 @@ jest.mock('@/services/posts.service', () => ({
     createPost: (...args: unknown[]) => mockCreatePost(...args),
     deletePost: (...args: unknown[]) => mockDeletePost(...args),
     bookmarkPost: (...args: unknown[]) => mockBookmarkPost(...args),
-    updatePost: jest.fn(),
-    unbookmarkPost: jest.fn(),
-    repost: jest.fn(),
-    sharePost: jest.fn(),
-    pinPost: jest.fn(),
-    unpinPost: jest.fn(),
-    translatePost: jest.fn(),
+    updatePost: (...args: unknown[]) => mockUpdatePost(...args),
+    unbookmarkPost: (...args: unknown[]) => mockUnbookmarkPost(...args),
+    repost: (...args: unknown[]) => mockRepost(...args),
+    sharePost: (...args: unknown[]) => mockSharePost(...args),
+    pinPost: (...args: unknown[]) => mockPinPost(...args),
+    unpinPost: (...args: unknown[]) => mockUnpinPost(...args),
+    translatePost: (...args: unknown[]) => mockTranslatePost(...args),
   },
 }));
 
@@ -376,5 +390,414 @@ describe('useBookmarkPostMutation - rollback', () => {
 
     const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
     expect(data?.pages[0].data[0].bookmarkCount).toBe(1);
+  });
+});
+
+// =============================================================================
+// useUpdatePostMutation
+// =============================================================================
+
+describe('useUpdatePostMutation', () => {
+  beforeEach(() => {
+    mockUpdatePost.mockClear();
+  });
+
+  it('optimistically patches post content in feed', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+
+    let resolveUpdate: (v: unknown) => void;
+    mockUpdatePost.mockImplementation(() => new Promise(r => { resolveUpdate = r; }));
+
+    const { result } = renderHook(() => useUpdatePostMutation(), { wrapper: createWrapper(qc) });
+
+    act(() => {
+      result.current.mutate({ postId: 'post-1', data: { content: 'Updated content' } });
+    });
+
+    await waitFor(() => {
+      const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+      expect(data?.pages[0].data[0].content).toBe('Updated content');
+      expect(data?.pages[0].data[0].isEdited).toBe(true);
+    });
+
+    await act(async () => {
+      resolveUpdate!({ success: true, data: {} });
+    });
+  });
+
+  it('rolls back on error', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    mockUpdatePost.mockRejectedValue(new Error('Server error'));
+
+    const { result } = renderHook(() => useUpdatePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate({ postId: 'post-1', data: { content: 'Updated' } });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+    expect(data?.pages[0].data[0].content).toBe('Hello world');
+  });
+
+  it('invalidates detail and list queries on settled', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    mockUpdatePost.mockResolvedValue({ success: true, data: {} });
+    const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
+
+    const { result } = renderHook(() => useUpdatePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate({ postId: 'post-1', data: { content: 'New' } });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({
+      queryKey: ['posts', 'detail', 'post-1'],
+    }));
+  });
+
+  it('no-op when feed cache is undefined (patchPostInFeed with old=undefined)', async () => {
+    const qc = createQueryClient();
+    // Do NOT seed feed - old will be undefined
+    mockUpdatePost.mockResolvedValue({ success: true, data: {} });
+
+    const { result } = renderHook(() => useUpdatePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate({ postId: 'post-1', data: { content: 'Whatever' } });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const data = qc.getQueryData(['posts', 'list', 'infinite', 'feed']);
+    expect(data).toBeUndefined();
+  });
+});
+
+// =============================================================================
+// useUnbookmarkPostMutation
+// =============================================================================
+
+describe('useUnbookmarkPostMutation', () => {
+  beforeEach(() => {
+    mockUnbookmarkPost.mockClear();
+  });
+
+  it('optimistically decrements bookmarkCount', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+
+    let resolveUnbookmark: (v: unknown) => void;
+    mockUnbookmarkPost.mockImplementation(() => new Promise(r => { resolveUnbookmark = r; }));
+
+    const { result } = renderHook(() => useUnbookmarkPostMutation(), { wrapper: createWrapper(qc) });
+
+    act(() => {
+      result.current.mutate('post-1');
+    });
+
+    await waitFor(() => {
+      const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+      expect(data?.pages[0].data[0].bookmarkCount).toBe(0);
+    });
+
+    await act(async () => {
+      resolveUnbookmark!({ success: true });
+    });
+  });
+
+  it('rolls back on error', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    mockUnbookmarkPost.mockRejectedValue(new Error('Server error'));
+
+    const { result } = renderHook(() => useUnbookmarkPostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate('post-1');
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+    expect(data?.pages[0].data[0].bookmarkCount).toBe(1);
+  });
+
+  it('does not go below 0', async () => {
+    const qc = createQueryClient();
+    qc.setQueryData(['posts', 'list', 'infinite', 'feed'], {
+      pages: [{ data: [{ ...mockPost, bookmarkCount: 0 }], meta: { pagination: { total: 1, offset: 0, limit: 20, hasMore: false }, nextCursor: null } }],
+      pageParams: [undefined],
+    });
+    mockUnbookmarkPost.mockResolvedValue({ success: true });
+
+    const { result } = renderHook(() => useUnbookmarkPostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate('post-1');
+    });
+
+    await waitFor(() => {
+      const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+      expect(data?.pages[0].data[0].bookmarkCount).toBe(0);
+    });
+  });
+});
+
+// =============================================================================
+// useRepostMutation
+// =============================================================================
+
+describe('useRepostMutation', () => {
+  beforeEach(() => {
+    mockRepost.mockClear();
+  });
+
+  it('calls postsService.repost and invalidates lists', async () => {
+    const qc = createQueryClient();
+    mockRepost.mockResolvedValue({ success: true, data: { ...mockPost, id: 'repost-1' } });
+    const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
+
+    const { result } = renderHook(() => useRepostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ postId: 'post-1' });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockRepost).toHaveBeenCalledWith('post-1', undefined);
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({
+      queryKey: ['posts', 'list'],
+    }));
+  });
+
+  it('calls postsService.repost with data', async () => {
+    const qc = createQueryClient();
+    mockRepost.mockResolvedValue({ success: true, data: {} });
+
+    const { result } = renderHook(() => useRepostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ postId: 'post-1', data: { content: 'Quote', isQuote: true } });
+    });
+
+    expect(mockRepost).toHaveBeenCalledWith('post-1', { content: 'Quote', isQuote: true });
+  });
+});
+
+// =============================================================================
+// useSharePostMutation
+// =============================================================================
+
+describe('useSharePostMutation', () => {
+  beforeEach(() => {
+    mockSharePost.mockClear();
+  });
+
+  it('calls postsService.sharePost', async () => {
+    const qc = createQueryClient();
+    mockSharePost.mockResolvedValue({ success: true });
+
+    const { result } = renderHook(() => useSharePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ postId: 'post-1', platform: 'twitter' });
+    });
+
+    expect(mockSharePost).toHaveBeenCalledWith('post-1', 'twitter');
+  });
+
+  it('calls postsService.sharePost without platform', async () => {
+    const qc = createQueryClient();
+    mockSharePost.mockResolvedValue({ success: true });
+
+    const { result } = renderHook(() => useSharePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ postId: 'post-1' });
+    });
+
+    expect(mockSharePost).toHaveBeenCalledWith('post-1', undefined);
+  });
+});
+
+// =============================================================================
+// usePinPostMutation
+// =============================================================================
+
+describe('usePinPostMutation', () => {
+  beforeEach(() => {
+    mockPinPost.mockClear();
+    mockUnpinPost.mockClear();
+  });
+
+  it('calls pinPost when pin=true', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    mockPinPost.mockResolvedValue({ success: true });
+
+    const { result } = renderHook(() => usePinPostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ postId: 'post-1', pin: true });
+    });
+
+    expect(mockPinPost).toHaveBeenCalledWith('post-1');
+    expect(mockUnpinPost).not.toHaveBeenCalled();
+
+    const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+    expect(data?.pages[0].data[0].isPinned).toBe(true);
+  });
+
+  it('calls unpinPost when pin=false', async () => {
+    const qc = createQueryClient();
+    qc.setQueryData(['posts', 'list', 'infinite', 'feed'], {
+      pages: [{ data: [{ ...mockPost, isPinned: true }], meta: { pagination: { total: 1, offset: 0, limit: 20, hasMore: false }, nextCursor: null } }],
+      pageParams: [undefined],
+    });
+    mockUnpinPost.mockResolvedValue({ success: true });
+
+    const { result } = renderHook(() => usePinPostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ postId: 'post-1', pin: false });
+    });
+
+    expect(mockUnpinPost).toHaveBeenCalledWith('post-1');
+    expect(mockPinPost).not.toHaveBeenCalled();
+  });
+
+  it('rolls back on error', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    mockPinPost.mockRejectedValue(new Error('Server error'));
+
+    const { result } = renderHook(() => usePinPostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate({ postId: 'post-1', pin: true });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+    expect(data?.pages[0].data[0].isPinned).toBe(false);
+  });
+});
+
+// =============================================================================
+// useTranslatePostMutation
+// =============================================================================
+
+describe('useTranslatePostMutation', () => {
+  beforeEach(() => {
+    mockTranslatePost.mockClear();
+  });
+
+  it('calls postsService.translatePost', async () => {
+    const qc = createQueryClient();
+    mockTranslatePost.mockResolvedValue({ success: true, data: { text: 'Bonjour' } });
+
+    const { result } = renderHook(() => useTranslatePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ postId: 'post-1', targetLanguage: 'fr' });
+    });
+
+    expect(mockTranslatePost).toHaveBeenCalledWith('post-1', 'fr');
+  });
+});
+
+// =============================================================================
+// removePostFromFeed with old=undefined
+// =============================================================================
+
+describe('removePostFromFeed via useDeletePostMutation - old=undefined', () => {
+  it('returns undefined when feed cache is empty', async () => {
+    const qc = createQueryClient();
+    // Do NOT seed
+    mockDeletePost.mockResolvedValue({ success: true });
+
+    const { result } = renderHook(() => useDeletePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate('post-1');
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const data = qc.getQueryData(['posts', 'list', 'infinite', 'feed']);
+    expect(data).toBeUndefined();
+  });
+});
+
+// =============================================================================
+// useLikePostMutation - socket not connected
+// =============================================================================
+
+describe('useLikePostMutation - socket not connected', () => {
+  beforeEach(() => {
+    mockSocketConnected = false;
+    mockSocketEmit.mockClear();
+  });
+
+  afterEach(() => {
+    mockSocketConnected = true;
+  });
+
+  it('rejects when socket not connected', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+
+    const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      result.current.mutate({ postId: 'post-1' });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toMatch(/Socket not connected/i);
+  });
+});
+
+// =============================================================================
+// useLikePostMutation - socket ack timeout
+// =============================================================================
+
+describe('useLikePostMutation - socket ack timeout', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockSocketConnected = true;
+    mockSocketEmit.mockClear();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('rejects after 10s timeout when no ack', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    // mockSocketEmit does NOT call the callback (simulating timeout)
+    mockSocketEmit.mockImplementation(() => {
+      // no callback invoked
+    });
+
+    const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
+
+    act(() => {
+      result.current.mutate({ postId: 'post-1' });
+    });
+
+    // Advance past the 10s timeout
+    act(() => {
+      jest.advanceTimersByTime(10001);
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toMatch(/Socket ack timeout/i);
   });
 });
