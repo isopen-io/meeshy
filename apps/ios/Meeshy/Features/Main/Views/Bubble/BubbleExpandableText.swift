@@ -62,10 +62,11 @@ struct BubbleExpandableText: View, Equatable {
                 // Bouton texte « Voir plus » aligné en bas à droite (spec produit).
                 //
                 // AMÉLIORATION FIABILITÉ (Task ExpandableTextFix) :
-                // 1. Décalage horizontal (`.padding(.trailing, 32)`) pour éviter
-                //    la zone morte du coin inférieur droit où l'overlay des
-                //    réactions (notamment le bouton "+") peut chevaucher et
-                //    voler le tap.
+                // 1. Décalage horizontal (`.padding(.trailing, 48)`) pour garantir
+                //    l'exclusion de la zone de contact du coin inférieur droit.
+                //    L'overlay des réactions (bouton "+") fait 40pt de large et
+                //    déborde de 4pt vers l'extérieur : 48pt assure une séparation
+                //    géométrique absolue.
                 // 2. Utilisation de `.highPriorityGesture` avec un `TapGesture`
                 //    pour garantir que le tap gagne sur le `LongPressGesture`
                 //    simultané du parent (`BubbleSwipeContainer`) et sur la
@@ -78,7 +79,7 @@ struct BubbleExpandableText: View, Equatable {
                     // Hit-area élargie à 44pt (HIG) sans gonfler visuellement le texte.
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
                     .padding(.top, 2)
-                    .padding(.trailing, 32)
+                    .padding(.trailing, 48)
                     .contentShape(Rectangle())
                     .textSelection(.disabled)
                     .highPriorityGesture(
@@ -90,6 +91,7 @@ struct BubbleExpandableText: View, Equatable {
                                 }
                             }
                     )
+                    .accessibilityIdentifier("bubble.expand.more")
                     .accessibilityAddTraits(.isButton)
                     .accessibilityLabel(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
             }
