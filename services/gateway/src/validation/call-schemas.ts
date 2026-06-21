@@ -162,9 +162,11 @@ export const socketSignalSchema = z.object({
       if (data.type === 'offer' || data.type === 'answer' || data.type === 'ice-restart') {
         return typeof data.sdp === 'string' && data.sdp.length > 0;
       }
+      /* istanbul ignore else -- enum guarantees all 4 types are handled */
       if (data.type === 'ice-candidate') {
         return typeof data.candidate === 'string';
       }
+      /* istanbul ignore next -- enum guarantees all 4 types handled above */
       return true;
     },
     {
