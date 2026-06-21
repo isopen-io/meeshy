@@ -256,7 +256,6 @@ public struct MeeshyAvatar: View {
         self.initials = Self.makeInitials(from: name)
     }
 
-    @State private var ringRotation: Double = 0
     @State private var tapScale: CGFloat = 1.0
     @State private var moodScale: CGFloat = 1.0
     private let isDark: Bool
@@ -343,18 +342,6 @@ public struct MeeshyAvatar: View {
             }
         }
         .scaleEffect(tapScale)
-        .onAppear {
-            if effectiveStoryState == .unread && context.animatesStoryRing {
-                withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
-                    ringRotation = 360
-                }
-            }
-        }
-        .onDisappear {
-            withTransaction(Transaction(animation: nil)) {
-                ringRotation = 0
-            }
-        }
 
         let tappable = Group {
             if hasTapHandler {
@@ -417,23 +404,11 @@ public struct MeeshyAvatar: View {
     private var storyRing: some View {
         switch effectiveStoryState {
         case .unread:
-            // Intentional multi-colour ring: the unread-story affordance is a
-            // universally recognised pattern (Instagram-style). It is content
-            // chrome, not brand chrome — kept off the Indigo scale on purpose.
+            // Unread-story affordance: solid brand-primary ring at double the
+            // resting width (product decision 2026-06-21). Replaces the former
+            // Instagram-style multi-colour rotating gradient.
             Circle()
-                .stroke(
-                    AngularGradient(
-                        gradient: Gradient(colors: [
-                            Color(hex: "FF2E63"), Color(hex: "FF6B6B"), Color(hex: "F27121"),
-                            Color(hex: "E94057"), Color(hex: "A855F7"), Color(hex: "08D9D6"),
-                            Color(hex: "FF2E63")
-                        ]),
-                        center: .center,
-                        startAngle: .degrees(ringRotation),
-                        endAngle: .degrees(ringRotation + 360)
-                    ),
-                    lineWidth: context.ringWidth
-                )
+                .stroke(MeeshyColors.brandPrimary, lineWidth: context.ringWidth * 2)
                 .frame(width: context.ringSize, height: context.ringSize)
         case .read:
             Circle()
