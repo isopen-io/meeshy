@@ -17,6 +17,10 @@
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { EventEmitter } from 'events';
+// Source de vérité des seuils de tolérance ZMQ — importée pour que ces tests
+// suivent automatiquement toute évolution des défauts (cbFailureThreshold,
+// maxRetries) sans dériver. Les env vars ne sont pas posées en test → défauts.
+import { ZMQ_TOLERANCE_DEFAULTS } from '../../../services/zmq-translation/zmqToleranceConfig';
 
 // Mock zeromq before importing the client
 const mockPushSocket = {
@@ -1524,8 +1528,8 @@ describe('ZmqTranslationClient', () => {
     it('_cbRecordError() opens circuit breaker after threshold errors — lines 213-214', async () => {
       expect((client as any).cbOpenedAt).toBeNull();
 
-      // Trigger 8 consecutive errors (CB_FAILURE_THRESHOLD = 8)
-      for (let i = 0; i < 8; i++) {
+      // Trigger CB_FAILURE_THRESHOLD consecutive errors (source-of-truth value).
+      for (let i = 0; i < ZMQ_TOLERANCE_DEFAULTS.cbFailureThreshold; i++) {
         (client as any)._cbRecordError();
       }
 
@@ -1599,8 +1603,8 @@ describe('ZmqTranslationClient', () => {
 
       await client.sendTranslationRequest(request);
 
-      // Exhaust all retries (ZMQ_MAX_RETRIES = 4, so need 5 timeouts: 1 initial + 4 retries)
-      for (let i = 0; i < 5; i++) {
+      // Exhaust all retries: 1 initial attempt + ZMQ_MAX_RETRIES retries = maxRetries+1 timeouts.
+      for (let i = 0; i < ZMQ_TOLERANCE_DEFAULTS.maxRetries + 1; i++) {
         await jest.advanceTimersByTimeAsync(30_000 + 100);
       }
 
@@ -1636,8 +1640,8 @@ describe('ZmqTranslationClient', () => {
         audioPath: '/tmp/audio.mp3'
       });
 
-      // Exhaust retries to guarantee an error is eventually emitted
-      for (let i = 0; i < 5; i++) {
+      // Exhaust retries to guarantee an error is eventually emitted (maxRetries+1 timeouts).
+      for (let i = 0; i < ZMQ_TOLERANCE_DEFAULTS.maxRetries + 1; i++) {
         await jest.advanceTimersByTimeAsync(30_000 + 100);
       }
 

@@ -175,6 +175,11 @@ struct CommentsSheetView: View {
     @State private var showCommentFilePicker: Bool = false
     @State private var showCommentLocationPicker: Bool = false
 
+    /// Enregistreur vocal parent-managed — MÊME composant que les conversations
+    /// (`ConversationView`). Produit un vrai fichier audio (pas un timer) déposé
+    /// dans `commentAttachments` comme pièce jointe voix, puis uploadé comme média.
+    @StateObject private var audioRecorder = AudioRecorderManager()
+
     @StateObject private var mentionController: MentionComposerController
 
     init(
@@ -349,7 +354,8 @@ struct CommentsSheetView: View {
                 content: data.comment.content, timestamp: data.comment.createdAt,
                 likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
                 parentId: parentId,
-                currentUserReactions: data.comment.currentUserReactions
+                currentUserReactions: data.comment.currentUserReactions,
+                media: (data.comment.media ?? []).map { $0.toFeedMedia() }
             )
             // The echoed event for OUR own just-sent comment: replace the optimistic
             // placeholder (same author + content) in place instead of duplicating it.
@@ -409,6 +415,18 @@ struct CommentsSheetView: View {
             } else {
                 likeDelta[event.commentId] = (likeDelta[event.commentId] ?? 0) - 1
             }
+        }
+        // Pipeline audio d'un média de commentaire terminé (transcription / variantes
+        // TTS prêtes) → on remplace le média du commentaire en cache par la version
+        // enrichie. Le drapeau de langue + le player audio Prisme se mettent à jour.
+        .onReceive(
+            SocialSocketManager.shared.commentMediaUpdated
+                .receive(on: DispatchQueue.main)
+                .filter { [postId = post.id] in $0.postId == postId }
+        ) { data in
+            let media = (data.comment.media ?? []).map { $0.toFeedMedia() }
+            guard !media.isEmpty else { return }
+            applyCommentMediaUpdate(commentId: data.commentId, parentId: data.comment.parentId, media: media)
         }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
@@ -543,7 +561,8 @@ struct CommentsSheetView: View {
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: commentId,
                     originalLanguage: c.originalLanguage, translatedContent: translated,
-                    currentUserReactions: c.currentUserReactions
+                    currentUserReactions: c.currentUserReactions,
+                    media: (c.media ?? []).map { $0.toFeedMedia() }
                 )
             }
             repliesMap[commentId] = replies
@@ -687,6 +706,15 @@ struct CommentsSheetView: View {
                 submitComment(text: text, attachments: attachments)
             },
             onLocationRequest: { showCommentLocationPicker = true },
+            // Capture voix réelle — mêmes composants que les conversations.
+            onStartRecording: { startCommentRecording() },
+            onStopRecordingToAttachment: { stopCommentRecordingToAttachment() },
+            onSendRecording: { stopAndSendCommentRecording() },
+            onCancelRecording: { audioRecorder.cancelRecording() },
+            externalIsRecording: audioRecorder.isRecording,
+            externalRecordingDuration: audioRecorder.duration,
+            externalAudioLevels: audioRecorder.audioLevels,
+            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
             textBinding: $composerText,
             replyBanner: replyingTo.map { AnyView(commentReplyBanner($0)) },
             customAttachmentsPreview: commentAttachments.isEmpty
@@ -843,33 +871,51 @@ struct CommentsSheetView: View {
         }
     }
 
-    // MARK: - Comment Send (optimistic, with attachment scaffold)
+    // MARK: - Comment Voice Recording (real capture — parity with conversations)
 
-    /// Posts a comment optimistically. Text follows the existing reconcile/roll-back
-    /// flow. Staged media (`attachments`) is collected here for parity with the
-    /// message-with-attachments composer; the actual upload + `attachmentIds`
-    /// transmission lands once the gateway comment-attachment endpoint ships
-    /// (the wire contract is ready via `CreateCommentRequest.attachmentIds`).
-    /// Until then, attachment-only comments are surfaced as "coming soon"
-    /// rather than silently dropped.
+    private func startCommentRecording() {
+        audioRecorder.startRecording()
+        HapticFeedback.medium()
+    }
+
+    /// Stoppe l'enregistrement et dépose l'audio (vrai fichier `.m4a`) dans la tray
+    /// des attachements du commentaire — éditable avant envoi. < 0,5 s = ignoré.
+    /// Renvoie `true` si un attachement a été déposé.
+    @discardableResult
+    private func stopCommentRecordingToAttachment() -> Bool {
+        guard audioRecorder.duration > 0.5 else {
+            audioRecorder.cancelRecording()
+            return false
+        }
+        let duration = audioRecorder.duration
+        guard let url = audioRecorder.stopRecording() else { return false }
+        commentAttachments.append(CommentComposerStaging.voiceAttachment(duration: duration, url: url))
+        return true
+    }
+
+    /// Stoppe et envoie le commentaire vocal immédiatement (raw).
+    private func stopAndSendCommentRecording() {
+        guard stopCommentRecordingToAttachment() else { return }
+        submitComment(text: composerText, attachments: commentAttachments)
+        composerText = ""
+    }
+
+    // MARK: - Comment Send (optimistic, with single media)
+
+    /// Poste un commentaire de façon optimiste, avec optionnellement UN média
+    /// (image/vidéo/audio — un commentaire ne porte qu'un seul média). Le texte
+    /// suit le flux reconcile/rollback existant ; le média est uploadé via TUS
+    /// (`uploadContext: "comment"` → PostMedia) puis lié via `addComment(attachmentIds:)`.
+    /// Les attachements file/location et la voix sans fichier sont ignorés (hors périmètre).
+    /// Un commentaire média-seul (sans texte) est autorisé.
     private func submitComment(text: String, attachments: [ComposerAttachment]) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let hadAttachments = !attachments.isEmpty
-
-        // Clear the staged media tray regardless of outcome — it has been handed
-        // to the send pipeline (or surfaced as not-yet-supported below).
+        // Un seul média par commentaire : on prend le premier image/vidéo/audio valide.
+        let media: PendingCommentMedia? = CommentComposerStaging.firstPendingMedia(in: attachments)
         commentAttachments.removeAll()
 
-        guard !trimmed.isEmpty else {
-            if hadAttachments {
-                FeedbackToastManager.shared.show(
-                    String(localized: "feed.comments.attachments_coming_soon",
-                           defaultValue: "Les pi\u{00E8}ces jointes en commentaire arrivent bient\u{00F4}t",
-                           bundle: .main)
-                )
-            }
-            return
-        }
+        // Rien à envoyer (ni texte ni média exploitable).
+        guard !trimmed.isEmpty || media != nil else { return }
 
         let parentId = replyingTo?.id
         let effects = commentEffects
@@ -882,11 +928,10 @@ struct CommentsSheetView: View {
         let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
         let effectFlags = flags > 0 ? Int(flags) : nil
 
-        // Optimistic: insert the comment in its place IMMEDIATELY — a reply
-        // goes under its parent (sub-message), otherwise it's a top-level
-        // row — WITHOUT waiting for the network. The confirmed server row
-        // reconciles it (REST response OR the `comment:added` socket event,
-        // whichever lands first); a failure rolls it back.
+        // Optimistic: insert the comment (with its local media for instant inline
+        // display) IMMEDIATELY — reply under its parent, else top-level — without
+        // waiting for the network. The confirmed server row reconciles it (REST
+        // response OR the `comment:added` socket event); a failure rolls it back.
         let tempId = "tmp_\(UUID().uuidString)"
         let me = AuthManager.shared.currentUser
         let optimistic = FeedComment(
@@ -896,7 +941,8 @@ struct CommentsSheetView: View {
             authorAvatarURL: me?.avatar,
             content: trimmed, timestamp: Date(),
             likes: 0, replies: 0, parentId: parentId,
-            effectFlags: effectFlags ?? 0
+            effectFlags: effectFlags ?? 0,
+            media: media.map { [$0.optimistic] } ?? []
         )
         if let parentId {
             var existing = repliesMap[parentId] ?? []
@@ -915,16 +961,26 @@ struct CommentsSheetView: View {
         }
         liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
 
+        let lang = composerLanguage
+
         Task {
             do {
-                let apiComment = try await PostService.shared.addComment(postId: post.id, content: trimmed, parentId: parentId, effectFlags: effectFlags)
+                let attachmentIds: [String]? = media != nil
+                    ? [try await CommentMediaUploader.upload(media!)]
+                    : nil
+                let apiComment = try await PostService.shared.addComment(
+                    postId: post.id, content: trimmed, parentId: parentId, effectFlags: effectFlags,
+                    attachmentIds: attachmentIds, mobileTranscription: media?.mobileTranscription,
+                    originalLanguage: lang
+                )
                 let feedComment = FeedComment(
                     id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
                     authorAvatarURL: apiComment.author.avatar,
                     content: apiComment.content, timestamp: apiComment.createdAt,
                     likes: 0, replies: 0,
                     parentId: parentId,
-                    effectFlags: apiComment.effectFlags ?? effectFlags ?? 0
+                    effectFlags: apiComment.effectFlags ?? effectFlags ?? 0,
+                    media: (apiComment.media ?? []).map { $0.toFeedMedia() }
                 )
                 // Swap the optimistic temp for the server row (no count
                 // change). Idempotent if the socket event already did it.
@@ -967,6 +1023,33 @@ struct CommentsSheetView: View {
             }
         }
     }
+
+    /// Remplace le média (enrichi) d'un commentaire en cache, qu'il soit top-level
+    /// (`liveComments`) ou une réponse (`repliesMap`). Déclenché par
+    /// `comment:media-updated` quand la transcription / les variantes TTS arrivent.
+    private func applyCommentMediaUpdate(commentId: String, parentId: String?, media: [FeedMedia]) {
+        if let parentId, var existing = repliesMap[parentId] {
+            if let idx = existing.firstIndex(where: { $0.id == commentId }) {
+                existing[idx].media = media
+                repliesMap[parentId] = existing
+                return
+            }
+        }
+        var current = liveComments ?? post.comments
+        if let idx = current.firstIndex(where: { $0.id == commentId }) {
+            current[idx].media = media
+            liveComments = current
+            return
+        }
+        // Réponse non encore montée dans repliesMap : tente tous les threads chargés.
+        for (key, var replies) in repliesMap {
+            if let idx = replies.firstIndex(where: { $0.id == commentId }) {
+                replies[idx].media = media
+                repliesMap[key] = replies
+                return
+            }
+        }
+    }
 }
 
 // MARK: - Comment Row View
@@ -999,7 +1082,12 @@ struct CommentRowView: View, Equatable {
         lhs.showSeeReplies == rhs.showSeeReplies &&
         lhs.comment.replies == rhs.comment.replies &&
         lhs.comment.content == rhs.comment.content &&
-        lhs.comment.translatedContent == rhs.comment.translatedContent
+        lhs.comment.translatedContent == rhs.comment.translatedContent &&
+        // Re-render quand le média (ou son enrichissement audio : transcription /
+        // variantes TTS via comment:media-updated) change.
+        lhs.comment.media.first?.id == rhs.comment.media.first?.id &&
+        lhs.comment.media.first?.transcription?.text == rhs.comment.media.first?.transcription?.text &&
+        lhs.comment.media.first?.translatedAudios.count == rhs.comment.media.first?.translatedAudios.count
     }
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -1138,6 +1226,21 @@ struct CommentRowView: View, Equatable {
                             }
                         }
                     }
+
+                // Média unique du commentaire (image/vidéo/audio) — inline + plein
+                // écran « comme dans une conversation ». Le commentaire ne porte
+                // qu'un seul média (cf. backend commentId FK sur PostMedia).
+                if let media = comment.media.first {
+                    CommentMediaView(
+                        media: media,
+                        accentColor: accentColor,
+                        authorName: comment.author,
+                        authorAvatarURL: comment.authorAvatarURL,
+                        authorColor: comment.authorColor,
+                        sentAt: comment.timestamp
+                    )
+                    .padding(.top, 2)
+                }
 
                 HStack(spacing: 20) {
                     Button {

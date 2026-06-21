@@ -220,14 +220,26 @@ export const UpdatePostSchema = z.object({
 }, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' });
 
 export const CreateCommentSchema = z.object({
-  content: z.string().min(1).max(2000),
+  // Le contenu peut être vide quand un média est joint (commentaire média seul).
+  // Le refine ci-dessous garantit qu'un commentaire porte AU MOINS du texte ou un média.
+  content: z.string().max(2000).optional().default(''),
   parentId: z.string().optional(),
   effectFlags: z.number().int().min(0).optional(),
   /// ISO 639-1 (or BCP-47) code of the language the comment is written in.
   /// Optional — when omitted the translation pipeline detects the language
   /// from the content as a fallback.
   originalLanguage: z.string().min(2).max(16).optional(),
-});
+  /// IDs de PostMedia déjà uploadés (uploadcontext=comment, postId/commentId=null
+  /// pending) à attacher. Wire aligné sur le contrat message-with-attachments
+  /// (tableau), MAIS un commentaire ne porte QU'UN SEUL média → borné à 1.
+  attachmentIds: z.array(z.string()).max(1).optional(),
+  /// Transcription Whisper produite côté mobile pour un média audio (évite la
+  /// re-transcription serveur). Même structure que pour les posts.
+  mobileTranscription: MobileTranscriptionSchema.optional(),
+}).refine(
+  (data) => (data.content?.trim().length ?? 0) > 0 || (data.attachmentIds?.length ?? 0) > 0,
+  { message: 'A comment must have text content or an attached media' },
+);
 
 export const RepostSchema = z.object({
   targetType: z.enum(['POST', 'REEL', 'STORY', 'STATUS']).optional(),

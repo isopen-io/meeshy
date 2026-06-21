@@ -191,7 +191,8 @@ class PostDetailViewModel: ObservableObject {
                         likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: c.parentId,
                         originalLanguage: c.originalLanguage, translatedContent: translatedContent,
-                        currentUserReactions: c.currentUserReactions
+                        currentUserReactions: c.currentUserReactions,
+                        media: (c.media ?? []).map { $0.toFeedMedia() }
                     )
                 }
             }.value
@@ -258,7 +259,8 @@ class PostDetailViewModel: ObservableObject {
                         likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: commentId,
                         originalLanguage: c.originalLanguage, translatedContent: translated,
-                        currentUserReactions: c.currentUserReactions
+                        currentUserReactions: c.currentUserReactions,
+                        media: (c.media ?? []).map { $0.toFeedMedia() }
                     )
                 }
             }.value
@@ -533,6 +535,75 @@ class PostDetailViewModel: ObservableObject {
         replyingTo = nil
     }
 
+    /// Envoi d'un commentaire (top-level OU réponse) portant UN média
+    /// (image/vidéo/audio). Contrairement au chemin texte top-level qui transite par
+    /// l'OfflineQueue, un commentaire média DOIT passer en direct (l'upload du fichier
+    /// exige le réseau). Optimistic-first avec le média local, puis upload TUS
+    /// (`uploadContext=comment`) → `addComment(attachmentIds:)`, réconcilie/rollback.
+    func submitCommentWithMedia(_ content: String, effectFlags: Int?, parentId: String?, pendingMedia: PendingCommentMedia) async {
+        guard let post else { return }
+        if parentId != nil { replyingTo = nil }
+        let tempId = "tmp_\(UUID().uuidString)"
+        let me = AuthManager.shared.currentUser
+        let optimistic = FeedComment(
+            id: tempId,
+            author: me?.displayName ?? me?.username ?? "",
+            authorId: me?.id ?? "",
+            authorAvatarURL: me?.avatar,
+            content: content, timestamp: Date(),
+            likes: 0, replies: 0, parentId: parentId,
+            effectFlags: effectFlags ?? 0,
+            media: [pendingMedia.optimistic]
+        )
+        let snapshotComments = comments
+        let snapshotReplies = parentId.flatMap { repliesMap[$0] }
+        let snapshotCount = post.commentCount
+        if let parentId {
+            var existing = repliesMap[parentId] ?? []
+            existing.insert(optimistic, at: 0)
+            repliesMap[parentId] = existing
+            expandedThreads.insert(parentId)
+            if let idx = comments.firstIndex(where: { $0.id == parentId }) { comments[idx].replies += 1 }
+        } else {
+            comments.insert(optimistic, at: 0)
+        }
+        self.post?.commentCount = snapshotCount + 1
+
+        do {
+            let attachmentId = try await CommentMediaUploader.upload(pendingMedia)
+            let apiComment = try await postService.addComment(
+                postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags,
+                attachmentIds: [attachmentId], mobileTranscription: pendingMedia.mobileTranscription,
+                originalLanguage: nil
+            )
+            let server = FeedComment(
+                id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
+                authorAvatarURL: apiComment.author.avatar,
+                content: apiComment.content, timestamp: apiComment.createdAt,
+                likes: 0, replies: 0, parentId: parentId,
+                effectFlags: apiComment.effectFlags ?? effectFlags ?? 0,
+                media: (apiComment.media ?? []).map { $0.toFeedMedia() }
+            )
+            if let parentId {
+                var existing = repliesMap[parentId] ?? []
+                if let idx = existing.firstIndex(where: { $0.id == tempId }) { existing[idx] = server }
+                else if !existing.contains(where: { $0.id == server.id }) { existing.insert(server, at: 0) }
+                repliesMap[parentId] = existing
+            } else if let idx = comments.firstIndex(where: { $0.id == tempId }) {
+                comments[idx] = server
+            } else if !comments.contains(where: { $0.id == server.id }) {
+                comments.insert(server, at: 0)
+            }
+            try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+        } catch {
+            // Rollback optimiste.
+            comments = snapshotComments
+            if let parentId { repliesMap[parentId] = snapshotReplies }
+            self.post?.commentCount = snapshotCount
+            FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Error sending comment", bundle: .main))
+        }
+    }
+
     // MARK: - Socket
 
     /// Id du post couvert par les sinks actifs. Keyer la garde sur le postId
@@ -564,7 +635,8 @@ class PostDetailViewModel: ObservableObject {
                     content: data.comment.content, timestamp: data.comment.createdAt,
                     likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
                     parentId: parentId,
-                    currentUserReactions: data.comment.currentUserReactions
+                    currentUserReactions: data.comment.currentUserReactions,
+                    media: (data.comment.media ?? []).map { $0.toFeedMedia() }
                 )
                 if let parentId {
                     if self.expandedThreads.contains(parentId) {
@@ -583,6 +655,27 @@ class PostDetailViewModel: ObservableObject {
                     }
                 }
                 self.post?.commentCount = data.commentCount
+            }
+            .store(in: &socketCancellables)
+
+        // Pipeline audio d'un média de commentaire terminé → remplace le média
+        // (transcription / variantes TTS prêtes) du commentaire en cache, qu'il
+        // soit top-level ou réponse. Miroir du handler de CommentsSheetView.
+        socialSocket.commentMediaUpdated
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] data in
+                guard let self else { return }
+                let media = (data.comment.media ?? []).map { $0.toFeedMedia() }
+                guard !media.isEmpty else { return }
+                let commentId = data.commentId
+                if let parentId = data.comment.parentId, var existing = self.repliesMap[parentId],
+                   let idx = existing.firstIndex(where: { $0.id == commentId }) {
+                    existing[idx].media = media
+                    self.repliesMap[parentId] = existing
+                } else if let idx = self.comments.firstIndex(where: { $0.id == commentId }) {
+                    self.comments[idx].media = media
+                }
             }
             .store(in: &socketCancellables)
 

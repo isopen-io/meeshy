@@ -39,7 +39,7 @@ public protocol PostServiceProviding: Sendable {
     func removeBookmark(postId: String) async throws
     func getPost(postId: String) async throws -> APIPost
     func getComments(postId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
-    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?) async throws -> APIPostComment
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?) async throws -> APIPostComment
     func likeComment(postId: String, commentId: String) async throws
     func unlikeComment(postId: String, commentId: String) async throws
     func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool) async throws -> APIPost
@@ -58,6 +58,16 @@ public protocol PostServiceProviding: Sendable {
     func recordImpressions(postIds: [String], source: String) async throws
     func recordImpression(postId: String, source: String) async throws
     func recordEngagement(_ sessions: [EngagementSession]) async throws
+}
+
+public extension PostServiceProviding {
+    /// Convenience texte-seul (attachements = nil). Préserve les appels existants
+    /// depuis que `addComment` porte `attachmentIds` / `mobileTranscription` /
+    /// `originalLanguage` (les protocoles Swift ne supportent pas les valeurs par défaut).
+    func addComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async throws -> APIPostComment {
+        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
+                             attachmentIds: nil, mobileTranscription: nil, originalLanguage: nil)
+    }
 }
 
 public final class PostService: PostServiceProviding, @unchecked Sendable {
@@ -101,11 +111,12 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(postId)/bookmark", method: "POST")
     }
 
-    public func addComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async throws -> APIPostComment {
-        // `attachmentIds` is carried by `CreateCommentRequest` (defaulting nil)
-        // so the wire contract is ready; it is wired through once the gateway
-        // comment-attachment endpoint ships.
-        let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags)
+    public func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+                           attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
+                           originalLanguage: String?) async throws -> APIPostComment {
+        let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags,
+                                        attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
+                                        originalLanguage: originalLanguage)
         let response: APIResponse<APIPostComment> = try await api.post(endpoint: "/posts/\(postId)/comments", body: body)
         return response.data
     }

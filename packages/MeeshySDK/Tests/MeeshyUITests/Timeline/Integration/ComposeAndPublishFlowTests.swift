@@ -76,7 +76,9 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     func getComments(postId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]> {
         throw NSError(domain: "mock", code: -1)
     }
-    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?) async throws -> APIPostComment {
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+                    attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
+                    originalLanguage: String?) async throws -> APIPostComment {
         throw NSError(domain: "mock", code: -1)
     }
     func likeComment(postId: String, commentId: String) async throws {}
