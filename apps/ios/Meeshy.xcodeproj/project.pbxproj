@@ -316,6 +316,7 @@
 		DD0100000000004F01 /* ConversationDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0100000000003F01 /* ConversationDashboardView.swift */; };
 		DD22EE33FF44AA55BB660099 /* StatusBubbleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */; };
 		DD22EE33FF44AA55BB6600AA /* UniversalComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */; };
+		13592BA2A5E911C34C7D1CF1 /* RecentMediaStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 958B07268694D7A98F773DC8 /* RecentMediaStrip.swift */; };
 		DD22EE33FF44AA55BB6600AC /* ComposerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500AC /* ComposerModels.swift */; };
 		DD22EE33FF44AA55BB6600AD /* UniversalComposerBar+Recording.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500AD /* UniversalComposerBar+Recording.swift */; };
 		DD22EE33FF44AA55BB6600AE /* UniversalComposerBar+Attachments.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500AE /* UniversalComposerBar+Attachments.swift */; };
@@ -875,6 +876,7 @@
 		CC1000000000001F10 /* MediaPlayerContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPlayerContext.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBubbleOverlay.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UniversalComposerBar.swift; sourceTree = "<group>"; };
+		958B07268694D7A98F773DC8 /* RecentMediaStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentMediaStrip.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500AC /* ComposerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerModels.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500AD /* UniversalComposerBar+Recording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UniversalComposerBar+Recording.swift"; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500AE /* UniversalComposerBar+Attachments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UniversalComposerBar+Attachments.swift"; sourceTree = "<group>"; };
@@ -1278,6 +1280,7 @@
 				CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */,
 				CC11DD22EE33FF44AA5500AC /* ComposerModels.swift */,
 				CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */,
+				958B07268694D7A98F773DC8 /* RecentMediaStrip.swift */,
 				CC11DD22EE33FF44AA5500AD /* UniversalComposerBar+Recording.swift */,
 				CC11DD22EE33FF44AA5500AE /* UniversalComposerBar+Attachments.swift */,
 				EF01020304050607080900AB /* EffectsPickerView.swift */,
@@ -2505,6 +2508,7 @@
 				AA11BB22CC33DD44EE55FF07 /* StatusComposerView.swift in Sources */,
 				DD22EE33FF44AA55BB660099 /* StatusBubbleOverlay.swift in Sources */,
 				DD22EE33FF44AA55BB6600AA /* UniversalComposerBar.swift in Sources */,
+				13592BA2A5E911C34C7D1CF1 /* RecentMediaStrip.swift in Sources */,
 				EF01020304050607080900AC /* EffectsPickerView.swift in Sources */,
 				DD22EE33FF44AA55BB6600AC /* ComposerModels.swift in Sources */,
 				DD22EE33FF44AA55BB6600AD /* UniversalComposerBar+Recording.swift in Sources */,

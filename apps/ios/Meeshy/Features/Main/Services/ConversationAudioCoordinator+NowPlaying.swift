@@ -11,7 +11,7 @@ import os
 ///
 /// Surfaces the active audio context, transport state and progress to the
 /// system lock screen, control center, AirPods controls and CarPlay. Honors
-/// remote commands (play/pause/next/seek) by routing them back to the
+/// remote commands (play/pause/next/previous/seek) by routing them back to the
 /// coordinator. `currentTime` is throttled to 0.25s to avoid spamming the
 /// system NowPlaying info center.
 ///
@@ -143,6 +143,11 @@ extension ConversationAudioCoordinator {
             Task { @MainActor in self.playNext() }
             return .success
         }
+        let previousToken = cc.previousTrackCommand.addTarget { [weak self] _ in
+            guard let self else { return .commandFailed }
+            Task { @MainActor in self.playPrevious() }
+            return .success
+        }
         let seekToken = cc.changePlaybackPositionCommand.addTarget { [weak self] event in
             guard let positionEvent = event as? MPChangePlaybackPositionCommandEvent,
                   let self else { return .commandFailed }
@@ -158,11 +163,15 @@ extension ConversationAudioCoordinator {
 
         // Tokens stored for future `deactivateNowPlayingBridge()` symmetry —
         // currently unused since the bridge is process-long.
-        _remoteCommandTokens = [playToken, pauseToken, nextToken, seekToken]
+        _remoteCommandTokens = [playToken, pauseToken, nextToken, previousToken, seekToken]
 
         cc.playCommand.isEnabled = true
         cc.pauseCommand.isEnabled = true
         cc.nextTrackCommand.isEnabled = true
+        // Always enabled: with no prior track `playPrevious()` simply restarts
+        // the current one (standard media-player behavior), so the control is
+        // never a dead no-op.
+        cc.previousTrackCommand.isEnabled = true
         cc.changePlaybackPositionCommand.isEnabled = true
     }
 
