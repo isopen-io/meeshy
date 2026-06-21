@@ -1315,6 +1315,18 @@ struct ConversationView: View {
                         mentionSuggestionPanel
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
+                    if let blockedId = blockedDirectParticipantId {
+                        blockedComposerZone(userId: blockedId)
+                    } else if viewModel.isConversationClosed {
+                        closedConversationBanner
+                    } else {
+                        themedComposer
+                    }
+                    // Panneau emoji inline — glisse vers le haut À LA PLACE DU
+                    // CLAVIER, donc EN DESSOUS de la barre de composition (jamais
+                    // au-dessus). Même placement que le carrousel de pièces
+                    // jointes et que le composer story, pour une bascule
+                    // clavier ⇄ emoji sans saut visuel.
                     if composerState.showTextEmojiPicker {
                         EmojiKeyboardPanel(
                             style: isDark ? .dark : .light,
@@ -1324,13 +1336,6 @@ struct ConversationView: View {
                         )
                         .frame(height: 260)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                    if let blockedId = blockedDirectParticipantId {
-                        blockedComposerZone(userId: blockedId)
-                    } else if viewModel.isConversationClosed {
-                        closedConversationBanner
-                    } else {
-                        themedComposer
                     }
                 }
                 .background(.ultraThinMaterial)
