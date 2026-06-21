@@ -1469,3 +1469,34 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - CI: 15/15 checks passed — Security✅ Quality(bun)✅ Trivy(neutral) Prisma✅ Test Python(translator)✅ Test gateway✅ Test web✅ Test agent✅ Test shared✅ Voice API Tests✅ TTS/STT Integration✅ Audio Pipeline Tests✅ Build(bun)✅ Voice E2E Benchmark(skipped) Summary✅
 - Squash-merge: PR #747 → main sha 4eb688b6af6dab7bd63e9c6477c13c0ad6d38ee2 (2026-06-21T14:xx Z)
 - Next slice: P2 Rate limiting × gateway (next ☐ cell top-to-bottom in P2 rows)
+
+## 2026-06-21T16:00Z — P2 Rate limiting × gateway
+- Targeted: `src/utils/rate-limiter.ts` (auth/phone factory functions), `src/middleware/rate-limiter.ts`, `src/middleware/rate-limit.ts`, `src/utils/socket-rate-limiter.ts`, `src/config/message-limits.ts`
+- Result: ☑ done
+- Coverage (slice-targeted files):
+  - config/message-limits.ts         line 100% → 100%, branch 0% → 100%
+  - middleware/rate-limit.ts          line 100% → 100%, branch 0% → 100%
+  - middleware/rate-limiter.ts        line 100% → 100%, branch 0% → 100%
+  - utils/rate-limiter.ts             line 73.91% → 100%, branch 61.19% → 98.5%
+  - utils/socket-rate-limiter.ts      line 0% → 100%, branch 0% → 100%
+  - ALL FILES combined:               line 100%, branch 99.34%
+  - Gateway full suite after ratchet:  CI-measured lines=55.27% / branches=52.64% / stmts=55.1% / funcs=55.39% (threshold floor ratcheted lines:54→55/branches:52→52/stmts:54→55/funcs:54→55)
+- Tests added: 232 (+160 net new — 72 already from existing test file)
+  - `src/__tests__/unit/config/message-limits.test.ts` (new, 14 tests)
+  - `src/__tests__/unit/utils/socket-rate-limiter.test.ts` (new, 52 tests)
+  - `src/__tests__/unit/utils/auth-rate-limiters.test.ts` (new, 87 tests)
+  - `src/__tests__/unit/middleware/rate-limit.test.ts` (new, 26 tests)
+  - `src/__tests__/unit/middleware/rate-limiter-pure.test.ts` (new, 53 tests)
+- Reviewer: PASS (rounds: 1 — one minor note: cleanup positive log path asserts count=0 but not logger.debug; deemed not a blocker since primary behavior asserted)
+- Production code changes: NONE — test-only diff (jest.config.json threshold ratchet only)
+- manifests/gateway.md: ticked [x] for message-limits.ts, middleware/rate-limit.ts, middleware/rate-limiter.ts, utils/rate-limiter.ts, utils/socket-rate-limiter.ts
+- PROGRESS.md: P2 Rate limiting × gateway flipped ☐→☑; baselines table updated
+- Notes:
+  1. Line 150 in rate-limiter.ts (RedisStore `ttl > 0 ? now+ttl : now+windowMs` false branch) is the one remaining uncovered branch (98.5%/file, 99.34%/slice). The false branch fires when pttl returns ≤0 after increment — requires pexpire to fail silently or a race; MockRedis always yields positive TTL. Genuine defensive guard, not testable with current mock infrastructure; no istanbul ignore added.
+  2. `getSocketRateLimiter()` singleton: destroy() called in tests but module-level `rateLimiterInstance` not reset to null — subsequent calls in same Jest worker return destroyed instance. Tests only call it once, so no issue in practice; isolated per Jest file.
+  3. Auth factory key generator tests cover isolation by identity (same bucket for same IP/token, separate bucket for different) and all fallback paths (missing IP → 'unknown', missing tokenId → '', missing email → '').
+  4. ⚠ First push used over-ratcheted thresholds (61/56/60/61) measured from `jest` without `--coverage`. CI runs `jest --coverage` (collectCoverageFrom counts all files → lower global average). Corrected to CI-measured values (55/52/55/55) in 2nd push. Lesson: always calibrate against CI-measured values, not local `jest` without `--coverage`.
+- Commit: 7c5fea62af1b2eaa1efeefe63c33de25b921ad41 (branch claude/coverage/p2-rate-limiting-gateway — corrected thresholds pushed 2026-06-21T16:38Z)
+- CI: All checks passed — Security✅ Quality(bun)✅ Trivy(neutral) Prisma✅ Test shared✅ Test agent✅ Audio Pipeline Tests✅ Test web✅ TTS/STT Integration✅ Voice API Tests✅ Test gateway✅ Build(bun)✅ Test Python(translator)✅(in-progress at merge time, non-blocking) Summary✅
+- Squash-merge: PR #748 → main sha ec90dfff090deb7e0b08a2d08e87400cb4d5d884 (2026-06-21T16:50Z)
+- Next slice: P2 Admin & moderation × gateway (next ☐ cell in feature matrix)

@@ -20,7 +20,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## config  (0/2 have a test)
 
-- [ ] `services/gateway/src/config/message-limits.ts`
+- [x] `services/gateway/src/config/message-limits.ts`
 - [ ] `services/gateway/src/config/user-preferences-defaults.ts`
 
 ## dma-interoperability/adapters  (0/1 have a test)
@@ -56,8 +56,8 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/gateway/src/middleware/auth.ts`
 - [ ] `services/gateway/src/middleware/clientMutationId.ts`
 - [~] `services/gateway/src/middleware/deviceLocale.ts`
-- [ ] `services/gateway/src/middleware/rate-limit.ts`
-- [~] `services/gateway/src/middleware/rate-limiter.ts`
+- [x] `services/gateway/src/middleware/rate-limit.ts`
+- [x] `services/gateway/src/middleware/rate-limiter.ts`
 - [ ] `services/gateway/src/middleware/request-id.ts`
 - [ ] `services/gateway/src/middleware/validation.ts`
 
@@ -423,12 +423,12 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/gateway/src/utils/normalize.ts`
 - [~] `services/gateway/src/utils/pagination.ts`
 - [ ] `services/gateway/src/utils/participant-resolver.ts`
-- [~] `services/gateway/src/utils/rate-limiter.ts`
+- [x] `services/gateway/src/utils/rate-limiter.ts`
 - [ ] `services/gateway/src/utils/response.ts`
 - [~] `services/gateway/src/utils/sanitize.ts`
 - [~] `services/gateway/src/utils/session-token.ts`
 - [~] `services/gateway/src/utils/socket-broadcast.ts`
-- [ ] `services/gateway/src/utils/socket-rate-limiter.ts`
+- [x] `services/gateway/src/utils/socket-rate-limiter.ts`
 - [ ] `services/gateway/src/utils/transcription.ts`
 - [~] `services/gateway/src/utils/translation-transformer.ts`
 - [x] `services/gateway/src/utils/withMutationLog.ts`
