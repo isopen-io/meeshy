@@ -93,6 +93,41 @@ final class DeliveryStatusResolverTests: XCTestCase {
         XCTAssertEqual(result, .read)
     }
 
+    // MARK: - "All" markers (live count-blind path) take precedence over counts
+
+    // C1: the real-time group path advances state + stamps readByAllAt but does
+    // NOT carry per-row counters. The marker must win so the checkmark doesn't
+    // regress to a single check while the stale counters say "not everyone".
+    func test_resolve_group_readByAllMarker_winsOverStaleCounts() {
+        let result = DeliveryStatusResolver.resolve(
+            status: .read, deliveredCount: 0, readCount: 0, recipientCount: 10,
+            deliveredToAllAt: Date(), readByAllAt: Date())
+        XCTAssertEqual(result, .read)
+    }
+
+    func test_resolve_group_deliveredToAllMarker_winsOverStaleCounts() {
+        let result = DeliveryStatusResolver.resolve(
+            status: .delivered, deliveredCount: 0, readCount: 0, recipientCount: 10,
+            deliveredToAllAt: Date(), readByAllAt: nil)
+        XCTAssertEqual(result, .delivered)
+    }
+
+    // No markers (cold-start: the gateway never persists them) → counts decide.
+    func test_resolve_group_noMarkers_partialRead_isSent() {
+        let result = DeliveryStatusResolver.resolve(
+            status: .read, deliveredCount: 1, readCount: 1, recipientCount: 10,
+            deliveredToAllAt: nil, readByAllAt: nil)
+        XCTAssertEqual(result, .sent)
+    }
+
+    // A marker never resurrects a pre-delivery lifecycle state.
+    func test_resolve_sending_markerIgnored() {
+        let result = DeliveryStatusResolver.resolve(
+            status: .sending, deliveredCount: 0, readCount: 0, recipientCount: 10,
+            deliveredToAllAt: Date(), readByAllAt: Date())
+        XCTAssertEqual(result, .sending)
+    }
+
     // MARK: - fromCounts(deliveredCount:readCount:recipientCount:)
 
     func test_fromCounts_group_partialRead_isSent() {

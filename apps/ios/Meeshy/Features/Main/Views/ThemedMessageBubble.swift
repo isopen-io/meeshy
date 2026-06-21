@@ -353,6 +353,8 @@ extension ThemedMessageBubble: @MainActor Equatable {
         // part of the equality gate or the checkmark would never refresh.
         lhs.message.deliveredCount == rhs.message.deliveredCount &&
         lhs.message.readCount == rhs.message.readCount &&
+        lhs.message.deliveredToAllAt == rhs.message.deliveredToAllAt &&
+        lhs.message.readByAllAt == rhs.message.readByAllAt &&
         lhs.recipientCount == rhs.recipientCount &&
         lhs.message.attachments.count == rhs.message.attachments.count &&
         lhs.message.reactions.count == rhs.message.reactions.count &&

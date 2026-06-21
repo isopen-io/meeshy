@@ -41,11 +41,21 @@ public enum DeliveryStatusResolver {
     ///     conversation members EXCLUDING the sender. `0` or `1` means a direct
     ///     conversation (or an unknown denominator) and the stored status is
     ///     trusted as-is.
+    ///   - deliveredToAllAt / readByAllAt: unambiguous "every recipient has
+    ///     received / read" markers stamped by the live all-or-nothing update
+    ///     path. That path advances `state` without carrying per-row counters,
+    ///     so without these a real-time group delivery/read would transiently
+    ///     regress to a single check until the sibling counters write lands.
+    ///     Non-nil takes precedence over the count comparison. `nil` at
+    ///     cold-start (the gateway does not persist them), where the per-message
+    ///     counts are authoritative.
     public static func resolve(
         status: MeeshyMessage.DeliveryStatus,
         deliveredCount: Int,
         readCount: Int,
-        recipientCount: Int
+        recipientCount: Int,
+        deliveredToAllAt: Date? = nil,
+        readByAllAt: Date? = nil
     ) -> MeeshyMessage.DeliveryStatus {
         // The pre-delivery send lifecycle is authoritative and independent of
         // how many peers have received the message — never reinterpret it.
@@ -63,9 +73,11 @@ public enum DeliveryStatusResolver {
         // working for direct chats.
         guard recipientCount > 1 else { return status }
 
-        // Group: the indicator must represent EVERY recipient.
-        if readCount >= recipientCount { return .read }
-        if deliveredCount >= recipientCount { return .delivered }
+        // Group: the indicator must represent EVERY recipient. Trust the
+        // unambiguous "all" markers first (count-blind live path), then the
+        // per-message counters (authoritative at cold-start).
+        if readByAllAt != nil || readCount >= recipientCount { return .read }
+        if deliveredToAllAt != nil || deliveredCount >= recipientCount { return .delivered }
         return .sent
     }
 

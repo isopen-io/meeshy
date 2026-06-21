@@ -547,6 +547,20 @@ public actor MessagePersistenceActor {
                     record.state = machine.state
                     record.deliveredAt = machine.deliveredAt
                     record.readAt = machine.readAt
+                    // The caller (ConversationSocketHandler) only feeds this batch
+                    // a delivered/read event once the WHOLE group has received /
+                    // read (all-or-nothing). This path advances `state` but does
+                    // NOT carry per-row counters, so stamp the unambiguous "all"
+                    // markers the display resolver trusts — otherwise a real-time
+                    // group delivery/read would transiently regress to a single
+                    // check until the sibling counters write lands.
+                    if machine.state == .read {
+                        let at = machine.readAt ?? Date()
+                        record.readByAllAt = at
+                        record.deliveredToAllAt = record.deliveredToAllAt ?? machine.deliveredAt ?? at
+                    } else if machine.state == .delivered {
+                        record.deliveredToAllAt = machine.deliveredAt ?? Date()
+                    }
                     record.updatedAt = Date()
                     record.changeVersion += 1
                     try record.update(db)

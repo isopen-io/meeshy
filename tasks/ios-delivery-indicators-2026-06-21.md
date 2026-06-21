@@ -64,9 +64,26 @@ Source de vérité unique : **`DeliveryStatusResolver`** (SDK, pure/stateless).
   (`ConversationSocketHandlerTests`: partiel 1/2 ⇒ aucune transition ; 2/2 ⇒
   delivered ; 2/2 ⇒ read inchangé).
 
+### Correctif C1 (suite revue opus) — course live → coche transitoire fausse
+Le chemin live GRDB (`batchDeliverySync`) avance le `state` mais **n'écrit pas**
+les colonnes de compteurs. Comme le resolver d'affichage est basé compteurs, un
+message de groupe livré/lu en temps réel pouvait **régresser transitoirement à une
+seule coche** jusqu'à ce que le chemin frère écrive les compteurs (course entre
+deux écrivains GRDB). Corrigé via les marqueurs **`deliveredToAllAt`/`readByAllAt`** :
+- `DeliveryStatusResolver.resolve` accepte ces timestamps et les fait **primer** sur
+  les compteurs (signal non ambigu « tous », indépendant du dénominateur).
+- `batchDeliverySync` les estampille quand l'événement all-or-nothing avance le
+  `state` (seul appelant : `ConversationSocketHandler`).
+- Au cold-start ils sont `nil` (le gateway ne les persiste pas) ⇒ fallback compteurs
+  exacts. Le `==` (Equatable) les compare pour garantir le re-render.
+- `ConversationSocketHandler` passe désormais par `DeliveryStatusResolver.fromCounts`
+  (source unique du seuil — M2).
+
 ### Garanties
 - **Cold-start (cas dominant : ouvrir un groupe)** : compteurs REST exacts +
   `recipientCount` ⇒ coche correcte immédiatement. Ne ment jamais.
+- **Live (groupe livré/lu par tous)** : marqueurs « all » ⇒ coche correcte
+  immédiatement, sans course ni dépendance aux compteurs.
 - **1:1** : comportement inchangé (le resolver fait confiance au statut quand
   `recipientCount <= 1`).
 - **Pire cas** : sous-déclaration temporaire (montre moins que la réalité) jamais
@@ -84,14 +101,7 @@ n'est pas câblé), mais la **CI macOS doit valider**.
    gater `markAsRead()` dessus, + tracking de viewport (`onAppear` par bulle →
    `maxVisibleCreatedAt`) pour n'envoyer l'accusé que jusqu'au message réellement
    vu. Mettre à jour `test_markAsRead_postsNotification` (injecter `{ true }`).
-2. **Précision live groupe « lu par tous »** : `batchDeliverySync`
-   (`MessagePersistenceActor`) avance le `state` mais **ne propage pas** les
-   colonnes `readCount`/`deliveredCount`. Donc, en groupe, le passage « lu par
-   tous » en temps réel n'apparaît qu'au prochain refresh REST (compteurs exacts).
-   Option A : propager les compteurs dans `batchDeliverySync` (étendre l'op
-   `batchDeliveryUpdate` pour porter delivered/readCount). Option B : déclencher un
-   refresh REST scoped sur l'événement `read-status:updated`.
-3. **Consommateurs secondaires** (`MessageInfoSheet`, `MessageOverlayMenu`,
+2. **Consommateurs secondaires** (`MessageInfoSheet`, `MessageOverlayMenu`,
    `BubbleStandardLayout+Media`) lisent le `deliveryStatus` brut (correct 1:1,
    approximatif groupe). Les router via le resolver pour cohérence totale.
 

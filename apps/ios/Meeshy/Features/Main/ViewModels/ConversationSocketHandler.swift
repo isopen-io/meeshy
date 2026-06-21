@@ -634,17 +634,20 @@ final class ConversationSocketHandler {
                 // must reflect EVERY recipient, never a single member of a group.
                 // `totalMembers` is the active recipient count (sender excluded);
                 // a partial summary advances NOTHING — the bubbles stay at their
-                // current (lower) state until the whole group catches up. A 0
-                // denominator falls back to legacy "any > 0" so 1:1 keeps working.
-                let n = summary.totalMembers
-                let allRead = n > 0 ? summary.readCount >= n : summary.readCount > 0
-                let allDelivered = n > 0 ? summary.deliveredCount >= n : summary.deliveredCount > 0
+                // current (lower) state until the whole group catches up. The
+                // threshold is owned by DeliveryStatusResolver (single source of
+                // truth; a 0 denominator falls back to legacy "any > 0" for 1:1).
                 let deliveryEvent: MessageEvent?
-                if allRead {
+                switch DeliveryStatusResolver.fromCounts(
+                    deliveredCount: summary.deliveredCount,
+                    readCount: summary.readCount,
+                    recipientCount: summary.totalMembers
+                ) {
+                case .read:
                     deliveryEvent = .readBy(userId: userId, at: Date())
-                } else if allDelivered {
+                case .delivered:
                     deliveryEvent = .delivered(count: summary.deliveredCount, at: Date())
-                } else {
+                default:
                     deliveryEvent = nil
                 }
                 // Batch-update delivery state; store observation will rebuild

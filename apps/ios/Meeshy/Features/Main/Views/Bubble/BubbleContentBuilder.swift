@@ -203,7 +203,9 @@ extension BubbleContent {
                     status: message.deliveryStatus,
                     deliveredCount: message.deliveredCount,
                     readCount: message.readCount,
-                    recipientCount: recipientCount)
+                    recipientCount: recipientCount,
+                    deliveredToAllAt: message.deliveredToAllAt,
+                    readByAllAt: message.readByAllAt)
                 : nil
         )
     }
