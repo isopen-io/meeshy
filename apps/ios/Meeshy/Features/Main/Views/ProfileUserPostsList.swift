@@ -11,8 +11,10 @@ import MeeshyUI
 //   - `FeedPostCard` for posts, `ReelFeedCard` for reels (`post.isReel`).
 //   - `CacheCoordinator.shared.feed` keyed `"user:<id>"` (same store as the feed)
 //     for cache-first display (Instant App, stale-while-revalidate).
-//   - Optimistic like / repost / bookmark / comment / share via `PostService`,
-//     identical to the feed handlers — no crash on any action.
+//   - Optimistic like / repost / bookmark / share via `PostService` (with
+//     rollback), and comment send via `addComment` — every action is wired and
+//     crash-free. (Unlike the feed, comments here are best-effort: no durable
+//     offline outbox — a failed send surfaces a toast rather than queuing.)
 //   - Impression batching (source `"profile"`) for every card that appears, and a
 //     `viewPost` call when a post is opened or its text expanded ("voir plus").
 //   - Reels open the immersive viewer (host wires `onOpenReel`); posts open detail
@@ -196,11 +198,15 @@ struct ProfileUserPostsList: View {
     // MARK: - Share
 
     private func share(_ postId: String) async {
-        // `try?` flattens to `String?` — nil when the mint fails (offline,
-        // rate-limit); we then fall back to the canonical web URL below.
-        let shortUrl = try? await PostService.shared.share(postId: postId, platform: "system", generateLink: true).shortUrl
-        viewModel.bumpShare(postId)
-        let resolved = shortUrl ?? "\(ShareableLink.webBaseURL)/feeds/post/\(postId)"
+        // `try?` → nil when the request never reached the gateway (offline,
+        // rate-limit). Only bump the optimistic share count when it succeeded —
+        // the gateway increments shareCount on any request that lands, but a
+        // transport failure records nothing, so bumping then would be wrong.
+        let result = try? await PostService.shared.share(postId: postId, platform: "system", generateLink: true)
+        if result != nil { viewModel.bumpShare(postId) }
+        // Always surface a shareable URL (tracked when minted, canonical web URL
+        // otherwise) so the user is never stuck with nothing to share.
+        let resolved = result?.shortUrl ?? "\(ShareableLink.webBaseURL)/feeds/post/\(postId)"
         guard let url = URL(string: resolved) else { return }
         shareableLink = ShareableLink(url: url)
     }
@@ -319,6 +325,11 @@ final class ProfileUserPostsViewModel: ObservableObject {
             renderWindow = min(posts.count, renderWindow + Self.renderStep)
         } else if hasMore {
             await loadMore()
+            // Grow the window to include the freshly fetched page — otherwise
+            // the rendered prefix is unchanged, the bottom sentinel never moves,
+            // its onAppear never re-fires, and pagination dead-ends at the cache
+            // boundary.
+            renderWindow = min(posts.count, renderWindow + Self.renderStep)
         }
     }
 
@@ -467,8 +478,12 @@ final class ProfileUserPostsViewModel: ObservableObject {
     private func flushImpressions() async {
         let batch = Array(pendingImpressionIds)
         guard !batch.isEmpty else { return }
-        recordedImpressionIds.formUnion(batch)
         pendingImpressionIds.subtract(batch)
-        try? await postService.recordImpressions(postIds: batch, source: "profile")
+        do {
+            try await postService.recordImpressions(postIds: batch, source: "profile")
+            // Mark recorded ONLY on success so a failed flush leaves the ids
+            // eligible to re-enqueue when the card next appears.
+            recordedImpressionIds.formUnion(batch)
+        } catch {}
     }
 }

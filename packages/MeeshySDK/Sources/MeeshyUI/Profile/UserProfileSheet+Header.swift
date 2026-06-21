@@ -276,7 +276,10 @@ extension UserProfileSheet {
 
             Spacer()
         }
-        .padding(.horizontal, 16)
+        // Leading inset clears the top-left close button (36pt @ leading 16) so
+        // the compact avatar/name never sit underneath it when collapsed.
+        .padding(.leading, 56)
+        .padding(.trailing, 16)
         .padding(.vertical, 8)
         .frame(height: ProfileHeaderMetrics.collapsedBar)
         .background(theme.backgroundPrimary)
