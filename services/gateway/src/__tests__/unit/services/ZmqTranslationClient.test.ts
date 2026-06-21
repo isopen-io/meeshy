@@ -1524,8 +1524,8 @@ describe('ZmqTranslationClient', () => {
     it('_cbRecordError() opens circuit breaker after threshold errors — lines 213-214', async () => {
       expect((client as any).cbOpenedAt).toBeNull();
 
-      // Trigger 5 consecutive errors (CB_FAILURE_THRESHOLD = 5)
-      for (let i = 0; i < 5; i++) {
+      // Trigger 8 consecutive errors (CB_FAILURE_THRESHOLD = 8)
+      for (let i = 0; i < 8; i++) {
         (client as any)._cbRecordError();
       }
 
@@ -1599,8 +1599,8 @@ describe('ZmqTranslationClient', () => {
 
       await client.sendTranslationRequest(request);
 
-      // Exhaust all retries (ZMQ_MAX_RETRIES = 3, so need 4 timeouts: 1 initial + 3 retries)
-      for (let i = 0; i < 4; i++) {
+      // Exhaust all retries (ZMQ_MAX_RETRIES = 4, so need 5 timeouts: 1 initial + 4 retries)
+      for (let i = 0; i < 5; i++) {
         await jest.advanceTimersByTimeAsync(30_000 + 100);
       }
 
@@ -1637,7 +1637,7 @@ describe('ZmqTranslationClient', () => {
       });
 
       // Exhaust retries to guarantee an error is eventually emitted
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < 5; i++) {
         await jest.advanceTimersByTimeAsync(30_000 + 100);
       }
 
