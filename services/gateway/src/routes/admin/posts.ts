@@ -96,6 +96,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       const user = authContext.registeredUser;
       const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
+      /* istanbul ignore next -- all admin roles passing canAccessAdmin have canViewAnalytics or canModerateContent; guard unreachable */
       if (!permissions.canViewAnalytics && !permissions.canModerateContent) {
         return sendForbidden(reply, 'Permission insuffisante pour voir les statistiques des posts');
       }
