@@ -1261,6 +1261,18 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         // from a stale `conversation:unread-updated` broadcast or from a
         // REST refresh that ran against the buggy server fallback.
         Task {
+            // Re-check the conversation is STILL the open one before applying the
+            // defensive zero. A rapid open→close
+            // (setCurrentlyOpenConversation("x") then (nil)) could otherwise let
+            // this deferred zero-write land after — and clobber — a fresh
+            // `conversation:unread-updated` that legitimately arrived once the
+            // conversation was no longer open. Guarding here keeps the
+            // pass-through restore correct (see ConversationSyncEngineTests
+            // .test_setCurrentlyOpenConversation_nil_restoresNormalPassThrough).
+            guard self.currentlyOpenConversationId == id else {
+                await self.recomputeTotalUnread()
+                return
+            }
             await self.cache.conversations.update(for: "list") { conversations in
                 var updated = conversations
                 if let idx = updated.firstIndex(where: { $0.id == id }) {
