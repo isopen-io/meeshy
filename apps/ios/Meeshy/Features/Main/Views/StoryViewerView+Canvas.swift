@@ -363,23 +363,6 @@ struct StoryComposerBarView: View {
             forceShowVoice: true,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
-            onSendMessage: { text, attachments, _ in submitStoryComment(text: text, attachments: attachments) },
-            onStartRecording: { audioRecorder.startRecording(); HapticFeedback.medium() },
-            onStopRecordingToAttachment: { stopRecordingToAttachment() },
-            onSendRecording: { if stopRecordingToAttachment() { submitStoryComment(text: "", attachments: commentAttachments) } },
-            onCancelRecording: { audioRecorder.cancelRecording() },
-            externalIsRecording: audioRecorder.isRecording,
-            externalRecordingDuration: audioRecorder.duration,
-            externalAudioLevels: audioRecorder.audioLevels,
-            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
-            externalAttachments: commentAttachments,
-            onPhotoLibrary: { showCommentPhotoPicker = true },
-            onFilePicker: { showCommentFilePicker = true },
-            customAttachmentsPreview: commentAttachments.isEmpty
-                ? nil
-                : AnyView(CommentAttachmentsTray(attachments: commentAttachments) { id in
-                    commentAttachments.removeAll { $0.id == id }
-                  }),
             onFocusChange: { focused in
                 if focused {
                     isComposerEngaged = true
@@ -396,6 +379,7 @@ struct StoryComposerBarView: View {
                     }
                 }
             },
+            onSendMessage: { text, attachments, _ in submitStoryComment(text: text, attachments: attachments) },
             replyBanner: replyingToStoryComment.map { reply in
                 AnyView(
                     HStack(spacing: 8) {
@@ -443,6 +427,21 @@ struct StoryComposerBarView: View {
                     )
                 )
             },
+            customAttachmentsPreview: commentAttachments.isEmpty
+                ? nil
+                : AnyView(CommentAttachmentsTray(attachments: commentAttachments) { id in
+                    commentAttachments.removeAll { $0.id == id }
+                  }),
+            onStartRecording: { audioRecorder.startRecording(); HapticFeedback.medium() },
+            onStopRecordingToAttachment: { stopRecordingToAttachment() },
+            onSendRecording: { if stopRecordingToAttachment() { submitStoryComment(text: "", attachments: commentAttachments) } },
+            onCancelRecording: { audioRecorder.cancelRecording() },
+            externalIsRecording: audioRecorder.isRecording,
+            externalRecordingDuration: audioRecorder.duration,
+            externalAudioLevels: audioRecorder.audioLevels,
+            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
+            onPhotoLibrary: { showCommentPhotoPicker = true },
+            onFilePicker: { showCommentFilePicker = true },
             onRequestTextEmoji: {
                 isComposerEngaged = true
                 // Dismiss keyboard first, then show emoji panel

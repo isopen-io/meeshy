@@ -706,6 +706,14 @@ struct CommentsSheetView: View {
                 submitComment(text: text, attachments: attachments)
             },
             onLocationRequest: { showCommentLocationPicker = true },
+            textBinding: $composerText,
+            replyBanner: replyingTo.map { AnyView(commentReplyBanner($0)) },
+            customAttachmentsPreview: commentAttachments.isEmpty
+                ? nil
+                : AnyView(commentAttachmentsPreview),
+            onTextChange: { text in
+                mentionController.handleQuery(in: text)
+            },
             // Capture voix réelle — mêmes composants que les conversations.
             onStartRecording: { startCommentRecording() },
             onStopRecordingToAttachment: { stopCommentRecordingToAttachment() },
@@ -715,14 +723,6 @@ struct CommentsSheetView: View {
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
             externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
-            textBinding: $composerText,
-            replyBanner: replyingTo.map { AnyView(commentReplyBanner($0)) },
-            customAttachmentsPreview: commentAttachments.isEmpty
-                ? nil
-                : AnyView(commentAttachmentsPreview),
-            onTextChange: { text in
-                mentionController.handleQuery(in: text)
-            },
             onPhotoLibrary: { showCommentPhotoPicker = true },
             onFilePicker: { showCommentFilePicker = true },
             onRecentMediaSelected: { pick in ingestCommentRecentMedia(pick) },

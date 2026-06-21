@@ -1764,8 +1764,6 @@ struct PostDetailView: View {
                 : AnyView(CommentAttachmentsTray(attachments: commentAttachments) { id in
                     commentAttachments.removeAll { $0.id == id }
                   }),
-            onPhotoLibrary: { showCommentPhotoPicker = true },
-            onFilePicker: { showCommentFilePicker = true },
             onStartRecording: { startCommentRecording() },
             onStopRecordingToAttachment: { stopCommentRecordingToAttachment() },
             onSendRecording: { stopAndSendCommentRecording() },
@@ -1774,9 +1772,11 @@ struct PostDetailView: View {
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
             externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
-            externalAttachments: commentAttachments,
+            onPhotoLibrary: { showCommentPhotoPicker = true },
+            onFilePicker: { showCommentFilePicker = true },
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects,
+            externalAttachments: commentAttachments,
             focusTrigger: $composerFocusTrigger
         )
         .photosPicker(
