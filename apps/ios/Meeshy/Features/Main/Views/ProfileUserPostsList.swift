@@ -173,13 +173,13 @@ struct ProfileUserPostsList: View {
             },
             onTapPost: { tapped in openPost(tapped) },
             onTapRepost: { _ in openPost(post) },
-            onReport: { id in
-                Task { await viewModel.report(id) }
-            },
             onSeeMore: {
                 // "Voir plus" expands the text inline AND counts a post view —
                 // throttled to once per hour per user+post (shared with open).
                 recordView(post.id)
+            },
+            onReport: { id in
+                Task { await viewModel.report(id) }
             }
         )
         .equatable()

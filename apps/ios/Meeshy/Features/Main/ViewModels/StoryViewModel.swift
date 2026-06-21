@@ -1054,16 +1054,17 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
                 try compressed.data.write(to: tempURL)
                 defer { try? FileManager.default.removeItem(at: tempURL) }
-                uploadResult = try await uploader.uploadFile(
+                let result = try await uploader.uploadFile(
                     fileURL: tempURL, mimeType: compressed.mimeType,
                     token: token, uploadContext: "story", thumbHash: thumbHash
                 )
+                uploadResult = result
                 // Pre-populate the image cache under the server URL so that when
                 // reconcilePublishedQueueSlide swaps in the real StoryItem the viewer
                 // gets a cache hit — no re-download of content the author just uploaded.
                 // adoptImage moves tempURL into the cache store; the deferred removeItem
                 // silently no-ops since the file is already gone from tempURL.
-                await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: uploadResult.fileUrl)
+                await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)
                 onProgress(baseProgress + 0.30 * slideShare)
             } else {
                 onProgress(baseProgress + 0.30 * slideShare)
