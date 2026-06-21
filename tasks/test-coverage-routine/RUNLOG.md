@@ -1465,4 +1465,7 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   2. ICE restart catch handler tests: use `mockRejectedValue` + `onError` assertion + `setTimeout(r, 0)` microtask flush for reliable async verification.
   3. RTCPeerConnection error path tests wrapped in try/finally to restore global after test.
   4. Only uncovered lines 434-439: secure context + no mediaDevices alternative error path — not a tautological justification but a genuine environment constraint (JSDOM provides `window.isSecureContext=false`).
+- Commit: cc48a461e38deae83fa2879da054efee4b694f79 (branch claude/coverage/p2-calls-web-webrtc)
+- CI: 15/15 checks passed — Security✅ Quality(bun)✅ Trivy(neutral) Prisma✅ Test Python(translator)✅ Test gateway✅ Test web✅ Test agent✅ Test shared✅ Voice API Tests✅ TTS/STT Integration✅ Audio Pipeline Tests✅ Build(bun)✅ Voice E2E Benchmark(skipped) Summary✅
+- Squash-merge: PR #747 → main sha 4eb688b6af6dab7bd63e9c6477c13c0ad6d38ee2 (2026-06-21T14:xx Z)
 - Next slice: P2 Rate limiting × gateway (next ☐ cell top-to-bottom in P2 rows)
