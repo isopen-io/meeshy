@@ -48,4 +48,30 @@ routing, disambiguated at the handler by `PostMedia.commentId` (zero translator/
 - Single media per comment (requirement: "un et unique média").
 
 ## Review
-(to fill at end)
+
+### Livré (3 commits poussés sur claude/dazzling-rubin-5ih1zt)
+1. **Backend + SDK foundation** — Prisma (PostMedia.commentId + PostComment.media),
+   gateway (schema mediaId/mobileTranscription, TUS uploadcontext=comment, addComment
+   link + audio trigger, PostAudioService owner disambiguation, comment:media-updated),
+   SDK (APIPostComment.media, FeedComment.media, addComment(mediaId:), socket publisher).
+2. **iOS** — CommentMediaView (inline + fullscreen image/video/audio Prisme),
+   CommentRowView media (unifie FeedCommentsSheet + PostDetailView via ThreadedCommentSection),
+   send pipeline (CommentMediaUploader + sendComment(text:media:)), realtime updates.
+3. **Tests** — gateway suite verte (6789 pass, 0 fail), 3 nouveaux tests media-linking.
+
+### Vérifié
+- Gateway: `tsc --noEmit` 0 erreur ; `jest` 224 suites / 6789 tests OK.
+- Shared: `npm run build` OK.
+- Prisma: schema validé + client régénéré (commentId présent).
+
+### NON vérifiable dans cet env (Linux, pas de toolchain Swift)
+- Compilation SDK/iOS — code écrit selon les patterns existants, à builder via
+  `./apps/ios/meeshy.sh build` (macOS) / CI.
+
+### À faire par l'utilisateur (branche clavier/composer annoncée)
+- Brancher l'UI d'attachement média du composer commentaire → `FeedCommentsSheet.sendComment(text:media:)`
+  en passant un `PendingCommentMedia` (le point d'entrée est prêt).
+
+### Follow-ups optionnels
+- StoryCommentRowView (média des commentaires de stories — composant overlay distinct).
+- CommentRecord GRDB : colonne média pour persistance cold-start (sinon re-fetch au load).
