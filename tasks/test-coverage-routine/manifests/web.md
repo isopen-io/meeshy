@@ -556,7 +556,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/components/conversations/header/TypingIndicator.tsx`
 - [ ] `apps/web/components/conversations/header/index.ts`
 - [~] `apps/web/components/conversations/header/types.ts`
-- [ ] `apps/web/components/conversations/header/use-call-banner.ts`
+- [x] `apps/web/components/conversations/header/use-call-banner.ts`
 - [ ] `apps/web/components/conversations/header/use-encryption-info.ts`
 - [ ] `apps/web/components/conversations/header/use-header-actions.ts`
 - [~] `apps/web/components/conversations/header/use-header-preferences.ts`
@@ -940,8 +940,8 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/web/hooks/use-auth.ts`
 - [x] `apps/web/hooks/use-auto-retry-failed-messages.ts`
 - [~] `apps/web/hooks/use-bot-protection.ts`
-- [~] `apps/web/hooks/use-call-duration.ts`
-- [ ] `apps/web/hooks/use-call-quality.ts`
+- [x] `apps/web/hooks/use-call-duration.ts`
+- [x] `apps/web/hooks/use-call-quality.ts`
 - [x] `apps/web/hooks/use-connection-status.ts`
 - [ ] `apps/web/hooks/use-contacts-actions.ts`
 - [ ] `apps/web/hooks/use-contacts-data.ts`
@@ -1055,7 +1055,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/hooks/conversations/index.ts`
 - [~] `apps/web/hooks/conversations/use-participants.ts`
 - [~] `apps/web/hooks/conversations/use-translation-state.ts`
-- [~] `apps/web/hooks/conversations/use-video-call.ts`
+- [x] `apps/web/hooks/conversations/use-video-call.ts`
 - [~] `apps/web/hooks/conversations/useComposerDrafts.ts`
 - [~] `apps/web/hooks/conversations/useConversationSelection.ts`
 - [~] `apps/web/hooks/conversations/useConversationTyping.ts`
@@ -1151,7 +1151,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## lib/calls  (1/1 have a test)
 
-- [~] `apps/web/lib/calls/adaptive-degradation.ts`
+- [x] `apps/web/lib/calls/adaptive-degradation.ts`
 
 ## lib/constants  (1/1 have a test)
 
@@ -1306,7 +1306,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/web/stores/app-store.ts`
 - [~] `apps/web/stores/auth-form-store.ts`
 - [~] `apps/web/stores/auth-store.ts`
-- [~] `apps/web/stores/call-store.ts`
+- [x] `apps/web/stores/call-store.ts`
 - [~] `apps/web/stores/conversation-preferences-store.ts`
 - [~] `apps/web/stores/conversation-ui-store.ts`
 - [~] `apps/web/stores/failed-messages-store.ts`
