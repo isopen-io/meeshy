@@ -165,7 +165,6 @@ struct RecentMediaStrip: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                openLibraryTile
                 ForEach(model.assets, id: \.localIdentifier) { asset in
                     RecentMediaCell(
                         asset: asset,
@@ -175,6 +174,8 @@ struct RecentMediaStrip: View {
                         onTap: { tap(asset) }
                     )
                 }
+                // Trailing tile — opens the full photo library after the samples.
+                openLibraryTile
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 6)

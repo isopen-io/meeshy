@@ -136,7 +136,11 @@ extension UniversalComposerBar {
     /// never shows a dead camera or emoji tile.
     private var carouselTiles: [CarouselTile] {
         var tiles: [CarouselTile] = []
-        if onPhotoLibrary != nil {
+        // The dedicated "Photos" tile is only listed when there is NO recent-media
+        // strip below (the strip already exposes photo/video picking + a tile to
+        // open the full library). Hosts without the strip keep this tile so photo
+        // access never disappears.
+        if onPhotoLibrary != nil && onRecentMediaSelected == nil {
             tiles.append(CarouselTile(
                 id: "photo", icon: "photo.fill", color: "9B59B6",
                 label: String(localized: "composer.attach.photo", defaultValue: "Photos", bundle: .main)
