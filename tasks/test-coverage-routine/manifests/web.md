@@ -1257,7 +1257,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/services/two-factor.service.ts`
 - [ ] `apps/web/services/user-preferences.service.ts`
 - [~] `apps/web/services/users.service.ts`
-- [~] `apps/web/services/webrtc-service.ts`
+- [x] `apps/web/services/webrtc-service.ts`
 - [ ] `apps/web/services/websocket.service.ts`
 
 ## services/conversations  (3/7 have a test)
