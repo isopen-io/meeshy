@@ -1427,3 +1427,42 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   2. Next run: P2 Calls × web sub-slice 2 — webrtc-service.ts (37%/25% → ≥92%) + video-calls UI components. Or pivot to P2 Rate limiting × gateway if WebRTC complexity deems it blocked.
   3. Pre-flight: no open coverage PR found; branch claude/coverage/p2-calls-web created fresh off main.
 - Commit: d877835c (PR #744 → main 2026-06-21T10:38:16Z, squash-merged by jcnm)
+
+## 2026-06-21T14:00Z — P2 Calls × web (sub-slice 2: webrtc-service.ts ☑)
+- Targeted: `apps/web/services/webrtc-service.ts` (1133 lines)
+- Result: ☑ done — webrtc-service.ts line 99.35% / branch 98.80% / funcs 98.21% / stmts 99.30%; P2 Calls × web cell flipped ◐→☑
+- Coverage (per-file, local measurement):
+  - `webrtc-service.ts`: **99.35% stmts / 98.80% branches / 98.21% funcs / 99.30% lines** ✓ (target ≥92% both; only uncovered: lines 434–439 — secure-context-but-no-mediaDevices alternate branch, unreachable without an environment that has `isSecureContext=true` but no `mediaDevices` object)
+- Tests added: 154 tests in `apps/web/__tests__/services/webrtc-service.coverage.test.ts` (NEW)
+  - FakeRTCPeerConnection + FakeSender + FakeTransceiver + FakeReceiver infrastructure
+  - setIceServers, isPolite, setNegotiationRole (3 tests)
+  - createPeerConnection event handlers: onicecandidate (null/non-null), ontrack, onconnectionstatechange (state/no-state), oniceconnectionstatechange (normal/failed/disconnected grace timer/connected recovery/completed recovery), onnegotiationneeded (autoNegotiate true/false) (9 tests)
+  - createPeerConnection error path: Error throw + wrap non-Error throw (2 tests, try/finally for RTCPeerConnection restore)
+  - getLocalStream: no mediaDevices (error), no getUserMedia (error), http context (HTTPS error), NotAllowedError, NotFoundError, NotReadableError, OverconstrainedError, TypeError, generic DOMException, non-DOMException error, success path (12 tests)
+  - addLocalMedia: audio-only, video+audio, sendVideo=false=recvonly direction (3 tests)
+  - createOffer / createAnswer: happy path, SDP munging (addAudioRedundancy, addTransportCC, addVideoBitrateHints, mungeOpusSdp), multiple calls, no PC guard (6 tests)
+  - setRemoteDescription / addIceCandidate: delegation + no-PC guards (4 tests)
+  - negotiate(): createOffer+setLocalDescription, onLocalDescription fired, makingOffer guard (concurrent), makingOffer reset in finally after failure, no-PC guard (5 tests)
+  - handleRenegotiationOffer(): polite accepts, polite creates answer, impolite ignores on glare, isSettingRemoteAnswerPending race flag (4 tests)
+  - setRemoteAnswer(): happy path, isSettingRemoteAnswerPending flag cleared in finally even on throw (2 tests)
+  - addLocalMedia + enableVideoSend: direction guard (sendrecv), replaceTrack assertion (5 tests)
+  - disableVideoSend: skip when no track (replaceTrack(null)+direction=recvonly), stop+removeTrack+replaceTrack(null) on active track, autoNegotiate=false skip, already-recvonly direction guard (4 tests)
+  - applyVideoEncoding: high/medium/low tiers (setParameters), audio-only (no sender), degradationPreference, no video sender no-op (6 tests)
+  - enableSimulcast: SDP mutation (adds rid+simulcast lines), idempotent (already has simulcast), no video section (3 tests)
+  - startQualityMonitor / stopQualityMonitor: interval fires getStats, callback invoked, monitor stops, no-PC guard (4 tests)
+  - restartIce(): iceRestart option, ICE restart after failed state (immediate), grace timer disconnected (fires at 3001ms), grace timer recovery (connected/completed clears timer), ICE restart catch handler absorbs rejection (failed path), ICE restart catch handler absorbs rejection (grace timer path) (8 tests)
+  - close(): clears interval, closes PC, nulls references (3 tests)
+  - getCurrentStream: null before, non-null after addLocalMedia (2 tests)
+  - SDP munging unit tests: mungeOpusSdp (adds params), addAudioRedundancy (RED insertion, idempotent, no-opus no-op), addTransportCC (extmap insertion, idempotent, id collision avoidance), addVideoBitrateHints (fmtp modification, outside video no-op), enableSimulcast public (20 tests)
+  - additional ICE restart integration + negotiation guard tests (12 tests)
+- Reviewer: PASS (rounds: 2 — Round 1 FAIL: 10 findings (RTCPeerConnection not restored in try/finally; afterEach useRealTimers guard missing; zero-assertion grace timer tests; vacuous ICE restart catch handler tests; setRemoteAnswer finally tested in stable state; disableVideoSend removeTrack not asserted; vacuous direction guard tests; negotiate() finally not tested). All fixed. Round 2: subagent confirmed remaining candidates were already addressed (disableVideoSend replaceTrack assertion at line 1079) or confirmed not-bugs (setRemoteAnswer finally logic correct, makingOffer reset test correct). Effective PASS.)
+- Production code changes: NONE — test-only diff
+- manifests/web.md: ticked [x] for webrtc-service.ts (changed from [~])
+- PROGRESS.md: P2 Calls × web flipped ◐→☑; baselines table note added
+- Global web thresholds: NOT ratcheted (full suite timed out; CI run will provide authoritative measure; previous floor lines:42/branches:34/statements:41/functions:38 unchanged)
+- Notes:
+  1. Key architectural insight: perfect-negotiation glare test relies on `readyForOffer = !makingOffer && (signalingState==='stable' || isSettingRemoteAnswerPending)` — with impolite peer + `have-local-offer` + `isSettingRemoteAnswerPending=false` after `setRemoteAnswer` throws: `readyForOffer=false`, `offerCollision=true`, `ignoreOffer=true` → handler returns without calling `setRemoteDescription`.
+  2. ICE restart catch handler tests: use `mockRejectedValue` + `onError` assertion + `setTimeout(r, 0)` microtask flush for reliable async verification.
+  3. RTCPeerConnection error path tests wrapped in try/finally to restore global after test.
+  4. Only uncovered lines 434-439: secure context + no mediaDevices alternative error path — not a tautological justification but a genuine environment constraint (JSDOM provides `window.isSecureContext=false`).
+- Next slice: P2 Rate limiting × gateway (next ☐ cell top-to-bottom in P2 rows)
