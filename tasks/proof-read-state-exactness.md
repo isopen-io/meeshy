@@ -68,10 +68,16 @@ marqueur local.
 > **T1.** `I(m) = read ⟹ R(m) = N(c)` et `I(m) = delivered ⟹ D(m) = N(c)`,
 > sous l'hypothèse **A1**.
 
-**A1 (hypothèse de membership)** : `n = memberCount−1 ≥ N(c)` — la vue client du
-nombre de membres n'est pas *sous-estimée* (aucune adhésion manquée non encore
-synchronisée). Les changements d'adhésion se propagent par événement participant ;
-les violations sont transitoires et s'auto-corrigent au refresh.
+**A1 (hypothèse de membership)** : `n ≥ N(c)` — le dénominateur d'affichage n'est
+pas *sous-estimé*. **Durci (2026-06-21)** : le REST `/messages` projette désormais
+un `recipientCount` serautoritaire **par message** (= `totalMembers` =
+participants actifs hors expéditeur, `computeRecipientCount`), persisté en GRDB
+(`MessageRecord.recipientCount`) et consommé en priorité par l'affichage
+(`message.recipientCount > 0 ? … : memberCount−1`). Quand le serveur le fournit,
+`n = N(c)` exactement → **A1 supprimée** sur le chemin froid (le dénominateur
+n'est plus dérivé du `memberCount` client). A1 ne subsiste qu'en *fallback* :
+message d'origine socket (pas encore rafraîchi par REST) ou payload antérieur —
+cas transitoires qui s'auto-corrigent au premier refresh REST.
 
 **Preuve par cas de la branche `I = read`** (le cas `delivered` est identique) :
 
@@ -191,8 +197,11 @@ message**.
   iOS absente (backend prêt). L'incrément §6 la rend prouvable au même standard.
 
 **Hypothèses à durcir pour un « toujours » inconditionnel** :
-- A1 : faire porter par le REST `/messages` le `recipientCount` (totalMembers
-  serveur) par message → supprime la dépendance au `memberCount` client et rend la
-  branche compteurs inconditionnellement sound (aligne froid sur live).
+- A1 : **livré** (2026-06-21) — le REST `/messages` porte un `recipientCount`
+  serveur par message (`computeRecipientCount`, 5 tests Jest verts), décodé par
+  `APIMessage`, persisté en GRDB (migration `messages_recipient_count`) et
+  consommé en priorité à l'affichage. La branche compteurs froide est désormais
+  inconditionnellement sound quand le serveur fournit la valeur ; A1 ne survit
+  qu'en fallback transitoire (message socket non encore rafraîchi).
 - Précision lecture : **livrée** (T3, `ReadReceiptGate` — gating foreground +
   viewport, lectures différées re-émises au foreground / scroll-bas).

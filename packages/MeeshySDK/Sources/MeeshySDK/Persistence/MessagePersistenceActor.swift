@@ -1565,6 +1565,10 @@ public actor MessagePersistenceActor {
                     // genuine server value, if ever provided, still wins.
                     existing.deliveredToAllAt = api.deliveredToAllAt ?? existing.deliveredToAllAt
                     existing.readByAllAt = api.readByAllAt ?? existing.readByAllAt
+                    // Authoritative recipient denominator: adopt a positive server
+                    // value, but never let a refresh that omits it (socket-origin
+                    // row, older gateway) clear a count already learned.
+                    if let rc = api.recipientCount, rc > 0 { existing.recipientCount = rc }
                     existing.state = max(existing.state, computedState)
                     // Self-heal rows that were upserted before we resolved
                     // sender.userId — their `senderId` column held the
@@ -1689,7 +1693,8 @@ public actor MessagePersistenceActor {
                         layoutVersion: 0, layoutMaxWidth: nil,
                         cachedTimeString: timeString,
                         changeVersion: 0,
-                        callSummaryJson: callSummaryJson
+                        callSummaryJson: callSummaryJson,
+                        recipientCount: api.recipientCount ?? 0
                     )
                     try record.insert(db)
                     changedConvIds.insert(api.conversationId)

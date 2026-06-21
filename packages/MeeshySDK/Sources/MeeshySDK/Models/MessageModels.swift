@@ -402,6 +402,12 @@ public struct APIMessage: Sendable {
     public let readByAllAt: Date?
     public let deliveredCount: Int?
     public let readCount: Int?
+    /// Server's authoritative count of ACTIVE recipients for this message
+    /// (active conversation participants excluding the sender). Projected by the
+    /// gateway so the all-or-nothing delivery indicator uses the real
+    /// denominator instead of a possibly-stale client `memberCount`. `nil` when
+    /// the payload predates the field (e.g. socket `message:new`).
+    public let recipientCount: Int?
     public let effectFlags: UInt32?
     public let translations: [APITextTranslation]?
     public let mentionedUsers: [MentionedUser]?
@@ -430,7 +436,7 @@ extension APIMessage: Decodable {
         case isEncrypted, encryptionMode, createdAt, updatedAt
         case sender, attachments, replyTo, forwardedFrom, forwardedFromConversation
         case reactionSummary, reactionCount, currentUserReactions
-        case deliveredToAllAt, readByAllAt, deliveredCount, readCount
+        case deliveredToAllAt, readByAllAt, deliveredCount, readCount, recipientCount
         case effectFlags, translations, mentionedUsers
         case metadata
         case trackingLinks
@@ -492,6 +498,7 @@ extension APIMessage: Decodable {
         readByAllAt = try c.decodeIfPresent(Date.self, forKey: .readByAllAt)
         deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount)
         readCount = try c.decodeIfPresent(Int.self, forKey: .readCount)
+        recipientCount = try c.decodeIfPresent(Int.self, forKey: .recipientCount)
         effectFlags = try c.decodeIfPresent(UInt32.self, forKey: .effectFlags)
         translations = try c.decodeIfPresent([APITextTranslation].self, forKey: .translations)
         mentionedUsers = try c.decodeIfPresent([MentionedUser].self, forKey: .mentionedUsers)
@@ -750,6 +757,7 @@ extension APIMessage {
                 || (currentUsername != nil && resolvedUsername?.lowercased() == currentUsername?.lowercased()),
             deliveredToAllAt: deliveredToAllAt, readByAllAt: readByAllAt,
             deliveredCount: deliveredCount ?? 0, readCount: readCount ?? 0,
+            recipientCount: recipientCount ?? 0,
             callSummary: callSummary,
             trackedLinkMap: trackedLinkMap
         )

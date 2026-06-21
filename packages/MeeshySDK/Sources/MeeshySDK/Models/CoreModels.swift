@@ -649,6 +649,14 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public var readByAllAt: Date?
     public var deliveredCount: Int = 0
     public var readCount: Int = 0
+    /// Authoritative denominator for the all-or-nothing delivery indicator: the
+    /// server's count of ACTIVE recipients (conversation participants excluding
+    /// this message's sender), projected per message by the gateway. `0` means
+    /// the server did not provide it (older payload, socket `message:new`, or an
+    /// optimistic local row) — the display then falls back to `memberCount − 1`.
+    /// Using the server value removes the client's dependency on a possibly
+    /// stale local membership count.
+    public var recipientCount: Int = 0
 
     // Pre-computed "HH:mm" string set at ingestion time — avoids DateFormatter in bubble body
     public var cachedTimeString: String?
@@ -720,7 +728,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 senderName: String? = nil, senderUsername: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil, senderUserId: String? = nil,
                 deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false,
                 deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
-                deliveredCount: Int = 0, readCount: Int = 0,
+                deliveredCount: Int = 0, readCount: Int = 0, recipientCount: Int = 0,
                 cachedTimeString: String? = nil,
                 callSummary: CallSummaryMetadata? = nil,
                 trackedLinkMap: [String: String] = [:]) {
@@ -741,6 +749,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.deliveryStatus = deliveryStatus; self.isMe = isMe
         self.deliveredToAllAt = deliveredToAllAt; self.readByAllAt = readByAllAt
         self.deliveredCount = deliveredCount; self.readCount = readCount
+        self.recipientCount = recipientCount
         self.cachedTimeString = cachedTimeString
         self.callSummary = callSummary
         self.trackedLinkMap = trackedLinkMap
@@ -757,7 +766,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case replyTo, forwardedFrom
         case senderName, senderUsername, senderColor, senderAvatarURL, senderUserId
         case deliveryStatus, isMe
-        case deliveredToAllAt, readByAllAt, deliveredCount, readCount
+        case deliveredToAllAt, readByAllAt, deliveredCount, readCount, recipientCount
         case cachedTimeString
         case callSummary
         case trackedLinkMap
@@ -807,6 +816,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         readByAllAt = try c.decodeIfPresent(Date.self, forKey: .readByAllAt)
         deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount) ?? 0
         readCount = try c.decodeIfPresent(Int.self, forKey: .readCount) ?? 0
+        recipientCount = try c.decodeIfPresent(Int.self, forKey: .recipientCount) ?? 0
         cachedTimeString = try c.decodeIfPresent(String.self, forKey: .cachedTimeString)
         // Tolerant: a malformed / future-shape call-summary blob must not fail
         // the whole cached-message decode (mirrors the APIMessage path).
@@ -864,6 +874,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encodeIfPresent(readByAllAt, forKey: .readByAllAt)
         try c.encode(deliveredCount, forKey: .deliveredCount)
         try c.encode(readCount, forKey: .readCount)
+        try c.encode(recipientCount, forKey: .recipientCount)
         try c.encodeIfPresent(cachedTimeString, forKey: .cachedTimeString)
         try c.encodeIfPresent(callSummary, forKey: .callSummary)
         if !trackedLinkMap.isEmpty {
