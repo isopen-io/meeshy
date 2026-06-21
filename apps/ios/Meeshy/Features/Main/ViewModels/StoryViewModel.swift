@@ -1058,6 +1058,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     fileURL: tempURL, mimeType: compressed.mimeType,
                     token: token, uploadContext: "story", thumbHash: thumbHash
                 )
+                // Pre-populate the image cache under the server URL so that when
+                // reconcilePublishedQueueSlide swaps in the real StoryItem the viewer
+                // gets a cache hit — no re-download of content the author just uploaded.
+                // adoptImage moves tempURL into the cache store; the deferred removeItem
+                // silently no-ops since the file is already gone from tempURL.
+                await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: uploadResult.fileUrl)
                 onProgress(baseProgress + 0.30 * slideShare)
             } else {
                 onProgress(baseProgress + 0.30 * slideShare)
@@ -1076,6 +1082,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                             fileURL: videoURL, mimeType: "video/mp4",
                             token: token, uploadContext: "story"
                         )
+                        // Seed the video cache under the server URL — metadata-only
+                        // reconciliation: viewer gets a cache hit, never re-downloads.
+                        await CacheCoordinator.shared.video.seed(copyingLocalFile: videoURL, for: result.fileUrl)
                         mediaObjects[i].postMediaId = result.id
                         mediaObjects[i].mediaURL = result.fileUrl
                         foregroundMediaIds.append(result.id)
@@ -1090,6 +1099,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                             fileURL: tempURL, mimeType: compressed.mimeType,
                             token: token, uploadContext: "story", thumbHash: fgThumbHash
                         )
+                        // Seed the image cache under the server URL — metadata-only
+                        // reconciliation: viewer gets a cache hit, never re-downloads.
+                        await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)
                         mediaObjects[i].postMediaId = result.id
                         mediaObjects[i].mediaURL = result.fileUrl
                         foregroundMediaIds.append(result.id)
@@ -1118,6 +1130,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                         fileURL: audioURL, mimeType: "audio/mp4",
                         token: token, uploadContext: "story"
                     )
+                    // Seed the audio cache under the server URL — metadata-only
+                    // reconciliation: viewer gets a cache hit, never re-downloads.
+                    await CacheCoordinator.shared.audio.seed(copyingLocalFile: audioURL, for: result.fileUrl)
                     audioObjects[i].postMediaId = result.id
                     foregroundMediaIds.append(result.id)
                     os.Logger.storyAudio.info(
