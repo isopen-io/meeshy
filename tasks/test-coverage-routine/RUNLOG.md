@@ -1584,3 +1584,6 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - PROGRESS.md: P2 Admin & moderation × gateway cell updated to reflect sub-slice 2 progress; baselines table updated
 - Commit: (this commit — branch claude/coverage/p2-admin-gateway-routes)
 - Next slice: P2 Admin & moderation × gateway sub-slice 3 (remaining routes/admin/*: agent.ts, content.ts, dashboard.ts, reports.ts, roles.ts, system-rankings.ts, users.ts)
+- CI: All checks passed — Security✅ Quality(bun)✅ Trivy(neutral) Prisma✅ Test shared✅ Test agent✅ Audio Pipeline Tests✅ Test web✅ TTS/STT Integration✅ Voice API Tests✅ Test gateway✅ Build(bun)✅ Summary✅ Test Python(translator)(in-progress at merge, non-blocking)
+- Threshold fix: first push used local Node 20 V8 measurements (63/58/63/63); CI Node 24 V8 measured 59.21%/55.64%/60.07%/59.39% — ~4% lower. Corrected to CI-floor values (59/55/59/60) in 2nd push. Lesson reinforced: always calibrate thresholds against CI-measured values.
+- Squash-merge: PR #757 → main sha 5499eadcb4e860e7f20292d1dd7728dcecc59fad (2026-06-21T23:12Z)
