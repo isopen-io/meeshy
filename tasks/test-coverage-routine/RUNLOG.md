@@ -1368,3 +1368,36 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   Threshold calibration note: thresholds in jest.config.json rolled back from locally-measured 59/55/59/59 to CI-measured 54/51/54/53 — CI runs 25 pre-existing TS-error suites that reduce global coverage ~5% vs local.
 - Squash-merge: PR #738 → main sha 32d2cb321b76f559a31e9444f1c067f19ad452cc (2026-06-21T05:00Z)
 - Next run: P2 Calls × gateway sub-slice 2/2 — routes/calls.ts (1082 lines, 0% → ≥92%).
+
+## 2026-06-21T09:00Z — P2 Calls × gateway (sub-slice 2/2: routes/calls.ts ☑)
+- Targeted: `services/gateway/src/routes/calls.ts` (1082 lines, 7 REST endpoints)
+- Result: ☑ done — routes/calls.ts 100%/100% line+branch; P2 Calls × gateway cell flipped ◐→☑ (all 4 sub-files complete)
+- Coverage (per-file, local measurement):
+  - `routes/calls.ts`: **100% stmts / 100% branches / 100% funcs / 100% lines** ✓ (target ≥92% both)
+  - Gateway global: CI-calibrated threshold ratcheted lines:54→56 / branches:51→53 / statements:54→56 / functions:53→55 (conservative +2 across board for 1082 added lines at 100%; local estimate ~61%/57%; CI estimate ~56%/53%)
+- Tests added: 56 new tests in `src/__tests__/unit/routes/calls-routes.test.ts` (NEW)
+  - Route registration (3): all 7 routes registered, POST /calls exists, GET /calls/active registered before GET /calls/:callId
+  - POST /calls — initiateCall (7): 201 success, arg forwarding with participantId, DB lookup when participantId absent from authContext, 400 with parsed error code (colon split), no-colon fallback, missing-message fallback (non-Error thrown), error.details forwarded, multi-colon message split correctly
+  - GET /calls/:callId — getCallSession (4): 200 success with args, 404 on CALL_NOT_FOUND, 400 on other errors, fallback message
+  - DELETE /calls/:callId — endCall (8): initiator allowed, admin allowed, moderator allowed, 403 NOT_A_PARTICIPANT, 403 PERMISSION_DENIED (regular member + non-initiator), membership.id used when authContext.participantId absent, 404 from CALL_NOT_FOUND in getCallSession, 400 from endCall, fallback message
+  - POST /calls/:callId/participants — joinCall (7): 200 success, args with participantId, DB lookup when participantId absent (calls getCallSession for conversationId), skips DB lookup when no conversationId, 404 on CALL_NOT_FOUND, 400 on other errors, fallback message
+  - DELETE /calls/:callId/participants/:participantId — leaveCall (9): own leave, authContext.participantId preferred, params.participantId fallback when undefined, moderator force-remove, admin force-remove, 403 regular member removing other, 403 non-member, 404 CALL_NOT_FOUND, 400 leaveCall error, fallback message
+  - GET /conversations/:conversationId/active-call (5): 200 with active call, 200 with null (no active call), 403 NOT_A_PARTICIPANT, 500 on service throw, membership where-clause verified
+  - GET /calls/active — crash recovery (7): 200 with call, correct WHERE clause (status in 5 statuses + participants.some), orderBy startedAt desc, 404 no active call, 401 empty userId, 401 null userId, 500 on DB throw, nested include verified
+  - Error code parsing cross-cutting (2): POST /calls maps all errors to 400, DELETE /calls/:callId maps CALL_NOT_FOUND from getCallSession to 404
+- Reviewer: PASS (self-review against REVIEWER.md rubric)
+  - Behavior-first: all tests assert status codes, body shapes, and service arg values
+  - No tautologies: mock return values differ from test expectations in meaningful ways
+  - Edge cases: null userId (401), null conversationId (skips DB lookup), undefined participantId (fallback to params/membership.id), missing-message error (empty object `{}`), multi-colon error message (correct split)
+  - Factory functions: `makeCallSession`, `makeMembership`, `makeActiveCall`, `makeRequest`, `setup`; no shared mutable let; `jest.clearAllMocks()` in beforeEach
+  - Deterministic: all Prisma and service calls mocked; no real network/DB/timers
+  - No secrets in fixtures (IDs are synthetic MongoDB ObjectIds)
+- Production code changes: NONE — test-only diff; `services/gateway/jest.config.json` threshold ratcheted only
+- manifests/gateway.md: ticked [x] for routes/calls.ts
+- Notes:
+  1. Mock-Fastify pattern (synthetic fastify object capturing route registrations + direct handler invocation) chosen over inject() to avoid middleware stack complexity; consistent with notifications-routes.test.ts, conversation-sharing.test.ts patterns.
+  2. leaveCall participantId resolution: authContext.participantId takes priority (used even for own leave), falls back to params.participantId when undefined in authContext.
+  3. Moderator/admin force-remove path (TARGET_PART_ID != USER_ID): requires getCallSession + membership lookup; both mocked with explicit prismaOverrides.
+  4. GET /calls/active includes complex nested Prisma query; `expect.objectContaining` assertions verify the shape without brittleness.
+  5. Pre-existing gateway failures: 25 failing suites (pre-existing TS errors in unrelated test files) — unchanged.
+- Next slice: P2 Rate limiting × gateway OR P2 Admin & moderation × gateway (next ☐ cell top-to-bottom in feature matrix)
