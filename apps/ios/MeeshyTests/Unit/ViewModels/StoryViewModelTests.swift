@@ -1177,4 +1177,132 @@ final class StoryViewModelTests: XCTestCase {
                 localCover: nil, serverThumbnailUrl: nil, mediaUrl: nil, avatarURL: "av"),
             "av")
     }
+
+    // MARK: - mediaURLStrings (prefetch dedup — extraction pure)
+
+    func test_mediaURLStrings_extractsAndDeduplicatesMediaURLs() {
+        let media = [
+            FeedMedia(id: "m-bg", type: .image, url: "https://cdn/bg.jpg"),
+            FeedMedia(id: "m-fg", type: .video, url: "https://cdn/fg.mp4"),
+            FeedMedia(id: "m-dup", type: .image, url: "https://cdn/bg.jpg") // doublon d'URL
+        ]
+        let item = StoryItem(id: "s1", media: media, storyEffects: nil, createdAt: Date())
+
+        let urls = Set(StoryViewModel.mediaURLStrings(for: item))
+
+        XCTAssertEqual(urls, ["https://cdn/bg.jpg", "https://cdn/fg.mp4"],
+                       "URLs média extraites et dédupliquées")
+    }
+
+    func test_mediaURLStrings_emptyMedia_returnsEmpty() {
+        let item = StoryItem(id: "s1", media: [], storyEffects: nil, createdAt: Date())
+        XCTAssertTrue(StoryViewModel.mediaURLStrings(for: item).isEmpty)
+    }
+
+    // MARK: - Offline optimistic visibility (P4 — voir ses stories hors-ligne)
+
+    func test_optimisticStoryId_isTempIdScopedAndIndexed() {
+        XCTAssertEqual(StoryViewModel.optimisticStoryId(tempStoryId: "pending_abc", slideIndex: 0),
+                       "pending_abc#0")
+        XCTAssertEqual(StoryViewModel.optimisticStoryId(tempStoryId: "pending_abc", slideIndex: 2),
+                       "pending_abc#2")
+        // Préfixé par le tempStoryId → retrait par préfixe possible.
+        XCTAssertTrue(StoryViewModel.optimisticStoryId(tempStoryId: "pending_abc", slideIndex: 1)
+            .hasPrefix("pending_abc#"))
+    }
+
+    func test_removeOptimisticStories_removesPendingKeepsPublished() {
+        let pending0 = makeStoryItem(id: "pending_x#0")
+        let pending1 = makeStoryItem(id: "pending_x#1")
+        let published = makeStoryItem(id: "server-real-id")
+        sut.storyGroups = [makeStoryGroup(userId: "me", stories: [published, pending0, pending1])]
+
+        sut.removeOptimisticStories(tempStoryId: "pending_x")
+
+        XCTAssertEqual(sut.storyGroups.count, 1)
+        XCTAssertEqual(sut.storyGroups[0].stories.map(\.id), ["server-real-id"],
+                       "seuls les placeholders pending_x#* sont retirés, la vraie story reste")
+    }
+
+    func test_removeOptimisticStories_removesGroupWhenAllPending() {
+        let pending0 = makeStoryItem(id: "pending_y#0")
+        sut.storyGroups = [makeStoryGroup(userId: "me", stories: [pending0])]
+
+        sut.removeOptimisticStories(tempStoryId: "pending_y")
+
+        XCTAssertTrue(sut.storyGroups.isEmpty,
+                      "un groupe ne contenant que des pending devient vide → retiré")
+    }
+
+    func test_removeOptimisticStories_unrelatedTempId_isNoOp() {
+        let pending0 = makeStoryItem(id: "pending_x#0")
+        sut.storyGroups = [makeStoryGroup(userId: "me", stories: [pending0])]
+
+        sut.removeOptimisticStories(tempStoryId: "pending_OTHER")
+
+        XCTAssertEqual(sut.storyGroups[0].stories.map(\.id), ["pending_x#0"],
+                       "un tempId sans correspondance ne touche à rien")
+    }
+
+    func test_insertOptimisticOfflineStories_insertsUnderCurrentUserAsViewed() {
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+        sut.storyGroups = []
+
+        sut.insertOptimisticOfflineStories(
+            slides: [Self.makeTextOnlySlide(id: "slide-a", content: "Bonjour"),
+                     Self.makeTextOnlySlide(id: "slide-b", content: "Coucou")],
+            slideImages: [:],
+            loadedImages: [:],
+            tempStoryId: "pending_z",
+            visibility: "PUBLIC"
+        )
+
+        XCTAssertEqual(sut.storyGroups.count, 1, "groupe créé pour l'auteur")
+        XCTAssertEqual(sut.storyGroups[0].id, "me-id")
+        let ids = sut.storyGroups[0].stories.map(\.id)
+        XCTAssertTrue(ids.contains("pending_z#0") && ids.contains("pending_z#1"),
+                      "une story optimiste par slide, id préfixé par le tempStoryId")
+        XCTAssertTrue(sut.storyGroups[0].stories.allSatisfy { $0.isViewed },
+                      "ses propres stories sont marquées vues (pas d'anneau non-lu sur soi-même)")
+    }
+
+    func test_insertOptimisticOfflineStories_noCurrentUser_isNoOp() {
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = nil
+        sut.storyGroups = []
+
+        sut.insertOptimisticOfflineStories(
+            slides: [Self.makeTextOnlySlide()],
+            slideImages: [:], loadedImages: [:],
+            tempStoryId: "pending_z", visibility: "PUBLIC"
+        )
+
+        XCTAssertTrue(sut.storyGroups.isEmpty, "sans utilisateur courant, aucune insertion")
+    }
+
+    func test_loadStories_forceNetwork_preservesPendingOptimisticStories() async {
+        // L'auteur a une story optimiste hors-ligne en attente. Un refetch réseau
+        // (qui ne la contient pas) ne doit PAS la faire disparaître du tray.
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+
+        let pending = makeStoryItem(id: "pending_keep#0")
+        sut.storyGroups = [makeStoryGroup(userId: "me-id", username: "Moi", stories: [pending])]
+
+        // Le serveur renvoie une story d'un AUTRE auteur, sans la pending.
+        let serverPost = Self.makeStoryAPIPost(id: "s-other", authorId: "other", authorUsername: "bob")
+        mockStoryService.listResult = .success(Self.makeStoriesResponse(posts: [serverPost]))
+
+        await sut.loadStories(forceNetwork: true)
+
+        let allIds = sut.storyGroups.flatMap { $0.stories.map(\.id) }
+        XCTAssertTrue(allIds.contains("pending_keep#0"),
+                      "la story optimiste en attente survit au refetch réseau")
+        XCTAssertTrue(allIds.contains("s-other"),
+                      "les stories serveur sont bien chargées en parallèle")
+    }
 }

@@ -26,9 +26,9 @@ final class StoryReader_PrefetchTests: XCTestCase {
     // MARK: - test_prefetch_currentSlide_loadsAdjacents
 
     /// When the prefetcher is updated to point at slide N in the middle of a
-    /// group, it MUST instantiate exactly three canvas views: `[N-1, N, N+1]`.
-    /// This is the load-bearing guarantee that the first frame of the next
-    /// slide is already rendered when the user swipes.
+    /// group, it MUST instantiate exactly four canvas views: `[N-1, N, N+1, N+2]`.
+    /// This is the load-bearing guarantee that the first frames of the next two
+    /// slides are already rendered when the user swipes forward.
     func test_prefetch_currentSlide_loadsAdjacents() {
         let items = makeItems(5)
         let prefetcher = StoryReaderPrefetcher()
@@ -39,7 +39,8 @@ final class StoryReader_PrefetchTests: XCTestCase {
         XCTAssertNotNil(prefetcher.view(for: "s1"), "N-1 must be prefetched")
         XCTAssertNotNil(prefetcher.view(for: "s2"), "N must be prefetched")
         XCTAssertNotNil(prefetcher.view(for: "s3"), "N+1 must be prefetched")
-        XCTAssertEqual(prefetcher.bootstrapped.count, 3)
+        XCTAssertNotNil(prefetcher.view(for: "s4"), "N+2 must be prefetched")
+        XCTAssertEqual(prefetcher.bootstrapped.count, 4)
     }
 
     // MARK: - test_prefetch_navigationN_to_N+1_noBootstrap
@@ -72,9 +73,10 @@ final class StoryReader_PrefetchTests: XCTestCase {
     // MARK: - test_prefetch_N-1_disposedAtN+1
 
     /// After scrolling forward by two slides, the old `N-1` view must be
-    /// evicted from the cache. This keeps the sliding window strictly to
-    /// three views and prevents an unbounded memory footprint over the
-    /// life of a long story group.
+    /// evicted from the cache. This keeps the sliding window bounded and
+    /// prevents an unbounded memory footprint over the life of a long story
+    /// group. Near the end of the group the look-ahead clamps, so the window
+    /// shrinks to `[N-1, N, N+1]` (s5 is the last slide → no N+2).
     func test_prefetch_N_minus_1_disposedAtN_plus_1() {
         let items = makeItems(6)
         let prefetcher = StoryReaderPrefetcher()
@@ -84,7 +86,7 @@ final class StoryReader_PrefetchTests: XCTestCase {
                                 preferredLanguages: ["fr"])
         XCTAssertNotNil(prefetcher.view(for: "s1"))
 
-        // Advance two slides forward — s1 falls out of the [N-1, N, N+1] window.
+        // Advance two slides forward — s1/s2 fall out of the look-behind window.
         prefetcher.updateWindow(items: items,
                                 currentIndex: 4,
                                 context: .empty,
@@ -95,13 +97,13 @@ final class StoryReader_PrefetchTests: XCTestCase {
         XCTAssertNotNil(prefetcher.view(for: "s3"))
         XCTAssertNotNil(prefetcher.view(for: "s4"))
         XCTAssertNotNil(prefetcher.view(for: "s5"))
-        XCTAssertEqual(prefetcher.bootstrapped.count, 3, "window stays bounded at 3 views")
+        XCTAssertEqual(prefetcher.bootstrapped.count, 3, "window clamps at the group end ([N-1, N, N+1])")
     }
 
     // MARK: - test_prefetch_firstSlide_onlyPrefetchesNext
 
     /// At the start of a group the prefetcher can only look forward — there
-    /// is no `N-1`. The window must contain exactly `[N, N+1]`.
+    /// is no `N-1`. With the n+2 look-ahead the window is `[N, N+1, N+2]`.
     func test_prefetch_firstSlide_onlyPrefetchesNext() {
         let items = makeItems(4)
         let prefetcher = StoryReaderPrefetcher()
@@ -111,8 +113,9 @@ final class StoryReader_PrefetchTests: XCTestCase {
                                 preferredLanguages: ["fr"])
         XCTAssertNotNil(prefetcher.view(for: "s0"))
         XCTAssertNotNil(prefetcher.view(for: "s1"))
-        XCTAssertNil(prefetcher.view(for: "s2"), "s2 (N+2) must NOT be prefetched")
-        XCTAssertEqual(prefetcher.bootstrapped.count, 2)
+        XCTAssertNotNil(prefetcher.view(for: "s2"), "s2 (N+2) must be prefetched")
+        XCTAssertNil(prefetcher.view(for: "s3"), "s3 (N+3) must NOT be prefetched")
+        XCTAssertEqual(prefetcher.bootstrapped.count, 3)
     }
 
     // MARK: - test_prefetch_lastSlide_onlyPrefetchesPrev
@@ -182,7 +185,8 @@ final class StoryReader_PrefetchTests: XCTestCase {
                                 extraWarmItems: [neighbor])
         XCTAssertNotNil(prefetcher.view(for: "g2-first"),
                         "L'entrée du groupe voisin doit être bootstrappée")
-        XCTAssertEqual(prefetcher.bootstrapped.count, 4, "[N-1, N, N+1] + 1 extra")
+        // index 1, count 4 → fenêtre [0,1,2,3] (n+2) = 4 + 1 extra = 5.
+        XCTAssertEqual(prefetcher.bootstrapped.count, 5, "[N-1, N, N+1, N+2] + 1 extra")
 
         let kept = prefetcher.view(for: "g2-first")
         prefetcher.updateWindow(items: items,
@@ -214,7 +218,8 @@ final class StoryReader_PrefetchTests: XCTestCase {
                                 preferredLanguages: ["fr"])
         XCTAssertNil(prefetcher.view(for: "g2-first"),
                      "Extra abandonné → évincé")
-        XCTAssertEqual(prefetcher.bootstrapped.count, 3)
+        // index 1, count 4 → fenêtre [0,1,2,3] (n+2) = 4 vues, sans l'extra.
+        XCTAssertEqual(prefetcher.bootstrapped.count, 4)
     }
 
     /// `detach()` must release all views and the host view from their
@@ -241,9 +246,11 @@ final class StoryReader_PrefetchTests: XCTestCase {
     /// public `updateWindow` API stays safe.
     func test_windowIndices_clampsAtBoundaries() {
         let prefetcher = StoryReaderPrefetcher()
-        XCTAssertEqual(prefetcher.windowIndices(around: 0, count: 5), [0, 1])
+        // Asymétrique : 1 en arrière, 2 en avant (look-ahead n+2).
+        XCTAssertEqual(prefetcher.windowIndices(around: 0, count: 5), [0, 1, 2])
         XCTAssertEqual(prefetcher.windowIndices(around: 4, count: 5), [3, 4])
-        XCTAssertEqual(prefetcher.windowIndices(around: 2, count: 5), [1, 2, 3])
+        XCTAssertEqual(prefetcher.windowIndices(around: 2, count: 5), [1, 2, 3, 4])
+        XCTAssertEqual(prefetcher.windowIndices(around: 3, count: 5), [2, 3, 4])
         XCTAssertEqual(prefetcher.windowIndices(around: 0, count: 1), [0])
         XCTAssertEqual(prefetcher.windowIndices(around: 0, count: 0), [])
     }

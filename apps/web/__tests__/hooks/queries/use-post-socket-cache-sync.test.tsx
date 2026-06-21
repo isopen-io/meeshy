@@ -371,4 +371,1020 @@ describe('usePostSocketCacheSync', () => {
       expect(posts[0].likeCount).toBe(10);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Additional coverage: handlers not covered above
+  // ---------------------------------------------------------------------------
+
+  describe('post:updated', () => {
+    it('replaces post in feed', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      const updated = { ...mockPost, content: 'Updated', isEdited: true };
+      act(() => emit('post:updated', { post: updated }));
+
+      const posts = getFeedPosts(qc) as typeof mockPost[];
+      expect(posts[0].content).toBe('Updated');
+      expect(posts[0].isEdited).toBe(true);
+    });
+
+    it('no-op when feed is empty (old=undefined)', () => {
+      const qc = createQueryClient();
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      const updated = { ...mockPost, content: 'Updated' };
+      act(() => emit('post:updated', { post: updated }));
+
+      expect(qc.getQueryData(['posts', 'list', 'infinite', 'feed'])).toBeUndefined();
+    });
+
+    it('updates detail cache when detail exists', () => {
+      const qc = createQueryClient();
+      qc.setQueryData(['posts', 'detail', 'post-1'], { data: mockPost });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      const updated = { ...mockPost, content: 'Detail Updated' };
+      act(() => emit('post:updated', { post: updated }));
+
+      const detail = qc.getQueryData<{ data: typeof mockPost }>(['posts', 'detail', 'post-1']);
+      expect(detail?.data.content).toBe('Detail Updated');
+    });
+  });
+
+  describe('post:unliked', () => {
+    it('updates likeCount and reactionSummary', () => {
+      const qc = createQueryClient();
+      seedFeed(qc, [{ ...mockPost, likeCount: 5, reactionSummary: { '❤️': 5 } as Record<string, number> }]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:unliked', {
+        postId: 'post-1',
+        userId: 'user-2',
+        emoji: '❤️',
+        likeCount: 4,
+        reactionSummary: { '❤️': 4 },
+      }));
+
+      const posts = getFeedPosts(qc) as typeof mockPost[];
+      expect(posts[0].likeCount).toBe(4);
+      expect((posts[0].reactionSummary as Record<string, number>)['❤️']).toBe(4);
+    });
+  });
+
+  describe('post:reposted', () => {
+    it('prepends repost to feed', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      const repost = { ...mockPost, id: 'repost-1' };
+      act(() => emit('post:reposted', { repost }));
+
+      const posts = getFeedPosts(qc);
+      expect(posts).toHaveLength(2);
+      expect((posts[0] as typeof mockPost).id).toBe('repost-1');
+    });
+
+    it('deduplicates repost', () => {
+      const qc = createQueryClient();
+      const repost = { ...mockPost, id: 'repost-1' };
+      seedFeed(qc, [repost]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reposted', { repost }));
+
+      expect(getFeedPosts(qc)).toHaveLength(1);
+    });
+
+    it('no-op when feed undefined', () => {
+      const qc = createQueryClient();
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reposted', { repost: { ...mockPost, id: 'repost-1' } }));
+
+      expect(qc.getQueryData(['posts', 'list', 'infinite', 'feed'])).toBeUndefined();
+    });
+  });
+
+  describe('post:bookmarked', () => {
+    it('invalidates bookmarks cache when bookmarked=true', () => {
+      const qc = createQueryClient();
+      const spy = jest.spyOn(qc, 'invalidateQueries');
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:bookmarked', {
+        postId: 'post-1',
+        userId: 'user-1',
+        bookmarked: true,
+      }));
+
+      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'bookmarks'] });
+      spy.mockRestore();
+    });
+
+    it('does NOT invalidate bookmarks cache when bookmarked=false', () => {
+      const qc = createQueryClient();
+      const spy = jest.spyOn(qc, 'invalidateQueries');
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:bookmarked', {
+        postId: 'post-1',
+        userId: 'user-1',
+        bookmarked: false,
+      }));
+
+      expect(spy).not.toHaveBeenCalled();
+      spy.mockRestore();
+    });
+  });
+
+  describe('comment:added (commentsInfinite cache)', () => {
+    it('prepends comment to commentsInfinite cache', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      const existingComment = { id: 'c-existing', content: 'Old', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [existingComment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      const newComment = { id: 'c-new', content: 'New!', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() };
+      act(() => emit('comment:added', {
+        postId: 'post-1',
+        comment: newComment,
+        commentCount: 2,
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { id: string }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].id).toBe('c-new');
+      expect(data?.pages[0].data).toHaveLength(2);
+    });
+
+    it('deduplicates comment in commentsInfinite cache', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      const comment = { id: 'c-dup', content: 'Dup', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:added', {
+        postId: 'post-1',
+        comment,
+        commentCount: 1,
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: unknown[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data).toHaveLength(1);
+    });
+
+    it('no-op when commentsInfinite cache undefined', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:added', {
+        postId: 'post-1',
+        comment: { id: 'c-1', content: 'Hi', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() },
+        commentCount: 1,
+      }));
+
+      expect(qc.getQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'])).toBeUndefined();
+    });
+  });
+
+  describe('comment:deleted (commentsInfinite cache)', () => {
+    it('removes comment from commentsInfinite cache', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      const comment = { id: 'c-1', content: 'To delete', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:deleted', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        commentCount: 0,
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: unknown[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data).toHaveLength(0);
+    });
+
+    it('no-op when commentsInfinite cache undefined', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:deleted', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        commentCount: 0,
+      }));
+
+      expect(qc.getQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'])).toBeUndefined();
+    });
+  });
+
+  describe('comment:liked', () => {
+    it('updates likeCount on matching comment', () => {
+      const qc = createQueryClient();
+      const comment = { id: 'c-1', content: 'Hi', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:liked', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        userId: 'user-2',
+        emoji: '❤️',
+        likeCount: 1,
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { id: string; likeCount: number }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].likeCount).toBe(1);
+    });
+
+    it('no-op when comment id does not match', () => {
+      const qc = createQueryClient();
+      const comment = { id: 'c-1', content: 'Hi', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:liked', {
+        postId: 'post-1',
+        commentId: 'other-comment',
+        userId: 'user-2',
+        emoji: '❤️',
+        likeCount: 99,
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { likeCount: number }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].likeCount).toBe(0);
+    });
+
+    it('no-op when commentsInfinite cache undefined', () => {
+      const qc = createQueryClient();
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:liked', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        userId: 'user-2',
+        emoji: '❤️',
+        likeCount: 1,
+      }));
+
+      expect(qc.getQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'])).toBeUndefined();
+    });
+  });
+
+  describe('comment:translation-updated', () => {
+    it('merges translation into matching comment', () => {
+      const qc = createQueryClient();
+      const comment = { id: 'c-1', content: 'Bonjour', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:translation-updated', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        language: 'en',
+        translation: { text: 'Hello', translationModel: 'nllb', createdAt: new Date().toISOString() },
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: (typeof comment & { translations?: Record<string, unknown> })[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].translations).toHaveProperty('en');
+    });
+
+    it('no-op when comment id does not match', () => {
+      const qc = createQueryClient();
+      const comment = { id: 'c-1', content: 'Bonjour', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:translation-updated', {
+        postId: 'post-1',
+        commentId: 'other-comment',
+        language: 'en',
+        translation: { text: 'Hello', translationModel: 'nllb', createdAt: new Date().toISOString() },
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: ({ translations?: unknown })[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].translations).toBeUndefined();
+    });
+
+    it('no-op when commentsInfinite cache undefined', () => {
+      const qc = createQueryClient();
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:translation-updated', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        language: 'en',
+        translation: { text: 'Hello', translationModel: 'nllb', createdAt: new Date().toISOString() },
+      }));
+
+      expect(qc.getQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'])).toBeUndefined();
+    });
+  });
+
+  describe('story:viewed', () => {
+    it('invalidates stories cache', () => {
+      const qc = createQueryClient();
+      const spy = jest.spyOn(qc, 'invalidateQueries');
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('story:viewed', { storyId: 'story-1', viewerId: 'user-2', viewerUsername: 'bob', viewCount: 6 }));
+
+      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'stories'] });
+      spy.mockRestore();
+    });
+  });
+
+  describe('story:reacted', () => {
+    it('invalidates stories cache', () => {
+      const qc = createQueryClient();
+      const spy = jest.spyOn(qc, 'invalidateQueries');
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('story:reacted', { storyId: 'story-1', userId: 'user-2', emoji: '❤️' }));
+
+      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'stories'] });
+      spy.mockRestore();
+    });
+  });
+
+  describe('status:updated', () => {
+    it('invalidates statuses cache', () => {
+      const qc = createQueryClient();
+      const spy = jest.spyOn(qc, 'invalidateQueries');
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('status:updated', { status: mockPost }));
+
+      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'statuses'] });
+      spy.mockRestore();
+    });
+  });
+
+  describe('status:reacted', () => {
+    it('invalidates statuses cache', () => {
+      const qc = createQueryClient();
+      const spy = jest.spyOn(qc, 'invalidateQueries');
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('status:reacted', { statusId: 'st-1', userId: 'user-2', emoji: '❤️' }));
+
+      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'statuses'] });
+      spy.mockRestore();
+    });
+  });
+
+  describe('comment:reaction-added', () => {
+    it('updates comment likeCount and reactionSummary for matching comment', () => {
+      const qc = createQueryClient();
+      const comment = { id: 'c-1', content: 'Hi', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString(), reactionSummary: {} as Record<string, number>, currentUserReactions: [] as string[] };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-2' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-added', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        userId: 'user-2',
+        emoji: '❤️',
+        action: 'add',
+        aggregation: { emoji: '❤️', count: 1 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { likeCount: number; reactionSummary: Record<string, number>; currentUserReactions: string[] }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].likeCount).toBe(1);
+      expect(data?.pages[0].data[0].reactionSummary['❤️']).toBe(1);
+      expect(data?.pages[0].data[0].currentUserReactions).toContain('❤️');
+    });
+
+    it('does not add to currentUserReactions for another user', () => {
+      const qc = createQueryClient();
+      const comment = { id: 'c-1', content: 'Hi', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString(), reactionSummary: {} as Record<string, number>, currentUserReactions: [] as string[] };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-added', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        userId: 'user-99',
+        emoji: '❤️',
+        action: 'add',
+        aggregation: { emoji: '❤️', count: 1 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { currentUserReactions: string[] }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].currentUserReactions).toHaveLength(0);
+    });
+
+    it('no-op when commentsInfinite cache undefined', () => {
+      const qc = createQueryClient();
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-added', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        userId: 'user-1',
+        emoji: '❤️',
+        action: 'add',
+        aggregation: { emoji: '❤️', count: 1 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      expect(qc.getQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'])).toBeUndefined();
+    });
+
+    it('no-op when comment id does not match', () => {
+      const qc = createQueryClient();
+      const comment = { id: 'c-1', content: 'Hi', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString(), reactionSummary: {} as Record<string, number>, currentUserReactions: [] as string[] };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-added', {
+        postId: 'post-1',
+        commentId: 'other-comment',
+        userId: 'user-1',
+        emoji: '❤️',
+        action: 'add',
+        aggregation: { emoji: '❤️', count: 1 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { likeCount: number }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].likeCount).toBe(0);
+    });
+  });
+
+  describe('comment:reaction-removed', () => {
+    it('removes emoji from reactionSummary when count drops to zero', () => {
+      const qc = createQueryClient();
+      const comment = { id: 'c-1', content: 'Hi', likeCount: 1, replyCount: 0, createdAt: new Date().toISOString(), reactionSummary: { '❤️': 1 } as Record<string, number>, currentUserReactions: ['❤️'] as string[] };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-removed', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        userId: 'user-1',
+        emoji: '❤️',
+        action: 'remove',
+        aggregation: { emoji: '❤️', count: 0 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { likeCount: number; reactionSummary: Record<string, number>; currentUserReactions: string[] }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].likeCount).toBe(0);
+      expect(data?.pages[0].data[0].reactionSummary['❤️']).toBeUndefined();
+      expect(data?.pages[0].data[0].currentUserReactions).not.toContain('❤️');
+    });
+
+    it('keeps emoji in reactionSummary when count > 0', () => {
+      const qc = createQueryClient();
+      const comment = { id: 'c-1', content: 'Hi', likeCount: 2, replyCount: 0, createdAt: new Date().toISOString(), reactionSummary: { '❤️': 2 } as Record<string, number>, currentUserReactions: ['❤️'] as string[] };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-removed', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        userId: 'user-1',
+        emoji: '❤️',
+        action: 'remove',
+        aggregation: { emoji: '❤️', count: 1 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { reactionSummary: Record<string, number> }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].reactionSummary['❤️']).toBe(1);
+    });
+
+    it('no-op when commentsInfinite cache undefined', () => {
+      const qc = createQueryClient();
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-removed', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        userId: 'user-1',
+        emoji: '❤️',
+        action: 'remove',
+        aggregation: { emoji: '❤️', count: 0 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      expect(qc.getQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'])).toBeUndefined();
+    });
+  });
+
+  describe('comment:reaction-sync', () => {
+    // NOTE: handleCommentReactionSync uses data.commentId as the key arg to
+    // commentsInfinite(), so the cache is keyed as ['posts', 'detail', commentId, 'comments', 'infinite']
+    it('replaces likeCount, reactionSummary, and currentUserReactions on matching comment', () => {
+      const qc = createQueryClient();
+      const commentId = 'c-1';
+      const comment = { id: commentId, content: 'Hi', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString(), reactionSummary: {} as Record<string, number>, currentUserReactions: [] as string[] };
+      // Key uses commentId (not postId) because handler does commentsInfinite(data.commentId)
+      qc.setQueryData(['posts', 'detail', commentId, 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-sync', {
+        commentId,
+        reactions: [{ emoji: '👍', count: 3 }, { emoji: '❤️', count: 2 }],
+        totalCount: 5,
+        userReactions: ['👍'],
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { likeCount: number; reactionSummary: Record<string, number>; currentUserReactions: string[] }[] }[] }>(['posts', 'detail', commentId, 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].likeCount).toBe(5);
+      expect(data?.pages[0].data[0].reactionSummary).toEqual({ '👍': 3, '❤️': 2 });
+      expect(data?.pages[0].data[0].currentUserReactions).toEqual(['👍']);
+    });
+
+    it('no-op when comment id does not match data in cache', () => {
+      const qc = createQueryClient();
+      const commentId = 'c-OTHER';
+      const comment = { id: 'c-1', content: 'Hi', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString(), reactionSummary: {} as Record<string, number>, currentUserReactions: [] as string[] };
+      // Cache keyed by commentId = 'c-OTHER', data has comment with id 'c-1' → no match
+      qc.setQueryData(['posts', 'detail', commentId, 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-sync', {
+        commentId,
+        reactions: [{ emoji: '👍', count: 3 }],
+        totalCount: 3,
+        userReactions: [],
+      }));
+
+      // The comment 'c-1' is NOT the same as commentId 'c-OTHER', so no patch
+      const data = qc.getQueryData<{ pages: { data: { likeCount: number }[] }[] }>(['posts', 'detail', commentId, 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].likeCount).toBe(0);
+    });
+
+    it('no-op when commentsInfinite cache undefined', () => {
+      const qc = createQueryClient();
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-sync', {
+        commentId: 'c-1',
+        reactions: [],
+        totalCount: 0,
+        userReactions: [],
+      }));
+
+      // Cache key is ['posts', 'detail', 'c-1', 'comments', 'infinite']
+      expect(qc.getQueryData(['posts', 'detail', 'c-1', 'comments', 'infinite'])).toBeUndefined();
+    });
+  });
+
+  describe('post:reaction-added - already reacted dedup', () => {
+    it('does not duplicate emoji in currentUserReactions if already present', () => {
+      const qc = createQueryClient();
+      seedFeed(qc, [{ ...mockPost, reactionSummary: { '❤️': 1 } as Record<string, number>, currentUserReactions: ['❤️'] as string[] }]);
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reaction-added', {
+        postId: 'post-1',
+        userId: 'user-1',
+        emoji: '❤️',
+        action: 'add',
+        aggregation: { emoji: '❤️', count: 1 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const posts = getFeedPosts(qc) as (typeof mockPost & { currentUserReactions: string[] })[];
+      // Should not have duplicated '❤️'
+      expect(posts[0].currentUserReactions.filter((e) => e === '❤️')).toHaveLength(1);
+    });
+  });
+
+  describe('post:reaction-removed - count stays above zero', () => {
+    it('keeps emoji in reactionSummary when count > 0', () => {
+      const seed = { ...mockPost, reactionSummary: { '❤️': 2 } as Record<string, number>, currentUserReactions: ['❤️'] as string[] };
+      const qc = createQueryClient();
+      seedFeed(qc, [seed]);
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reaction-removed', {
+        postId: 'post-1',
+        userId: 'user-1',
+        emoji: '❤️',
+        action: 'remove',
+        aggregation: { emoji: '❤️', count: 1 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const posts = getFeedPosts(qc) as (typeof mockPost & { reactionSummary: Record<string, number> })[];
+      expect(posts[0].reactionSummary['❤️']).toBe(1);
+    });
+  });
+
+  describe('patchPostInAllCaches - detail cache coverage', () => {
+    it('patches post in detail cache when it contains data property', () => {
+      const qc = createQueryClient();
+      // Do NOT seed feed, only seed detail cache
+      qc.setQueryData(['posts', 'detail', 'post-1'], { data: mockPost });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:liked', {
+        postId: 'post-1',
+        userId: 'user-2',
+        emoji: '❤️',
+        likeCount: 99,
+        reactionSummary: { '❤️': 99 },
+      }));
+
+      const detail = qc.getQueryData<{ data: typeof mockPost }>(['posts', 'detail', 'post-1']);
+      expect(detail?.data.likeCount).toBe(99);
+    });
+
+    it('no-op when detail cache is undefined', () => {
+      const qc = createQueryClient();
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:liked', {
+        postId: 'post-1',
+        userId: 'user-2',
+        emoji: '❤️',
+        likeCount: 99,
+        reactionSummary: { '❤️': 99 },
+      }));
+
+      expect(qc.getQueryData(['posts', 'detail', 'post-1'])).toBeUndefined();
+    });
+
+    it('no-op when detail cache does not have data property', () => {
+      const qc = createQueryClient();
+      qc.setQueryData(['posts', 'detail', 'post-1'], { other: 'field' });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:liked', {
+        postId: 'post-1',
+        userId: 'user-2',
+        emoji: '❤️',
+        likeCount: 99,
+        reactionSummary: { '❤️': 99 },
+      }));
+
+      const detail = qc.getQueryData<{ other: string }>(['posts', 'detail', 'post-1']);
+      expect(detail?.other).toBe('field');
+    });
+  });
+
+  describe('multi-page feed - only first page gets new posts', () => {
+    it('post:created prepends to page 0 only when feed has multiple pages', () => {
+      const qc = createQueryClient();
+      const page2Post = { ...mockPost, id: 'page2-post' };
+      qc.setQueryData(['posts', 'list', 'infinite', 'feed'], {
+        pages: [
+          { data: [mockPost], meta: { pagination: { total: 2, offset: 0, limit: 1, hasMore: true }, nextCursor: 'cursor1' } },
+          { data: [page2Post], meta: { pagination: { total: 2, offset: 1, limit: 1, hasMore: false }, nextCursor: null } },
+        ],
+        pageParams: [undefined, 'cursor1'],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      const newPost = { ...mockPost, id: 'brand-new' };
+      act(() => emit('post:created', { post: newPost }));
+
+      const data = qc.getQueryData<{ pages: { data: { id: string }[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+      expect(data?.pages[0].data[0].id).toBe('brand-new'); // prepended to page 0
+      expect(data?.pages[1].data[0].id).toBe('page2-post'); // page 1 unchanged
+    });
+
+    it('post:reposted prepends to page 0 only when feed has multiple pages', () => {
+      const qc = createQueryClient();
+      const page2Post = { ...mockPost, id: 'page2-post' };
+      qc.setQueryData(['posts', 'list', 'infinite', 'feed'], {
+        pages: [
+          { data: [mockPost], meta: {} },
+          { data: [page2Post], meta: {} },
+        ],
+        pageParams: [undefined, 'cursor1'],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      const repost = { ...mockPost, id: 'repost-new' };
+      act(() => emit('post:reposted', { repost }));
+
+      const data = qc.getQueryData<{ pages: { data: { id: string }[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+      expect(data?.pages[0].data[0].id).toBe('repost-new');
+      expect(data?.pages[1].data[0].id).toBe('page2-post');
+    });
+  });
+
+  describe('post:created with undefined feed', () => {
+    it('no-op when feed is undefined', () => {
+      const qc = createQueryClient();
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:created', { post: mockPost }));
+
+      expect(qc.getQueryData(['posts', 'list', 'infinite', 'feed'])).toBeUndefined();
+    });
+  });
+
+  describe('post:deleted with undefined feed', () => {
+    it('no-op when feed is undefined', () => {
+      const qc = createQueryClient();
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:deleted', { postId: 'post-1', authorId: 'user-1' }));
+
+      expect(qc.getQueryData(['posts', 'list', 'infinite', 'feed'])).toBeUndefined();
+    });
+  });
+
+  describe('no socket - early return', () => {
+    it('does not throw when socket is null', () => {
+      // Override getSocket to return null for this test
+      const { meeshySocketIOService } = jest.requireMock('@/services/meeshy-socketio.service');
+      const originalGetSocket = meeshySocketIOService.getSocket;
+      meeshySocketIOService.getSocket = () => null;
+
+      const qc = createQueryClient();
+      expect(() => {
+        renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+      }).not.toThrow();
+
+      meeshySocketIOService.getSocket = originalGetSocket;
+    });
+  });
+
+  describe('post:updated - post id does not match any in feed', () => {
+    it('leaves feed unchanged when updated post is not in feed', () => {
+      const qc = createQueryClient();
+      seedFeed(qc); // feed has mockPost with id='post-1'
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:updated', { post: { ...mockPost, id: 'post-9999', content: 'Changed' } }));
+
+      const posts = getFeedPosts(qc) as typeof mockPost[];
+      expect(posts).toHaveLength(1);
+      expect(posts[0].id).toBe('post-1'); // unchanged
+      expect(posts[0].content).toBe('Hello');
+    });
+  });
+
+  describe('comment:added - multi-page comment cache (second page unchanged)', () => {
+    it('only prepends to the first page, leaves page 2+ intact', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      const oldComment = { id: 'c-old', content: 'Old', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() };
+      const page2Comment = { id: 'c-page2', content: 'Page2', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [
+          { data: [oldComment], meta: {} },
+          { data: [page2Comment], meta: {} },
+        ],
+        pageParams: [undefined, 'cursor2'],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      const newComment = { id: 'c-new', content: 'New!', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() };
+      act(() => emit('comment:added', { postId: 'post-1', comment: newComment, commentCount: 3 }));
+
+      const data = qc.getQueryData<{ pages: { data: { id: string }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].id).toBe('c-new'); // prepended to page 0
+      expect(data?.pages[1].data[0].id).toBe('c-page2'); // page 1 untouched
+    });
+  });
+
+  describe('comment:reaction-added - already reacted dedup', () => {
+    it('does not duplicate emoji when already in currentUserReactions', () => {
+      const qc = createQueryClient();
+      const comment = {
+        id: 'c-1', content: 'Hi', likeCount: 1, replyCount: 0,
+        createdAt: new Date().toISOString(),
+        reactionSummary: { '❤️': 1 } as Record<string, number>,
+        currentUserReactions: ['❤️'] as string[],
+      };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-added', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        userId: 'user-1',
+        emoji: '❤️',
+        action: 'add',
+        aggregation: { emoji: '❤️', count: 1 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { currentUserReactions: string[] }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].currentUserReactions.filter((e) => e === '❤️')).toHaveLength(1);
+    });
+  });
+
+  describe('comment:reaction-removed - other user branch', () => {
+    it('does not touch currentUserReactions when userId !== currentUserId', () => {
+      const qc = createQueryClient();
+      const comment = {
+        id: 'c-1', content: 'Hi', likeCount: 2, replyCount: 0,
+        createdAt: new Date().toISOString(),
+        reactionSummary: { '❤️': 2 } as Record<string, number>,
+        currentUserReactions: ['❤️'] as string[],
+      };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-removed', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        userId: 'user-99', // other user
+        emoji: '❤️',
+        action: 'remove',
+        aggregation: { emoji: '❤️', count: 1 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { currentUserReactions: string[] }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].currentUserReactions).toContain('❤️'); // unchanged
+    });
+  });
+
+  describe('patchPostInAllCaches - non-matching post id in feed', () => {
+    it('leaves unmatched posts unchanged in feed (covers p : p branch in patchPostInAllCaches)', () => {
+      const qc = createQueryClient();
+      const post2 = { ...mockPost, id: 'post-2', likeCount: 0 };
+      seedFeed(qc, [mockPost, post2]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:liked', {
+        postId: 'post-1', // only post-1 matched
+        userId: 'user-2',
+        emoji: '❤️',
+        likeCount: 99,
+        reactionSummary: { '❤️': 99 },
+      }));
+
+      const posts = getFeedPosts(qc) as typeof mockPost[];
+      expect(posts[0].likeCount).toBe(99);   // post-1 updated
+      expect(posts[1].likeCount).toBe(0);    // post-2 unchanged (covers the false branch)
+    });
+  });
+
+  describe('post:reaction-added - undefined currentUserReactions (?? [] right branch)', () => {
+    it('appends emoji when post has no currentUserReactions and userId===currentUserId', () => {
+      const qc = createQueryClient();
+      const postNoReactions = { ...mockPost, currentUserReactions: undefined as unknown as string[] };
+      seedFeed(qc, [postNoReactions]);
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reaction-added', {
+        postId: 'post-1',
+        userId: 'user-1',
+        emoji: '👍',
+        action: 'add',
+        aggregation: { emoji: '👍', count: 1 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const posts = getFeedPosts(qc) as (typeof mockPost & { currentUserReactions?: string[] })[];
+      expect(posts[0].currentUserReactions).toContain('👍');
+    });
+  });
+
+  describe('post:reaction-removed - undefined currentUserReactions (?? [] right branch)', () => {
+    it('filters emoji when post has no currentUserReactions and userId===currentUserId', () => {
+      const qc = createQueryClient();
+      const postNoReactions = { ...mockPost, currentUserReactions: undefined as unknown as string[], reactionSummary: { '❤️': 1 } as Record<string, number> };
+      seedFeed(qc, [postNoReactions]);
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reaction-removed', {
+        postId: 'post-1',
+        userId: 'user-1',
+        emoji: '❤️',
+        action: 'remove',
+        aggregation: { emoji: '❤️', count: 0 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const posts = getFeedPosts(qc) as (typeof mockPost & { currentUserReactions?: string[] })[];
+      expect(posts[0].currentUserReactions ?? []).not.toContain('❤️');
+    });
+  });
+
+  describe('comment:reaction-added - undefined currentUserReactions (?? [] right branch)', () => {
+    it('appends emoji when comment has no currentUserReactions and userId===currentUserId', () => {
+      const qc = createQueryClient();
+      const comment = {
+        id: 'c-1', content: 'Hi', likeCount: 0, replyCount: 0,
+        createdAt: new Date().toISOString(),
+        reactionSummary: {} as Record<string, number>,
+        currentUserReactions: undefined as unknown as string[],
+      };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-added', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        userId: 'user-1',
+        emoji: '👍',
+        action: 'add',
+        aggregation: { emoji: '👍', count: 1 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { currentUserReactions?: string[] }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].currentUserReactions).toContain('👍');
+    });
+  });
+
+  describe('comment:reaction-removed - non-matching comment id (line 309 true branch)', () => {
+    it('skips non-matching comments and filters currentUserReactions on matching one', () => {
+      const qc = createQueryClient();
+      const matchComment = {
+        id: 'c-match', content: 'Match', likeCount: 2, replyCount: 0,
+        createdAt: new Date().toISOString(),
+        reactionSummary: { '❤️': 2 } as Record<string, number>,
+        currentUserReactions: undefined as unknown as string[], // ?? [] right branch
+      };
+      const otherComment = {
+        id: 'c-other', content: 'Other', likeCount: 0, replyCount: 0,
+        createdAt: new Date().toISOString(),
+        reactionSummary: {} as Record<string, number>,
+        currentUserReactions: [] as string[],
+      };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [matchComment, otherComment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-removed', {
+        postId: 'post-1',
+        commentId: 'c-match',
+        userId: 'user-1',
+        emoji: '❤️',
+        action: 'remove',
+        aggregation: { emoji: '❤️', count: 1 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { id: string; likeCount: number; currentUserReactions?: string[] }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].likeCount).toBe(1);           // c-match updated
+      expect(data?.pages[0].data[1].likeCount).toBe(0);           // c-other unchanged (line 309 true branch)
+      expect(data?.pages[0].data[0].currentUserReactions ?? []).not.toContain('❤️'); // line 322 ?? [] right branch
+    });
+  });
 });

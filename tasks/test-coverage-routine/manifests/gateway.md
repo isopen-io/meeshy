@@ -70,7 +70,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/affiliate.ts`
 - [ ] `services/gateway/src/routes/anonymous.ts`
 - [ ] `services/gateway/src/routes/attachments.ts`
-- [ ] `services/gateway/src/routes/calls.ts`
+- [x] `services/gateway/src/routes/calls.ts`
 - [ ] `services/gateway/src/routes/communities.ts`
 - [ ] `services/gateway/src/routes/community-preferences.ts`
 - [ ] `services/gateway/src/routes/conversation-encryption.ts`

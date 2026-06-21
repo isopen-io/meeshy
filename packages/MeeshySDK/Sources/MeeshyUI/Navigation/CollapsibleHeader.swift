@@ -309,7 +309,8 @@ extension CollapsibleHeader where LeadingContent == EmptyView, CenterContent == 
         backArrowColor: Color,
         backgroundColor: Color,
         @ViewBuilder titleView: @escaping () -> TitleContent,
-        @ViewBuilder trailing: @escaping () -> TrailingContent = { EmptyView() }
+        @ViewBuilder trailing: @escaping () -> TrailingContent = { EmptyView() },
+        accessory: (() -> AnyView)? = nil
     ) {
         self.title = title
         self.subtitle = subtitle
@@ -323,7 +324,7 @@ extension CollapsibleHeader where LeadingContent == EmptyView, CenterContent == 
         self.titleView = titleView
         self.trailing = trailing
         self.centerReveal = nil
-        self.accessory = nil
+        self.accessory = accessory
     }
 }
 

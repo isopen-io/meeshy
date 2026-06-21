@@ -700,6 +700,8 @@ struct RootView: View {
                     AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
                         router.deepLinkProfileUser = nil
                         router.push(.postDetail(post.id, post))
+                    }, onOpenReel: { reel, reels in
+                        ProfilePostsOpener.openReel(reel, in: reels) { router.deepLinkProfileUser = nil }
                     }))
                 }
             )
