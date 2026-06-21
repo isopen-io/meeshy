@@ -252,10 +252,13 @@ struct UniversalComposerBar: View {
     @StateObject private var keyboardObserver = KeyboardObserver()
 
     /// Height for the attachment carousel — matches the last known keyboard
-    /// height, with a sane fallback before the keyboard has ever appeared.
+    /// height so swapping keyboard <-> carousel keeps the input row still, but
+    /// never shorter than the panel's own content (taller when the two-row
+    /// recent-media grid is shown, so it can't clip).
     var attachmentPanelHeight: CGFloat {
-        let h = keyboardObserver.lastKnownHeight
-        return h > 120 ? h : 300
+        let keyboard = max(keyboardObserver.lastKnownHeight, 260)
+        let contentFloor: CGFloat = onRecentMediaSelected != nil ? 324 : 150
+        return max(keyboard, contentFloor)
     }
 
     // MARK: - Recording constants

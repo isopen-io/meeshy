@@ -149,9 +149,10 @@ final class RecentMediaStripModel: ObservableObject {
 // MARK: - RecentMediaStrip
 // ============================================================================
 
-/// Horizontal strip of recent photos/videos shown beneath the attachment
-/// carousel. Tapping a thumbnail hands the resolved media to `onSelect`; the
-/// leading "+" tile opens the full photo library via `onOpenLibrary`.
+/// Two-row grid (four per row) of recent photos/videos shown beneath the
+/// attachment carousel. Tapping a thumbnail hands the resolved media to
+/// `onSelect`; the trailing 8th tile opens the full photo library via
+/// `onOpenLibrary`.
 struct RecentMediaStrip: View {
     let accentColor: String
     let onOpenLibrary: () -> Void
@@ -160,12 +161,29 @@ struct RecentMediaStrip: View {
     @StateObject private var model = RecentMediaStripModel()
     @State private var resolvingId: String?
 
-    private let cell: CGFloat = 84
+    private let columns = 4
+    private let spacing: CGFloat = 6
+    private let hPadding: CGFloat = 12
+
+    /// Square cell sized so exactly `columns` fit across the screen width.
+    private var cell: CGFloat {
+        let width = UIScreen.main.bounds.width
+        return ((width - hPadding * 2) - spacing * CGFloat(columns - 1)) / CGFloat(columns)
+    }
+
+    /// Recent samples shown before the "open library" tile. Capped so the grid
+    /// reads as two rows of four — seven thumbnails + the trailing tile (the
+    /// 8th cell). Tapping that tile opens the full photo library for the rest.
+    private var samples: [PHAsset] { Array(model.assets.prefix((columns * 2) - 1)) }
 
     var body: some View {
+        let rows = [
+            GridItem(.fixed(cell), spacing: spacing),
+            GridItem(.fixed(cell), spacing: spacing)
+        ]
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(model.assets, id: \.localIdentifier) { asset in
+            LazyHGrid(rows: rows, spacing: spacing) {
+                ForEach(samples, id: \.localIdentifier) { asset in
                     RecentMediaCell(
                         asset: asset,
                         model: model,
@@ -174,10 +192,10 @@ struct RecentMediaStrip: View {
                         onTap: { tap(asset) }
                     )
                 }
-                // Trailing tile — opens the full photo library after the samples.
+                // 8th cell — opens the full photo library after the samples.
                 openLibraryTile
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, hPadding)
             .padding(.vertical, 6)
         }
         .task { model.load() }
