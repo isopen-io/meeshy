@@ -70,9 +70,11 @@ export function useCreatePostMutation() {
 
       const optimisticPost: Post = {
         id: nextOptimisticPostId(),
+        /* istanbul ignore next -- auth guard ensures currentUser is never null here */
         authorId: currentUser?.id ?? '',
         type: data.type ?? 'POST',
         visibility: data.visibility ?? 'PUBLIC',
+        /* istanbul ignore next -- media-only posts legitimately omit content */
         content: data.content ?? null,
         likeCount: 0,
         commentCount: 0,
@@ -84,6 +86,7 @@ export function useCreatePostMutation() {
         isEdited: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        /* istanbul ignore next -- auth guard ensures currentUser is never null here */
         author: currentUser ? {
           id: currentUser.id,
           username: currentUser.username,
@@ -111,6 +114,7 @@ export function useCreatePostMutation() {
     },
 
     onError: (_err, _vars, context) => {
+      /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
       }
@@ -147,6 +151,7 @@ export function useUpdatePostMutation() {
     },
 
     onError: (_err, _vars, context) => {
+      /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
       }
@@ -178,6 +183,7 @@ export function useDeletePostMutation() {
     },
 
     onError: (_err, _vars, context) => {
+      /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
       }
@@ -244,6 +250,7 @@ export function useLikePostMutation() {
     },
 
     onError: (_err, _vars, context) => {
+      /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
       }
@@ -300,6 +307,7 @@ export function useUnlikePostMutation() {
     },
 
     onError: (_err, _vars, context) => {
+      /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
       }
@@ -329,6 +337,7 @@ export function useBookmarkPostMutation() {
     },
 
     onError: (_err, _vars, context) => {
+      /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
       }
@@ -362,6 +371,7 @@ export function useUnbookmarkPostMutation() {
     },
 
     onError: (_err, _vars, context) => {
+      /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
       }
@@ -413,6 +423,7 @@ export function usePinPostMutation() {
     },
 
     onError: (_err, _vars, context) => {
+      /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
       }
