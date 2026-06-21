@@ -175,6 +175,11 @@ struct CommentsSheetView: View {
     @State private var showCommentFilePicker: Bool = false
     @State private var showCommentLocationPicker: Bool = false
 
+    /// Enregistreur vocal parent-managed — MÊME composant que les conversations
+    /// (`ConversationView`). Produit un vrai fichier audio (pas un timer) déposé
+    /// dans `commentAttachments` comme pièce jointe voix, puis uploadé comme média.
+    @StateObject private var audioRecorder = AudioRecorderManager()
+
     @StateObject private var mentionController: MentionComposerController
 
     init(
@@ -701,6 +706,15 @@ struct CommentsSheetView: View {
                 submitComment(text: text, attachments: attachments)
             },
             onLocationRequest: { showCommentLocationPicker = true },
+            // Capture voix réelle — mêmes composants que les conversations.
+            onStartRecording: { startCommentRecording() },
+            onStopRecordingToAttachment: { stopCommentRecordingToAttachment() },
+            onSendRecording: { stopAndSendCommentRecording() },
+            onCancelRecording: { audioRecorder.cancelRecording() },
+            externalIsRecording: audioRecorder.isRecording,
+            externalRecordingDuration: audioRecorder.duration,
+            externalAudioLevels: audioRecorder.audioLevels,
+            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
             textBinding: $composerText,
             replyBanner: replyingTo.map { AnyView(commentReplyBanner($0)) },
             customAttachmentsPreview: commentAttachments.isEmpty
@@ -855,6 +869,37 @@ struct CommentsSheetView: View {
                 ComposerAttachment.file(url: dest, name: url.lastPathComponent, size: size)
             )
         }
+    }
+
+    // MARK: - Comment Voice Recording (real capture — parity with conversations)
+
+    private func startCommentRecording() {
+        audioRecorder.startRecording()
+        HapticFeedback.medium()
+    }
+
+    /// Stoppe l'enregistrement et dépose l'audio (vrai fichier `.m4a`) dans la tray
+    /// des attachements du commentaire — éditable avant envoi. < 0,5 s = ignoré.
+    /// Renvoie `true` si un attachement a été déposé.
+    @discardableResult
+    private func stopCommentRecordingToAttachment() -> Bool {
+        guard audioRecorder.duration > 0.5 else {
+            audioRecorder.cancelRecording()
+            return false
+        }
+        let duration = audioRecorder.duration
+        guard let url = audioRecorder.stopRecording() else { return false }
+        var voice = ComposerAttachment.voice(duration: duration)
+        voice.url = url
+        commentAttachments.append(voice)
+        return true
+    }
+
+    /// Stoppe et envoie le commentaire vocal immédiatement (raw).
+    private func stopAndSendCommentRecording() {
+        guard stopCommentRecordingToAttachment() else { return }
+        submitComment(text: composerText, attachments: commentAttachments)
+        composerText = ""
     }
 
     // MARK: - Comment Send (optimistic, with single media)
