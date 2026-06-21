@@ -155,7 +155,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
 | web | `pnpm --filter web test:coverage` | 42.42 | 34.51 | 2026-06-21 (post P2 Calls × web sub-slice 1; +tests for adaptive-degradation/call-store/use-call-quality/use-video-call/use-call-banner; stmts:41.66/branch:34.51/funcs:38.96/lines:42.42; threshold floor unchanged lines:42/branches:34/statements:41/functions:38 — integer floors same) |
-| gateway | `pnpm --filter gateway test:coverage` | 55.27→61.38 | 52.64→57.51 | 2026-06-21 (post P2 Admin & moderation × gateway sub-slice 1; +243 tests covering 6 services/admin + 1 middleware + 1 validation to ≥93% branch; local-measured stmts=61.12%/branches=57.51%/funcs=62.6%/lines=61.38%; threshold floor NOT ratcheted yet — awaiting CI measurement) |
+| gateway | `pnpm --filter gateway test:coverage` | 61.32 | 57.49 | 2026-06-21 (post P2 Admin & moderation × gateway sub-slice 1 merged via PR #753; stmts=61.07%/branches=57.49%/funcs=62.53%/lines=61.32%; threshold floor ratcheted lines:61/branches:57/statements:61/functions:62; also fixed calls-routes.test.ts expecting 7→8 routes after GET /calls/history added by another PR) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | ~39 | n/a | 2026-06-19 (post P1 Voice/audio × translator; +127 tests covering 6 modules; fail_under ratcheted 37→39; diarization GPU methods pragma'd) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |

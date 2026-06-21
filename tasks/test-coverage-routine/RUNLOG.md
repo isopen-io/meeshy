@@ -1537,3 +1537,19 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Commit: 07d6019d (branch claude/coverage/p2-admin-gateway)
 - PR: #753 (open — awaiting CI)
 - Next slice (after PR #753 merges): P2 Admin & moderation × gateway sub-slice 2 (routes/admin/* — 19 files)
+
+## 2026-06-21T20:00Z — P2 Admin & moderation × gateway (sub-slice 1: CI fix + merge + ratchet)
+- Targeted: Fix pre-existing ZmqTranslationClient test failures exposed by Node.js 20→24 upgrade in CI
+- Result: ☑ PR #753 merged to main; coverage floor ratcheted; calls-routes.test.ts fixed
+- Root cause of CI failure (7 tests): `cbFailureThreshold` default changed 5→8 and `maxRetries` changed 3→4 in `zmqToleranceConfig.ts` defaults, but test loop counts were not updated. Additionally `jest.advanceTimersByTime()` + manual `await Promise.resolve()` chains are unreliable on Node.js 24.
+- Fix applied to 2 test files (test-only, no production code changed):
+  - `ZmqTranslationClient.gap.test.ts`: openCircuitBreaker() loops 5→8; CB threshold tests 4+1→7+1; retry-exhausted loop 4→5; all `jest.advanceTimersByTime()` + Promise.resolve() replaced with `jest.advanceTimersByTimeAsync()`
+  - `ZmqTranslationClient.test.ts`: _cbRecordError threshold test 5→8 iterations; retry-exhausted loop 4→5 iterations; transcriptionError timeout loop 4→5
+- Additional fix: `calls-routes.test.ts` expects 7→8 routes (GET /calls/history was added by another PR that merged to main)
+- Coverage after merge (all 239 suites passing, 7218 tests):
+  - stmts=61.07% / branches=57.49% / funcs=62.53% / lines=61.32%
+- Coverage floor ratcheted in `jest.config.json`: lines:55→61 / branches:52→57 / statements:55→61 / functions:55→62
+- Production code changes: NONE (test-only + threshold ratchet + calls-routes count fix)
+- CI: Green on PR #753 (Security✅ Quality✅)
+- Merge: PR #753 squash-merged → main 2026-06-21T20:00Z
+- Next slice: P2 Admin & moderation × gateway sub-slice 2 (routes/admin/* — 19 files, ~8600 lines)

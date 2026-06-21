@@ -219,9 +219,9 @@ describe('callRoutes', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('route registration', () => {
-    it('registers all 7 routes', () => {
+    it('registers all 8 routes', () => {
       const { routes } = setup();
-      expect(routes).toHaveLength(7);
+      expect(routes).toHaveLength(8);
     });
 
     it('registers POST /calls', () => {
