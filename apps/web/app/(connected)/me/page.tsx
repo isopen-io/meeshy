@@ -3,45 +3,52 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Button, Card, Badge, LanguageOrb, theme, Input, useToast, PageHeader, Dialog, DialogBody, DialogFooter, Avatar, Skeleton, Textarea, Label } from '@/components/v2';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { Footer } from '@/components/layout/Footer';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { OnlineIndicator } from '@/components/ui/online-indicator';
+// Modal building blocks reused from the v2 design system.
+import {
+  useToast,
+  Dialog,
+  DialogBody,
+  DialogFooter,
+  Input,
+  Textarea,
+  Label,
+  LanguageOrb,
+} from '@/components/v2';
 import { useProfileV2 } from '@/hooks/v2';
 import { useAuth } from '@/hooks/use-auth';
 import { useI18n } from '@/hooks/use-i18n';
+import {
+  Pencil,
+  Settings,
+  Link2,
+  Users,
+  Bell,
+  LogOut,
+  ChevronRight,
+  MessageSquare,
+} from 'lucide-react';
 
-function ProfileSkeleton() {
-  return (
-    <div className="h-full overflow-auto pb-8 bg-[var(--gp-background)] transition-colors duration-300">
-      <Skeleton variant="rectangular" className="h-40 rounded-none" />
-      <div className="max-w-2xl mx-auto px-6">
-        <div className="relative -mt-16 mb-6">
-          <Skeleton variant="circular" className="w-32 h-32 border-4 border-[var(--gp-surface)]" />
-        </div>
-        <div className="mb-6 space-y-3">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-4 w-full" />
-        </div>
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} variant="default" hover={false} className="p-4">
-              <Skeleton className="h-8 w-16 mx-auto mb-2" />
-              <Skeleton className="h-3 w-20 mx-auto" />
-            </Card>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
+// ─── Helpers ───────────────────────────────────────────────────────────────
 
 function formatNumber(num: number): string {
-  if (num >= 1000) {
-    return (num / 1000).toFixed(1) + 'k';
-  }
-  return num.toString();
+  return num >= 1000 ? (num / 1000).toFixed(1) + 'k' : num.toString();
 }
 
-// Edit Profile Modal Component
+function getInitials(name: string): string {
+  const parts = name.replace(/^@/, '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase();
+}
+
+// ─── Modals ────────────────────────────────────────────────────────────────
+
 function EditProfileModal({
   isOpen,
   onClose,
@@ -58,54 +65,28 @@ function EditProfileModal({
   const [name, setName] = useState(profile.name);
   const [bio, setBio] = useState(profile.bio || '');
 
-  const handleSave = async () => {
-    await onSave({ displayName: name, bio });
-  };
-
   return (
     <Dialog open={isOpen} onClose={onClose}>
       <DialogBody>
-        <h2
-          className="text-xl font-bold mb-6 text-[var(--gp-text-primary)]"
-          style={{ fontFamily: theme.fonts.display }}
-        >
-          Modifier le profil
-        </h2>
-
+        <h2 className="text-xl font-bold mb-6 text-[var(--gp-text-primary)]">Modifier le profil</h2>
         <div className="space-y-4">
           <div>
             <Label className="mb-2">Nom</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Votre nom"
-            />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Votre nom" />
           </div>
-
           <div>
             <Label className="mb-2">Bio</Label>
-            <Textarea
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              placeholder="Parlez-nous de vous..."
-              rows={3}
-            />
+            <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Parlez-nous de vous..." rows={3} />
           </div>
         </div>
       </DialogBody>
       <DialogFooter>
-        <Button
-          variant="outline"
-          className="flex-1"
-          onClick={onClose}
-          disabled={isSaving}
-        >
+        <Button variant="outline" className="flex-1" onClick={onClose} disabled={isSaving}>
           Annuler
         </Button>
         <Button
-          variant="primary"
           className="flex-1"
-          onClick={handleSave}
+          onClick={() => onSave({ displayName: name, bio })}
           disabled={isSaving || !name.trim()}
         >
           {isSaving ? 'Enregistrement...' : 'Enregistrer'}
@@ -115,7 +96,6 @@ function EditProfileModal({
   );
 }
 
-// Logout Confirmation Modal Component
 function LogoutConfirmModal({
   isOpen,
   onClose,
@@ -130,54 +110,69 @@ function LogoutConfirmModal({
   return (
     <Dialog open={isOpen} onClose={onClose} className="max-w-sm">
       <DialogBody>
-        <h2
-          className="text-xl font-bold mb-2 text-[var(--gp-text-primary)]"
-          style={{ fontFamily: theme.fonts.display }}
-        >
-          Se deconnecter ?
-        </h2>
+        <h2 className="text-xl font-bold mb-2 text-[var(--gp-text-primary)]">Se déconnecter ?</h2>
         <p className="text-[var(--gp-text-secondary)]">
-          Etes-vous sur de vouloir vous deconnecter de votre compte ?
+          Êtes-vous sûr de vouloir vous déconnecter de votre compte ?
         </p>
       </DialogBody>
       <DialogFooter>
-        <Button
-          variant="outline"
-          className="flex-1"
-          onClick={onClose}
-          disabled={isLoggingOut}
-        >
+        <Button variant="outline" className="flex-1" onClick={onClose} disabled={isLoggingOut}>
           Annuler
         </Button>
-        <Button
-          variant="primary"
-          className="flex-1"
-          style={{ background: theme.colors.asianRuby }}
-          onClick={onConfirm}
-          disabled={isLoggingOut}
-        >
-          {isLoggingOut ? 'Deconnexion...' : 'Se deconnecter'}
+        <Button variant="destructive" className="flex-1" onClick={onConfirm} disabled={isLoggingOut}>
+          {isLoggingOut ? 'Déconnexion...' : 'Se déconnecter'}
         </Button>
       </DialogFooter>
     </Dialog>
   );
 }
 
-export default function V2ProfilePage() {
+// ─── Quick-link card ─────────────────────────────────────────────────────────
+
+function QuickLink({ href, icon: Icon, label, tint }: { href: string; icon: React.ElementType; label: string; tint: string }) {
+  return (
+    <Link href={href} className="block">
+      <Card className="border-2 hover:shadow-md transition-shadow">
+        <CardContent className="p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tint}`}>
+              <Icon className="w-5 h-5" />
+            </div>
+            <span className="font-medium text-foreground">{label}</span>
+          </div>
+          <ChevronRight className="w-5 h-5 text-muted-foreground" />
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
+
+// ─── Shell (links dashboard-v1 chrome) ──────────────────────────────────────
+// Module-scoped so it keeps a stable component identity across renders (an
+// inline component would remount its subtree, dropping modal input focus).
+
+function ProfileShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-950 dark:to-gray-900 flex flex-col">
+      <DashboardLayout title="Mon profil" hideSearch className="!bg-none !bg-transparent !h-auto !max-w-none !px-0">
+        <div className="w-full max-w-3xl mx-auto px-4 md:px-8 py-8 space-y-8">{children}</div>
+      </DashboardLayout>
+      <div className="w-screen relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] mt-16">
+        <Footer />
+      </div>
+    </div>
+  );
+}
+
+// ─── Page ────────────────────────────────────────────────────────────────────
+
+export default function ProfilePage() {
   const router = useRouter();
   const { logout } = useAuth();
   const { addToast } = useToast();
-  const {
-    profile,
-    stats,
-    isLoading,
-    error,
-    isCurrentUser,
-    updateProfile,
-    isUpdating,
-  } = useProfileV2();
-
+  const { profile, stats, isLoading, error, isCurrentUser, updateProfile, isUpdating } = useProfileV2();
   const { t } = useI18n('settings');
+
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -188,7 +183,7 @@ export default function V2ProfilePage() {
       await logout();
       addToast(t('v2me.logoutSuccess'), 'success');
       router.push('/login');
-    } catch (_err) {
+    } catch {
       addToast(t('v2me.logoutError'), 'error');
       setIsLoggingOut(false);
     }
@@ -199,265 +194,169 @@ export default function V2ProfilePage() {
       await updateProfile(data);
       addToast(t('v2me.profileUpdated'), 'success');
       setIsEditModalOpen(false);
-    } catch (_err) {
+    } catch {
       addToast(t('v2me.profileUpdateError'), 'error');
     }
   };
 
   if (isLoading) {
-    return <ProfileSkeleton />;
-  }
-
-  if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--gp-background)]">
-        <div className="text-center p-4">
-          <p style={{ color: 'var(--gp-error)' }}>{error}</p>
-          <Button variant="outline" className="mt-4" onClick={() => router.push('/login')}>
-            Retour a la connexion
-          </Button>
+      <ProfileShell>
+        <div className="h-56 rounded-3xl bg-gray-200 dark:bg-gray-800 animate-pulse" />
+        <div className="grid grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-24 rounded-xl bg-gray-200 dark:bg-gray-800 animate-pulse" />
+          ))}
         </div>
-      </div>
+      </ProfileShell>
     );
   }
 
-  if (!profile) {
+  if (error || !profile) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--gp-background)]">
-        <div className="text-center p-4">
-          <p className="text-[var(--gp-text-secondary)]">Profil non trouve</p>
-          <Button variant="outline" className="mt-4" onClick={() => router.push('/conversations')}>
-            Retour aux conversations
-          </Button>
-        </div>
-      </div>
+      <ProfileShell>
+        <Card className="border-2">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <p className="text-rose-600 dark:text-rose-400 mb-4">{error || 'Profil non trouvé'}</p>
+            <Button variant="outline" onClick={() => router.push('/conversations')}>
+              Retour aux conversations
+            </Button>
+          </CardContent>
+        </Card>
+      </ProfileShell>
     );
   }
 
   return (
-    <div className="h-full overflow-auto pb-8 bg-[var(--gp-background)] transition-colors duration-300">
-      <PageHeader
-        title="Mon profil"
-        hideProfileButton
-        actionButtons={
-          isCurrentUser ? (
-            <Link href="/settings">
-              <Button variant="ghost" size="sm">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </Button>
-            </Link>
-          ) : undefined
-        }
-      />
-
-      {/* Banner */}
-      <div
-        className="h-40"
-        style={{
-          background: profile.banner
-            ? `url(${profile.banner})`
-            : `linear-gradient(135deg, var(--gp-terracotta), var(--gp-deep-teal))`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      />
-
-      {/* Profile Info */}
-      <div className="max-w-2xl mx-auto px-6">
-        <div className="relative -mt-16 mb-6">
-          <Avatar
-            src={profile.avatar}
-            name={profile.name}
-            size="xl"
-            isOnline={profile.isOnline}
-            className="border-4 border-[var(--gp-surface)]"
-          />
-        </div>
-
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <h1
-              className="text-2xl font-bold text-[var(--gp-text-primary)]"
-              style={{ fontFamily: theme.fonts.display }}
-            >
-              {profile.name}
-            </h1>
-            {profile.isPro && <Badge variant="teal">Pro</Badge>}
-          </div>
-          <p className="mb-2 text-[var(--gp-text-secondary)]">{profile.username}</p>
-          {profile.bio && (
-            <p className="text-[var(--gp-text-primary)]">{profile.bio}</p>
-          )}
-          {!profile.isOnline && profile.lastSeen && (
-            <p className="text-sm mt-2 text-[var(--gp-text-muted)]">
-              {profile.lastSeen}
-            </p>
-          )}
-          {isCurrentUser && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-4"
-              onClick={() => setIsEditModalOpen(true)}
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-              {t('v2me.editProfile')}
-            </Button>
-          )}
-        </div>
-
-        {/* Languages */}
-        {profile.languages.length > 0 && (
-          <Card variant="outlined" hover={false} className="p-4 mb-6">
-            <h3 className="font-semibold mb-3 text-[var(--gp-text-primary)]">
-              {isCurrentUser ? 'Mes langues' : 'Langues'}
-            </h3>
-            <div className="flex flex-wrap gap-3">
-              {profile.languages.map((lang) => (
-                <div
-                  key={lang.code}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--gp-parchment)]"
-                >
-                  <LanguageOrb code={lang.code} size="sm" pulse={false} className="w-6 h-6 text-sm" />
-                  <span className="text-sm font-medium">{lang.name}</span>
-                  <Badge
-                    variant={
-                      lang.level === 'native' ? 'terracotta' :
-                      lang.level === 'fluent' ? 'teal' : 'gold'
-                    }
-                    size="sm"
-                  >
-                    {lang.level === 'native' ? 'Natif' :
-                     lang.level === 'fluent' ? 'Courant' : 'Apprentissage'}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {/* Stats */}
-        {stats && (
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <Card variant="default" hover={false} className="p-4 text-center">
-              <p className="text-2xl font-bold text-[var(--gp-terracotta)]">
-                {formatNumber(stats.conversationsCount)}
-              </p>
-              <p className="text-sm text-[var(--gp-text-secondary)]">Conversations</p>
-            </Card>
-            <Card variant="default" hover={false} className="p-4 text-center">
-              <p className="text-2xl font-bold text-[var(--gp-deep-teal)]">
-                {formatNumber(stats.messagesCount)}
-              </p>
-              <p className="text-sm text-[var(--gp-text-secondary)]">Messages</p>
-            </Card>
-            <Card variant="default" hover={false} className="p-4 text-center">
-              <p className="text-2xl font-bold text-[var(--gp-gold-accent)]">
-                {formatNumber(stats.contactsCount)}
-              </p>
-              <p className="text-sm text-[var(--gp-text-secondary)]">Contacts</p>
-            </Card>
-          </div>
-        )}
-
-        {/* Actions */}
-        {isCurrentUser && (
-          <div className="space-y-3">
-            <Link href="/links" className="block">
-              <Card variant="outlined" hover className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'color-mix(in srgb, var(--gp-terracotta) 15%, transparent)' }}>
-                    <svg className="w-5 h-5 text-[var(--gp-terracotta)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                    </svg>
-                  </div>
-                  <span className="font-medium text-[var(--gp-text-primary)]">Mes liens de partage</span>
-                </div>
-                <svg className="w-5 h-5 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Card>
-            </Link>
-
-            <Link href="/contacts" className="block">
-              <Card variant="outlined" hover className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'color-mix(in srgb, var(--gp-deep-teal) 15%, transparent)' }}>
-                    <svg className="w-5 h-5 text-[var(--gp-deep-teal)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                  </div>
-                  <span className="font-medium text-[var(--gp-text-primary)]">Mes contacts</span>
-                </div>
-                <svg className="w-5 h-5 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Card>
-            </Link>
-
-            <Link href="/notifications" className="block">
-              <Card variant="outlined" hover className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'color-mix(in srgb, var(--gp-royal-indigo) 15%, transparent)' }}>
-                    <svg className="w-5 h-5 text-[var(--gp-royal-indigo)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                    </svg>
-                  </div>
-                  <span className="font-medium text-[var(--gp-text-primary)]">Notifications</span>
-                </div>
-                <svg className="w-5 h-5 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Card>
-            </Link>
-
-            <Button
-              variant="outline"
-              className="w-full text-[var(--gp-asian-ruby)] border-[var(--gp-asian-ruby)]"
-              onClick={() => setIsLogoutModalOpen(true)}
-            >
-              Se deconnecter
-            </Button>
-          </div>
-        )}
-
-        {/* Message button for other users */}
-        {!isCurrentUser && (
-          <Link href={`/conversations?user=${profile.id}`} className="block">
-            <Button variant="primary" className="w-full">
-              Envoyer un message
-            </Button>
-          </Link>
-        )}
-      </div>
-
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet" />
-
-      {/* Edit Profile Modal */}
-      {profile && (
-        <EditProfileModal
-          isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
-          profile={profile}
-          onSave={handleSaveProfile}
-          isSaving={isUpdating}
+    <ProfileShell>
+      {/* Hero banner with avatar */}
+      <header className="relative overflow-hidden rounded-3xl shadow-2xl bg-white dark:bg-gray-950">
+        <div
+          className="h-40 md:h-52"
+          style={{
+            background: profile.banner
+              ? `url(${profile.banner}) center/cover`
+              : 'linear-gradient(135deg, #2563eb, #7c3aed)',
+          }}
         />
+        <div className="px-6 pb-6">
+          <div className="relative -mt-14 mb-4 flex items-end justify-between">
+            <div className="relative">
+              <Avatar className="h-28 w-28 border-4 border-white dark:border-gray-950 shadow-lg">
+                {profile.avatar ? <AvatarImage src={profile.avatar} alt="" /> : null}
+                <AvatarFallback className="text-2xl bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                  {getInitials(profile.name)}
+                </AvatarFallback>
+              </Avatar>
+              <span className="absolute bottom-2 right-2">
+                <OnlineIndicator isOnline={profile.isOnline} size="lg" />
+              </span>
+            </div>
+            {isCurrentUser && (
+              <Button variant="outline" size="sm" onClick={() => setIsEditModalOpen(true)}>
+                <Pencil className="w-4 h-4 mr-2" />
+                {t('v2me.editProfile')}
+              </Button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground">{profile.name}</h1>
+            {profile.isPro && <Badge>Pro</Badge>}
+          </div>
+          <p className="text-muted-foreground">{profile.username}</p>
+          {profile.bio && <p className="mt-2 text-foreground">{profile.bio}</p>}
+          {!profile.isOnline && profile.lastSeen && (
+            <p className="text-sm mt-2 text-muted-foreground">{profile.lastSeen}</p>
+          )}
+        </div>
+      </header>
+
+      {/* Stats */}
+      {stats && (
+        <section aria-label="Statistiques" className="grid grid-cols-3 gap-4">
+          <Card className="border-2">
+            <CardContent className="p-4 text-center">
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{formatNumber(stats.conversationsCount)}</p>
+              <p className="text-sm text-muted-foreground">Conversations</p>
+            </CardContent>
+          </Card>
+          <Card className="border-2">
+            <CardContent className="p-4 text-center">
+              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatNumber(stats.messagesCount)}</p>
+              <p className="text-sm text-muted-foreground">Messages</p>
+            </CardContent>
+          </Card>
+          <Card className="border-2">
+            <CardContent className="p-4 text-center">
+              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{formatNumber(stats.contactsCount)}</p>
+              <p className="text-sm text-muted-foreground">Contacts</p>
+            </CardContent>
+          </Card>
+        </section>
       )}
 
-      {/* Logout Confirmation Modal */}
+      {/* Languages */}
+      {profile.languages.length > 0 && (
+        <section aria-label={isCurrentUser ? 'Mes langues' : 'Langues'}>
+          <Card className="border-2">
+            <CardContent className="p-4">
+              <h2 className="font-semibold mb-3 text-foreground">{isCurrentUser ? 'Mes langues' : 'Langues'}</h2>
+              <div className="flex flex-wrap gap-3">
+                {profile.languages.map((lang) => (
+                  <div key={lang.code} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-900">
+                    <LanguageOrb code={lang.code} size="sm" pulse={false} className="w-6 h-6 text-sm" />
+                    <span className="text-sm font-medium text-foreground">{lang.name}</span>
+                    <Badge variant={lang.level === 'native' ? 'default' : 'secondary'}>
+                      {lang.level === 'native' ? 'Natif' : lang.level === 'fluent' ? 'Courant' : 'Apprentissage'}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
+      {/* Owner actions */}
+      {isCurrentUser ? (
+        <section aria-label="Raccourcis" className="space-y-3">
+          <QuickLink href="/links" icon={Link2} label="Mes liens de partage" tint="bg-blue-500/15 text-blue-600 dark:text-blue-400" />
+          <QuickLink href="/contacts" icon={Users} label="Mes contacts" tint="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" />
+          <QuickLink href="/notifications" icon={Bell} label="Notifications" tint="bg-indigo-500/15 text-indigo-600 dark:text-indigo-400" />
+          <QuickLink href="/settings" icon={Settings} label={t('title') || 'Paramètres'} tint="bg-gray-500/15 text-gray-600 dark:text-gray-400" />
+          <Button
+            variant="outline"
+            className="w-full text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+            onClick={() => setIsLogoutModalOpen(true)}
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Se déconnecter
+          </Button>
+        </section>
+      ) : (
+        <Link href={`/conversations?user=${profile.id}`} className="block">
+          <Button className="w-full">
+            <MessageSquare className="w-4 h-4 mr-2" />
+            Envoyer un message
+          </Button>
+        </Link>
+      )}
+
+      {/* Modals */}
+      <EditProfileModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        profile={profile}
+        onSave={handleSaveProfile}
+        isSaving={isUpdating}
+      />
       <LogoutConfirmModal
         isOpen={isLogoutModalOpen}
         onClose={() => setIsLogoutModalOpen(false)}
         onConfirm={handleLogout}
         isLoggingOut={isLoggingOut}
       />
-    </div>
+    </ProfileShell>
   );
 }

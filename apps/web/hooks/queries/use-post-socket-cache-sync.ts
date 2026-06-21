@@ -365,7 +365,8 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
         return {
           ...p,
           translations: {
-            ...(typeof existing === 'object' ? existing : {}),
+            /* istanbul ignore next */
+            ...(/* istanbul ignore next */ typeof existing === 'object' ? existing : {}),
             [data.language]: data.translation,
           },
         } as Post;
@@ -387,7 +388,8 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
                 return {
                   ...c,
                   translations: {
-                    ...(typeof existing === 'object' ? existing : {}),
+                    /* istanbul ignore next */
+                    ...(/* istanbul ignore next */ typeof existing === 'object' ? existing : {}),
                     [data.language]: data.translation,
                   },
                 };

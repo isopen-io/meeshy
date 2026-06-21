@@ -93,17 +93,20 @@ struct ThemedFeedOverlay: View {
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
+    /// Présentation unifiée du story viewer (`.fullScreenCover(item:)` au root).
+    /// Remplace l'ancien cover local `(isPresented:)` + `selectedStoryUserId`
+    /// séparé, dont la capture périmée d'uid provoquait l'écran noir « introuvable ».
+    @EnvironmentObject var storyViewerCoordinator: StoryViewerCoordinator
     @State private var composerText = ""
     @FocusState private var isComposerFocused: Bool
-    @State private var showStoryViewer = false
-    @State private var selectedStoryUserId: String?
-    /// `true` quand le viewer est ouvert depuis l'avatar d'un auteur de post
-    /// (contexte « personne précise ») ; `false` depuis le tray (flux).
-    @State private var storyViewerSingleGroup = false
     @State private var showStatusComposer = false
     @State private var showFullComposer = false
     @State private var pendingAttachmentType: String?
     @State private var quoteOriginalPost: FeedPost?
+    /// Negative scroll offset of the feed (0 at rest, more negative scrolling
+    /// up) — drives the collapsing header and the reveal of the compact story
+    /// trail integrated in the header's accessory slot. Mirrors `FeedView`.
+    @State private var headerScrollOffset: CGFloat = 0
 
     // Post reaction state — socket-driven, mirrors FeedView pattern.
     @State private var postLikedIds: Set<String> = []
@@ -344,7 +347,7 @@ struct ThemedFeedOverlay: View {
     private var feedHeader: some View {
         CollapsibleHeader(
             title: "Meeshy Feed",
-            scrollOffset: 0,
+            scrollOffset: headerScrollOffset,
             showBackButton: false,
             titleColor: theme.textPrimary,
             backArrowColor: MeeshyColors.indigo500,
@@ -368,6 +371,18 @@ struct ThemedFeedOverlay: View {
                         .adaptiveGlass(in: Circle(), interactive: true)
                 }
                 .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
+            },
+            // Compact story trail integrated inside the header (accessory slot,
+            // below the title/actions bar) — reveals as the full Story Tray
+            // scrolls up under the header. Mirrors `FeedView` and the chats list.
+            accessory: {
+                AnyView(
+                    // Lancement unifié via StoryViewerCoordinator (chemin unique trail).
+                    PinnedStoryTrailBand(
+                        viewModel: storyViewModel,
+                        scrollOffset: headerScrollOffset
+                    )
+                )
             }
         )
     }
@@ -494,9 +509,10 @@ struct ThemedFeedOverlay: View {
             },
             authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),
             onViewAuthorStory: {
-                selectedStoryUserId = post.authorId
-                storyViewerSingleGroup = true
-                showStoryViewer = true
+                // Contexte « personne précise » → singleGroup, via le coordinator unique.
+                storyViewerCoordinator.present(
+                    StoryViewerRequest(id: post.authorId, startAtFirstUnviewed: true, singleGroup: true)
+                )
             }
         )
     }
@@ -529,16 +545,26 @@ struct ThemedFeedOverlay: View {
             // centré (iOS 16-compatible). Identique à `FeedView.feedScrollView`.
             GeometryReader { viewportProxy in
                 let viewportFrame = viewportProxy.frame(in: .global)
-                ScrollView(showsIndicators: false) {
+                // Branded pull-to-refresh + scroll-offset tracking (drives the
+                // collapsing header and the compact story-trail reveal). The
+                // `topPadding` reserves the header height so the full Story Tray
+                // glides up under the header on scroll. Mirrors `FeedView`.
+                MeeshyRefreshableScroll(
+                    onRefresh: {
+                        await viewModel.refresh()
+                        await storyViewModel.loadStories()
+                        await statusViewModel.loadStatuses()
+                    },
+                    coordinateSpaceName: "feedScroll",
+                    onScrollOffsetChange: { offset in
+                        headerScrollOffset = offset
+                    },
+                    topPadding: CollapsibleHeaderMetrics.expandedHeight
+                ) {
                 LazyVStack(spacing: 14) {
-                    Spacer().frame(height: 70)
-
-                    // Story Tray
-                    StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
-                        selectedStoryUserId = userId
-                        storyViewerSingleGroup = false
-                        showStoryViewer = true
-                    }, onAddStatus: {
+                    // Story Tray — lancement unifié via StoryViewerCoordinator
+                    // (même chemin que la liste de conversations), pas de cover local.
+                    StoryTrayView(viewModel: storyViewModel, onAddStatus: {
                         showStatusComposer = true
                     })
 
@@ -605,11 +631,6 @@ struct ThemedFeedOverlay: View {
                 }
                 .padding(.bottom, 100)
                 }
-                .refreshable {
-                    await viewModel.refresh()
-                    await storyViewModel.loadStories()
-                    await statusViewModel.loadStatuses()
-                }
                 .onPreferenceChange(ReelVisibilityPreferenceKey.self) { frames in
                     reelAutoplay.update(
                         frames: frames,
@@ -620,8 +641,10 @@ struct ThemedFeedOverlay: View {
             }
         }
         .overlay(alignment: .top) {
-            // Header « Meeshy Feed » épinglé (le ScrollView réserve déjà ~70pt en
-            // tête via le Spacer initial pour qu'il glisse dessous au scroll).
+            // Header « Meeshy Feed » épinglé : le `MeeshyRefreshableScroll`
+            // réserve `CollapsibleHeaderMetrics.expandedHeight` en tête (topPadding)
+            // pour que le contenu glisse dessous au scroll et que la trail compacte
+            // se révèle dans le slot accessory.
             feedHeader
         }
         .task {
@@ -707,23 +730,9 @@ struct ThemedFeedOverlay: View {
                 onDismiss: { editingPost = nil }
             )
         }
-        .fullScreenCover(isPresented: $showStoryViewer) {
-            StoryViewerContainer(
-                viewModel: storyViewModel,
-                userId: selectedStoryUserId,
-                isPresented: $showStoryViewer,
-                onReplyToStory: { replyContext in
-                    showStoryViewer = false
-                    router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
-                },
-                singleGroup: storyViewerSingleGroup,
-                startAtFirstUnviewed: true,
-                presentationSource: "FeedOverlay"
-            )
-            .environmentObject(router)
-            .environmentObject(statusViewModel)
-            .environmentObject(conversationListViewModel)
-        }
+        // Story viewer : présentation unifiée via StoryViewerCoordinator au root
+        // (`.fullScreenCover(item:)`). L'ancien cover local `(isPresented:)` +
+        // `selectedStoryUserId` séparé est supprimé (capture périmée d'uid → écran noir).
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)
                 .presentationDetents([.medium])

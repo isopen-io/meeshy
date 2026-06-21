@@ -15,7 +15,13 @@ private struct StoryPreviewAssets: Identifiable {
 
 struct StoryTrayView: View {
     @ObservedObject var viewModel: StoryViewModel
-    var onViewStory: (String) -> Void
+    /// Optionnel : surcharge de présentation. `nil` (défaut) → chemin canonique
+    /// unique via `StoryViewerCoordinator` (`.fullScreenCover(item:)` au niveau
+    /// root). Avant, chaque hôte (feeds iPad/iPhone) câblait son propre
+    /// `.fullScreenCover(isPresented:)` + variable `selectedStoryUserId` séparée :
+    /// SwiftUI évaluait le cover avec l'uid encore `nil` (capture périmée) → écran
+    /// noir « story introuvable ». Le coordinator capture la requête atomiquement.
+    var onViewStory: ((String) -> Void)? = nil
     var onAddStatus: (() -> Void)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -56,7 +62,11 @@ struct StoryTrayView: View {
                 user: user,
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
                 onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
-                postsContent: { uid in AnyView(ProfileUserPostsList(userId: uid)) }
+                postsContent: { uid in AnyView(ProfileUserPostsList(
+                    userId: uid,
+                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
+                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
+                )) }
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -181,9 +191,23 @@ struct StoryTrayView: View {
     private func storyRingCell(for group: StoryGroup) -> some View {
         StoryRingCell(
             group: group,
-            onViewStory: { onViewStory(group.id) },
+            onViewStory: { presentStory(userId: group.id) },
             onShowProfile: { selectedProfileUser = .from(storyGroup: group) }
         )
+    }
+
+    /// Chemin de présentation unique pour toute la trail (feeds + chats). Si un
+    /// hôte fournit `onViewStory`, on le respecte ; sinon on passe par le
+    /// coordinator — `.fullScreenCover(item:)` au root capture la requête sans
+    /// race d'uid, éliminant l'écran noir « story introuvable » du chemin feeds.
+    private func presentStory(userId: String) {
+        if let onViewStory {
+            onViewStory(userId)
+        } else {
+            storyViewerCoordinator.present(
+                StoryViewerRequest(id: userId, startAtFirstUnviewed: true)
+            )
+        }
     }
 
 }
@@ -530,10 +554,13 @@ struct PinnedStoryTrailBand: View {
     /// Same negative scroll offset the `CollapsibleHeader` consumes (0 at rest,
     /// more negative as the content scrolls up).
     let scrollOffset: CGFloat
-    var onViewStory: (String) -> Void
+    /// Optionnel : surcharge de présentation. `nil` (défaut) → coordinator (cf.
+    /// `StoryTrayView.onViewStory`), unifiant la mini-trail avec la grande trail.
+    var onViewStory: ((String) -> Void)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
+    @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @State private var selectedProfileUser: ProfileSheetUser?
 
     // Layout-derived: the full trail (120pt + 8 top pad) sits under the 64pt
@@ -572,7 +599,11 @@ struct PinnedStoryTrailBand: View {
                         user: user,
                         moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
                         onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
-                        postsContent: { uid in AnyView(ProfileUserPostsList(userId: uid)) }
+                        postsContent: { uid in AnyView(ProfileUserPostsList(
+                    userId: uid,
+                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
+                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
+                )) }
                     )
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
@@ -588,7 +619,7 @@ struct PinnedStoryTrailBand: View {
                     StoryRingCell(
                         group: group,
                         context: .storyTrayCompact,
-                        onViewStory: { onViewStory(group.id) },
+                        onViewStory: { presentStory(userId: group.id) },
                         onShowProfile: { selectedProfileUser = .from(storyGroup: group) }
                     )
                 }
@@ -600,6 +631,18 @@ struct PinnedStoryTrailBand: View {
         // No own background — this view is injected as the `CollapsibleHeader`
         // accessory slot, so the header surface masks the content underneath.
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Même chemin de présentation que `StoryTrayView.presentStory` — unifie la
+    /// mini-trail épinglée avec la grande trail via le coordinator par défaut.
+    private func presentStory(userId: String) {
+        if let onViewStory {
+            onViewStory(userId)
+        } else {
+            storyViewerCoordinator.present(
+                StoryViewerRequest(id: userId, startAtFirstUnviewed: true)
+            )
+        }
     }
 
     private var addStoryButton: some View {

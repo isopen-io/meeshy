@@ -174,6 +174,7 @@ extension UserProfileSheet {
 
     @ViewBuilder
     var pinnedTabBar: some View {
+        let progress = ProfileHeaderMetrics.progress(offset: scrollOffset)
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 ForEach(ProfileTab.allCases, id: \.self) { tab in
@@ -186,7 +187,35 @@ extension UserProfileSheet {
             Divider()
                 .opacity(0.3)
         }
+        // When the big header has scrolled away (progress → 1) the compact
+        // identity bar (banner + avatar réduits) pins at the very top; the tabs
+        // slide down by its height so they sit JUST BELOW it instead of being
+        // covered by the overlay. No gap while expanded (progress 0).
+        .padding(.top, ProfileHeaderMetrics.collapsedBar * progress)
         .background(theme.backgroundPrimary)
+    }
+
+    // MARK: - Close button (Liquid Glass, top-leading)
+
+    /// Floating close affordance using the adaptive Liquid Glass helper
+    /// (`glassEffect` on iOS 26+, `.ultraThinMaterial` fallback below). Sits over
+    /// the reduced banner so the sheet is always dismissible even mid-scroll.
+    var closeButton: some View {
+        Button {
+            HapticFeedback.light()
+            onDismiss?()
+            dismiss()
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(theme.textPrimary)
+                .frame(width: 36, height: 36)
+                .adaptiveGlass(in: Circle())
+        }
+        .padding(.leading, 16)
+        .padding(.top, 14)
+        .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .module))
+        .accessibilityHint(String(localized: "profile.close.hint", defaultValue: "Ferme le profil", bundle: .module))
     }
 
     private func tabButton(_ tab: ProfileTab) -> some View {
@@ -247,7 +276,10 @@ extension UserProfileSheet {
 
             Spacer()
         }
-        .padding(.horizontal, 16)
+        // Leading inset clears the top-left close button (36pt @ leading 16) so
+        // the compact avatar/name never sit underneath it when collapsed.
+        .padding(.leading, 56)
+        .padding(.trailing, 16)
         .padding(.vertical, 8)
         .frame(height: ProfileHeaderMetrics.collapsedBar)
         .background(theme.backgroundPrimary)

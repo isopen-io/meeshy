@@ -205,6 +205,10 @@ public struct UserProfileSheet: View {
                 // and reads name/@username; avoids a duplicate identity element.
                 .accessibilityHidden(ProfileHeaderMetrics.progress(offset: scrollOffset) <= 0.5)
         }
+        // Always-on close affordance over the (reduced) banner, top-leading.
+        .overlay(alignment: .topLeading) {
+            closeButton
+        }
         .task {
             await loadDataIfNeeded()
             await loadConversationsIfNeeded()

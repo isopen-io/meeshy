@@ -626,6 +626,8 @@ struct PostDetailView: View {
                     AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
                         selectedProfileUser = nil
                         router.push(.postDetail(post.id, post))
+                    }, onOpenReel: { reel, reels in
+                        ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil }
                     }))
                 }
             )

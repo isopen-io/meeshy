@@ -727,7 +727,11 @@ struct StoryHeaderView: View {
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
-                postsContent: { uid in AnyView(ProfileUserPostsList(userId: uid)) }
+                postsContent: { uid in AnyView(ProfileUserPostsList(
+                    userId: uid,
+                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
+                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
+                )) }
             )
             .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
