@@ -525,4 +525,21 @@ function patchPostInAllCaches(
     }
     return old;
   });
+
+  // Reels affinity threads (`/feed/reels`, `/reel/:id`) live under a separate
+  // key family the two patchers above never reach; mirror the patch there so
+  // like / comment / bookmark counts stay live on the reel surfaces too.
+  queryClient.setQueriesData<{ pages?: Array<{ data?: Post[] }> }>(
+    { queryKey: [...queryKeys.posts.lists(), 'reels'] },
+    (old) => {
+      if (!old?.pages) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          data: (page.data ?? []).map((p) => (p.id === postId ? patcher(p) : p)),
+        })),
+      };
+    },
+  );
 }

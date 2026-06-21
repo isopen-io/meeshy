@@ -102,6 +102,8 @@ export const queryKeys = {
       [...queryKeys.posts.lists(), 'feed', filters] as const,
     infinite: (type?: string) =>
       [...queryKeys.posts.lists(), 'infinite', type] as const,
+    reelsFeed: (seed?: string) =>
+      [...queryKeys.posts.lists(), 'reels', seed ?? 'foryou'] as const,
     details: () => [...queryKeys.posts.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.posts.details(), id] as const,
     comments: (postId: string) =>

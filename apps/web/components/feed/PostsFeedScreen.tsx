@@ -2,7 +2,9 @@
 
 import { useCallback, useRef, useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, useToast, PageHeader, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer, StatusComposer } from '@/components/v2';
+import Link from 'next/link';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { Button, useToast, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer, StatusComposer } from '@/components/v2';
 import type { StatusItem, StoryVisibility } from '@/components/v2';
 import { PostComposer } from '@/components/v2/PostComposer';
 import { PostEditor } from '@/components/v2/PostEditor';
@@ -72,6 +74,40 @@ const mockStatuses: StatusItem[] = [
     expiresAt: new Date(Date.now() + 1800000).toISOString(), isOwn: false,
   },
 ];
+
+// ─── Feed tabs ───────────────────────────────────────────────────────────────
+
+/**
+ * Posts ⇆ Reels segmented switcher, rendered at the top of the posts feed so
+ * the two `/feed/*` surfaces are mutually discoverable. Uses real links for
+ * SEO / middle-click / a11y rather than client-only navigation.
+ */
+export function FeedTabs({ active }: { active: 'posts' | 'reels' }) {
+  const base =
+    'flex-1 text-center text-sm font-medium rounded-full px-4 py-2 transition-colors';
+  const on = 'bg-[var(--gp-terracotta)] text-white';
+  const off = 'text-[var(--gp-text-muted)] hover:text-[var(--gp-text-primary)]';
+  return (
+    <nav aria-label="Type de fil" className="mb-6">
+      <div className="flex gap-1 rounded-full bg-[var(--gp-surface)] border border-[var(--gp-border)] p-1">
+        <Link
+          href="/feed/posts"
+          aria-current={active === 'posts' ? 'page' : undefined}
+          className={`${base} ${active === 'posts' ? on : off}`}
+        >
+          Publications
+        </Link>
+        <Link
+          href="/feed/reels"
+          aria-current={active === 'reels' ? 'page' : undefined}
+          className={`${base} ${active === 'reels' ? on : off}`}
+        >
+          Reels
+        </Link>
+      </div>
+    </nav>
+  );
+}
 
 // ─── Screen ────────────────────────────────────────────────────────────────
 
@@ -454,16 +490,10 @@ export function PostsFeedScreen() {
   // ─── Render ──────────────────────────────────────────────────────────
 
   return (
-    <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors duration-300">
-      <PageHeader
-        title="Découvrir Meeshy"
-        hideNotificationButton
-        hideProfileButton
-        onBack={() => router.back()}
-      />
-
-      <main className="max-w-2xl mx-auto px-6 py-8" aria-label="Fil d'actualité">
+    <DashboardLayout title="Feed" className="!max-w-none !px-0">
+      <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 py-6">
         <h1 className="sr-only">Fil d&apos;actualité — posts, reels et stories</h1>
+        <FeedTabs active="posts" />
 
         {/* Story Tray */}
         <section aria-label="Stories publiques">
@@ -626,7 +656,7 @@ export function PostsFeedScreen() {
             </div>
           </section>
         )}
-      </main>
+      </div>
 
       {/* Story Viewer */}
       {storyViewerOpen && storyDataList.length > 0 && (
@@ -690,7 +720,7 @@ export function PostsFeedScreen() {
           saving={repostMutation.isPending}
         />
       )}
-    </div>
+    </DashboardLayout>
   );
 }
 

@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useToast } from '@/components/v2';
 import { ReelPlayer } from '@/components/feed/ReelPlayer';
 import { usePostQuery } from '@/hooks/queries/use-post-query';
-import { useFeedQuery, useFeedPosts } from '@/hooks/queries/use-feed-query';
+import { useReelsFeedQuery, useReelsFeedPosts } from '@/hooks/queries/use-reels-feed-query';
 import {
   useLikePostMutation,
   useUnlikePostMutation,
@@ -27,9 +27,10 @@ function isReelLiked(post: Post): boolean {
  * Immersive reel thread (`/reel/:id`).
  *
  * Resolves the seed reel by id (guaranteed even for deep links) and threads the
- * other reels currently in the feed behind it. Arrow keys / wheel / on-screen
- * chevrons advance through the thread; reaching the tail pulls the next feed
- * page. The dedicated affinity thread (`/feed/reels`) lands in a later phase.
+ * affinity-ranked reels behind it (`/posts/feed/reels?seed=:id`). The gateway
+ * excludes the seed from its results, so we prepend it here. Arrow keys / wheel
+ * / on-screen chevrons advance through the thread; reaching the tail pulls the
+ * next affinity page.
  */
 export default function ReelPage() {
   const router = useRouter();
@@ -41,8 +42,8 @@ export default function ReelPage() {
   usePostSocketCacheSync();
 
   const { data: seed, isLoading, isError } = usePostQuery(postId);
-  const feedQuery = useFeedQuery();
-  const feedPosts = useFeedPosts(feedQuery);
+  const reelsQuery = useReelsFeedQuery({ seed: postId, enabled: !!postId });
+  const affinityReels = useReelsFeedPosts(reelsQuery);
 
   const likeMutation = useLikePostMutation();
   const unlikeMutation = useUnlikePostMutation();
@@ -50,24 +51,34 @@ export default function ReelPage() {
   const unbookmarkMutation = useUnbookmarkPostMutation();
   const shareMutation = useSharePostMutation();
 
-  // Thread = seed reel first, then the other reels currently in the feed.
+  // Only a REEL seeds the immersive player; any other post type (stale/scraped
+  // link) is treated as unavailable rather than forced into reel chrome.
+  const seedIsReel = seed?.type === 'REEL';
+
+  // Thread = seed reel first (excluded by the gateway), then the affinity reels.
   const thread = useMemo(() => {
-    if (!seed) return [] as Post[];
-    const others = feedPosts.filter((p) => p.type === 'REEL' && p.id !== seed.id);
+    if (!seed || !seedIsReel) return [] as Post[];
+    const others = affinityReels.filter((p) => p.id !== seed.id);
     return [seed, ...others];
-  }, [seed, feedPosts]);
+  }, [seed, seedIsReel, affinityReels]);
 
   const [index, setIndex] = useState(0);
+
+  // Reset to the seed when the route changes — Next.js reuses this mounted
+  // component when navigating between two /reel/:id deep links.
+  useEffect(() => {
+    setIndex(0);
+  }, [postId]);
 
   // Clamp index if the thread shrinks (e.g. cache eviction).
   useEffect(() => {
     if (index > thread.length - 1 && thread.length > 0) setIndex(thread.length - 1);
   }, [thread.length, index]);
 
-  // Pull more feed pages as we approach the tail of the thread.
-  const { hasNextPage, isFetchingNextPage, fetchNextPage } = feedQuery;
+  // Pull more affinity pages as we reach i = N - 3 in the thread.
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = reelsQuery;
   useEffect(() => {
-    if (index >= thread.length - 2 && hasNextPage && !isFetchingNextPage) {
+    if (thread.length > 0 && index >= thread.length - 3 && hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
     }
   }, [index, thread.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
@@ -138,9 +149,15 @@ export default function ReelPage() {
         </>
       ) : (
         <>
-          <h1 className="text-lg font-semibold">{isError ? 'Reel indisponible' : 'Ce reel n’existe plus'}</h1>
+          <h1 className="text-lg font-semibold">
+            {isError ? 'Reel indisponible' : seed && !seedIsReel ? 'Ce contenu n’est pas un reel' : 'Ce reel n’existe plus'}
+          </h1>
           <p className="max-w-sm text-center text-sm text-white/70">
-            {isError ? 'Ce reel est privé ou a été supprimé.' : 'Le reel que vous cherchez est introuvable.'}
+            {isError
+              ? 'Ce reel est privé ou a été supprimé.'
+              : seed && !seedIsReel
+                ? 'Le lien pointe vers une publication, pas vers un reel.'
+                : 'Le reel que vous cherchez est introuvable.'}
           </p>
           <button
             onClick={close}
