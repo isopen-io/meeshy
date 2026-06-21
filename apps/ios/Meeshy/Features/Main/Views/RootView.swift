@@ -701,14 +701,7 @@ struct RootView: View {
                         router.deepLinkProfileUser = nil
                         router.push(.postDetail(post.id, post))
                     }, onOpenReel: { reel, reels in
-                        // Dismiss the profile sheet first, then present the
-                        // root-level immersive reels overlay (it lives behind the
-                        // sheet, so it must come up after the sheet is gone).
-                        router.deepLinkProfileUser = nil
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                            HapticFeedback.medium()
-                            ReelsPresenter.shared.present(posts: reels, startId: reel.id)
-                        }
+                        ProfilePostsOpener.openReel(reel, in: reels) { router.deepLinkProfileUser = nil }
                     }))
                 }
             )

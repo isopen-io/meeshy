@@ -421,11 +421,7 @@ struct FeedPostCard: View {
                         selectedProfileUser = nil
                         onTapPost?(tapped)
                     }, onOpenReel: { reel, reels in
-                        selectedProfileUser = nil
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                            HapticFeedback.medium()
-                            ReelsPresenter.shared.present(posts: reels, startId: reel.id)
-                        }
+                        ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil }
                     }))
                 }
             )

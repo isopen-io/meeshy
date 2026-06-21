@@ -166,6 +166,11 @@ struct ProfileUserPostsList: View {
             onSendComment: { postId, content, parentId in
                 Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
             },
+            onSelectLanguage: { postId, language in
+                // Tap on a flag whose translation isn't loaded yet → request it.
+                // The result arrives via the social socket and patches the card.
+                Task { await viewModel.requestTranslation(postId: postId, language: language) }
+            },
             onTapPost: { tapped in openPost(tapped) },
             onTapRepost: { _ in openPost(post) },
             onReport: { id in
@@ -233,6 +238,33 @@ struct ProfileUserPostsList: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
+    }
+}
+
+// MARK: - Profile posts opener (shared host-side navigation)
+//
+// Centralizes how a host (any sheet presenting `ProfileUserPostsList`) opens a
+// tapped post or reel: dismiss the profile sheet first, then navigate at the
+// root. Reels present the immersive overlay — which lives behind the sheet, so
+// it must come up AFTER the dismiss settles (hence the small delay). Posts push
+// the detail route via RootView's existing `pushNavigateToRoute` listener, so
+// hosts without a `Router` in scope (audio fullscreen, comments sheet) work too.
+@MainActor
+enum ProfilePostsOpener {
+    static func openReel(_ reel: FeedPost, in reels: [FeedPost], dismiss: @escaping () -> Void) {
+        dismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            HapticFeedback.medium()
+            ReelsPresenter.shared.present(posts: reels, startId: reel.id)
+        }
+    }
+
+    static func openPost(_ post: FeedPost, dismiss: @escaping () -> Void) {
+        dismiss()
+        NotificationCenter.default.post(
+            name: Notification.Name("pushNavigateToRoute"),
+            object: "postDetail:\(post.id)"
+        )
     }
 }
 
@@ -319,6 +351,8 @@ final class ProfileUserPostsViewModel: ObservableObject {
     private var recordedImpressionIds: Set<String> = []
     private var impressionTask: Task<Void, Never>?
 
+    private var cancellables = Set<AnyCancellable>()
+
     init(
         userId: String,
         postService: PostServiceProviding = PostService.shared,
@@ -328,6 +362,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
         self.cacheKey = "user:\(userId)"
         self.postService = postService
         self.languageProvider = languageProvider
+        subscribeToTranslationUpdates()
     }
 
     private var preferredLanguages: [String] { languageProvider.preferredLanguages }
@@ -513,6 +548,45 @@ final class ProfileUserPostsViewModel: ObservableObject {
     func report(_ postId: String) async {
         try? await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
         FeedbackToastManager.shared.showSuccess(String(localized: "profile.posts.report.success", defaultValue: "Signalement envoyé", bundle: .main))
+    }
+
+    // MARK: - On-demand translation (mirrors FeedViewModel)
+
+    /// Requests a translation for `postId` into `language`. The computed
+    /// translation is delivered asynchronously via the social socket and patched
+    /// into `posts` by `subscribeToTranslationUpdates` (so the flag lights up).
+    func requestTranslation(postId: String, language: String) async {
+        do {
+            try await postService.requestTranslation(postId: postId, targetLanguage: language)
+        } catch {
+            // On failure the flag simply stays "untranslated" — no toast (the
+            // tap is exploratory, not a committed user action).
+        }
+    }
+
+    private func subscribeToTranslationUpdates() {
+        // Idempotent — ensures the social socket is up so `post:translation-updated`
+        // actually arrives when the profile sheet is opened outside the feed.
+        SocialSocketManager.shared.connect()
+        SocialSocketManager.shared.postTranslationUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] (data: SocketPostTranslationUpdatedData) in
+                guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
+                var post = self.posts[index]
+                var translations = post.translations ?? [:]
+                translations[data.language] = PostTranslation(
+                    text: data.translation.text,
+                    translationModel: data.translation.translationModel,
+                    confidenceScore: data.translation.confidenceScore
+                )
+                post.translations = translations
+                if self.preferredLanguages.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }),
+                   post.translatedContent == nil {
+                    post.translatedContent = data.translation.text
+                }
+                self.posts[index] = post
+            }
+            .store(in: &cancellables)
     }
 
     /// Optimistic share-count bump — the gateway always increments shareCount on
