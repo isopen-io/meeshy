@@ -23,7 +23,8 @@ public sealed interface CoalesceDecision {
  * - send + delete of the same unsent message cancels both;
  * - a repeated edit / read-receipt merges, keeping the latest;
  * - a delete supersedes pending edits of the same message;
- * - a reaction toggle (add then remove, or remove then add) cancels itself.
+ * - a reaction toggle (add then remove, or remove then add) cancels itself;
+ * - a repeated conversation-preference toggle (per-field target) keeps the latest.
  *
  * [pending] MUST contain only still-cancellable rows ([OutboxState.PENDING]);
  * an in-flight mutation cannot be undone.
@@ -36,6 +37,8 @@ public object OutboxCoalescer {
             OutboxKind.DELETE_MESSAGE -> onDelete(incoming, sameTarget)
             OutboxKind.EDIT_MESSAGE -> replaceSameKind(incoming, sameTarget, OutboxKind.EDIT_MESSAGE)
             OutboxKind.READ_RECEIPT -> replaceSameKind(incoming, sameTarget, OutboxKind.READ_RECEIPT)
+            OutboxKind.UPDATE_CONVERSATION_PREFS ->
+                replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_CONVERSATION_PREFS)
             OutboxKind.ADD_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.REMOVE_REACTION)
             OutboxKind.REMOVE_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.ADD_REACTION)
             else -> CoalesceDecision.Enqueue(incoming)

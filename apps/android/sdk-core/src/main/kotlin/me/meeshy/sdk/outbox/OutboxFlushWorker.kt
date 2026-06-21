@@ -13,6 +13,7 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.model.ConversationPreferencesUpdate
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddReactionRequest
@@ -129,6 +130,15 @@ class OutboxFlushWorker @AssistedInject constructor(
         },
         OutboxKind.READ_RECEIPT to MutationSender { row ->
             when (apiCall { conversationApi.markRead(row.targetId) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.UPDATE_CONVERSATION_PREFS to MutationSender { row ->
+            val body = runCatching { json.decodeFromString<ConversationPreferencesUpdate>(row.payload) }
+                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
+            val (conversationId, _) = conversationPrefTargetParts(row.targetId)
+            when (apiCall { conversationApi.updatePreferences(conversationId, body) }) {
                 is NetworkResult.Success -> SendResult.Success
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }

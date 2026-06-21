@@ -8,12 +8,16 @@ import kotlinx.coroutines.test.runTest
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.ConversationPreferencesUpdate
 import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.net.api.ConversationApi
+import me.meeshy.sdk.outbox.ConversationPrefField
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.conversationPrefTarget
 import me.meeshy.sdk.outbox.kindEnum
 import org.junit.After
 import org.junit.Before
@@ -29,6 +33,8 @@ private class FakeConversationApi(
     override suspend fun create(body: CreateConversationRequest) =
         ApiResponse<ApiConversation>(success = false)
     override suspend fun markRead(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun updatePreferences(id: String, body: ConversationPreferencesUpdate) =
+        ApiResponse(success = true, data = Unit)
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -97,6 +103,71 @@ class ConversationRepositoryTest {
         assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT)).isEmpty()
     }
 
+
+    @Test
+    fun `setPinnedOptimistic flips the cached flag and queues a prefs mutation`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(success = true, data = listOf(ApiConversation(id = "c1", title = "Team"))),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.setPinnedOptimistic("c1", true)
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.preferences?.isPinned).isTrue()
+        val row = OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.SETTINGS).single()
+        assertThat(row.targetId).isEqualTo(conversationPrefTarget("c1", ConversationPrefField.PINNED))
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.UPDATE_CONVERSATION_PREFS)
+    }
+
+    @Test
+    fun `setMutedOptimistic preserves the other preferences`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(
+                        ApiConversation(
+                            id = "c1",
+                            preferences = ApiConversationPreferences(isPinned = true),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        repo.setMutedOptimistic("c1", true)
+
+        val prefs = repo.conversationStream("c1").first()?.preferences
+        assertThat(prefs?.isMuted).isTrue()
+        assertThat(prefs?.isPinned).isTrue()
+    }
+
+    @Test
+    fun `setArchivedOptimistic is a no-op when already in the target state`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(
+                        ApiConversation(
+                            id = "c1",
+                            preferences = ApiConversationPreferences(isArchived = true),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.setArchivedOptimistic("c1", true)
+
+        assertThat(applied).isFalse()
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.SETTINGS)).isEmpty()
+    }
 
     @Test
     fun `stream first emission is Empty on a cold cache`() = runTest {

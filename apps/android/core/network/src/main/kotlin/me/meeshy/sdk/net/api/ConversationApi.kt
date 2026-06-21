@@ -2,11 +2,13 @@ package me.meeshy.sdk.net.api
 
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.ConversationPreferencesUpdate
 import me.meeshy.sdk.model.CreateConversationRequest
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.PATCH
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -25,4 +27,10 @@ interface ConversationApi {
 
     @PATCH("conversations/{id}/read")
     suspend fun markRead(@Path("id") id: String): ApiResponse<Unit>
+
+    @PUT("user-preferences/conversations/{id}")
+    suspend fun updatePreferences(
+        @Path("id") id: String,
+        @Body body: ConversationPreferencesUpdate,
+    ): ApiResponse<Unit>
 }

@@ -2,6 +2,7 @@ package me.meeshy.app.conversations
 
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -233,6 +234,38 @@ class ConversationListViewModelTest {
         vm.selectFilter(ConversationFilter.ARCHIVED)
         advanceUntilIdle()
         assertThat(vm.state.value.conversations.map { it.id }).containsExactly("old")
+    }
+
+    @Test
+    fun toggle_pin_optimistically_flips_to_the_opposite_state() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        val pinned = ApiConversation(
+            id = "c1",
+            preferences = ApiConversationPreferences(isPinned = true),
+        )
+        vm.togglePin(pinned)
+        advanceUntilIdle()
+
+        coVerify { repo.setPinnedOptimistic("c1", false) }
+    }
+
+    @Test
+    fun toggle_mute_and_archive_route_to_the_repository() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.toggleMute(ApiConversation(id = "c1"))
+        vm.toggleArchive(
+            ApiConversation(id = "c1", preferences = ApiConversationPreferences(isArchived = true)),
+        )
+        advanceUntilIdle()
+
+        coVerify { repo.setMutedOptimistic("c1", true) }
+        coVerify { repo.setArchivedOptimistic("c1", false) }
     }
 
     @Test

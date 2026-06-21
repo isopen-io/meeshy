@@ -117,6 +117,21 @@ class ConversationListViewModel @Inject constructor(
         }
     }
 
+    /** Swipe action: pin/unpin — optimistic, persisted, network-confirmed via outbox. */
+    fun togglePin(conversation: ApiConversation) {
+        viewModelScope.launch { repository.setPinnedOptimistic(conversation.id, !conversation.isPinned) }
+    }
+
+    /** Swipe action: mute/unmute — optimistic, persisted, network-confirmed via outbox. */
+    fun toggleMute(conversation: ApiConversation) {
+        viewModelScope.launch { repository.setMutedOptimistic(conversation.id, !conversation.isMuted) }
+    }
+
+    /** Swipe action: archive/unarchive — optimistic, persisted, network-confirmed via outbox. */
+    fun toggleArchive(conversation: ApiConversation) {
+        viewModelScope.launch { repository.setArchivedOptimistic(conversation.id, !conversation.isArchived) }
+    }
+
     /** Pull-to-refresh: the visible spinner tracks the user gesture only —
      * background SWR revalidations stay silent ([ConversationListUiState.isSyncing]). */
     fun refresh() {

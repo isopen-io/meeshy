@@ -88,4 +88,43 @@ class OutboxCoalescerTest {
 
         assertThat(decision).isEqualTo(CoalesceDecision.Enqueue(send))
     }
+
+    @Test
+    fun `repeated preference toggle on the same field keeps the latest`() {
+        val target = conversationPrefTarget("c1", ConversationPrefField.PINNED)
+        val first = row("p1", OutboxKind.UPDATE_CONVERSATION_PREFS, target)
+        val second = row("p2", OutboxKind.UPDATE_CONVERSATION_PREFS, target)
+
+        val decision = OutboxCoalescer.decide(second, listOf(first))
+
+        assertThat(decision).isEqualTo(CoalesceDecision.Replace(listOf("p1"), second))
+    }
+
+    @Test
+    fun `preference toggles on different fields stay independent`() {
+        val pin = row(
+            "p1",
+            OutboxKind.UPDATE_CONVERSATION_PREFS,
+            conversationPrefTarget("c1", ConversationPrefField.PINNED),
+        )
+        val mute = row(
+            "m1",
+            OutboxKind.UPDATE_CONVERSATION_PREFS,
+            conversationPrefTarget("c1", ConversationPrefField.MUTED),
+        )
+
+        val decision = OutboxCoalescer.decide(mute, listOf(pin))
+
+        assertThat(decision).isEqualTo(CoalesceDecision.Enqueue(mute))
+    }
+
+    @Test
+    fun `preference target round-trips through its parts`() {
+        val target = conversationPrefTarget("conv#42", ConversationPrefField.ARCHIVED)
+
+        val (conversationId, field) = conversationPrefTargetParts(target)
+
+        assertThat(conversationId).isEqualTo("conv#42")
+        assertThat(field).isEqualTo(ConversationPrefField.ARCHIVED)
+    }
 }

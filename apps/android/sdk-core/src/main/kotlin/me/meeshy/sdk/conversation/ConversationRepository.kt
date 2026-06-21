@@ -12,15 +12,19 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.model.ConversationPreferencesUpdate
+import me.meeshy.sdk.outbox.ConversationPrefField
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.conversationPrefTarget
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -105,6 +109,79 @@ class ConversationRepository @Inject constructor(
                 lane = OutboxLanes.READ_RECEIPT,
                 targetId = id,
                 payload = "{}",
+            ),
+        )
+        return true
+    }
+
+    /**
+     * Optimistic pin/unpin: the cached conversation's [ApiConversationPreferences.isPinned]
+     * flips instantly and an `UPDATE_CONVERSATION_PREFS` row joins the settings lane.
+     * No-op (returns false) when the conversation is unknown or already in [pinned].
+     */
+    suspend fun setPinnedOptimistic(id: String, pinned: Boolean): Boolean =
+        mutatePreferenceOptimistic(
+            id = id,
+            field = ConversationPrefField.PINNED,
+            current = { it.isPinned },
+            apply = { it.copy(isPinned = pinned) },
+            target = pinned,
+            body = ConversationPreferencesUpdate(isPinned = pinned),
+        )
+
+    /** Optimistic mute/unmute — see [setPinnedOptimistic]. */
+    suspend fun setMutedOptimistic(id: String, muted: Boolean): Boolean =
+        mutatePreferenceOptimistic(
+            id = id,
+            field = ConversationPrefField.MUTED,
+            current = { it.isMuted },
+            apply = { it.copy(isMuted = muted) },
+            target = muted,
+            body = ConversationPreferencesUpdate(isMuted = muted),
+        )
+
+    /** Optimistic archive/unarchive — see [setPinnedOptimistic]. */
+    suspend fun setArchivedOptimistic(id: String, archived: Boolean): Boolean =
+        mutatePreferenceOptimistic(
+            id = id,
+            field = ConversationPrefField.ARCHIVED,
+            current = { it.isArchived },
+            apply = { it.copy(isArchived = archived) },
+            target = archived,
+            body = ConversationPreferencesUpdate(isArchived = archived),
+        )
+
+    private suspend fun mutatePreferenceOptimistic(
+        id: String,
+        field: ConversationPrefField,
+        current: (ApiConversationPreferences) -> Boolean,
+        apply: (ApiConversationPreferences) -> ApiConversationPreferences,
+        target: Boolean,
+        body: ConversationPreferencesUpdate,
+    ): Boolean {
+        val updated = database.withTransaction {
+            val row = conversationDao.find(id) ?: return@withTransaction false
+            val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+            val prefs = conversation.preferences ?: ApiConversationPreferences()
+            if (current(prefs) == target) return@withTransaction false
+            conversationDao.upsertAll(
+                listOf(
+                    row.copy(
+                        payload = MeeshyApi.json.encodeToString(
+                            conversation.copy(preferences = apply(prefs)),
+                        ),
+                    ),
+                ),
+            )
+            true
+        }
+        if (!updated) return false
+        outboxRepository.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.UPDATE_CONVERSATION_PREFS,
+                lane = OutboxLanes.SETTINGS,
+                targetId = conversationPrefTarget(id, field),
+                payload = MeeshyApi.json.encodeToString(body),
             ),
         )
         return true

@@ -10,6 +10,7 @@ public enum class OutboxKind {
     ADD_REACTION,
     REMOVE_REACTION,
     READ_RECEIPT,
+    UPDATE_CONVERSATION_PREFS,
     UPDATE_PROFILE,
     UPDATE_SETTINGS,
 }
@@ -46,6 +47,35 @@ public object OutboxLanes {
 /** Payload of an `ADD_REACTION` / `REMOVE_REACTION` outbox row. */
 @kotlinx.serialization.Serializable
 public data class ReactionPayload(val emoji: String)
+
+/**
+ * A single per-user conversation preference toggle carried by an
+ * `UPDATE_CONVERSATION_PREFS` row. Each field is its own outbox target
+ * ([conversationPrefTarget]) so that a pin toggle and a mute toggle on the same
+ * conversation coalesce independently (last-write-wins per field) instead of
+ * one clobbering the other.
+ */
+public enum class ConversationPrefField {
+    PINNED,
+    MUTED,
+    ARCHIVED,
+}
+
+/**
+ * Outbox `targetId` for a conversation preference toggle — encodes both the
+ * conversation and the field so same-field repeats coalesce while distinct
+ * fields stay independent. Parsed back by [conversationPrefTargetParts].
+ */
+public fun conversationPrefTarget(conversationId: String, field: ConversationPrefField): String =
+    "$conversationId#${field.name}"
+
+/** Splits a [conversationPrefTarget] back into `(conversationId, field)`. */
+public fun conversationPrefTargetParts(target: String): Pair<String, ConversationPrefField> {
+    val separator = target.lastIndexOf('#')
+    val conversationId = target.substring(0, separator)
+    val field = ConversationPrefField.valueOf(target.substring(separator + 1))
+    return conversationId to field
+}
 
 /** Input to [OutboxRepository.enqueue] — a mutation to deliver. */
 public data class OutboxMutation(

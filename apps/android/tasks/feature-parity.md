@@ -196,9 +196,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       nom personnalisé / participants) ; barre de chips `LazyRow` + champ de
       recherche dans l'app bar ; 22 tests verts (11 modèle + 11 VM)
 - [ ] Communities carousel + category filter chips
-- [ ] Pinned / muted / locked / archived / favorited (emoji) states
-- [ ] Swipe actions (pin, mute, lock, archive, mark read/unread, block, hide)
-- [ ] Context menu (pin, mute, mark read, details, invite, favorite, move, lock, archive, block, delete)
+- [~] Pinned / muted states surfaced in the row (pin glyph + mute bell) ;
+      locked / favorited (emoji) pending
+- [~] Swipe actions — pin / mute / archive done : `ConversationSwipeActions`
+      (port pur de `leadingSwipeActions`/`trailingSwipeActions`) → `SwipeToDismissBox`
+      (leading=pin, trailing=archive, snap-back) + long-press `DropdownMenu`
+      (pin/mute/archive). Optimiste de bout en bout : `ConversationRepository.set{Pinned,Muted,Archived}Optimistic`
+      muent le payload caché + enfilent une mutation `UPDATE_CONVERSATION_PREFS`
+      (lane settings, cible par-champ `cid#FIELD` → coalescing last-write-wins
+      indépendant par champ) drainée vers `PUT user-preferences/conversations/:id`.
+      Teintes fidèles iOS (pin=indigo, mute=slate, archive=amber). 13 tests verts
+      (4 swipe + 2 VM + 3 coalescer/cible + 3 repo + round-trip). lock / mark
+      read-unread / block / hide pending (managers/endpoints séparés)
+- [ ] Context menu (details, invite, favorite, move, lock, block, delete)
 - [ ] Hard-press conversation preview popover
 - [~] Conversation row: rich last-message preview done (labels type média
       📷/🎬/🎵/📎/📍 port iOS, caption prioritaire, préfixe expéditeur en groupe,

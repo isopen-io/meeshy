@@ -28,4 +28,11 @@
     <string name="conversations_filter_channels">Canais</string>
     <string name="conversations_filter_favorites">Favoritos</string>
     <string name="conversations_filter_archived">Arquivadas</string>
+    <string name="swipe_pin">Fixar</string>
+    <string name="swipe_unpin">Desafixar</string>
+    <string name="swipe_mute">Silenciar</string>
+    <string name="swipe_unmute">Reativar</string>
+    <string name="swipe_archive">Arquivar</string>
+    <string name="swipe_unarchive">Desarquivar</string>
+    <string name="conversations_more_actions">Mais ações</string>
 </resources>
