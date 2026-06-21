@@ -402,7 +402,11 @@ struct CommentsSheetView: View {
                 user: user,
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
                 onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
-                postsContent: { uid in AnyView(ProfileUserPostsList(userId: uid)) }
+                postsContent: { uid in AnyView(ProfileUserPostsList(
+                    userId: uid,
+                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
+                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
+                )) }
             )
             .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
@@ -1053,7 +1057,11 @@ struct CommentRowView: View, Equatable {
                 user: user,
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
                 onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
-                postsContent: { uid in AnyView(ProfileUserPostsList(userId: uid)) }
+                postsContent: { uid in AnyView(ProfileUserPostsList(
+                    userId: uid,
+                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
+                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
+                )) }
             )
             .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
