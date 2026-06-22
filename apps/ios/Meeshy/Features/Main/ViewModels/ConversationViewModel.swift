@@ -1969,11 +1969,12 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Send Message
 
-    /// Send-time fallback for `originalLanguage` when the composer supplies
-    /// none. Forced to French — the keyboard layout must never drive content
-    /// language (Prisme Linguistique). The composer itself starts in `fr` and
-    /// `TextAnalyzer` re-detects from the typed text.
-    private func defaultComposeLanguage() -> String { "fr" }
+    /// Langue de composition : détectée depuis le contenu (on-device), repli sur la
+    /// langue primaire de l'utilisateur puis "fr". Pure → testable sans authManager.
+    static func composeLanguage(for content: String, preferred: [String]) -> String {
+        LanguageDetection.detectLanguageCode(for: content, fallback: preferred.first)
+            ?? preferred.first ?? "fr"
+    }
 
     /// Stable identity of a logical message, used to dedup an accidental
     /// double-tap. Two taps producing the same key within
@@ -2391,7 +2392,7 @@ class ConversationViewModel: ObservableObject {
 
             let body = SendMessageRequest(
                 content: finalContent,
-                originalLanguage: originalLanguage ?? defaultComposeLanguage(),
+                originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                 replyToId: replyToId,
                 storyReplyToId: storyReplyToId,
                 forwardedFromId: forwardedFromId,
@@ -2433,7 +2434,7 @@ class ConversationViewModel: ObservableObject {
                     attachmentIds: [],
                     replyToId: replyToId,
                     storyReplyToId: storyReplyToId,
-                    originalLanguage: originalLanguage ?? defaultComposeLanguage(),
+                    originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                     isEncrypted: false,
                     clientMessageId: tempId
                 ) {
@@ -2703,7 +2704,7 @@ class ConversationViewModel: ObservableObject {
             replyToId: replyToId
         )
         let replyToJson = resolvedReplyRef.flatMap { try? JSONEncoder().encode($0) }
-        let resolvedOriginalLanguage = originalLanguage ?? defaultComposeLanguage()
+        let resolvedOriginalLanguage = originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages)
         let record = MessageRecord(
             localId: tempId, serverId: nil,
             conversationId: conversationId, senderId: currentUserId,
