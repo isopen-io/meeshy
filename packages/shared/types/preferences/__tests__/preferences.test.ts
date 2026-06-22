@@ -359,7 +359,12 @@ describe('Schema.partial() pour updates partiels', () => {
     });
 
     expect(partial.showOnlineStatus).toBe(false);
-    expect(partial.showLastSeen).toBeUndefined();
+    // zod v4: `.partial()` ne fait qu'ajouter `.optional()` à chaque champ et
+    // conserve le `.default()` interne, qui s'applique donc toujours pour les
+    // clés absentes (contrairement à zod v3 qui retournait undefined). Tous les
+    // champs de PrivacyPreferenceSchema ayant un default, le sous-ensemble est
+    // accepté et les champs non fournis prennent leur valeur par défaut.
+    expect(partial.showLastSeen).toBe(true);
   });
 
   test('NotificationPreferenceSchema.partial() devrait accepter plusieurs champs', () => {
