@@ -329,7 +329,12 @@
       "reactionAdded": "Reacción {emoji} añadida",
       "reactionRemoved": "Reacción eliminada",
       "inviteSearchPlaceholder": "Buscar usuarios...",
-      "editPhoto": "Editar"
+      "editPhoto": "Editar",
+      "activity": "Actividad",
+      "viewAllParticipants": "Ver todos los participantes",
+      "mediaAndAppearance": "Multimedia y Apariencia",
+      "changeBanner": "Cambiar el banner",
+      "uploadBanner": "Añadir un banner"
     },
     "conversationImage": {
       "title": "Cambiar la imagen de la conversación",
