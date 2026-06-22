@@ -305,9 +305,11 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     private func handlePlaybackFinished() {
         let finishedUrl = currentUrl
         reportListenProgress(complete: true)
-        // Natural end → forget the saved position so a later re-listen starts
-        // from 0 instead of resuming at the very end.
+        // Natural end → forget the saved RESUME position so a later re-listen
+        // starts from 0, but remember the media as fully CONSUMED so the bubble
+        // keeps tinting the waveform at rest.
         if let attId = attachmentId {
+            MediaConsumptionStore.shared.record(fraction: 1, complete: true, for: attId)
             AudioPlaybackPositionStore.shared.clear(for: attId)
         }
         timer?.invalidate()
@@ -380,6 +382,11 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// Safe no-op when no attachment is loaded.
     private func persistPosition() {
         guard let attId = attachmentId else { return }
+        // Record the at-rest consumption fraction (monotonic) so a partially
+        // listened voice note keeps its waveform tint after scroll / relaunch.
+        if duration > 0 {
+            MediaConsumptionStore.shared.record(fraction: currentTime / duration, complete: false, for: attId)
+        }
         saveResumePosition(currentTime, forAttachment: attId, totalDuration: duration)
     }
 
@@ -1374,6 +1381,14 @@ public struct AudioPlayerView: View {
     /// the same count so cache keys and indices line up.
     private var waveformBarCount: Int { context.isCompact ? 48 : 72 }
 
+    /// Persisted "at-rest" consumption fraction (0...1) for this attachment —
+    /// drives the waveform tint BEFORE playback starts so a half- or
+    /// fully-listened voice note reads at a glance. Pure store read; the player
+    /// engine owns the live `progress`.
+    private var restingProgress: Double {
+        MediaConsumptionStore.shared.fraction(for: attachment.id) ?? 0
+    }
+
     private var waveformProgress: some View {
         GeometryReader { geo in
             let barCount = waveformBarCount
@@ -1383,14 +1398,21 @@ public struct AudioPlayerView: View {
             let slot = geo.size.width / CGFloat(barCount)
             let barWidth = max(1.5, slot * 0.62)
 
+            // Live playback (incl. a resumed position) drives the bars with the
+            // full accent. At rest we fall back to the persisted consumption
+            // fraction with an attenuated accent — discreet, per the Prisme.
+            let isLivePlayback = player.progress > 0
+            let shownProgress = isLivePlayback ? player.progress : restingProgress
+            let playedColor = isLivePlayback ? accent : accent.opacity(0.4)
+
             HStack(spacing: 0) {
                 ForEach(0..<barCount, id: \.self) { i in
                     let fraction = (Double(i) + 0.5) / Double(barCount)
-                    let isPlayed = fraction <= player.progress
+                    let isPlayed = fraction <= shownProgress
                     let h = waveformHeight(index: i, total: barCount)
 
                     Capsule(style: .continuous)
-                        .fill(isPlayed ? accent : (isDark ? Color.white.opacity(0.20) : Color.black.opacity(0.12)))
+                        .fill(isPlayed ? playedColor : (isDark ? Color.white.opacity(0.20) : Color.black.opacity(0.12)))
                         .frame(width: barWidth, height: h)
                         .frame(width: slot, height: 24, alignment: .center)
                 }
