@@ -26,6 +26,10 @@ struct PostDetailView: View {
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false
+    /// Texte du composer, lié au `UniversalComposerBar`. Permet de préremplir une
+    /// @mention quand on répond à une réponse (niveau 2) — l'auteur ciblé est
+    /// notifié via `user_mentioned` même si la réponse est reparentée à la racine.
+    @State private var composerText: String = ""
     // Comment attachments + real voice capture (parity with feed/reels composer).
     @State private var commentAttachments: [ComposerAttachment] = []
     @State private var showCommentPhotoPicker: Bool = false
@@ -380,7 +384,7 @@ struct PostDetailView: View {
                 likeDelta: viewModel.commentLikeDelta,
                 heartInFlightIds: viewModel.commentHeartInFlightIds,
                 onReply: { target in
-                    viewModel.replyingTo = target
+                    beginReply(to: target)
                 },
                 onToggleThread: {
                     Task { await viewModel.toggleThread(comment.id, postId: postId) }
@@ -1761,6 +1765,7 @@ struct PostDetailView: View {
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
             onSendMessage: { text, attachments, _ in submitComment(text: text, attachments: attachments) },
+            textBinding: $composerText,
             replyBanner: replyBannerView,
             customAttachmentsPreview: commentAttachments.isEmpty
                 ? nil
@@ -1805,6 +1810,23 @@ struct PostDetailView: View {
         }
     }
 
+    // MARK: - Reply targeting
+
+    /// Amorce une réponse. Répondre à une réponse (niveau 2) reste plat au niveau
+    /// 2 (cf. `sendReply` : parentId = racine) ; on préremplit une @mention vers
+    /// l'auteur ciblé pour qu'il soit notifié (`user_mentioned`) malgré le
+    /// reparentage à la racine.
+    private func beginReply(to target: FeedComment) {
+        viewModel.replyingTo = target
+        composerFocusTrigger = true
+        guard target.parentId != nil,
+              let username = target.authorUsername, !username.isEmpty else { return }
+        let mention = "@\(username) "
+        if !composerText.contains("@\(username)") {
+            composerText = mention + composerText
+        }
+    }
+
     // MARK: - Comment send + voice (parity with feed/reels composer)
 
     private func submitComment(text: String, attachments: [ComposerAttachment]) {
@@ -1816,7 +1838,8 @@ struct PostDetailView: View {
         let blur = commentBlurEnabled
         commentEffects = .none
         commentBlurEnabled = false
-        let parentId = viewModel.replyingTo?.id
+        // Réponse plate à 2 niveaux (cf. sendReply) : reparente à la racine.
+        let parentId = viewModel.replyingTo?.parentId ?? viewModel.replyingTo?.id
         let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
         let effectFlags = flags > 0 ? Int(flags) : nil
         Task {

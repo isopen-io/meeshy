@@ -281,8 +281,7 @@ struct CommentsSheetView: View {
                                     likeDelta: likeDelta,
                                     heartInFlightIds: heartInFlightIds,
                                     onReply: { target in
-                                        replyingTo = target
-                                        composerFocusTrigger = true
+                                        beginReply(to: target)
                                     },
                                     onToggleThread: {
                                         Task { await toggleThread(comment.id) }
@@ -369,6 +368,7 @@ struct CommentsSheetView: View {
             let feedComment = FeedComment(
                 id: data.comment.id, author: data.comment.author.name,
                 authorId: data.comment.author.id,
+                authorUsername: data.comment.author.username,
                 authorAvatarURL: data.comment.author.avatar,
                 content: data.comment.content, timestamp: data.comment.createdAt,
                 likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
@@ -575,6 +575,7 @@ struct CommentsSheetView: View {
                 )
                 return FeedComment(
                     id: c.id, author: c.author.name, authorId: c.author.id,
+                    authorUsername: c.author.username,
                     authorAvatarURL: c.author.avatar,
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
@@ -919,6 +920,24 @@ struct CommentsSheetView: View {
         composerText = ""
     }
 
+    // MARK: - Reply targeting
+
+    /// Amorce une réponse vers `target`. Une réponse à un commentaire RACINE se
+    /// rattache à lui. Une réponse à une RÉPONSE (niveau 2) reste plate au niveau
+    /// 2 (cf. `submitComment` : parentId = racine) ; pour que l'auteur ciblé soit
+    /// notifié malgré ce reparentage, on préremplit une @mention — le backend
+    /// déclenche `user_mentioned` sur le contenu du commentaire.
+    private func beginReply(to target: FeedComment) {
+        replyingTo = target
+        composerFocusTrigger = true
+        guard target.parentId != nil,
+              let username = target.authorUsername, !username.isEmpty else { return }
+        let mention = "@\(username) "
+        if !composerText.contains("@\(username)") {
+            composerText = mention + composerText
+        }
+    }
+
     // MARK: - Comment Send (optimistic, with single media)
 
     /// Poste un commentaire de façon optimiste, avec optionnellement UN média
@@ -936,7 +955,11 @@ struct CommentsSheetView: View {
         // Rien à envoyer (ni texte ni média exploitable).
         guard !trimmed.isEmpty || media != nil else { return }
 
-        let parentId = replyingTo?.id
+        // Réponse plate à 2 niveaux : répondre à une réponse rattache la nouvelle
+        // réponse au MÊME parent racine (`replyingTo.parentId`) pour qu'elle reste
+        // au niveau 2 ; répondre à une racine utilise son id. L'auteur ciblé est
+        // notifié via la @mention préremplie par `beginReply`.
+        let parentId = replyingTo?.parentId ?? replyingTo?.id
         let effects = commentEffects
         let blur = commentBlurEnabled
         replyingTo = nil
@@ -957,6 +980,7 @@ struct CommentsSheetView: View {
             id: tempId,
             author: me?.displayName ?? me?.username ?? "",
             authorId: me?.id ?? "",
+            authorUsername: me?.username,
             authorAvatarURL: me?.avatar,
             content: trimmed, timestamp: Date(),
             likes: 0, replies: 0, parentId: parentId,
@@ -1356,13 +1380,12 @@ struct CommentRowView: View, Equatable {
                     .accessibilityValue("\(likeCount)")
                     .accessibilityHint(String(localized: "a11y.comment.like.hint", defaultValue: "Aimer ce commentaire", bundle: .main))
 
-                    // Max 2 niveaux : une réponse (niveau 2) ne peut pas elle-même
-                    // recevoir de réponse → ni « Répondre » ni « Voir ». Un commentaire
-                    // racine montre `↰ N  Répondre`, puis — s'il reste des réponses non
-                    // révélées (`showSeeReplies`) — `·  Voir` qui charge/affiche les
-                    // réponses SANS avoir à répondre.
-                    if !isReply {
-                        HStack(spacing: 8) {
+                    // Réponses plates à 2 niveaux : on peut répondre à un commentaire
+                    // racine OU à une réponse, mais une réponse-de-réponse reste affichée
+                    // au niveau 2 (rattachée au même parent racine, cf. submitComment).
+                    // Répondre à une réponse @mentionne son auteur → il est notifié.
+                    // Le compteur `↰ N` et « Voir » ne concernent que la racine.
+                    HStack(spacing: 8) {
                             Button {
                                 onReply()
                                 HapticFeedback.light()
@@ -1370,7 +1393,7 @@ struct CommentRowView: View, Equatable {
                                 HStack(spacing: 4) {
                                     Image(systemName: "arrowshape.turn.up.left")
                                         .font(.system(size: 13))
-                                    if comment.replies > 0 {
+                                    if !isReply && comment.replies > 0 {
                                         Text("\(comment.replies)")
                                             .font(.system(size: 12, weight: .semibold))
                                     }
@@ -1406,7 +1429,6 @@ struct CommentRowView: View, Equatable {
                                     : String(localized: "feed.comments.see_replies", defaultValue: "Voir", bundle: .main))
                             }
                         }
-                    }
 
                     Spacer()
 

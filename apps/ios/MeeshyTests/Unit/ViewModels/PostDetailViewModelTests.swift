@@ -380,6 +380,41 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTAssertEqual(mock.lastDeleteCommentCommentId, "r1")
     }
 
+    // MARK: - sendReply (flat 2-level threading)
+
+    func test_sendReply_toRootComment_usesRootAsParent() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let root = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 0)
+        sut.comments = [root]
+        sut.replyingTo = root
+
+        await sut.sendReply("Coucou")
+
+        XCTAssertEqual(mock.lastAddCommentParentId, "c1", "répondre à une racine se rattache à elle")
+    }
+
+    func test_sendReply_toReply_staysFlatUnderRoot() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let root = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 1)
+        let reply = FeedComment(id: "r1", author: "bob", authorId: "a2", authorUsername: "bob", content: "Reply", parentId: "c1")
+        sut.comments = [root]
+        sut.repliesMap = ["c1": [reply]]
+        // Répondre à une réponse de niveau 2 …
+        sut.replyingTo = reply
+
+        await sut.sendReply("@bob ok")
+
+        // … reste plat au niveau 2 : rattaché au MÊME parent racine (c1), pas à r1.
+        XCTAssertEqual(mock.lastAddCommentParentId, "c1")
+        // La nouvelle réponse s'ajoute sous c1 (et non sous r1, qui ne porte pas de fil).
+        XCTAssertEqual(sut.repliesMap["c1"]?.count, 2)
+        XCTAssertNil(sut.repliesMap["r1"], "aucun sous-fil créé sous une réponse")
+    }
+
     // MARK: - topLevelComments
 
     func test_topLevelComments_filtersParentComments() async {

@@ -186,6 +186,7 @@ class PostDetailViewModel: ObservableObject {
                     )
                     return FeedComment(
                         id: c.id, author: c.author.name, authorId: c.author.id,
+                        authorUsername: c.author.username,
                         authorAvatarURL: c.author.avatar,
                         content: c.content, timestamp: c.createdAt,
                         likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
@@ -254,6 +255,7 @@ class PostDetailViewModel: ObservableObject {
                     )
                     return FeedComment(
                         id: c.id, author: c.author.name, authorId: c.author.id,
+                        authorUsername: c.author.username,
                         authorAvatarURL: c.author.avatar,
                         content: c.content, timestamp: c.createdAt,
                         likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
@@ -458,6 +460,7 @@ class PostDetailViewModel: ObservableObject {
             id: cmid,
             author: currentUser?.displayName ?? currentUser?.username ?? "",
             authorId: currentUser?.id ?? "",
+            authorUsername: currentUser?.username,
             authorAvatarURL: currentUser?.avatar,
             content: content,
             timestamp: Date(),
@@ -495,12 +498,16 @@ class PostDetailViewModel: ObservableObject {
 
     func sendReply(_ content: String, effectFlags: Int? = nil) async {
         guard let post, let parent = replyingTo else { return }
-        let parentId = parent.id
+        // Réponse plate à 2 niveaux : répondre à une réponse rattache au MÊME
+        // parent racine pour rester au niveau 2 ; l'auteur ciblé est notifié via
+        // la @mention préremplie (cf. `PostDetailView.beginReply`).
+        let parentId = parent.parentId ?? parent.id
         replyingTo = nil
         do {
             let apiComment = try await postService.addComment(postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags)
             let reply = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
+                authorUsername: apiComment.author.username,
                 authorAvatarURL: apiComment.author.avatar,
                 content: apiComment.content, timestamp: apiComment.createdAt,
                 likes: 0, replies: 0,
@@ -549,6 +556,7 @@ class PostDetailViewModel: ObservableObject {
             id: tempId,
             author: me?.displayName ?? me?.username ?? "",
             authorId: me?.id ?? "",
+            authorUsername: me?.username,
             authorAvatarURL: me?.avatar,
             content: content, timestamp: Date(),
             likes: 0, replies: 0, parentId: parentId,
@@ -578,6 +586,7 @@ class PostDetailViewModel: ObservableObject {
             )
             let server = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
+                authorUsername: apiComment.author.username,
                 authorAvatarURL: apiComment.author.avatar,
                 content: apiComment.content, timestamp: apiComment.createdAt,
                 likes: 0, replies: 0, parentId: parentId,
@@ -674,6 +683,7 @@ class PostDetailViewModel: ObservableObject {
                 let comment = FeedComment(
                     id: data.comment.id, author: data.comment.author.name,
                     authorId: data.comment.author.id,
+                    authorUsername: data.comment.author.username,
                     authorAvatarURL: data.comment.author.avatar,
                     content: data.comment.content, timestamp: data.comment.createdAt,
                     likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
