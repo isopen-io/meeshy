@@ -165,4 +165,4 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 60wc | claude/practical-fermat-afplne (i18n aria AttachmentPreviewReply) | #804 | ✅ |
 | 60wd | claude/practical-fermat-iuu5e3 (i18n cluster admin/agent) | #811 | ✅ |
 | 61w | claude/practical-fermat-e2lu99 (i18n VideoLightbox plein écran) | #816 | ✅ |
-| 62wb | claude/practical-fermat-am6uvs (Badge variants gold/success/warning → tokens --gp-* dark-mode) | ⏳ | ⏳ |
+| 62wb | claude/practical-fermat-am6uvs (Badge variants gold/success/warning → tokens --gp-* dark-mode) | #847 | ⏳ |
