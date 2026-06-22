@@ -173,6 +173,7 @@ fun MeeshyApp() {
                     onConversationClick = { conversationId ->
                         navController.navigate(Routes.chat(conversationId))
                     },
+                    onContacts = { navController.navigate(Routes.CONTACTS) },
                     onLogout = {
                         authViewModel.logout()
                         navController.navigate(Routes.LOGIN) {

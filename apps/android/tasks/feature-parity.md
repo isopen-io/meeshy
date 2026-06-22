@@ -404,11 +404,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Community invite links: list, stats, detail, copy/share
 
 ## J. Contacts & Friends
-- [ ] Contacts hub: 4 tabs (Contacts / Requests / Discover / Blocked) with badges
+- [~] Contacts hub: 4 tabs (Contacts / Requests / Discover / Blocked) with badges —
+      `:feature:contacts` hub reachable from the conversations top bar (People icon),
+      4-tab `TabRow` with a live count badge on the **Requests** tab ; Contacts /
+      Discover / Blocked tabs remain placeholders pending their data slices
 - [ ] Contacts list (online/offline filters + counts, search, presence + mood-emoji)
 - [ ] Cache-first friends list with cross-screen reconciliation; online-first sorting
 - [ ] Friendship status resolution (friend / pending sent / pending received / blocked)
-- [ ] Send / accept / decline / cancel friend request — optimistic + offline-queued, idempotent
+- [~] Send / accept / decline / cancel friend request — **Requests tab** lists received +
+      sent requests (avatars tinted by deterministic `DynamicColorGenerator.colorForName`),
+      with optimistic accept / decline (`respond`) + cancel (`deleteRequest`), in-flight
+      guard (`pendingActionIds`) and snapshot rollback on failure (9 ViewModel tests, EN/FR/ES/PT) ;
+      send (compose-new) + offline-queue + idempotency pending
 - [ ] Invite by email; invite by SMS; import phone contacts
 - [ ] Discover suggestions (cache-first) + live user search with inline connect
 - [ ] Blocked-users list with confirm-to-unblock; optimistic unblock with rollback
