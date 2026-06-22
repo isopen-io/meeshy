@@ -23,21 +23,26 @@ public struct AudioConsentNotice: View, Equatable {
         Button(action: onTap) {
             HStack(spacing: 8) {
                 Image(systemName: "mic.slash").font(.caption)
+                    .foregroundStyle(.primary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(message).font(.caption).multilineTextAlignment(.leading)
+                        .foregroundStyle(.primary)
                     Text(actionTitle).font(.caption2.weight(.semibold))
+                        .foregroundStyle(Color(hex: accentHex))
                 }
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.right").font(.caption2)
+                    .foregroundStyle(Color(hex: accentHex))
             }
-            .padding(.horizontal, 10).padding(.vertical, 8)
+            .padding(.horizontal, 10).padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color(hex: accentHex).opacity(0.4), lineWidth: 1))
-            .foregroundStyle(Color(hex: accentHex))
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityHint(Text(actionTitle))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("\(message). \(actionTitle)"))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("audioConsentNotice")
     }
 }
