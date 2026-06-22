@@ -233,7 +233,7 @@ export function DashboardLayout({
                   <DropdownMenuItem asChild>
                     <Link href="/feed/posts" className="flex items-center cursor-pointer">
                       <Newspaper className="mr-2 h-4 w-4" />
-                      <span>{t('navigation.feeds') || 'Feeds'}</span>
+                      <span>{t('navigation.feeds', 'Feed')}</span>
                     </Link>
                   </DropdownMenuItem>
 

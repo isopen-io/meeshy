@@ -242,7 +242,7 @@ export function Header({
                   variant="ghost"
                   onClick={() => {
                     const shareUrl = window.location.origin;
-                    const shareText = t('shareText') || 'Rejoignez-moi sur Meeshy - Une plateforme de messagerie multilingue où vous pouvez discuter avec des personnes du monde entier !';
+                    const shareText = t('shareText', 'Join me on Meeshy - A multilingual messaging platform where you can chat with people from around the world!');
                     if (navigator.share) {
                       navigator.share({
                         title: 'Meeshy',
@@ -289,7 +289,7 @@ export function Header({
                   variant="ghost"
                   onClick={() => {
                     const shareUrl = window.location.origin;
-                    const shareText = t('shareText') || 'Rejoignez-moi sur Meeshy - Une plateforme de messagerie multilingue où vous pouvez discuter avec des personnes du monde entier !';
+                    const shareText = t('shareText', 'Join me on Meeshy - A multilingual messaging platform where you can chat with people from around the world!');
                     if (navigator.share) {
                       navigator.share({
                         title: 'Meeshy',
@@ -499,7 +499,7 @@ export function Header({
                     className="w-full justify-start"
                     onClick={() => {
                       const shareUrl = window.location.origin;
-                      const shareText = t('shareText') || 'Rejoignez-moi sur Meeshy - Une plateforme de messagerie multilingue où vous pouvez discuter avec des personnes du monde entier !';
+                      const shareText = t('shareText', 'Join me on Meeshy - A multilingual messaging platform where you can chat with people from around the world!');
                       if (navigator.share) {
                         navigator.share({
                           title: 'Meeshy',
@@ -568,7 +568,7 @@ export function Header({
                     className="w-full justify-start"
                     onClick={() => {
                       const shareUrl = window.location.origin;
-                      const shareText = t('shareText') || 'Rejoignez-moi sur Meeshy - Une plateforme de messagerie multilingue où vous pouvez discuter avec des personnes du monde entier !';
+                      const shareText = t('shareText', 'Join me on Meeshy - A multilingual messaging platform where you can chat with people from around the world!');
                       if (navigator.share) {
                         navigator.share({
                           title: 'Meeshy',
