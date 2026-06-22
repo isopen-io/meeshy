@@ -733,7 +733,10 @@ struct BubbleStandardLayout: View {
                     },
                     onShowTranslationDetail: onShowTranslationDetail,
                     onRequestTranslation: onRequestTranslation,
-                    onPlayAudio: onPlayAudio
+                    onPlayAudio: onPlayAudio,
+                    parentIsMe: content.isMe,
+                    voiceConsentMissing: voiceConsentMissing,
+                    onTapConsentNotice: onTapConsentNotice
                 )
             } else {
                 ForEach(audioAttachments) { attachment in
