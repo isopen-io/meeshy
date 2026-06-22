@@ -58,7 +58,7 @@
 		6354817D4751DBCD1D41FA55 /* CallStarter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04C7F658F411CA89494B4204 /* CallStarter.swift */; };
 		1F26B618A56CEA57B8408E7B /* CallDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 658141E84AE3DB02533425BA /* CallDetailSheet.swift */; };
 		83BD51218A1F70484C0E2E41 /* CallsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778C4719074ED676630AE6B2 /* CallsTab.swift */; };
-		51B8DB24C49E4007DCE3460C /* ContactsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20FBA05C1AAA4EE765F12DA3 /* ContactsSection.swift */; };
+		51B8DB24C49E4007DCE3460C /* PeopleDiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20FBA05C1AAA4EE765F12DA3 /* PeopleDiscoveryView.swift */; };
 		154D81017A2D9E725E1BB2B0 /* KeypadTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */; };
 		2D3563D04A488B10C2B3D2CE /* KeypadViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB2A3B95A3287DB42D5FF468 /* KeypadViewModel.swift */; };
 		46B9CEA8F388C548AEED4A2E /* MockVoIPTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE78D3B42AA19F0490A676B0 /* MockVoIPTokenStore.swift */; };
@@ -191,6 +191,7 @@
 		FBA0C8000000000000000001 /* FeedButtonAnchorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA0C8000000000000000002 /* FeedButtonAnchorTests.swift */; };
 		AEFX000100010001000100B0 /* AudioEffectTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFX000100010001000100F0 /* AudioEffectTypes.swift */; };
 		AMVRT0001000100010001001 /* AudioMediaViewRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */; };
+		CNDTST0001000100010001001 /* ConsentNoticeDecisionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CNDTST0001000100010001000 /* ConsentNoticeDecisionTests.swift */; };
 		ANA00100010001000100B001 /* AnalyticsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANA00100010001000100F001 /* AnalyticsManager.swift */; };
 		ANONSC00000000002001 /* AnonymousSessionContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANONSC00000000001001 /* AnonymousSessionContext.swift */; };
 		ANYCD00000000002001 /* AnyCodable.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANYCD00000000001001 /* AnyCodable.swift */; };
@@ -564,6 +565,7 @@
 		THSM0001000100010001B001 /* ThermalStateMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = THSM0001000100010001F001 /* ThermalStateMonitorTests.swift */; };
 		TL6001A001A001A001A00001 /* TrackingLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TL6002A002A002A002A00002 /* TrackingLinksView.swift */; };
 		TM2800000000002F28 /* FeedbackToastManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = TM2800000000001F28 /* FeedbackToastManager.swift */; };
+		CDFT00000000002F28 /* CommentDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDFT00000000001F28 /* CommentDraftStore.swift */; };
 		TNAV0001000100010001001 /* TabNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TNAV0001000100010001000 /* TabNavigationTests.swift */; };
 		TOSV002A002A002A002A0002 /* TermsOfServiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */; };
 		TSSU00200000000001F00 /* FeedbackToastSurfacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = TSSU00100000000001F00 /* FeedbackToastSurfacing.swift */; };
@@ -811,6 +813,7 @@
 		AE4100000000001F41 /* AudioEffectsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEffectsPanel.swift; sourceTree = "<group>"; };
 		AEFX000100010001000100F0 /* AudioEffectTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEffectTypes.swift; sourceTree = "<group>"; };
 		AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMediaViewRenderTests.swift; sourceTree = "<group>"; };
+		CNDTST0001000100010001000 /* ConsentNoticeDecisionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConsentNoticeDecisionTests.swift; sourceTree = "<group>"; };
 		ANA00100010001000100F001 /* AnalyticsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsManager.swift; sourceTree = "<group>"; };
 		ANONSC00000000001001 /* AnonymousSessionContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousSessionContext.swift; sourceTree = "<group>"; };
 		ANYCD00000000001001 /* AnyCodable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyCodable.swift; sourceTree = "<group>"; };
@@ -1006,7 +1009,7 @@
 		04C7F658F411CA89494B4204 /* CallStarter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallStarter.swift; sourceTree = "<group>"; };
 		658141E84AE3DB02533425BA /* CallDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDetailSheet.swift; sourceTree = "<group>"; };
 		778C4719074ED676630AE6B2 /* CallsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallsTab.swift; sourceTree = "<group>"; };
-		20FBA05C1AAA4EE765F12DA3 /* ContactsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsSection.swift; sourceTree = "<group>"; };
+		20FBA05C1AAA4EE765F12DA3 /* PeopleDiscoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeopleDiscoveryView.swift; sourceTree = "<group>"; };
 		B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeypadTab.swift; sourceTree = "<group>"; };
 		EB2A3B95A3287DB42D5FF468 /* KeypadViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeypadViewModel.swift; sourceTree = "<group>"; };
 		F7C8FDC10EBAC576B77E8347 /* MediaPostCell.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MediaPostCell.swift; sourceTree = "<group>"; };
@@ -1191,6 +1194,7 @@
 		THSM0001000100010001F001 /* ThermalStateMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThermalStateMonitorTests.swift; sourceTree = "<group>"; };
 		TL6002A002A002A002A00002 /* TrackingLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingLinksView.swift; sourceTree = "<group>"; };
 		TM2800000000001F28 /* FeedbackToastManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackToastManager.swift; sourceTree = "<group>"; };
+		CDFT00000000001F28 /* CommentDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentDraftStore.swift; sourceTree = "<group>"; };
 		TNAV0001000100010001000 /* TabNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabNavigationTests.swift; sourceTree = "<group>"; };
 		TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TermsOfServiceView.swift; sourceTree = "<group>"; };
 		TSSU00100000000001F00 /* FeedbackToastSurfacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackToastSurfacing.swift; sourceTree = "<group>"; };
@@ -1630,6 +1634,7 @@
 				PQ7000000000001FPQ /* PendingStatusQueue.swift */,
 				CC2400000000001F24 /* ConversationLockManager.swift */,
 				TM2800000000001F28 /* FeedbackToastManager.swift */,
+				CDFT00000000001F28 /* CommentDraftStore.swift */,
 				SPS2800000000001F28 /* StoryPublishService.swift */,
 				SVES000000000001F28 /* StoryVideoExportService.swift */,
 				CM3600000000001F36 /* CallManager.swift */,
@@ -1849,7 +1854,7 @@
 				04C7F658F411CA89494B4204 /* CallStarter.swift */,
 				658141E84AE3DB02533425BA /* CallDetailSheet.swift */,
 				778C4719074ED676630AE6B2 /* CallsTab.swift */,
-				20FBA05C1AAA4EE765F12DA3 /* ContactsSection.swift */,
+				20FBA05C1AAA4EE765F12DA3 /* PeopleDiscoveryView.swift */,
 				B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */,
 				EB2A3B95A3287DB42D5FF468 /* KeypadViewModel.swift */,
 				73E4ECF08EDFD91908B42081 /* ContactsListTab.swift */,
@@ -1950,6 +1955,7 @@
 				CVLT0001000100010001000 /* ConversationViewLifecycleTests.swift */,
 				CVRC0001000100010001000 /* ConversationReplyContextTests.swift */,
 				AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */,
+				CNDTST0001000100010001000 /* ConsentNoticeDecisionTests.swift */,
 				ATDLT0001000100010001000 /* AttachmentDownloaderTests.swift */,
 				RFLAYOUTTST0100010001002 /* ReelFeedLayoutTests.swift */,
 				RFAUTOPLAYTST01000100002 /* ReelFeedAutoplayCoordinatorTests.swift */,
@@ -2684,6 +2690,7 @@
 				PP2600000000002F26 /* AddParticipantSheet.swift in Sources */,
 				ML2700000000002F27 /* MagicLinkView.swift in Sources */,
 				TM2800000000002F28 /* FeedbackToastManager.swift in Sources */,
+				CDFT00000000002F28 /* CommentDraftStore.swift in Sources */,
 				SPS2800000000002F28 /* StoryPublishService.swift in Sources */,
 				SVES000000000002F28 /* StoryVideoExportService.swift in Sources */,
 				SESH000000000002F28 /* StoryExportShareSheet.swift in Sources */,
@@ -2775,7 +2782,7 @@
 				6354817D4751DBCD1D41FA55 /* CallStarter.swift in Sources */,
 				1F26B618A56CEA57B8408E7B /* CallDetailSheet.swift in Sources */,
 				83BD51218A1F70484C0E2E41 /* CallsTab.swift in Sources */,
-				51B8DB24C49E4007DCE3460C /* ContactsSection.swift in Sources */,
+				51B8DB24C49E4007DCE3460C /* PeopleDiscoveryView.swift in Sources */,
 				154D81017A2D9E725E1BB2B0 /* KeypadTab.swift in Sources */,
 				2D3563D04A488B10C2B3D2CE /* KeypadViewModel.swift in Sources */,
 				F7273BAD84FB8B7281518D59 /* ContactsListTab.swift in Sources */,
@@ -2918,6 +2925,7 @@
 				CVLT0001000100010001001 /* ConversationViewLifecycleTests.swift in Sources */,
 				CVRC0001000100010001001 /* ConversationReplyContextTests.swift in Sources */,
 				AMVRT0001000100010001001 /* AudioMediaViewRenderTests.swift in Sources */,
+				CNDTST0001000100010001001 /* ConsentNoticeDecisionTests.swift in Sources */,
 				ATDLT0001000100010001001 /* AttachmentDownloaderTests.swift in Sources */,
 				RFLAYOUTTST0100010001001 /* ReelFeedLayoutTests.swift in Sources */,
 				RFAUTOPLAYTST01000100001 /* ReelFeedAutoplayCoordinatorTests.swift in Sources */,

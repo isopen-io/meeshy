@@ -88,6 +88,8 @@ jest.mock('@/hooks/use-i18n', () => ({
         'common.next': 'Vidéo suivante',
         'common.enterFullscreen': 'Plein écran',
         'common.exitFullscreen': 'Quitter le plein écran',
+        'common.videoLightboxKeyboardHelp':
+          'Utilisez les flèches ← → pour naviguer • Espace pour lecture/pause • M pour couper le son • F pour le plein écran • Échap pour fermer',
       };
       return translations[key] || key;
     },
@@ -110,6 +112,8 @@ jest.mock('@/hooks/useI18n', () => ({
         'common.next': 'Vidéo suivante',
         'common.enterFullscreen': 'Plein écran',
         'common.exitFullscreen': 'Quitter le plein écran',
+        'common.videoLightboxKeyboardHelp':
+          'Utilisez les flèches ← → pour naviguer • Espace pour lecture/pause • M pour couper le son • F pour le plein écran • Échap pour fermer',
       };
       return translations[key] || key;
     },

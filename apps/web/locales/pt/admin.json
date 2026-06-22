@@ -302,6 +302,7 @@
       "fieldCooldown": "Cooldown (minutos)",
       "cooldownHint": "Tempo antes de poder re-selecionar este topic na mesma conversa.",
       "fieldActive": "Ativo (usado pelo estrategista)",
+      "close": "Fechar",
       "cancel": "Cancelar",
       "saving": "Salvando...",
       "save": "Salvar",
@@ -354,6 +355,46 @@
       "added": "Adicionado",
       "noResults": "Nenhum usuário encontrado",
       "minChars": "Digite pelo menos 2 caracteres"
+    },
+    "conversationsTab": {
+      "deleteConfirm": "Excluir esta configuração de agente?",
+      "title": "Configurações de agente",
+      "count": "{count} conversas configuradas",
+      "searchPlaceholder": "Pesquisar...",
+      "configure": "Configurar",
+      "empty": "Nenhuma conversa configurada para o agente",
+      "viewMessages": "Ver mensagens do agente",
+      "triggerScheduler": "Agendador de gatilhos",
+      "columns": {
+        "conversation": "Conversa",
+        "status": "Status",
+        "triggers": "Gatilhos",
+        "controlled": "Controlados",
+        "messages": "Mensagens",
+        "confidence": "Confiança",
+        "lastResponse": "Última resp.",
+        "actions": "Ações"
+      }
+    },
+    "conversationPicker": {
+      "searchPlaceholder": "Pesquisar por título, ID ou identificador...",
+      "searching": "Pesquisando nas salas...",
+      "untitled": "Sem título",
+      "noResults": "Nenhuma conversa encontrada para «{term}»",
+      "minChars": "Digite pelo menos 2 caracteres para pesquisar"
+    },
+    "rolesSection": {
+      "empty": "Nenhum papel observado para esta conversa",
+      "origin": {
+        "observed": "Observado",
+        "archetype": "Arquétipo",
+        "hybrid": "Híbrido"
+      },
+      "locked": "Bloqueado",
+      "unlock": "Desbloquear",
+      "messagesAnalyzed": "{count} msg analisadas",
+      "confidence": "Confiança",
+      "assignArchetype": "Atribuir um arquétipo..."
     }
   },
   "agentLive": {

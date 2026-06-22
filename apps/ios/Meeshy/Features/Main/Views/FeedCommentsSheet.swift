@@ -20,6 +20,10 @@ struct ThreadedCommentSection: View {
     let onReply: (FeedComment) -> Void
     let onToggleThread: () -> Void
     let onLikeComment: (String) -> Void
+    /// Supprime un commentaire (racine ou réponse). Le parent gère le retrait
+    /// optimiste + l'appel API. Câblé sur chaque ligne uniquement quand
+    /// l'utilisateur courant est l'auteur (`canDelete`).
+    var onDeleteComment: ((FeedComment) -> Void)? = nil
     var moodEmoji: String? = nil
     var storyState: StoryRingState = .none
     var presenceState: PresenceState = .offline
@@ -30,6 +34,15 @@ struct ThreadedCommentSection: View {
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
     private var theme: ThemeManager { ThemeManager.shared }
+
+    /// Renvoie un handler de suppression pour `c` SEULEMENT si l'utilisateur
+    /// courant en est l'auteur — sinon `nil` (l'item « Supprimer » disparaît).
+    private func deleteHandler(for c: FeedComment) -> (() -> Void)? {
+        guard let onDeleteComment,
+              let me = AuthManager.shared.currentUser?.id, !me.isEmpty,
+              c.authorId == me else { return nil }
+        return { onDeleteComment(c) }
+    }
 
     /// Show first 2 replies by default without requiring toggle
     private var autoPreviewReplies: [FeedComment] {
@@ -59,6 +72,7 @@ struct ThreadedCommentSection: View {
                 isInFlight: heartInFlightIds.contains(comment.id),
                 onReply: { onReply(comment) },
                 onLikeComment: { onLikeComment(comment.id) },
+                onDeleteComment: deleteHandler(for: comment),
                 showSeeReplies: showSeeReplies,
                 onSeeReplies: { onToggleThread() },
                 moodEmoji: moodEmoji,
@@ -78,6 +92,7 @@ struct ThreadedCommentSection: View {
                         isInFlight: heartInFlightIds.contains(reply.id),
                         onReply: { onReply(reply) },
                         onLikeComment: { onLikeComment(reply.id) },
+                        onDeleteComment: deleteHandler(for: reply),
                         moodEmoji: replyMoodResolver?(reply.authorId),
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
                         presenceState: replyPresenceResolver?(reply.authorId) ?? .offline
@@ -113,6 +128,7 @@ struct ThreadedCommentSection: View {
                         isInFlight: heartInFlightIds.contains(reply.id),
                         onReply: { onReply(reply) },
                         onLikeComment: { onLikeComment(reply.id) },
+                        onDeleteComment: deleteHandler(for: reply),
                         moodEmoji: replyMoodResolver?(reply.authorId),
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
                         presenceState: replyPresenceResolver?(reply.authorId) ?? .offline
@@ -143,6 +159,9 @@ struct CommentsSheetView: View {
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @State private var replyingTo: FeedComment? = nil
+    /// @mention auto-injectée par `beginReply` lors d'une réponse à une réponse —
+    /// suivie pour pouvoir la retirer proprement si on change de cible.
+    @State private var prefilledMention: String? = nil
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var liveComments: [FeedComment]?
     @State private var liveCommentCount: Int?
@@ -265,14 +284,16 @@ struct CommentsSheetView: View {
                                     likeDelta: likeDelta,
                                     heartInFlightIds: heartInFlightIds,
                                     onReply: { target in
-                                        replyingTo = target
-                                        composerFocusTrigger = true
+                                        beginReply(to: target)
                                     },
                                     onToggleThread: {
                                         Task { await toggleThread(comment.id) }
                                     },
                                     onLikeComment: { commentId in
                                         Task { await toggleCommentLike(commentId: commentId) }
+                                    },
+                                    onDeleteComment: { target in
+                                        Task { await deleteComment(target) }
                                     },
                                     moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                                     storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
@@ -337,6 +358,10 @@ struct CommentsSheetView: View {
             // Sème l'état "liké par moi" des commentaires top-level déjà chargés
             // (`post.comments` porte `currentUserReactions` depuis `toFeedPost`).
             seedLikedIds(from: comments)
+            // Reprend le brouillon de commentaire laissé sur ce post (cache-first).
+            if composerText.isEmpty, let draft = CommentDraftStore.shared.load(postId: post.id) {
+                composerText = draft
+            }
         }
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: post.id)
@@ -350,6 +375,7 @@ struct CommentsSheetView: View {
             let feedComment = FeedComment(
                 id: data.comment.id, author: data.comment.author.name,
                 authorId: data.comment.author.id,
+                authorUsername: data.comment.author.username,
                 authorAvatarURL: data.comment.author.avatar,
                 content: data.comment.content, timestamp: data.comment.createdAt,
                 likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
@@ -427,6 +453,16 @@ struct CommentsSheetView: View {
             let media = (data.comment.media ?? []).map { $0.toFeedMedia() }
             guard !media.isEmpty else { return }
             applyCommentMediaUpdate(commentId: data.commentId, parentId: data.comment.parentId, media: media)
+        }
+        // Suppression en temps réel : retire le commentaire et resynchronise le
+        // compteur sur la valeur autoritative serveur (heale la dérive optimiste).
+        // Idempotent avec le retrait optimiste du client qui supprime.
+        .onReceive(
+            SocialSocketManager.shared.commentDeleted
+                .receive(on: DispatchQueue.main)
+                .filter { [postId = post.id] in $0.postId == postId }
+        ) { data in
+            applyCommentDeletion(commentId: data.commentId, commentCount: data.commentCount)
         }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
@@ -556,6 +592,7 @@ struct CommentsSheetView: View {
                 )
                 return FeedComment(
                     id: c.id, author: c.author.name, authorId: c.author.id,
+                    authorUsername: c.author.username,
                     authorAvatarURL: c.author.avatar,
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
@@ -713,6 +750,8 @@ struct CommentsSheetView: View {
                 : AnyView(commentAttachmentsPreview),
             onTextChange: { text in
                 mentionController.handleQuery(in: text)
+                // Persiste le brouillon par post (un envoi vide le texte → efface).
+                CommentDraftStore.shared.save(postId: post.id, text: text)
             },
             // Capture voix réelle — mêmes composants que les conversations.
             onStartRecording: { startCommentRecording() },
@@ -900,6 +939,33 @@ struct CommentsSheetView: View {
         composerText = ""
     }
 
+    // MARK: - Reply targeting
+
+    /// Amorce une réponse vers `target`. Une réponse à un commentaire RACINE se
+    /// rattache à lui. Une réponse à une RÉPONSE (niveau 2) reste plate au niveau
+    /// 2 (cf. `submitComment` : parentId = racine) ; pour que l'auteur ciblé soit
+    /// notifié malgré ce reparentage, on préremplit une @mention — le backend
+    /// déclenche `user_mentioned` sur le contenu du commentaire.
+    private func beginReply(to target: FeedComment) {
+        replyingTo = target
+        composerFocusTrigger = true
+        // Retire d'abord la @mention auto-injectée pour une cible précédente (si on
+        // change de cible sans envoyer) — sinon les mentions s'accumulent ou un
+        // mauvais auteur est notifié. La mention auto est toujours préfixée.
+        if let old = prefilledMention, composerText.hasPrefix(old) {
+            composerText = String(composerText.dropFirst(old.count))
+        }
+        prefilledMention = nil
+        guard target.parentId != nil,
+              let username = target.authorUsername, !username.isEmpty else { return }
+        let mention = "@\(username) "
+        // Match exact en préfixe (pas un `contains` qui confondrait @bob et @bobby).
+        if !composerText.hasPrefix(mention) {
+            composerText = mention + composerText
+        }
+        prefilledMention = mention
+    }
+
     // MARK: - Comment Send (optimistic, with single media)
 
     /// Poste un commentaire de façon optimiste, avec optionnellement UN média
@@ -917,7 +983,11 @@ struct CommentsSheetView: View {
         // Rien à envoyer (ni texte ni média exploitable).
         guard !trimmed.isEmpty || media != nil else { return }
 
-        let parentId = replyingTo?.id
+        // Réponse plate à 2 niveaux : répondre à une réponse rattache la nouvelle
+        // réponse au MÊME parent racine (`replyingTo.parentId`) pour qu'elle reste
+        // au niveau 2 ; répondre à une racine utilise son id. L'auteur ciblé est
+        // notifié via la @mention préremplie par `beginReply`.
+        let parentId = replyingTo?.parentId ?? replyingTo?.id
         let effects = commentEffects
         let blur = commentBlurEnabled
         replyingTo = nil
@@ -938,6 +1008,7 @@ struct CommentsSheetView: View {
             id: tempId,
             author: me?.displayName ?? me?.username ?? "",
             authorId: me?.id ?? "",
+            authorUsername: me?.username,
             authorAvatarURL: me?.avatar,
             content: trimmed, timestamp: Date(),
             likes: 0, replies: 0, parentId: parentId,
@@ -959,15 +1030,18 @@ struct CommentsSheetView: View {
             current.insert(optimistic, at: 0)
             liveComments = current
         }
-        liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
+        liveCommentCount = (liveCommentCount ?? post.commentCount) + 1
 
         let lang = composerLanguage
 
         Task {
             do {
-                let attachmentIds: [String]? = media != nil
-                    ? [try await CommentMediaUploader.upload(media!)]
-                    : nil
+                let attachmentIds: [String]?
+                if let media {
+                    attachmentIds = [try await CommentMediaUploader.upload(media)]
+                } else {
+                    attachmentIds = nil
+                }
                 let apiComment = try await PostService.shared.addComment(
                     postId: post.id, content: trimmed, parentId: parentId, effectFlags: effectFlags,
                     attachmentIds: attachmentIds, mobileTranscription: media?.mobileTranscription,
@@ -1018,7 +1092,7 @@ struct CommentsSheetView: View {
                     current.removeAll { $0.id == tempId }
                     liveComments = current
                 }
-                liveCommentCount = max((liveCommentCount ?? post.comments.count) - 1, 0)
+                liveCommentCount = max((liveCommentCount ?? post.commentCount) - 1, 0)
                 FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
             }
         }
@@ -1050,6 +1124,77 @@ struct CommentsSheetView: View {
             }
         }
     }
+
+    /// Retire un commentaire (racine + ses réponses chargées, ou réponse avec
+    /// décrément du compteur de son parent) et resynchronise le total sur la valeur
+    /// autoritative serveur. Déclenché par le socket `comment:deleted` — idempotent
+    /// avec le retrait optimiste local.
+    private func applyCommentDeletion(commentId: String, commentCount: Int) {
+        var current = liveComments ?? post.comments
+        current.removeAll { $0.id == commentId }
+        repliesMap[commentId] = nil
+        expandedThreads.remove(commentId)
+        for (key, var replies) in repliesMap {
+            if let idx = replies.firstIndex(where: { $0.id == commentId }) {
+                replies.remove(at: idx)
+                repliesMap[key] = replies
+                if let pIdx = current.firstIndex(where: { $0.id == key }), current[pIdx].replies > 0 {
+                    current[pIdx].replies -= 1
+                }
+            }
+        }
+        liveComments = current
+        liveCommentCount = commentCount
+    }
+
+    // MARK: - Comment Deletion
+
+    /// Supprime un commentaire (auteur uniquement, gated par `CommentRowView`).
+    /// Retrait optimiste immédiat (racine + ses réponses chargées, ou réponse
+    /// avec décrément du compteur du parent) puis appel API. Rollback complet
+    /// du snapshot si l'API échoue. Miroir du flux optimiste d'envoi.
+    private func deleteComment(_ comment: FeedComment) async {
+        let previousComments = liveComments
+        let previousReplies = repliesMap
+        let previousExpanded = expandedThreads
+        let previousCount = liveCommentCount
+
+        if let parentId = comment.parentId {
+            if var existing = repliesMap[parentId] {
+                existing.removeAll { $0.id == comment.id }
+                repliesMap[parentId] = existing
+                // Met à jour le cache d'aperçu pour ne pas réafficher la réponse
+                // supprimée à la ré-ouverture du post.
+                try? await CacheCoordinator.shared.comments.save(existing, for: "replies-\(parentId)")
+            }
+            var current = liveComments ?? post.comments
+            if let idx = current.firstIndex(where: { $0.id == parentId }), current[idx].replies > 0 {
+                current[idx].replies -= 1
+                liveComments = current
+            }
+            liveCommentCount = max(0, (liveCommentCount ?? post.commentCount) - 1)
+        } else {
+            var current = liveComments ?? post.comments
+            current.removeAll { $0.id == comment.id }
+            liveComments = current
+            repliesMap[comment.id] = nil
+            expandedThreads.remove(comment.id)
+            // La suppression d'un commentaire racine cascade ses réponses côté
+            // serveur → on retire 1 + le nombre de réponses (compteur serveur).
+            liveCommentCount = max(0, (liveCommentCount ?? post.commentCount) - 1 - comment.replies)
+        }
+
+        do {
+            try await PostService.shared.deleteComment(postId: post.id, commentId: comment.id)
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main))
+        } catch {
+            liveComments = previousComments
+            repliesMap = previousReplies
+            expandedThreads = previousExpanded
+            liveCommentCount = previousCount
+            FeedbackToastManager.shared.showError(String(localized: "feed.comments.delete_error", defaultValue: "Impossible de supprimer le commentaire", bundle: .main))
+        }
+    }
 }
 
 // MARK: - Comment Row View
@@ -1063,6 +1208,10 @@ struct CommentRowView: View, Equatable {
     var isInFlight: Bool = false
     let onReply: () -> Void
     var onLikeComment: (() -> Void)? = nil
+    /// Supprime ce commentaire. Fourni (non-nil) UNIQUEMENT quand l'utilisateur
+    /// courant est l'auteur — le parent décide de l'éligibilité. `nil` ⇒ l'item
+    /// « Supprimer » n'apparaît pas dans le menu « … ».
+    var onDeleteComment: (() -> Void)? = nil
     /// Affiche le bouton « Voir » (charger/afficher les réponses) à côté de
     /// « Répondre ». Calculé par le parent (`ThreadedCommentSection`) : vrai
     /// seulement s'il reste des réponses non révélées. Ignoré pour une réponse.
@@ -1080,6 +1229,9 @@ struct CommentRowView: View, Equatable {
         lhs.likeCount == rhs.likeCount &&
         lhs.isInFlight == rhs.isInFlight &&
         lhs.showSeeReplies == rhs.showSeeReplies &&
+        // Re-render si l'éligibilité à la suppression change (ex: changement de
+        // compte avec la feuille ouverte) — sinon l'item « Supprimer » reste figé.
+        (lhs.onDeleteComment == nil) == (rhs.onDeleteComment == nil) &&
         lhs.comment.replies == rhs.comment.replies &&
         lhs.comment.content == rhs.comment.content &&
         lhs.comment.translatedContent == rhs.comment.translatedContent &&
@@ -1108,6 +1260,19 @@ struct CommentRowView: View, Equatable {
     private var effectiveCommentContent: String {
         if showOriginal { return comment.content }
         return comment.displayContent
+    }
+
+    /// « Copier » n'a de sens que pour un commentaire qui porte du texte
+    /// (un commentaire média-seul n'a rien à copier).
+    private var canCopyContent: Bool {
+        !effectiveCommentContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Le menu « … » n'est affiché que s'il contient au moins une action —
+    /// évite un bouton mort (le bug d'origine) sur un commentaire média-seul
+    /// dont l'utilisateur n'est pas l'auteur.
+    private var hasMoreOptions: Bool {
+        canCopyContent || onDeleteComment != nil
     }
 
     var body: some View {
@@ -1271,13 +1436,12 @@ struct CommentRowView: View, Equatable {
                     .accessibilityValue("\(likeCount)")
                     .accessibilityHint(String(localized: "a11y.comment.like.hint", defaultValue: "Aimer ce commentaire", bundle: .main))
 
-                    // Max 2 niveaux : une réponse (niveau 2) ne peut pas elle-même
-                    // recevoir de réponse → ni « Répondre » ni « Voir ». Un commentaire
-                    // racine montre `↰ N  Répondre`, puis — s'il reste des réponses non
-                    // révélées (`showSeeReplies`) — `·  Voir` qui charge/affiche les
-                    // réponses SANS avoir à répondre.
-                    if !isReply {
-                        HStack(spacing: 8) {
+                    // Réponses plates à 2 niveaux : on peut répondre à un commentaire
+                    // racine OU à une réponse, mais une réponse-de-réponse reste affichée
+                    // au niveau 2 (rattachée au même parent racine, cf. submitComment).
+                    // Répondre à une réponse @mentionne son auteur → il est notifié.
+                    // Le compteur `↰ N` et « Voir » ne concernent que la racine.
+                    HStack(spacing: 8) {
                             Button {
                                 onReply()
                                 HapticFeedback.light()
@@ -1285,7 +1449,7 @@ struct CommentRowView: View, Equatable {
                                 HStack(spacing: 4) {
                                     Image(systemName: "arrowshape.turn.up.left")
                                         .font(.system(size: 13))
-                                    if comment.replies > 0 {
+                                    if !isReply && comment.replies > 0 {
                                         Text("\(comment.replies)")
                                             .font(.system(size: 12, weight: .semibold))
                                     }
@@ -1321,19 +1485,35 @@ struct CommentRowView: View, Equatable {
                                     : String(localized: "feed.comments.see_replies", defaultValue: "Voir", bundle: .main))
                             }
                         }
-                    }
 
                     Spacer()
 
-                    Button {
-                        HapticFeedback.light()
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: isReply ? 12 : 14))
-                            .foregroundColor(theme.textMuted)
+                    if hasMoreOptions {
+                        Menu {
+                            if canCopyContent {
+                                Button {
+                                    UIPasteboard.general.string = effectiveCommentContent
+                                    HapticFeedback.success()
+                                } label: {
+                                    Label(String(localized: "comment.action.copy", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
+                                }
+                            }
+                            if let onDeleteComment {
+                                Button(role: .destructive) {
+                                    HapticFeedback.medium()
+                                    onDeleteComment()
+                                } label: {
+                                    Label(String(localized: "comment.action.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: isReply ? 12 : 14))
+                                .foregroundColor(theme.textMuted)
+                        }
+                        .accessibilityLabel(String(localized: "a11y.comment.more_options", defaultValue: "Plus d'options", bundle: .main))
+                        .meeshyTapTarget(44)
                     }
-                    .accessibilityLabel(String(localized: "a11y.comment.more_options", defaultValue: "Plus d'options", bundle: .main))
-                    .meeshyTapTarget(44)
                 }
                 .padding(.top, isReply ? 2 : 4)
             }

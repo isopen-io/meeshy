@@ -314,6 +314,128 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTFail("Observer continuation never registered for cmid=\(cmid)")
     }
 
+    // MARK: - deleteComment
+
+    func test_deleteComment_topLevel_removesOptimisticallyAndCallsService() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let comment = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 0)
+        sut.comments = [comment]
+        sut.post?.commentCount = 1
+
+        await sut.deleteComment(comment)
+
+        XCTAssertTrue(sut.comments.isEmpty)
+        XCTAssertEqual(mock.deleteCommentCallCount, 1)
+        XCTAssertEqual(mock.lastDeleteCommentPostId, "p1")
+        XCTAssertEqual(mock.lastDeleteCommentCommentId, "c1")
+        XCTAssertEqual(sut.post?.commentCount, 0)
+    }
+
+    func test_deleteComment_topLevel_subtractsReplyCountFromTotal() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let comment = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 2)
+        sut.comments = [comment]
+        sut.post?.commentCount = 3 // 1 racine + 2 réponses
+
+        await sut.deleteComment(comment)
+
+        XCTAssertEqual(sut.post?.commentCount, 0, "racine + ses réponses retirées du total")
+    }
+
+    func test_deleteComment_failure_rollsBack() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        mock.deleteCommentResult = .failure(NSError(domain: "test", code: 500))
+        let comment = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 0)
+        sut.comments = [comment]
+        sut.post?.commentCount = 1
+
+        await sut.deleteComment(comment)
+
+        XCTAssertEqual(sut.comments.count, 1, "le commentaire est restauré si l'API échoue")
+        XCTAssertEqual(sut.comments[0].id, "c1")
+        XCTAssertEqual(sut.post?.commentCount, 1)
+    }
+
+    func test_deleteComment_reply_decrementsParentReplyCount() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let parent = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 1)
+        let reply = FeedComment(id: "r1", author: "bob", authorId: "a2", content: "Reply", parentId: "c1")
+        sut.comments = [parent]
+        sut.repliesMap = ["c1": [reply]]
+        sut.post?.commentCount = 2
+
+        await sut.deleteComment(reply)
+
+        XCTAssertEqual(sut.repliesMap["c1"]?.isEmpty, true)
+        XCTAssertEqual(sut.comments.first(where: { $0.id == "c1" })?.replies, 0)
+        XCTAssertEqual(sut.post?.commentCount, 1)
+        XCTAssertEqual(mock.lastDeleteCommentCommentId, "r1")
+    }
+
+    // MARK: - preloadReplyPreviews
+
+    func test_preloadReplyPreviews_loadsRepliesForCommentsWithReplies() async {
+        await CacheCoordinator.shared.comments.invalidate(for: "replies-c1")
+        let (sut, mock) = makeSUT()
+        sut.comments = [FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 2)]
+
+        await sut.preloadReplyPreviews(postId: "p1")
+
+        XCTAssertEqual(mock.getCommentRepliesCallCount, 1, "les réponses d'un commentaire racine sont préchargées")
+    }
+
+    func test_preloadReplyPreviews_skipsCommentsWithoutReplies() async {
+        let (sut, mock) = makeSUT()
+        sut.comments = [FeedComment(id: "c2", author: "alice", authorId: "a1", content: "Top", replies: 0)]
+
+        await sut.preloadReplyPreviews(postId: "p1")
+
+        XCTAssertEqual(mock.getCommentRepliesCallCount, 0, "pas de précharge si aucun sous-commentaire")
+    }
+
+    // MARK: - sendReply (flat 2-level threading)
+
+    func test_sendReply_toRootComment_usesRootAsParent() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let root = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 0)
+        sut.comments = [root]
+        sut.replyingTo = root
+
+        await sut.sendReply("Coucou")
+
+        XCTAssertEqual(mock.lastAddCommentParentId, "c1", "répondre à une racine se rattache à elle")
+    }
+
+    func test_sendReply_toReply_staysFlatUnderRoot() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let root = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 1)
+        let reply = FeedComment(id: "r1", author: "bob", authorId: "a2", authorUsername: "bob", content: "Reply", parentId: "c1")
+        sut.comments = [root]
+        sut.repliesMap = ["c1": [reply]]
+        // Répondre à une réponse de niveau 2 …
+        sut.replyingTo = reply
+
+        await sut.sendReply("@bob ok")
+
+        // … reste plat au niveau 2 : rattaché au MÊME parent racine (c1), pas à r1.
+        XCTAssertEqual(mock.lastAddCommentParentId, "c1")
+        // La nouvelle réponse s'ajoute sous c1 (et non sous r1, qui ne porte pas de fil).
+        XCTAssertEqual(sut.repliesMap["c1"]?.count, 2)
+        XCTAssertNil(sut.repliesMap["r1"], "aucun sous-fil créé sous une réponse")
+    }
+
     // MARK: - topLevelComments
 
     func test_topLevelComments_filtersParentComments() async {

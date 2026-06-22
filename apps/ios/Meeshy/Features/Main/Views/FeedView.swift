@@ -43,6 +43,9 @@ struct FeedView: View {
     // injected by `iPadRootView`'s environment.
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    // Présentation unifiée du viewer de story (même coordinator que la story tray
+    // et que `ThemedFeedOverlay` côté iPhone). Injecté par `iPadRootView`.
+    @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @StateObject var viewModel = FeedViewModel()
     /// Élit le réel le plus centré dans le viewport et pilote sa lecture muette
     /// (source UNIQUE de "quel réel joue"). Call-aware via son init par défaut.
@@ -802,6 +805,15 @@ struct FeedView: View {
             moodLookup: { userId in
                 (emoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
                  tapHandler: statusViewModel.moodTapHandler(for: userId))
+            },
+            authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),
+            onViewAuthorStory: {
+                // Parité iPhone (`ThemedFeedOverlay`) : toucher l'avatar d'un auteur
+                // qui a une story ouvre SA story via le coordinator unique. Sans ce
+                // câblage, l'anneau de story et le tap étaient inertes sur iPad.
+                storyViewerCoordinator.present(
+                    StoryViewerRequest(id: post.authorId, startAtFirstUnviewed: true, singleGroup: true)
+                )
             }
         )
         .equatable()

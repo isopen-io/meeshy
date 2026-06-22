@@ -526,7 +526,11 @@ struct StoryComposerBarView: View {
         commentBlurEnabled = false
         let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
         let effectFlags = flags > 0 ? Int(flags) : nil
-        let parentId = replyingToStoryComment?.id
+        // Réponse plate à 2 niveaux : répondre à une réponse rattache au MÊME parent
+        // racine (sinon la réponse-de-réponse atterrissait dans un bucket jamais rendu
+        // → commentaire invisible). L'auteur ciblé est notifié via la @mention injectée
+        // à l'ouverture de la réponse (cf. makeStoryCommentRow).
+        let parentId = replyingToStoryComment?.parentId ?? replyingToStoryComment?.id
         replyingToStoryComment = nil
         sendComment(trimmed, effectFlags, parentId, media)
     }

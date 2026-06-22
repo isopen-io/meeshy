@@ -226,7 +226,7 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
           return reply.status(400).send({
             success: false,
             error: 'Invalid request parameters',
-            details: paramsResult.error.errors,
+            details: paramsResult.error.issues,
           });
         }
         const { userId: targetUserId } = paramsResult.data;
@@ -393,7 +393,7 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
           return reply.status(400).send({
             success: false,
             error: 'Invalid request body',
-            details: bodyResult.error.errors,
+            details: bodyResult.error.issues,
           });
         }
         const { recipientUserId, conversationId } = bodyResult.data;

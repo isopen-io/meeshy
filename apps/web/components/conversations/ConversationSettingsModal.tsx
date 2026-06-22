@@ -749,7 +749,7 @@ export function ConversationSettingsModal({
                       <span className="truncate">{t('conversationDetails.customization') || 'Personnalisation'}</span>
                     </h3>
 
-                    <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">Chargement...</div>}>
+                    <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">{t('conversationDetails.loading', 'Loading...')}</div>}>
                       <div className="space-y-4 min-w-0">
                         {/* Tags personnels */}
                         <div className="space-y-2 p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-green-50/80 to-emerald-50/80 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200/50 dark:border-green-800/30 min-w-0">
@@ -885,7 +885,7 @@ export function ConversationSettingsModal({
                       <span className="truncate">{t('conversationDetails.activity') || 'Activité'}</span>
                     </h3>
 
-                    <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">Chargement...</div>}>
+                    <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">{t('conversationDetails.loading', 'Loading...')}</div>}>
                       <div className="space-y-4 min-w-0">
                         {/* Stats langues */}
                         {messages.length > 0 && (
@@ -950,7 +950,7 @@ export function ConversationSettingsModal({
                       {isSavingPrefs ? (
                         <>
                           <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                          {t('conversationDetails.saving') || 'Enregistrement...'}
+                          {t('conversationDetails.saving', 'Saving...')}
                         </>
                       ) : (
                         <>
@@ -1058,7 +1058,7 @@ export function ConversationSettingsModal({
                             {!isEditingTitle ? (
                               <div className="flex items-center gap-2 group/title min-w-0">
                                 <h4 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 truncate min-w-0">
-                                  {convTitle || 'Sans titre'}
+                                  {convTitle || t('conversationDetails.untitled', 'Untitled')}
                                 </h4>
                                 <Button
                                   type="button"
@@ -1143,7 +1143,7 @@ export function ConversationSettingsModal({
                             setIsEditingDescription(true);
                           }}>
                             <p className="text-xs text-gray-600 dark:text-gray-400 group-hover/desc:text-gray-800 dark:group-hover/desc:text-gray-300 transition-colors line-clamp-2 break-words">
-                              {convDescription || 'Cliquez pour ajouter une description...'}
+                              {convDescription || t('conversationDetails.addDescription', 'Click to add a description...')}
                             </p>
                           </div>
                         ) : (
@@ -1174,7 +1174,7 @@ export function ConversationSettingsModal({
                                 className="h-7 text-xs text-red-600 hover:text-red-700"
                               >
                                 <X className="h-3 w-3 mr-1" />
-                                Annuler
+                                {t('conversationDetails.cancel', 'Cancel')}
                               </Button>
                               <Button
                                 type="button"
@@ -1189,7 +1189,7 @@ export function ConversationSettingsModal({
                                 ) : (
                                   <Check className="h-3 w-3 mr-1" />
                                 )}
-                                Valider
+                                {t('conversationDetails.confirm', 'Confirm')}
                               </Button>
                             </div>
                           </div>
@@ -1305,7 +1305,7 @@ export function ConversationSettingsModal({
                     transition={{ delay: 0.4 }}
                     className="space-y-4"
                   >
-                    <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">Chargement...</div>}>
+                    <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">{t('conversationDetails.loading', 'Loading...')}</div>}>
                       <FoldableSection
                         title={t('conversationDetails.shareLinks')}
                         icon={<Link2 className="h-4 w-4 mr-2" />}

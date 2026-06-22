@@ -201,7 +201,10 @@
       "title": "Ops! Algo deu errado",
       "description": "Ocorreu um erro inesperado. Por favor, tente novamente.",
       "details": "Detalhes do erro",
-      "reload": "Recarregar página"
+      "reload": "Recarregar página",
+      "featureError": "Algo deu errado em {feature}",
+      "featureUnavailable": "Esta seção não está disponível no momento.",
+      "retry": "Tentar novamente"
     },
     "download": "Baixar",
     "play": "Reproduzir",
@@ -213,6 +216,11 @@
     "zoomIn": "Ampliar",
     "zoomOut": "Reduzir",
     "rotate": "Girar",
+    "imageViewer": "Visualizador de imagens",
+    "imageLoadError": "Não foi possível carregar a imagem",
+    "downloadAnyway": "Baixar mesmo assim",
+    "lightboxKeyboardHelp": "Use as setas ← → para navegar • +/- para zoom • R para girar • Esc para fechar",
+    "videoLightboxKeyboardHelp": "Use as setas ← → para navegar • Espaço para reproduzir/pausar • M para silenciar • F para tela cheia • Esc para fechar",
     "clearSearch": "Limpar pesquisa",
     "backToList": "Voltar à lista",
     "backToConversations": "Voltar às conversas",

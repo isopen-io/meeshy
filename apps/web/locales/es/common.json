@@ -201,7 +201,10 @@
       "title": "¡Vaya! Algo salió mal",
       "description": "Ocurrió un error inesperado. Por favor, inténtalo de nuevo.",
       "details": "Detalles del error",
-      "reload": "Recargar página"
+      "reload": "Recargar página",
+      "featureError": "Algo salió mal en {feature}",
+      "featureUnavailable": "Esta sección no está disponible en este momento.",
+      "retry": "Reintentar"
     },
     "download": "Descargar",
     "play": "Reproducir",
@@ -213,6 +216,11 @@
     "zoomIn": "Acercar",
     "zoomOut": "Alejar",
     "rotate": "Rotar",
+    "imageViewer": "Visor de imágenes",
+    "imageLoadError": "No se puede cargar la imagen",
+    "downloadAnyway": "Descargar de todos modos",
+    "lightboxKeyboardHelp": "Usa las flechas ← → para navegar • +/- para hacer zoom • R para rotar • Esc para cerrar",
+    "videoLightboxKeyboardHelp": "Usa las flechas ← → para navegar • Espacio para reproducir/pausar • M para silenciar • F para pantalla completa • Esc para cerrar",
     "clearSearch": "Borrar búsqueda",
     "backToList": "Volver a la lista",
     "backToConversations": "Volver a conversaciones",

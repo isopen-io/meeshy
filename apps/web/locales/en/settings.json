@@ -7,6 +7,19 @@
     "settingsError": "Error loading settings",
     "settingsSaved": "Settings saved successfully",
     "settingsSaveError": "Error saving settings",
+    "configModal": {
+      "title": "Settings & Configuration",
+      "selectSection": "Select a section",
+      "sectionLabel": "Settings section",
+      "tabs": {
+        "user": "User profile",
+        "language": "Languages & Translation",
+        "theme": "Appearance",
+        "stats": "Statistics",
+        "notifications": "Notifications",
+        "privacy": "Privacy"
+      }
+    },
     "errors": {
       "loadProfile": "Error loading profile",
       "loadSettings": "Error loading settings",

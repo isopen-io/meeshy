@@ -153,7 +153,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({
           success: false,
           message: 'Données invalides',
-          errors: error.errors
+          errors: error.issues
         });
       }
       logError(fastify.log, 'Update link error:', error);
@@ -307,7 +307,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({
           success: false,
           message: 'Données invalides',
-          errors: error.errors
+          errors: error.issues
         });
       }
       logError(fastify.log, 'Update link error:', error);

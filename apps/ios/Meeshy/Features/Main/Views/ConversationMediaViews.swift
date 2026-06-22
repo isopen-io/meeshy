@@ -543,6 +543,12 @@ struct AudioMediaView: View, Equatable {
     /// Référence : draft-ietf-mimi-content-08 §MultiPart processAll +
     /// disposition inline (user feedback 2026-05-29).
     var embedsCaptionInWidget: Bool = false
+    var voiceConsentMissing: Bool = false
+    var onTapConsentNotice: (() -> Void)? = nil
+
+    nonisolated static func shouldShowConsentNotice(isMe: Bool, voiceConsentMissing: Bool) -> Bool {
+        isMe && voiceConsentMissing
+    }
 
     static func == (lhs: AudioMediaView, rhs: AudioMediaView) -> Bool {
         lhs.attachment.id == rhs.attachment.id
@@ -566,6 +572,7 @@ struct AudioMediaView: View, Equatable {
             && lhs.transcription?.segments.count == rhs.transcription?.segments.count
             && lhs.translatedAudios.count == rhs.translatedAudios.count
             && lhs.translatedAudios.map(\.url) == rhs.translatedAudios.map(\.url)
+            && lhs.voiceConsentMissing == rhs.voiceConsentMissing
     }
 
     @State private var resolvedAvailability: AudioAvailability = .needsDownload
@@ -665,6 +672,15 @@ struct AudioMediaView: View, Equatable {
                 .padding(.leading, 4)
                 .padding(.top, 2)
                 .tint(Color(hex: contactColor))
+            }
+            if Self.shouldShowConsentNotice(isMe: parentIsMe, voiceConsentMissing: voiceConsentMissing) {
+                AudioConsentNotice(
+                    message: NSLocalizedString("audio.consent.notice.message", bundle: .main, comment: ""),
+                    actionTitle: NSLocalizedString("audio.consent.notice.action", bundle: .main, comment: ""),
+                    accentHex: accentColor,
+                    onTap: { onTapConsentNotice?() }
+                )
+                .padding(.top, 6)
             }
         }
         .fullScreenCover(isPresented: $showAudioFullscreen) {

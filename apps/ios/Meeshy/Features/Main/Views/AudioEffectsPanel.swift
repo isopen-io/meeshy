@@ -196,6 +196,8 @@ struct AudioEffectsPanel: View {
                 .frame(width: 55, alignment: .leading)
             Slider(value: value, in: range)
                 .tint(MeeshyColors.indigo500)
+                .accessibilityLabel(label)
+                .accessibilityValue(String(format: format, value.wrappedValue))
             Text(String(format: format, value.wrappedValue))
                 .font(.system(size: 11, weight: .medium).monospacedDigit())
                 .foregroundColor(.secondary)

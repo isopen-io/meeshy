@@ -24,7 +24,7 @@ export const MyMentionsQuerySchema = z.object({
   limit: z
     .string()
     .transform(Number)
-    .default('20')
+    .prefault('20')
 }).strict();
 
 export type SuggestionsQuery = z.infer<typeof SuggestionsQuerySchema>;

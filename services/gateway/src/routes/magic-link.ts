@@ -88,7 +88,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       // Validate input
       const validationResult = requestMagicLinkSchema.safeParse(request.body);
       if (!validationResult.success) {
-        return sendBadRequest(reply, validationResult.error.errors[0]?.message || 'Invalid email address');
+        return sendBadRequest(reply, validationResult.error.issues[0]?.message || 'Invalid email address');
       }
 
       const { email, rememberDevice } = validationResult.data;
@@ -169,7 +169,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       const validationResult = validateMagicLinkSchema.safeParse({ token: query.token });
 
       if (!validationResult.success) {
-        return sendBadRequest(reply, validationResult.error.errors[0]?.message || 'Token is required');
+        return sendBadRequest(reply, validationResult.error.issues[0]?.message || 'Token is required');
       }
 
       const { token } = validationResult.data;
@@ -257,7 +257,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       const validationResult = validateMagicLinkSchema.safeParse(request.body);
 
       if (!validationResult.success) {
-        return sendBadRequest(reply, validationResult.error.errors[0]?.message || 'Token is required');
+        return sendBadRequest(reply, validationResult.error.issues[0]?.message || 'Token is required');
       }
 
       const { token } = validationResult.data;

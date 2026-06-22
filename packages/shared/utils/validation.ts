@@ -1124,7 +1124,7 @@ export const AttachmentSchemas = {
 
     // Timestamps
     createdAt: z.string().datetime(),
-    metadata: z.record(z.unknown())
+    metadata: z.record(z.string(), z.unknown())
       .refine(
         (m) => { try { return JSON.stringify(m).length <= 8 * 1024; } catch { return false; } },
         { message: 'metadata exceeds 8KB serialized' }

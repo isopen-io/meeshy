@@ -226,7 +226,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }
@@ -306,7 +306,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }
@@ -383,7 +383,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }
@@ -456,7 +456,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }
@@ -519,7 +519,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }
@@ -767,7 +767,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }
@@ -836,7 +836,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }
@@ -910,7 +910,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }
@@ -979,7 +979,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }

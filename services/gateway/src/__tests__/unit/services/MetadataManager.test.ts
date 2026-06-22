@@ -66,9 +66,9 @@ class MockPDFParse {
 
 // Setup mocks
 jest.mock('sharp', () => mockSharp);
-jest.mock('music-metadata', () => ({
-  parseFile: mockParseFile,
-}));
+// music-metadata est ESM-only (chargé via import() dynamique côté prod) : on ne peut
+// pas le jest.mock comme un module CJS. On injecte le mock dans le seam `musicMetadataLoader`
+// (voir beforeEach) qui court-circuite l'import dynamique.
 jest.mock('fluent-ffmpeg', () => ({
   ffprobe: mockFfprobe,
 }));
@@ -95,7 +95,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 // Import after mocks
-import { MetadataManager } from '../../../services/attachments/MetadataManager';
+import { MetadataManager, musicMetadataLoader } from '../../../services/attachments/MetadataManager';
 import type {
   AudioMetadata,
   VideoMetadata,
@@ -110,6 +110,8 @@ describe('MetadataManager', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Injecte le mock parseFile dans le seam ESM (remplace l'ancien jest.mock('music-metadata'))
+    musicMetadataLoader.parseFile = mockParseFile;
     metadataManager = new MetadataManager(uploadBasePath);
 
     // Setup default sharp chain
