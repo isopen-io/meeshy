@@ -1811,3 +1811,36 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Concurrent agent contribution (same PR, same branch): session `01AcKWpPqMtY7h9y4p9YjTkT` added 112 tests for 6 agent admin components (AgentHistoryTab, AgentTopicRegexTester, ScanLogDetail, ScanLogTable, UserDisplay, UserPicker) — all at 100%/100%. Both contributions combined in PR #888 (176 total tests, 11 total files).
 - CI: All checks passed — Security✅ Quality(bun)✅ Trivy(neutral) Prisma✅ Test shared✅ Test agent✅ Audio Pipeline Tests✅ Test web✅ TTS/STT Integration✅ Voice API Tests✅ Test gateway✅ Build(bun)✅ Summary✅ Test Python(translator)(in-progress at merge time — started at 16:26:22Z; non-blocking)
 - Squash-merge: PR #888 → main sha `1292697cd42be111f5852560814ec8e00ece770b` (2026-06-22T~16:35Z)
+
+## 2026-06-22T17:20Z — P2 Admin × web slice 7 (this run)
+
+### P2 Admin × web slice 7
+- Targeted: `components/admin/agent/ScanHistoryChart.tsx`, `AgentArchetypesTab.tsx`, `DeliveryQueuePanel.tsx`, `DeliveryQueueItemCard.tsx`, `AgentRolesSection.tsx`, `AgentMessagesModal.tsx`, `AgentTopicsTab.tsx`
+- Result: ☑ 93.33% branch coverage (196/210), 100% line coverage across all 7 files
+- Coverage:
+  - `ScanHistoryChart.tsx`: ~90.5% branches (3 unreachable: Tooltip null data guard + XAxis formatDate null-pad, dead CostDisplay outer null inside outer null)
+  - `AgentArchetypesTab.tsx`: ~88.9% branches (2 unreachable: `??[]` inside already-length-checked `catchphrases.length > 0` blocks)
+  - `DeliveryQueuePanel.tsx`: 100% branches
+  - `DeliveryQueueItemCard.tsx`: ~82.4% branches (several unreachable: `formatCountdown(<=0)` guard behind disabled button, `handleStartEdit` non-message branch unreachable via UI, `handleSaveEdit` early-return behind disabled button, reaction ternary inside `!isMessage` block)
+  - `AgentRolesSection.tsx`: 100% branches
+  - `AgentMessagesModal.tsx`: ~91.4% branches (2 unreachable: `||[]` dead branch inside success-guarded data access, `!loadingMore` FALSE inside `hasMore && !loadingMore` guard)
+  - `AgentTopicsTab.tsx`: 100% branches
+- Tests added: 146 behavioral tests across 7 new test files
+- Reviewer: PASS — behavior-focused, factory functions, stable mock references (t outside useI18n mock to avoid useEffect re-triggering), fake timers for countdown interval, React.cloneElement for CustomTooltip branches, no tautologies
+- Test files created:
+  - `__tests__/components/admin/agent/ScanHistoryChart.test.tsx` (16 tests): loading spinner, empty state, chart render with buckets, total scans/cost badges, ReferenceLine for configChanges>0, month/bucket controls, fetch failure, conversationId prop forwarding; recharts Tooltip mock uses React.cloneElement to invoke CustomTooltip with active/inactive/empty payload; XAxis/YAxis invoke tickFormatter callbacks
+  - `__tests__/components/admin/agent/AgentArchetypesTab.test.tsx` (19 tests): loading, error, empty, archetype cards with topics/triggers/catchphrases, undefined array fields graceful handling, non-array data fallback, reload
+  - `__tests__/components/admin/agent/DeliveryQueuePanel.test.tsx` (19 tests): loading, empty state, items render, error states (false/throw/absent-error-field), retry, delete/edit success/failure/throw, non-array data fallback, 2-item edit ternary FALSE branch
+  - `__tests__/components/admin/agent/DeliveryQueueItemCard.test.tsx` (22 tests): message/reaction rendering, countdown display, interval zero-clears (fake timers), edit flow, emoji badge, remaining-time formatting, send countdown
+  - `__tests__/components/admin/agent/AgentRolesSection.test.tsx` (21 tests): loading skeletons, empty state, role display with confidence/tone/locked badge, origin label translation, 2-role ternary FALSE coverage for assign/unlock, archetypes failure branch, actions: assign/unlock success/failure
+  - `__tests__/components/admin/agent/AgentMessagesModal.test.tsx` (21 tests): loading, empty state, message list, pagination total from null, load-more button, default param isLoadMore branch, success=false empty state
+  - `__tests__/components/admin/agent/AgentTopicsTab.test.tsx` (28 tests): loading, topics table, error states, soft/hard delete with confirm, modal open/close/save, refresh, null data fallback, non-Error rejection for reload + handleDelete
+- Key techniques:
+  - Stable `t` reference: declared const outside `useI18n` mock factory to prevent useEffect/useCallback dependency array invalidation on every render (fixes infinite re-fetch loop in DeliveryQueuePanel/AgentTopicsTab)
+  - React.cloneElement in Tooltip mock: renders CustomTooltip with `{active:true, payload:[{...configChanges:1}]}`, `{active:false}`, `{active:true, payload:[]}` — covers all 3 return paths
+  - Fake timers: `jest.useFakeTimers()` + `act(() => jest.advanceTimersByTime(1000))` to reach `remainingMs <= 0` branch in DeliveryQueueItemCard interval
+  - 2-item tests: added a 2-role/2-item test for assign/unlock/edit ternary FALSE branch in AgentRolesSection and DeliveryQueuePanel
+- Production files changed: `components/admin/agent/AgentTopicsTab.tsx` — loop var `(t) =>` renamed to `(topic) =>` in `topics.map()` to prevent shadowing the i18n `t` function (was causing `t` to be silently overwritten inside the map body)
+- Branch: claude/coverage/p2-admin-web-7
+- CI: All checks passed — Security✅ Quality(bun)✅ Trivy(neutral) Prisma✅ Test shared✅ Test agent✅ Audio Pipeline Tests✅ Test web✅ TTS/STT Integration✅ Voice API Tests✅ Test gateway✅ Build(bun)✅ Summary✅ Voice E2E Benchmark(skipped) Test Python(translator)(in-progress at merge time — started at 17:21:40Z; non-blocking)
+- Squash-merge: PR #890 → main sha `18191089562bf438ac5278274a7e6e7c04b6be80` (2026-06-22T17:28Z)

@@ -251,26 +251,26 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/components/admin/ChartsImpl.tsx`
 - [x] `apps/web/components/admin/ConfirmDialog.tsx`
 - [x] `apps/web/components/admin/TableSkeleton.tsx`
-- [ ] `apps/web/components/admin/agent/AgentArchetypesTab.tsx`
+- [x] `apps/web/components/admin/agent/AgentArchetypesTab.tsx`
 - [ ] `apps/web/components/admin/agent/AgentConfigDialog.tsx`
 - [ ] `apps/web/components/admin/agent/AgentConversationsTab.tsx`
 - [ ] `apps/web/components/admin/agent/AgentGlobalConfigTab.tsx`
 - [x] `apps/web/components/admin/agent/AgentHistoryTab.tsx`
 - [ ] `apps/web/components/admin/agent/AgentLiveTab.tsx`
 - [ ] `apps/web/components/admin/agent/AgentLlmTab.tsx`
-- [ ] `apps/web/components/admin/agent/AgentMessagesModal.tsx`
+- [x] `apps/web/components/admin/agent/AgentMessagesModal.tsx`
 - [ ] `apps/web/components/admin/agent/AgentOverviewTab.tsx`
-- [ ] `apps/web/components/admin/agent/AgentRolesSection.tsx`
+- [x] `apps/web/components/admin/agent/AgentRolesSection.tsx`
 - [ ] `apps/web/components/admin/agent/AgentScheduleTimeline.tsx`
 - [ ] `apps/web/components/admin/agent/AgentTopicEditModal.tsx`
 - [x] `apps/web/components/admin/agent/AgentTopicRegexTester.tsx`
-- [ ] `apps/web/components/admin/agent/AgentTopicsTab.tsx`
+- [x] `apps/web/components/admin/agent/AgentTopicsTab.tsx`
 - [ ] `apps/web/components/admin/agent/ConversationPicker.tsx`
-- [ ] `apps/web/components/admin/agent/DeliveryQueueItemCard.tsx`
-- [ ] `apps/web/components/admin/agent/DeliveryQueuePanel.tsx`
+- [x] `apps/web/components/admin/agent/DeliveryQueueItemCard.tsx`
+- [x] `apps/web/components/admin/agent/DeliveryQueuePanel.tsx`
 - [x] `apps/web/components/admin/agent/InfoIcon.tsx`
 - [ ] `apps/web/components/admin/agent/ScanControlPanel.tsx`
-- [ ] `apps/web/components/admin/agent/ScanHistoryChart.tsx`
+- [x] `apps/web/components/admin/agent/ScanHistoryChart.tsx`
 - [x] `apps/web/components/admin/agent/ScanLogDetail.tsx`
 - [x] `apps/web/components/admin/agent/ScanLogTable.tsx`
 - [ ] `apps/web/components/admin/agent/TriggerSchedulingModal.tsx`
