@@ -87,3 +87,9 @@
 27. **Reprise foreground d'un média : TOUJOURS gater sur `window != nil` ET sur le drapeau d'autorisation canonique (`isPlaybackActive`), pas seulement sur le mode.** `handleDidBecomeActive` ne vérifiait `window` que pour l'audio mixer → un canvas `.play` retenu hors écran rejouait sa vidéo/audio à la réouverture de l'app. Et `handleAppLifecycle(active: true)` court-circuitait le gate. Preuve/validation : grep CoreMedia `SetRateAndAnchorTime` (rate=1 au foreground avant fix, plus aucun après).
 
 28. **Avant tout `push --force-with-lease` sur `dev` : `git fetch` PUIS vérifier `git log main..origin/dev`** — un agent parallèle peut avoir mergé une PR sur dev uniquement (PR #570 écrasée puis réintégrée par merge `cb3cd8a9e`). Le lease ne protège que contre ce qu'on a déjà VU ; il faut regarder ce qu'on s'apprête à effacer.
+
+## 2026-06-22 — Gateway test coverage (admin routes)
+
+29. **Fastify response serialization strips response-body fields not declared in the route schema.** When a route handler returns `{ success, data, cacheInvalidation }` but the JSON schema only declares `{ success, data }`, Fastify's `fast-json-stringify` silently drops `cacheInvalidation`. Tests that assert `body.cacheInvalidation.*` will always fail. **Fix:** either add the extra field to the response schema, or (when verifying side-effects) assert on mock.calls instead of the response body.
+
+30. **Mock ordering matters when conditional pipeline calls are skipped.** `aggregateRaw.mockResolvedValueOnce(a).mockResolvedValueOnce(b)` breaks when the first mock value is consumed by a call that only happens conditionally. If the first pipeline is skipped (e.g. `topLangCodes.length === 0` skips the distinct-users aggregation), the second mock value never gets consumed. **Rule:** for conditional pipelines, build mock stacks that match the actual execution path, not the happy-path order.

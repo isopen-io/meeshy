@@ -100,8 +100,8 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## routes/admin  (13/19 have a test)
 
-- [ ] `services/gateway/src/routes/admin/agent-topics.ts`
-- [ ] `services/gateway/src/routes/admin/agent.ts`
+- [x] `services/gateway/src/routes/admin/agent-topics.ts`
+- [~] `services/gateway/src/routes/admin/agent.ts`
 - [x] `services/gateway/src/routes/admin/analytics.ts`
 - [x] `services/gateway/src/routes/admin/anonymous-users.ts`
 - [x] `services/gateway/src/routes/admin/broadcasts.ts`
@@ -109,7 +109,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `services/gateway/src/routes/admin/dashboard.ts`
 - [x] `services/gateway/src/routes/admin/index.ts`
 - [x] `services/gateway/src/routes/admin/invitations.ts`
-- [~] `services/gateway/src/routes/admin/languages.ts`
+- [x] `services/gateway/src/routes/admin/languages.ts`
 - [x] `services/gateway/src/routes/admin/messages.ts`
 - [x] `services/gateway/src/routes/admin/posts.ts`
 - [x] `services/gateway/src/routes/admin/reports.ts`

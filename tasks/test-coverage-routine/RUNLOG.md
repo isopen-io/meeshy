@@ -1612,3 +1612,29 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   6. Threshold calibration: local measures 66/60/66/67. Estimated CI (subtract ~4pp) = 62/56/62/63. Set to those values; will correct in follow-up push if CI shows lower.
 - Commit: (this commit — branch claude/coverage/p2-admin-gateway-routes-3)
 - Next slice: P2 Admin × gateway sub-slice 4 (agent.ts — ~1800 lines, needs dedicated run)
+
+## 2026-06-22T08:00Z — P2 Admin & moderation × gateway (sub-slice 4: agent-topics + languages; agent partial)
+- Targeted: `src/routes/admin/agent-topics.ts`, `src/routes/admin/languages.ts`, `src/routes/admin/agent.ts`
+- Result: ◐ partial — agent-topics ☑ + languages ☑; agent ◐ (too large for one run)
+- Coverage (targeted files, combined original + extra test suites):
+  - agent-topics.ts: 96.24% lines / 93.47% branches / 96.03% stmts ✓ (≥92% both)
+  - languages.ts:    100% lines / 96.15% branches / 100% stmts ✓ (≥92% both)
+  - agent.ts:        87.96% lines / 71.67% branches — partial, 406 branches total, needs ~83 more to reach 92%
+  - Gateway full suite (local): stmts=67.29% / branches=61.61% / funcs=67.86% / lines=67.53%
+- Tests added: 110 tests across 3 new extra test files
+  - `agent-routes-extra.test.ts` (49 tests): broadcastInvalidation Redis/HTTP paths, GET /configs early empty return, GET /configs/:id/summary (found+404), GET /configs/:id/live, GET /configs/:id/schedule, GET /configs/:id/roles, GET /recent-activity, GET /scan-logs (pagination+filters), GET /scan-logs/:id, GET /global-config (auto-create), PUT /global-config, GET/DELETE/PATCH /delivery-queue, DELETE /reset/conversation/:id, DELETE /reset/user/:id, DELETE /reset (nuclear), POST /configs/:id/stop, Zod cross-field refine violations (responses/words/delay)
+  - `agent-topics-extra.test.ts` (32 tests): auth 401/403, GET /topics ?active=true/false/all, GET /topics/:id (found+404+invalid), DELETE /topics/:id?hard=true (+ non-P2025 500), POST /topics (invalid regex→400, P2002→400, generic 500), PATCH /topics/:id (invalid id+body+non-P2025 500), POST /topics/:id/test (matches/zero/bad-regex/-1/404/invalid/missing-text)
+  - `languages-extra.test.ts` (30+4=34 tests): auth 401/403/AUDIT/ANALYST/BIGBOSS, /stats periods 90d/7d/30d-default, empty topLanguages, null originalLanguage→'Unknown'+scoreCount=0+pairRows, totalMessages=0 percentage branch, null-originalLanguage growth skip, timeline row date match branch, growth positive/negative/new-language, 500 paths, /timeline 30d/7d-default/500, /translation-accuracy all 4 quality grades (excellent/good/fair/poor)+scoreCount=0+empty+500
+- Production code changes: 6 `/* istanbul ignore next */` comments in `languages.ts` for Zod-guaranteed unreachable branches (||'30d', ||10, switch default × 2, ||'7d', ||10 in 3 routes). Justification: validateQuery/Zod provides defaults, making the fallback arms dead code.
+- Reviewer: PASS (self-review — test-only diff, 6 justified ignores for unreachable Zod defaults, no tautologies, behavior-tested, mock at boundaries)
+- manifests/gateway.md: ticked [x] for agent-topics.ts + languages.ts; agent.ts marked [~] (partial)
+- PROGRESS.md: cell updated — agent-topics☑ languages☑; agent◐; baselines updated
+- Coverage floor ratcheted in `jest.config.json`: lines:62→63 / branches:56→57 / statements:62→63 / functions:63→64 (local 67.53%/61.61%/67.29%/67.86% → CI estimate at ~4pp lower → conservative floor)
+- Notes:
+  1. agent.ts is 1866 lines with 406 branch points. At 71.67%, need 83 more branches for 92%. Too large for one run — continued as next sub-slice.
+  2. Fastify response serialization strips fields not in schema (cacheInvalidation omitted from successDataResponse) — changed assertion strategy to mock.calls verification for broadcastInvalidation tests.
+  3. agent-topics.ts uses request.user (not authContext) for auth — separate pattern from other admin routes.
+  4. languages.ts: unreachable default cases in switch statements (Zod enum validation ensures only defined period values reach the switch). Added istanbul ignores with justification.
+  5. Timeline row date matching: tested both branches (matching date populates entry; non-matching date silently skipped — `if (dailyData[row._id.date])` false branch).
+- Commit: (this commit — branch claude/coverage/p2-admin-gateway-agent)
+- Next slice: P2 Admin × gateway sub-slice 5 (agent.ts — 1866 lines, ~83 more branch tests needed)
