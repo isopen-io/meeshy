@@ -125,7 +125,7 @@ function StatusComposer({ open, onClose, onPublish, currentStatus }: StatusCompo
               className={cn(
                 'text-xs transition-colors duration-300',
                 content.length >= MAX_CONTENT_LENGTH
-                  ? 'text-[#C1292E] font-medium'
+                  ? 'text-[var(--gp-error)] font-medium'
                   : 'text-[var(--gp-text-muted)]'
               )}
             >
