@@ -279,6 +279,7 @@
 		CEQ000000002F01 /* CallEventQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEQ000000001F01 /* CallEventQueue.swift */; };
 		CEQT000000002F01 /* CallEventQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEQT000000001F01 /* CallEventQueueTests.swift */; };
 		CF236AB810E070AE44B8AE2F /* Bubble/BubbleStandardLayout+Media.swift in Sources */ = {isa = PBXBuildFile; fileRef = 161B698A5C7ABD5B61A9F071 /* Bubble/BubbleStandardLayout+Media.swift */; };
+		FDE9A5D13C7C053E78FC8A1C /* Bubble/MediaConsumptionProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8960C90225E408EDBE735C2 /* Bubble/MediaConsumptionProgressBar.swift */; };
 		CHPW002A002A002A002A0002 /* ChangePasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CHPW001A001A001A001A0001 /* ChangePasswordView.swift */; };
 		CL6001A001A001A001A00001 /* CommunityLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CL6002A002A002A002A00002 /* CommunityLinksView.swift */; };
 		CLRT0001000100010001002 /* ComposerLanguageResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLRT0001000100010001001 /* ComposerLanguageResolverTests.swift */; };
@@ -643,6 +644,7 @@
 		13BCD5ADC318DEED40437A0F /* TaskTimeoutTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TaskTimeoutTests.swift; sourceTree = "<group>"; };
 		147B06F4C6BA47BCD48D03C6 /* apps/ios/MeeshyTests/Unit/Services/PresenceManagerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = apps/ios/MeeshyTests/Unit/Services/PresenceManagerTests.swift; sourceTree = SOURCE_ROOT; };
 		161B698A5C7ABD5B61A9F071 /* Bubble/BubbleStandardLayout+Media.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "Bubble/BubbleStandardLayout+Media.swift"; sourceTree = "<group>"; };
+		D8960C90225E408EDBE735C2 /* Bubble/MediaConsumptionProgressBar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "Bubble/MediaConsumptionProgressBar.swift"; sourceTree = "<group>"; };
 		17F9BAE1DE897740FE5B367B /* FeedListView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeedListView.swift; sourceTree = "<group>"; };
 		17FD2C4BEA6C9C218634F16B /* CallTranscriptionService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CallTranscriptionService.swift; sourceTree = "<group>"; };
 		18D41D2818B5E73E616A792D /* MeeshyWidgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyWidgets.swift; sourceTree = "<group>"; };
@@ -1542,6 +1544,7 @@
 				CC6D1F93BD7E43668D8041AB /* MessageContextOverlay.swift */,
 				529B682AC1214F9C9016713C /* ConversationView+ContextOverlay.swift */,
 				161B698A5C7ABD5B61A9F071 /* Bubble/BubbleStandardLayout+Media.swift */,
+				D8960C90225E408EDBE735C2 /* Bubble/MediaConsumptionProgressBar.swift */,
 				56FAE7930C60B05A39A5DAF2 /* ConversationMediaViews.swift */,
 				ABE2501A2F8D4343B50DA1FF /* VideoAvailabilityResolver.swift */,
 				0CA1B0DE0000000000000002 /* VideoEmbedContainer.swift */,
@@ -2633,6 +2636,7 @@
 				53922BC2159445F08DC37D42 /* MessageContextOverlay.swift in Sources */,
 				C795FFC6761046EAB134E478 /* ConversationView+ContextOverlay.swift in Sources */,
 				CF236AB810E070AE44B8AE2F /* Bubble/BubbleStandardLayout+Media.swift in Sources */,
+				FDE9A5D13C7C053E78FC8A1C /* Bubble/MediaConsumptionProgressBar.swift in Sources */,
 				BBLC0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleContent.swift in Sources */,
 				BBLB0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift in Sources */,
 				BBLS0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleStyle.swift in Sources */,
@@ -3073,7 +3077,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1187;
+				CURRENT_PROJECT_VERSION = 1189;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -3181,7 +3185,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1187;
+				CURRENT_PROJECT_VERSION = 1189;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Dev";
@@ -3279,7 +3283,7 @@
 				CODE_SIGN_ENTITLEMENTS = Meeshy/Meeshy.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1187;
+				CURRENT_PROJECT_VERSION = 1189;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Meeshy;
@@ -3312,7 +3316,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1187;
+				CURRENT_PROJECT_VERSION = 1189;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -3350,7 +3354,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1187;
+				CURRENT_PROJECT_VERSION = 1189;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -3390,7 +3394,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1187;
+				CURRENT_PROJECT_VERSION = 1189;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
