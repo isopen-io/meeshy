@@ -1,4 +1,5 @@
 import { apiService } from './api.service';
+import { buildApiUrl } from '@/lib/config';
 import type {
   Post,
   PostComment,
@@ -47,6 +48,8 @@ export interface UpdatePostRequest {
   readonly visibilityUserIds?: string[];
   readonly storyEffects?: Record<string, unknown>;
   readonly moodEmoji?: string;
+  /** Ids of attached media (PostMedia) to detach during the edit. */
+  readonly removeMediaIds?: readonly string[];
 }
 
 export interface RepostRequest {
@@ -71,6 +74,26 @@ export interface CursorPaginatedResponse<T> {
     };
     readonly nextCursor: string | null;
   };
+}
+
+export interface ReelFeedFilters {
+  readonly cursor?: string;
+  readonly limit?: number;
+  /** Seed reel id — anchors the affinity thread when a reel is opened from the feed. */
+  readonly seed?: string;
+}
+
+// The reels feed mirrors the gateway `sendSuccess()` envelope: the cursor lives
+// at the top-level `pagination`, not under `meta` (matches `/posts/feed/reels`).
+export interface ReelsFeedResponse {
+  readonly success: boolean;
+  readonly data: Post[];
+  readonly pagination?: {
+    readonly limit: number;
+    readonly hasMore: boolean;
+    readonly nextCursor: string | null;
+  };
+  readonly meta?: { readonly mentionedUsers?: readonly unknown[] };
 }
 
 // ---------------------------------------------------------------------------
@@ -101,6 +124,16 @@ export const postsService = {
 
   async getFeed(filters: FeedFilters = {}): Promise<CursorPaginatedResponse<Post>> {
     const response = await apiService.get<CursorPaginatedResponse<Post>>(`/posts/feed${buildQuery(filters)}`);
+    return unwrap(response);
+  },
+
+  async getReelsFeed(filters: ReelFeedFilters = {}): Promise<ReelsFeedResponse> {
+    const params = new URLSearchParams();
+    if (filters.cursor) params.set('cursor', filters.cursor);
+    if (filters.limit) params.set('limit', String(filters.limit));
+    if (filters.seed) params.set('seed', filters.seed);
+    const qs = params.toString();
+    const response = await apiService.get<ReelsFeedResponse>(`/posts/feed/reels${qs ? `?${qs}` : ''}`);
     return unwrap(response);
   },
 
@@ -280,3 +313,19 @@ export const postsService = {
     await apiService.post(`/stories/audio/${audioId}/use`);
   },
 };
+
+/**
+ * Ping de vue anonyme (fire-and-forget). N'attache PAS de JWT (parcours anonyme) :
+ * seul `x-session-token` part comme clé de dédup opaque. Le gateway no-op si un
+ * JWT est présent ou si le post n'est pas public. buildApiUrl préfixe /api/v1.
+ */
+export async function recordAnonymousView(postId: string, sessionKey: string): Promise<void> {
+  try {
+    await fetch(buildApiUrl(`/posts/${postId}/anonymous-view`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-session-token': sessionKey },
+    });
+  } catch {
+    // fire-and-forget : ne jamais bloquer le rendu
+  }
+}

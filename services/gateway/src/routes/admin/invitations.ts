@@ -244,6 +244,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
       const { id } = request.params as { id: string };
       const { status } = request.body as { status: string };
 
+      /* istanbul ignore next -- Zod z.enum enforces valid status; guard unreachable */
       if (!['pending', 'accepted', 'rejected'].includes(status)) {
         return sendBadRequest(reply, 'Statut invalide');
       }

@@ -65,6 +65,7 @@ import type {
   CommentLikedEventData,
   PostTranslationUpdatedEventData,
   CommentTranslationUpdatedEventData,
+  CommentMediaUpdatedEventData,
   CommentReactionUpdateEventData,
   CommentReactionSyncEventData,
   PostReactionUpdateEventData,
@@ -214,11 +215,12 @@ export const SERVER_EVENTS = {
   TRANSCRIPTION_READY: 'audio:transcription-ready',
 
   /**
-   * --- Message pinning (RESERVED — no emitter yet) ---
-   * Declared for future "pin message" feature. Gateway does not
-   * currently emit these and no client subscribes to them. Keep the
-   * constants + types in sync with the iOS roadmap so the feature
-   * can be wired without renaming.
+   * --- Message pinning ---
+   * Emitted by the gateway on the pin/unpin REST routes
+   * (POST/DELETE /conversations/:id/messages/:messageId/pin) to the
+   * conversation room. iOS subscribes via MessageSocketManager
+   * (messagePinned / messageUnpinned) and applies the change through
+   * persistence so other participants and devices see pin state live.
    */
   MESSAGE_PINNED: 'message:pinned',
   MESSAGE_UNPINNED: 'message:unpinned',
@@ -273,6 +275,9 @@ export const SERVER_EVENTS = {
   // --- Post/Comment Translations ---
   POST_TRANSLATION_UPDATED: 'post:translation-updated',
   COMMENT_TRANSLATION_UPDATED: 'comment:translation-updated',
+
+  // --- Comment media (audio transcription/translation ready) ---
+  COMMENT_MEDIA_UPDATED: 'comment:media-updated',
 
   // --- User Preferences ---
   USER_PREFERENCES_UPDATED: 'user:preferences-updated',
@@ -1112,6 +1117,7 @@ export interface ServerToClientEvents {
   // Post/Comment Translations
   [SERVER_EVENTS.POST_TRANSLATION_UPDATED]: (data: PostTranslationUpdatedEventData) => void;
   [SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED]: (data: CommentTranslationUpdatedEventData) => void;
+  [SERVER_EVENTS.COMMENT_MEDIA_UPDATED]: (data: CommentMediaUpdatedEventData) => void;
 
   // User Preferences
   [SERVER_EVENTS.USER_PREFERENCES_UPDATED]: (data: UserPreferencesUpdatedEventData) => void;

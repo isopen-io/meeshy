@@ -61,7 +61,7 @@ final class StoryRepostFlowTests: XCTestCase {
         let repostOf: APIRepostOf? = repostOfId.map { rid in
             APIRepostOf(
                 id: rid, type: repostType, content: nil, originalLanguage: nil, translations: nil,
-                storyEffects: nil, audioUrl: nil, originalRepostOfId: nil,
+                storyEffects: nil, audioUrl: nil, moodEmoji: nil, originalRepostOfId: nil,
                 author: author, media: nil, createdAt: Date(), likeCount: nil,
                 commentCount: nil, isQuote: nil
             )

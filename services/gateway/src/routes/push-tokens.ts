@@ -231,11 +231,11 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        fastify.log.warn(`[PUSH_TOKEN] Validation error: ${JSON.stringify(error.errors)}`);
+        fastify.log.warn(`[PUSH_TOKEN] Validation error: ${JSON.stringify(error.issues)}`);
         return reply.status(400).send({
           success: false,
           error: 'Invalid request data',
-          details: error.errors
+          details: error.issues
         });
       }
 
@@ -326,11 +326,11 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        fastify.log.warn(`[PUSH_TOKEN] Validation error: ${JSON.stringify(error.errors)}`);
+        fastify.log.warn(`[PUSH_TOKEN] Validation error: ${JSON.stringify(error.issues)}`);
         return reply.status(400).send({
           success: false,
           error: 'Invalid request data',
-          details: error.errors
+          details: error.issues
         });
       }
 

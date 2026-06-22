@@ -36,7 +36,7 @@ struct ReelFeedVideoSurface: View {
         ZStack {
             // Poster (thumbHash → thumbnail) reste visible sous la vidéo jusqu'à
             // la première frame, et seul affichage pour les cartes inactives.
-            ReelPoster(thumbHash: media.thumbHash, url: media.thumbnailUrl ?? media.url, color: media.thumbnailColor)
+            ReelPoster(thumbHash: media.thumbHash, url: media.thumbnailUrl ?? media.url, color: media.thumbnailColor).equatable()
 
             // Surface vidéo seulement quand cette carte est active, prête, et que
             // le moteur partagé joue bien CETTE url (sinon on montrerait la frame

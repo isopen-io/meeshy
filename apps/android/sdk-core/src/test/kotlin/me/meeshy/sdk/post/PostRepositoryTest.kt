@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.net.api.PostApi
 import org.junit.Test
 import java.io.IOException
@@ -22,7 +23,17 @@ class PostRepositoryTest {
     private fun ok(post: ApiPost) = ApiResponse(success = true, data = listOf(post))
     private fun okUnit() = ApiResponse(success = true, data = Unit)
 
+    private fun page(posts: List<ApiPost>, nextCursor: String?, hasMore: Boolean) =
+        ApiResponse(
+            success = true,
+            data = posts,
+            pagination = Pagination(nextCursor = nextCursor, hasMore = hasMore),
+        )
+
     private fun List<ApiPost>.post(id: String) = first { it.id == id }
+
+    private fun CacheResult<List<ApiPost>>.posts(): List<ApiPost> =
+        (this as? CacheResult.Fresh)?.value ?: (this as CacheResult.Stale).value
 
     private suspend fun seed(post: ApiPost): PostRepository {
         coEvery { api.getFeed(any(), any()) } returns ok(post)
@@ -83,5 +94,51 @@ class PostRepositoryTest {
             assertThat(post.likeCount).isEqualTo(2)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun feedHasMore_reflectsFirstPagePagination() = runTest {
+        coEvery { api.getFeed(null, any()) } returns
+            page(listOf(ApiPost(id = "p1", content = "a")), nextCursor = "c1", hasMore = true)
+        val repo = PostRepository(api)
+
+        repo.refresh()
+
+        assertThat(repo.feedHasMore.value).isTrue()
+    }
+
+    @Test
+    fun loadMore_appendsDedupedNextPage_andStopsWhenExhausted() = runTest {
+        coEvery { api.getFeed(null, any()) } returns
+            page(listOf(ApiPost(id = "p1", content = "a")), nextCursor = "c1", hasMore = true)
+        coEvery { api.getFeed("c1", any()) } returns
+            page(
+                listOf(ApiPost(id = "p1", content = "a"), ApiPost(id = "p2", content = "b")),
+                nextCursor = null,
+                hasMore = false,
+            )
+        val repo = PostRepository(api)
+        repo.refresh()
+
+        val moreRemains = repo.loadMore()
+
+        assertThat(moreRemains).isFalse()
+        assertThat(repo.feedHasMore.value).isFalse()
+        repo.feedStream().test {
+            assertThat(awaitItem().posts().map { it.id }).containsExactly("p1", "p2").inOrder()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun loadMore_isNoOp_whenNoCursorRemains() = runTest {
+        coEvery { api.getFeed(null, any()) } returns
+            page(listOf(ApiPost(id = "p1", content = "a")), nextCursor = null, hasMore = false)
+        val repo = PostRepository(api)
+        repo.refresh()
+
+        assertThat(repo.loadMore()).isFalse()
+
+        coVerify(exactly = 1) { api.getFeed(any(), any()) }
     }
 }

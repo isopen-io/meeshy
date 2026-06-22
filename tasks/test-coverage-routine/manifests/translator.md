@@ -39,13 +39,13 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/translator/src/services/audio_fetcher.py`
 - [ ] `services/translator/src/services/audio_message_pipeline.py`
 - [~] `services/translator/src/services/database_service.py`
-- [ ] `services/translator/src/services/diarization_service.py`
+- [x] `services/translator/src/services/diarization_service.py`
 - [ ] `services/translator/src/services/diarization_speechbrain.py`
 - [x] `services/translator/src/services/language_capabilities.py`
 - [ ] `services/translator/src/services/model_manager.py`
 - [~] `services/translator/src/services/redis_service.py`
 - [~] `services/translator/src/services/segment_serialization.py`
-- [ ] `services/translator/src/services/transcribe_gap_filler.py`
+- [x] `services/translator/src/services/transcribe_gap_filler.py`
 - [~] `services/translator/src/services/transcription_service.py`
 - [~] `services/translator/src/services/translation_ml_service.py`
 - [~] `services/translator/src/services/translation_pipeline_service.py`
@@ -55,13 +55,13 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/translator/src/services/voice_clone_service.py`
 - [~] `services/translator/src/services/voice_profile_handler.py`
 - [ ] `services/translator/src/services/zmq_audio_handler.py`
-- [ ] `services/translator/src/services/zmq_models.py`
+- [x] `services/translator/src/services/zmq_models.py`
 - [ ] `services/translator/src/services/zmq_pool_manager.py`
 - [~] `services/translator/src/services/zmq_server.py`
 - [ ] `services/translator/src/services/zmq_server_core.py`
 - [ ] `services/translator/src/services/zmq_transcription_handler.py`
 - [ ] `services/translator/src/services/zmq_translation_handler.py`
-- [ ] `services/translator/src/services/zmq_voice_handler.py`
+- [x] `services/translator/src/services/zmq_voice_handler.py`
 
 ## services/audio_pipeline  (2/8 have a test)
 
@@ -133,10 +133,10 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 ## services/zmq_pool  (0/5 have a test)
 
 - [ ] `services/translator/src/services/zmq_pool/__init__.py`
-- [ ] `services/translator/src/services/zmq_pool/connection_manager.py`
-- [ ] `services/translator/src/services/zmq_pool/translation_processor.py`
-- [ ] `services/translator/src/services/zmq_pool/worker_pool.py`
-- [ ] `services/translator/src/services/zmq_pool/zmq_pool_manager.py`
+- [x] `services/translator/src/services/zmq_pool/connection_manager.py`
+- [x] `services/translator/src/services/zmq_pool/translation_processor.py`
+- [x] `services/translator/src/services/zmq_pool/worker_pool.py`
+- [x] `services/translator/src/services/zmq_pool/zmq_pool_manager.py`
 
 ## tests  (0/1 have a test)
 
@@ -151,11 +151,11 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 - [~] `services/translator/src/utils/audio_format.py`
 - [ ] `services/translator/src/utils/audio_format_converter.py`
-- [ ] `services/translator/src/utils/audio_utils.py`
+- [x] `services/translator/src/utils/audio_utils.py`
 - [~] `services/translator/src/utils/model_utils.py`
 - [ ] `services/translator/src/utils/performance.py`
-- [ ] `services/translator/src/utils/pipeline_cache.py`
-- [ ] `services/translator/src/utils/segment_splitter.py`
-- [ ] `services/translator/src/utils/smart_segment_merger.py`
+- [x] `services/translator/src/utils/pipeline_cache.py`
+- [x] `services/translator/src/utils/segment_splitter.py`
+- [x] `services/translator/src/utils/smart_segment_merger.py`
 - [~] `services/translator/src/utils/text_segmentation.py`
 - [ ] `services/translator/src/utils/warning_filters.py`

@@ -155,8 +155,11 @@ struct RootView: View {
                     case .profile:
                         ProfileView()
                             .navigationBarHidden(true)
-                    case .contacts(let initialTab):
-                        ContactsHubView(initialTab: initialTab)
+                    case .contacts:
+                        ContactsHubView()
+                            .navigationBarHidden(true)
+                    case .peopleDiscovery(let initialTab):
+                        PeopleDiscoveryView(initialTab: initialTab)
                             .navigationBarHidden(true)
                     case .communityList:
                         CommunityListView(
@@ -440,12 +443,12 @@ struct RootView: View {
         .adaptiveOnChange(of: router.sceneTitle) { _, title in
             UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
-                .first?.title = "Meeshy — \(title)"
+                .first?.title = String(format: String(localized: "root.scene_title_format", defaultValue: "Meeshy — %@", bundle: .main), title)
         }
         .onAppear {
             UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
-                .first?.title = "Meeshy — Conversations"
+                .first?.title = String(localized: "root.scene_title_default", defaultValue: "Meeshy — Conversations", bundle: .main)
         }
         .task {
             // Connect Socket.IO early so the backend knows we're online
@@ -695,9 +698,17 @@ struct RootView: View {
             UserProfileSheet(
                 user: user,
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                postsContent: { uid in
+                    AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
+                        router.deepLinkProfileUser = nil
+                        router.push(.postDetail(post.id, post))
+                    }, onOpenReel: { reel, reels in
+                        ProfilePostsOpener.openReel(reel, in: reels) { router.deepLinkProfileUser = nil }
+                    }))
+                }
             )
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showSharePicker) {
@@ -792,6 +803,9 @@ struct RootView: View {
         guard let deepLink = deepLinkRouter.consumePendingDeepLink() else { return }
 
         switch deepLink {
+        case .trackedLink(let token):
+            // `/l/<token>` resolved async by targetType (re-sets pendingDeepLink).
+            deepLinkRouter.resolveTrackedLink(token)
         case .joinLink(let identifier), .chatLink(let identifier):
             // RootView only mounts when authenticated, so we never want
             // the anonymous join sheet here — that flow is owned by
@@ -1347,6 +1361,13 @@ struct RootView: View {
         reelsRevealCompleted = false
         reelsRevealMasked = true
         SharedAVPlayerManager.shared.pause()
+        // Couper aussi tout réel-AUDIO en cours : il est piloté par le moteur
+        // externe `@StateObject` de la page (pas par `SharedAVPlayerManager`), et
+        // ni `AudioPlayerView.onDisappear` (early-return pour moteur externe) ni
+        // `ReelPageView.onChange(isActive)` (la page reste active à la fermeture)
+        // ne le stoppent. `stopAllAudio()` coupe les players audio/externes en
+        // laissant le moteur vidéo (repris par la surface de fond du feed).
+        PlaybackCoordinator.shared.stopAllAudio()
         HapticFeedback.light()
         let duration: Double = reduceMotionEnabled ? 0.18 : 0.3
         withAnimation(.easeIn(duration: duration)) {
@@ -1373,11 +1394,15 @@ struct RootView: View {
                 }
             },
             onRightTap: {
+                HapticFeedback.light()
+                // Le bouton porte l'avatar de l'utilisateur. 1er tap = déplie le
+                // menu ; 2e tap (menu déjà ouvert) = ouvre la page profil dans les
+                // réglages et referme le menu, comme n'importe quel autre item.
                 if showMenu {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showMenu = false
                     }
-                    router.push(.settings)
+                    router.push(.profile)
                 } else {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showMenu.toggle()
@@ -1393,9 +1418,26 @@ struct RootView: View {
                 }
             },
             onRightLongPress: {
-                router.push(.settings)
+                // Long-press sur l'avatar = raccourci direct vers la page profil
+                // (sans passer par le menu). Les réglages restent accessibles via
+                // le dernier item du menu (roue dentée).
+                HapticFeedback.medium()
+                if showMenu {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showMenu = false
+                    }
+                }
+                router.push(.profile)
             },
             isSearchBarVisible: !isScrollingDown,
+            leftA11yLabel: String(localized: "a11y.floating.feed", defaultValue: "Flux", bundle: .main),
+            leftA11yHint: String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité", bundle: .main),
+            rightA11yLabel: String(localized: "a11y.floating.menu", defaultValue: "Menu", bundle: .main),
+            rightA11yHint: String(localized: "a11y.floating.menu.hint", defaultValue: "Ouvre le menu de navigation", bundle: .main),
+            rightA11yValue: notificationManager.unreadCount > 0
+                ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationManager.unreadCount)
+                : nil,
+            rightA11yActionName: String(localized: "a11y.floating.menu.profile-action", defaultValue: "Modifier le profil", bundle: .main),
             leftContent: {
                 // Feed button content
                 ZStack {
@@ -1420,7 +1462,9 @@ struct RootView: View {
                 }
             },
             rightContent: {
-                // Menu button content
+                // Menu button content — porte l'avatar de l'utilisateur (ou ses
+                // initiales) à l'intérieur de l'anneau dégradé. L'anneau vire au
+                // rouge quand le menu est ouvert ; le badge de notifications reste.
                 ZStack {
                     Circle()
                         .fill(
@@ -1431,13 +1475,18 @@ struct RootView: View {
                             )
                         )
 
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
+                    MeeshyAvatar(
+                        name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
+                        context: .custom(38),
+                        avatarURL: AuthManager.shared.currentUser?.avatar,
+                        thumbHash: AuthManager.shared.currentUser?.avatarThumbHash
+                    )
+                    .allowsHitTesting(false)
 
                     // Badge
                     if !showMenu && notificationManager.unreadCount > 0 {
                         NotificationBadge(count: notificationManager.unreadCount)
+                            .accessibilityLabel(String(format: String(localized: "a11y.notifications.unread_count", defaultValue: "%d notifications non lues", bundle: .main), notificationManager.unreadCount))
                     }
                 }
             }
@@ -1469,7 +1518,7 @@ struct RootView: View {
 
             // Menu items configuration
             let menuItemSize: CGFloat = 46
-            let menuSpacing: CGFloat = 12
+            let menuSpacing: CGFloat = MeeshySpacing.md
 
             // Determine if menu should expand up or down
             let expandDown = pos.y < 0.5
@@ -1478,12 +1527,16 @@ struct RootView: View {
             let menuX = pos.isLeft ? buttonX : buttonX
             let menuStartY = expandDown ? buttonY + halfButton + menuSpacing + menuItemSize / 2 : buttonY - halfButton - menuSpacing - menuItemSize / 2
 
-            // Menu items
-            let menuItems: [(icon: String, color: String, action: () -> Void)] = [
-                ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.links) }),
-                ("bell.fill", "FF6B6B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.notifications) }),
-                ("person.2.fill", "6366F1", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.contacts()) }),
-                ("person.3.fill", "2ECC71", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) })
+            // Menu items — boutons d'action. Le profil n'a PAS d'item dédié : il
+            // s'ouvre via le 2e tap (ou le long-press) sur le bouton avatar. Le
+            // DERNIER bouton est la roue dentée (→ préférences générales).
+            let menuItems: [(icon: String, color: String, label: String, action: () -> Void)] = [
+                ("link.badge.plus", "F8B500", String(localized: "root.menu.links", defaultValue: "Mes liens"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.links) }),
+                ("bell.fill", "FF6B6B", String(localized: "root.menu.notifications", defaultValue: "Notifications"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.notifications) }),
+                ("person.2.fill", "6366F1", String(localized: "root.menu.contacts", defaultValue: "Contacts"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.contacts) }),
+                ("sparkle.magnifyingglass", "8B5CF6", String(localized: "root.menu.discover", defaultValue: "Découvrir"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.peopleDiscovery()) }),
+                ("person.3.fill", "2ECC71", String(localized: "root.menu.communities", defaultValue: "Communautés"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) }),
+                ("gearshape.fill", "64748B", String(localized: "root.menu.settings", defaultValue: "Réglages"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.settings) })
             ]
 
             ForEach(Array(menuItems.enumerated()), id: \.offset) { index, item in
@@ -1493,16 +1546,20 @@ struct RootView: View {
 
                 let itemY = menuStartY + yOffset
 
-                // Special handling for notifications badge
-                if item.icon == "bell.fill" {
-                    ThemedActionButton(icon: item.icon, color: item.color, badge: notificationManager.unreadCount, action: item.action)
-                        .position(x: menuX, y: itemY)
-                        .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
-                } else {
-                    ThemedActionButton(icon: item.icon, color: item.color, action: item.action)
-                        .position(x: menuX, y: itemY)
-                        .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
+                // Special handling for notifications & pending-request badges
+                Group {
+                    if item.icon == "bell.fill" {
+                        ThemedActionButton(icon: item.icon, color: item.color, badge: notificationManager.unreadCount, action: item.action)
+                    } else if item.icon == "sparkle.magnifyingglass" {
+                        ThemedActionButton(icon: item.icon, color: item.color, badge: FriendshipCache.shared.pendingReceivedCount, action: item.action)
+                    } else {
+                        ThemedActionButton(icon: item.icon, color: item.color, action: item.action)
+                    }
                 }
+                .position(x: menuX, y: itemY)
+                .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
+                .accessibilityLabel(item.label)
+                .accessibilityHint(String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section"))
             }
         }
         .ignoresSafeArea()

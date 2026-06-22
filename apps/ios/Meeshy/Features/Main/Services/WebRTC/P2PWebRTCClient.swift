@@ -239,6 +239,15 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let capturer = RTCCameraVideoCapturer(delegate: filterDelegate)
         videoCapturer = capturer
 
+        // PiP système — autoriser la caméra à continuer en multitâche/arrière-plan
+        // (iOS 16+, appareils compatibles) pour que le pair continue de voir notre
+        // flux quand on bascule l'app en arrière-plan avec le PiP actif. Pas
+        // d'entitlement legacy requis sur iOS 16+ : simple propriété de session.
+        if capturer.captureSession.isMultitaskingCameraAccessSupported {
+            capturer.captureSession.isMultitaskingCameraAccessEnabled = true
+            Logger.webrtc.info("[WEBRTC] multitasking camera access enabled")
+        }
+
         Logger.webrtc.info("[WEBRTC] captureDevices probe")
         let cams = RTCCameraVideoCapturer.captureDevices()
         Logger.webrtc.info("[WEBRTC] captureDevices count=\(cams.count)")

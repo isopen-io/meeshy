@@ -188,7 +188,7 @@ struct StoryViewerView: View {
     @State var showFullEmojiPicker = false // internal for cross-file extension access
     @State var showTextEmojiPicker = false // internal for cross-file extension access
     @State private var selectedProfileUser: ProfileSheetUser?
-    @State private var emojiToInject = ""
+    @State var emojiToInject = "" // internal for cross-file extension access
     @State private var composerFocusTrigger = false
     @State var composerLanguage: String = DefaultComposerLanguage.resolve() // internal for cross-file extension access
     @State var commentBlurEnabled: Bool = false // internal for cross-file extension access
@@ -419,6 +419,7 @@ struct StoryViewerView: View {
             triggerInitialActionIfNeeded()
             if let story = currentStory {
                 SocialSocketManager.shared.joinPostRoom(postId: story.id)
+                EngagementTracker.shared.begin(postId: story.id, contentType: .story, surface: .storyViewer)
             }
         }
         .task(id: currentStory?.id) {
@@ -442,6 +443,7 @@ struct StoryViewerView: View {
             if let story = currentStory {
                 SocialSocketManager.shared.leavePostRoom(postId: story.id)
             }
+            Task { await EngagementTracker.shared.end(surface: .storyViewer) }
         }
         .adaptiveOnChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
@@ -490,6 +492,7 @@ struct StoryViewerView: View {
                 group.stories.indices.contains(oldValue) ? group.stories[oldValue] : nil
             }
             transitionPostRoom(from: previousStory, to: currentStory)
+            transitionEngagement(to: currentStory)
         }
         .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
             skipExpiredStoriesIfNeeded()
@@ -500,6 +503,7 @@ struct StoryViewerView: View {
                 ? groups[oldValue].stories[currentStoryIndex]
                 : nil
             transitionPostRoom(from: previousStory, to: currentStory)
+            transitionEngagement(to: currentStory)
         }
         .onReceive(SocialSocketManager.shared.commentReactionAdded.receive(on: DispatchQueue.main)) { event in
             applyCommentReactionEvent(event)
@@ -561,7 +565,7 @@ struct StoryViewerView: View {
                     authorHandle: wrapper.authorHandle
                 ),
                 onPublishSlide: { _, _, _, _, _ in },
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility in
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
                     viewModel.publishStoryInBackground(
                         slides: slides,
                         slideImages: slideImages,
@@ -569,7 +573,8 @@ struct StoryViewerView: View {
                         loadedVideoURLs: loadedVideoURLs,
                         loadedAudioURLs: loadedAudioURLs,
                         originalLanguage: originalLanguage,
-                        visibility: visibility
+                        visibility: visibility,
+                        visibilityUserIds: visibilityUserIds
                     )
                     repostStoryComposerSource = nil
                 },
@@ -863,6 +868,31 @@ struct StoryViewerView: View {
         }
     }
 
+    /// Finalizes the open `.storyViewer` engagement session and begins one for
+    /// `newStory`. The viewer reuses a single surface, so each story switch ends
+    /// the previous session (pushing video watch-time when present) before the
+    /// next begins. `end` is idempotent when no session is open.
+    private func transitionEngagement(to newStory: StoryItem?) {
+        let m = SharedAVPlayerManager.shared
+        let watchMs = m.currentTime.isNaN ? 0 : Int(m.currentTime * 1000)
+        let durMs = m.duration > 0 ? Int(m.duration * 1000) : nil
+        let drained = m.drainWatchSamples()
+        let maxPos = max(watchMs, drained.samples.map(\.positionMs).max() ?? 0)
+        let completed: Bool = {
+            if drained.reachedEnd { return true }
+            guard let d = durMs, d > 0 else { return false }
+            return maxPos >= Int(Double(d) * 0.95)
+        }()
+        EngagementTracker.shared.attachWatch(surface: .storyViewer, watchMs: watchMs,
+            mediaDurationMs: durMs, completed: completed, samples: drained.samples)
+        Task {
+            await EngagementTracker.shared.end(surface: .storyViewer)
+            if let new = newStory {
+                EngagementTracker.shared.begin(postId: new.id, contentType: .story, surface: .storyViewer)
+            }
+        }
+    }
+
     /// `isQuote: false`. Surfaces user-facing toasts on success / known error
     /// codes (404 = source story gone, 403 = repost forbidden) and a generic
     /// failure otherwise. Errors are mapped against `APIError.serverError`'s
@@ -1067,8 +1097,8 @@ struct StoryViewerView: View {
             dismissComposer: { dismissComposer() },
             goToPrevious: { goToPrevious() },
             goToNext: { goToNext() },
-            sendComment: { text, effectFlags, parentId in
-                sendComment(text: text, effectFlags: effectFlags, parentId: parentId)
+            sendComment: { text, effectFlags, parentId, pendingMedia in
+                sendComment(text: text, effectFlags: effectFlags, parentId: parentId, pendingMedia: pendingMedia)
             },
             makeStoryCommentRow: { comment, userLang in
                 makeStoryCommentRow(comment, userLang: userLang)

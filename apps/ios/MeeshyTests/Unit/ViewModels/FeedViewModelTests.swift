@@ -165,6 +165,20 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertNil(sut.error)
     }
 
+    func test_didReconnect_backfillsFeedFromNetwork() async {
+        let (sut, api, socket, _) = makeSUT()
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", content: "Backfilled")]))
+        sut.subscribeToSocketEvents()
+
+        // Un reconnect du socket social doit declencher un refresh du feed
+        // (backfill du gap pendant la coupure), miroir de ConversationSyncEngine.
+        socket.didReconnect.send(())
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(sut.posts.count, 1)
+        XCTAssertEqual(sut.posts.first?.id, "p1")
+    }
+
     func test_loadFeed_failure_setsError() async {
         let (sut, api, _, _) = makeSUT()
         api.errorToThrow = APIError.networkError(URLError(.notConnectedToInternet))
@@ -782,6 +796,78 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertNil(postService.lastRepostContent)
     }
 
+    /// Re-sharing a SHARE of a reel must reference the original reel (root), not
+    /// the intermediate share — otherwise the new post embeds an empty card.
+    func test_repostPost_ofAShareOfReel_resolvesToRootReel() async {
+        let (sut, _, _, postService) = makeSUT()
+        var share = Self.makeFeedPost(id: "share-1")
+        share.repost = RepostContent(id: "reel-root", author: "marie", content: "", type: "REEL")
+        sut.posts = [share]
+
+        await sut.repostPost("share-1")
+
+        XCTAssertEqual(postService.lastRepostPostId, "reel-root")
+    }
+
+    /// A deeper chain collapses to the recorded root via `originalRepostOfId`.
+    func test_repostPost_ofChainedShare_resolvesToOriginalRoot() async {
+        let (sut, _, _, postService) = makeSUT()
+        var share = Self.makeFeedPost(id: "share-2")
+        share.repost = RepostContent(
+            id: "intermediate", author: "bob", content: "", type: "REEL",
+            originalRepostOfId: "deep-root"
+        )
+        sut.posts = [share]
+
+        await sut.repostPost("share-2")
+
+        XCTAssertEqual(postService.lastRepostPostId, "deep-root")
+    }
+
+    /// An original (non-share) post reposts with its own id, unchanged.
+    func test_repostPost_ofOriginalPost_usesItsOwnId() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+
+        await sut.repostPost("p1")
+
+        XCTAssertEqual(postService.lastRepostPostId, "p1")
+    }
+
+    // MARK: - updatePost()
+
+    func test_updatePost_forwardsLanguageAndTypeToService() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+
+        await sut.updatePost("p1", content: "new body", language: "fr", type: "REEL")
+
+        XCTAssertEqual(postService.lastUpdatePostId, "p1")
+        XCTAssertEqual(postService.lastUpdateContent, "new body")
+        XCTAssertEqual(postService.lastUpdateOriginalLanguage, "fr")
+        XCTAssertEqual(postService.lastUpdateType, "REEL")
+    }
+
+    func test_updatePost_contentOnly_passesNilLanguageAndType() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+
+        await sut.updatePost("p1", content: "just text")
+
+        XCTAssertEqual(postService.lastUpdateContent, "just text")
+        XCTAssertNil(postService.lastUpdateOriginalLanguage)
+        XCTAssertNil(postService.lastUpdateType)
+    }
+
+    func test_updatePost_forwardsRemoveMediaIdsToService() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+
+        await sut.updatePost("p1", content: "body", removeMediaIds: ["m1", "m2"])
+
+        XCTAssertEqual(postService.lastUpdateRemoveMediaIds, ["m1", "m2"])
+    }
+
     // MARK: - refresh()
 
     func test_refresh_resetsNewPostsCountAndReloads() async {
@@ -1264,7 +1350,7 @@ final class FeedViewModelTests: XCTestCase {
     // MARK: - pinPost()
 
     func test_pinPost_callsPostService() async {
-        let (sut, _, _, postService) = makeSUT()
+        let (sut, _, _, _) = makeSUT()
 
         await sut.pinPost("pin-post")
 

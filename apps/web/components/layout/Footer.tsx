@@ -13,14 +13,14 @@ import { useI18n } from '@/hooks/useI18n';
 export function Footer() {
   const { t } = useI18n('landing');
 
-  // Fallback values in case translations are not loaded
-  const tagline = t('footer.tagline') || 'Breaking language barriers, one conversation at a time';
-  const copyright = t('footer.copyright') || '© 2025 Meeshy. All rights reserved.';
-  const aboutText = t('footer.links.about') || 'About';
-  const termsText = t('footer.links.terms') || 'Terms';
-  const contactText = t('footer.links.contact') || 'Contact';
-  const policyText = t('footer.links.policy') || 'Privacy Policy';
-  const partnersText = t('footer.links.partners') || 'Partners';
+  // Anti-flash fallbacks mirror the EN locale (use-i18n native t(key, fallback) signature)
+  const tagline = t('footer.tagline', 'Meet without shyness');
+  const copyright = t('footer.copyright', '© 2026 Meeshy');
+  const aboutText = t('footer.links.about', 'About');
+  const termsText = t('footer.links.terms', 'Terms');
+  const contactText = t('footer.links.contact', 'Contact');
+  const policyText = t('footer.links.policy', 'Policy');
+  const partnersText = t('footer.links.partners', 'Partners');
 
   return (
     <footer className="bg-gray-900 text-white py-12">

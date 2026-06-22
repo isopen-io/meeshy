@@ -370,13 +370,12 @@ export class CommentReactionService {
     await this.prisma.$transaction(async (tx) => {
       const comment = await tx.postComment.findUnique({
         where: { id: commentId },
-        select: { reactionSummary: true, reactionCount: true }
+        select: { reactionSummary: true }
       });
 
       if (!comment) return;
 
       const currentSummary = (comment.reactionSummary as Record<string, number>) || {};
-      const currentCount = comment.reactionCount || 0;
 
       if (action === 'add') {
         currentSummary[emoji] = (currentSummary[emoji] || 0) + count;
@@ -385,11 +384,17 @@ export class CommentReactionService {
         if (currentSummary[emoji] <= 0) delete currentSummary[emoji];
       }
 
-      const newCount = action === 'add' ? currentCount + count : Math.max(0, currentCount - count);
+      // Compteur AUTORITAIRE depuis la table `CommentReaction` (la ligne add/remove
+      // a déjà été appliquée). On synchronise `reactionCount` ET `likeCount` sur ce
+      // total : le chemin SOCKET maintient désormais `likeCount` identiquement au
+      // chemin REST (`PostCommentService.likeComment` = increment), éliminant la
+      // divergence du compteur de like de commentaire entre les surfaces. Miroir de
+      // `PostReactionService.updatePostReactionSummary` (unification du like de post).
+      const total = await tx.commentReaction.count({ where: { commentId } });
 
       await tx.postComment.update({
         where: { id: commentId },
-        data: { reactionSummary: currentSummary, reactionCount: newCount }
+        data: { reactionSummary: currentSummary, reactionCount: total, likeCount: total }
       });
     });
   }

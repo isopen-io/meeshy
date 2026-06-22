@@ -679,8 +679,9 @@ extension StoryViewerView {
 
     // MARK: - Actions
 
-    func sendComment(text: String, effectFlags: Int? = nil, parentId: String? = nil) {
-        guard !text.isEmpty, let story = currentStory else { return }
+    func sendComment(text: String, effectFlags: Int? = nil, parentId: String? = nil, pendingMedia: PendingCommentMedia? = nil) {
+        guard (!text.isEmpty || pendingMedia != nil), let story = currentStory else { return }
+        EngagementTracker.shared.recordAction(.commented, surface: .storyViewer)
 
         // Optimistic local insert. Reply nesting is currently flat in the UI
         // (Threads-style max-1-niveau pour MVP) — the parentId is forwarded
@@ -698,7 +699,8 @@ extension StoryViewerView {
             content: text,
             parentId: parentId,
             effectFlags: effectFlags ?? 0,
-            originalLanguage: composerLanguage
+            originalLanguage: composerLanguage,
+            media: pendingMedia.map { [$0.optimistic] } ?? []
         )
 
         if let parentId {
@@ -718,15 +720,24 @@ extension StoryViewerView {
             storyCommentCount += 1
         }
 
-        // Send to API
+        // Send to API. Un média éventuel est uploadé (uploadContext=comment → PostMedia)
+        // puis transmis via `attachmentIds` ; la ligne serveur réconcilie via le socket
+        // `comment:added` (qui porte désormais le média). Le commentaire optimiste
+        // affiche déjà le média local.
         let language = composerLanguage
         Task {
+            var attachmentIds: [String]? = nil
+            if let pendingMedia, let uploadedId = try? await CommentMediaUploader.upload(pendingMedia) {
+                attachmentIds = [uploadedId]
+            }
             await StoryInteractionService().postComment(
                 storyId: story.id,
                 content: text,
                 originalLanguage: language,
                 effectFlags: effectFlags,
-                parentId: parentId
+                parentId: parentId,
+                attachmentIds: attachmentIds,
+                mobileTranscription: pendingMedia?.mobileTranscription
             )
         }
 
@@ -740,6 +751,7 @@ extension StoryViewerView {
 
     func sendReaction(emoji: String) {
         guard let story = currentStory else { return }
+        EngagementTracker.shared.recordAction(.reacted, surface: .storyViewer)
 
         // Fire & forget like
         Task {
@@ -842,12 +854,18 @@ extension StoryViewerView {
                 // réseau/CPU gaspillés pour un viewer mort).
                 guard !Task.isCancelled else { return }
                 let mediaType = story.media.first(where: { $0.url == urlString })?.type
-                if mediaType == .video || mediaType == .audio {
-                    // Video/Audio: download data to disk cache + preroll player
-                    _ = try? await imageStore.data(for: urlString)
+                if mediaType == .video {
+                    // Le canvas relit la vidéo via `CacheCoordinator.shared.video`
+                    // (`videoLocalFileURL(for:)`). Le prefetch DOIT peupler CE
+                    // store — pas `images` — sinon le canvas tombe en cache-miss
+                    // et re-télécharge ce qui vient d'être préchargé.
+                    _ = try? await CacheCoordinator.shared.video.data(for: urlString)
                     if let url = URL(string: urlString) {
                         await StoryMediaLoader.shared.preloadAndCachePlayer(url: url)
                     }
+                } else if mediaType == .audio {
+                    // Idem : le lecteur audio relit via le store `audio`.
+                    _ = try? await CacheCoordinator.shared.audio.data(for: urlString)
                 } else {
                     // Image: use image(for:) to populate UIImage NSCache for instant display
                     _ = await imageStore.image(for: urlString)
@@ -1050,6 +1068,74 @@ struct StoryViewersSheet: View {
 /// Extracted from `StoryViewerView.storyCommentsOverlay` (formerly an
 /// `AnyView`) so the deeply-nested comment panel becomes its own
 /// type-metadata unit instead of inflating the viewer's opaque type.
+/// Listing threadé d'UN commentaire racine d'une story : la ligne racine, l'aperçu
+/// auto des 2 premières réponses, le bouton « Voir N autres réponses » / « Masquer »,
+/// et les réponses dépliées. Composant réutilisable extrait de `StoryCommentsOverlayView`
+/// (le rendu est préservé à l'identique) — paramétré par un builder de ligne opaque
+/// (`makeRow`) pour rester agnostique du style de la ligne.
+struct StoryCommentThread: View {
+    let comment: FeedComment
+    let replies: [FeedComment]
+    let isExpanded: Bool
+    let isLoadingReplies: Bool
+    let userLang: String
+    let makeRow: (FeedComment, String) -> StoryCommentRowView
+    let onToggleThread: () -> Void
+
+    var body: some View {
+        makeRow(comment, userLang)
+            .id(comment.id)
+
+        let autoPreview = Array(replies.prefix(2))
+        if !autoPreview.isEmpty && !isExpanded {
+            ForEach(autoPreview) { reply in
+                makeRow(reply, userLang)
+                    .padding(.leading, 32)
+                    .id(reply.id)
+            }
+        }
+
+        if comment.replies > 2 {
+            Button {
+                HapticFeedback.light()
+                onToggleThread()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                    let remaining = max(0, comment.replies - 2)
+                    Text(isExpanded
+                         ? "Masquer"
+                         : "Voir \(remaining) autre\(remaining > 1 ? "s" : "") r\u{00E9}ponse\(remaining > 1 ? "s" : "")")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundColor(StoryCommentRowView.legibleAuthorColor(hex: comment.authorColor))
+                .padding(.leading, 40)
+                .padding(.vertical, 4)
+                .storyOverlayLegible()
+            }
+        }
+
+        if isExpanded {
+            if isLoadingReplies && replies.isEmpty {
+                HStack {
+                    Spacer()
+                    ProgressView().tint(.white.opacity(0.5)).scaleEffect(0.7)
+                    Spacer()
+                }
+                .padding(.leading, 32)
+                .padding(.vertical, 4)
+            }
+
+            ForEach(replies) { reply in
+                makeRow(reply, userLang)
+                    .padding(.leading, 32)
+                    .id(reply.id)
+            }
+        }
+    }
+}
+
 struct StoryCommentsOverlayView: View {
     let storyComments: [FeedComment]
     let storyCommentCount: Int
@@ -1199,57 +1285,15 @@ struct StoryCommentsOverlayView: View {
                                 .padding(.vertical, 4)
                         }
 
-                        makeStoryCommentRow(comment, userLang)
-                            .id(comment.id)
-
-                        let replies = storyCommentRepliesMap[comment.id] ?? []
-                        let autoPreview = Array(replies.prefix(2))
-                        if !autoPreview.isEmpty && !storyCommentExpandedThreads.contains(comment.id) {
-                            ForEach(autoPreview) { reply in
-                                makeStoryCommentRow(reply, userLang)
-                                    .padding(.leading, 32)
-                                    .id(reply.id)
-                            }
-                        }
-
-                        if comment.replies > 2 {
-                            Button {
-                                HapticFeedback.light()
-                                Task { await toggleStoryCommentThread(comment.id) }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: storyCommentExpandedThreads.contains(comment.id) ? "chevron.up" : "chevron.down")
-                                        .font(.system(size: 9, weight: .bold))
-                                    let remaining = max(0, comment.replies - 2)
-                                    Text(storyCommentExpandedThreads.contains(comment.id)
-                                         ? "Masquer"
-                                         : "Voir \(remaining) autre\(remaining > 1 ? "s" : "") r\u{00E9}ponse\(remaining > 1 ? "s" : "")")
-                                        .font(.system(size: 11, weight: .semibold))
-                                }
-                                .foregroundColor(StoryCommentRowView.legibleAuthorColor(hex: comment.authorColor))
-                                .padding(.leading, 40)
-                                .padding(.vertical, 4)
-                                .storyOverlayLegible()
-                            }
-                        }
-
-                        if storyCommentExpandedThreads.contains(comment.id) {
-                            if storyCommentLoadingReplies.contains(comment.id) && replies.isEmpty {
-                                HStack {
-                                    Spacer()
-                                    ProgressView().tint(.white.opacity(0.5)).scaleEffect(0.7)
-                                    Spacer()
-                                }
-                                .padding(.leading, 32)
-                                .padding(.vertical, 4)
-                            }
-
-                            ForEach(replies) { reply in
-                                makeStoryCommentRow(reply, userLang)
-                                    .padding(.leading, 32)
-                                    .id(reply.id)
-                            }
-                        }
+                        StoryCommentThread(
+                            comment: comment,
+                            replies: storyCommentRepliesMap[comment.id] ?? [],
+                            isExpanded: storyCommentExpandedThreads.contains(comment.id),
+                            isLoadingReplies: storyCommentLoadingReplies.contains(comment.id),
+                            userLang: userLang,
+                            makeRow: makeStoryCommentRow,
+                            onToggleThread: { Task { await toggleStoryCommentThread(comment.id) } }
+                        )
                     }
 
                     if isLoadingComments {
@@ -1347,12 +1391,14 @@ extension StoryViewerView {
                 )
                 return FeedComment(
                     id: c.id, author: c.author.name, authorId: c.author.id,
+                    authorUsername: c.author.username,
                     authorAvatarURL: c.author.avatar,
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: commentId,
                     originalLanguage: c.originalLanguage, translatedContent: translated,
-                    currentUserReactions: c.currentUserReactions
+                    currentUserReactions: c.currentUserReactions,
+                    media: (c.media ?? []).map { $0.toFeedMedia() }
                 )
             }
             storyCommentRepliesMap[commentId] = replies
@@ -1375,6 +1421,12 @@ extension StoryViewerView {
             onReply: {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                     replyingToStoryComment = comment
+                }
+                // Répondre à une réponse (niveau 2) : la réponse reste plate au niveau 2
+                // (parent racine, cf. submitStoryComment) — on injecte une @mention de
+                // l'auteur ciblé dans le composer pour qu'il soit notifié (`user_mentioned`).
+                if comment.parentId != nil, let username = comment.authorUsername, !username.isEmpty {
+                    emojiToInject = "@\(username) "
                 }
                 HapticFeedback.light()
             },
@@ -1553,12 +1605,14 @@ extension StoryViewerView {
                 }()
                 return FeedComment(
                     id: c.id, author: c.author.name, authorId: c.author.id,
+                    authorUsername: c.author.username,
                     authorAvatarURL: c.author.avatar,
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: c.parentId,
                     originalLanguage: c.originalLanguage, translatedContent: translated,
-                    currentUserReactions: c.currentUserReactions
+                    currentUserReactions: c.currentUserReactions,
+                    media: (c.media ?? []).map { $0.toFeedMedia() }
                 )
             }
             storyComments = comments
@@ -1637,7 +1691,10 @@ struct StoryCommentRowView: View, Equatable {
         lhs.likeCount == rhs.likeCount &&
         lhs.isInFlight == rhs.isInFlight &&
         lhs.comment.content == rhs.comment.content &&
-        lhs.comment.translatedContent == rhs.comment.translatedContent
+        lhs.comment.translatedContent == rhs.comment.translatedContent &&
+        lhs.comment.media.first?.id == rhs.comment.media.first?.id &&
+        lhs.comment.media.first?.transcription?.text == rhs.comment.media.first?.transcription?.text &&
+        lhs.comment.media.first?.translatedAudios.count == rhs.comment.media.first?.translatedAudios.count
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1675,6 +1732,19 @@ struct StoryCommentRowView: View, Equatable {
             VStack(alignment: .leading, spacing: 4) {
                 headerRow
                 contentText
+                // Média unique du commentaire (image/vidéo/audio) — inline + plein
+                // écran, identique aux autres surfaces de commentaires.
+                if let media = comment.media.first {
+                    CommentMediaView(
+                        media: media,
+                        accentColor: comment.authorColor,
+                        authorName: comment.author,
+                        authorAvatarURL: comment.authorAvatarURL,
+                        authorColor: comment.authorColor,
+                        sentAt: comment.timestamp
+                    )
+                    .padding(.top, 2)
+                }
                 actionRow
             }
 
@@ -1886,6 +1956,11 @@ struct StoryActionButton: View {
     var isActive: Bool = false
     var activeColor: Color = .white
     var activeGlow: Color? = nil
+    /// Outline symbol overlaid in `accentOutlineColor` over the glyph when the
+    /// current user has participated (e.g. already reacted) — an accent BORDER
+    /// on the glyph, matching the feed/reel participation indicator.
+    var accentOutline: String? = nil
+    var accentOutlineColor: Color = .clear
     let action: () -> Void
 
     var body: some View {
@@ -1919,6 +1994,12 @@ struct StoryActionButton: View {
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(isActive ? activeColor : .white)
                         .adaptiveSymbolBounce(value: isActive)
+                    // Accent border on the glyph when the current user participated.
+                    if let accentOutline {
+                        Image(systemName: accentOutline)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(accentOutlineColor)
+                    }
                 }
                 // Halo sombre sous l'icône — lisibilité garantie sur N'IMPORTE QUEL
                 // fond de story (clair comme foncé), sans voile ni gros cartouche

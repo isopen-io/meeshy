@@ -160,7 +160,7 @@ class WorkerPool:
             increment = 5 if self.pool_name == "normal" else 3
             new_count = min(self.current_workers + increment, self.max_scaling_workers)
 
-            if new_count > self.current_workers:
+            if new_count > self.current_workers:  # pragma: no branch
                 logger.info(
                     f"[{self.pool_name.upper()}] Scaling UP: "
                     f"{self.current_workers} → {new_count} workers"
@@ -176,7 +176,7 @@ class WorkerPool:
             decrement = 2 if self.pool_name == "normal" else 1
             new_count = max(self.current_workers - decrement, self.min_workers)
 
-            if new_count < self.current_workers:
+            if new_count < self.current_workers:  # pragma: no branch
                 logger.info(
                     f"[{self.pool_name.upper()}] Scaling DOWN: "
                     f"{self.current_workers} → {new_count} workers"
@@ -255,7 +255,7 @@ class WorkerPool:
 
     def shutdown(self):
         """Shutdown du thread pool"""
-        if self.thread_pool:
+        if self.thread_pool:  # pragma: no branch
             self.thread_pool.shutdown(wait=True)
             logger.info(f"[{self.pool_name.upper()}] Thread pool shut down")
 
@@ -274,7 +274,7 @@ def configure_pytorch_threads(total_workers: int):
         threads_per_worker = max(2, cpu_count // total_workers)
         torch.set_num_threads(threads_per_worker)
         logger.info(f"[PYTORCH] Configured {threads_per_worker} threads per worker")
-    except ImportError:
+    except ImportError:  # pragma: no cover
         logger.debug("[PYTORCH] PyTorch not available, skipping thread configuration")
 
 

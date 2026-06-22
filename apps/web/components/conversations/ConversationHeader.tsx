@@ -105,7 +105,7 @@ export function ConversationHeader({
                   variant="ghost"
                   onClick={onBackToList}
                   className="h-9 w-9 mt-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                  aria-label={t('conversationHeader.backToList') || 'Retour à la liste'}
+                  aria-label={t('conversationHeader.backToList', 'Back to conversations')}
                 >
                   <ArrowLeft className="h-5 w-5" aria-hidden="true" />
                 </Button>

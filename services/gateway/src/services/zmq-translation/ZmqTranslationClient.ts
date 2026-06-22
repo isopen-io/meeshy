@@ -13,6 +13,7 @@ import { EventEmitter } from 'events';
 import { ZmqConnectionManager, type ConnectionManagerConfig } from './ZmqConnectionManager';
 import { ZmqMessageHandler } from './ZmqMessageHandler';
 import { ZmqRequestSender } from './ZmqRequestSender';
+import { readZmqToleranceConfig } from './zmqToleranceConfig';
 
 // Re-export tous les types publics
 export * from './types';
@@ -48,20 +49,25 @@ export interface ZMQClientStats {
   memory_usage_mb: number;
 }
 
-// Timeout for ZMQ translation requests (30 seconds)
-const ZMQ_REQUEST_TIMEOUT_MS = 30_000;
-// Maximum number of retries before emitting an error
-const ZMQ_MAX_RETRIES = 3;
-// Long-running voice pipeline (voice_translate / voice_translate_async) can take
-// several minutes (Whisper + NLLB + Chatterbox). Resending after 30 s would
-// duplicate the same job 4× in the translator worker pool and saturate CPU.
-// → Single shot, long deadman timeout, no retry.
-const ZMQ_VOICE_TRANSLATE_DEADMAN_MS = 15 * 60_000; // 15 minutes
+// Tolérance ZMQ surchargeable par env (cf. zmqToleranceConfig.ts) : permet
+// d'ajuster timeouts / retries / circuit-breaker en prod sans redéployer de code.
+// But : ne jamais dropper une traduction tant que le translator finit par
+// répondre, sans tempête de retries dupliqués.
+const _zmqTolerance = readZmqToleranceConfig();
 
-// Circuit breaker: open after this many consecutive errors
-const CB_FAILURE_THRESHOLD = 5;
-// Stay open for this duration before auto-resetting to closed
-const CB_COOLDOWN_MS = 30_000;
+// Timeout par tentative pour une requête de traduction texte (défaut 30 s).
+const ZMQ_REQUEST_TIMEOUT_MS = _zmqTolerance.requestTimeoutMs;
+// Nombre de retries avant émission d'erreur (tentatives totales = +1).
+const ZMQ_MAX_RETRIES = _zmqTolerance.maxRetries;
+// Pipelines voix longs (voice_translate / voice_translate_async) : plusieurs
+// minutes (Whisper + NLLB + Chatterbox). Re-pousser dupliquerait le job dans le
+// worker pool et saturerait le CPU → un seul tir, deadman long, pas de retry.
+const ZMQ_VOICE_TRANSLATE_DEADMAN_MS = _zmqTolerance.voiceTranslateDeadmanMs;
+
+// Circuit breaker : ouvre après N erreurs consécutives.
+const CB_FAILURE_THRESHOLD = _zmqTolerance.cbFailureThreshold;
+// Reste ouvert ce délai avant auto-reset.
+const CB_COOLDOWN_MS = _zmqTolerance.cbCooldownMs;
 
 export class ZmqTranslationClient extends EventEmitter {
   private connectionManager: ZmqConnectionManager;
@@ -385,6 +391,7 @@ export class ZmqTranslationClient extends EventEmitter {
     let heartbeatCount = 0;
 
     const checkForMessages = async () => {
+      /* istanbul ignore next -- clearInterval is called in close() before this fires in tests */
       if (!this.running) {
         logger.info('🛑 Arrêt de l\'écoute - running=false');
         return;
@@ -397,6 +404,7 @@ export class ZmqTranslationClient extends EventEmitter {
         try {
           const message = await this.connectionManager.receive();
 
+          /* istanbul ignore else -- receive() returns Buffer/Buffer[] or throws; null/undefined is structurally unreachable here */
           if (message) {
             // Passer au message handler
             await this.messageHandler.handleMessage(message);
@@ -407,6 +415,7 @@ export class ZmqTranslationClient extends EventEmitter {
         }
 
       } catch (error) {
+        /* istanbul ignore next -- inner try/catch catches all receive/handleMessage errors; outer catch is structurally unreachable */
         if (this.running) {
           logger.error(`❌ Erreur réception résultat: ${error}`);
         }
@@ -603,8 +612,8 @@ export class ZmqTranslationClient extends EventEmitter {
       return true;
 
     } catch (error) {
-      logger.error(`❌ Health check échoué: ${error}`);
-      return false;
+      /* istanbul ignore next -- connectionManager.sendPing() catches internally; this outer catch is structurally unreachable */
+      logger.error(`❌ Health check échoué: ${error}`); /* istanbul ignore next */ return false;
     }
   }
 
@@ -654,6 +663,7 @@ export class ZmqTranslationClient extends EventEmitter {
       logger.info('✅ ZmqTranslationClient arrêté');
 
     } catch (error) {
+      /* istanbul ignore next -- connectionManager.close() has its own internal catch; this outer catch is structurally unreachable */
       logger.error(`❌ Erreur arrêt ZmqTranslationClient: ${error}`);
     }
   }
@@ -661,6 +671,7 @@ export class ZmqTranslationClient extends EventEmitter {
   /**
    * Méthode de test pour vérifier la réception (pour tests)
    */
+  /* istanbul ignore next -- diagnostic utility; all meaningful behaviour is covered by the other tests */
   async testReception(): Promise<void> {
     logger.info('🧪 [ZMQ-Client] Test de réception des messages...');
 

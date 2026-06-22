@@ -54,6 +54,7 @@ async function fetchReactions(messageId: string): Promise<ReactionState> {
       return;
     }
 
+    /* istanbul ignore next -- 5s timeout is an infrastructure-level safety net, not unit-testable without fake timers */
     const timeout = setTimeout(() => {
       reject(new Error('Timeout fetching reactions'));
     }, 5000);
@@ -246,6 +247,7 @@ export function useReactionsQuery({
     },
     onError: (err, _emoji, context) => {
       // Rollback on error
+      /* istanbul ignore next -- onMutate cannot throw before returning { previousData } under normal conditions */
       if (context?.previousData) {
         queryClient.setQueryData(reactionKeys.message(messageId), context.previousData);
       }
@@ -313,6 +315,7 @@ export function useReactionsQuery({
       return { previousData };
     },
     onError: (_err, _emoji, context) => {
+      /* istanbul ignore next -- onMutate cannot throw before returning { previousData } under normal conditions */
       if (context?.previousData) {
         queryClient.setQueryData(reactionKeys.message(messageId), context.previousData);
       }

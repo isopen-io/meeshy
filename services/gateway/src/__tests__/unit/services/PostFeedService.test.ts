@@ -631,6 +631,23 @@ describe('PostFeedService.getReels', () => {
     expect((result.items[0] as any).currentUserReactions).toEqual(['🔥']);
   });
 
+  it('enrichit chaque reel avec isBookmarkedByMe du viewer', async () => {
+    // Sans ce champ, le reel viewer ne pouvait pas réhydrater l'état favori
+    // → le bookmark « disparaissait » à la réouverture. Aligné sur getFeed.
+    const bookmarked = makePost('r-bm', { type: 'REEL' });
+    const plain = makePost('r-plain', { type: 'REEL' });
+    mockPostFindMany.mockResolvedValue([bookmarked, plain]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+    mockPostBookmarkFindMany.mockResolvedValue([{ postId: 'r-bm' }]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getReels('user-1');
+
+    const byId = Object.fromEntries(result.items.map((p: any) => [p.id, p.isBookmarkedByMe]));
+    expect(byId['r-bm']).toBe(true);
+    expect(byId['r-plain']).toBe(false);
+  });
+
   it('reste fonctionnel quand les requêtes d\'affinité auxiliaires échouent (best-effort)', async () => {
     const reel = makePost('r-1', { type: 'REEL' });
     mockPostFindMany.mockResolvedValue([reel]);

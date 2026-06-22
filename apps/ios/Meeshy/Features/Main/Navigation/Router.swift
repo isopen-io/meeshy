@@ -8,7 +8,8 @@ enum Route: Hashable {
     case conversation(Conversation)
     case settings
     case profile
-    case contacts(ContactsTab = .contacts)
+    case contacts
+    case peopleDiscovery(DiscoveryTab = .requests)
     case communityList
     case communityDetail(String)
     case communityCreate
@@ -44,7 +45,7 @@ enum Route: Hashable {
 extension Route {
     var isHub: Bool {
         switch self {
-        case .profile, .settings, .communityList, .contacts, .links, .notifications:
+        case .profile, .settings, .communityList, .contacts, .peopleDiscovery, .links, .notifications:
             return true
         default:
             return false
@@ -61,6 +62,8 @@ extension Route {
             return "Profil"
         case .contacts:
             return "Contacts"
+        case .peopleDiscovery:
+            return "Decouvrir"
         case .communityList:
             return "Communautes"
         case .communityDetail:
@@ -237,6 +240,10 @@ final class Router: ObservableObject {
 
             case .userProfile(let username):
                 deepLinkProfileUser = ProfileSheetUser(username: username)
+
+            case .trackedLink(let token):
+                // `/l/<token>` resolved async by targetType (records the click).
+                DeepLinkRouter.shared.resolveTrackedLink(token)
 
             case .joinLink(let identifier):
                 // In-app taps of an invitation share link. Funnel them through

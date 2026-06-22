@@ -99,6 +99,50 @@ final class StoryViewerCommentReactionTests: XCTestCase {
         XCTAssertTrue(result.isEmpty)
     }
 
+    // MARK: - CommentsSheetView.computeLikedIds(from: [FeedComment]) tests
+    // C'est l'overload réellement branché pour semer `likedIds` à l'ouverture de la
+    // sheet (depuis `post.comments` + réponses, qui portent `currentUserReactions`).
+
+    private func makeFeedComment(id: String, currentUserReactions: [String]?) -> FeedComment {
+        FeedComment(id: id, author: "alice", authorId: "a1", content: "stub",
+                    currentUserReactions: currentUserReactions)
+    }
+
+    func test_commentsSheet_computeLikedIds_feedComment_withHeartReaction_includesId() {
+        let comments = [
+            makeFeedComment(id: "c1", currentUserReactions: ["\u{2764}\u{FE0F}"]),
+            makeFeedComment(id: "c2", currentUserReactions: ["\u{1F525}"]),
+            makeFeedComment(id: "c3", currentUserReactions: nil)
+        ]
+
+        let result = CommentsSheetView.computeLikedIds(from: comments)
+
+        XCTAssertEqual(result, ["c1"])
+    }
+
+    func test_commentsSheet_computeLikedIds_feedComment_multipleHearts_includesAll() {
+        let comments = [
+            makeFeedComment(id: "c1", currentUserReactions: ["\u{2764}\u{FE0F}"]),
+            makeFeedComment(id: "c2", currentUserReactions: ["\u{1F525}", "\u{2764}\u{FE0F}"]),
+            makeFeedComment(id: "c3", currentUserReactions: [])
+        ]
+
+        let result = CommentsSheetView.computeLikedIds(from: comments)
+
+        XCTAssertEqual(result, ["c1", "c2"])
+    }
+
+    func test_commentsSheet_computeLikedIds_feedComment_emptyOrNil_returnsEmptySet() {
+        let comments = [
+            makeFeedComment(id: "c1", currentUserReactions: nil),
+            makeFeedComment(id: "c2", currentUserReactions: [])
+        ]
+
+        let result = CommentsSheetView.computeLikedIds(from: comments)
+
+        XCTAssertTrue(result.isEmpty)
+    }
+
     // MARK: - In-flight guard logic tests
 
     /// Validates the in-flight guard set semantic: inserting a commentId blocks

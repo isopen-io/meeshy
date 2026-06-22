@@ -176,6 +176,45 @@ final class PostModelsTests: XCTestCase {
         XCTAssertEqual(feedPost.media.count, 1)
     }
 
+    func test_APIPost_decodes_impressionCount_andMapsToFeedPost() throws {
+        let json = """
+        {
+            "id": "post3",
+            "type": "POST",
+            "content": "Counters",
+            "createdAt": "2026-01-15T10:30:00.000Z",
+            "author": {"id": "a3", "username": "carol"},
+            "viewCount": 4,
+            "postOpenCount": 34,
+            "impressionCount": 51
+        }
+        """.data(using: .utf8)!
+        let apiPost = try makeDecoder().decode(APIPost.self, from: json)
+        XCTAssertEqual(apiPost.impressionCount, 51)
+
+        let feedPost = apiPost.toFeedPost()
+        // Total (displayed) views and impressions are the raw, non-deduped
+        // counters; unique views stay in viewCount (saved, not displayed).
+        XCTAssertEqual(feedPost.impressionCount, 51)
+        XCTAssertEqual(feedPost.postOpenCount, 34)
+        XCTAssertEqual(feedPost.viewCount, 4)
+    }
+
+    func test_APIPost_missingImpressionCount_defaultsToZero() throws {
+        let json = """
+        {
+            "id": "post4",
+            "type": "POST",
+            "content": "No counters",
+            "createdAt": "2026-01-15T10:30:00.000Z",
+            "author": {"id": "a4", "username": "dave"}
+        }
+        """.data(using: .utf8)!
+        let apiPost = try makeDecoder().decode(APIPost.self, from: json)
+        XCTAssertNil(apiPost.impressionCount)
+        XCTAssertEqual(apiPost.toFeedPost().impressionCount, 0)
+    }
+
     // MARK: - APIPostComment
 
     func testAPIPostCommentDecodable() throws {

@@ -276,10 +276,12 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
 
     const { attachments, persist = true } = request.body;
 
+    /* istanbul ignore if -- schema minItems:1 makes this unreachable in validated requests */
     if (!attachments || attachments.length === 0) {
       return sendBadRequest(reply, 'attachments array is required and must not be empty');
     }
 
+    /* istanbul ignore if -- schema maxItems:50 makes this unreachable in validated requests */
     if (attachments.length > 50) {
       return sendBadRequest(reply, 'Maximum 50 attachments per batch');
     }

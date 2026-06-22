@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useCallback, useState, useMemo } from 'react';
-import { useI18n } from '@/hooks/use-i18n';
+import { useI18n, type TFunction } from '@/hooks/use-i18n';
 import { Smile, Copy, Reply, Flag, Trash2, MoreVertical, Edit, Languages, CheckCircle2, AlertTriangle, HelpCircle, CheckCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -46,7 +46,7 @@ interface MessageActionsBarProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onViewInfo?: () => void;
-  t: (key: string) => string;
+  t: TFunction;
   tReport: (key: string) => string;
   // Props pour les traductions
   translationError?: string;
@@ -435,14 +435,14 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                     minHeight: '24px'
                   }}
                   className="p-0 rounded-full transition-colors text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700"
-                  aria-label={t('messageActions.more') || 'Plus d\'options'}
+                  aria-label={t('messageActions.more', 'More options')}
                 >
                   <MoreVertical className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
             <TooltipContent>
-              <p>{t('messageActions.more') || 'Plus d\'options'}</p>
+              <p>{t('messageActions.more', 'More options')}</p>
             </TooltipContent>
           </Tooltip>
 
@@ -456,7 +456,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
               <span>
                 {message.content && message.content.trim()
                   ? t('copyMessage')
-                  : t('copyLink') || 'Copier le lien'}
+                  : t('copyLink', 'Copy link')}
               </span>
             </DropdownMenuItem>
 
@@ -467,7 +467,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                 className="flex items-center gap-2 cursor-pointer"
               >
                 <CheckCheck className="h-4 w-4" />
-                <span>{t('messageActions.messageInfo') || 'Message info'}</span>
+                <span>{t('messageActions.messageInfo', 'Message info')}</span>
               </DropdownMenuItem>
             )}
 

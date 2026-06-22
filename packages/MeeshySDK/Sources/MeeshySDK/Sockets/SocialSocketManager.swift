@@ -149,6 +149,10 @@ public struct SocketCommentReactionSyncEvent: Codable, Sendable {
 public struct SocketPostBookmarkedData: Decodable, Sendable {
     public let postId: String
     public let bookmarked: Bool
+    /// Absolute bookmark count after the mutation (mirrors `likeCount` on the
+    /// like events). Optional so decoding survives an older gateway that does
+    /// not yet emit it — clients then leave the displayed count untouched.
+    public let bookmarkCount: Int?
 }
 
 public struct SocketPostReactionAggregation: Codable, Sendable {
@@ -199,6 +203,15 @@ public struct SocketCommentTranslationUpdatedData: Decodable, Sendable {
     public let translation: SocketTranslationPayload
 }
 
+/// `comment:media-updated` — émis quand le pipeline audio d'un média de commentaire
+/// a produit une transcription/traductions. Porte le commentaire enrichi (média
+/// transcrit/traduit) à substituer en cache.
+public struct SocketCommentMediaUpdatedData: Decodable, Sendable {
+    public let postId: String
+    public let commentId: String
+    public let comment: APIPostComment
+}
+
 // MARK: - Protocol
 
 public protocol SocialSocketProviding: Sendable {
@@ -232,12 +245,11 @@ public protocol SocialSocketProviding: Sendable {
     var storyTranslationUpdated: PassthroughSubject<SocketStoryTranslationUpdatedData, Never> { get }
     var postTranslationUpdated: PassthroughSubject<SocketPostTranslationUpdatedData, Never> { get }
     var commentTranslationUpdated: PassthroughSubject<SocketCommentTranslationUpdatedData, Never> { get }
-    /// In-app notification fired by the gateway over `notification:new`.
-    /// Carries the same `title`/`subtitle`/`content` framing as the APN push
-    /// payload so the iOS app can render a toast with sender + conversation
-    /// context + audio body label without re-deriving anything client-side.
-    /// UX decision (whether/when to show the toast) is app-side.
-    var inAppNotification: PassthroughSubject<APINotification, Never> { get }
+    var commentMediaUpdated: PassthroughSubject<SocketCommentMediaUpdatedData, Never> { get }
+    /// Fires on every reconnect (a `.connect` that follows a previous one).
+    /// App-side feed handlers (FeedViewModel) observe this to backfill posts /
+    /// reactions missed while the social socket was down.
+    var didReconnect: PassthroughSubject<Void, Never> { get }
     var isConnected: Bool { get }
     var connectionState: ConnectionState { get }
     func connect()
@@ -290,7 +302,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public let storyTranslationUpdated = PassthroughSubject<SocketStoryTranslationUpdatedData, Never>()
     public let postTranslationUpdated = PassthroughSubject<SocketPostTranslationUpdatedData, Never>()
     public let commentTranslationUpdated = PassthroughSubject<SocketCommentTranslationUpdatedData, Never>()
-    public let inAppNotification = PassthroughSubject<APINotification, Never>()
+    public let commentMediaUpdated = PassthroughSubject<SocketCommentMediaUpdatedData, Never>()
 
     @Published public var isConnected = false
     @Published public var connectionState: ConnectionState = .disconnected
@@ -300,9 +312,15 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     private let decoder = JSONDecoder()
     private var reconnectAttempt: Int = 0
     private var hadPreviousConnection = false
+    /// Post rooms actuellement rejointes (détail, reel, story, commentaires).
+    /// Miroir de `MessageSocketManager.joinedConversations` : après une reconnexion
+    /// (résumé d'app / réseau revenu), le gateway a oublié nos rooms — sans re-join
+    /// les likes/commentaires/réactions temps réel du post ouvert cessaient
+    /// silencieusement. Préservé à travers `suspendTransport`, vidé au `disconnect()`.
+    private var joinedPostRooms: Set<String> = []
     /// Fires on every reconnect (a `.connect` that follows a previous one).
-    /// R2 — feed/social re-sync trigger; app-side handlers (FeedViewModel /
-    /// FeedSyncEngine) observe this to backfill missed posts/reactions.
+    /// R2 — feed re-sync trigger; FeedViewModel observes this to backfill
+    /// posts/reactions missed while the social socket was down.
     public let didReconnect = PassthroughSubject<Void, Never>()
     private var heartbeatTimer: Timer?
     private var lifecycleCancellables = Set<AnyCancellable>()
@@ -437,6 +455,9 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         // Logout / cold reset: forget the prior connection so the next `.connect`
         // is a genuine cold first connect (no spurious reconnect backfill).
         hadPreviousConnection = false
+        // Cold reset : oublier les post rooms (contrairement à suspendTransport qui
+        // les préserve pour le re-join au resume).
+        joinedPostRooms.removeAll()
     }
 
     // MARK: - Background lifecycle
@@ -523,13 +544,27 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     // MARK: - Post Room Management
 
     public func joinPostRoom(postId: String) {
+        // Tracker AVANT toute émission : le handler `.connect` re-émet `post:join`
+        // pour toutes les rooms de `joinedPostRooms` une fois le handshake terminé.
+        joinedPostRooms.insert(postId)
+        guard socket?.status == .connected else {
+            // Socket pas encore connecté : émettre serait perdu. Le re-join du
+            // handler `.connect` prendra le relais (miroir de joinConversation).
+            return
+        }
         socket?.emit("post:join", ["postId": postId])
         Logger.socket.info("SocialSocket joined post room: \(postId)")
     }
 
     public func leavePostRoom(postId: String) {
+        joinedPostRooms.remove(postId)
         socket?.emit("post:leave", ["postId": postId])
         Logger.socket.info("SocialSocket left post room: \(postId)")
+    }
+
+    /// Rooms à re-joindre après un (re)connect, ordre déterministe pour les tests.
+    func postRoomsToRejoinOnConnect() -> [String] {
+        joinedPostRooms.sorted()
     }
 
     // MARK: - Comment Reaction Emission
@@ -566,12 +601,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                     continuation.resume(throwing: CommentReactionError.serverError(message))
                     return
                 }
-                guard let jsonData = try? JSONSerialization.data(withJSONObject: data),
-                      let event = try? self.decoder.decode(SocketCommentReactionUpdateEvent.self, from: jsonData) else {
-                    continuation.resume(throwing: CommentReactionError.malformedResponse)
-                    return
-                }
-                continuation.resume(returning: event)
+                continuation.resume(returning: Self.decodeCommentReactionAck(data, decoder: self.decoder, commentId: commentId, postId: postId, emoji: emoji, action: "add"))
             }
         }
     }
@@ -592,12 +622,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                     continuation.resume(throwing: CommentReactionError.serverError(message))
                     return
                 }
-                guard let jsonData = try? JSONSerialization.data(withJSONObject: data),
-                      let event = try? self.decoder.decode(SocketCommentReactionUpdateEvent.self, from: jsonData) else {
-                    continuation.resume(throwing: CommentReactionError.malformedResponse)
-                    return
-                }
-                continuation.resume(returning: event)
+                continuation.resume(returning: Self.decodeCommentReactionAck(data, decoder: self.decoder, commentId: commentId, postId: postId, emoji: emoji, action: "remove"))
             }
         }
     }
@@ -646,6 +671,38 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         }
     }
 
+    /// Décode l'ACK d'une réaction post. Contrat aligné (gateway `PostReactionHandler`) :
+    /// `data` == l'`updateEvent` du broadcast `post:reaction-added/-removed`.
+    /// TOLÉRANT : si le shape de l'ACK dérive (success==true mais champs inattendus), on
+    /// synthétise un événement minimal au lieu de jeter `malformedResponse` — l'agrégation
+    /// autoritaire arrive via le broadcast et tous les appelants ignorent ce retour
+    /// (`_ = try await …`). Évite l'ancien bug où chaque réaction socket échouait.
+    nonisolated static func decodePostReactionAck(
+        _ data: [String: Any], decoder: JSONDecoder, postId: String, emoji: String, action: String
+    ) -> SocketPostReactionUpdateEvent {
+        if let jsonData = try? JSONSerialization.data(withJSONObject: data),
+           let event = try? decoder.decode(SocketPostReactionUpdateEvent.self, from: jsonData) {
+            return event
+        }
+        return SocketPostReactionUpdateEvent(
+            postId: postId, userId: "", emoji: emoji, action: action,
+            aggregation: SocketPostReactionAggregation(emoji: emoji, count: 0), timestamp: nil)
+    }
+
+    /// Décode l'ACK d'une réaction commentaire (même contrat/tolérance que `decodePostReactionAck`).
+    nonisolated static func decodeCommentReactionAck(
+        _ data: [String: Any], decoder: JSONDecoder, commentId: String, postId: String, emoji: String, action: String
+    ) -> SocketCommentReactionUpdateEvent {
+        if let jsonData = try? JSONSerialization.data(withJSONObject: data),
+           let event = try? decoder.decode(SocketCommentReactionUpdateEvent.self, from: jsonData) {
+            return event
+        }
+        return SocketCommentReactionUpdateEvent(
+            commentId: commentId, postId: postId, userId: "", emoji: emoji, action: action,
+            aggregation: SocketCommentReactionAggregation(emoji: emoji, count: 0, userIds: [], hasCurrentUser: false),
+            timestamp: nil)
+    }
+
     public func addPostReaction(postId: String, emoji: String) async throws -> SocketPostReactionUpdateEvent {
         guard let socket else { throw PostReactionError.noSocket }
         return try await withCheckedThrowingContinuation { continuation in
@@ -662,12 +719,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                     continuation.resume(throwing: PostReactionError.serverError(message))
                     return
                 }
-                guard let jsonData = try? JSONSerialization.data(withJSONObject: data),
-                      let event = try? self.decoder.decode(SocketPostReactionUpdateEvent.self, from: jsonData) else {
-                    continuation.resume(throwing: PostReactionError.malformedResponse)
-                    return
-                }
-                continuation.resume(returning: event)
+                continuation.resume(returning: Self.decodePostReactionAck(data, decoder: self.decoder, postId: postId, emoji: emoji, action: "add"))
             }
         }
     }
@@ -688,12 +740,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                     continuation.resume(throwing: PostReactionError.serverError(message))
                     return
                 }
-                guard let jsonData = try? JSONSerialization.data(withJSONObject: data),
-                      let event = try? self.decoder.decode(SocketPostReactionUpdateEvent.self, from: jsonData) else {
-                    continuation.resume(throwing: PostReactionError.malformedResponse)
-                    return
-                }
-                continuation.resume(returning: event)
+                continuation.resume(returning: Self.decodePostReactionAck(data, decoder: self.decoder, postId: postId, emoji: emoji, action: "remove"))
             }
         }
     }
@@ -740,6 +787,16 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             }
             self.startHeartbeat()
             self.subscribeFeed()
+            // Re-join des post rooms après (re)connexion : le gateway a oublié nos
+            // rooms à la coupure. Sans ça, le post/reel/story ouvert cessait de
+            // recevoir likes/commentaires/réactions temps réel après un flap réseau.
+            let rooms = self.postRoomsToRejoinOnConnect()
+            for postId in rooms {
+                self.socket?.emit("post:join", ["postId": postId])
+            }
+            if !rooms.isEmpty {
+                Logger.socket.info("SocialSocket reconnected — re-joined \(rooms.count) post room(s)")
+            }
             Logger.socket.info("SocialSocket connected")
         }
 
@@ -1021,19 +1078,17 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             }
         }
 
-        // --- In-app notification toast ---
-        // Gateway emits `notification:new` whenever a server-side notification
-        // is created. The payload is shaped identically to the REST
-        // `APINotification` model plus the optional `title`/`subtitle` push
-        // header fields. The app subscribes to `inAppNotification` and
-        // decides whether to surface a toast (e.g. suppressed when already in
-        // the target conversation).
-        socket.on("notification:new") { [weak self] data, _ in
+        socket.on("comment:media-updated") { [weak self] data, _ in
             guard let self else { return }
-            self.decode(APINotification.self, from: data) { [weak self] payload in
-                self?.inAppNotification.send(payload)
+            self.decode(SocketCommentMediaUpdatedData.self, from: data) { [weak self] payload in
+                self?.commentMediaUpdated.send(payload)
             }
         }
+
+        // NOTE — `notification:new` in-app toasts are handled via
+        // MessageSocketManager.notificationReceived → NotificationToastManager.
+        // SocialSocketManager intentionally does NOT mirror that event (a second
+        // decode with no consumer would be dead work + a double-toast hazard).
     }
 
     // MARK: - Decode Helper

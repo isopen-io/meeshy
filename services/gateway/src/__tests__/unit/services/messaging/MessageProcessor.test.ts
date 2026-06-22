@@ -24,10 +24,12 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 
 const mockFindExistingTrackingLink = jest.fn() as jest.Mock<any>;
 const mockCreateTrackingLink = jest.fn() as jest.Mock<any>;
+const mockCollectContentTrackingLinks = jest.fn(async () => []) as jest.Mock<any>;
 jest.mock('../../../../services/TrackingLinkService', () => ({
   TrackingLinkService: jest.fn().mockImplementation(() => ({
     findExistingTrackingLink: (...a: any[]) => mockFindExistingTrackingLink(...a),
     createTrackingLink: (...a: any[]) => mockCreateTrackingLink(...a),
+    collectContentTrackingLinks: (...a: any[]) => mockCollectContentTrackingLinks(...a),
   })),
 }));
 
@@ -388,6 +390,23 @@ describe('MessageProcessor.saveMessage', () => {
     const msg = await processor.saveMessage({ ...baseData });
     expect(msgCreate).toHaveBeenCalledTimes(1);
     expect(msg).toHaveProperty('timestamp');
+  });
+
+  // Parité REST : le snapshot du message cité doit porter ses pièces jointes,
+  // sinon l'aperçu de citation est vide pour les messages reçus en temps réel.
+  it('demande les attachments du replyTo dans le create (aperçu de citation)', async () => {
+    await processor.saveMessage({ ...baseData, replyToId: 'orig-msg-id' });
+    const createArgs = msgCreate.mock.calls[0][0] as { include?: { replyTo?: { include?: Record<string, unknown> } } };
+    expect(createArgs.include?.replyTo?.include).toHaveProperty('attachments');
+  });
+
+  it('demande les attachments du replyTo dans le fallback dédup (findFirst)', async () => {
+    const cid = 'cid_55555555-5555-4555-8555-555555555555';
+    msgCreate.mockRejectedValueOnce(Object.assign(new Error('Unique constraint'), { code: 'P2002' }));
+    msgFindFirst.mockResolvedValue(makeMessage({ clientMessageId: cid }));
+    await processor.saveMessage({ ...baseData, clientMessageId: cid });
+    const findFirstArgs = msgFindFirst.mock.calls[0][0] as { include?: { replyTo?: { include?: Record<string, unknown> } } };
+    expect(findFirstArgs.include?.replyTo?.include).toHaveProperty('attachments');
   });
 
   it('uses provided encryptedContent + encryptionMetadata', async () => {

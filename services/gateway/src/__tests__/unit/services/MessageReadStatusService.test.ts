@@ -35,6 +35,8 @@ const mockPrisma: any = {
     findMany: jest.fn(),
     findFirst: jest.fn(),
     upsert: jest.fn(),
+    createMany: jest.fn(),
+    updateMany: jest.fn(),
     count: jest.fn(),
     deleteMany: jest.fn()
   },
@@ -99,6 +101,16 @@ describe('MessageReadStatusService', () => {
     console.log = jest.fn();
     console.error = jest.fn();
     console.warn = jest.fn();
+
+    // Safe defaults for the per-message freeze path (freezeMessageStatus).
+    // Individual tests override these to exercise the freeze behavior.
+    mockPrisma.message.findMany.mockResolvedValue([]);
+    mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+    mockPrisma.messageStatusEntry.createMany.mockResolvedValue({ count: 0 });
+    mockPrisma.messageStatusEntry.updateMany.mockResolvedValue({ count: 0 });
+    // Default: no per-participant media consumption rows (getMessageReadStatus).
+    // Individual tests override this to exercise the attachmentConsumption path.
+    mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([]);
 
     // Create service instance with mock Prisma
     service = new MessageReadStatusService(mockPrisma as any);
@@ -367,8 +379,8 @@ describe('MessageReadStatusService', () => {
         })
       });
 
-      // Cursor-only approach: no messageStatusEntry.upsert
-      expect(mockPrisma.messageStatusEntry.upsert).not.toHaveBeenCalled();
+      // No messages in the newly-crossed window (default mock) → freeze no-ops.
+      expect(mockPrisma.messageStatusEntry.createMany).not.toHaveBeenCalled();
     });
 
     it('should fetch latest message when messageId not provided', async () => {
@@ -448,9 +460,75 @@ describe('MessageReadStatusService', () => {
         })
       });
 
-      // Cursor-only approach: no messageStatusEntry.upsert, no message.findMany, no message.update
-      expect(mockPrisma.messageStatusEntry.upsert).not.toHaveBeenCalled();
+      // No messages in the newly-crossed window (default mock) → freeze no-ops.
+      expect(mockPrisma.messageStatusEntry.createMany).not.toHaveBeenCalled();
       expect(mockPrisma.message.update).not.toHaveBeenCalled();
+    });
+
+    it('should freeze a write-once readAt per message newly crossed', async () => {
+      const messageDate = new Date('2025-01-01T00:00:00Z');
+      mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId, createdAt: messageDate });
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+      // Previous read cursor is older → window has newly-read messages.
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01T00:00:00Z') });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }, { id: testMessageId2 }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]); // none frozen yet
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+
+      // Window query excludes the participant's own messages and is time-bounded.
+      expect(mockPrisma.message.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            conversationId: testConversationId,
+            deletedAt: null,
+            senderId: { not: testParticipantId },
+            createdAt: expect.objectContaining({ gt: new Date('2024-12-01T00:00:00Z') })
+          })
+        })
+      );
+      // Both messages get a frozen readAt (write-once create).
+      expect(mockPrisma.messageStatusEntry.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({ messageId: testMessageId, participantId: testParticipantId, readAt: expect.any(Date) }),
+          expect.objectContaining({ messageId: testMessageId2, participantId: testParticipantId, readAt: expect.any(Date) })
+        ]
+      });
+    });
+
+    it('should set readAt on a delivery-created entry without overwriting deliveredAt (write-once)', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId, createdAt: new Date('2025-01-01T00:00:00Z') });
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
+      // Entry already exists from delivery: deliveredAt set, readAt still null.
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        { messageId: testMessageId, deliveredAt: new Date('2025-01-01T00:00:01Z'), readAt: null }
+      ]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+
+      // No create (entry exists); update only the null readAt field.
+      expect(mockPrisma.messageStatusEntry.createMany).not.toHaveBeenCalled();
+      expect(mockPrisma.messageStatusEntry.updateMany).toHaveBeenCalledWith({
+        where: { messageId: { in: [testMessageId] }, participantId: testParticipantId, readAt: null },
+        data: { readAt: expect.any(Date) }
+      });
+    });
+
+    it('should not re-freeze a message whose readAt is already set (write-once)', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId, createdAt: new Date('2025-01-01T00:00:00Z') });
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        { messageId: testMessageId, deliveredAt: new Date('2025-01-01T00:00:01Z'), readAt: new Date('2025-01-02T00:00:00Z') }
+      ]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+
+      expect(mockPrisma.messageStatusEntry.createMany).not.toHaveBeenCalled();
+      expect(mockPrisma.messageStatusEntry.updateMany).not.toHaveBeenCalled();
     });
 
     it('should sync notifications when marking as read', async () => {
@@ -606,6 +684,180 @@ describe('MessageReadStatusService', () => {
       expect(result.readBy).toHaveLength(1);
       expect(result.receivedBy[0].participantId).toBe(testParticipantId2);
       expect(result.receivedBy[0].avatarURL).toBe('av2.jpg');
+    });
+
+    it('should expose per-participant media consumption positions for the message attachments', async () => {
+      const messageCreatedAt = new Date('2025-01-01T10:00:00Z');
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: messageCreatedAt,
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId,
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId, displayName: 'User1', avatar: null, user: null },
+        { id: testParticipantId2, displayName: 'User2', avatar: 'av2.jpg', user: null },
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      // User2 listened to ~45s of the audio attachment, not yet complete.
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([
+        {
+          attachmentId: testAttachmentId,
+          participantId: testParticipantId2,
+          lastPlayPositionMs: 45000,
+          listenedComplete: false,
+          lastWatchPositionMs: null,
+          watchedComplete: false,
+        },
+      ]);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      // Query is scoped to this message and excludes the sender.
+      expect(mockPrisma.attachmentStatusEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { messageId: testMessageId, participantId: { not: testParticipantId } },
+        })
+      );
+      expect(result.attachmentConsumption).toHaveLength(1);
+      expect(result.attachmentConsumption[0]).toEqual({
+        attachmentId: testAttachmentId,
+        participants: [
+          {
+            participantId: testParticipantId2,
+            displayName: 'User2',
+            avatarURL: 'av2.jpg',
+            lastPlayPositionMs: 45000,
+            listenedComplete: false,
+            lastWatchPositionMs: null,
+            watchedComplete: false,
+          },
+        ],
+      });
+    });
+
+    it('should group multiple participants under the same attachment', async () => {
+      const thirdParticipantId = '507f1f77bcf86cd799439099';
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: new Date('2025-01-01T10:00:00Z'),
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId,
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId, displayName: 'Sender', avatar: null, user: null },
+        { id: testParticipantId2, displayName: 'Bob', avatar: null, user: null },
+        { id: thirdParticipantId, displayName: 'Carol', avatar: null, user: null },
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([
+        {
+          attachmentId: testAttachmentId,
+          participantId: testParticipantId2,
+          lastPlayPositionMs: null,
+          listenedComplete: true,
+          lastWatchPositionMs: null,
+          watchedComplete: false,
+        },
+        {
+          attachmentId: testAttachmentId,
+          participantId: thirdParticipantId,
+          lastPlayPositionMs: 12000,
+          listenedComplete: false,
+          lastWatchPositionMs: null,
+          watchedComplete: false,
+        },
+      ]);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      expect(result.attachmentConsumption).toHaveLength(1);
+      expect(result.attachmentConsumption[0].participants).toHaveLength(2);
+      const byId = Object.fromEntries(
+        result.attachmentConsumption[0].participants.map(p => [p.participantId, p])
+      );
+      expect(byId[testParticipantId2].listenedComplete).toBe(true);
+      expect(byId[thirdParticipantId].lastPlayPositionMs).toBe(12000);
+    });
+
+    it('should skip consumption rows with no audio/video signal (download/image-only)', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: new Date('2025-01-01T10:00:00Z'),
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId,
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId, displayName: 'Sender', avatar: null, user: null },
+        { id: testParticipantId2, displayName: 'Bob', avatar: null, user: null },
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      // Bob downloaded but never played → no playback signal to surface.
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([
+        {
+          attachmentId: testAttachmentId,
+          participantId: testParticipantId2,
+          lastPlayPositionMs: null,
+          listenedComplete: false,
+          lastWatchPositionMs: null,
+          watchedComplete: false,
+        },
+      ]);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      expect(result.attachmentConsumption).toHaveLength(0);
+    });
+
+    it('should skip consumption rows whose participant no longer exists', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: new Date('2025-01-01T10:00:00Z'),
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId,
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId, displayName: 'Sender', avatar: null, user: null },
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([
+        {
+          attachmentId: testAttachmentId,
+          participantId: 'orphan-participant-id',
+          lastPlayPositionMs: 5000,
+          listenedComplete: false,
+          lastWatchPositionMs: null,
+          watchedComplete: false,
+        },
+      ]);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      expect(result.attachmentConsumption).toHaveLength(0);
+    });
+
+    it('should return an empty consumption list when there are no attachment status rows', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: new Date('2025-01-01T10:00:00Z'),
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId,
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId, displayName: 'Sender', avatar: null, user: null },
+        { id: testParticipantId2, displayName: 'Bob', avatar: null, user: null },
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([]);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      expect(result.attachmentConsumption).toEqual([]);
     });
   });
 
@@ -1995,6 +2247,663 @@ describe('MessageReadStatusService', () => {
 
         expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
       });
+    });
+  });
+
+  // ==========================================================================
+  // GAP-FILL: uncovered methods / branches
+  // ==========================================================================
+
+  describe('dedup cache and cleanupDedupCache (static)', () => {
+    it('markMessagesAsReceived returns early on duplicate call within TTL', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId });
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+      mockPrisma.message.count.mockResolvedValue(0);
+
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId);
+      const upsertCallsAfterFirst = mockPrisma.conversationReadCursor.upsert.mock.calls.length;
+
+      // Second call with same args within 2 s → should be a no-op (dedup hit)
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId);
+
+      expect(mockPrisma.conversationReadCursor.upsert.mock.calls.length).toBe(upsertCallsAfterFirst);
+    });
+
+    it('markMessagesAsRead returns early on duplicate call within TTL', async () => {
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+      mockPrisma.participant.findUnique.mockResolvedValue({ userId: null });
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+      const upsertCallsAfterFirst = mockPrisma.conversationReadCursor.upsert.mock.calls.length;
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+
+      expect(mockPrisma.conversationReadCursor.upsert.mock.calls.length).toBe(upsertCallsAfterFirst);
+    });
+
+    it('triggers cleanupDedupCache when cache exceeds 100 entries', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId });
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+      mockPrisma.message.count.mockResolvedValue(0);
+
+      const cache: Map<string, number> = (MessageReadStatusService as any).recentActionCache;
+      const now = Date.now();
+      for (let i = 0; i < 101; i++) {
+        cache.set(`fill-key-${i}:conv:received`, now - 5000);
+      }
+      expect(cache.size).toBeGreaterThan(100);
+
+      // This call triggers cleanupDedupCache internally (cache.size > 100)
+      await service.markMessagesAsReceived('new-participant', testConversationId, testMessageId);
+
+      expect(cache.size).toBeLessThan(110);
+    });
+  });
+
+  describe('getUnreadCountsForParticipants', () => {
+    it('returns empty map for empty participants array', async () => {
+      const result = await service.getUnreadCountsForParticipants([], testConversationId, 'sender-1');
+      expect(result).toEqual(new Map());
+      expect(mockPrisma.conversationReadCursor.findMany).not.toHaveBeenCalled();
+    });
+
+    it('returns unread counts for participants using cursors', async () => {
+      const since = new Date('2024-01-01T10:00:00Z');
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p1', lastReadAt: since },
+      ]);
+      mockPrisma.message.count.mockResolvedValue(3);
+
+      const participants = [
+        { id: 'p1', joinedAt: new Date('2024-01-01T00:00:00Z') },
+        { id: 'p2', joinedAt: null },
+      ];
+
+      const result = await service.getUnreadCountsForParticipants(
+        participants, testConversationId, 'sender-x'
+      );
+
+      expect(result.get('p1')).toBe(3);
+      expect(result.get('p2')).toBe(3);
+    });
+
+    it('returns zero-count map when DB throws', async () => {
+      mockPrisma.conversationReadCursor.findMany.mockRejectedValue(new Error('DB error'));
+      const participants = [{ id: 'p1', joinedAt: null }];
+
+      const result = await service.getUnreadCountsForParticipants(
+        participants, testConversationId, 'sender-x'
+      );
+
+      expect(result.get('p1')).toBe(0);
+    });
+  });
+
+  describe('markMessagesAsReceived error path', () => {
+    it('throws when cursor upsert fails', async () => {
+      (MessageReadStatusService as any).recentActionCache.clear();
+      mockPrisma.conversationReadCursor.upsert.mockRejectedValue(new Error('upsert fail'));
+
+      await expect(
+        service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId)
+      ).rejects.toThrow('upsert fail');
+    });
+  });
+
+  describe('markMessagesAsRead', () => {
+    it('returns early when no latestMessageId and findFirst returns null', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue(null);
+
+      // Should not throw and should not call upsert
+      await service.markMessagesAsRead(testParticipantId, testConversationId);
+      expect(mockPrisma.conversationReadCursor.upsert).not.toHaveBeenCalled();
+    });
+
+    it('resolves latestMessageId from DB when not provided', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue({ id: 'resolved-msg' });
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+      mockPrisma.participant.findUnique.mockResolvedValue({ userId: null });
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId);
+
+      const upsertCall = mockPrisma.conversationReadCursor.upsert.mock.calls[0][0];
+      expect(upsertCall.create.lastReadMessageId).toBe('resolved-msg');
+    });
+
+    it('calls NotificationService when participant has userId', async () => {
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+      mockPrisma.participant.findUnique.mockResolvedValue({ userId: 'user-with-id' });
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+
+      // No error thrown means the notification path was reached and succeeded
+      expect(mockPrisma.participant.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: testParticipantId } })
+      );
+    });
+
+    it('throws when cursor upsert fails', async () => {
+      (MessageReadStatusService as any).recentActionCache.clear();
+      mockPrisma.conversationReadCursor.upsert.mockRejectedValue(new Error('read upsert fail'));
+
+      await expect(
+        service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId)
+      ).rejects.toThrow('read upsert fail');
+    });
+  });
+
+  describe('getConversationReadStatuses error path', () => {
+    it('throws when message.findMany fails', async () => {
+      mockPrisma.message.findMany.mockRejectedValue(new Error('findMany fail'));
+
+      await expect(
+        service.getConversationReadStatuses(testConversationId, [testMessageId])
+      ).rejects.toThrow('findMany fail');
+    });
+  });
+
+  describe('getMessageStatusDetails', () => {
+    it('throws when message is not found', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.getMessageStatusDetails(testMessageId)
+      ).rejects.toThrow('Message not found');
+    });
+
+    it('returns paginated statuses for a found message', async () => {
+      const msgCreatedAt = new Date('2024-06-01T10:00:00Z');
+      mockPrisma.message.findUnique.mockResolvedValue({
+        createdAt: msgCreatedAt,
+        conversationId: testConversationId,
+      });
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        {
+          participantId: 'p1',
+          lastDeliveredAt: new Date('2024-06-01T10:01:00Z'),
+          lastReadAt: new Date('2024-06-01T10:02:00Z'),
+        },
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p1', displayName: 'Alice', avatar: null },
+      ]);
+
+      const result = await service.getMessageStatusDetails(testMessageId);
+
+      expect(result.statuses).toHaveLength(1);
+      expect(result.statuses[0].displayName).toBe('Alice');
+      expect(result.statuses[0].deliveredAt).not.toBeNull();
+      expect(result.statuses[0].readAt).not.toBeNull();
+      expect(result.pagination.total).toBe(1);
+    });
+
+    it('prefers the frozen per-message timestamps over the moving cursor', async () => {
+      const msgCreatedAt = new Date('2024-06-01T10:00:00Z');
+      // Cursor has moved far forward (e.g. conversation re-opened today).
+      const movedCursorAt = new Date('2024-09-01T09:00:00Z');
+      // But the message was actually read right after it was sent.
+      const frozenReadAt = new Date('2024-06-01T10:02:00Z');
+      const frozenDeliveredAt = new Date('2024-06-01T10:01:00Z');
+
+      mockPrisma.message.findUnique.mockResolvedValue({
+        createdAt: msgCreatedAt,
+        conversationId: testConversationId,
+      });
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p1', lastDeliveredAt: movedCursorAt, lastReadAt: movedCursorAt },
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p1', displayName: 'Alice', avatar: null },
+      ]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        { participantId: 'p1', deliveredAt: frozenDeliveredAt, receivedAt: frozenDeliveredAt, readAt: frozenReadAt, readDevice: 'ios' },
+      ]);
+
+      const result = await service.getMessageStatusDetails(testMessageId);
+
+      // The frozen historical times win — NOT the re-advanced cursor value.
+      expect(result.statuses[0].readAt).toEqual(frozenReadAt);
+      expect(result.statuses[0].deliveredAt).toEqual(frozenDeliveredAt);
+      expect(result.statuses[0].readDevice).toBe('ios');
+    });
+
+    it('skips orphan cursors (participant not found)', async () => {
+      const msgCreatedAt = new Date('2024-06-01T10:00:00Z');
+      mockPrisma.message.findUnique.mockResolvedValue({
+        createdAt: msgCreatedAt,
+        conversationId: testConversationId,
+      });
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        {
+          participantId: 'orphan-p',
+          lastDeliveredAt: new Date('2024-06-01T10:01:00Z'),
+          lastReadAt: null,
+        },
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+
+      const result = await service.getMessageStatusDetails(testMessageId);
+
+      expect(result.statuses).toHaveLength(0);
+    });
+
+    it('applies delivered filter correctly', async () => {
+      const msgCreatedAt = new Date('2024-06-01T10:00:00Z');
+      mockPrisma.message.findUnique.mockResolvedValue({
+        createdAt: msgCreatedAt,
+        conversationId: testConversationId,
+      });
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p1', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: null },
+        { participantId: 'p2', lastDeliveredAt: null, lastReadAt: null },
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p1', displayName: 'Alice', avatar: null },
+        { id: 'p2', displayName: 'Bob', avatar: null },
+      ]);
+
+      const result = await service.getMessageStatusDetails(testMessageId, { filter: 'delivered' });
+      expect(result.statuses).toHaveLength(1);
+      expect(result.statuses[0].displayName).toBe('Alice');
+    });
+
+    it('applies read filter correctly', async () => {
+      const msgCreatedAt = new Date('2024-06-01T10:00:00Z');
+      mockPrisma.message.findUnique.mockResolvedValue({
+        createdAt: msgCreatedAt,
+        conversationId: testConversationId,
+      });
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p1', lastDeliveredAt: null, lastReadAt: new Date('2024-06-01T10:02:00Z') },
+        { participantId: 'p2', lastDeliveredAt: null, lastReadAt: null },
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p1', displayName: 'Alice', avatar: null },
+        { id: 'p2', displayName: 'Bob', avatar: null },
+      ]);
+
+      const result = await service.getMessageStatusDetails(testMessageId, { filter: 'read' });
+      expect(result.statuses).toHaveLength(1);
+      expect(result.statuses[0].readAt).not.toBeNull();
+    });
+
+    it('applies unread filter correctly', async () => {
+      const msgCreatedAt = new Date('2024-06-01T10:00:00Z');
+      mockPrisma.message.findUnique.mockResolvedValue({
+        createdAt: msgCreatedAt,
+        conversationId: testConversationId,
+      });
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p1', lastDeliveredAt: null, lastReadAt: new Date('2024-06-01T10:02:00Z') },
+        { participantId: 'p2', lastDeliveredAt: null, lastReadAt: null },
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p1', displayName: 'Alice', avatar: null },
+        { id: 'p2', displayName: 'Bob', avatar: null },
+      ]);
+
+      const result = await service.getMessageStatusDetails(testMessageId, { filter: 'unread' });
+      expect(result.statuses).toHaveLength(1);
+      expect(result.statuses[0].displayName).toBe('Bob');
+    });
+
+    it('handles pagination correctly', async () => {
+      const msgCreatedAt = new Date('2024-06-01T10:00:00Z');
+      mockPrisma.message.findUnique.mockResolvedValue({ createdAt: msgCreatedAt, conversationId: testConversationId });
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p1', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: null },
+        { participantId: 'p2', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: null },
+        { participantId: 'p3', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: null },
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p1', displayName: 'A', avatar: null },
+        { id: 'p2', displayName: 'B', avatar: null },
+        { id: 'p3', displayName: 'C', avatar: null },
+      ]);
+
+      const result = await service.getMessageStatusDetails(testMessageId, { offset: 1, limit: 1 });
+      expect(result.statuses).toHaveLength(1);
+      expect(result.pagination.total).toBe(3);
+      expect(result.pagination.hasMore).toBe(true);
+    });
+
+    it('throws when DB query fails', async () => {
+      mockPrisma.message.findUnique.mockRejectedValue(new Error('DB error'));
+      await expect(service.getMessageStatusDetails(testMessageId)).rejects.toThrow('DB error');
+    });
+
+    it('returns empty statuses when no cursors found', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        createdAt: new Date(),
+        conversationId: testConversationId,
+      });
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+
+      const result = await service.getMessageStatusDetails(testMessageId);
+      expect(result.statuses).toHaveLength(0);
+      expect(result.pagination.total).toBe(0);
+      expect(mockPrisma.participant.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getAttachmentStatusDetails', () => {
+    it('returns paginated attachment statuses', async () => {
+      const viewedAt = new Date('2024-06-01T11:00:00Z');
+      mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([
+        {
+          participantId: 'p1',
+          viewedAt,
+          downloadedAt: null,
+          listenedAt: null,
+          watchedAt: null,
+          listenCount: 0,
+          watchCount: 0,
+          listenedComplete: false,
+          watchedComplete: false,
+          lastPlayPositionMs: null,
+          lastWatchPositionMs: null,
+        },
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p1', displayName: 'Charlie', avatar: 'avatar.png' },
+      ]);
+
+      const result = await service.getAttachmentStatusDetails(testAttachmentId);
+
+      expect(result.statuses).toHaveLength(1);
+      expect(result.statuses[0].username).toBe('Charlie');
+      expect(result.statuses[0].viewedAt).toBe(viewedAt);
+      expect(result.pagination.total).toBe(1);
+    });
+
+    it('filters by viewed status', async () => {
+      mockPrisma.attachmentStatusEntry.count.mockResolvedValue(0);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.getAttachmentStatusDetails(testAttachmentId, { filter: 'viewed' });
+
+      expect(mockPrisma.attachmentStatusEntry.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ viewedAt: { not: null } }),
+        })
+      );
+    });
+
+    it('filters by downloaded status', async () => {
+      mockPrisma.attachmentStatusEntry.count.mockResolvedValue(0);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.getAttachmentStatusDetails(testAttachmentId, { filter: 'downloaded' });
+
+      expect(mockPrisma.attachmentStatusEntry.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ downloadedAt: { not: null } }),
+        })
+      );
+    });
+
+    it('filters by listened status', async () => {
+      mockPrisma.attachmentStatusEntry.count.mockResolvedValue(0);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.getAttachmentStatusDetails(testAttachmentId, { filter: 'listened' });
+
+      expect(mockPrisma.attachmentStatusEntry.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ listenedAt: { not: null } }),
+        })
+      );
+    });
+
+    it('filters by watched status', async () => {
+      mockPrisma.attachmentStatusEntry.count.mockResolvedValue(0);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.getAttachmentStatusDetails(testAttachmentId, { filter: 'watched' });
+
+      expect(mockPrisma.attachmentStatusEntry.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ watchedAt: { not: null } }),
+        })
+      );
+    });
+
+    it('skips orphan participant rows', async () => {
+      mockPrisma.attachmentStatusEntry.count.mockResolvedValue(2);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([
+        {
+          participantId: 'orphan',
+          viewedAt: null, downloadedAt: null, listenedAt: null, watchedAt: null,
+          listenCount: 0, watchCount: 0, listenedComplete: false, watchedComplete: false,
+          lastPlayPositionMs: null, lastWatchPositionMs: null,
+        },
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+
+      const result = await service.getAttachmentStatusDetails(testAttachmentId);
+      expect(result.statuses).toHaveLength(0);
+    });
+
+    it('returns empty when no statuses found', async () => {
+      mockPrisma.attachmentStatusEntry.count.mockResolvedValue(0);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([]);
+
+      const result = await service.getAttachmentStatusDetails(testAttachmentId);
+
+      expect(result.statuses).toHaveLength(0);
+      expect(mockPrisma.participant.findMany).not.toHaveBeenCalled();
+    });
+
+    it('throws when DB query fails', async () => {
+      mockPrisma.attachmentStatusEntry.count.mockRejectedValue(new Error('att DB fail'));
+      await expect(service.getAttachmentStatusDetails(testAttachmentId)).rejects.toThrow('att DB fail');
+    });
+  });
+
+  describe('getLatestMessageSummary', () => {
+    it('returns zeros when no messages found', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue(null);
+
+      const result = await service.getLatestMessageSummary(testConversationId);
+
+      expect(result).toEqual({ totalMembers: 0, deliveredCount: 0, readCount: 0 });
+    });
+
+    it('returns summary based on active participants and cursors', async () => {
+      const msgCreatedAt = new Date('2024-06-01T10:00:00Z');
+      mockPrisma.message.findFirst.mockResolvedValue({
+        createdAt: msgCreatedAt,
+        senderId: 'sender-id',
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p1' }, { id: 'p2' },
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p1', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: new Date('2024-06-01T10:02:00Z') },
+        { participantId: 'p2', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: null },
+      ]);
+
+      const result = await service.getLatestMessageSummary(testConversationId);
+
+      expect(result.totalMembers).toBe(2);
+      expect(result.deliveredCount).toBe(2);
+      expect(result.readCount).toBe(1);
+    });
+
+    it('only counts cursors from active participants', async () => {
+      const msgCreatedAt = new Date('2024-06-01T10:00:00Z');
+      mockPrisma.message.findFirst.mockResolvedValue({
+        createdAt: msgCreatedAt,
+        senderId: 'sender-id',
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([{ id: 'p1' }]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'inactive-p', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: null },
+        { participantId: 'p1', lastDeliveredAt: null, lastReadAt: null },
+      ]);
+
+      const result = await service.getLatestMessageSummary(testConversationId);
+
+      expect(result.deliveredCount).toBe(0);
+    });
+
+    it('returns zeros and logs error on DB failure', async () => {
+      mockPrisma.message.findFirst.mockRejectedValue(new Error('connection lost'));
+
+      const result = await service.getLatestMessageSummary(testConversationId);
+
+      expect(result).toEqual({ totalMembers: 0, deliveredCount: 0, readCount: 0 });
+    });
+  });
+
+  describe('updateUnreadCount (via markMessagesAsReceived)', () => {
+    it('counts all messages when cursor has no lastReadAt', async () => {
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
+        id: 'cursor-1', lastReadAt: null,
+      });
+      mockPrisma.message.count.mockResolvedValue(5);
+      mockPrisma.conversationReadCursor.update.mockResolvedValue({});
+
+      await service.markMessagesAsReceived('p-new', testConversationId, testMessageId);
+
+      expect(mockPrisma.message.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ senderId: { not: 'p-new' } }),
+        })
+      );
+      expect(mockPrisma.conversationReadCursor.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { unreadCount: 5 } })
+      );
+    });
+
+    it('counts messages after lastReadAt when cursor has lastReadAt', async () => {
+      const lastReadAt = new Date('2024-06-01T09:00:00Z');
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
+        id: 'cursor-2', lastReadAt,
+      });
+      mockPrisma.message.count.mockResolvedValue(2);
+      mockPrisma.conversationReadCursor.update.mockResolvedValue({});
+
+      await service.markMessagesAsReceived('p-with-cursor', testConversationId, testMessageId);
+
+      expect(mockPrisma.message.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ createdAt: { gt: lastReadAt } }),
+        })
+      );
+      expect(mockPrisma.conversationReadCursor.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { unreadCount: 2 } })
+      );
+    });
+
+    it('does not call update when cursor is null', async () => {
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+      mockPrisma.message.count.mockResolvedValue(0);
+
+      await service.markMessagesAsReceived('p-no-cursor', testConversationId, testMessageId);
+
+      expect(mockPrisma.conversationReadCursor.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateAttachmentComputedStatus — video all-watched path', () => {
+    beforeEach(() => {
+      // Reset these mocks fully to clear any queued Once handlers from prior tests
+      mockPrisma.attachmentStatusEntry.count.mockReset();
+      mockPrisma.attachmentStatusEntry.findFirst.mockReset();
+      mockPrisma.$transaction.mockReset();
+      mockPrisma.messageAttachment.findUnique.mockResolvedValue({
+        id: testAttachmentId,
+        messageId: testMessageId,
+        mimeType: 'video/mp4',
+        message: { conversationId: testConversationId, senderId: 'sender-id' },
+      });
+      mockPrisma.participant.count.mockResolvedValue(1);
+      mockPrisma.messageAttachment.update.mockResolvedValue({});
+      mockPrisma.$transaction.mockImplementation(async (cb: any) => cb(mockPrisma));
+    });
+
+    it('sets watchedByAllAt when all participants watched (video)', async () => {
+      const watchedAt = new Date('2024-06-01T12:00:00Z');
+      mockPrisma.attachmentStatusEntry.count.mockImplementation((args: any) => {
+        if (args?.where?.watchedAt) return Promise.resolve(1);
+        return Promise.resolve(0);
+      });
+      mockPrisma.attachmentStatusEntry.findFirst.mockImplementation(() =>
+        Promise.resolve({ watchedAt })
+      );
+
+      await service.markVideoAsWatched(testParticipantId, testAttachmentId);
+
+      const updateData = mockPrisma.messageAttachment.update.mock.calls[0]?.[0]?.data;
+      expect(updateData?.watchedByAllAt).toEqual(watchedAt);
+    });
+
+    it('logs error when updateAttachmentComputedStatus DB call fails', async () => {
+      mockPrisma.attachmentStatusEntry.count.mockRejectedValue(new Error('count fail'));
+      mockPrisma.$transaction.mockImplementation(async (cb: any) => cb(mockPrisma));
+
+      // Should not throw — error is caught and logged inside updateAttachmentComputedStatus
+      await service.markVideoAsWatched(testParticipantId, testAttachmentId);
+    });
+  });
+
+  describe('cleanupObsoleteCursors error path', () => {
+    it('throws when conversationReadCursor.findMany fails', async () => {
+      mockPrisma.conversationReadCursor.findMany.mockRejectedValue(new Error('cursor error'));
+
+      await expect(
+        service.cleanupObsoleteCursors(testConversationId)
+      ).rejects.toThrow('cursor error');
+    });
+  });
+
+  // ===========================================================
+  // BRANCH GAP-FILL: uncovered catch blocks + no-op method
+  // ===========================================================
+
+  describe('updateUnreadCount — error swallowed silently', () => {
+    it('completes markMessagesAsReceived even when updateUnreadCount DB call fails', async () => {
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+      // findUnique inside updateUnreadCount throws — error must be swallowed
+      mockPrisma.conversationReadCursor.findUnique.mockRejectedValue(new Error('cursor lookup fail'));
+
+      await expect(
+        service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId)
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('markMessagesAsRead — notification sync error swallowed', () => {
+    it('completes normally when participant.findUnique throws during notification sync', async () => {
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+      // participant.findUnique throws inside the notification-sync try block
+      mockPrisma.participant.findUnique.mockRejectedValue(new Error('participant lookup fail'));
+
+      await expect(
+        service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId)
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('updateMessageComputedStatus — no-op legacy method', () => {
+    it('resolves to undefined without side effects', async () => {
+      await expect(
+        service.updateMessageComputedStatus(testMessageId)
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('getUnreadCountsForConversations — empty participantIds guard', () => {
+    it('returns empty Map when participantIds array is empty', async () => {
+      const result = await service.getUnreadCountsForConversations([], [testConversationId]);
+      expect(result).toEqual(new Map());
     });
   });
 });

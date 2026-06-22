@@ -40,6 +40,7 @@ public actor CacheCoordinator {
     public let friendRequests: GRDBCacheStore<String, FriendRequest>
     public let blockedUsers: GRDBCacheStore<String, BlockedUser>
     public let userSearch: GRDBCacheStore<String, UserSearchResult>
+    public let callHistory: GRDBCacheStore<String, APICallRecord>
     public let timeline: GRDBCacheStore<String, TimelinePoint>
     /// User-defined conversation categories. Single key "list" stores the full
     /// ordered set (typically <20 items). Stale-while-revalidate via
@@ -240,6 +241,7 @@ public actor CacheCoordinator {
         self.friendRequests = GRDBCacheStore(policy: .participants, db: db, namespace: "freq", encrypted: true)
         self.blockedUsers = GRDBCacheStore(policy: .participants, db: db, namespace: "blocked", encrypted: true)
         self.userSearch = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "usearch")
+        self.callHistory = GRDBCacheStore(policy: .callHistory, db: db, namespace: "callhist", encrypted: true)
         self.timeline = GRDBCacheStore(policy: .userStats, db: db, namespace: "timeline")
         self.categories = GRDBCacheStore(policy: .preferences, db: db, namespace: "prefs-cat")
         self.userTags = GRDBCacheStore(policy: .preferences, db: db, namespace: "prefs-tags")
@@ -315,6 +317,7 @@ public actor CacheCoordinator {
         await friendRequests.invalidateAll()
         await blockedUsers.invalidateAll()
         await userSearch.invalidateAll()
+        await callHistory.invalidateAll()
         await timeline.invalidateAll()
         // Preference stores are NOT userId-namespaced and the coordinator is a
         // process-lifetime singleton, so their in-memory L1 would otherwise
@@ -334,6 +337,9 @@ public actor CacheCoordinator {
         await SearchIndex.shared.clearAll()
         // No translation persist task to cancel — persistence is now incremental
         clearTranslationCacheDB()
+        // Anti cross-user: drop any pending engagement sessions (open or
+        // finalized) so user A's dwell/watch never flushes under user B.
+        await EngagementOutbox.shared.purgeAll()
 
         // Reset the search-index backfill flag so the next user's first
         // `start()` re-runs the backfill against their freshly hydrated cache.

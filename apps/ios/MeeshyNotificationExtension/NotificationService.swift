@@ -101,30 +101,13 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             bestAttemptContent.body = fallback
         }
 
-        // Phase B — for `message_reaction`, the gateway sends body = "❤️" (emoji alone).
-        // Reformat it to "<sender> a réagi <emoji> à votre message" so the banner is
-        // self-explanatory. Done BEFORE applyCommunicationIntent so INSendMessageIntent
-        // sees the final body. The avatar of the reactor is still rendered via the
-        // standard Communication Notifications path (INPerson.image from `imageURL`).
-        if (userInfo["type"] as? String) == "message_reaction" {
-            let emoji = (userInfo["reactionEmoji"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-                ?? bestAttemptContent.body
-            let senderName = (userInfo["senderDisplayName"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-                ?? (userInfo["senderUsername"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-                ?? ""
-            let template = NSLocalizedString(
-                "notification.message_reaction.body",
-                value: "%@ a réagi %@ à votre message",
-                comment: "Push body for a message reaction: sender name + emoji"
-            )
-            bestAttemptContent.body = senderName.isEmpty
-                ? String(format: NSLocalizedString(
-                    "notification.message_reaction.body.no_sender",
-                    value: "A réagi %@ à votre message",
-                    comment: "Fallback when no sender name is available"
-                ), emoji)
-                : String(format: template, senderName, emoji)
-        }
+        // Prisme Linguistique (i18n serveur) : pour `message_reaction`, le gateway
+        // envoie désormais le body DÉJÀ localisé dans la langue du destinataire
+        // (« reacted ❤️ to your message » / « a réagi ❤️ à votre message » …, via
+        // `notificationString(lang, 'reaction.message')`). Le NSE ne reconstruit
+        // plus rien : il affiche le body tel quel. Le nom du réacteur est porté par
+        // INSendMessageIntent (titre Communication Notification), l'avatar via
+        // INPerson.image. Voir docs/superpowers/specs/2026-06-16-notification-system-i18n-design.md
 
         let isCommunicationType = Self.communicationTypes.contains(
             userInfo["type"] as? String ?? ""
@@ -519,16 +502,48 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
 
         let speakableGroupName: INSpeakableString?
         if isGroup {
-            let groupTitle = (userInfo["conversationTitle"] as? String)
-                .flatMap { $0.isEmpty ? nil : $0 }
+            // iOS renders `speakableGroupName` as the group line in the Communication
+            // Notification subtitle (and IGNORES content.subtitle there). So we carry
+            // the FULLY DECORATED name here — type glyph + favorite emoji + customName
+            // ?? canonical title + (category) + mute/lock badges — via the same
+            // Local-First composition used by `composedConversationSubtitle`.
+            let localDetails = (userInfo["conversationId"] as? String)
+                .flatMap { NSEDataSync.conversationDetails(forId: $0) }
+            let decorated = NotificationPayloadHelpers.composedConversationSubtitle(
+                conversationType: conversationType,
+                conversationTitle: userInfo["conversationTitle"] as? String,
+                customName: localDetails?.customName,
+                favoriteEmoji: localDetails?.favoriteEmoji,
+                categoryName: localDetails?.categoryName,
+                isMuted: localDetails?.isMuted ?? false,
+                isLocked: localDetails?.isLocked ?? false
+            )
+            let groupTitle = decorated
+                ?? (userInfo["conversationTitle"] as? String).flatMap { $0.isEmpty ? nil : $0 }
                 ?? content.title
             speakableGroupName = INSpeakableString(spokenPhrase: groupTitle)
         } else {
             speakableGroupName = nil
         }
 
+        // iOS surfaces the group name (speakableGroupName) in the Communication
+        // Notification subtitle ONLY when the intent is a GROUP conversation, which
+        // requires ≥2 recipients. With recipients:nil iOS renders a 1:1 banner
+        // (sender as title, no group subtitle) and IGNORES any manually-set
+        // content.subtitle — confirmed empirically on iOS 26.3.1. We synthesize
+        // neutral members keyed by conversationId purely to trigger group mode;
+        // the displayed name comes from speakableGroupName, not these handles.
+        let groupRecipients: [INPerson]? = isGroup ? [
+            INPerson(personHandle: INPersonHandle(value: "\(conversationId)#m1", type: .unknown),
+                     nameComponents: nil, displayName: "", image: nil,
+                     contactIdentifier: nil, customIdentifier: "\(conversationId)#m1"),
+            INPerson(personHandle: INPersonHandle(value: "\(conversationId)#m2", type: .unknown),
+                     nameComponents: nil, displayName: "", image: nil,
+                     contactIdentifier: nil, customIdentifier: "\(conversationId)#m2")
+        ] : nil
+
         let intent = INSendMessageIntent(
-            recipients: nil,
+            recipients: groupRecipients,
             outgoingMessageType: .unknown,
             content: content.body,
             speakableGroupName: speakableGroupName,

@@ -128,7 +128,7 @@ struct SecurityVerificationView: View {
     // CIContext is expensive to create (it sets up the Core Image / GPU
     // pipeline) and is documented as safe to share — build one and reuse it
     // instead of a fresh context on every QR generation.
-    nonisolated(unsafe) private static let qrContext = CIContext()
+    private static let qrContext = CIContext()
 
     private static func generateQRCode(from string: String) -> UIImage? {
         let filter = CIFilter.qrCodeGenerator()

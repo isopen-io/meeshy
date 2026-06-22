@@ -120,7 +120,7 @@ const StoryTextObjectSchema = z.object({
   startTime: z.number().min(0).max(86400).optional(),
   duration: z.number().min(0).max(86400).optional(),
   sourceLanguage: z.string().max(STORY_LANG_MAX).optional(),
-  translations: z.record(z.string().max(STORY_TEXT_MAX)).optional(),
+  translations: z.record(z.string(), z.string().max(STORY_TEXT_MAX)).optional(),
 }).passthrough();
 
 const StoryStickerObjectSchema = z.object({
@@ -203,6 +203,15 @@ export const UpdatePostSchema = z.object({
   visibilityUserIds: z.array(z.string()).max(500).optional(),
   storyEffects: StoryEffectsSchema.optional(),
   moodEmoji: z.string().max(10).optional(),
+  // ISO 639-1 (or BCP-47) source language. Changing it re-runs the Prisme
+  // translation pipeline from the new source and discards stale translations.
+  originalLanguage: z.string().min(2).max(16).optional(),
+  // Type is editable only between POST and REEL (service enforces the rest:
+  // no repost, no STORY/STATUS, reel requires media).
+  type: z.enum(['POST', 'REEL']).optional(),
+  // Ids of attached media (PostMedia) to detach during the edit. Only media
+  // belonging to this post is removed; a reel must keep at least one media.
+  removeMediaIds: z.array(z.string()).max(50).optional(),
 }).refine((data) => {
   if ((data.visibility === 'EXCEPT' || data.visibility === 'ONLY') && (!data.visibilityUserIds || data.visibilityUserIds.length === 0)) {
     return false;
@@ -211,14 +220,26 @@ export const UpdatePostSchema = z.object({
 }, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' });
 
 export const CreateCommentSchema = z.object({
-  content: z.string().min(1).max(2000),
+  // Le contenu peut être vide quand un média est joint (commentaire média seul).
+  // Le refine ci-dessous garantit qu'un commentaire porte AU MOINS du texte ou un média.
+  content: z.string().max(2000).optional().default(''),
   parentId: z.string().optional(),
   effectFlags: z.number().int().min(0).optional(),
   /// ISO 639-1 (or BCP-47) code of the language the comment is written in.
   /// Optional — when omitted the translation pipeline detects the language
   /// from the content as a fallback.
   originalLanguage: z.string().min(2).max(16).optional(),
-});
+  /// IDs de PostMedia déjà uploadés (uploadcontext=comment, postId/commentId=null
+  /// pending) à attacher. Wire aligné sur le contrat message-with-attachments
+  /// (tableau), MAIS un commentaire ne porte QU'UN SEUL média → borné à 1.
+  attachmentIds: z.array(z.string()).max(1).optional(),
+  /// Transcription Whisper produite côté mobile pour un média audio (évite la
+  /// re-transcription serveur). Même structure que pour les posts.
+  mobileTranscription: MobileTranscriptionSchema.optional(),
+}).refine(
+  (data) => (data.content?.trim().length ?? 0) > 0 || (data.attachmentIds?.length ?? 0) > 0,
+  { message: 'A comment must have text content or an attached media' },
+);
 
 export const RepostSchema = z.object({
   targetType: z.enum(['POST', 'REEL', 'STORY', 'STATUS']).optional(),
@@ -229,6 +250,47 @@ export const RepostSchema = z.object({
 export const TranslatePostSchema = z.object({
   targetLanguage: z.string().min(2).max(5),
 });
+
+// ============================================
+// ENGAGEMENT CAPTURE (LOT 4 — ingestion)
+// ============================================
+
+export const EngagementActionSchema = z.object({
+  type: z.string().max(40),
+  atMs: z.number().int().min(0),
+});
+
+export const WatchSampleSchema = z.object({
+  positionMs: z.number().int().min(0),
+  atMs: z.number().int().min(0),
+});
+
+export const EngagementSessionSchema = z.object({
+  sessionId: z.guid(),
+  // Champ informatif côté client uniquement : la route IGNORE ce userId et
+  // prend l'identité du token auth (anti-spoof). Optionnel pour refléter
+  // qu'il n'est pas fiable côté serveur.
+  userId: z.string().optional(),
+  postId: z.string().regex(/^[0-9a-fA-F]{24}$/),
+  contentType: z.enum(['POST', 'REEL', 'STORY', 'STATUS']),
+  surface: z.string().max(40),
+  startedAt: z.string(),
+  dwellMs: z.number().int().min(0),
+  watchMs: z.number().int().min(0).optional(),
+  mediaDurationMs: z.number().int().min(0).optional(),
+  completed: z.boolean().default(false),
+  truncated: z.boolean().default(false),
+  consent: z.string().max(40).optional(),
+  actions: z.array(EngagementActionSchema).max(200).default([]),
+  watchSamples: z.array(WatchSampleSchema).max(500).default([]),
+});
+
+export const EngagementBatchSchema = z.object({
+  sessions: z.array(EngagementSessionSchema).min(1).max(50),
+});
+
+export type EngagementBatch = z.infer<typeof EngagementBatchSchema>;
+export type EngagementSessionInput = z.infer<typeof EngagementSessionSchema>;
 
 export const FeedQuerySchema = z.object({
   cursor: z.string().optional(),

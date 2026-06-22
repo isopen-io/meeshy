@@ -191,7 +191,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({
           success: false,
           error: 'Données invalides',
-          details: error.errors
+          details: error.issues
         });
       }
       if (error instanceof Error && error.message === 'Token already exists') {
@@ -274,6 +274,64 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       logError(fastify.log, 'Get tracking link error:', error);
+      return sendInternalError(reply, 'Erreur interne du serveur');
+    }
+  });
+
+  /**
+   * 5bis. Résoudre un token vers sa cible typée (page de redirection + deep link).
+   * GET /api/tracking-links/:token/resolve — PUBLIC (n'expose pas les stats privées,
+   * juste de quoi router : type de cible, id, attribution du partageur, état actif).
+   * Tente TrackingLink puis fallback ConversationShareLink (invitation).
+   */
+  fastify.get('/tracking-links/:token/resolve', {
+    onRequest: [authOptional],
+    schema: {
+      description: 'Resolve a /l/<token> link to its typed target for smart redirection (web page + iOS DeepLinkRouter). Tries a tracking link, then falls back to a conversation invitation. Expired/inactive links resolve with isActive=false.',
+      tags: ['tracking-links'],
+      summary: 'Resolve a tracking token to its typed target',
+      params: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: { type: 'string', pattern: '^[a-zA-Z0-9_-]{2,50}$' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                kind: { type: 'string', enum: ['tracking', 'conversation'] },
+                targetType: { type: 'string' },
+                targetId: { type: ['string', 'null'] },
+                originalUrl: { type: ['string', 'null'] },
+                // sharerId volontairement NON exposé ici (route publique) : ce
+                // serait une fuite d'attribution inutile au routage. Strippé par
+                // le response schema Fastify ; l'attribution reste via createdBy.
+                isActive: { type: 'boolean' },
+                expiresAt: { type: ['string', 'null'], format: 'date-time' }
+              }
+            }
+          }
+        },
+        404: { description: 'Token not found', ...errorResponseSchema },
+        500: { description: 'Internal server error', ...errorResponseSchema }
+      }
+    }
+  }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
+    try {
+      const { token } = request.params as { token: string };
+      const resolved = await trackingLinkService.resolveTarget(token);
+      if (!resolved) {
+        return sendNotFound(reply, 'Lien introuvable');
+      }
+      return sendSuccess(reply, resolved);
+    } catch (error) {
+      logError(fastify.log, 'Resolve tracking link error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });

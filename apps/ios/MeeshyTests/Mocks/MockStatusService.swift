@@ -32,6 +32,8 @@ final class MockStatusService: StatusServiceProviding {
     var lastCreateVisibility: String?
     var lastCreateVisibilityUserIds: [String]?
     var lastCreateViaUsername: String?
+    var lastCreateAudioUrl: String?
+    var lastCreateRepostOfId: String?
 
     var deleteCallCount = 0
     var lastDeleteStatusId: String?
@@ -51,13 +53,16 @@ final class MockStatusService: StatusServiceProviding {
     }
 
     func create(moodEmoji: String, content: String?, visibility: String,
-                visibilityUserIds: [String]?, viaUsername: String? = nil) async throws -> APIPost {
+                visibilityUserIds: [String]?, viaUsername: String? = nil,
+                audioUrl: String? = nil, repostOfId: String? = nil) async throws -> APIPost {
         createCallCount += 1
         lastCreateMoodEmoji = moodEmoji
         lastCreateContent = content
         lastCreateVisibility = visibility
         lastCreateVisibilityUserIds = visibilityUserIds
         lastCreateViaUsername = viaUsername
+        lastCreateAudioUrl = audioUrl
+        lastCreateRepostOfId = repostOfId
         return try createResult.get()
     }
 
@@ -89,6 +94,9 @@ final class MockStatusService: StatusServiceProviding {
         lastCreateContent = nil
         lastCreateVisibility = nil
         lastCreateVisibilityUserIds = nil
+        lastCreateViaUsername = nil
+        lastCreateAudioUrl = nil
+        lastCreateRepostOfId = nil
 
         deleteResult = .success(())
         deleteCallCount = 0

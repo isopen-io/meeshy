@@ -2,6 +2,8 @@ package me.meeshy.sdk.post
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.transformLatest
@@ -26,6 +28,7 @@ import me.meeshy.sdk.net.api.PostViewRequest
 import me.meeshy.sdk.net.api.RepostPostRequest
 import me.meeshy.sdk.net.api.UpdatePostRequest
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.net.rawApiCall
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -38,6 +41,13 @@ class PostRepository @Inject constructor(
     // In-memory cache for Phase 1 — Room-backed FeedEntity added in Phase 3 (ARCHITECTURE.md §13).
     private val _feedCache = MutableStateFlow<List<ApiPost>?>(null)
     private val _feedSyncedAt = MutableStateFlow<Long?>(null)
+
+    // Cursor pagination state (port of FeedViewModel.nextCursor / hasMore).
+    private var feedCursor: String? = null
+    private val _feedHasMore = MutableStateFlow(true)
+
+    /** Whether older feed pages remain to be fetched (drives the infinite-scroll trigger). */
+    val feedHasMore: StateFlow<Boolean> = _feedHasMore.asStateFlow()
 
     /**
      * Cache-first feed stream (ARCHITECTURE.md §4). An in-memory L1 cache serves
@@ -99,12 +109,46 @@ class PostRepository @Inject constructor(
         }
     }
 
+    /**
+     * Infinite-scroll pagination (port of FeedViewModel.loadMoreIfNeeded). Fetches
+     * the page after the current cursor, deduplicates against the in-memory cache and
+     * appends it. The freshness watermark is untouched — older pages do not make the
+     * newest page fresher. Returns whether more pages remain. Silent no-op when the
+     * cursor is exhausted or the network call fails (the user can scroll again).
+     */
+    suspend fun loadMore(): Boolean {
+        val cursor = feedCursor
+        if (!_feedHasMore.value || cursor == null) return false
+        val current = _feedCache.value ?: return false
+        return when (val result = rawApiCall { postApi.getFeed(cursor, FEED_PAGE_SIZE) }) {
+            is NetworkResult.Success -> {
+                val response = result.data
+                val page = response.data
+                if (!response.success || page == null) return false
+                val existingIds = current.mapTo(HashSet()) { it.id }
+                _feedCache.value = current + page.filter { it.id !in existingIds }
+                feedCursor = response.pagination?.nextCursor
+                _feedHasMore.value = response.pagination?.hasMore ?: false
+                _feedHasMore.value
+            }
+            is NetworkResult.Failure -> false
+        }
+    }
+
     private suspend fun revalidateFeed(onError: (Throwable) -> Unit = {}) {
         try {
-            when (val result = apiCall { postApi.getFeed(null, 30) }) {
+            when (val result = rawApiCall { postApi.getFeed(null, FEED_PAGE_SIZE) }) {
                 is NetworkResult.Success -> {
-                    _feedCache.value = result.data
+                    val response = result.data
+                    val page = response.data
+                    if (!response.success || page == null) {
+                        onError(Exception(response.error ?: response.message ?: "Unknown error"))
+                        return
+                    }
+                    _feedCache.value = page
                     _feedSyncedAt.value = clock.nowMillis()
+                    feedCursor = response.pagination?.nextCursor
+                    _feedHasMore.value = response.pagination?.hasMore ?: false
                 }
                 is NetworkResult.Failure -> onError(Exception(result.error.message))
             }
@@ -113,6 +157,10 @@ class PostRepository @Inject constructor(
         } catch (e: Throwable) {
             onError(e)
         }
+    }
+
+    private companion object {
+        const val FEED_PAGE_SIZE = 30
     }
 
     suspend fun getFeed(cursor: String? = null, limit: Int = 20): NetworkResult<List<ApiPost>> =

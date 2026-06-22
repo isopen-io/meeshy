@@ -316,7 +316,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'array', items: { type: 'object' } },
+            data: { type: 'array', items: { type: 'object', additionalProperties: true } },
             pagination: {
               type: 'object',
               properties: {

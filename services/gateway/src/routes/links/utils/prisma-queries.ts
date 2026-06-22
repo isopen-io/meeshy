@@ -83,25 +83,23 @@ export async function findShareLinkByIdentifier(
   prisma: PrismaClient,
   identifier: string
 ): Promise<any> {
-  const isLinkId = identifier.startsWith('mshy_');
   const isObjectId = /^[0-9a-fA-F]{24}$/.test(identifier);
 
-  if (isLinkId) {
-    return prisma.conversationShareLink.findUnique({
-      where: { linkId: identifier },
-      include: shareLinkIncludeStructure
-    });
-  } else if (isObjectId) {
+  if (isObjectId) {
     return prisma.conversationShareLink.findUnique({
       where: { id: identifier },
       include: shareLinkIncludeStructure
     });
-  } else {
-    return prisma.conversationShareLink.findFirst({
-      where: { identifier: identifier },
-      include: shareLinkIncludeStructure
-    });
   }
+
+  // `mshy_*` peut être un linkId (`mshy_<objId>.<ts>`) OU un identifier custom
+  // (`mshy_meeshy-public`). Ne PAS supposer que tout `mshy_*` est un linkId —
+  // un identifier custom ne matcherait jamais via findUnique(linkId). Accepter
+  // les deux (cohérent avec le fix join `ab22f62ac`).
+  return prisma.conversationShareLink.findFirst({
+    where: { OR: [{ linkId: identifier }, { identifier: identifier }] },
+    include: shareLinkIncludeStructure
+  });
 }
 
 /**

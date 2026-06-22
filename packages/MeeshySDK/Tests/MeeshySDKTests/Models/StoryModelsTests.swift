@@ -446,7 +446,7 @@ final class StoryModelsTests: XCTestCase {
         let repostOf: APIRepostOf? = repostOfId.map { rid in
             APIRepostOf(
                 id: rid, type: "STORY", content: nil, originalLanguage: nil, translations: nil,
-                storyEffects: nil, audioUrl: nil, originalRepostOfId: nil,
+                storyEffects: nil, audioUrl: nil, moodEmoji: nil, originalRepostOfId: nil,
                 author: author, media: nil, createdAt: Date(), likeCount: nil,
                 commentCount: nil, isQuote: nil
             )
@@ -455,7 +455,7 @@ final class StoryModelsTests: XCTestCase {
             id: id, type: type, visibility: visibility, content: "Hello",
             originalLanguage: "en", createdAt: Date(), updatedAt: nil, expiresAt: nil,
             author: author, likeCount: 0, commentCount: 0, repostCount: 0,
-            viewCount: 0, bookmarkCount: 0, shareCount: 0, reactionSummary: nil,
+            viewCount: 0, postOpenCount: nil, qualifiedViewCount: nil, playCount: nil, bookmarkCount: 0, shareCount: 0, reactionSummary: nil,
             isPinned: false, isEdited: false, media: nil, comments: nil,
             repostOf: repostOf, originalRepostOfId: originalRepostOfId, isQuote: false,
             moodEmoji: nil, audioUrl: audioUrl, audioDuration: nil, storyEffects: nil,

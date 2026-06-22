@@ -44,7 +44,7 @@ struct WidgetPreviewView: View {
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
+                VStack(spacing: MeeshySpacing.xl) {
                     unreadCountCard
                         .staggeredAppear(index: 0, baseDelay: 0.08)
 
@@ -62,8 +62,8 @@ struct WidgetPreviewView: View {
 
                     Color.clear.frame(height: 40)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.md)
             }
             .background(
                 MeeshyColors.mainBackgroundGradient(isDark: isDark)
@@ -148,9 +148,9 @@ struct WidgetPreviewView: View {
                 .padding(.top, 2)
             }
         }
-        .padding(20)
+        .padding(MeeshySpacing.xl)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: totalUnread > 0
@@ -162,8 +162,8 @@ struct WidgetPreviewView: View {
                 )
                 .shadow(
                     color: (totalUnread > 0 ? MeeshyColors.error : MeeshyColors.indigo400).opacity(0.3),
-                    radius: 16,
-                    y: 8
+                    radius: MeeshySpacing.lg,
+                    y: MeeshySpacing.sm
                 )
         )
     }
@@ -199,18 +199,18 @@ struct WidgetPreviewView: View {
                 }
             }
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
                         .stroke(
                             MeeshyColors.glassBorderGradient(isDark: isDark),
                             lineWidth: 1
                         )
                 )
-                .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
+                .shadow(color: .black.opacity(0.08), radius: MeeshySpacing.md, y: MeeshySpacing.xs)
         )
     }
 
@@ -307,7 +307,7 @@ struct WidgetPreviewView: View {
                 quickActionButton(
                     icon: "megaphone.fill",
                     label: String(localized: "widget.preview.action.post", defaultValue: "Post", bundle: .main),
-                    gradient: [Color(hex: "A855F7"), Color(hex: "6366F1")]
+                    gradient: [MeeshyColors.purple500, MeeshyColors.indigo500]
                 ) {
                     dismiss()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -327,18 +327,18 @@ struct WidgetPreviewView: View {
                 }
             }
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
                         .stroke(
                             MeeshyColors.glassBorderGradient(isDark: isDark),
                             lineWidth: 1
                         )
                 )
-                .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
+                .shadow(color: .black.opacity(0.08), radius: MeeshySpacing.md, y: MeeshySpacing.xs)
         )
     }
 
@@ -394,7 +394,7 @@ struct WidgetPreviewView: View {
                     linkTypeCard(
                         title: String(localized: "widget.preview.referral", defaultValue: "Parrainage", bundle: .main),
                         icon: "person.badge.plus",
-                        color: "2ECC71",
+                        color: MeeshyColors.successHex,
                         stat1: String(localized: "widget.preview.linkCount", defaultValue: "\(affiliateVM.tokens.count) lien(s)", bundle: .main),
                         stat2: String(localized: "widget.preview.referralSignups", defaultValue: "\(affiliateVM.tokens.reduce(0) { $0 + $1.referralCount }) inscrits", bundle: .main)
                     ) {
@@ -420,7 +420,7 @@ struct WidgetPreviewView: View {
                     linkTypeCard(
                         title: String(localized: "widget.preview.tracking", defaultValue: "Tracking", bundle: .main),
                         icon: "chart.bar.fill",
-                        color: "A855F7",
+                        color: MeeshyColors.purple500Hex,
                         stat1: String(localized: "widget.preview.linkCountTracking", defaultValue: "\(trackingStats?.totalLinks ?? 0) lien(s)", bundle: .main),
                         stat2: String(localized: "widget.preview.trackingClicks", defaultValue: "\(trackingStats?.totalClicks ?? 0) clics", bundle: .main)
                     ) {
@@ -433,7 +433,7 @@ struct WidgetPreviewView: View {
                     linkTypeCard(
                         title: String(localized: "widget.preview.community", defaultValue: "Communaut\u{00e9}", bundle: .main),
                         icon: "person.3.fill",
-                        color: "F8B500",
+                        color: MeeshyColors.warningHex,
                         stat1: String(localized: "widget.preview.groupCount", defaultValue: "\(communityLinks.count) groupe(s)", bundle: .main),
                         stat2: String(localized: "widget.preview.memberCount", defaultValue: "\(communityLinks.reduce(0) { $0 + $1.memberCount }) membres", bundle: .main)
                     ) {
@@ -446,18 +446,18 @@ struct WidgetPreviewView: View {
                 .padding(.horizontal, 1)
             }
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
                         .stroke(
                             MeeshyColors.glassBorderGradient(isDark: isDark),
                             lineWidth: 1
                         )
                 )
-                .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
+                .shadow(color: .black.opacity(0.08), radius: MeeshySpacing.md, y: MeeshySpacing.xs)
         )
     }
 
@@ -491,13 +491,13 @@ struct WidgetPreviewView: View {
                         .foregroundColor(Color(hex: color))
                 }
             }
-            .padding(12)
+            .padding(MeeshySpacing.md)
             .frame(width: 110)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(Color(hex: color).opacity(0.2), lineWidth: 1)
                     )
             )
@@ -531,12 +531,12 @@ struct WidgetPreviewView: View {
 
             Spacer(minLength: 0)
         }
-        .padding(14)
+        .padding(MeeshySpacing.md + 2)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                         .stroke(
                             MeeshyColors.glassBorderGradient(isDark: isDark),
                             lineWidth: 0.5

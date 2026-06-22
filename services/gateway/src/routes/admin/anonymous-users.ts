@@ -31,6 +31,7 @@ export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
     preHandler: [validateQuery(AnonymousUsersQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
+      /* istanbul ignore next -- Zod AnonymousUsersQuerySchema always provides offset and limit with defaults */
       const { offset = '0', limit = '20', search, status } = request.query as AnonymousUserListQuery;
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 

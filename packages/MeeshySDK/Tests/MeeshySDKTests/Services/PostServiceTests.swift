@@ -25,7 +25,7 @@ final class PostServiceTests: XCTestCase {
             id: id, type: "POST", visibility: "PUBLIC", content: "Hello world",
             originalLanguage: "en", createdAt: Date(), updatedAt: nil, expiresAt: nil,
             author: APIAuthor(id: "author1", username: "alice", displayName: "Alice", avatar: nil),
-            likeCount: 10, commentCount: 2, repostCount: 1, viewCount: 100,
+            likeCount: 10, commentCount: 2, repostCount: 1, viewCount: 100, postOpenCount: nil, qualifiedViewCount: nil, playCount: nil,
             bookmarkCount: 3, shareCount: 0, reactionSummary: nil, isPinned: false,
             isEdited: false, media: nil, comments: nil, repostOf: nil,
             originalRepostOfId: nil, isQuote: nil,
@@ -43,7 +43,8 @@ final class PostServiceTests: XCTestCase {
             effectFlags: nil,
             createdAt: Date(),
             author: APIAuthor(id: "author2", username: "bob", displayName: "Bob", avatar: nil),
-            currentUserReactions: nil
+            currentUserReactions: nil,
+            media: nil
         )
     }
 
@@ -346,5 +347,16 @@ final class PostServiceTests: XCTestCase {
     func test_recordEngagement_emptyArray_doesNotCallNetwork() async throws {
         try await service.recordEngagement([])
         XCTAssertEqual(mock.requestCount, 0)
+    }
+
+    func test_recordImpression_postsTo_singleImpressionEndpoint() async throws {
+        let response = APIResponse(success: true, data: ["recorded": true], error: nil)
+        mock.stub("/posts/\(postId)/impression", result: response)
+
+        try await service.recordImpression(postId: postId, source: "detail")
+
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/\(postId)/impression")
+        XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 }

@@ -136,7 +136,7 @@ export async function agentTopicsRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const parsed = TopicInputSchema.safeParse(request.body);
     if (!parsed.success) {
-      sendBadRequest(reply, parsed.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join('; '));
+      sendBadRequest(reply, parsed.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join('; '));
       return;
     }
     try {
@@ -169,7 +169,7 @@ export async function agentTopicsRoutes(fastify: FastifyInstance) {
     }
     const parsed = TopicPatchSchema.safeParse(request.body);
     if (!parsed.success) {
-      sendBadRequest(reply, parsed.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join('; '));
+      sendBadRequest(reply, parsed.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join('; '));
       return;
     }
     try {

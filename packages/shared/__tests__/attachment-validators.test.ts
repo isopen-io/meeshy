@@ -267,11 +267,44 @@ describe('attachment-validators — Zod schemas at the JSON boundary', () => {
       }
     });
 
+    it('parseAttachmentTranslation returns ok:true on valid input', () => {
+      const r = parseAttachmentTranslation({
+        type: 'audio',
+        transcription: 'Bonjour le monde',
+        createdAt: '2024-01-01T00:00:00Z',
+      });
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        expect(r.value.transcription).toBe('Bonjour le monde');
+        expect(r.value.type).toBe('audio');
+      }
+    });
+
     it('parseAttachmentTranslation returns a structured error on invalid input', () => {
       const r = parseAttachmentTranslation({ type: 'audio' /* missing transcription, createdAt */ });
       expect(r.ok).toBe(false);
       if (!r.ok) {
         expect(r.code).toBe('INVALID_TRANSLATION');
+      }
+    });
+
+    it('parseAttachmentTranslationsMap returns ok:true on valid map', () => {
+      const r = parseAttachmentTranslationsMap({
+        fr: {
+          type: 'audio',
+          transcription: 'Bonjour',
+          createdAt: '2024-06-01T00:00:00Z',
+        },
+        en: {
+          type: 'audio',
+          transcription: 'Hello',
+          createdAt: '2024-06-01T00:00:00Z',
+        },
+      });
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        expect(r.value['fr']?.transcription).toBe('Bonjour');
+        expect(r.value['en']?.transcription).toBe('Hello');
       }
     });
 

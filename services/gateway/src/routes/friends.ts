@@ -161,7 +161,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({
           success: false,
           message: 'Donnees invalides',
-          errors: error.errors
+          errors: error.issues
         });
       }
 
@@ -600,7 +600,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({
           success: false,
           message: 'Donnees invalides',
-          errors: error.errors
+          errors: error.issues
         });
       }
 

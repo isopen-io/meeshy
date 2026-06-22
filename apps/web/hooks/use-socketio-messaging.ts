@@ -76,6 +76,7 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
   // Le retry réseau est désormais géré par ConnectionService (online event).
   useEffect(() => {
     const tryReconnectIfTokensAvailable = () => {
+      /* istanbul ignore next -- SSR false-arm unreachable: window is always defined in browser/jsdom */
       if (typeof window === 'undefined') return;
       const hasAuthToken = !!authManager.getAuthToken();
       const hasSessionToken = !!authManager.getAnonymousSession()?.token;

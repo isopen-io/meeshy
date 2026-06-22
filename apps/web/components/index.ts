@@ -39,7 +39,6 @@ export {
   PasswordSettings,
   VideoSettings,
   DocumentSettings,
-  FontSelector,
   ThemeSettings,
 } from './settings';
 export * from './notifications';

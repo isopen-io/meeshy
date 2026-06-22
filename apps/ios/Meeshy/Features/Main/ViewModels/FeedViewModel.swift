@@ -744,28 +744,10 @@ class FeedViewModel: ObservableObject {
         }
     }
 
-    /// Wave 1 Phase C — comment like flows through the offline outbox.
-    /// `emoji` is currently fixed to `❤️` server-side ; until the route
-    /// accepts custom emojis the parameter is ignored at the wire layer
-    /// but still threaded through here for API stability with the view.
-    func likeComment(postId: String, commentId: String, emoji: String = "❤️") async {
-        let cmid = ClientMutationId.generate()
-        let payload = ToggleLikeCommentPayload(
-            clientMutationId: cmid,
-            commentId: commentId,
-            liked: true
-        )
-        do {
-            try await offlineQueue.enqueue(.toggleLikeComment, payload: payload, conversationId: postId)
-        } catch {
-            FeedbackToastManager.shared.showError(String(localized: "feed.like.error", defaultValue: "Error liking post", bundle: .main))
-        }
-    }
-
     func repostPost(_ postId: String, content: String? = nil, isQuote: Bool = false) async {
         do {
             _ = try await postService.repost(
-                postId: postId,
+                postId: resolveRepostTargetId(postId),
                 targetType: nil,           // nil = server defaults to original post type
                 content: isQuote ? content : nil,
                 isQuote: isQuote ? (content != nil) : false
@@ -773,6 +755,16 @@ class FeedViewModel: ObservableObject {
         } catch {
             FeedbackToastManager.shared.showError(String(localized: "feed.repost.error", defaultValue: "Error reposting", bundle: .main))
         }
+    }
+
+    /// Re-sharing a SHARE must reference the ORIGINAL reel/post (root), never the
+    /// intermediate share — otherwise the new post embeds an empty share card
+    /// (the gateway hydrates `repostOf` only one level deep). When `postId` is
+    /// itself a repost, resolve to its recorded root (`originalRepostOfId`, else
+    /// the directly reposted content's id). Non-shares repost with their own id.
+    private func resolveRepostTargetId(_ postId: String) -> String {
+        guard let repost = posts.first(where: { $0.id == postId })?.repost else { return postId }
+        return repost.originalRepostOfId ?? repost.id
     }
 
     /// Server-side payload returned by `POST /posts/:postId/share`. The
@@ -847,11 +839,12 @@ class FeedViewModel: ObservableObject {
     /// are cleared (the gateway re-translates in background and pushes
     /// `post:updated` via socket). Rolls back the snapshot on API failure.
     /// No-op if the post isn't found in the current feed.
-    func updatePost(_ postId: String, content: String) async {
+    func updatePost(_ postId: String, content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil) async {
         guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = posts[idx]
         // Apply optimistic mutation: new content + clear translations so the
-        // bubble re-renders with the new source text immediately.
+        // bubble re-renders with the new source text immediately. A language
+        // change re-runs translation server-side, so the stale map is dropped.
         var optimistic = snapshot
         optimistic.content = content
         optimistic.translatedContent = nil
@@ -859,7 +852,7 @@ class FeedViewModel: ObservableObject {
         posts[idx] = optimistic
         debouncedCacheSave()
         do {
-            let updated = try await postService.update(postId: postId, content: content, visibility: nil, moodEmoji: nil)
+            let updated = try await postService.update(postId: postId, content: content, visibility: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds)
             // Re-hydrate from the server response so the gateway-authoritative
             // fields (updatedAt, isEdited, sanitized content, …) replace the
             // optimistic in-memory copy. Preserves the resolved translation
@@ -925,6 +918,19 @@ class FeedViewModel: ObservableObject {
         guard socketCancellables.isEmpty else { return }
         socialSocket.connect()
 
+        // --- didReconnect → backfill du feed ---
+        // Apres un flap reseau, le gateway a oublie nos rooms et des posts ont pu
+        // etre crees pendant la coupure. Un refresh (forceRefresh) recharge la tete
+        // du feed ; mergePreservingRealtimeHead conserve les posts inseres en temps
+        // reel. Miroir de ConversationSyncEngine sur messageSocket.didReconnect.
+        socialSocket.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                guard let self else { return }
+                Task { await self.loadFeed(forceRefresh: true) }
+            }
+            .store(in: &socketCancellables)
+
         // --- post:created ---
         socialSocket.postCreated
             .receive(on: DispatchQueue.main)
@@ -977,12 +983,17 @@ class FeedViewModel: ObservableObject {
             }
             .store(in: &socketCancellables)
 
-        // --- post:liked ---
+        // --- post:liked --- (compteur ABSOLU, source unique du like de post)
         socialSocket.postLiked
             .receive(on: DispatchQueue.main)
             .sink { [weak self] data in
                 guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
                 self.posts[index].likes = data.likeCount
+                // Persister `isLiked` pour l'acteur → le cache reste correct au cold
+                // start (le seeding `postLikedIds` relit `post.isLiked`).
+                if data.userId == AuthManager.shared.currentUser?.id {
+                    self.posts[index].isLiked = true
+                }
                 self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
@@ -993,15 +1004,31 @@ class FeedViewModel: ObservableObject {
             .sink { [weak self] data in
                 guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
                 self.posts[index].likes = data.likeCount
+                if data.userId == AuthManager.shared.currentUser?.id {
+                    self.posts[index].isLiked = false
+                }
                 self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
 
         // --- post:bookmarked ---
+        // Le favori est PERSONNEL : le gateway n'émet `post:bookmarked` que vers la
+        // feed room du viewer (toutes ses sessions/vues, dont le reel viewer). On
+        // réconcilie `isBookmarkedByMe` sur le post → le re-seed du reel viewer
+        // depuis `FeedViewModel.posts` porte le bon état (favori persistant).
         socialSocket.postBookmarked
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.debouncedCacheSave()
+            .sink { [weak self] payload in
+                guard let self else { return }
+                if let index = self.posts.firstIndex(where: { $0.id == payload.postId }) {
+                    self.posts[index].isBookmarkedByMe = payload.bookmarked
+                    // Absolute count (when the gateway provides it) is authoritative
+                    // → the feed reconciles the displayed count live, no reload.
+                    if let count = payload.bookmarkCount {
+                        self.posts[index].bookmarkCount = count
+                    }
+                }
+                self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
 
@@ -1167,8 +1194,12 @@ class FeedViewModel: ObservableObject {
                 }
             }
 
-            // Video preroll: separate from main group — non-blocking, fire-and-forget
-            if let firstVideo = slice.flatMap(\.media).first(where: { $0.type == .video }),
+            // Video preroll: separate from main group — non-blocking, fire-and-forget.
+            // Suspended while the device is critically hot (SOTA thermal back-off,
+            // WWDC19 #422) so fast scrolling stops spawning new decode sessions until
+            // it cools down.
+            if MediaThermalPolicy.shouldPrefetchVideo(thermalState: ProcessInfo.processInfo.thermalState),
+               let firstVideo = slice.flatMap(\.media).first(where: { $0.type == .video }),
                let url = firstVideo.url, let resolved = MeeshyConfig.resolveMediaURL(url) {
                 Task(priority: .utility) {
                     await StoryMediaLoader.shared.preloadAndCachePlayer(url: resolved)

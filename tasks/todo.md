@@ -1,62 +1,76 @@
-# Android iteration — chat vivant : accusés de lecture temps réel + émission de frappe
+# Audio iOS — Position de lecture persistée + Now Playing (next/previous)
 
-Contexte : itération /loop Android. Baseline verte (testDebugUnitTest, SDK bootstrappé
-dans le conteneur). Le rendu ✓/✓✓ (DeliveryStatusIcon) et l'indicateur de frappe
-ENTRANT existent déjà ; il manque le flux temps réel `read-status:updated` → cache
-Room et l'émission de frappe SORTANTE (parité iOS ConversationSocketHandler).
+## Contexte / état existant (iOS)
+- Moteur réel : `AudioPlaybackManager` (MeeshyUI, `Media/AudioPlayerView.swift`).
+- Orchestration file/conversation : `ConversationAudioCoordinator` (app) + `PlaybackCoordinator` (SDK, mutex 1 audio).
+- Now Playing : `ConversationAudioCoordinator+NowPlaying.swift` — MPNowPlayingInfoCenter + RemoteCommand (play/pause/**next**/seek), activé dans `AdaptiveRootView`.
+- Waveform : DÉJÀ fidèle (PCM via `WaveformCache`) + calculée 1× + cachée mémoire/disque → **rien à refaire** (point 2 satisfait sur iOS).
+
+## Manques à combler
+- [ ] Position de lecture jamais persistée → `play()` repart toujours de 0, perdue au stop / app kill.
+- [ ] Now Playing : pas de `previousTrackCommand` ; pas d'historique pour revenir en arrière.
 
 ## Plan
 
-- [x] RED — MessageRepositoryTest.applyReadReceipt : upgrade des messages propres
-      server-acked ≤ frontière (deliveredCount/readCount), peers intouchés,
-      bulles pending intouchées, pas de downgrade read→delivered, messages
-      postérieurs à la frontière intouchés
-- [x] RED — ChatViewModelTest : event read-status de la conversation ouverte →
-      applyReadReceipt avec le summary ; event d'une autre conversation ignoré ;
-      première frappe → emitTypingStart (une seule fois, throttle) ; re-émission
-      après 3 s de frappe continue ; 3 s d'inactivité → emitTypingStop ; draft
-      vidé → stop immédiat ; send → stop ; pas de stop si jamais démarré
-- [x] GREEN — modèle : ReadStatusSummary + champ `summary` sur ReadStatusUpdatedEvent
-      (défaut vide — robustesse décodage)
-- [x] GREEN — MessageDao.listForConversation + MessageRepository.applyReadReceipt
-      (transactionnel, upgrade monotone, sémantique frontière identique à iOS
-      ConversationSyncEngine.applyReadReceipt)
-- [x] GREEN — MessageSocketManager.emitTypingStart/emitTypingStop
-- [x] GREEN — ChatViewModel : collect readStatusUpdated ; machine d'émission de
-      frappe (start once + reemit 3 s + idle 3 s + stop sur send/clear)
-- [x] Vérif : testDebugUnitTest + :app:assembleDebug verts
-- [x] Commit + push sur claude/awesome-albattani-cecsyc
+### 1. Store de position (SDK core) — persistance locale
+- [ ] `MeeshySDK/Cache/AudioPlaybackPositionStore.swift`
+  - Struct pure `AudioPlaybackPositions` (Codable) : `[attachmentId: Entry{positionSeconds, updatedAt}]`, méthodes pures `setting / removing / pruned(max:) / position(for:)`.
+  - `@MainActor final class AudioPlaybackPositionStore` singleton, UserDefaults JSON, cap (prune), API `position(for:) / save(_:for:) / clear(for:)`.
 
-## Décisions
+### 2. Reprise + sauvegarde dans le moteur (MeeshyUI)
+- [ ] `playData(_:)` : après `duration`, si position sauvegardée valide (`1s < pos < duration-1s`) → `player.currentTime = pos` avant `play()`.
+- [ ] `persistPosition()` : sauvegarde si mid-track, sinon clear. Appelé sur pause (`togglePlayPause`), `stop()`, et `UIApplication.willResignActive` (couvre app kill).
+- [ ] `handlePlaybackFinished()` : `clear(for:)` (relecture repart de 0).
 
-- Le summary du gateway est autoritaire (counts recalculés serveur) — on l'applique
-  tel quel comme iOS, sans filtrer sur l'auteur de l'ack.
-- Statut par message : read (readByAllAt non-null ou readCount>0) > delivered
-  (deliveredCount>0) > sent. Upgrade only, jamais de downgrade.
-- Frontière = event.updatedAt comparée à MessageEntity.createdAt (epoch millis,
-  déjà calculé à l'insertion) — pas de re-parse ISO des payloads.
-- Émission de frappe : timings iOS (re-emit 3 s, idle 3 s), emit direct sur le
-  socket (pas d'outbox — un typing offline n'a aucun sens à rejouer).
-- Vérifié côté gateway : getLatestMessageSummary exclut le curseur de l'expéditeur
-  du dernier message — ma propre lecture ne marque jamais mes messages « lus ».
+### 3. Now Playing previous/next + historique (app)
+- [ ] `ConversationAudioCoordinator` : `history: [QueuedAudio]`, push dans `advanceQueue`, reset dans `play()`/`close()`.
+- [ ] `playPrevious()` : si `currentTime > 3s` → restart (seek 0) ; sinon pop history → réinsère head courant → joue le précédent ; sinon restart.
+- [ ] `+NowPlaying` : ajouter `previousTrackCommand` → `playPrevious()`, enable.
+
+### 4. Tests
+- [ ] SDK : `AudioPlaybackPositionStoreTests` (struct pure + store via UserDefaults suite dédiée).
+- [ ] App : `ConversationAudioCoordinatorTests` — previous restart / previous via history / previous sans history.
+
+## Note d'environnement
+Container Linux : impossible de compiler/tester iOS ici (Xcode/simulateur = macOS).
+Code écrit selon les patterns existants ; build `./apps/ios/meeshy.sh test` + SDK xcodebuild à lancer sur Mac/CI.
 
 ## Review
 
-Itération livrée : le chat devient « vivant » des deux côtés du fil.
+### Fait
+- **Store position (SDK core)** : `AudioPlaybackPositionStore` + struct pure `AudioPlaybackPositions`
+  (UserDefaults JSON, cap 500, éviction LRU). Tests `AudioPlaybackPositionStoreTests`.
+- **Reprise + sauvegarde (moteur `AudioPlaybackManager`)** :
+  - reprise dans `playData` (position valide `1s < pos < durée-1s`, morceaux ≥ 2s) ;
+  - sauvegarde sur pause, `stop()`, `willResignActive` (app kill), et au **switch de morceau**
+    via `didSet` sur `attachmentId` (couvre tap d'un autre audio / skip) ;
+  - `clear` à la fin naturelle (relecture repart de 0).
+- **Now Playing previous/next (app)** : historique `history` dans `ConversationAudioCoordinator`,
+  `playPrevious()` (restart si >3s, sinon morceau précédent), `hasPrevious` ; `previousTrackCommand`
+  ajouté au bridge `+NowPlaying`. Tests coordinator (3 cas + hasPrevious).
+- **Waveform** : déjà fidèle + cachée 1× sur iOS (`WaveformCache`) → aucune modif nécessaire.
 
-- core/model : ReadStatusSummary (+ summary sur ReadStatusUpdatedEvent, défaut vide).
-- core/database : MessageDao.listForConversation.
-- sdk-core : MessageRepository.applyReadReceipt (transactionnel, upgrade monotone
-  sent→delivered→read, frontière = updatedAt vs createdAt epoch, 5 tests Robolectric) ;
-  MessageSocketManager.emitTypingStart/Stop (payload {conversationId}, parité iOS).
-- feature:chat : collect read-status:updated → cache Room (les ✓✓ existants dans
-  MessageBubble se mettent à jour en temps réel via l'invalidation Room) ; machine
-  d'émission de frappe (start à la 1re frappe, re-emit 3 s, stop après 3 s d'idle /
-  draft vidé / send / onCleared), 7 tests ViewModel.
-- Zéro changement UI nécessaire : DeliveryStatusIcon et TypingIndicator étaient
-  déjà en place, seuls les flux manquaient.
-- Suite complète verte : testDebugUnitTest + :app:assembleDebug.
+### Ajouts (retour utilisateur)
+- **Waveform plus fine/fidèle** (le rendu, pas la donnée) : les barres étaient grossières
+  (35 barres ~4px, coins carrés → effet « carrés »). Désormais 72/48 barres fines à bouts
+  arrondis (Capsule), décodées à ≥96 échantillons (down-map index→sample), hauteur sur 22pt
+  avec courbe perceptuelle `pow 0.65` pour ne pas écraser les passages calmes. Source unique
+  `waveformBarCount`. La donnée restait déjà fidèle (PCM `WaveformCache`).
+- **Langue par défaut du composer conversation = FR (Prisme)** : `ConversationView` onAppear
+  priorisait le **clavier** (anglais sur device/simu → « en »). Réordonné : langue de contenu
+  configurée de l'utilisateur (priorité 1 Prisme) d'abord, clavier en simple fallback
+  (anonymes / langue non supportée). Les autres composers partaient déjà de `resolve()` = "fr".
 
-Prochain incrément suggéré : pièces jointes images (picker + upload multipart +
-rendu grille), ou présence en ligne (user:status + presence:snapshot → header),
-ou recherche dans la conversation (MessageApi.search déjà câblé).
+### Revue de code (high effort) — corrections
+- **MEDIUM corrigé** : `playPrevious()` en mode « restart » faisait seulement `engine.seek(to: 0)`,
+  qui ne relance pas la lecture. Si l'audio était en pause, « précédent » (écran verrouillé)
+  rembobinait sans rejouer. Ajout de `restartCurrent()` (seek 0 + reprise si en pause). Test ajouté.
+- **LOW corrigé** : `AudioPlaybackPositions.pruned` triait par `updatedAt` seul (tie non
+  déterministe si deux écritures au même instant). Tie-break par clé → éviction déterministe.
+- Vérifiés OK : mapping waveform borné, observer `willResignActive` sans fuite (token retiré en
+  deinit), `didSet attachmentId` cohérent (pas de double-persist), reorder langue Prisme correct.
+
+### Validation
+- ⚠️ Build/tests iOS NON exécutés ici (container Linux ; Xcode/simulateur = macOS requis).
+  À lancer sur Mac/CI : `./apps/ios/meeshy.sh test` (app) + `xcodebuild test -scheme MeeshySDK-Package` (SDK).
+- Fichiers SDK auto-découverts par SPM ; fichiers app modifiés déjà référencés (pas de `project.pbxproj` à toucher).

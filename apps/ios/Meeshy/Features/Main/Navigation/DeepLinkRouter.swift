@@ -14,6 +14,11 @@ enum DeepLinkDestination {
     /// idempotent `joinAuthenticated`. Kept distinct from `.conversation`
     /// because the identifier is a share-link token, not a conversationId.
     case joinLink(identifier: String)
+    /// Tracked share link (`/l/<token>`). Resolved ASYNC via
+    /// `GET /tracking-links/:token/resolve` → routed by `targetType`; a click is
+    /// recorded so in-app opens are counted. Distinct from `.joinLink` so a reel
+    /// share no longer hits the conversation-join flow (404).
+    case trackedLink(token: String)
     /// Direct chat share link (`/chat/<id>`). Same resolution path as
     /// `.joinLink` — the gateway accepts either shape.
     case chatLink(identifier: String)
@@ -158,12 +163,13 @@ enum DeepLinkParser {
         case "u", "users":
             // meeshy://u/{username} (or meeshy://users/{username}).
             if components.count >= 2 { return .userProfile(username: components[1]) }
-        case "join", "l":
-            // meeshy://join/{linkId} (or meeshy://l/{linkId}) — invitation /
-            // share link. Mirrors the Universal Link shape claimed by AASA
-            // (`/join/*`, `/l/*`) and the web fallback redirect
-            // (`window.location = meeshy://join/<id>`).
+        case "join":
+            // meeshy://join/{linkId} — conversation invitation share link.
             if components.count >= 2 { return .joinLink(identifier: components[1]) }
+        case "l":
+            // meeshy://l/{token} — tracked share link (post/reel/story/invitation).
+            // Resolved async by targetType; NOT assumed to be a conversation join.
+            if components.count >= 2 { return .trackedLink(token: components[1]) }
         case "chat":
             // meeshy://chat/{linkId} — direct chat share link (web fallback
             // redirect emits this from /chat/[id]).
@@ -256,7 +262,10 @@ enum DeepLinkParser {
             // here is what lets `isMeeshyDeepLink` return `true` so
             // `AppDelegate.application(_:continue:)` claims the cold-launch
             // Universal Link instead of bouncing it to Safari.
-            case "join", "l": return .joinLink(identifier: components[1])
+            case "join": return .joinLink(identifier: components[1])
+            // Tracked share link — `/l/<token>` (post/reel/story/invitation).
+            // Resolved async by targetType (no longer assumed to be a join).
+            case "l": return .trackedLink(token: components[1])
             // Direct chat share link — `/chat/<id>`.
             case "chat": return .chatLink(identifier: components[1])
             default: break
@@ -281,6 +290,8 @@ enum DeepLinkParser {
 
 enum DeepLink: Equatable {
     case joinLink(identifier: String)
+    /// `/l/<token>` — resolved async (TrackedLinkService) then re-routed by targetType.
+    case trackedLink(token: String)
     case chatLink(identifier: String)
     case magicLink(token: String)
     case conversation(id: String)
@@ -300,6 +311,42 @@ final class DeepLinkRouter: ObservableObject {
     @Published var pendingDeepLink: DeepLink?
 
     init() {}
+
+    // MARK: - Tracked link (`/l/<token>`) async resolution
+
+    /// Resolves a `/l/<token>` link to its typed destination OFF the navigation
+    /// path: records an in-app click (so app opens are counted like web opens),
+    /// asks the gateway `/tracking-links/:token/resolve` for the target, then
+    /// re-sets `pendingDeepLink` to the real destination. On failure/offline it
+    /// falls back to the legacy join flow (token = linkId) so nothing regresses.
+    func resolveTrackedLink(_ token: String, resolver: TrackedLinkResolving = TrackedLinkService.shared) {
+        Task { @MainActor in
+            await resolver.recordClick(token: token)
+            let resolved = try? await resolver.resolve(token: token)
+            self.pendingDeepLink = Self.trackedDestination(for: resolved, token: token)
+        }
+    }
+
+    /// Maps a resolved tracked link to a `DeepLink`. Conversation invitations keep
+    /// the legacy `.joinLink` flow (the token IS the linkId); POST/REEL/STATUS →
+    /// `.postDetail`, STORY → `.storyDetail`, PROFILE → `.userProfile`. Unknown /
+    /// expired / missing id → `.joinLink` fallback (backward compatible).
+    static func trackedDestination(for resolved: ResolvedTrackedLink?, token: String) -> DeepLink {
+        let kind = (resolved?.kind ?? "").lowercased()
+        let type = (resolved?.targetType ?? "").uppercased()
+        if kind == "conversation" || type == "CONVERSATION" {
+            return .joinLink(identifier: token)
+        }
+        if let targetId = resolved?.targetId, resolved?.isActive != false {
+            switch type {
+            case "STORY": return .storyDetail(postId: targetId)
+            case "PROFILE": return .userProfile(username: targetId)
+            case "REEL", "POST", "STATUS": return .postDetail(postId: targetId)
+            default: break
+            }
+        }
+        return .joinLink(identifier: token)
+    }
 
     // MARK: - Universal Link Handling
 
@@ -321,9 +368,14 @@ final class DeepLinkRouter: ObservableObject {
         let head = pathComponents[0]
 
         switch head {
-        case "join", "l":
+        case "join":
             guard let identifier = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
             pendingDeepLink = .joinLink(identifier: identifier)
+            return true
+
+        case "l":
+            guard let token = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
+            resolveTrackedLink(token)
             return true
 
         case "chat":
@@ -436,6 +488,11 @@ final class DeepLinkRouter: ObservableObject {
         case "join":
             guard let identifier = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
             pendingDeepLink = .joinLink(identifier: identifier)
+            return true
+
+        case "l":
+            guard let token = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
+            resolveTrackedLink(token)
             return true
 
         case "chat":

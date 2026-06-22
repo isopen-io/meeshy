@@ -21,6 +21,14 @@ class PostDetailViewModel: ObservableObject {
     @Published private(set) var _topLevelComments: [FeedComment] = []
     var topLevelComments: [FeedComment] { _topLevelComments }
 
+    // Comment-like optimistic state — socket-reaction driven, miroir exact de
+    // `CommentsSheetView`. Keyé par commentId. Semé depuis `currentUserReactions`
+    // de chaque commentaire/réponse au chargement (sans ce seeding + sans cet état,
+    // le cœur d'un commentaire restait inerte dans le détail de post).
+    @Published var commentLikedIds: Set<String> = []
+    @Published var commentLikeDelta: [String: Int] = [:]
+    @Published var commentHeartInFlightIds: Set<String> = []
+
     private var commentCursor: String?
     private let postService: PostServiceProviding
     private let socialSocket = SocialSocketManager.shared
@@ -101,6 +109,22 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
+    /// Ouvrir la page Détail d'un post est, par règle produit, une vue TOTALE
+    /// (chaque ouverture compte, jamais dédupliquée) ET une impression, comptées
+    /// IMMÉDIATEMENT — avant et indépendamment du tracking d'engagement (durée de
+    /// lecture). Le gateway incrémente `postOpenCount` + `impressionCount` via
+    /// `POST /posts/:id/impression?source=detail`. On bump les compteurs affichés
+    /// de façon optimiste pour un feedback instantané, puis on enregistre (fire-
+    /// and-forget). La vue UNIQUE (`viewCount`, dédupliquée, non affichée) reste
+    /// portée par `viewPost` appelé séparément à l'ouverture.
+    func registerDetailOpen(_ postId: String) async {
+        if post != nil {
+            post?.impressionCount += 1
+            post?.postOpenCount += 1
+        }
+        try? await postService.recordImpression(postId: postId, source: "detail")
+    }
+
     private func refreshPost(_ postId: String) async {
         defer { isLoading = false }
         do {
@@ -129,14 +153,25 @@ class PostDetailViewModel: ObservableObject {
         switch cacheResult {
         case .fresh(let cached, _):
             if comments.isEmpty { comments = cached }
+            seedCommentLikes(from: cached)
+            schedulePreloadReplyPreviews(postId: postId)
             return
         case .stale(let cached, _):
             if comments.isEmpty { comments = cached }
+            seedCommentLikes(from: cached)
             await fetchCommentsFromNetwork(postId, cacheKey: cacheKey)
+            schedulePreloadReplyPreviews(postId: postId)
         case .expired, .empty:
             isLoadingComments = comments.isEmpty
             await fetchCommentsFromNetwork(postId, cacheKey: cacheKey)
+            schedulePreloadReplyPreviews(postId: postId)
         }
+    }
+
+    /// Lance le préchargement des aperçus de réponses SANS bloquer `loadComments`
+    /// (sinon le chargement des commentaires sérialisait jusqu'à 5 appels REST).
+    private func schedulePreloadReplyPreviews(postId: String) {
+        Task { [weak self] in await self?.preloadReplyPreviews(postId: postId) }
     }
 
     func loadMoreComments(_ postId: String) async {
@@ -160,17 +195,21 @@ class PostDetailViewModel: ObservableObject {
                     )
                     return FeedComment(
                         id: c.id, author: c.author.name, authorId: c.author.id,
+                        authorUsername: c.author.username,
                         authorAvatarURL: c.author.avatar,
                         content: c.content, timestamp: c.createdAt,
                         likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: c.parentId,
-                        originalLanguage: c.originalLanguage, translatedContent: translatedContent
+                        originalLanguage: c.originalLanguage, translatedContent: translatedContent,
+                        currentUserReactions: c.currentUserReactions,
+                        media: (c.media ?? []).map { $0.toFeedMedia() }
                     )
                 }
             }.value
             let existingIds = Set(comments.map(\.id))
             let unique = newComments.filter { !existingIds.contains($0.id) }
             comments.append(contentsOf: unique)
+            seedCommentLikes(from: unique)
             commentCursor = response.pagination?.nextCursor
             hasMoreComments = response.pagination?.hasMore ?? false
             try? await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
@@ -225,17 +264,116 @@ class PostDetailViewModel: ObservableObject {
                     )
                     return FeedComment(
                         id: c.id, author: c.author.name, authorId: c.author.id,
+                        authorUsername: c.author.username,
                         authorAvatarURL: c.author.avatar,
                         content: c.content, timestamp: c.createdAt,
                         likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: commentId,
-                        originalLanguage: c.originalLanguage, translatedContent: translated
+                        originalLanguage: c.originalLanguage, translatedContent: translated,
+                        currentUserReactions: c.currentUserReactions,
+                        media: (c.media ?? []).map { $0.toFeedMedia() }
                     )
                 }
             }.value
             repliesMap[commentId] = replies
+            seedCommentLikes(from: replies)
+            // Persiste les réponses sous "replies-{commentId}" pour hydrater
+            // l'aperçu (2 premières) instantanément à la ré-ouverture du post
+            // (cache-first, miroir de `FeedCommentsSheet`).
+            try? await CacheCoordinator.shared.comments.save(replies, for: "replies-\(commentId)")
         } catch {
             expandedThreads.remove(commentId)
+        }
+    }
+
+    /// Précharge l'aperçu des réponses (les 2 premières s'affichent sans tap)
+    /// des premiers commentaires racine qui en ont — cache-first puis réseau,
+    /// en miroir de `FeedCommentsSheet`. Sans ça, les sous-commentaires
+    /// restaient masqués dans le détail de post jusqu'au tap « Voir ».
+    func preloadReplyPreviews(postId: String) async {
+        let withReplies = topLevelComments.filter { $0.replies > 0 }.prefix(5)
+        for comment in withReplies {
+            guard repliesMap[comment.id] == nil else { continue }
+            let cached = await CacheCoordinator.shared.comments.load(for: "replies-\(comment.id)")
+            if case .fresh(let replies, _) = cached {
+                repliesMap[comment.id] = replies
+                seedCommentLikes(from: replies)
+                continue
+            } else if case .stale(let replies, _) = cached {
+                repliesMap[comment.id] = replies
+                seedCommentLikes(from: replies)
+                continue
+            }
+            await loadReplies(postId: postId, commentId: comment.id)
+        }
+    }
+
+    // MARK: - Comment Like (optimistic, socket-reaction driven)
+
+    /// Sème (additif) `commentLikedIds` depuis l'état serveur (`currentUserReactions`)
+    /// des commentaires/réponses fournis, sans écraser les toggles déjà appliqués.
+    private func seedCommentLikes(from comments: [FeedComment]) {
+        let heart = StoryViewerView.heartEmoji
+        let liked = comments
+            .filter { $0.currentUserReactions?.contains(heart) == true }
+            .map(\.id)
+        guard !liked.isEmpty else { return }
+        commentLikedIds.formUnion(liked)
+    }
+
+    /// Like/unlike d'un commentaire — optimistic + réaction socket cœur + rollback.
+    /// Miroir exact de `CommentsSheetView.toggleCommentLike` pour que le like de
+    /// commentaire dans le détail de post se comporte comme dans la sheet.
+    func toggleCommentLike(_ commentId: String, postId: String) async {
+        guard !commentHeartInFlightIds.contains(commentId) else { return }
+        commentHeartInFlightIds.insert(commentId)
+        defer { commentHeartInFlightIds.remove(commentId) }
+
+        let wasLiked = commentLikedIds.contains(commentId)
+        if wasLiked {
+            commentLikedIds.remove(commentId)
+            commentLikeDelta[commentId, default: 0] -= 1
+        } else {
+            commentLikedIds.insert(commentId)
+            commentLikeDelta[commentId, default: 0] += 1
+        }
+
+        do {
+            try await withTaskTimeout(seconds: TaskTimeoutDefaults.socialReaction) {
+                if wasLiked {
+                    _ = try await SocialSocketManager.shared.removeCommentReaction(
+                        commentId: commentId, postId: postId, emoji: StoryViewerView.heartEmoji
+                    )
+                } else {
+                    _ = try await SocialSocketManager.shared.addCommentReaction(
+                        commentId: commentId, postId: postId, emoji: StoryViewerView.heartEmoji
+                    )
+                }
+            }
+        } catch {
+            // Fallback REST quand le socket échoue (le endpoint écrit la même table
+            // CommentReaction, idempotent + likeCount synchronisé). Mutuellement exclusif
+            // avec le socket → pas de double-écriture. Rollback uniquement si REST échoue aussi.
+            let restOK: Bool
+            do {
+                if wasLiked {
+                    try await postService.unlikeComment(postId: postId, commentId: commentId)
+                } else {
+                    try await postService.likeComment(postId: postId, commentId: commentId)
+                }
+                restOK = true
+            } catch {
+                restOK = false
+            }
+            if !restOK {
+                if wasLiked {
+                    commentLikedIds.insert(commentId)
+                    commentLikeDelta[commentId, default: 0] += 1
+                } else {
+                    commentLikedIds.remove(commentId)
+                    commentLikeDelta[commentId, default: 0] -= 1
+                }
+            }
         }
     }
 
@@ -313,7 +451,7 @@ class PostDetailViewModel: ObservableObject {
     /// Updates the loaded post's body content. Optimistic UX mirrors
     /// FeedViewModel.updatePost: flip the in-memory post immediately, clear
     /// translations so the bubble re-renders, rollback on API failure.
-    func updatePost(content: String) async {
+    func updatePost(content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil) async {
         guard let snapshot = post else { return }
         var optimistic = snapshot
         optimistic.content = content
@@ -321,7 +459,7 @@ class PostDetailViewModel: ObservableObject {
         optimistic.translations = nil
         self.post = optimistic
         do {
-            let updated = try await postService.update(postId: snapshot.id, content: content, visibility: nil, moodEmoji: nil)
+            let updated = try await postService.update(postId: snapshot.id, content: content, visibility: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds)
             self.post = updated.toFeedPost(preferredLanguages: preferredLanguages)
             FeedbackToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
         } catch {
@@ -357,6 +495,7 @@ class PostDetailViewModel: ObservableObject {
             id: cmid,
             author: currentUser?.displayName ?? currentUser?.username ?? "",
             authorId: currentUser?.id ?? "",
+            authorUsername: currentUser?.username,
             authorAvatarURL: currentUser?.avatar,
             content: content,
             timestamp: Date(),
@@ -394,12 +533,16 @@ class PostDetailViewModel: ObservableObject {
 
     func sendReply(_ content: String, effectFlags: Int? = nil) async {
         guard let post, let parent = replyingTo else { return }
-        let parentId = parent.id
+        // Réponse plate à 2 niveaux : répondre à une réponse rattache au MÊME
+        // parent racine pour rester au niveau 2 ; l'auteur ciblé est notifié via
+        // la @mention préremplie (cf. `PostDetailView.beginReply`).
+        let parentId = parent.parentId ?? parent.id
         replyingTo = nil
         do {
             let apiComment = try await postService.addComment(postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags)
             let reply = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
+                authorUsername: apiComment.author.username,
                 authorAvatarURL: apiComment.author.avatar,
                 content: apiComment.content, timestamp: apiComment.createdAt,
                 likes: 0, replies: 0,
@@ -434,6 +577,123 @@ class PostDetailViewModel: ObservableObject {
         replyingTo = nil
     }
 
+    /// Envoi d'un commentaire (top-level OU réponse) portant UN média
+    /// (image/vidéo/audio). Contrairement au chemin texte top-level qui transite par
+    /// l'OfflineQueue, un commentaire média DOIT passer en direct (l'upload du fichier
+    /// exige le réseau). Optimistic-first avec le média local, puis upload TUS
+    /// (`uploadContext=comment`) → `addComment(attachmentIds:)`, réconcilie/rollback.
+    func submitCommentWithMedia(_ content: String, effectFlags: Int?, parentId: String?, pendingMedia: PendingCommentMedia) async {
+        guard let post else { return }
+        if parentId != nil { replyingTo = nil }
+        let tempId = "tmp_\(UUID().uuidString)"
+        let me = AuthManager.shared.currentUser
+        let optimistic = FeedComment(
+            id: tempId,
+            author: me?.displayName ?? me?.username ?? "",
+            authorId: me?.id ?? "",
+            authorUsername: me?.username,
+            authorAvatarURL: me?.avatar,
+            content: content, timestamp: Date(),
+            likes: 0, replies: 0, parentId: parentId,
+            effectFlags: effectFlags ?? 0,
+            media: [pendingMedia.optimistic]
+        )
+        let snapshotComments = comments
+        let snapshotReplies = parentId.flatMap { repliesMap[$0] }
+        let snapshotCount = post.commentCount
+        if let parentId {
+            var existing = repliesMap[parentId] ?? []
+            existing.insert(optimistic, at: 0)
+            repliesMap[parentId] = existing
+            expandedThreads.insert(parentId)
+            if let idx = comments.firstIndex(where: { $0.id == parentId }) { comments[idx].replies += 1 }
+        } else {
+            comments.insert(optimistic, at: 0)
+        }
+        self.post?.commentCount = snapshotCount + 1
+
+        do {
+            let attachmentId = try await CommentMediaUploader.upload(pendingMedia)
+            let apiComment = try await postService.addComment(
+                postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags,
+                attachmentIds: [attachmentId], mobileTranscription: pendingMedia.mobileTranscription,
+                originalLanguage: nil
+            )
+            let server = FeedComment(
+                id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
+                authorUsername: apiComment.author.username,
+                authorAvatarURL: apiComment.author.avatar,
+                content: apiComment.content, timestamp: apiComment.createdAt,
+                likes: 0, replies: 0, parentId: parentId,
+                effectFlags: apiComment.effectFlags ?? effectFlags ?? 0,
+                media: (apiComment.media ?? []).map { $0.toFeedMedia() }
+            )
+            if let parentId {
+                var existing = repliesMap[parentId] ?? []
+                if let idx = existing.firstIndex(where: { $0.id == tempId }) { existing[idx] = server }
+                else if !existing.contains(where: { $0.id == server.id }) { existing.insert(server, at: 0) }
+                repliesMap[parentId] = existing
+            } else if let idx = comments.firstIndex(where: { $0.id == tempId }) {
+                comments[idx] = server
+            } else if !comments.contains(where: { $0.id == server.id }) {
+                comments.insert(server, at: 0)
+            }
+            try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+        } catch {
+            // Rollback optimiste.
+            comments = snapshotComments
+            if let parentId { repliesMap[parentId] = snapshotReplies }
+            self.post?.commentCount = snapshotCount
+            FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Error sending comment", bundle: .main))
+        }
+    }
+
+    // MARK: - Comment Deletion
+
+    /// Supprime un commentaire (auteur uniquement — le gating se fait côté vue
+    /// via `CommentRowView`). Retrait optimiste immédiat (racine + réponses, ou
+    /// réponse avec décrément du parent), puis appel API, rollback du snapshot
+    /// si l'API échoue. Miroir du flux optimiste de `submitCommentWithMedia`.
+    func deleteComment(_ comment: FeedComment) async {
+        guard let post else { return }
+        let snapshotComments = comments
+        let snapshotReplies = repliesMap
+        let snapshotExpanded = expandedThreads
+        let snapshotCount = post.commentCount
+
+        if let parentId = comment.parentId {
+            if var existing = repliesMap[parentId] {
+                existing.removeAll { $0.id == comment.id }
+                repliesMap[parentId] = existing
+                // Met à jour l'aperçu en cache pour ne pas réafficher la réponse
+                // supprimée à la ré-ouverture du post.
+                try? await CacheCoordinator.shared.comments.save(existing, for: "replies-\(parentId)")
+            }
+            if let idx = comments.firstIndex(where: { $0.id == parentId }), comments[idx].replies > 0 {
+                comments[idx].replies -= 1
+            }
+            self.post?.commentCount = max(0, snapshotCount - 1)
+        } else {
+            comments.removeAll { $0.id == comment.id }
+            repliesMap[comment.id] = nil
+            expandedThreads.remove(comment.id)
+            // Suppression d'un commentaire racine → cascade serveur de ses réponses.
+            self.post?.commentCount = max(0, snapshotCount - 1 - comment.replies)
+        }
+
+        do {
+            try await postService.deleteComment(postId: post.id, commentId: comment.id)
+            try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main))
+        } catch {
+            comments = snapshotComments
+            repliesMap = snapshotReplies
+            expandedThreads = snapshotExpanded
+            self.post?.commentCount = snapshotCount
+            FeedbackToastManager.shared.showError(String(localized: "feed.comments.delete_error", defaultValue: "Impossible de supprimer le commentaire", bundle: .main))
+        }
+    }
+
     // MARK: - Socket
 
     /// Id du post couvert par les sinks actifs. Keyer la garde sur le postId
@@ -461,10 +721,13 @@ class PostDetailViewModel: ObservableObject {
                 let comment = FeedComment(
                     id: data.comment.id, author: data.comment.author.name,
                     authorId: data.comment.author.id,
+                    authorUsername: data.comment.author.username,
                     authorAvatarURL: data.comment.author.avatar,
                     content: data.comment.content, timestamp: data.comment.createdAt,
                     likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
-                    parentId: parentId
+                    parentId: parentId,
+                    currentUserReactions: data.comment.currentUserReactions,
+                    media: (data.comment.media ?? []).map { $0.toFeedMedia() }
                 )
                 if let parentId {
                     if self.expandedThreads.contains(parentId) {
@@ -483,6 +746,85 @@ class PostDetailViewModel: ObservableObject {
                     }
                 }
                 self.post?.commentCount = data.commentCount
+            }
+            .store(in: &socketCancellables)
+
+        // Pipeline audio d'un média de commentaire terminé → remplace le média
+        // (transcription / variantes TTS prêtes) du commentaire en cache, qu'il
+        // soit top-level ou réponse. Miroir du handler de CommentsSheetView.
+        socialSocket.commentMediaUpdated
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] data in
+                guard let self else { return }
+                let media = (data.comment.media ?? []).map { $0.toFeedMedia() }
+                guard !media.isEmpty else { return }
+                let commentId = data.commentId
+                if let parentId = data.comment.parentId, var existing = self.repliesMap[parentId],
+                   let idx = existing.firstIndex(where: { $0.id == commentId }) {
+                    existing[idx].media = media
+                    self.repliesMap[parentId] = existing
+                } else if let idx = self.comments.firstIndex(where: { $0.id == commentId }) {
+                    self.comments[idx].media = media
+                }
+            }
+            .store(in: &socketCancellables)
+
+        // Suppression de commentaire en temps réel : retire la ligne sur TOUS les
+        // clients et resynchronise le compteur sur la valeur autoritative du serveur
+        // (heale toute dérive de l'arithmétique optimiste locale). Sans ce sink, un
+        // commentaire supprimé ailleurs persistait et le total dérivait sans se
+        // corriger. Idempotent avec le retrait optimiste du client qui supprime.
+        socialSocket.commentDeleted
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] data in
+                guard let self else { return }
+                let id = data.commentId
+                self.comments.removeAll { $0.id == id }
+                self.repliesMap[id] = nil
+                self.expandedThreads.remove(id)
+                // Réponse supprimée : retire-la de son fil + décrémente le compteur
+                // de réponses de son parent racine.
+                for (key, var replies) in self.repliesMap {
+                    if let idx = replies.firstIndex(where: { $0.id == id }) {
+                        replies.remove(at: idx)
+                        self.repliesMap[key] = replies
+                        if let pIdx = self.comments.firstIndex(where: { $0.id == key }), self.comments[pIdx].replies > 0 {
+                            self.comments[pIdx].replies -= 1
+                        }
+                    }
+                }
+                self.post?.commentCount = data.commentCount
+            }
+            .store(in: &socketCancellables)
+
+        // Réactions cœur de commentaire en temps réel (miroir de CommentsSheetView) :
+        // synchronise `commentLikedIds` (réaction du user courant) ou `commentLikeDelta`
+        // (réaction d'un tiers) sans toucher l'optimistic local déjà appliqué.
+        socialSocket.commentReactionAdded
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] event in
+                guard let self, event.emoji == StoryViewerView.heartEmoji else { return }
+                if event.userId == AuthManager.shared.currentUser?.id {
+                    self.commentLikedIds.insert(event.commentId)
+                } else {
+                    self.commentLikeDelta[event.commentId, default: 0] += 1
+                }
+            }
+            .store(in: &socketCancellables)
+
+        socialSocket.commentReactionRemoved
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] event in
+                guard let self, event.emoji == StoryViewerView.heartEmoji else { return }
+                if event.userId == AuthManager.shared.currentUser?.id {
+                    self.commentLikedIds.remove(event.commentId)
+                } else {
+                    self.commentLikeDelta[event.commentId, default: 0] -= 1
+                }
             }
             .store(in: &socketCancellables)
 

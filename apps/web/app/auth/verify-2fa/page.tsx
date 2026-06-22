@@ -64,6 +64,7 @@ const OTPInput = ({
   disabled?: boolean;
   length?: number;
 }) => {
+  const { t } = useI18n('auth');
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const handleChange = (index: number, char: string) => {
@@ -97,7 +98,7 @@ const OTPInput = ({
   };
 
   return (
-    <div className="flex gap-2 justify-center">
+    <div className="flex gap-2 justify-center" role="group" aria-label={t('otp.groupLabel', { length })}>
       {Array.from({ length }, (_, index) => (
         <input
           key={index}
@@ -110,6 +111,8 @@ const OTPInput = ({
           onKeyDown={(e) => handleKeyDown(index, e)}
           onPaste={handlePaste}
           disabled={disabled}
+          aria-label={t('otp.digitLabel', { index: index + 1, total: length })}
+          autoComplete="one-time-code"
           className="w-12 h-14 text-center text-xl font-bold bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent disabled:bg-gray-100 dark:disabled:bg-gray-800"
         />
       ))}

@@ -32,7 +32,7 @@ export * from './api-schemas.js';
 export * from './migration-utils.js';
 
 // Message types are now consolidated - export only UIMessage and GatewayMessage to avoid conflicts with conversation.ts
-export type { UIMessage, GatewayMessage } from './message-types.js';
+export type { UIMessage, GatewayMessage, MessageAttachmentConsumption, MessageAttachmentConsumptionParticipant } from './message-types.js';
 export { gatewayToUIMessage, getDisplayContent, isTranslating, hasTranslation } from './message-types.js';
 
 // Export des types unifiés Phase 2 - Messaging

@@ -1,0 +1,13 @@
+{
+  "deleted": "Story supprimée",
+  "deleteError": "Impossible de supprimer la story",
+  "replySent": "Réponse envoyée",
+  "loading": "Chargement de la story…",
+  "unavailableTitle": "Story indisponible",
+  "notAStoryTitle": "Ce contenu n’est pas une story",
+  "goneTitle": "Cette story n’existe plus",
+  "unavailableBody": "Cette story est privée ou a expiré.",
+  "notAStoryBody": "Le lien pointe vers une publication, pas vers une story.",
+  "goneBody": "La story que vous cherchez a peut-être expiré (les stories durent 24h).",
+  "backToFeed": "Retour au fil"
+}

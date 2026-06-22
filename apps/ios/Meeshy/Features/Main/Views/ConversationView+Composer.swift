@@ -152,11 +152,21 @@ extension ConversationView {
             onPhotoLibrary: { composerState.showPhotoPicker = true },
             onCamera: { composerState.showCamera = true },
             onFilePicker: { composerState.showFilePicker = true },
+            onShowAttachments: {
+                // Carrousel de pièces jointes ouvert → ferme le panneau emoji
+                // pour ne jamais empiler deux surfaces d'entrée sous la barre.
+                if composerState.showTextEmojiPicker {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        composerState.showTextEmojiPicker = false
+                    }
+                }
+            },
             onRequestTextEmoji: {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     composerState.showTextEmojiPicker.toggle()
                 }
             },
+            onRecentMediaSelected: { pick in ingestRecentMediaPick(pick) },
             injectedEmoji: $composerState.emojiToInject,
             ephemeralDuration: $viewModel.ephemeralDuration,
             hideEphemeral: composerState.editingMessageId != nil,
@@ -281,6 +291,17 @@ extension ConversationView {
             }, onCancel: {
                 scrollState.audioToEdit = nil
             })
+        }
+    }
+
+    // MARK: - Recent Media Strip Selection
+
+    /// Ingests a photo/video tapped in the composer's inline recent-media strip
+    /// through the same preparation pipeline as a camera capture.
+    func ingestRecentMediaPick(_ pick: RecentMediaPick) {
+        switch pick {
+        case .image(let image): handleCameraCapture(image)
+        case .video(let url): handleCameraVideo(url)
         }
     }
 

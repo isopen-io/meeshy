@@ -7,7 +7,9 @@ import {
   copyAndZeroize,
   ApiResponseSchemas,
   SignalValidation,
-  UserSchemas
+  UserSchemas,
+  updateBannerSchema,
+  SignalProtocolLimits,
 } from '../utils/validation.js';
 import { z } from 'zod';
 import { MeeshyError } from '../utils/errors.js';
@@ -130,5 +132,47 @@ describe('UserSchemas', () => {
   it('should validate minimal user', () => {
     const user = { id: '1', username: 'u', displayName: 'd' };
     expect(UserSchemas.minimal.safeParse(user).success).toBe(true);
+  });
+});
+
+describe('updateBannerSchema', () => {
+  it('accepts http:// URLs', () => {
+    expect(updateBannerSchema.safeParse({ banner: 'http://example.com/img.png' }).success).toBe(true);
+  });
+
+  it('accepts https:// URLs', () => {
+    expect(updateBannerSchema.safeParse({ banner: 'https://cdn.meeshy.me/banner.jpg' }).success).toBe(true);
+  });
+
+  it('accepts /api/ paths', () => {
+    expect(updateBannerSchema.safeParse({ banner: '/api/v1/static/banner.jpg' }).success).toBe(true);
+  });
+
+  it('rejects arbitrary strings', () => {
+    expect(updateBannerSchema.safeParse({ banner: 'ftp://bad.com' }).success).toBe(false);
+  });
+
+  it('rejects relative paths without /api/', () => {
+    expect(updateBannerSchema.safeParse({ banner: '/uploads/img.jpg' }).success).toBe(false);
+  });
+
+  it('rejects empty string', () => {
+    expect(updateBannerSchema.safeParse({ banner: '' }).success).toBe(false);
+  });
+});
+
+describe('SignalValidation.validateMessageNumber — overflow branch', () => {
+  it('returns MESSAGE_NUMBER_OVERFLOW when number exceeds MAX_MESSAGE_NUMBER', () => {
+    const overflow = SignalProtocolLimits.MAX_MESSAGE_NUMBER + 1;
+    const result = SignalValidation.validateMessageNumber(overflow, 0);
+    expect(result.valid).toBe(false);
+    expect(result.code).toBe('MESSAGE_NUMBER_OVERFLOW');
+    expect(result.error).toContain(String(SignalProtocolLimits.MAX_MESSAGE_NUMBER));
+  });
+
+  it('accepts MAX_MESSAGE_NUMBER itself', () => {
+    const max = SignalProtocolLimits.MAX_MESSAGE_NUMBER;
+    const result = SignalValidation.validateMessageNumber(max, max - 1, SignalProtocolLimits.MAX_SKIPPED_KEYS);
+    expect(result.valid).toBe(true);
   });
 });

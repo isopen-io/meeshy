@@ -145,6 +145,10 @@ struct VoiceProfileManageView: View {
 
                 cloningToggle
 
+                if profile.isReady {
+                    voicePublicToggle
+                }
+
                 samplesSection
 
                 actionsSection
@@ -245,7 +249,7 @@ struct VoiceProfileManageView: View {
                     .foregroundColor(theme.textSecondary)
             }
             Spacer()
-            Toggle("", isOn: Binding(
+            Toggle(String(localized: "voice.profile.cloningEnabled", defaultValue: "Clonage vocal actif", bundle: .main), isOn: Binding(
                 get: { viewModel.isCloningEnabled },
                 set: { newValue in
                     Task { await viewModel.toggleCloning(enabled: newValue) }
@@ -260,6 +264,38 @@ struct VoiceProfileManageView: View {
                 .fill(theme.backgroundSecondary)
         )
         .padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Voice Public Toggle
+
+    private var voicePublicToggle: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(String(localized: "voice.makePublic", defaultValue: "Rendre mon profil vocal public", bundle: .main))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+                Text(String(localized: "voice.makePublic.description", defaultValue: "Un echantillon de votre voix sera visible sur votre profil public", bundle: .main))
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.textSecondary)
+            }
+            Spacer()
+            Toggle(String(localized: "voice.makePublic", defaultValue: "Rendre mon profil vocal public", bundle: .main), isOn: Binding(
+                get: { viewModel.isVoicePublic },
+                set: { newValue in
+                    Task { await viewModel.toggleVoicePublic(enabled: newValue) }
+                }
+            ))
+            .labelsHidden()
+            .tint(Color(hex: accentColor))
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(theme.backgroundSecondary)
+        )
+        .padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Samples
@@ -335,7 +371,10 @@ struct VoiceProfileManageView: View {
                 Image(systemName: "trash")
                     .font(.system(size: 13))
                     .foregroundColor(MeeshyColors.error.opacity(0.7))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
+            .accessibilityLabel(String(localized: "voice.profile.deleteSample", defaultValue: "Supprimer l'échantillon", bundle: .main))
         }
         .padding(.vertical, 6)
     }

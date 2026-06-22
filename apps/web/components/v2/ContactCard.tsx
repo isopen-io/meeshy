@@ -75,7 +75,7 @@ export const ContactCard = memo(function ContactCard({
 
       <div className="flex-1 min-w-0">
         <Link
-          href={`/v2/profile/${contact.id}`}
+          href={`/u/${contact.id}`}
           className="font-medium truncate block text-[var(--gp-text-primary)] hover:underline"
         >
           {contact.name}

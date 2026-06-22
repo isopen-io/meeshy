@@ -14,7 +14,13 @@
  * - Unresponded participant retrieval
  */
 
-import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest, afterEach, beforeAll } from '@jest/globals';
+
+// Mock call-summary utils
+jest.mock('@meeshy/shared/utils/call-summary', () => ({
+  buildCallSummaryWithMetadata: jest.fn(),
+  callSummaryClientMessageId: jest.fn().mockReturnValue('summary-msg-id-123')
+}));
 
 // Mock @meeshy/shared/types/video-call before importing CallService
 jest.mock('@meeshy/shared/types/video-call', () => ({
@@ -49,7 +55,8 @@ jest.mock('@meeshy/shared/types/video-call', () => ({
 }));
 
 import { CallService } from '../../../services/CallService';
-import { CallMode, CallStatus, ParticipantRole } from '@meeshy/shared/prisma/client';
+import { CallMode, CallStatus, ParticipantRole, CallEndReason } from '@meeshy/shared/prisma/client';
+import { buildCallSummaryWithMetadata } from '@meeshy/shared/utils/call-summary';
 
 // Mock logger to avoid console noise during tests
 jest.mock('../../../utils/logger', () => ({
@@ -106,6 +113,9 @@ const createMockPrisma = () => {
       update: jest.fn() as MockFn,
       updateMany: jest.fn() as MockFn
     },
+    message: {
+      create: jest.fn() as MockFn
+    },
     $transaction: jest.fn() as MockFn
   };
 };
@@ -137,7 +147,7 @@ interface MockCallParticipant {
   isAudioEnabled: boolean;
   isVideoEnabled: boolean;
   user?: MockUser;
-  participant?: { user: MockUser };
+  participant?: { userId: string; user: MockUser };
 }
 
 interface MockCallSession {
@@ -766,10 +776,13 @@ describe('CallService', () => {
       );
     });
 
-    it('should authorize access for call participant', async () => {
+    it('should authorize a user who is already in the call (fast path, no membership query)', async () => {
       const mockCall = createMockCallSession({
         participants: [
-          createMockParticipant({ participantId: 'participant-123', userId: 'user-123', user: createMockUser() })
+          createMockParticipant({
+            participantId: 'participant-123',
+            participant: { userId: 'user-789', user: createMockUser() }
+          })
         ],
         initiator: createMockUser(),
         conversation: createMockConversation()
@@ -777,12 +790,14 @@ describe('CallService', () => {
 
       mockPrisma.callSession.findUnique.mockResolvedValue(mockCall);
 
-      const result = await callService.getCallSession('call-123', 'participant-123');
+      const result = await callService.getCallSession('call-123', 'user-789');
 
       expect(result).toBeDefined();
+      // The user maps to an existing CallParticipant → no conversation lookup.
+      expect(mockPrisma.participant.findFirst).not.toHaveBeenCalled();
     });
 
-    it('should authorize access for conversation member', async () => {
+    it('should authorize a conversation member by USER id, not participant id (regression: Participant migration 403)', async () => {
       const mockCall = createMockCallSession({
         participants: [createMockParticipant({ user: createMockUser() })],
         initiator: createMockUser(),
@@ -797,9 +812,15 @@ describe('CallService', () => {
         isActive: true
       });
 
-      const result = await callService.getCallSession('call-123', 'participant-456');
+      // The REST route passes `authContext.userId`; a callee fetching the call to
+      // answer it is not yet a CallParticipant and has no Participant row whose
+      // `id` equals their `userId`. Membership MUST be resolved by `userId`.
+      const result = await callService.getCallSession('call-123', 'user-456');
 
       expect(result).toBeDefined();
+      expect(mockPrisma.participant.findFirst).toHaveBeenCalledWith({
+        where: { conversationId: 'conv-123', userId: 'user-456', isActive: true }
+      });
     });
 
     it('should throw error for unauthorized access (CVE-003)', async () => {
@@ -812,7 +833,7 @@ describe('CallService', () => {
       mockPrisma.callSession.findUnique.mockResolvedValue(mockCall);
       mockPrisma.participant.findFirst.mockResolvedValue(null);
 
-      await expect(callService.getCallSession('call-123', 'unauthorized-participant')).rejects.toThrow(
+      await expect(callService.getCallSession('call-123', 'user-stranger')).rejects.toThrow(
         'NOT_A_PARTICIPANT: You do not have access to this call'
       );
     });
@@ -1433,5 +1454,1644 @@ describe('CallService - Error Code Verification', () => {
     await expect(
       callService.endCall('call-123', 'user-456', 'participant-456')
     ).resolves.toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Gap-fill tests — bring CallService to ≥92% line+branch coverage
+// ---------------------------------------------------------------------------
+
+describe('CallService - Ringing Timeout & Heartbeat Utilities', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.clearAllMocks();
+  });
+
+  // scheduleRingingTimeout
+  it('scheduleRingingTimeout: fires callback after 60 s', () => {
+    const cb = jest.fn();
+    callService.scheduleRingingTimeout('call-t1', cb);
+    expect(cb).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(60_000);
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
+
+  it('scheduleRingingTimeout: replaces existing timeout with new one', () => {
+    const cb1 = jest.fn();
+    const cb2 = jest.fn();
+    callService.scheduleRingingTimeout('call-t2', cb1);
+    callService.scheduleRingingTimeout('call-t2', cb2); // replaces cb1
+    jest.advanceTimersByTime(60_000);
+    expect(cb1).not.toHaveBeenCalled();
+    expect(cb2).toHaveBeenCalledTimes(1);
+  });
+
+  // clearRingingTimeout
+  it('clearRingingTimeout: prevents callback from firing', () => {
+    const cb = jest.fn();
+    callService.scheduleRingingTimeout('call-t3', cb);
+    callService.clearRingingTimeout('call-t3');
+    jest.advanceTimersByTime(60_000);
+    expect(cb).not.toHaveBeenCalled();
+  });
+
+  it('clearRingingTimeout: no-op when no timeout exists for callId', () => {
+    // should not throw
+    expect(() => callService.clearRingingTimeout('call-nonexistent')).not.toThrow();
+  });
+
+  // generateIceServers
+  it('generateIceServers: delegates to TURNCredentialService', () => {
+    const servers = callService.generateIceServers('user-123');
+    expect(servers).toBeDefined();
+    expect(Array.isArray(servers)).toBe(true);
+    expect(servers.length).toBeGreaterThan(0);
+  });
+
+  // recordHeartbeat / getLastHeartbeat
+  it('recordHeartbeat & getLastHeartbeat: stores and retrieves timestamp', () => {
+    const before = Date.now();
+    callService.recordHeartbeat('call-hb1', 'p-1');
+    const ts = callService.getLastHeartbeat('call-hb1', 'p-1');
+    expect(ts).toBeGreaterThanOrEqual(before);
+    expect(ts).toBeLessThanOrEqual(Date.now());
+  });
+
+  it('getLastHeartbeat: returns undefined for unknown participant', () => {
+    const ts = callService.getLastHeartbeat('call-hb2', 'p-unknown');
+    expect(ts).toBeUndefined();
+  });
+
+  it('getLastHeartbeat: returns undefined for unknown call', () => {
+    expect(callService.getLastHeartbeat('call-nope', 'p-1')).toBeUndefined();
+  });
+
+  // clearHeartbeats
+  it('clearHeartbeats: removes all heartbeats for the call', () => {
+    callService.recordHeartbeat('call-hb3', 'p-1');
+    callService.recordHeartbeat('call-hb3', 'p-2');
+    callService.clearHeartbeats('call-hb3');
+    expect(callService.getLastHeartbeat('call-hb3', 'p-1')).toBeUndefined();
+    expect(callService.getLastHeartbeat('call-hb3', 'p-2')).toBeUndefined();
+  });
+
+  it('clearHeartbeats: no-op when call has no heartbeats', () => {
+    expect(() => callService.clearHeartbeats('call-no-hb')).not.toThrow();
+  });
+
+  // getStaleHeartbeats
+  it('getStaleHeartbeats: returns empty array when no heartbeats for call', () => {
+    const stale = callService.getStaleHeartbeats('call-s1', 5000);
+    expect(stale).toEqual([]);
+  });
+
+  it('getStaleHeartbeats: returns participants whose heartbeat is older than maxAgeMs', () => {
+    jest.useRealTimers(); // need real time for Date.now() comparison
+    callService.recordHeartbeat('call-s2', 'p-old');
+    // advance 200ms artificially by manually setting Date.now via a spy
+    const realNow = Date.now;
+    const future = Date.now() + 10_000;
+    jest.spyOn(Date, 'now').mockReturnValue(future);
+    const stale = callService.getStaleHeartbeats('call-s2', 5_000);
+    expect(stale).toContain('p-old');
+    jest.spyOn(Date, 'now').mockRestore();
+    jest.useFakeTimers();
+  });
+
+  it('getStaleHeartbeats: does not return fresh heartbeats', () => {
+    jest.useRealTimers();
+    callService.recordHeartbeat('call-s3', 'p-fresh');
+    const stale = callService.getStaleHeartbeats('call-s3', 60_000);
+    expect(stale).not.toContain('p-fresh');
+    jest.useFakeTimers();
+  });
+});
+
+describe('CallService - updateCallStatus', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('throws CALL_NOT_FOUND when call does not exist', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue(null);
+    await expect(callService.updateCallStatus('missing', CallStatus.active)).rejects.toThrow(
+      'CALL_NOT_FOUND: Call session not found'
+    );
+  });
+
+  it('returns current session without writing when call is already in terminal state', async () => {
+    const terminalCall = createMockCallSession({
+      status: CallStatus.ended,
+      endedAt: new Date(),
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(terminalCall) // first lookup (status check)
+      .mockResolvedValueOnce(terminalCall); // getCallSession
+    const result = await callService.updateCallStatus('call-123', CallStatus.active);
+    expect(result.status).toBe(CallStatus.ended);
+    expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+  });
+
+  it('sets endedAt and duration when transitioning to terminal status', async () => {
+    const startedAt = new Date(Date.now() - 30_000);
+    const activeCall = createMockCallSession({
+      status: CallStatus.active,
+      startedAt,
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+    const endedCall = { ...activeCall, status: CallStatus.ended, endedAt: new Date(), duration: 30 };
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(activeCall)
+      .mockResolvedValueOnce(endedCall);
+    mockPrisma.callSession.update.mockResolvedValue(endedCall);
+
+    await callService.updateCallStatus('call-123', CallStatus.ended, CallEndReason.completed);
+
+    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: CallStatus.ended,
+          endReason: CallEndReason.completed
+        })
+      })
+    );
+  });
+
+  it('sets endedAt without endReason when no reason provided for terminal status', async () => {
+    const activeCall = createMockCallSession({
+      status: CallStatus.active,
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+    const endedCall = { ...activeCall, status: CallStatus.ended, endedAt: new Date() };
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(activeCall)
+      .mockResolvedValueOnce(endedCall);
+    mockPrisma.callSession.update.mockResolvedValue(endedCall);
+
+    await callService.updateCallStatus('call-123', CallStatus.ended);
+
+    const updateCall = mockPrisma.callSession.update.mock.calls[0] as any;
+    // endReason should not be in data since none provided
+    expect(updateCall[0].data).not.toHaveProperty('endReason');
+  });
+
+  it('sets answeredAt when transitioning to active and call not yet answered', async () => {
+    const initiatedCall = createMockCallSession({
+      status: CallStatus.initiated,
+      answeredAt: null,
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+    const activeCall = { ...initiatedCall, status: CallStatus.active, answeredAt: new Date() };
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(initiatedCall)
+      .mockResolvedValueOnce(activeCall);
+    mockPrisma.callSession.update.mockResolvedValue(activeCall);
+
+    await callService.updateCallStatus('call-123', CallStatus.active);
+
+    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: CallStatus.active,
+          answeredAt: expect.any(Date)
+        })
+      })
+    );
+  });
+
+  it('does not set answeredAt when transitioning to active and call already answered', async () => {
+    const alreadyAnswered = createMockCallSession({
+      status: CallStatus.reconnecting,
+      answeredAt: new Date(Date.now() - 5000),
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+    const activeCall = { ...alreadyAnswered, status: CallStatus.active };
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(alreadyAnswered)
+      .mockResolvedValueOnce(activeCall);
+    mockPrisma.callSession.update.mockResolvedValue(activeCall);
+
+    await callService.updateCallStatus('call-123', CallStatus.active);
+
+    const updateCall = mockPrisma.callSession.update.mock.calls[0] as any;
+    expect(updateCall[0].data).not.toHaveProperty('answeredAt');
+  });
+});
+
+describe('CallService - initiateCall phantom cleanup & transaction', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  const validInitiateData = {
+    conversationId: 'conv-123',
+    initiatorId: 'user-123',
+    participantId: 'participant-123',
+    type: 'video' as const,
+    settings: { audioEnabled: true, videoEnabled: true }
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('phantom cleanup: force-ends stale participations before initiating', async () => {
+    const staleCallId = 'stale-call-1';
+    const staleStartedAt = new Date(Date.now() - 120_000);
+    const staleParticipation = {
+      id: 'stale-part-1',
+      callSessionId: staleCallId,
+      leftAt: null,
+      callSession: { id: staleCallId, startedAt: staleStartedAt, conversationId: 'conv-other' }
+    };
+    const mockConversation = createMockConversation();
+    const newCall = createMockCallSession({
+      participants: [createMockParticipant()],
+      initiator: createMockUser(),
+      conversation: mockConversation
+    });
+
+    mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([staleParticipation]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null); // no active call in target conv
+
+    let phantomTxCalled = false;
+    let createTxCalled = false;
+    mockPrisma.$transaction
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) => {
+        phantomTxCalled = true;
+        const tx = {
+          callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
+        };
+        return cb(tx);
+      })
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) => {
+        createTxCalled = true;
+        const session = { id: 'call-123' };
+        const tx = {
+          callSession: { create: jest.fn().mockResolvedValue(session) },
+          callParticipant: { create: jest.fn().mockResolvedValue({}) }
+        };
+        return cb(tx);
+      });
+    mockPrisma.callSession.findUnique.mockResolvedValue(newCall);
+
+    const result = await callService.initiateCall(validInitiateData);
+
+    expect(phantomTxCalled).toBe(true);
+    expect(createTxCalled).toBe(true);
+    expect(result).toBeDefined();
+  });
+
+  it('phantom cleanup: uses `now` as fallback when staleSession.startedAt is null', async () => {
+    const staleCallId = 'stale-call-null-ts';
+    // startedAt is null on the embedded callSession
+    const staleParticipation = {
+      id: 'stale-part-null',
+      callSessionId: staleCallId,
+      leftAt: null,
+      callSession: { id: staleCallId, startedAt: null, conversationId: 'conv-other' }
+    };
+    const mockConversation = createMockConversation();
+    const newCall = createMockCallSession({
+      participants: [createMockParticipant()],
+      initiator: createMockUser(),
+      conversation: mockConversation
+    });
+
+    mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([staleParticipation]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null);
+
+    mockPrisma.$transaction
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) => {
+        const tx = {
+          callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
+        };
+        return cb(tx);
+      })
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) => {
+        const session = { id: 'call-123' };
+        const tx = {
+          callSession: { create: jest.fn().mockResolvedValue(session) },
+          callParticipant: { create: jest.fn().mockResolvedValue({}) }
+        };
+        return cb(tx);
+      });
+    mockPrisma.callSession.findUnique.mockResolvedValue(newCall);
+
+    // Should not throw — `now` used as fallback for null startedAt
+    const result = await callService.initiateCall(validInitiateData);
+    expect(result).toBeDefined();
+  });
+
+  it('phantom cleanup: logs error and continues when cleanup transaction fails', async () => {
+    const staleCallId = 'stale-call-err';
+    const staleParticipation = {
+      id: 'stale-part-err',
+      callSessionId: staleCallId,
+      leftAt: null,
+      callSession: { id: staleCallId, startedAt: new Date(), conversationId: 'conv-other' }
+    };
+    const mockConversation = createMockConversation();
+    const newCall = createMockCallSession({
+      participants: [createMockParticipant()],
+      initiator: createMockUser(),
+      conversation: mockConversation
+    });
+
+    mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([staleParticipation]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null);
+
+    // First $transaction (phantom cleanup) throws; second (create call) succeeds
+    mockPrisma.$transaction
+      .mockRejectedValueOnce(new Error('DB error during phantom cleanup'))
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) => {
+        const session = { id: 'call-new' };
+        const tx = {
+          callSession: { create: jest.fn().mockResolvedValue(session) },
+          callParticipant: { create: jest.fn().mockResolvedValue({}) }
+        };
+        return cb(tx);
+      });
+    mockPrisma.callSession.findUnique.mockResolvedValue(newCall);
+
+    // Should NOT throw — cleanup failure is logged and swallowed
+    const result = await callService.initiateCall(validInitiateData);
+    expect(result).toBeDefined();
+  });
+
+  it('session creation transaction: creates callSession and callParticipant', async () => {
+    const mockConversation = createMockConversation();
+    const createdSession = { id: 'call-new-tx' };
+    const fullSession = createMockCallSession({
+      id: 'call-new-tx',
+      participants: [createMockParticipant()],
+      initiator: createMockUser(),
+      conversation: mockConversation
+    });
+
+    mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null);
+
+    let sessionCreated = false;
+    let participantCreated = false;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const tx = {
+        callSession: { create: jest.fn().mockImplementation(() => { sessionCreated = true; return createdSession; }) },
+        callParticipant: { create: jest.fn().mockImplementation(() => { participantCreated = true; return {}; }) }
+      };
+      return cb(tx);
+    });
+    mockPrisma.callSession.findUnique.mockResolvedValue(fullSession);
+
+    await callService.initiateCall(validInitiateData);
+
+    expect(sessionCreated).toBe(true);
+    expect(participantCreated).toBe(true);
+  });
+});
+
+describe('CallService - joinCall already-in-call path', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns existing session and ICE servers without creating new participant', async () => {
+    const existingParticipant = createMockParticipant({
+      participantId: 'participant-456',
+      userId: 'user-456',
+      leftAt: null
+    });
+    const callWithUser = createMockCallSession({
+      status: CallStatus.active,
+      participants: [existingParticipant],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce({ ...callWithUser, conversation: createMockConversation() })
+      .mockResolvedValueOnce(callWithUser);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'member-456', conversationId: 'conv-123', userId: 'user-456', isActive: true
+    });
+
+    const result = await callService.joinCall({
+      callId: 'call-123',
+      userId: 'user-456',
+      participantId: 'participant-456'
+    });
+
+    // No new participant was created via $transaction
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    expect(result.callSession).toBeDefined();
+    expect(result.iceServers).toBeDefined();
+    expect(result.iceServers.length).toBeGreaterThan(0);
+  });
+});
+
+describe('CallService - leaveCall idempotent paths', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('throws CALL_NOT_FOUND when participant missing and session also missing', async () => {
+    mockPrisma.callParticipant.findFirst.mockResolvedValue(null);
+    mockPrisma.callSession.findUnique.mockResolvedValue(null);
+
+    await expect(callService.leaveCall({
+      callId: 'call-gone', userId: 'user-123', participantId: 'p-123'
+    })).rejects.toThrow('CALL_NOT_FOUND: Call session not found');
+  });
+
+  it('returns existing session when call is already ended (idempotent)', async () => {
+    const endedSession = createMockCallSession({
+      status: CallStatus.ended,
+      endedAt: new Date(),
+      participants: [createMockParticipant({ leftAt: new Date() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+
+    mockPrisma.callParticipant.findFirst.mockResolvedValue(null);
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce({ ...endedSession, participants: endedSession.participants })
+      .mockResolvedValueOnce(endedSession); // getCallSession
+
+    const result = await callService.leaveCall({
+      callId: 'call-123', userId: 'user-123', participantId: 'p-123'
+    });
+
+    expect(result.status).toBe(CallStatus.ended);
+    // No DB writes
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('returns session unchanged when group call still has active participants (idempotent)', async () => {
+    // Need at least 2 active participants (leftAt: null) so idemRemaining > 1 triggers the "group continues" path
+    const activeParticipant1 = createMockParticipant({ id: 'p-other-1', userId: 'user-other-1', leftAt: null });
+    const activeParticipant2 = createMockParticipant({ id: 'p-other-2', userId: 'user-other-2', leftAt: null });
+    const groupSession = createMockCallSession({
+      status: CallStatus.active,
+      endedAt: null,
+      participants: [activeParticipant1, activeParticipant2],
+      initiator: createMockUser(),
+      conversation: createMockConversation({ type: 'group' })
+    });
+    const fullSession = {
+      ...groupSession,
+      participants: [
+        { ...activeParticipant1, user: createMockUser({ id: 'user-other-1' }) },
+        { ...activeParticipant2, user: createMockUser({ id: 'user-other-2' }) }
+      ],
+      initiator: createMockUser(),
+      conversation: createMockConversation({ type: 'group' })
+    };
+
+    mockPrisma.callParticipant.findFirst.mockResolvedValue(null);
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(groupSession)
+      .mockResolvedValueOnce(fullSession); // getCallSession
+    mockPrisma.conversation.findUnique.mockResolvedValue({ type: 'group' });
+
+    const result = await callService.leaveCall({
+      callId: 'call-123', userId: 'user-123', participantId: 'p-123'
+    });
+
+    expect(result).toBeDefined();
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('force-ends direct call when participant not found (idempotent direct leave)', async () => {
+    const directSession = createMockCallSession({
+      status: CallStatus.active,
+      endedAt: null,
+      participants: [createMockParticipant({ leftAt: null })],
+      initiator: createMockUser(),
+      conversation: createMockConversation({ type: 'direct' })
+    });
+    const endedSession = {
+      ...directSession,
+      status: CallStatus.ended,
+      endedAt: new Date(),
+      participants: [createMockParticipant({ leftAt: new Date(), user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation({ type: 'direct' })
+    };
+
+    mockPrisma.callParticipant.findFirst.mockResolvedValue(null);
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(directSession)
+      .mockResolvedValueOnce(endedSession); // getCallSession after tx
+    mockPrisma.conversation.findUnique.mockResolvedValue({ type: 'direct' });
+
+    let txCalled = false;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      txCalled = true;
+      const tx = {
+        callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+        callSession: { update: jest.fn().mockResolvedValue({}) }
+      };
+      return cb(tx);
+    });
+
+    const result = await callService.leaveCall({
+      callId: 'call-123', userId: 'user-123', participantId: 'p-123'
+    });
+
+    expect(txCalled).toBe(true);
+    expect(result).toBeDefined();
+  });
+
+  it('force-ends when last participant in group (idempotent, no remaining active)', async () => {
+    const groupSession = createMockCallSession({
+      status: CallStatus.active,
+      endedAt: null,
+      // 0 remaining active participants (all already left)
+      participants: [createMockParticipant({ leftAt: new Date() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation({ type: 'group' })
+    });
+    const endedSession = {
+      ...groupSession,
+      status: CallStatus.ended,
+      endedAt: new Date(),
+      participants: [createMockParticipant({ leftAt: new Date(), user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation({ type: 'group' })
+    };
+
+    mockPrisma.callParticipant.findFirst.mockResolvedValue(null);
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(groupSession)
+      .mockResolvedValueOnce(endedSession);
+    mockPrisma.conversation.findUnique.mockResolvedValue({ type: 'group' });
+
+    let txCalled = false;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      txCalled = true;
+      const tx = {
+        callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        callSession: { update: jest.fn().mockResolvedValue({}) }
+      };
+      return cb(tx);
+    });
+
+    await callService.leaveCall({
+      callId: 'call-123', userId: 'user-other', participantId: 'p-other'
+    });
+
+    expect(txCalled).toBe(true);
+  });
+
+  it('force-ends with missed status for pre-answered call (idempotent)', async () => {
+    const ringingSession = createMockCallSession({
+      status: CallStatus.ringing,
+      endedAt: null,
+      participants: [],
+      initiator: createMockUser(),
+      conversation: createMockConversation({ type: 'direct' })
+    });
+    const missedSession = {
+      ...ringingSession,
+      status: CallStatus.missed,
+      endedAt: new Date(),
+      participants: [createMockParticipant({ leftAt: new Date(), user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation({ type: 'direct' })
+    };
+
+    mockPrisma.callParticipant.findFirst.mockResolvedValue(null);
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(ringingSession)
+      .mockResolvedValueOnce(missedSession);
+    mockPrisma.conversation.findUnique.mockResolvedValue({ type: 'direct' });
+
+    let capturedData: any = null;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const tx = {
+        callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        callSession: {
+          update: jest.fn().mockImplementation(({ data }: any) => {
+            capturedData = data;
+            return {};
+          })
+        }
+      };
+      return cb(tx);
+    });
+
+    await callService.leaveCall({
+      callId: 'call-123', userId: 'user-123', participantId: 'p-123'
+    });
+
+    expect(capturedData.status).toBe(CallStatus.missed);
+    expect(capturedData.endReason).toBe(CallEndReason.missed);
+  });
+});
+
+describe('CallService - markCallAsMissed non-ringing guard', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns current session without writing when call is already active', async () => {
+    const activeCall = createMockCallSession({
+      status: CallStatus.active,
+      answeredAt: new Date(),
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(activeCall)  // markCallAsMissed lookup
+      .mockResolvedValueOnce(activeCall); // getCallSession
+
+    const result = await callService.markCallAsMissed('call-123');
+
+    expect(result.status).toBe(CallStatus.active);
+    expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+  });
+
+  it('returns current session without writing when call is already missed', async () => {
+    const missedCall = createMockCallSession({
+      status: CallStatus.missed,
+      endedAt: new Date(),
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(missedCall)
+      .mockResolvedValueOnce(missedCall);
+
+    const result = await callService.markCallAsMissed('call-123');
+
+    expect(result.status).toBe(CallStatus.missed);
+    expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+  });
+
+  it('marks ringing call as missed (allowed)', async () => {
+    const ringingCall = createMockCallSession({
+      status: CallStatus.ringing,
+      participants: [createMockParticipant()],
+      initiator: createMockUser()
+    });
+    const missedCall = {
+      ...ringingCall,
+      status: CallStatus.missed,
+      endedAt: new Date(),
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    };
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(ringingCall)
+      .mockResolvedValueOnce(missedCall);
+    mockPrisma.callSession.update.mockResolvedValue(missedCall);
+
+    const result = await callService.markCallAsMissed('call-123');
+
+    expect(result.status).toBe(CallStatus.missed);
+    expect(mockPrisma.callSession.update).toHaveBeenCalled();
+  });
+});
+
+describe('CallService - resolveEndReason private method', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any);
+  });
+
+  const resolve = (service: CallService, reason?: string) =>
+    (service as any).resolveEndReason(reason);
+
+  it('returns missed for "missed"', () => {
+    expect(resolve(callService, 'missed')).toBe(CallEndReason.missed);
+  });
+
+  it('returns rejected for "rejected"', () => {
+    expect(resolve(callService, 'rejected')).toBe(CallEndReason.rejected);
+  });
+
+  it('returns failed for "failed"', () => {
+    expect(resolve(callService, 'failed')).toBe(CallEndReason.failed);
+  });
+
+  it('returns connectionLost for "connectionLost"', () => {
+    expect(resolve(callService, 'connectionLost')).toBe(CallEndReason.connectionLost);
+  });
+
+  it('returns heartbeatTimeout for "heartbeatTimeout"', () => {
+    expect(resolve(callService, 'heartbeatTimeout')).toBe(CallEndReason.heartbeatTimeout);
+  });
+
+  it('returns garbageCollected for "garbageCollected"', () => {
+    expect(resolve(callService, 'garbageCollected')).toBe(CallEndReason.garbageCollected);
+  });
+
+  it('returns completed for unknown reason (default)', () => {
+    expect(resolve(callService, 'unknown-reason')).toBe(CallEndReason.completed);
+  });
+
+  it('returns completed for undefined reason', () => {
+    expect(resolve(callService, undefined)).toBe(CallEndReason.completed);
+  });
+});
+
+describe('CallService - persistCallStats', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns early without update when findUnique resolves null (call not found)', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue(null);
+
+    await callService.persistCallStats('missing-call', { bytesSent: 1000, bytesReceived: 500 });
+
+    expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+  });
+
+  it('returns early without update when findUnique rejects (network error → null via .catch)', async () => {
+    // The .catch(() => null) in persistCallStats converts rejection to null
+    mockPrisma.callSession.findUnique.mockRejectedValue(new Error('DB connection lost'));
+
+    await callService.persistCallStats('call-123', { bytesSent: 1000 });
+
+    expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+  });
+
+  it('updates bytesSent/bytesReceived when new total exceeds stored total', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      bytesSent: 100,
+      bytesReceived: 200
+    });
+    mockPrisma.callSession.update.mockResolvedValue({});
+
+    await callService.persistCallStats('call-123', { bytesSent: 500, bytesReceived: 600 });
+
+    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ bytesSent: 500, bytesReceived: 600 })
+      })
+    );
+  });
+
+  it('does not update when new total does not exceed stored total', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      bytesSent: 1000,
+      bytesReceived: 2000
+    });
+
+    await callService.persistCallStats('call-123', { bytesSent: 100, bytesReceived: 200 });
+
+    expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+  });
+
+  it('updates networkQuality when a valid level is provided', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      bytesSent: null,
+      bytesReceived: null
+    });
+    mockPrisma.callSession.update.mockResolvedValue({});
+
+    await callService.persistCallStats('call-123', { level: 'excellent' });
+
+    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ networkQuality: 'excellent' })
+      })
+    );
+  });
+
+  it('does not update for invalid quality level', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      bytesSent: null,
+      bytesReceived: null
+    });
+
+    await callService.persistCallStats('call-123', { level: 'unknown' as any });
+
+    expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+  });
+
+  it('catches and logs when update fails (.catch handler) — Error instance branch', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      bytesSent: 0,
+      bytesReceived: 0
+    });
+    mockPrisma.callSession.update.mockRejectedValue(new Error('update failed'));
+
+    // Should NOT throw — the .catch swallows the error
+    await expect(
+      callService.persistCallStats('call-123', { bytesSent: 500, bytesReceived: 600 })
+    ).resolves.toBeUndefined();
+  });
+
+  it('catches and logs when update fails with non-Error — String(error) branch', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      bytesSent: 0,
+      bytesReceived: 0
+    });
+    // Throw a non-Error (string) to exercise the String(error) branch
+    mockPrisma.callSession.update.mockRejectedValue('plain string error');
+
+    await expect(
+      callService.persistCallStats('call-123', { bytesSent: 500, bytesReceived: 600 })
+    ).resolves.toBeUndefined();
+  });
+
+  it('returns early with no-op when data object is empty (no valid stats)', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      bytesSent: null,
+      bytesReceived: null
+    });
+
+    await callService.persistCallStats('call-123', { bytesSent: -1, bytesReceived: -1, level: 'bad' as any });
+
+    expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+  });
+
+  it('uses fallback 0 when current.bytesSent/bytesReceived are null', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      bytesSent: null,
+      bytesReceived: null
+    });
+    mockPrisma.callSession.update.mockResolvedValue({});
+
+    await callService.persistCallStats('call-123', { bytesSent: 100, bytesReceived: 200 });
+
+    // currentTotal = null??0 + null??0 = 0; 100+200 > 0 → update
+    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ bytesSent: 100, bytesReceived: 200 })
+      })
+    );
+  });
+
+  it('uses reportSent with null reportReceived (only bytesSent provided) — ??current.bytesReceived branch', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      bytesSent: 0,
+      bytesReceived: 500
+    });
+    mockPrisma.callSession.update.mockResolvedValue({});
+
+    // Only bytesSent provided → reportReceived is null → nextReceived = null ?? current.bytesReceived ?? 0 = 500
+    // currentTotal = 0 + 500 = 500; nextSent + nextReceived = 1000 + 500 = 1500 > 500 → update
+    await callService.persistCallStats('call-123', { bytesSent: 1000 });
+
+    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ bytesSent: 1000, bytesReceived: 500 })
+      })
+    );
+  });
+
+  it('uses null reportSent with reportReceived provided — ??current.bytesSent branch', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      bytesSent: 200,
+      bytesReceived: 0
+    });
+    mockPrisma.callSession.update.mockResolvedValue({});
+
+    // Only bytesReceived provided → reportSent is null → nextSent = null ?? current.bytesSent ?? 0 = 200
+    // currentTotal = 200 + 0 = 200; nextSent + nextReceived = 200 + 800 = 1000 > 200 → update
+    await callService.persistCallStats('call-123', { bytesReceived: 800 });
+
+    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ bytesSent: 200, bytesReceived: 800 })
+      })
+    );
+  });
+
+  it('uses ??0 fallback when both reportSent=null and current.bytesSent=null', async () => {
+    // current has null bytes — exercises the ??0 fallback on both lines 1176-1177
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      bytesSent: null,
+      bytesReceived: null
+    });
+    mockPrisma.callSession.update.mockResolvedValue({});
+
+    // Only bytesReceived provided, both current values null → nextSent = null ?? null ?? 0 = 0
+    // nextReceived = 500 (not null); currentTotal = null??0 + null??0 = 0; 0+500 > 0 → update
+    await callService.persistCallStats('call-123', { bytesReceived: 500 });
+
+    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ bytesSent: 0, bytesReceived: 500 })
+      })
+    );
+  });
+
+  it('uses ??0 fallback for nextReceived when reportReceived=null and current.bytesReceived=null (line 1177)', async () => {
+    // current.bytesReceived is null; only bytesSent provided → reportReceived is null
+    // → nextReceived = null (reportReceived) ?? null (current.bytesReceived) ?? 0 = 0
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      bytesSent: null,
+      bytesReceived: null
+    });
+    mockPrisma.callSession.update.mockResolvedValue({});
+
+    // Only bytesSent provided → reportReceived=null; current.bytesReceived=null → nextReceived=??0=0
+    // nextSent=500, nextReceived=0; currentTotal=0; 500+0>0 → update
+    await callService.persistCallStats('call-123', { bytesSent: 500 });
+
+    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ bytesSent: 500, bytesReceived: 0 })
+      })
+    );
+  });
+
+  it('updates networkQuality good, fair, and poor levels', async () => {
+    for (const level of ['good', 'fair', 'poor'] as const) {
+      mockPrisma.callSession.findUnique.mockResolvedValue({ bytesSent: null, bytesReceived: null });
+      mockPrisma.callSession.update.mockResolvedValue({});
+
+      await callService.persistCallStats('call-123', { level });
+
+      expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ networkQuality: level }) })
+      );
+      jest.clearAllMocks();
+    }
+  });
+});
+
+describe('CallService - leaveCall wasPreAnswered=false branch (active call)', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('ends call with status=ended and endReason=completed when active call (wasPreAnswered=false)', async () => {
+    const participant = createMockParticipant({ userId: 'user-123', participantId: 'participant-123' });
+    const activeCall = createMockCallSession({
+      status: CallStatus.active, // NOT initiated/ringing/connecting
+      participants: [participant]
+    });
+    const endedCall = {
+      ...activeCall,
+      status: CallStatus.ended,
+      endedAt: new Date(),
+      participants: [{ ...participant, leftAt: new Date(), user: createMockUser() }],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    };
+
+    mockPrisma.callParticipant.findFirst.mockResolvedValue(participant);
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(activeCall)
+      .mockResolvedValueOnce(endedCall);
+    mockPrisma.conversation.findUnique.mockResolvedValue({ type: 'direct' });
+
+    let capturedStatus: string | undefined;
+    let capturedReason: string | undefined;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const tx = {
+        callParticipant: { update: jest.fn().mockResolvedValue({}) },
+        callSession: {
+          update: jest.fn().mockImplementation(({ data }: any) => {
+            capturedStatus = data.status;
+            capturedReason = data.endReason;
+            return {};
+          })
+        }
+      };
+      return cb(tx);
+    });
+
+    await callService.leaveCall({ callId: 'call-123', userId: 'user-123', participantId: 'participant-123' });
+
+    expect(capturedStatus).toBe(CallStatus.ended);
+    expect(capturedReason).toBe(CallEndReason.completed);
+  });
+
+  it('ends call with status=missed and endReason=missed when ringing call (wasPreAnswered=true)', async () => {
+    const participant = createMockParticipant({ userId: 'user-123', participantId: 'participant-123' });
+    const ringingCall = createMockCallSession({
+      status: CallStatus.ringing,
+      participants: [participant]
+    });
+    const missedCall = {
+      ...ringingCall,
+      status: CallStatus.missed,
+      endedAt: new Date(),
+      participants: [{ ...participant, leftAt: new Date(), user: createMockUser() }],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    };
+
+    mockPrisma.callParticipant.findFirst.mockResolvedValue(participant);
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(ringingCall)
+      .mockResolvedValueOnce(missedCall);
+    mockPrisma.conversation.findUnique.mockResolvedValue({ type: 'direct' });
+
+    let capturedStatus: string | undefined;
+    let capturedReason: string | undefined;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const tx = {
+        callParticipant: { update: jest.fn().mockResolvedValue({}) },
+        callSession: {
+          update: jest.fn().mockImplementation(({ data }: any) => {
+            capturedStatus = data.status;
+            capturedReason = data.endReason;
+            return {};
+          })
+        }
+      };
+      return cb(tx);
+    });
+
+    await callService.leaveCall({ callId: 'call-123', userId: 'user-123', participantId: 'participant-123' });
+
+    expect(capturedStatus).toBe(CallStatus.missed);
+    expect(capturedReason).toBe(CallEndReason.missed);
+  });
+});
+
+describe('CallService - joinCall settings branches', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('uses settings.audioEnabled=false when explicitly provided', async () => {
+    const existingCall = createMockCallSession({
+      status: CallStatus.initiated,
+      participants: [createMockParticipant()],
+      conversation: createMockConversation()
+    });
+    const updatedCall = {
+      ...existingCall,
+      status: CallStatus.connecting,
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    };
+
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(existingCall)
+      .mockResolvedValueOnce(updatedCall);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'member-456', conversationId: 'conv-123', userId: 'user-456', isActive: true
+    });
+
+    let capturedAudio: boolean | undefined;
+    let capturedVideo: boolean | undefined;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const tx = {
+        callParticipant: {
+          create: jest.fn().mockImplementation(({ data }: any) => {
+            capturedAudio = data.isAudioEnabled;
+            capturedVideo = data.isVideoEnabled;
+            return {};
+          })
+        },
+        callSession: { update: jest.fn().mockResolvedValue({}) }
+      };
+      return cb(tx);
+    });
+
+    await callService.joinCall({
+      callId: 'call-123',
+      userId: 'user-456',
+      participantId: 'participant-456',
+      settings: { audioEnabled: false, videoEnabled: false }
+    });
+
+    expect(capturedAudio).toBe(false);
+    expect(capturedVideo).toBe(false);
+  });
+
+  it('does not update callSession when joining connecting call (not initiated/ringing)', async () => {
+    const connectingCall = createMockCallSession({
+      status: CallStatus.connecting,
+      participants: [createMockParticipant()],
+      conversation: createMockConversation()
+    });
+    const updatedCall = {
+      ...connectingCall,
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    };
+
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(connectingCall)
+      .mockResolvedValueOnce(updatedCall);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'member-456', conversationId: 'conv-123', userId: 'user-456', isActive: true
+    });
+
+    let sessionUpdateCalled = false;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const tx = {
+        callParticipant: { create: jest.fn().mockResolvedValue({}) },
+        callSession: {
+          update: jest.fn().mockImplementation(() => {
+            sessionUpdateCalled = true;
+            return {};
+          })
+        }
+      };
+      return cb(tx);
+    });
+
+    await callService.joinCall({
+      callId: 'call-123',
+      userId: 'user-456',
+      participantId: 'participant-456'
+    });
+
+    expect(sessionUpdateCalled).toBe(false);
+  });
+
+  it('does not update callSession when joining active call (not initiated/ringing)', async () => {
+    const activeCall = createMockCallSession({
+      status: CallStatus.active,
+      participants: [createMockParticipant()],
+      conversation: createMockConversation()
+    });
+    const updatedCall = {
+      ...activeCall,
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    };
+
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(activeCall)
+      .mockResolvedValueOnce(updatedCall);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'member-456', conversationId: 'conv-123', userId: 'user-456', isActive: true
+    });
+
+    let sessionUpdateCalled = false;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const tx = {
+        callParticipant: { create: jest.fn().mockResolvedValue({}) },
+        callSession: {
+          update: jest.fn().mockImplementation(() => {
+            sessionUpdateCalled = true;
+            return {};
+          })
+        }
+      };
+      return cb(tx);
+    });
+
+    await callService.joinCall({
+      callId: 'call-123',
+      userId: 'user-456',
+      participantId: 'participant-456'
+    });
+
+    // Status is 'active', not 'initiated'/'ringing', so callSession.update should NOT be called
+    expect(sessionUpdateCalled).toBe(false);
+  });
+});
+
+describe('CallService - initiateCall audio type (isVideoEnabled=false branch)', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('uses default audioEnabled=true when settings not provided (??true branch)', async () => {
+    const mockConversation = createMockConversation();
+    const newCall = createMockCallSession({
+      participants: [createMockParticipant()],
+      initiator: createMockUser(),
+      conversation: mockConversation
+    });
+
+    mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null);
+
+    let capturedAudioEnabled: boolean | undefined;
+    let capturedVideoEnabled: boolean | undefined;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const session = { id: 'call-no-settings' };
+      const tx = {
+        callSession: { create: jest.fn().mockResolvedValue(session) },
+        callParticipant: {
+          create: jest.fn().mockImplementation(({ data }: any) => {
+            capturedAudioEnabled = data.isAudioEnabled;
+            capturedVideoEnabled = data.isVideoEnabled;
+            return {};
+          })
+        }
+      };
+      return cb(tx);
+    });
+    mockPrisma.callSession.findUnique.mockResolvedValue(newCall);
+
+    await callService.initiateCall({
+      conversationId: 'conv-123',
+      initiatorId: 'user-123',
+      participantId: 'participant-123',
+      type: 'video'
+      // settings: undefined (not provided)
+    });
+
+    // settings undefined → settings?.audioEnabled = undefined → ?? true
+    expect(capturedAudioEnabled).toBe(true);
+    // type='video' AND settings?.videoEnabled = undefined → ?? true
+    expect(capturedVideoEnabled).toBe(true);
+  });
+
+  it('sets isVideoEnabled=false when type=audio in participant creation', async () => {
+    const mockConversation = createMockConversation();
+    const newCall = createMockCallSession({
+      participants: [createMockParticipant()],
+      initiator: createMockUser(),
+      conversation: mockConversation
+    });
+
+    mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null);
+
+    let capturedVideoEnabled: boolean | undefined;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const session = { id: 'call-audio' };
+      const tx = {
+        callSession: { create: jest.fn().mockResolvedValue(session) },
+        callParticipant: {
+          create: jest.fn().mockImplementation(({ data }: any) => {
+            capturedVideoEnabled = data.isVideoEnabled;
+            return {};
+          })
+        }
+      };
+      return cb(tx);
+    });
+    mockPrisma.callSession.findUnique.mockResolvedValue(newCall);
+
+    await callService.initiateCall({
+      conversationId: 'conv-123',
+      initiatorId: 'user-123',
+      participantId: 'participant-123',
+      type: 'audio', // NOT video
+      settings: { audioEnabled: true, videoEnabled: true }
+    });
+
+    // type='audio' → isVideoEnabled=false regardless of settings
+    expect(capturedVideoEnabled).toBe(false);
+  });
+});
+
+describe('CallService - createCallSummaryMessage', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+  const mockBuildCallSummary = buildCallSummaryWithMetadata as jest.MockedFunction<typeof buildCallSummaryWithMetadata>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns null when call session not found', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue(null);
+
+    const result = await callService.createCallSummaryMessage('missing-call');
+
+    expect(result).toBeNull();
+  });
+
+  it('callType is null when metadata.type is not a string (line 1240: null branch)', async () => {
+    // metadata.type is a number, not a string → callType = null
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      id: 'call-123',
+      conversationId: 'conv-123',
+      initiatorId: 'user-123',
+      status: CallStatus.ended,
+      endReason: CallEndReason.completed,
+      duration: 60,
+      metadata: { type: 42 }, // not a string
+      bytesSent: null,
+      bytesReceived: null,
+      networkQuality: null
+    });
+    mockBuildCallSummary.mockReturnValue(null as any);
+
+    const result = await callService.createCallSummaryMessage('call-123');
+
+    expect(result).toBeNull();
+    // buildCallSummaryWithMetadata should have been called with callType=null
+    expect(mockBuildCallSummary).toHaveBeenCalledWith(
+      expect.objectContaining({ callType: null })
+    );
+  });
+
+  it('callType is string when metadata.type is a valid string', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      id: 'call-123',
+      conversationId: 'conv-123',
+      initiatorId: 'user-123',
+      status: CallStatus.ended,
+      endReason: CallEndReason.completed,
+      duration: 60,
+      metadata: { type: 'video' }, // valid string
+      bytesSent: null,
+      bytesReceived: null,
+      networkQuality: null
+    });
+    mockBuildCallSummary.mockReturnValue(null as any);
+
+    await callService.createCallSummaryMessage('call-123');
+
+    expect(mockBuildCallSummary).toHaveBeenCalledWith(
+      expect.objectContaining({ callType: 'video' })
+    );
+  });
+
+  it('returns null when buildCallSummaryWithMetadata returns null (non-terminal status)', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      id: 'call-123',
+      conversationId: 'conv-123',
+      initiatorId: 'user-123',
+      status: CallStatus.active,
+      endReason: null,
+      duration: null,
+      metadata: { type: 'video' },
+      bytesSent: null,
+      bytesReceived: null,
+      networkQuality: null
+    });
+    mockBuildCallSummary.mockReturnValue(null as any);
+
+    const result = await callService.createCallSummaryMessage('call-123');
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null when initiator has no participant row', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      id: 'call-123',
+      conversationId: 'conv-123',
+      initiatorId: 'user-123',
+      status: CallStatus.ended,
+      endReason: CallEndReason.completed,
+      duration: 60,
+      metadata: { type: 'video' },
+      bytesSent: null,
+      bytesReceived: null,
+      networkQuality: null
+    });
+    mockBuildCallSummary.mockReturnValue({
+      summary: { content: 'Appel vidéo · 01:00', outcome: 'completed', callType: 'video' },
+      metadata: { callId: 'call-123' }
+    } as any);
+    mockPrisma.participant.findFirst.mockResolvedValue(null);
+
+    const result = await callService.createCallSummaryMessage('call-123');
+
+    expect(result).toBeNull();
+  });
+
+  it('creates and returns the summary message (callMetadata non-null path)', async () => {
+    const callData = {
+      id: 'call-123',
+      conversationId: 'conv-123',
+      initiatorId: 'user-123',
+      status: CallStatus.ended,
+      endReason: CallEndReason.completed,
+      duration: 60,
+      metadata: { type: 'video' },
+      bytesSent: 1000,
+      bytesReceived: 2000,
+      networkQuality: 'good'
+    };
+    mockPrisma.callSession.findUnique.mockResolvedValue(callData);
+    mockBuildCallSummary.mockReturnValue({
+      summary: { content: 'Appel vidéo · 01:00', outcome: 'completed', callType: 'video' },
+      metadata: { callId: 'call-123', duration: 60 } // non-null callMetadata
+    } as any);
+    mockPrisma.participant.findFirst.mockResolvedValue({ id: 'participant-123' });
+    const mockMessage = { id: 'msg-summary-123', content: 'Appel vidéo · 01:00' };
+    mockPrisma.message.create.mockResolvedValue(mockMessage);
+
+    const result = await callService.createCallSummaryMessage('call-123');
+
+    expect(result).toBe(mockMessage);
+    expect(mockPrisma.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          conversationId: 'conv-123',
+          content: 'Appel vidéo · 01:00',
+          messageType: 'system',
+          metadata: expect.objectContaining({ callId: 'call-123' })
+        })
+      })
+    );
+  });
+
+  it('uses undefined when callMetadata is null (line 1288: ??undefined branch)', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      id: 'call-123',
+      conversationId: 'conv-123',
+      initiatorId: 'user-123',
+      status: CallStatus.ended,
+      endReason: CallEndReason.completed,
+      duration: 60,
+      metadata: { type: 'video' },
+      bytesSent: null,
+      bytesReceived: null,
+      networkQuality: null
+    });
+    mockBuildCallSummary.mockReturnValue({
+      summary: { content: 'Appel vidéo · 01:00', outcome: 'completed', callType: 'video' },
+      metadata: null // null callMetadata → ?? undefined
+    } as any);
+    mockPrisma.participant.findFirst.mockResolvedValue({ id: 'participant-123' });
+    const mockMessage = { id: 'msg-null-meta', content: 'Appel vidéo · 01:00' };
+    mockPrisma.message.create.mockResolvedValue(mockMessage);
+
+    const result = await callService.createCallSummaryMessage('call-123');
+
+    expect(result).toBe(mockMessage);
+    // metadata should be undefined in the create call
+    const createCall = (mockPrisma.message.create as jest.MockedFunction<any>).mock.calls[0][0];
+    expect(createCall.data.metadata).toBeUndefined();
+  });
+
+  it('returns null when message.create fails with P2002 (duplicate idempotent)', async () => {
+    const { Prisma } = await import('@meeshy/shared/prisma/client');
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      id: 'call-123',
+      conversationId: 'conv-123',
+      initiatorId: 'user-123',
+      status: CallStatus.ended,
+      endReason: CallEndReason.completed,
+      duration: 60,
+      metadata: { type: 'video' },
+      bytesSent: null,
+      bytesReceived: null,
+      networkQuality: null
+    });
+    mockBuildCallSummary.mockReturnValue({
+      summary: { content: 'Appel vidéo · 01:00', outcome: 'completed', callType: 'video' },
+      metadata: null
+    } as any);
+    mockPrisma.participant.findFirst.mockResolvedValue({ id: 'participant-123' });
+    mockPrisma.message.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint', { code: 'P2002', clientVersion: '5.0' })
+    );
+
+    const result = await callService.createCallSummaryMessage('call-123');
+
+    expect(result).toBeNull();
+  });
+
+  it('re-throws when message.create fails with non-P2002 error', async () => {
+    mockPrisma.callSession.findUnique.mockResolvedValue({
+      id: 'call-123',
+      conversationId: 'conv-123',
+      initiatorId: 'user-123',
+      status: CallStatus.ended,
+      endReason: CallEndReason.completed,
+      duration: 60,
+      metadata: { type: 'video' },
+      bytesSent: null,
+      bytesReceived: null,
+      networkQuality: null
+    });
+    mockBuildCallSummary.mockReturnValue({
+      summary: { content: 'Appel vidéo · 01:00', outcome: 'completed', callType: 'video' },
+      metadata: null
+    } as any);
+    mockPrisma.participant.findFirst.mockResolvedValue({ id: 'participant-123' });
+    mockPrisma.message.create.mockRejectedValue(new Error('DB connection lost'));
+
+    await expect(callService.createCallSummaryMessage('call-123')).rejects.toThrow('DB connection lost');
   });
 });

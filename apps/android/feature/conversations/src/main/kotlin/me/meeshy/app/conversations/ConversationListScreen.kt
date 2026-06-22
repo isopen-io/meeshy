@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Close
@@ -23,12 +24,14 @@ import androidx.compose.material.icons.filled.MarkChatRead
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -76,12 +79,26 @@ import me.meeshy.ui.theme.hexColor
 fun ConversationListScreen(
     onConversationClick: (String) -> Unit,
     onLogout: () -> Unit,
+    onNewConversation: () -> Unit = {},
+    onContacts: () -> Unit = {},
     viewModel: ConversationListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onNewConversation,
+                containerColor = MeeshyPalette.Indigo500,
+                contentColor = MeeshyPalette.White,
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Chat,
+                    contentDescription = stringResource(R.string.conversations_new),
+                )
+            }
+        },
         topBar = {
             TopAppBar(
                 title = {
@@ -102,6 +119,9 @@ fun ConversationListScreen(
                     } else {
                         IconButton(onClick = { viewModel.setSearchActive(true) }) {
                             Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.conversations_search))
+                        }
+                        IconButton(onClick = onContacts) {
+                            Icon(Icons.Filled.People, contentDescription = stringResource(R.string.conversations_contacts))
                         }
                         IconButton(onClick = onLogout) {
                             Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.conversations_logout))

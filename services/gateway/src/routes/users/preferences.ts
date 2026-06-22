@@ -349,18 +349,14 @@ export async function getUserStats(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                messagesSent: { type: 'number', description: 'Total messages sent by user' },
-                messagesReceived: { type: 'number', description: 'Total messages received' },
-                conversationsCount: { type: 'number', description: 'Total conversations (all types)' },
-                groupsCount: { type: 'number', description: 'Group conversations only' },
-                totalConversations: { type: 'number', description: 'Total conversations (duplicate of conversationsCount)' },
-                averageResponseTime: { type: 'number', nullable: true, description: 'Average response time in seconds' },
-                lastActivity: { type: 'string', format: 'date-time', description: 'Last activity timestamp' }
-              }
-            }
+            // `additionalProperties: true` is REQUIRED here. The handler returns
+            // totalMessages / totalConversations / totalTranslations /
+            // friendRequestsReceived / languagesUsed / memberDays / languages /
+            // achievements, but a restrictive `properties` whitelist made Fastify
+            // silently STRIP every field whose name wasn't declared — only
+            // `totalConversations` survived, so the iOS profile sheet showed 0
+            // everywhere. See lesson: Fastify response schema strips undeclared fields.
+            data: { type: 'object', additionalProperties: true }
           }
         },
         401: errorResponseSchema,

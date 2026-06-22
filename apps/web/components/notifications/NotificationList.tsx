@@ -81,7 +81,7 @@ export const NotificationList = memo(function NotificationList({
 
   if (!grouped) {
     return (
-      <div className="space-y-3">
+      <div className="divide-y divide-border/60">
         <AnimatePresence mode="popLayout">
           {notifications.map((notification, index) => (
             <NotificationItem
@@ -108,13 +108,13 @@ export const NotificationList = memo(function NotificationList({
   let globalIndex = 0;
 
   return (
-    <div className="space-y-6">
+    <div>
       {groups.map((group) => (
         <div key={group.label}>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3 px-1">
+          <h3 className="sticky top-16 z-20 bg-background/85 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur-sm">
             {group.label}
           </h3>
-          <div className="space-y-3">
+          <div className="divide-y divide-border/60">
             <AnimatePresence mode="popLayout">
               {group.notifications.map((notification) => {
                 const idx = globalIndex++;

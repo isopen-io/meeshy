@@ -106,9 +106,8 @@ describe('ForgotPasswordPage', () => {
     it('should render email and phone tab buttons', () => {
       render(<ForgotPasswordPage />);
 
-      // Find tab buttons by their translation keys (mock returns the key)
-      const emailTab = screen.getByText(/forgotPassword\.tabEmail/i);
-      const phoneTab = screen.getByText(/forgotPassword\.tabPhone/i);
+      const emailTab = screen.getByText(/by email/i);
+      const phoneTab = screen.getByText(/by phone/i);
 
       expect(emailTab).toBeInTheDocument();
       expect(phoneTab).toBeInTheDocument();
@@ -127,14 +126,13 @@ describe('ForgotPasswordPage', () => {
 
     it('should render description text', () => {
       render(<ForgotPasswordPage />);
-      // Description text should be present (mock returns the key)
-      const description = screen.getByText(/forgotPassword\.description/i);
+      const description = screen.getByText(/enter your email address/i);
       expect(description).toBeInTheDocument();
     });
 
     it('should render security note', () => {
       render(<ForgotPasswordPage />);
-      const securityNote = screen.getByText(/forgotPassword\.securityNote/i);
+      const securityNote = screen.getByText(/for security reasons/i);
       expect(securityNote).toBeInTheDocument();
     });
   });
@@ -143,7 +141,7 @@ describe('ForgotPasswordPage', () => {
     it('should switch to phone reset flow when phone tab is clicked', async () => {
       render(<ForgotPasswordPage />);
 
-      const phoneTab = screen.getByText(/forgotPassword\.tabPhone/i);
+      const phoneTab = screen.getByText(/by phone/i);
       fireEvent.click(phoneTab);
 
       await waitFor(() => {
@@ -155,7 +153,7 @@ describe('ForgotPasswordPage', () => {
       render(<ForgotPasswordPage />);
 
       // First switch to phone
-      const phoneTab = screen.getByText(/forgotPassword\.tabPhone/i);
+      const phoneTab = screen.getByText(/by phone/i);
       fireEvent.click(phoneTab);
 
       await waitFor(() => {
@@ -163,7 +161,7 @@ describe('ForgotPasswordPage', () => {
       });
 
       // Then switch back to email
-      const emailTab = screen.getByText(/forgotPassword\.tabEmail/i);
+      const emailTab = screen.getByText(/by email/i);
       fireEvent.click(emailTab);
 
       await waitFor(() => {
@@ -175,7 +173,7 @@ describe('ForgotPasswordPage', () => {
       render(<ForgotPasswordPage />);
 
       // Email tab should have active styles by default
-      const emailTab = screen.getByText(/forgotPassword\.tabEmail/i);
+      const emailTab = screen.getByText(/by email/i);
       const emailTabParent = emailTab.closest('button');
 
       // Check that it has the active class or styling
@@ -187,8 +185,7 @@ describe('ForgotPasswordPage', () => {
     it('should close phone reset flow via onClose callback', async () => {
       render(<ForgotPasswordPage />);
 
-      // Switch to phone using the translation key
-      const phoneTab = screen.getByText(/forgotPassword\.tabPhone/i);
+      const phoneTab = screen.getByText(/by phone/i);
       fireEvent.click(phoneTab);
 
       await waitFor(() => {
@@ -208,21 +205,21 @@ describe('ForgotPasswordPage', () => {
   describe('Footer Links', () => {
     it('should render terms of service link', () => {
       render(<ForgotPasswordPage />);
-      const termsLink = screen.getByRole('link', { name: /register\.termsOfService/i });
+      const termsLink = screen.getByRole('link', { name: /terms of service/i });
       expect(termsLink).toBeInTheDocument();
       expect(termsLink).toHaveAttribute('href', '/terms');
     });
 
     it('should render privacy policy link', () => {
       render(<ForgotPasswordPage />);
-      const privacyLink = screen.getByRole('link', { name: /register\.privacyPolicy/i });
+      const privacyLink = screen.getByRole('link', { name: /privacy policy/i });
       expect(privacyLink).toBeInTheDocument();
       expect(privacyLink).toHaveAttribute('href', '/privacy');
     });
 
     it('should render contact link', () => {
       render(<ForgotPasswordPage />);
-      const contactLink = screen.getByRole('link', { name: /register\.contactUs/i });
+      const contactLink = screen.getByRole('link', { name: /contact us/i });
       expect(contactLink).toBeInTheDocument();
       expect(contactLink).toHaveAttribute('href', '/contact');
     });

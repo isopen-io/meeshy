@@ -2,6 +2,7 @@
 <resources>
     <string name="conversations_title">Meeshy</string>
     <string name="conversations_logout">Cerrar sesión</string>
+    <string name="conversations_contacts">Contactos</string>
     <string name="conversations_empty">Aún no hay conversaciones</string>
     <string name="conversations_retry">Reintentar</string>
     <string name="conversations_no_messages">Aún no hay mensajes</string>
@@ -38,4 +39,12 @@
     <string name="conversations_action_more">Más acciones</string>
     <string name="conversations_badge_pinned">Fijada</string>
     <string name="conversations_badge_muted">Silenciada</string>
+    <string name="conversations_new">Nueva conversación</string>
+    <string name="new_conversation_title">Nueva conversación</string>
+    <string name="new_conversation_back">Atrás</string>
+    <string name="new_conversation_create">Crear</string>
+    <string name="new_conversation_search_hint">Buscar personas</string>
+    <string name="new_conversation_group_title">Nombre del grupo</string>
+    <string name="new_conversation_remove">Quitar</string>
+    <string name="new_conversation_selected">Seleccionado</string>
 </resources>

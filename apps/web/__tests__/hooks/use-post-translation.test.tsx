@@ -88,3 +88,55 @@ describe('usePreferredLanguage', () => {
     expect(result.current).toBe('fr');
   });
 });
+
+describe('resolvePreferredLanguage fallbacks', () => {
+  const saved = { ...mockConfig };
+
+  afterEach(() => {
+    Object.assign(mockConfig, saved);
+  });
+
+  it('uses regionalLanguage when systemLanguage is empty', () => {
+    mockConfig.systemLanguage = '';
+
+    const { result } = renderHook(() => usePostTranslation('hello', 'es', {}));
+
+    expect(result.current.preferredLanguage).toBe('en');
+    expect(result.current.displayContent).toBe('hello');
+    expect(result.current.isTranslated).toBe(false);
+  });
+
+  it('uses customDestinationLanguage when both systemLanguage and regionalLanguage are empty', () => {
+    mockConfig.systemLanguage = '';
+    mockConfig.regionalLanguage = '';
+    mockConfig.customDestinationLanguage = 'pt';
+
+    const { result } = renderHook(() => usePostTranslation('hello', 'es', {}));
+
+    expect(result.current.preferredLanguage).toBe('pt');
+  });
+
+  it('falls back to fr when all language preferences are empty', () => {
+    mockConfig.systemLanguage = '';
+    mockConfig.regionalLanguage = '';
+    mockConfig.customDestinationLanguage = undefined;
+
+    const { result } = renderHook(() => usePostTranslation('hello', 'es', {}));
+
+    expect(result.current.preferredLanguage).toBe('fr');
+  });
+});
+
+describe('findTranslation edge cases', () => {
+  it('does not use translation with empty text', () => {
+    const translations = { fr: { text: '' } };
+
+    const { result } = renderHook(() =>
+      usePostTranslation('Hola', 'es', translations),
+    );
+
+    // text is falsy → no match → fall back to original
+    expect(result.current.displayContent).toBe('Hola');
+    expect(result.current.isTranslated).toBe(false);
+  });
+});

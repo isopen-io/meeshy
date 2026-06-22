@@ -104,7 +104,9 @@ describe('PostReactionService', () => {
         create: jest.fn(),
         findFirst: jest.fn(),
         findMany: jest.fn(),
-        deleteMany: jest.fn()
+        deleteMany: jest.fn(),
+        // Compteur autoritaire lu dans updatePostReactionSummary (sync likeCount).
+        count: jest.fn().mockResolvedValue(1)
       },
       // $transaction executes the callback with a transaction client (same shape).
       $transaction: jest.fn(),
@@ -147,6 +149,7 @@ describe('PostReactionService', () => {
             findUnique: mockPrisma.post.findUnique,
             update: mockPrisma.post.update,
           },
+          postReaction: { count: mockPrisma.postReaction.count },
         });
       });
     });
@@ -315,6 +318,7 @@ describe('PostReactionService', () => {
             findUnique: mockPrisma.post.findUnique,
             update: mockPrisma.post.update,
           },
+          postReaction: { count: mockPrisma.postReaction.count },
         });
       });
     });
@@ -1014,6 +1018,7 @@ describe('PostReactionService', () => {
             findUnique: mockPrisma.post.findUnique,
             update: mockPrisma.post.update,
           },
+          postReaction: { count: mockPrisma.postReaction.count },
         });
       });
     });
@@ -1074,6 +1079,7 @@ describe('PostReactionService', () => {
             findUnique: mockPrisma.post.findUnique,
             update: mockPrisma.post.update,
           },
+          postReaction: { count: mockPrisma.postReaction.count },
         });
       });
     });

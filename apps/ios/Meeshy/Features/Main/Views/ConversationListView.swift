@@ -75,8 +75,8 @@ struct ConversationListView: View {
     // review finding 2026-06-10) — they aren't in `renderFingerprint`. Both
     // change only on explicit user action (rare), and the gate keeps unaffected
     // rows static, so observing them is free on the hot scroll path.
-    @ObservedObject var lockManager = ConversationLockManager.shared
-    @ObservedObject var blockService = BlockService.shared
+    private var lockManager: ConversationLockManager { ConversationLockManager.shared }
+    private var blockService: BlockService { BlockService.shared }
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet de la liste. La présence est rafraîchie lors des refreshs naturels.
     private var presenceManager: PresenceManager { PresenceManager.shared }
@@ -373,8 +373,8 @@ struct ConversationListView: View {
             SwipeAction(
                 icon: conversation.userState.isPinned ? "pin.slash.fill" : "pin.fill",
                 label: conversation.userState.isPinned
-                    ? String(localized: "swipe.unpin", defaultValue: "D\u{00e9}s\u{00e9}pingler")
-                    : String(localized: "swipe.pin", defaultValue: "\u{00c9}pingler"),
+                    ? String(localized: "swipe.unpin")
+                    : String(localized: "swipe.pin"),
                 color: MeeshyColors.pinnedBlue
             ) {
                 Task { await conversationViewModel.togglePin(for: conversation.id) }
@@ -382,8 +382,8 @@ struct ConversationListView: View {
             SwipeAction(
                 icon: conversation.userState.isMuted ? "bell.fill" : "bell.slash.fill",
                 label: conversation.userState.isMuted
-                    ? String(localized: "swipe.unmute", defaultValue: "Son")
-                    : String(localized: "swipe.mute", defaultValue: "Silence"),
+                    ? String(localized: "swipe.unmute")
+                    : String(localized: "swipe.mute"),
                 color: MeeshyColors.neutral500
             ) {
                 Task { await conversationViewModel.toggleMute(for: conversation.id) }
@@ -391,8 +391,8 @@ struct ConversationListView: View {
             SwipeAction(
                 icon: isLocked ? "lock.open.fill" : "lock.fill",
                 label: isLocked
-                    ? String(localized: "swipe.unlock", defaultValue: "D\u{00e9}verrouiller")
-                    : String(localized: "swipe.lock", defaultValue: "Verrouiller"),
+                    ? String(localized: "swipe.unlock")
+                    : String(localized: "swipe.lock"),
                 color: MeeshyColors.warning
             ) {
                 if isLocked {
@@ -419,8 +419,8 @@ struct ConversationListView: View {
             SwipeAction(
                 icon: isArchived ? "tray.and.arrow.up.fill" : "archivebox.fill",
                 label: isArchived
-                    ? String(localized: "swipe.unarchive", defaultValue: "D\u{00e9}sarchiver")
-                    : String(localized: "swipe.archive", defaultValue: "Archiver"),
+                    ? String(localized: "swipe.unarchive")
+                    : String(localized: "swipe.archive"),
                 color: MeeshyColors.warning
             ) {
                 if isArchived {
@@ -432,8 +432,8 @@ struct ConversationListView: View {
             SwipeAction(
                 icon: isRead ? "envelope.badge.fill" : "envelope.open.fill",
                 label: isRead
-                    ? String(localized: "swipe.mark_unread", defaultValue: "Non lu")
-                    : String(localized: "swipe.mark_read", defaultValue: "Lu"),
+                    ? String(localized: "swipe.mark_unread")
+                    : String(localized: "swipe.mark_read"),
                 color: MeeshyColors.indigo400
             ) {
                 if isRead {
@@ -449,8 +449,8 @@ struct ConversationListView: View {
             actions.append(SwipeAction(
                 icon: isBlocked ? "hand.raised.slash.fill" : "hand.raised.fill",
                 label: isBlocked
-                    ? String(localized: "swipe.unblock", defaultValue: "D\u{00e9}bloquer")
-                    : String(localized: "swipe.block", defaultValue: "Bloquer"),
+                    ? String(localized: "swipe.unblock")
+                    : String(localized: "swipe.block"),
                 color: MeeshyColors.error
             ) {
                 if isBlocked {
@@ -467,7 +467,7 @@ struct ConversationListView: View {
 
         actions.append(SwipeAction(
             icon: "eye.slash.fill",
-            label: String(localized: "swipe.hide", defaultValue: "Masquer"),
+            label: String(localized: "swipe.hide"),
             color: MeeshyColors.error
         ) {
             Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
@@ -540,7 +540,9 @@ struct ConversationListView: View {
                 viewModel: statusViewModel,
                 initialEmoji: entry.moodEmoji,
                 initialText: entry.content,
-                viaUsername: entry.username
+                viaUsername: entry.username,
+                repostOfId: entry.id,
+                repostAudioUrl: entry.audioUrl
             )
             .presentationDetents([.medium])
         }
@@ -604,11 +606,11 @@ struct ConversationListView: View {
                 )
                 .environmentObject(theme)
             }
-            .alert(String(localized: "conversation.list.master_pin_required.title", defaultValue: "Master PIN requis", bundle: .main), isPresented: $showNoMasterPinAlert) {
-                Button(String(localized: "conversation.list.master_pin_required.configure", defaultValue: "Configurer", bundle: .main), role: .none) { router.push(.settings) }
-                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+            .alert(String(localized: "conversation.list.master_pin_required.title", bundle: .main), isPresented: $showNoMasterPinAlert) {
+                Button(String(localized: "conversation.list.master_pin_required.configure", bundle: .main), role: .none) { router.push(.settings) }
+                Button(String(localized: "common.cancel", bundle: .main), role: .cancel) {}
             } message: {
-                Text(String(localized: "conversation.list.master_pin_required.message", defaultValue: "Configurez d'abord un master PIN dans Paramètres > Sécurité pour verrouiller des conversations.", bundle: .main))
+                Text(String(localized: "conversation.list.master_pin_required.message", bundle: .main))
             }
             .sheet(isPresented: $showWidgetPreview) {
                 WidgetPreviewView(onNewConversation: onNewConversation)
@@ -623,11 +625,11 @@ struct ConversationListView: View {
                     .environmentObject(router)
             }
             .confirmationDialog(
-                String(localized: "block.confirm.title", defaultValue: "Bloquer cet utilisateur ?"),
+                String(localized: "block.confirm.title"),
                 isPresented: $showBlockConfirmation,
                 titleVisibility: .visible
             ) {
-                Button(String(localized: "action.block", defaultValue: "Bloquer"), role: .destructive) {
+                Button(String(localized: "action.block"), role: .destructive) {
                     guard let conv = blockTargetConversation,
                           let targetUserId = conv.participantUserId else { return }
                     Task {
@@ -636,9 +638,9 @@ struct ConversationListView: View {
                         HapticFeedback.success()
                     }
                 }
-                Button(String(localized: "action.cancel", defaultValue: "Annuler"), role: .cancel) {}
+                Button(String(localized: "action.cancel"), role: .cancel) {}
             } message: {
-                Text(String(localized: "block.confirm.message", defaultValue: "Cette personne ne pourra plus vous envoyer de messages dans cette conversation."))
+                Text(String(localized: "block.confirm.message"))
             }
     }
 
@@ -710,9 +712,9 @@ struct ConversationListView: View {
                         // list with no feedback.
                         EmptyStateView(
                             icon: "exclamationmark.arrow.triangle.2.circlepath",
-                            title: String(localized: "conversations.error.title", defaultValue: "Impossible de charger les conversations"),
-                            subtitle: String(localized: "conversations.error.subtitle", defaultValue: "Verifiez votre connexion puis reessayez"),
-                            actionLabel: String(localized: "conversations.error.retry", defaultValue: "Reessayer"),
+                            title: String(localized: "conversations.error.title"),
+                            subtitle: String(localized: "conversations.error.subtitle"),
+                            actionLabel: String(localized: "conversations.error.retry"),
                             onAction: {
                                 Task { await conversationViewModel.forceRefresh() }
                             }
@@ -722,9 +724,9 @@ struct ConversationListView: View {
                     } else if conversationViewModel.groupedConversations.isEmpty {
                         EmptyStateView(
                             icon: "bubble.left.and.bubble.right",
-                            title: String(localized: "conversations.empty.title", defaultValue: "Aucune conversation"),
-                            subtitle: String(localized: "conversations.empty.subtitle", defaultValue: "Commencez a discuter avec vos amis ou rejoignez une communaute"),
-                            actionLabel: String(localized: "conversations.empty.action", defaultValue: "Commencer une discussion"),
+                            title: String(localized: "conversations.empty.title"),
+                            subtitle: String(localized: "conversations.empty.subtitle"),
+                            actionLabel: String(localized: "conversations.empty.action"),
                             onAction: {
                                 onNewConversation?()
                             }
@@ -778,7 +780,10 @@ struct ConversationListView: View {
             .animation(.easeOut(duration: 0.25), value: isScrollingDown)
             .animation(.easeOut(duration: 0.25), value: showSearchOverlay)
         }
-        // Layer 3: Collapsible header overlay — pinned to top, respects safe area
+        // Layer 3: Collapsible header overlay — pinned to top, respects safe area.
+        // A compact story trail is integrated *inside* the header (accessory
+        // slot, below the title/actions bar) and reveals as the full-size trail
+        // scrolls up under the header.
         .overlay(alignment: .top) {
             ConversationListHeaderOverlay(
                 scrollOffset: headerScrollOffset,
@@ -787,7 +792,16 @@ struct ConversationListView: View {
                 onNotificationsTap: onNotificationsTap,
                 onSettingsTap: onSettingsTap,
                 onNewConversation: onNewConversation,
-                showShareLinkSheet: $showShareLinkSheet
+                showShareLinkSheet: $showShareLinkSheet,
+                accessory: {
+                    AnyView(
+                        PinnedStoryTrailBand(
+                            viewModel: storyViewModel,
+                            scrollOffset: headerScrollOffset,
+                            onViewStory: { userId in onStoryViewRequest?(userId, true) }
+                        )
+                    )
+                }
             )
         }
         .sheet(isPresented: $showShareLinkSheet) {
@@ -927,10 +941,10 @@ struct ShareLinkPickerSheet: View {
                 if conversations.isEmpty {
                     VStack(spacing: 16) {
                         Image(systemName: "link.badge.plus")
-                            .font(.system(size: 48))
+                            .font(MeeshyFont.relative(48))
                             .foregroundStyle(MeeshyColors.indigo300)
-                        Text(String(localized: "conversation.list.no_eligible_conversation", defaultValue: "Aucune conversation eligible", bundle: .main))
-                            .font(.system(size: 16, weight: .medium))
+                        Text(String(localized: "conversation.list.no_eligible_conversation", bundle: .main))
+                            .font(MeeshyFont.relative(16, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -941,26 +955,28 @@ struct ShareLinkPickerSheet: View {
                         } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: conversation.type == .group ? "person.3.fill" : "globe")
-                                    .font(.system(size: 16))
+                                    .font(MeeshyFont.relative(16))
                                     .foregroundColor(MeeshyColors.indigo500)
                                     .frame(width: 32, height: 32)
+                                    .accessibilityHidden(true)
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(conversation.name)
-                                        .font(.system(size: 16, weight: .medium))
+                                        .font(MeeshyFont.relative(16, weight: .medium))
                                         .foregroundColor(theme.textPrimary)
                                         .lineLimit(1)
 
                                     Text(conversation.type.rawValue.capitalized)
-                                        .font(.system(size: 13))
+                                        .font(MeeshyFont.relative(13))
                                         .foregroundColor(theme.textSecondary)
                                 }
 
                                 Spacer()
 
                                 Image(systemName: "link")
-                                    .font(.system(size: 14))
+                                    .font(MeeshyFont.relative(14))
                                     .foregroundColor(MeeshyColors.indigo400)
+                                    .accessibilityHidden(true)
                             }
                             .padding(.vertical, 4)
                         }
@@ -968,11 +984,11 @@ struct ShareLinkPickerSheet: View {
                     .listStyle(.plain)
                 }
             }
-            .navigationTitle(String(localized: "conversation.list.create_share_link.title", defaultValue: "Creer un lien de partage", bundle: .main))
+            .navigationTitle(String(localized: "conversation.list.create_share_link.title", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { dismiss() }
+                    Button(String(localized: "common.close", bundle: .main)) { dismiss() }
                 }
             }
         }

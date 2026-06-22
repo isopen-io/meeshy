@@ -50,15 +50,31 @@ extension CachePolicy {
     public static let conversations = CachePolicy(ttl: .hours(24), staleTTL: .minutes(5), maxItemCount: nil, storageLocation: .grdb)
     public static let messages = CachePolicy(ttl: .months(6), staleTTL: .minutes(2), maxItemCount: 600, storageLocation: .grdb)
     public static let participants = CachePolicy(ttl: .hours(24), staleTTL: .minutes(5), maxItemCount: nil, storageLocation: .grdb)
-    public static let userProfiles = CachePolicy(ttl: .hours(1), staleTTL: .minutes(5), maxItemCount: 100, storageLocation: .grdb)
+    /// Profil d'un autre utilisateur. TTL 30 j + fenêtre fraîche courte : affichage
+    /// cache instantané, prolongé à chaque visite via `touch`, revalidation SWR
+    /// silencieuse au-delà de la fenêtre fraîche.
+    public static let userProfiles = CachePolicy(ttl: .days(30), staleTTL: .minutes(5), maxItemCount: 100, storageLocation: .grdb)
     public static let mediaImages = CachePolicy(ttl: .years(1), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Images", maxBytes: 300_000_000))
     public static let mediaAudio = CachePolicy(ttl: .months(6), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Audio", maxBytes: 200_000_000))
     public static let mediaVideo = CachePolicy(ttl: .months(6), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Video", maxBytes: 500_000_000))
     public static let thumbnails = CachePolicy(ttl: .days(7), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Thumbnails", maxBytes: 50_000_000))
-    public static let feedPosts = CachePolicy(ttl: .hours(6), staleTTL: .minutes(2), maxItemCount: 100, storageLocation: .grdb)
+    /// Fil d'actualité. TTL 7 jours : une fois un post chargé, il reste servable
+    /// (et disponible hors-ligne) pendant 7 jours sans nouveau téléchargement du
+    /// payload liste — les médias (images 1 an / vidéo-audio 6 mois) ne sont jamais
+    /// re-téléchargés dans cette fenêtre. La fenêtre fraîche de 5 min garde l'UI
+    /// instantanée au cold-start / réouverture rapide ; au-delà, SWR sert le cache
+    /// immédiatement et revalide en silence (les events socket du feed gardent la
+    /// liste vivante entre-temps). Avant : TTL 6 h → expiration et refetch bloquant
+    /// plusieurs fois par jour, contraire à « ne pas re-télécharger sur 7 jours ».
+    public static let feedPosts = CachePolicy(ttl: .days(7), staleTTL: .minutes(5), maxItemCount: 100, storageLocation: .grdb)
     public static let comments = CachePolicy(ttl: .hours(1), staleTTL: .minutes(2), maxItemCount: 500, storageLocation: .grdb)
     public static let stories = CachePolicy(ttl: .hours(24), staleTTL: .minutes(5), maxItemCount: nil, storageLocation: .grdb)
     public static let notifications = CachePolicy(ttl: .hours(24), staleTTL: .minutes(2), maxItemCount: 200, storageLocation: .grdb)
+    /// Call journal. Calls are immutable once terminal, so a long TTL is safe;
+    /// the 5-min fresh window keeps the Calls tab instant on cold start / quick
+    /// reopen, then SWR serves cache + revalidates silently. The 3-month server
+    /// window bounds growth; `maxItemCount: 300` caps the local mirror.
+    public static let callHistory = CachePolicy(ttl: .days(30), staleTTL: .minutes(5), maxItemCount: 300, storageLocation: .grdb)
     public static let userStats = CachePolicy(ttl: .hours(6), staleTTL: .minutes(10), maxItemCount: 10, storageLocation: .grdb)
     public static let linksAndTokens = CachePolicy(ttl: .hours(12), staleTTL: .minutes(5), maxItemCount: 100, storageLocation: .grdb)
     public static let statuses = CachePolicy(ttl: .hours(1), staleTTL: .minutes(2), maxItemCount: 100, storageLocation: .grdb)

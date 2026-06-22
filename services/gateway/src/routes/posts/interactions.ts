@@ -5,13 +5,13 @@ import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
-import { TrackingLinkService } from '../../services/TrackingLinkService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
-import { LikeSchema, RepostSchema, PostParams } from './types';
-import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
+import { LikeSchema, RepostSchema, PostParams, EngagementBatchSchema } from './types';
+import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
+import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
@@ -24,7 +24,6 @@ export function registerInteractionRoutes(
   // argument is the default — passed explicitly so the constructor chain
   // is readable.
   const postService = new PostService(prisma, new MediaService(), orphanCleanup);
-  const trackingLinkService = new TrackingLinkService(prisma);
 
   // POST /posts/:postId/like
   fastify.post('/posts/:postId/like', {
@@ -196,8 +195,15 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
-      await postService.bookmarkPost(postId, authContext.registeredUser.id);
-      return sendSuccess(reply, { bookmarked: true });
+      const result = await postService.bookmarkPost(postId, authContext.registeredUser.id);
+      // Sync temps réel (perso) : le feed et le reel viewer réhydratent
+      // `isBookmarkedByMe` + le `bookmarkCount` absolu → le favori et son
+      // compteur survivent à la fermeture/réouverture, sans reload.
+      fastify.socialEvents?.broadcastPostBookmarked(
+        { postId, bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 },
+        authContext.registeredUser.id,
+      );
+      return sendSuccess(reply, { bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 });
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/bookmark] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -215,8 +221,12 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
-      await postService.unbookmarkPost(postId, authContext.registeredUser.id);
-      return sendSuccess(reply, { bookmarked: false });
+      const result = await postService.unbookmarkPost(postId, authContext.registeredUser.id);
+      fastify.socialEvents?.broadcastPostBookmarked(
+        { postId, bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 },
+        authContext.registeredUser.id,
+      );
+      return sendSuccess(reply, { bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 });
     } catch (error) {
       fastify.log.error(`[DELETE /posts/:postId/bookmark] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -270,6 +280,32 @@ export function registerInteractionRoutes(
     }
   });
 
+  // POST /posts/:postId/anonymous-view — compte une ouverture ANONYME (sans compte).
+  // v1 "comptage bête" : public, dédup faible par X-Session-Token (chaîne opaque).
+  // Les clients INSCRITS (JWT présent) sont comptés via le parcours engagement →
+  // no-op ici pour éviter le double-comptage. Voir spec 2026-06-17 (§ Sécurité).
+  // Pas de preValidation auth : on lit le header directement, sans tenter de
+  // résoudre un Participant (un token navigateur n'en est pas un → éviterait un 401).
+  fastify.post('/posts/:postId/anonymous-view', {
+    config: { rateLimit: createPostRouteRateLimitConfig('view') },
+  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
+    try {
+      if (request.headers.authorization) {
+        return sendSuccess(reply, { counted: false }); // client inscrit → parcours engagement
+      }
+      const sessionKey = request.headers['x-session-token'] as string | undefined;
+      if (!sessionKey || sessionKey.length === 0 || sessionKey.length > 128) {
+        return sendBadRequest(reply, 'Missing or invalid session key', { code: 'VALIDATION_ERROR' });
+      }
+      const { postId } = request.params;
+      const counted = await postService.recordAnonymousOpen(postId, sessionKey);
+      return sendSuccess(reply, { counted });
+    } catch (error) {
+      fastify.log.error(`[POST /posts/:postId/anonymous-view] Error: ${error}`);
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
+    }
+  });
+
   // POST /posts/:postId/impression — Track a feed impression
   fastify.post('/posts/:postId/impression', {
     schema: {
@@ -277,7 +313,7 @@ export function registerInteractionRoutes(
       body: {
         type: 'object',
         properties: {
-          source: { type: 'string', enum: ['feed', 'profile', 'search', 'shared_link', 'notification'] }
+          source: { type: 'string', enum: ['feed', 'profile', 'search', 'shared_link', 'notification', 'detail'] }
         }
       }
     },
@@ -296,9 +332,20 @@ export function registerInteractionRoutes(
         data: { postId, userId: authContext.registeredUser.id, source }
       });
 
+      // Ouvrir le Détail d'un post (`source: 'detail'`) est à la fois une
+      // impression ET une vue (totale, jamais dédupliquée) comptée IMMÉDIATEMENT
+      // — chaque ouverture compte, sans seuil ni gating engagement. Les autres
+      // sources (apparition feed, etc.) ne comptent qu'une impression.
+      // Note : `postOpenCount` n'est PLUS alimenté par l'engagement sur la surface
+      // `detail` (cf. engagementAggregateIncrements) pour éviter le double comptage.
+      const counters: Record<string, { increment: number }> = { impressionCount: { increment: 1 } };
+      if (source === 'detail') {
+        counters.postOpenCount = { increment: 1 };
+      }
+
       await prisma.post.update({
         where: { id: postId },
-        data: { impressionCount: { increment: 1 } }
+        data: counters
       });
 
       return sendSuccess(reply, { recorded: true });
@@ -316,7 +363,7 @@ export function registerInteractionRoutes(
         required: ['postIds'],
         properties: {
           postIds: { type: 'array', items: { type: 'string' } },
-          source: { type: 'string', enum: ['feed', 'profile', 'search', 'shared_link', 'notification'] }
+          source: { type: 'string', enum: ['feed', 'profile', 'search', 'shared_link', 'notification', 'detail'] }
         }
       }
     },
@@ -357,6 +404,43 @@ export function registerInteractionRoutes(
     }
   });
 
+  // POST /posts/engagement/batch — Ingest durable engagement sessions (dwell + actions)
+  //
+  // Append-only ingestion of finalized consumption sessions captured client-side
+  // (EngagementOutbox). Idempotent on sessionId (upsert) so a lost-ACK retry is a
+  // no-op. The userId is taken from the auth context — the client-supplied
+  // session.userId is never trusted. Skips (without 400) any session whose post
+  // was deleted between begin and flush.
+  fastify.post('/posts/engagement/batch', {
+    preValidation: [requiredAuth],
+    config: { rateLimit: createPostRouteRateLimitConfig('engagement') },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+      }
+
+      const parsed = EngagementBatchSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendBadRequest(reply, 'Invalid engagement batch', { code: 'VALIDATION_ERROR' });
+      }
+
+      // Zod has validated + applied defaults at runtime; `.data.sessions` is the
+      // parsed output. The service re-normalizes defensively, so the structural
+      // assertion to its input shape is safe.
+      const sessions = parsed.data.sessions as Parameters<typeof postService.recordEngagementBatch>[0];
+      const recorded = await postService.recordEngagementBatch(
+        sessions,
+        authContext.registeredUser.id,
+      );
+      return sendSuccess(reply, { recorded });
+    } catch (error) {
+      fastify.log.error(`[POST /posts/engagement/batch] Error: ${error}`);
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
+    }
+  });
+
   // POST /posts/:postId/share — Track a share, optionally mint a tracking link
   //
   // Body (all optional):
@@ -387,42 +471,67 @@ export function registerInteractionRoutes(
       const body = (request.body as any) ?? {};
       const platform: string | undefined = body.platform;
       const generateLink: boolean = Boolean(body.generateLink);
-
-      const post = await postService.sharePost(postId, authContext.registeredUser.id, platform);
-      if (!post) {
-        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
-      }
+      const baseUrl = resolveFrontendBaseUrl();
 
       const payload: {
         shared: boolean;
         shareCount: number;
         shortUrl?: string;
         token?: string;
-      } = { shared: true, shareCount: post.shareCount };
+      } = { shared: true, shareCount: 0 };
 
       if (generateLink) {
-        const baseUrl = (process.env.FRONTEND_URL || 'https://meeshy.me').replace(/\/+$/, '');
-        try {
-          const link = await trackingLinkService.createTrackingLink({
-            originalUrl: `${baseUrl}/feeds/post/${postId}`,
-            name: `Post ${postId.slice(0, 8)}`,
-            source: platform,
-            medium: 'share',
-            createdBy: authContext.registeredUser.id,
-          });
-          payload.token = link.token;
-          payload.shortUrl = `${baseUrl}${link.shortUrl}`;
-        } catch (linkError) {
-          // Tracking link failure must not roll back the share counter —
-          // surface the issue in logs and return the share-only payload so
-          // the client can fall back to the raw post URL.
-          fastify.log.error(`[POST /posts/:postId/share] tracking link mint failed: ${linkError}`);
+        // Tracked share: upsert one link per (post, sharer). Reusing an existing
+        // link does NOT re-increment shareCount — the counter tracks unique
+        // sharers, not repeated taps of the share button.
+        const result = await postService.shareWithTrackingLink(
+          postId,
+          authContext.registeredUser.id,
+          { baseUrl, platform },
+        );
+        if (!result) {
+          return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
         }
+        payload.shareCount = result.shareCount;
+        payload.token = result.token;
+        payload.shortUrl = result.shortUrl;
+      } else {
+        // Plain share (no tracked link) — increment the counter as before.
+        const post = await postService.sharePost(postId, authContext.registeredUser.id, platform);
+        if (!post) {
+          return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+        }
+        payload.shareCount = post.shareCount;
       }
 
       return sendSuccess(reply, payload);
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/share] Error: ${error}`);
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
+    }
+  });
+
+  // GET /posts/:postId/share — Analytics of the caller's own tracked share link.
+  //
+  // Returns null data when the caller has not (yet) generated a tracked share
+  // for this post. Otherwise exposes the live click analytics so the UI can
+  // surface "your link got N clicks" without a second tracking-links call.
+  fastify.get('/posts/:postId/share', {
+    preValidation: [requiredAuth],
+  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+      }
+
+      const { postId } = request.params;
+      const baseUrl = resolveFrontendBaseUrl();
+      const link = await postService.getPostShareLink(postId, authContext.registeredUser.id, baseUrl);
+
+      return sendSuccess(reply, link);
+    } catch (error) {
+      fastify.log.error(`[GET /posts/:postId/share] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
