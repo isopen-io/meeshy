@@ -29,6 +29,10 @@ private class FakeConversationApi(
     override suspend fun create(body: CreateConversationRequest) =
         ApiResponse<ApiConversation>(success = false)
     override suspend fun markRead(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun updatePreferences(
+        id: String,
+        body: me.meeshy.sdk.net.api.ConversationPreferencesUpdate,
+    ) = ApiResponse(success = true, data = Unit)
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -97,6 +101,67 @@ class ConversationRepositoryTest {
         assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT)).isEmpty()
     }
 
+
+    @Test
+    fun `setPinnedOptimistic flips the cached pref and queues a snapshot mutation`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(ApiConversation(id = "c1", title = "Team")),
+                ),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.setPinnedOptimistic("c1", true)
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.preferences?.isPinned).isTrue()
+        val row = OutboxRepository(db, db.outboxDao())
+            .deliverable(OutboxLanes.CONVERSATION_PREFS).single()
+        assertThat(row.targetId).isEqualTo("c1")
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.UPDATE_CONVERSATION_PREFS)
+    }
+
+    @Test
+    fun `setPinnedOptimistic is a no-op when the pref is already in the target state`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(success = true, data = listOf(ApiConversation(id = "c1"))),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.setPinnedOptimistic("c1", false)
+
+        assertThat(applied).isFalse()
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS))
+            .isEmpty()
+    }
+
+    @Test
+    fun `successive pref mutations coalesce into one latest-wins snapshot`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(success = true, data = listOf(ApiConversation(id = "c1"))),
+            ),
+        )
+        repo.refresh()
+
+        repo.setPinnedOptimistic("c1", true)
+        repo.setMutedOptimistic("c1", true)
+
+        val rows = OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS)
+        assertThat(rows).hasSize(1)
+        val payload = me.meeshy.sdk.net.MeeshyApi.json
+            .decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(rows.single().payload)
+        assertThat(payload.isPinned).isTrue()
+        assertThat(payload.isMuted).isTrue()
+        val cached = repo.conversationStream("c1").first()?.preferences
+        assertThat(cached?.isPinned).isTrue()
+        assertThat(cached?.isMuted).isTrue()
+    }
 
     @Test
     fun `stream first emission is Empty on a cold cache`() = runTest {

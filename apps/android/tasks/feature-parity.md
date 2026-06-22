@@ -203,9 +203,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       nom personnalisé / participants) ; barre de chips `LazyRow` + champ de
       recherche dans l'app bar ; 22 tests verts (11 modèle + 11 VM)
 - [ ] Communities carousel + category filter chips
-- [ ] Pinned / muted / locked / archived / favorited (emoji) states
-- [ ] Swipe actions (pin, mute, lock, archive, mark read/unread, block, hide)
-- [ ] Context menu (pin, mute, mark read, details, invite, favorite, move, lock, archive, block, delete)
+- [~] Pinned / muted / archived states done (optimistic toggle + row indicators
+      📌/🔕 + filter integration) ; locked / favorited (emoji) pending
+- [~] Swipe actions done (leading = pin/unpin, trailing = archive/unarchive ;
+      `SwipeToDismissBox` non-destructif qui snap-back, le résultat visible est
+      la re-dérivation du filtre) ; mute/lock/mark-unread/block/hide pending
+- [~] Context menu done (long-press → `DropdownMenu` : pin/unpin, mute/unmute,
+      mark-read si non lu, archive/unarchive) ; details/invite/favorite/move/
+      lock/block/delete pending
 - [ ] Hard-press conversation preview popover
 - [~] Conversation row: rich last-message preview done (labels type média
       📷/🎬/🎵/📎/📍 port iOS, caption prioritaire, préfixe expéditeur en groupe,

@@ -29,6 +29,16 @@
     <string name="conversations_filter_channels">Salons</string>
     <string name="conversations_filter_favorites">Favoris</string>
     <string name="conversations_filter_archived">Archivées</string>
+    <string name="conversations_action_pin">Épingler</string>
+    <string name="conversations_action_unpin">Désépingler</string>
+    <string name="conversations_action_mute">Muet</string>
+    <string name="conversations_action_unmute">Réactiver le son</string>
+    <string name="conversations_action_archive">Archiver</string>
+    <string name="conversations_action_unarchive">Désarchiver</string>
+    <string name="conversations_action_mark_read">Marquer comme lu</string>
+    <string name="conversations_action_more">Plus d\'actions</string>
+    <string name="conversations_badge_pinned">Épinglée</string>
+    <string name="conversations_badge_muted">Muette</string>
     <string name="conversations_new">Nouvelle conversation</string>
     <string name="new_conversation_title">Nouvelle conversation</string>
     <string name="new_conversation_back">Retour</string>

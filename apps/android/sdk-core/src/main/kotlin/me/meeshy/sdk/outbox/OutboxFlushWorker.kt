@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddReactionRequest
 import me.meeshy.sdk.net.api.ConversationApi
+import me.meeshy.sdk.net.api.ConversationPreferencesUpdate
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.ReactionApi
@@ -56,6 +57,7 @@ class OutboxFlushWorker @AssistedInject constructor(
         val lanes = listOf(
             OutboxLanes.REACTION,
             OutboxLanes.READ_RECEIPT,
+            OutboxLanes.CONVERSATION_PREFS,
             OutboxLanes.PRESENCE,
             OutboxLanes.SOCIAL,
             OutboxLanes.PROFILE,
@@ -129,6 +131,20 @@ class OutboxFlushWorker @AssistedInject constructor(
         },
         OutboxKind.READ_RECEIPT to MutationSender { row ->
             when (apiCall { conversationApi.markRead(row.targetId) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.UPDATE_CONVERSATION_PREFS to MutationSender { row ->
+            val prefs = runCatching { json.decodeFromString<ConversationPrefsPayload>(row.payload) }
+                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
+            val body = ConversationPreferencesUpdate(
+                isPinned = prefs.isPinned,
+                isMuted = prefs.isMuted,
+                isArchived = prefs.isArchived,
+                mentionsOnly = prefs.mentionsOnly,
+            )
+            when (apiCall { conversationApi.updatePreferences(row.targetId, body) }) {
                 is NetworkResult.Success -> SendResult.Success
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }
