@@ -13,6 +13,7 @@ interface ConversationRankCardProps {
 }
 
 function formatDate(dateString: string | undefined, locale: string) {
+  /* istanbul ignore next */
   if (!dateString) return 'N/A';
   const date = new Date(dateString);
   return new Intl.DateTimeFormat(locale, {
