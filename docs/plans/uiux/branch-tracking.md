@@ -226,3 +226,4 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 61we | claude/practical-fermat-xzf7uf (i18n message-bubble + bubble.forwarded) | #842 | ✅ |
 | 62wb | claude/practical-fermat-am6uvs (Badge variants gold/success/warning → tokens --gp-* dark-mode) | #847 | ✅ |
 | 63w | claude/practical-fermat-yly7ym (anti-pattern t()||fallback sidebar détails conv) | #849 | ⏳ |
+| 65w | claude/practical-fermat-s5hyhl (anti-pattern t()||fallback ConversationSettingsModal + 6 clés fr-only en/es/pt) | — | ⏳ |
