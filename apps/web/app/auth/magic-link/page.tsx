@@ -459,7 +459,7 @@ function MagicLinkPageContent() {
                   </Button>
                   <Button variant="outline" className="w-full" onClick={() => router.push('/')}>
                     <ArrowLeft className="h-4 w-4" />
-                    {t('featureGate.backToHome', 'Back to home')}
+                    {t('magicLink.backToHome', 'Back to Home')}
                   </Button>
                 </div>
               </div>
@@ -527,7 +527,7 @@ function MagicLinkPageContent() {
                 </h2>
 
                 <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">
-                  {t('magicLink.checkEmail.description', "We've sent you a magic link to sign in")}
+                  {t('magicLink.checkEmail.description', 'We\'ve sent you a magic link to sign in')}
                 </p>
 
                 <div className="backdrop-blur-sm bg-white/30 dark:bg-gray-800/30 rounded-lg p-4 mb-6 border border-white/20 dark:border-gray-700/30">
@@ -600,7 +600,7 @@ function MagicLinkPageContent() {
 
                 {/* Spam warning */}
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">
-                  {t('magicLink.checkEmail.spamWarning', "Can't find the email? Check your spam or junk folder")}
+                  {t('magicLink.checkEmail.spamWarning', 'Can\'t find the email? Check your spam or junk folder')}
                 </p>
               </div>
 
@@ -689,7 +689,7 @@ function MagicLinkPageContent() {
                 {t('magicLink.title', 'Magic Link Login')}
               </h1>
               <p className="text-gray-600 dark:text-gray-400 mt-2">
-                {t('magicLink.description', "Enter your email address and we'll send you a secure login link")}
+                {t('magicLink.description', 'Enter your email address and we\'ll send you a secure login link')}
               </p>
             </div>
 

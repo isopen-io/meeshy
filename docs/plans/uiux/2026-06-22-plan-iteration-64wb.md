@@ -1,33 +1,26 @@
-# Plan — Itération 64wb (web)
+# Plan d'itération 64wb (web) — Anti-pattern `t()||fallback` Magic Link
+
+**Base** : `main` HEAD (post-merge #846 / iter-63w cluster).
+**Branche** : `claude/practical-fermat-3pti6c`
+**Surface** : `app/auth/magic-link/page.tsx` (+ 4 locales `auth.json`)
 
 ## Objectif
-Solder un cluster **orthogonal** de l'anti-pattern `t()||fallback` (différé 60w) :
-les **en-têtes de catégories de la liste de conversations** (carrousel + groupes).
-
-## Périmètre (bounded, 0-fichier-partagé avec #854/#857/#858/#859/#855)
-1. `components/conversations/CommunityCarousel.tsx` → `conversationsList.{all,reacted,archived}` (3)
-2. `components/conversations/conversation-groups/ConversationGroup.tsx` → `conversationsList.{pinned,uncategorized}` (2)
+Solder un lot self-contained et orthogonal du cluster anti-pattern `t('clé') || 'fallback FR'` (~40 fichiers restants) : la page Magic Link (46 occurrences), sans collision avec les 6 PR web en vol.
 
 ## Étapes
-- [x] `git fetch` + `list_pull_requests` → cartographier la contention 64w, choisir surface orthogonale
-- [x] Vérifier que les 5 clés `conversationsList.*` existent ×4 locales (oui → 0 locale)
-- [x] Convertir `t('k') || 'fr/en'` → `t('k', 'En')` (fallbacks anglicisés, leçon 50w)
-- [x] Élargir le type du prop `t` `(key)=>string` → `(key, fallback?)=>string` sur les 2 interfaces
-- [x] Vérifier 0 anti-pattern restant + non-régression du mock de test
-- [ ] Commit + push branche `claude/practical-fermat-y6vyvh`
-- [ ] PR → CI vert → merge dans `main` + suppression branche
-- [ ] MAJ `branch-tracking.md` (History + annotation SOLDÉ)
+1. [x] `git fetch` + `list_pull_requests` → confirmer orthogonalité (aucune PR ne touche magic-link).
+2. [x] Vérifier présence des clés `auth.magicLink.*`/`register.*`/`login.*` ×4 locales (0 manquante sur le lot).
+3. [x] Transformation mécanique `t(k) || 'FR'` → `t(k, 'EN exacte')` (45×) ; suppression du `||` mort sur les 2 clés à paramètres.
+4. [x] Bug `featureGate.backToHome` (hors namespace `auth`) → nouvelle clé `auth.magicLink.backToHome` ×4 + référence corrigée.
+5. [x] Insertion chirurgicale de la clé locale (préserver formatage ; pas de re-sérialisation JSON globale).
+6. [x] Vérifs : grep résiduel = 0, JSON valides, échappement apostrophes, aucun test impacté.
+7. [ ] Commit + push branche + PR + merge dans `main` après CI verte.
+8. [ ] Mettre à jour `branch-tracking.md` (nouvelle base, historique) ; supprimer la branche après merge.
 
-## Différé restant (pour 65w+) — classe `t()||fallback`
-`ConversationSettingsModal.tsx` (29), `app/auth/magic-link/page.tsx` (44),
-`app/auth/verify-phone/page.tsx` (26), `app/links/tracked/[token]/page.tsx` (15),
-`hooks/conversations/useMessageActions.ts` (10), `ConversationDetailsStep.tsx` (3, ns `modals`),
-`conversation-participants-drawer.tsx` (2 + placeholder FR brut admin l.581),
-`ConversationLayout.tsx` (1, `messageRestored`), `app/settings/page.tsx` (1),
-`app/dashboard/LastMessagePreview.tsx` (1), `app/(connected)/contacts/page.tsx` (1),
-hooks recovery (`use-recovery-flow`/`use-recovery-submission`/`use-message-interactions`),
-`PhoneResetFlow.tsx` (56, post-#800). Lots **bornés et orthogonaux** (contention forte).
+## Garde-fous
+- Valeurs EN reprises **mot pour mot** du locale (anti-flash + cohérence FR/EN — leçon 50w).
+- Ne PAS re-sérialiser les JSON en entier (formatage d'origine inconsistant → diff massif/conflits). Insertion par ligne.
+- Surface orthogonale : NE PAS toucher feed/reels/modales/banners/audio-effects/voice-profile/_archived/details-sidebar/me (PR en vol ou soldés).
 
-## Continuité
-- Base : `main` HEAD post-#853. Branche de travail : `claude/practical-fermat-y6vyvh`.
-- Après merge : supprimer la branche, repartir de `main` HEAD pour 65w.
+## Résultat
+Voir `docs/analyses/uiux/2026-06-22-iteration-64wb.md`. Lot soldé, page entièrement i18n + anti-flash. Reste du cluster (~39 fichiers) → itérations ultérieures par lots bornés.
