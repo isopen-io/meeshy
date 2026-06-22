@@ -39,6 +39,7 @@ import me.meeshy.app.chat.ChatScreen
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.contacts.ContactsScreen
 import me.meeshy.app.conversations.ConversationListScreen
+import me.meeshy.app.conversations.NewConversationScreen
 import me.meeshy.app.feed.FeedScreen
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.profile.ProfileScreen
@@ -47,6 +48,7 @@ import me.meeshy.app.settings.SettingsScreen
 object Routes {
     const val LOGIN = "login"
     const val CONVERSATIONS = "conversations"
+    const val NEW_CONVERSATION = "conversations/new"
     const val CONVERSATIONS_DEEP_LINK = "meeshy://conversations"
     const val CHAT = "chat/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val CHAT_DEEP_LINK = "meeshy://$CHAT"
@@ -173,11 +175,22 @@ fun MeeshyApp() {
                     onConversationClick = { conversationId ->
                         navController.navigate(Routes.chat(conversationId))
                     },
+                    onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
                     onContacts = { navController.navigate(Routes.CONTACTS) },
                     onLogout = {
                         authViewModel.logout()
                         navController.navigate(Routes.LOGIN) {
                             popUpTo(Routes.CONVERSATIONS) { inclusive = true }
+                        }
+                    },
+                )
+            }
+            composable(Routes.NEW_CONVERSATION) {
+                NewConversationScreen(
+                    onBack = { navController.popBackStack() },
+                    onConversationCreated = { conversationId ->
+                        navController.navigate(Routes.chat(conversationId)) {
+                            popUpTo(Routes.CONVERSATIONS)
                         }
                     },
                 )

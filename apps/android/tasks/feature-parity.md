@@ -213,7 +213,13 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       prime sur le sync) → strip animée sous l'app bar (Hors ligne / Reconnexion… /
       Synchronisation…)
 - [ ] Conversation category create + expand/collapse; client-side tag aggregation for autocomplete
-- [ ] Create direct/group conversation via user search; add participants
+- [x] Create direct/group conversation via user search; add participants —
+      FAB sur la liste → `NewConversationScreen` : recherche debouncée (300 ms,
+      `UserRepository.searchUsers`), multi-sélection avec chips persistants
+      (survit aux changements de requête), règle pure `NewConversationLogic`
+      (1 sélection → direct sans titre ; ≥2 → groupe avec titre saisi) →
+      `ConversationRepository.create` → navigation vers le chat créé
+      (popUpTo conversations). 14 tests verts (6 logique + 8 VM)
 - [ ] Story tray + per-conversation story rings
 - [ ] In-app dashboard ("Tableau de bord"): unread count, recent conversations, link stats, quick actions
 
