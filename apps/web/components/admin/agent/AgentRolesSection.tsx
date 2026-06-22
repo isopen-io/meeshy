@@ -95,16 +95,16 @@ export function AgentRolesSection({ conversationId }: AgentRolesSectionProps) {
   if (roles.length === 0) {
     return (
       <p className="text-sm text-gray-500 text-center py-4">
-        Aucun rôle observé pour cette conversation
+        {t('agent.rolesSection.empty', 'No role observed for this conversation')}
       </p>
     );
   }
 
   const originLabel = (origin: string) => {
     switch (origin) {
-      case 'observed': return 'Observé';
-      case 'archetype': return 'Archétype';
-      case 'hybrid': return 'Hybride';
+      case 'observed': return t('agent.rolesSection.origin.observed', 'Observed');
+      case 'archetype': return t('agent.rolesSection.origin.archetype', 'Archetype');
+      case 'hybrid': return t('agent.rolesSection.origin.hybrid', 'Hybrid');
       default: return origin;
     }
   };
@@ -123,14 +123,14 @@ export function AgentRolesSection({ conversationId }: AgentRolesSectionProps) {
               {role.locked && (
                 <Badge variant="secondary" className="text-xs">
                   <Lock className="h-3 w-3 mr-1" />
-                  Verrouillé
+                  {t('agent.rolesSection.locked', 'Locked')}
                 </Badge>
               )}
             </div>
             {role.locked && (
               <Button variant="ghost" size="sm" onClick={() => handleUnlock(role.userId)}>
                 <Unlock className="h-3 w-3 mr-1" />
-                Unlock
+                {t('agent.rolesSection.unlock', 'Unlock')}
               </Button>
             )}
           </div>
@@ -140,11 +140,11 @@ export function AgentRolesSection({ conversationId }: AgentRolesSectionProps) {
             <span>-</span>
             <span>{role.vocabularyLevel}</span>
             <span>-</span>
-            <span>{role.messagesAnalyzed} msg analysés</span>
+            <span>{t('agent.rolesSection.messagesAnalyzed', { count: role.messagesAnalyzed })}</span>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 w-16">Confiance</span>
+            <span className="text-xs text-gray-500 w-16">{t('agent.rolesSection.confidence', 'Confidence')}</span>
             <Progress value={role.confidence * 100} className="flex-1 h-2" />
             <span className="text-xs font-mono w-10 text-right">{(role.confidence * 100).toFixed(0)}%</span>
           </div>
@@ -157,7 +157,7 @@ export function AgentRolesSection({ conversationId }: AgentRolesSectionProps) {
               disabled={assigningUser === role.userId}
             >
               <SelectTrigger className="h-8 text-xs flex-1">
-                <SelectValue placeholder="Assigner un archétype..." />
+                <SelectValue placeholder={t('agent.rolesSection.assignArchetype', 'Assign an archetype...')} />
               </SelectTrigger>
               <SelectContent>
                 {archetypes.map(a => (

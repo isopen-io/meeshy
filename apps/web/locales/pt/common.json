@@ -220,6 +220,7 @@
     "imageLoadError": "Não foi possível carregar a imagem",
     "downloadAnyway": "Baixar mesmo assim",
     "lightboxKeyboardHelp": "Use as setas ← → para navegar • +/- para zoom • R para girar • Esc para fechar",
+    "videoLightboxKeyboardHelp": "Use as setas ← → para navegar • Espaço para reproduzir/pausar • M para silenciar • F para tela cheia • Esc para fechar",
     "clearSearch": "Limpar pesquisa",
     "backToList": "Voltar à lista",
     "backToConversations": "Voltar às conversas",

@@ -220,6 +220,7 @@
     "imageLoadError": "No se puede cargar la imagen",
     "downloadAnyway": "Descargar de todos modos",
     "lightboxKeyboardHelp": "Usa las flechas ← → para navegar • +/- para hacer zoom • R para rotar • Esc para cerrar",
+    "videoLightboxKeyboardHelp": "Usa las flechas ← → para navegar • Espacio para reproducir/pausar • M para silenciar • F para pantalla completa • Esc para cerrar",
     "clearSearch": "Borrar búsqueda",
     "backToList": "Volver a la lista",
     "backToConversations": "Volver a conversaciones",
