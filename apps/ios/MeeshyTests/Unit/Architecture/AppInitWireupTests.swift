@@ -124,6 +124,21 @@ final class AppInitWireupTests: XCTestCase {
             XCTFail("AppDelegate.swift no longer contains a `func application(` declaration")
             return ""
         }
-        return String(source[methodStart.lowerBound...])
+        // Strip `//` line comments before scanning. The launch sequence carries
+        // an explanatory comment block that NAMES the very symbols we order-check
+        // (`preheatAllPipelines()`, `register()`); without stripping, the first
+        // `range(of:)` match lands inside that comment — above the real call —
+        // and the ordering assertions read a bogus position. We only need the
+        // executable lines, so drop everything from `//` onward per line.
+        let executable = String(source[methodStart.lowerBound...])
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> Substring in
+                if let commentStart = line.range(of: "//") {
+                    return line[line.startIndex..<commentStart.lowerBound]
+                }
+                return line
+            }
+            .joined(separator: "\n")
+        return executable
     }
 }
