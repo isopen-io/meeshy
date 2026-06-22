@@ -380,6 +380,27 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTAssertEqual(mock.lastDeleteCommentCommentId, "r1")
     }
 
+    // MARK: - preloadReplyPreviews
+
+    func test_preloadReplyPreviews_loadsRepliesForCommentsWithReplies() async {
+        await CacheCoordinator.shared.comments.invalidate(for: "replies-c1")
+        let (sut, mock) = makeSUT()
+        sut.comments = [FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 2)]
+
+        await sut.preloadReplyPreviews(postId: "p1")
+
+        XCTAssertEqual(mock.getCommentRepliesCallCount, 1, "les réponses d'un commentaire racine sont préchargées")
+    }
+
+    func test_preloadReplyPreviews_skipsCommentsWithoutReplies() async {
+        let (sut, mock) = makeSUT()
+        sut.comments = [FeedComment(id: "c2", author: "alice", authorId: "a1", content: "Top", replies: 0)]
+
+        await sut.preloadReplyPreviews(postId: "p1")
+
+        XCTAssertEqual(mock.getCommentRepliesCallCount, 0, "pas de précharge si aucun sous-commentaire")
+    }
+
     // MARK: - sendReply (flat 2-level threading)
 
     func test_sendReply_toRootComment_usesRootAsParent() async {

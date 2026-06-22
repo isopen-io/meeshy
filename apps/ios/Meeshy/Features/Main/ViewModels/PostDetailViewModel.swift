@@ -154,14 +154,17 @@ class PostDetailViewModel: ObservableObject {
         case .fresh(let cached, _):
             if comments.isEmpty { comments = cached }
             seedCommentLikes(from: cached)
+            await preloadReplyPreviews(postId: postId)
             return
         case .stale(let cached, _):
             if comments.isEmpty { comments = cached }
             seedCommentLikes(from: cached)
             await fetchCommentsFromNetwork(postId, cacheKey: cacheKey)
+            await preloadReplyPreviews(postId: postId)
         case .expired, .empty:
             isLoadingComments = comments.isEmpty
             await fetchCommentsFromNetwork(postId, cacheKey: cacheKey)
+            await preloadReplyPreviews(postId: postId)
         }
     }
 
@@ -268,8 +271,34 @@ class PostDetailViewModel: ObservableObject {
             }.value
             repliesMap[commentId] = replies
             seedCommentLikes(from: replies)
+            // Persiste les réponses sous "replies-{commentId}" pour hydrater
+            // l'aperçu (2 premières) instantanément à la ré-ouverture du post
+            // (cache-first, miroir de `FeedCommentsSheet`).
+            try? await CacheCoordinator.shared.comments.save(replies, for: "replies-\(commentId)")
         } catch {
             expandedThreads.remove(commentId)
+        }
+    }
+
+    /// Précharge l'aperçu des réponses (les 2 premières s'affichent sans tap)
+    /// des premiers commentaires racine qui en ont — cache-first puis réseau,
+    /// en miroir de `FeedCommentsSheet`. Sans ça, les sous-commentaires
+    /// restaient masqués dans le détail de post jusqu'au tap « Voir ».
+    func preloadReplyPreviews(postId: String) async {
+        let withReplies = topLevelComments.filter { $0.replies > 0 }.prefix(5)
+        for comment in withReplies {
+            guard repliesMap[comment.id] == nil else { continue }
+            let cached = await CacheCoordinator.shared.comments.load(for: "replies-\(comment.id)")
+            if case .fresh(let replies, _) = cached {
+                repliesMap[comment.id] = replies
+                seedCommentLikes(from: replies)
+                continue
+            } else if case .stale(let replies, _) = cached {
+                repliesMap[comment.id] = replies
+                seedCommentLikes(from: replies)
+                continue
+            }
+            await loadReplies(postId: postId, commentId: comment.id)
         }
     }
 
