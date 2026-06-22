@@ -280,5 +280,8 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 63w | claude/practical-fermat-yly7ym (anti-pattern t()||fallback sidebar détails conv) | #849 | ⏳ |
 | 65w | claude/practical-fermat-s5hyhl (anti-pattern t()||fallback ConversationSettingsModal + 6 clés fr-only en/es/pt) | — | ⏳ |
 | 64w | claude/practical-fermat-gq4cjc (i18n bannières failed-message/system-status + selectors ; 24 clés ×4 locales) | #857 | ✅ |
+| 63wb | claude/practical-fermat-m1o8ha (a11y — `<MotionConfig reducedMotion="user">` global : TOUTES les animations Framer Motion respectent `prefers-reduced-motion`, WCAG 2.3.3 ; 55 fichiers couverts sans changement par composant) | #862 | ✅ |
 | 65w (doublon) | claude/practical-fermat-8tc8x4 (anti-pattern ConversationSettingsModal — DOUBLON de #864) | #867 | ❌ fermée |
 | 66w | claude/practical-fermat-8tc8x4 (anti-pattern `t()\|\|fallback` page deep-link stats lien suivi `links/tracked/[token]` : 15 occ. + 8 clés `links.tracking.*` dont 7 absentes des 4 locales + `details.unexpectedError`) | ⏳ | ⏳ |
+
+> **DONE — NE PLUS re-flagger `prefers-reduced-motion` (framer-motion)** : réglé globalement par iter-63wb / #862 (`components/providers/MotionProvider.tsx` monté dans `app/layout.tsx`). Les listes « Différé » des blocs Current State dupliqués qui le citent encore comme candidat sont **périmées** sur ce point. Reste différé (distinct) : la préférence **applicative** `preferences.reducedMotion` (toggle ApplicationSettings) demeure un quasi no-op (état serveur async, non câblé globalement) → itération dédiée ultérieure.

@@ -604,7 +604,9 @@ final class MessageListViewController: UIViewController {
                         secondaryLangCode: languageSelection?.secondaryLangCode,
                         onSetActiveDisplayLanguage: setActiveDisplayLanguage,
                         onSetSecondaryLanguage: setSecondaryLanguage,
-                        onOpenProfile: openProfileHandler
+                        onOpenProfile: openProfileHandler,
+                        voiceConsentMissing: vm?.voiceConsentMissing ?? false,
+                        onTapConsentNotice: { [weak self] in self?.router.push(.settings) }
                     ))
                     .equatable()
                 }
@@ -801,6 +803,15 @@ final class MessageListViewController: UIViewController {
             .dropFirst()
             .sink { [weak self] _ in
                 // Preferred language revision change requires full reconfigure of all items
+                self?.applySnapshot(animated: false)
+            }
+            .store(in: &cancellables)
+
+        vm.$voiceConsentMissing
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] _ in
                 self?.applySnapshot(animated: false)
             }
             .store(in: &cancellables)

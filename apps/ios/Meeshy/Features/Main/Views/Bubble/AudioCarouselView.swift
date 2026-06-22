@@ -57,6 +57,9 @@ struct AudioCarouselView: View {
     let onShowTranslationDetail: ((String) -> Void)?
     let onRequestTranslation: ((String, String) -> Void)?
     let onPlayAudio: ((String) -> Void)?
+    var parentIsMe: Bool = false
+    var voiceConsentMissing: Bool = false
+    var onTapConsentNotice: (() -> Void)? = nil
 
     @State private var currentPageID: String?
     /// Height of the pager — grows to the tallest audio page so a track with a
@@ -110,6 +113,16 @@ struct AudioCarouselView: View {
                 isDark: isDark
             )
             .equatable()
+
+            if AudioMediaView.shouldShowConsentNotice(isMe: parentIsMe, voiceConsentMissing: voiceConsentMissing) {
+                AudioConsentNotice(
+                    message: NSLocalizedString("audio.consent.notice.message", bundle: .main, comment: ""),
+                    actionTitle: NSLocalizedString("audio.consent.notice.action", bundle: .main, comment: ""),
+                    accentHex: accentColor,
+                    onTap: { onTapConsentNotice?() }
+                )
+                .padding(.top, 6)
+            }
         }
         .onAppear {
             if currentPageID == nil { currentPageID = items.first?.id }

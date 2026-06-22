@@ -112,6 +112,8 @@ struct BubbleStandardLayout: View {
 
     @ObservedObject var blurController: BubbleBlurRevealController
     @ObservedObject var ephemeralController: BubbleEphemeralController
+    var voiceConsentMissing: Bool = false
+    var onTapConsentNotice: (() -> Void)? = nil
 
     // MARK: - Playback tracking
     //
@@ -731,7 +733,10 @@ struct BubbleStandardLayout: View {
                     },
                     onShowTranslationDetail: onShowTranslationDetail,
                     onRequestTranslation: onRequestTranslation,
-                    onPlayAudio: onPlayAudio
+                    onPlayAudio: onPlayAudio,
+                    parentIsMe: content.isMe,
+                    voiceConsentMissing: voiceConsentMissing,
+                    onTapConsentNotice: onTapConsentNotice
                 )
             } else {
                 ForEach(audioAttachments) { attachment in
@@ -1233,7 +1238,9 @@ struct BubbleStandardLayout: View {
                 onReplyTap: onReplyTap,
                 onStoryReplyTap: onStoryReplyTap,
                 onPlayAudio: onPlayAudio,
-                embedsCaptionInWidget: embedsCaption
+                embedsCaptionInWidget: embedsCaption,
+                voiceConsentMissing: voiceConsentMissing,
+                onTapConsentNotice: onTapConsentNotice
             )
             .equatable()
 
