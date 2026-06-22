@@ -70,5 +70,13 @@
     "confirmDeleteIrreversible": "Esta ação é irreversível. O arquivo será excluído permanentemente.",
     "cancel": "Cancelar",
     "deleting": "Excluindo..."
+  },
+  "deleteDialog": {
+    "title": "Confirmar exclusão",
+    "description": "Tem certeza de que deseja excluir este arquivo? Esta ação é irreversível.",
+    "serverNote": "O arquivo será excluído permanentemente do servidor.",
+    "cancel": "Cancelar",
+    "deleting": "Excluindo...",
+    "delete": "Excluir"
   }
 }

@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { Attachment } from '@meeshy/shared/types/attachment';
+import { useI18n } from '@/hooks/useI18n';
 import { Button } from '../ui/button';
 import {
   Dialog,
@@ -29,13 +30,14 @@ export const AttachmentDeleteDialog = React.memo(function AttachmentDeleteDialog
   onConfirm,
   onCancel,
 }: AttachmentDeleteDialogProps) {
+  const { t } = useI18n('attachments');
   return (
     <Dialog open={!!attachment} onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Confirmer la suppression</DialogTitle>
+          <DialogTitle>{t('deleteDialog.title', 'Confirm deletion')}</DialogTitle>
           <DialogDescription>
-            Êtes-vous sûr de vouloir supprimer ce fichier ? Cette action est irréversible.
+            {t('deleteDialog.description', 'Are you sure you want to delete this file? This action is irreversible.')}
           </DialogDescription>
         </DialogHeader>
         {attachment && (
@@ -44,7 +46,7 @@ export const AttachmentDeleteDialog = React.memo(function AttachmentDeleteDialog
               {attachment.originalName}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              Le fichier sera définitivement supprimé du serveur.
+              {t('deleteDialog.serverNote', 'The file will be permanently deleted from the server.')}
             </div>
           </div>
         )}
@@ -54,14 +56,14 @@ export const AttachmentDeleteDialog = React.memo(function AttachmentDeleteDialog
             onClick={onCancel}
             disabled={isDeleting}
           >
-            Annuler
+            {t('deleteDialog.cancel', 'Cancel')}
           </Button>
           <Button
             variant="destructive"
             onClick={onConfirm}
             disabled={isDeleting}
           >
-            {isDeleting ? 'Suppression...' : 'Supprimer'}
+            {isDeleting ? t('deleteDialog.deleting', 'Deleting...') : t('deleteDialog.delete', 'Delete')}
           </Button>
         </DialogFooter>
       </DialogContent>
