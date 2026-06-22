@@ -168,6 +168,24 @@ class StoryPlaybackTest {
         assertThat(dismissed.jumpToPreviousGroup()).isEqualTo(dismissed)
     }
 
+    // ---- dismiss (vertical swipe) ------------------------------------------
+
+    @Test
+    fun `dismissed marks a live playback as dismissed without moving position`() {
+        val pb = playback(group("a", "a1", "a2"), startUserId = "a").advance()
+        val gone = pb.dismissed()
+        assertThat(gone.isDismissed).isTrue()
+        assertThat(gone.groupIndex).isEqualTo(pb.groupIndex)
+        assertThat(gone.slideIndex).isEqualTo(pb.slideIndex)
+    }
+
+    @Test
+    fun `dismissed is idempotent once already dismissed`() {
+        val dismissed = playback(group("a", "a1"), startUserId = "a").advance()
+        assertThat(dismissed.isDismissed).isTrue()
+        assertThat(dismissed.dismissed()).isEqualTo(dismissed)
+    }
+
     // ---- derived accessors --------------------------------------------------
 
     @Test

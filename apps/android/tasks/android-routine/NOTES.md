@@ -48,11 +48,24 @@ Append-only log of gotchas and decisions that save time next run.
 - Quick-strip source of truth = `EmojiCatalog.defaultQuickReactions` (sdk model),
   NOT a screen-local literal — keeps the strip consistent with the picker.
 
+## Decisions (cont.)
+- **Story viewer swipes = pure resolver + pure engine transition.** A drag is
+  mapped to intent by `StorySwipeResolver.resolve(dragX, dragY, hThreshold,
+  vThreshold)` on the **dominant axis** (`|x|>|y|`); only a *downward* drag
+  dismisses; sub-threshold travel is `None` so finger drift during a tap can't
+  hijack navigation. Thresholds are parameters (Composable feeds them from
+  density) → the decision stays 100% JVM-testable. `StoryViewerViewModel.onSwipe`
+  dispatches into `jumpToNext/PreviousGroup` + the new pure `StoryPlayback
+  .dismissed()`. Composable only runs `detectDragGestures` (exempt glue).
+- Compose gesture coexistence: keep `detectTapGestures` and `detectDragGestures`
+  in **separate `pointerInput`** blocks on the same Box — Compose routes taps vs
+  drags to the right detector; do not try to merge them.
+
 ## Open follow-ups (cross-slice)
 - Wire **Kover** with a 90% per-module verification rule.
 - Add a dedicated **Android CI workflow** (touches `.github/` → separate run).
-- Story viewer richness: horizontal swipe = group jump (engine already supports
-  `jumpToNext/PreviousGroup`), vertical swipe = dismiss, **reactions strip done**
-  (this loop), comments overlay, viewers sheet, media prefetch, SWR/Room backing.
+- Story viewer richness: **swipe gestures done** (horizontal = group jump,
+  vertical = dismiss), **reactions strip done**; remaining: comments overlay,
+  viewers sheet, media prefetch, SWR/Room backing, cross-dissolve transitions.
 - `story:reacted`/`story:unreacted` socket wiring into `applyDelta` is the next
   reaction slice; needs server `currentUserReactions` to seed `mine` on load.

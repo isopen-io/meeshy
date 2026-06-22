@@ -4,28 +4,63 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → **Stories (in progress)** → Calls → rest`
 
-Stories so far: tray (ring carousel) + cross-group viewer playback engine
-shipped earlier loops; this loop adds the **quick-reaction strip** (optimistic
-count + rollback) to the viewer.
+Stories so far: tray (ring carousel) + cross-group viewer playback engine +
+quick-reaction strip shipped earlier loops; this loop wires the **swipe
+gestures** (horizontal = group jump, vertical = dismiss) into the viewer.
 
 ## Next slice (pick one for the next run)
 
 Ordered by value within the Stories area:
-1. `story-viewer-swipe-gestures` — wire horizontal swipe → `jumpToNext/PreviousGroup`
-   (engine already supports it) and vertical drag → dismiss; instrumentation-free
-   logic lives in the engine, Composable wires the gesture.
-2. `story-reaction-socket-delta` — wire `story:reacted`/`story:unreacted` realtime
+1. `story-reaction-socket-delta` — wire `story:reacted`/`story:unreacted` realtime
    events into `StoryReactionState.applyDelta` (reducer already supports it) so other
    users' reactions update the open viewer live; seed `mine` from server
    `currentUserReactions` once the API exposes it.
-3. `story-tray-swr` — Room/SWR backing for the tray so it is genuinely
+2. `story-tray-swr` — Room/SWR backing for the tray so it is genuinely
    cache-first (skeleton only on cold empty), per Instant-App principles.
-4. `story-composer` — publish flow (text/media) via the outbox/WorkManager chain.
+3. `story-composer` — publish flow (text/media) via the outbox/WorkManager chain.
 
 After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-22 — slice `story-viewer-swipe-gestures` ✅
+- **Branch:** `claude/apps/android/story-viewer-swipe-gestures`
+- **What:** wired horizontal/vertical swipe navigation into the story viewer.
+  A pure resolver maps an accumulated drag to a navigation intent on the
+  **dominant axis**; the ViewModel dispatches it into the existing pure
+  `StoryPlayback` engine. Parity with iOS `StoryViewerView` swipes (swipe left =
+  next author, right = previous author, down = close).
+- **Added (production):**
+  - `StorySwipeResolver.kt` — pure `resolve(dragX, dragY, hThreshold, vThreshold)
+    → StorySwipeAction{NextGroup,PreviousGroup,Dismiss,None}`. Dominant axis wins
+    (`|x|>|y|`), only a downward drag dismisses, sub-threshold travel is `None`
+    (a small drift during a tap can't hijack navigation). Thresholds are params
+    (Composable supplies them from density) so the decision stays fully testable.
+  - `StoryPlayback.dismissed()` — pure transition that closes the viewer,
+    preserving position; idempotent once dismissed.
+  - `StoryViewerViewModel.onSwipe(action)` — dispatches `NextGroup`/`PreviousGroup`
+    → `jumpToNext/PreviousGroup`, `Dismiss` → `dismissed()`, `None` → inert.
+  - `StoryViewerScreen` — second `pointerInput` running `detectDragGestures`,
+    accumulating drag and calling `onSwipe(StorySwipeResolver.resolve(...))` on end
+    (thresholds 64.dp horizontal / 120.dp vertical). Tap gesture untouched.
+- **Tests:** +12 `StorySwipeResolverTest` (left/right/down/up, both sub-threshold
+  axes, no-movement, horizontal- & vertical-dominant diagonals, inclusive
+  boundaries on each axis, horizontal-dominant-but-sub-threshold) ; +2
+  `StoryPlaybackTest` (`dismissed` marks live + idempotent) ; +4
+  `StoryViewerViewModelTest` (onSwipe NextGroup / PreviousGroup / Dismiss / None).
+  Stories test files now: resolver 12, playback 21, viewer-VM 15 — all green.
+- **Edge cases covered:** zero drag, sub-threshold on each axis, upward never
+  dismisses, diagonal axis arbitration both ways, inclusive thresholds, None is
+  inert (state untouched), dismiss preserves slide position, already-dismissed
+  idempotent.
+- **Verify:** `./apps/android/meeshy.sh check` → BUILD SUCCESSFUL (full
+  `assembleDebug` + all JVM unit tests across modules).
+- **Reviewer:** PASS — scope `apps/android` only; behavioural tests, no
+  tautologies; SDK purity (the "when a drag becomes a swipe" UX rule lives in
+  `:feature:stories`, not the SDK); pure resolver + pure engine transition keep
+  all branch logic JVM-testable; UDF + immutable `UiState`; accent-coherent
+  viewer, natural gestures, no dead end (dismiss → `onClose`).
 
 ### 2026-06-22 — slice `story-viewer-reactions` ✅
 - **Branch:** `claude/apps/android/story-viewer-reactions`

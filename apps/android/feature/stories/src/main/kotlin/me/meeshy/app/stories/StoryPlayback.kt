@@ -75,6 +75,9 @@ data class StoryPlayback(
         else -> copy(slideIndex = 0)
     }
 
+    /** Vertical swipe ↓: close the viewer. Position is preserved; idempotent. */
+    fun dismissed(): StoryPlayback = if (isDismissed) this else copy(isDismissed = true)
+
     companion object {
         /** Build a live playback over the non-empty [groups], positioned at [startUserId]'s group. */
         fun startingAt(groups: List<StoryGroupSlides>, startUserId: String?): StoryPlayback {

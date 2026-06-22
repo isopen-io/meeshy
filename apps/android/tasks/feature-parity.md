@@ -357,8 +357,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       authors, rolls back to the previous group's last slide, dismisses past the
       last slide of the last group; `jumpToNext/PreviousGroup` ready for swipes),
       wired into `StoryViewerViewModel`/`StoryViewerScreen` with segmented progress
-      + timed auto-advance. Pending: horizontal/vertical swipe gestures wired to the
-      jump/dismiss API, cross-dissolve transitions, opening/closing effects.
+      + timed auto-advance; **swipe gestures wired** (pure `StorySwipeResolver`
+      maps a drag → `NextGroup`/`PreviousGroup`/`Dismiss`/`None` on the dominant
+      axis, dispatched through `StoryViewerViewModel.onSwipe` into the engine's
+      `jumpToNext/PreviousGroup` + new `StoryPlayback.dismissed()`). Pending:
+      cross-dissolve transitions, per-story opening/closing effects.
 - [ ] Timed auto-advance gated on media-load readiness; adjacent-slide prefetch (sliding window)
 - [ ] Story content rendering: text/positioning/background/filters/media overlays
 - [~] Story reactions: emoji quick-strip + full picker, big floating animation, heart bounce, count
