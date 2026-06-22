@@ -7,6 +7,19 @@
     "settingsError": "Erreur lors du chargement des paramètres",
     "settingsSaved": "Paramètres enregistrés avec succès",
     "settingsSaveError": "Erreur lors de l'enregistrement des paramètres",
+    "configModal": {
+      "title": "Paramètres et Configuration",
+      "selectSection": "Sélectionner une section",
+      "sectionLabel": "Section des paramètres",
+      "tabs": {
+        "user": "Profil utilisateur",
+        "language": "Langues & Traduction",
+        "theme": "Apparence",
+        "stats": "Statistiques",
+        "notifications": "Notifications",
+        "privacy": "Confidentialité"
+      }
+    },
     "errors": {
       "loadProfile": "Erreur lors du chargement du profil",
       "loadSettings": "Erreur lors du chargement des paramètres",
