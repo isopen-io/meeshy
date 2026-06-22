@@ -38,6 +38,7 @@ const OTPInput = ({
   disabled?: boolean;
   id?: string;
 }) => {
+  const { t } = useI18n('auth');
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const CODE_LENGTH = 6;
 
@@ -74,7 +75,7 @@ const OTPInput = ({
   };
 
   return (
-    <div className="flex justify-center gap-2" role="group" aria-label="Code de vérification à 6 chiffres">
+    <div className="flex justify-center gap-2" role="group" aria-label={t('otp.groupLabel', '6-digit verification code')}>
       {Array.from({ length: CODE_LENGTH }).map((_, index) => (
         <input
           key={index}
@@ -90,7 +91,7 @@ const OTPInput = ({
           onKeyDown={(e) => handleKeyDown(index, e)}
           onPaste={handlePaste}
           disabled={disabled}
-          aria-label={`Chiffre ${index + 1} sur 6`}
+          aria-label={t('otp.digitLabel', { index: index + 1, total: CODE_LENGTH })}
           autoComplete="one-time-code"
           className="w-12 h-14 text-center text-2xl font-bold bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
         />
