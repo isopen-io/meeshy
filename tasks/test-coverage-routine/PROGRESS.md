@@ -155,7 +155,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
 | web | `pnpm --filter web test:coverage` | 42.42 | 34.51 | 2026-06-21 (post P2 Calls × web sub-slice 1; +tests for adaptive-degradation/call-store/use-call-quality/use-video-call/use-call-banner; stmts:41.66/branch:34.51/funcs:38.96/lines:42.42; threshold floor unchanged lines:42/branches:34/statements:41/functions:38 — integer floors same) |
-| gateway | `pnpm --filter gateway test:coverage` | 68.44 (local) / ~64.4 (CI est.) | 62.46 (local) / ~58.5 (CI est.) | 2026-06-22 (post P2 Admin × gateway sub-slice 5: agent.ts 100%lines/93.09%branches ☑; local stmts=68.2%/branches=62.46%/funcs=68.46%/lines=68.44%; threshold floor ratcheted lines:62→64/branches:57→58/statements:62→64/functions:64 unchanged; CI Node 24 gap ~4pp) |
+| gateway | `pnpm --filter gateway test:coverage` | 68.44 (local) / ~64.4 (CI est.) | 62.46 (local) / ~58.5 (CI est.) | 2026-06-22 (post P2 Admin × gateway sub-slice 5: agent.ts 100%lines/93.09%branches ☑ — PR #772 squash-merged main@287ca0b9; local stmts=68.2%/branches=62.46%/funcs=68.46%/lines=68.44%; threshold floor ratcheted lines:62→63/branches:57→58/statements:62→63/functions:64; CI Node 24 gap ~4pp) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | ~39 | n/a | 2026-06-19 (post P1 Voice/audio × translator; +127 tests covering 6 modules; fail_under ratcheted 37→39; diarization GPU methods pragma'd) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |

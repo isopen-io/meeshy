@@ -1655,3 +1655,13 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (rounds: 1) — all 22 ignores accepted as genuinely unreachable
 - Commit: (this commit — branch claude/coverage/p2-admin-gateway-agent)
 - Coverage floor ratcheted in `jest.config.json`: lines:62→64 / branches:57→58 / statements:62→64 / functions:64 (unchanged)
+
+## 2026-06-22T10:15Z — MERGE: PR #772 squash-merged to main
+- Action: squash-merge of `claude/coverage/p2-admin-gateway-agent` → `main`
+- PR: #772 "test(gateway): cover admin agent.ts — 100% lines, 93.09% branches"
+- Merge sha: `287ca0b90c32c72cb2b591698138faab69959831`
+- CI result: 13/14 jobs ✅ (Build bun ✅, Test gateway ✅, Test web ✅, Audio Pipeline ✅, Voice API ✅, TTS/STT ✅, Quality ✅, Security ✅, Prisma ✅, Test shared ✅, Test agent ✅, Summary ✅; Test Python was still in_progress at merge time — not a required check)
+- Coverage floor (actual merged values in jest.config.json): lines:63 / branches:58 / statements:63 / functions:64
+  - NOTE: RUNLOG sub-slice 5 entry said "lines:62→64 / statements:62→64" — the actual committed value is 63/63 (conservative linter-safe value from the rebase). Corrected here.
+- Phase complete: P2 Admin & moderation × gateway sub-slice 5 (agent.ts) ☑ merged to main.
+- Next: P2 Admin × gateway `content.ts` remains ⚠ blocked (production bug in translations endpoint — 2 failing tests). Skip to next ☐ cell: P2 Theme/accent color × any app, or pick a different P2 gateway file.
