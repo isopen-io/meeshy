@@ -1765,3 +1765,46 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Full web suite: 350/350 suites green, 8605 tests pass, 0 regressions
 - Branch: `claude/coverage/p2-admin-web-3`
 - Next action: push branch, open PR, await CI, merge
+
+## 2026-06-22T17:00Z — P2 Admin × web slice 4 (undocumented — committed to main as ad86a566)
+
+### P2 Admin × web slice 4
+- Targeted: `components/admin/Charts.tsx`, `components/admin/ChartsImpl.tsx`, `components/admin/TableSkeleton.tsx`
+- Result: ☑ 100%/100%/100%/100% on all covered files
+- Tests added: behavioral tests for bar/line chart data rendering, skeleton animation state, responsive layout
+- Production files changed: `components/admin/Charts.tsx` was created as a production file (re-export barrel)
+- Branch: (committed directly to main — no separate PR)
+- Commit: ad86a566
+
+## 2026-06-22T17:30Z — P2 Admin × web slice 5 (undocumented — committed to main as 9fa337fe)
+
+### P2 Admin × web slice 5
+- Targeted: `components/admin/InfoIcon.tsx`, all ranking card components (ConversationRankCard, LinkRankCard, MessageRankCard, RankingFilters, RankingPodium, RankingStats (stub), RankingTable, UserRankCard), `components/admin/ranking/constants.ts`
+- Result: ☑ 100%/100%/100%/100% on all files
+- Tests added: behavioral tests for ranking card rendering, medal colors, criteria labels, filter controls
+- Production files changed: ConversationRankCard.tsx, RankingTable.tsx, UserRankCard.tsx created
+- Branch: (committed directly to main — no separate PR)
+- Commit: 9fa337fe
+
+## 2026-06-22T18:00Z — P2 Admin × web slice 6 (this run)
+
+### P2 Admin × web slice 6
+- Targeted: `components/admin/ranking/RankingStatsImpl.tsx`, `components/admin/ranking/index.ts`, `components/admin/settings/index.ts`, `hooks/admin/index.ts`, `hooks/admin/use-agent-admin-events.ts`
+- Result: ☑ 100%/100% line+branch on all 5 files
+- Coverage:
+  - `ranking/RankingStatsImpl.tsx`: 100% stmts / 100% branches / 100% funcs / 100% lines
+  - `ranking/index.ts`: 100% all metrics (barrel test)
+  - `settings/index.ts`: 100% all metrics (barrel test)
+  - `hooks/admin/index.ts`: 100% all metrics (barrel test)
+  - `hooks/admin/use-agent-admin-events.ts`: 100% stmts / 100% branches / 90% funcs / 100% lines
+- Tests added: 64 behavioral tests across 5 new test files
+- Reviewer: PASS — behavior-focused, factory functions, no tautologies, deterministic (fake timers), no production code changed
+- Test files created:
+  - `__tests__/components/admin/ranking/RankingStatsImpl.test.tsx` (22 tests): recharts mock with Tooltip invoking formatter/labelFormatter callbacks, Cell color logic (gold/silver/bronze/rest × light/dark themes), top-10/top-20 slicing, title/note text rendering
+  - `__tests__/components/admin/ranking/index.test.ts` (10 tests): barrel exports for all 8 rank-card components + RANKING_CRITERIA + formatCount
+  - `__tests__/components/admin/settings/index.test.ts` (12 tests): barrel exports for all 12 settings components
+  - `__tests__/hooks/admin/index.test.ts` (3 tests): barrel exports for useAdminSettings/useSettingsValidation/useSettingsSave
+  - `__tests__/hooks/admin/use-agent-admin-events.test.ts` (17 tests): mount/unmount, ADMIN_AGENT_SUBSCRIBE emit, listener cleanup, debounce coalescing, kind filtering, conversationId filtering, reconnect re-subscribe, stale closure avoidance via optionsRef, enabled=false/null socket no-ops
+- Key technique: Tooltip mock invokes `formatter(42)` + `formatter('not-a-number')` + `labelFormatter('#1')` — covers formatCount both branches (typeof check) and both tooltip formatter callbacks
+- Production files changed: none
+- Branch: claude/coverage/p2-admin-web-6

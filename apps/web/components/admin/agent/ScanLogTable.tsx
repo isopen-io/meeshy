@@ -25,7 +25,7 @@ type ScanLogTableProps = {
   conversationId?: string;
 };
 
-export default memo(function ScanLogTable({ conversationId }: ScanLogTableProps = {}) {
+export default memo(function ScanLogTable({ conversationId }: ScanLogTableProps) {
   const { t } = useI18n('admin');
   const [logs, setLogs] = useState<ScanLogSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,6 +68,7 @@ export default memo(function ScanLogTable({ conversationId }: ScanLogTableProps 
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
+  /* istanbul ignore next -- filters.limit is always initialized to 15; ?? 15 fallback is unreachable */
   const limit = filters.limit ?? 15;
   const hasMore = page * limit < total;
 

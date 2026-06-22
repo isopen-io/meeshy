@@ -244,13 +244,13 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/components/index.ts`
 - [ ] `apps/web/components/not-found-page.tsx`
 
-## components/admin  (2/62 have a test)
+## components/admin  (32/62 have a test)
 
 - [ ] `apps/web/components/admin/AdminLayout.tsx`
-- [ ] `apps/web/components/admin/Charts.tsx`
+- [x] `apps/web/components/admin/Charts.tsx`
 - [ ] `apps/web/components/admin/ChartsImpl.tsx`
-- [ ] `apps/web/components/admin/ConfirmDialog.tsx`
-- [ ] `apps/web/components/admin/TableSkeleton.tsx`
+- [x] `apps/web/components/admin/ConfirmDialog.tsx`
+- [x] `apps/web/components/admin/TableSkeleton.tsx`
 - [ ] `apps/web/components/admin/agent/AgentArchetypesTab.tsx`
 - [ ] `apps/web/components/admin/agent/AgentConfigDialog.tsx`
 - [ ] `apps/web/components/admin/agent/AgentConversationsTab.tsx`
@@ -268,7 +268,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/components/admin/agent/ConversationPicker.tsx`
 - [ ] `apps/web/components/admin/agent/DeliveryQueueItemCard.tsx`
 - [ ] `apps/web/components/admin/agent/DeliveryQueuePanel.tsx`
-- [ ] `apps/web/components/admin/agent/InfoIcon.tsx`
+- [x] `apps/web/components/admin/agent/InfoIcon.tsx`
 - [ ] `apps/web/components/admin/agent/ScanControlPanel.tsx`
 - [ ] `apps/web/components/admin/agent/ScanHistoryChart.tsx`
 - [ ] `apps/web/components/admin/agent/ScanLogDetail.tsx`
@@ -276,32 +276,32 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/components/admin/agent/TriggerSchedulingModal.tsx`
 - [ ] `apps/web/components/admin/agent/UserDisplay.tsx`
 - [ ] `apps/web/components/admin/agent/UserPicker.tsx`
-- [~] `apps/web/components/admin/agent/config-form-merge.ts`
-- [ ] `apps/web/components/admin/ranking/ConversationRankCard.tsx`
-- [ ] `apps/web/components/admin/ranking/LinkRankCard.tsx`
-- [ ] `apps/web/components/admin/ranking/MessageRankCard.tsx`
-- [ ] `apps/web/components/admin/ranking/RankingFilters.tsx`
-- [ ] `apps/web/components/admin/ranking/RankingPodium.tsx`
-- [ ] `apps/web/components/admin/ranking/RankingStats.tsx`
-- [ ] `apps/web/components/admin/ranking/RankingStatsImpl.tsx`
-- [ ] `apps/web/components/admin/ranking/RankingTable.tsx`
-- [ ] `apps/web/components/admin/ranking/UserRankCard.tsx`
-- [ ] `apps/web/components/admin/ranking/constants.ts`
-- [ ] `apps/web/components/admin/ranking/index.ts`
-- [~] `apps/web/components/admin/ranking/utils.tsx`
-- [ ] `apps/web/components/admin/settings/DatabaseSettingsSection.tsx`
-- [ ] `apps/web/components/admin/settings/FeaturesSettingsSection.tsx`
-- [ ] `apps/web/components/admin/settings/GeneralSettingsSection.tsx`
-- [ ] `apps/web/components/admin/settings/MessagesSettingsSection.tsx`
-- [ ] `apps/web/components/admin/settings/RateLimitingSettingsSection.tsx`
-- [ ] `apps/web/components/admin/settings/SecuritySettingsSection.tsx`
-- [ ] `apps/web/components/admin/settings/ServerSettingsSection.tsx`
-- [ ] `apps/web/components/admin/settings/SettingField.tsx`
-- [ ] `apps/web/components/admin/settings/SettingsAlerts.tsx`
-- [ ] `apps/web/components/admin/settings/SettingsHeader.tsx`
-- [ ] `apps/web/components/admin/settings/SettingsStats.tsx`
-- [ ] `apps/web/components/admin/settings/UploadsSettingsSection.tsx`
-- [ ] `apps/web/components/admin/settings/index.ts`
+- [x] `apps/web/components/admin/agent/config-form-merge.ts`
+- [x] `apps/web/components/admin/ranking/ConversationRankCard.tsx`
+- [x] `apps/web/components/admin/ranking/LinkRankCard.tsx`
+- [x] `apps/web/components/admin/ranking/MessageRankCard.tsx`
+- [x] `apps/web/components/admin/ranking/RankingFilters.tsx`
+- [x] `apps/web/components/admin/ranking/RankingPodium.tsx`
+- [x] `apps/web/components/admin/ranking/RankingStats.tsx`
+- [x] `apps/web/components/admin/ranking/RankingStatsImpl.tsx`
+- [x] `apps/web/components/admin/ranking/RankingTable.tsx`
+- [x] `apps/web/components/admin/ranking/UserRankCard.tsx`
+- [x] `apps/web/components/admin/ranking/constants.ts`
+- [x] `apps/web/components/admin/ranking/index.ts`
+- [x] `apps/web/components/admin/ranking/utils.tsx`
+- [x] `apps/web/components/admin/settings/DatabaseSettingsSection.tsx`
+- [x] `apps/web/components/admin/settings/FeaturesSettingsSection.tsx`
+- [x] `apps/web/components/admin/settings/GeneralSettingsSection.tsx`
+- [x] `apps/web/components/admin/settings/MessagesSettingsSection.tsx`
+- [x] `apps/web/components/admin/settings/RateLimitingSettingsSection.tsx`
+- [x] `apps/web/components/admin/settings/SecuritySettingsSection.tsx`
+- [x] `apps/web/components/admin/settings/ServerSettingsSection.tsx`
+- [x] `apps/web/components/admin/settings/SettingField.tsx`
+- [x] `apps/web/components/admin/settings/SettingsAlerts.tsx`
+- [x] `apps/web/components/admin/settings/SettingsHeader.tsx`
+- [x] `apps/web/components/admin/settings/SettingsStats.tsx`
+- [x] `apps/web/components/admin/settings/UploadsSettingsSection.tsx`
+- [x] `apps/web/components/admin/settings/index.ts`
 - [ ] `apps/web/components/admin/user-detail/UserActivitySection.tsx`
 - [ ] `apps/web/components/admin/user-detail/UserContactInfoSection.tsx`
 - [ ] `apps/web/components/admin/user-detail/UserGeolocationSection.tsx`
@@ -1027,13 +1027,13 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/hooks/useTextAttachmentDetection.ts`
 - [ ] `apps/web/hooks/useThrottle.ts`
 
-## hooks/admin  (1/5 have a test)
+## hooks/admin  (5/5 have a test)
 
-- [ ] `apps/web/hooks/admin/index.ts`
-- [ ] `apps/web/hooks/admin/use-admin-settings.ts`
-- [~] `apps/web/hooks/admin/use-agent-admin-events.ts`
-- [ ] `apps/web/hooks/admin/use-settings-save.ts`
-- [ ] `apps/web/hooks/admin/use-settings-validation.ts`
+- [x] `apps/web/hooks/admin/index.ts`
+- [x] `apps/web/hooks/admin/use-admin-settings.ts`
+- [x] `apps/web/hooks/admin/use-agent-admin-events.ts`
+- [x] `apps/web/hooks/admin/use-settings-save.ts`
+- [x] `apps/web/hooks/admin/use-settings-validation.ts`
 
 ## hooks/composer  (11/12 have a test)
 
@@ -1217,7 +1217,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## services  (12/42 have a test)
 
-- [ ] `apps/web/services/admin.service.ts`
+- [x] `apps/web/services/admin.service.ts`
 - [ ] `apps/web/services/advanced-translation.service.ts`
 - [ ] `apps/web/services/agent-admin.service.ts`
 - [ ] `apps/web/services/anonymous-chat.service.ts`
