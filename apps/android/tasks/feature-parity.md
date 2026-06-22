@@ -351,8 +351,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Timeline transport: play/pause, scrub, zoom 0.25×–4×, mute; snap-to-grid with guides
 - [ ] Multi-track playback with sample-accurate audio mixing (foreground+background, fades, ducking)
 - [ ] Story media audio-focus arbitration (claim app audio, restore on dismiss)
-- [ ] **Story viewer**: tap-advance + swipe (horizontal=group, vertical=dismiss), segmented
+- [~] **Story viewer**: tap-advance + swipe (horizontal=group, vertical=dismiss), segmented
       progress bars, cross-dissolve transitions, per-story opening/closing effects
+      — done: pure cross-group **`StoryPlayback`** engine (tap-advance rolls between
+      authors, rolls back to the previous group's last slide, dismisses past the
+      last slide of the last group; `jumpToNext/PreviousGroup` ready for swipes),
+      wired into `StoryViewerViewModel`/`StoryViewerScreen` with segmented progress
+      + timed auto-advance. Pending: horizontal/vertical swipe gestures wired to the
+      jump/dismiss API, cross-dissolve transitions, opening/closing effects.
 - [ ] Timed auto-advance gated on media-load readiness; adjacent-slide prefetch (sliding window)
 - [ ] Story content rendering: text/positioning/background/filters/media overlays
 - [ ] Story reactions: emoji quick-strip + full picker, big floating animation, heart bounce, count
