@@ -134,7 +134,7 @@ export function UserMediaSection({ userId }: { userId: string }) {
                     title={item.originalName || undefined}
                   >
                     {preview ? (
-                      <img src={preview} alt={item.originalName || ''} className="w-full h-full object-cover" />
+                      <img src={preview} alt={item.originalName || ''} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                     ) : (
                       <Icon className="h-7 w-7 text-gray-400" />
                     )}

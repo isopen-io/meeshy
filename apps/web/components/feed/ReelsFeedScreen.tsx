@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useToast } from '@/components/v2';
+import { FeedTabs } from '@/components/feed/PostsFeedScreen';
 import { ReelPlayer } from '@/components/feed/ReelPlayer';
 import { useReelsFeedQuery, useReelsFeedPosts } from '@/hooks/queries/use-reels-feed-query';
 import {
@@ -158,7 +159,10 @@ export function ReelsFeedScreen() {
   }, [current, index, reels.length, userLanguage, close, onLike, onComment, onShare, onBookmark, reelsQuery, t]);
 
   return (
-    <DashboardLayout title="Reels" hideSearch className="!max-w-none !px-0 !overflow-hidden !h-full">
+    <DashboardLayout title="Reels" hideSearch className="!max-w-none !px-0 !overflow-hidden !h-full relative">
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[60] w-full max-w-md px-4">
+        <FeedTabs active="reels" />
+      </div>
       <div className="relative h-full w-full">{content}</div>
     </DashboardLayout>
   );
