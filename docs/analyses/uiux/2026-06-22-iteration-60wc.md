@@ -1,86 +1,82 @@
 # Analyse UI/UX — Itération 60wc (web only)
 
-## Contexte de la routine
-- Déclenchée par la fermeture (merge) de la **PR #799** (iter-59w : i18n + a11y
-  `ImageLightbox`) sur `main`.
-- **Double collision absorbée** (agents parallèles, même run) :
-  - `60w` = PR #806 (i18n `config-modal.tsx`) — mergé en premier.
-  - `60wb` = PR #808 (fix anti-pattern `t()||fallback` sur `components/auth/**`) —
-    mergé ensuite.
-  - Ma surface (cluster **admin/agent**) est **disjointe** des deux → renumérotée
-    **60wc** (convention suffixe lettre), les trois conservées.
-- Revue préalable `docs/analyses/uiux/` + `docs/plans/uiux/` :
-  - Cluster **feed/reels 53w** entièrement soldé (#774/#780/#787).
-  - Modales hand-rolled : Escape/role=dialog/aria-modal **58w** (#792) + **focus-trap**
-    (#796) + **inert** (#779) soldés.
-  - Rouge d'erreur design-system **56wb** (#776 → `--gp-error`) soldé.
-  - `ImageLightbox` **59w** (#799), OTP a11y **59w** (#786), `config-modal` **60w**
-    (#806), anti-pattern auth **60wb** (#808) soldés.
-- Aucune analyse/plan en double détecté pour le périmètre **web**. Itérations `*i`
-  (iOS) et Android **hors périmètre** (web only).
+**Date** : 2026-06-22
+**Périmètre** : application web (`apps/web/`) exclusivement
+**Veine** : a11y + Prisme — i18n des aria-labels d'un aperçu de pièces jointes live
+**Base** : `main` HEAD post-merge iter-60wb (#808 auth anti-pattern) — commit `7f4f093`
+**Numérotée 60wc** : double collision absorbée — 60w (#806 config-modal) **et** 60wb (#808 auth `t()||fallback`) livrées en parallèle ; périmètres **disjoints**, les trois conservées.
 
-## Cible 60wc — cluster **admin / agent** (surfaces live non internationalisées)
-Le panneau d'administration des **agents conversationnels**
-(`components/admin/agent/`) présente une rupture du **Prisme Linguistique** :
-3 composants importent (ou peuvent importer) `useI18n('admin')` mais affichent des
-libellés **FR figés** rendus en TOUTES langues.
+## Revue de cohérence (étapes 1–3 de la routine)
 
-### 1. `AgentConversationsTab.tsx` (hook `t` présent, non utilisé sur ces chaînes)
-- Confirm de suppression `Supprimer cette configuration agent ?`
-- Titre `Configurations Agent` + compteur `{total} conversations configurées`
-- Placeholder recherche `Rechercher...`, bouton `Configurer`
-- État vide `Aucune conversation configurée pour l'agent`
-- Tooltips `Voir les messages agent`, `Planificateur de triggers`
-- **En-têtes de colonnes desktop** : `Statut`, `Contrôlés`, `Confiance`,
-  `Dernière rép.` (+ `Conversation`/`Triggers`/`Messages`/`Actions` homogénéisés)
+### Doublons d'analyses
+- **Aucun doublon de périmètre** : 60w (#806) = `config-modal.tsx` ; 60wb (#808) =
+  anti-pattern `t()||fallback` sur `components/auth/**` ; cette 60wc =
+  `AttachmentPreviewReply.tsx` (surfaces sans recouvrement).
+- **Doublon détecté côté PR (à fermer)** : PR **#802** et **#803** sont **deux
+  doublons encore ouverts** du focus-trap déjà livré par #796 (mêmes 2 modales,
+  même hook `useFocusTrap`) → **redondants, à fermer**.
 
-### 2. `ConversationPicker.tsx` (destructurait `{ locale }` seul — `t` ajouté)
-- Placeholder `Chercher par titre, ID ou identifier...`
-- État chargement `Recherche dans les salons...`
-- Repli titre `Sans titre` (×2 : liste + sélection)
-- État vide paramétré `Aucune conversation trouvée pour « {term} »`
-- Aide `Entrez au moins 2 caractères pour rechercher`
+### Correction d'un faux positif que j'avais émis (config-modal)
+Mon ébauche initiale qualifiait `components/settings/config-modal.tsx` de **code
+mort** (aucun import direct dans `app/`/`components/`). **C'était FAUX** : le
+composant est **lazy-loadé et live en prod** via `lib/lazy-components.tsx`
+(`LazyConfigModal` + entrée `'config-modal'` du registre) ; la 60w (#806) l'a
+correctement internationalisé. **Leçon** : pour juger « code mort » côté web,
+grep AUSSI `lib/lazy-components.tsx` (lazy registry) ET les imports dynamiques
+`import(...)`, pas seulement les imports statiques. NE PLUS qualifier
+`config-modal.tsx` de code mort.
 
-### 3. `AgentRolesSection.tsx` (hook `t` présent, non utilisé sur ces chaînes)
-- État vide `Aucun rôle observé pour cette conversation`
-- `originLabel` : `Observé` / `Archétype` / `Hybride`
-- Badge `Verrouillé` ; bouton `Unlock` (incohérence EN→FR `Déverrouiller`)
-- `{n} msg analysés`, libellé `Confiance`, placeholder `Assigner un archétype...`
+## Problème traité — aria-labels FR figés sur `AttachmentPreviewReply` (LIVE)
 
-## Correctif livré
-- **22 chaînes** internationalisées sous le namespace existant `admin` →
-  `agent.{conversationsTab,conversationPicker,rolesSection}.*` (+ sous-groupes
-  `conversationsTab.columns.*` et `rolesSection.origin.*`).
-- **40 clés ×4 locales** (`en/fr/es/pt`) ajoutées à `admin.json`, diff **strictement
-  additif** (round-trip JSON byte-identique vérifié ; parité 268 clés `agent` ×4).
-- Fallbacks EN en 2e argument pour les chaînes simples (anti-flash, **leçon 50w** —
-  signature native `t(key, fallback)`, cohérent avec le fix 60wb/#808) ; interpolation
-  `{count}`/`{term}` (params object, sans fallback string — exclusifs par la signature).
-- `ConversationPicker` : `t` ajouté au destructuring `useI18n('admin')`.
-- Incohérence corrigée : bouton `Unlock` (EN dur) → clé `rolesSection.unlock`.
+`components/attachments/AttachmentPreviewReply.tsx` affiche les aperçus interactifs
+de pièces jointes dans les **zones de message/réponse** — surface **vivante**,
+montée par `components/common/message-composer/index.tsx` et
+`components/common/bubble-message/MessageReplyPreview.tsx` (cœur du chat).
+
+Le composant **n'avait AUCUN hook i18n** : 7 libellés d'accessibilité
+(`aria-label`/`title`/`alt`) étaient **figés en français en TOUTES langues** —
+un lecteur d'écran anglophone/hispanophone/lusophone entendait du français
+(rupture Prisme + a11y, WCAG 1.1.1 / 4.1.2).
+
+| Surface | Avant (FR figé) | Après |
+|---------|-----------------|-------|
+| group | `{n} pièce(s) jointe(s)` | `t('upload.filesAttached', {count})` *(réutilisé)* |
+| image | `Ouvrir l'image {name}` | `t('actions.openImageNamed', {name})` *(réutilisé)* |
+| image alt | `Aperçu de l'image {name}` | `t('actions.imagePreviewNamed', {name})` *(neuf)* |
+| vidéo title | `Ouvrir en plein écran` | `t('gallery.fullscreen')` *(réutilisé)* |
+| vidéo | `Ouvrir la vidéo {name} en plein écran` | `t('actions.openVideoFullscreenNamed', {name})` *(neuf)* |
+| PDF | `Ouvrir le PDF : {name}` | `t('actions.openPdfNamed', {name})` *(neuf)* |
+| texte | `Ouvrir le fichier texte : {name}` | `t('actions.openTextFileNamed', {name})` *(neuf)* |
+
+## Décisions
+- **Réutilisation maximale** (Single Source of Truth) : 3 des 7 chaînes mappent
+  vers des clés **déjà présentes ×4 locales** (`upload.filesAttached`,
+  `actions.openImageNamed`, `gallery.fullscreen`).
+- **4 clés neuves** sous le bloc existant `attachments.actions`
+  (`imagePreviewNamed`, `openVideoFullscreenNamed`, `openPdfNamed`,
+  `openTextFileNamed`) — cohérent avec les `*Named` déjà en place. Parité ×4.
+- **Pas de fallback string** : signature `t()` exclusive (params **OU** fallback).
+  Les 7 surfaces sont `aria-label`/`title`/`alt` **non visibles** → aucun flash ;
+  parité ×4 garantit zéro clé brute.
+- **Test** : `__tests__/components/attachments/AttachmentPreviewReply.test.tsx`
+  interrogeait par nom accessible FR → mock de `@/hooks/useI18n` ajouté (résout
+  les clés en FR), intent inchangé. Pattern identique au 59w `PhoneResetFlow.test`.
 
 ## Vérifications
-- Grep FR résiduel sur les 3 fichiers → **0** (hors séparateur `•`).
-- JSON valide ×4 ; parité des 40 clés ×4 locales.
-- Aucun test n'importe ces 3 composants ni n'assert les anciennes chaînes FR.
-- CI verte (#811) : Test web ✅, Quality bun ✅, Build bun ✅, + toutes les suites.
+- Grep FR résiduel dans `AttachmentPreviewReply.tsx` (aria/title/alt) = **0**.
+- JSON valide ×4 ; diff locale **strictement additif** (4 clés en fin de bloc).
+- **CI #804** : Quality (bun) ✅, Test web ✅ (avec le mock i18n),
+  Security ✅, Build ✅ — sur le commit pré-merge ET le commit de merge.
 
-## Annotation — NE PLUS re-flagger
-- `components/admin/agent/AgentConversationsTab.tsx`, `ConversationPicker.tsx`,
-  `AgentRolesSection.tsx` : i18n complet sous `admin.agent.{conversationsTab,
-  conversationPicker,rolesSection}.*`. Surfaces conformes au Prisme.
-- `ConversationPicker` prop défaut `placeholder="Search a conversation..."` (EN) :
-  défaut de prop **surchargé par les appelants** — non visible en pratique, laissé
-  tel quel. Ne pas re-flagger.
+## ✅ Statut — COMPLÈTE & CORRIGÉE
+**NE PLUS re-flagger** `components/attachments/AttachmentPreviewReply.tsx` pour
+i18n des aria-labels/title/alt. **NE PLUS qualifier `config-modal.tsx` de code
+mort** — live (lazy) + i18n (#806). **À fermer** : PR #802 / #803.
 
-## Optimisations restantes (différé 61w+)
-- Anti-pattern `t()||fallback` : **60wb (#808) a soldé `auth/**`** ; reste ~270 occ /
-  ~48 fichiers (admin/conversations/audio/settings/video-calls) → lots `60wc+`.
-- `Badge` v2 variants success/warning/gold hexes off-palette → **arbitrage
-  `theme.colors.*` vs `gp-*` requis AVANT migration** (déféré 56wb).
-- `PhoneResetFlow.tsx:490` (sr-only indicatif), `AttachmentPreviewReply.tsx:205-206`
-  (title/aria FR) — encore ouverts.
-- Épuration `components/settings/_archived/` (+ `font-selector.tsx`/`metadata-test.tsx`
-  morts ; `font-selector`/`config-modal` exportés au barrel + testés → lot dédié).
-- `console.error` FR (logs dev) ; `next-themes` orphelin (lockfile) ;
-  `app/settings/loading.tsx` (server component → i18n server-side dédiée).
+## Reste différé (61w+)
+- `components/auth/PhoneResetFlow.tsx:491` : `sr-only` `Indicatif pays` FR figé.
+- Anti-pattern `t()||fallback` restant (~270 occ / ~48 fichiers hors auth) — 60wd+ (cf. #808).
+- `Badge` variants success/warning/gold off-palette — arbitrage `theme.colors.*` vs `gp-*`.
+- `app/settings/loading.tsx` server-component i18n (exclusion documentée).
+- retrait dépendance orpheline `next-themes` (touche `pnpm-lock.yaml`, isolé).
+</content>

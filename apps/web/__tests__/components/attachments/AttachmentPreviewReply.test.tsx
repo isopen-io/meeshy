@@ -71,6 +71,31 @@ jest.mock('@/utils/attachment-url', () => ({
     })),
 }));
 
+// Mock i18n: resolve the attachment a11y keys to French so the accessible-name
+// queries below (querying by visible/accessible label) keep validating behavior.
+jest.mock('@/hooks/useI18n', () => ({
+  useI18n: () => ({
+    t: (key: string, paramsOrFallback?: Record<string, unknown> | string) => {
+      const params =
+        typeof paramsOrFallback === 'object' && paramsOrFallback !== null
+          ? paramsOrFallback
+          : {};
+      const name = (params.name as string) ?? '';
+      const count = (params.count as number | string) ?? '';
+      const map: Record<string, string> = {
+        'upload.filesAttached': `${count} pièces jointes`,
+        'actions.openImageNamed': `Ouvrir l'image ${name}`,
+        'actions.imagePreviewNamed': `Aperçu de l'image ${name}`,
+        'gallery.fullscreen': 'Ouvrir en plein écran',
+        'actions.openVideoFullscreenNamed': `Ouvrir la vidéo ${name} en plein écran`,
+        'actions.openPdfNamed': `Ouvrir le PDF : ${name}`,
+        'actions.openTextFileNamed': `Ouvrir le fichier texte : ${name}`,
+      };
+      return map[key] ?? key;
+    },
+  }),
+}));
+
 // Create mock attachment helper
 const createMockAttachment = (overrides: Partial<Attachment> = {}): Attachment => ({
   id: `attachment-${Math.random().toString(36).substr(2, 9)}`,
