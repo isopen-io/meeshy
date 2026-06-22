@@ -280,3 +280,5 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 63w | claude/practical-fermat-yly7ym (anti-pattern t()||fallback sidebar détails conv) | #849 | ⏳ |
 | 65w | claude/practical-fermat-s5hyhl (anti-pattern t()||fallback ConversationSettingsModal + 6 clés fr-only en/es/pt) | — | ⏳ |
 | 64w | claude/practical-fermat-gq4cjc (i18n bannières failed-message/system-status + selectors ; 24 clés ×4 locales) | #857 | ✅ |
+| 65w (doublon) | claude/practical-fermat-8tc8x4 (anti-pattern ConversationSettingsModal — DOUBLON de #864) | #867 | ❌ fermée |
+| 66w | claude/practical-fermat-8tc8x4 (anti-pattern `t()\|\|fallback` page deep-link stats lien suivi `links/tracked/[token]` : 15 occ. + 8 clés `links.tracking.*` dont 7 absentes des 4 locales + `details.unexpectedError`) | ⏳ | ⏳ |
