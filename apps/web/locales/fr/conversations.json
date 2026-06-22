@@ -219,6 +219,8 @@
       "descriptionPlaceholder": "Ajoutez une description...",
       "descriptionUpdated": "Description mise à jour avec succès",
       "addDescription": "Cliquez pour ajouter une description...",
+      "loading": "Chargement...",
+      "untitled": "Sans titre",
       "noDescription": "Aucune description",
       "editDescription": "Modifier la description",
       "clickToChangeImage": "Cliquez pour changer l'image",

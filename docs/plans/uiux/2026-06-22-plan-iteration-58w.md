@@ -1,39 +1,40 @@
-# Plan — Iteration 58w (web)
+# Plan — Itération 58w (web)
+
+## Base
+- Repartir de `main` HEAD `657e588` (post-merge #780 iter-57wb).
+- Branche de travail : `claude/practical-fermat-ihammv`.
+
+## Contexte — pivot après collision
+Le candidat 58w initial (i18n `ReelsFeedScreen.tsx`) a été livré **en parallèle**
+par un autre agent (#780, iter-57wb, mergé `657e588`). La PR doublon #783 a été
+fermée sans merge (CI verte) — convention #770→#771. Le run repivote sur un
+périmètre **non revendiqué** : le différé borné 56wb « gestes/a11y modales
+hand-rolled ».
 
 ## Objectif
-Solder le **dernier volet** du différé borné « surface feed non internationalisée » (cluster 53w) : l'écran `/feed/posts`.
+Passe **a11y + gestes de dismiss standard** sur les 2 dialogues maison du
+design-system, sans dépendance ni focus-trap (différé 59w+) :
+- `components/v2/ConversationDrawer.tsx` (user-facing)
+- `components/admin/agent/AgentTopicEditModal.tsx` (admin)
 
-## Contexte
-- Volet lecteur `ReelPlayer` → soldé 57w (#774).
-- Volet écran reels `ReelsFeedScreen` → soldé 57wb (#780).
-- Reste : `components/feed/PostsFeedScreen.tsx` (+ `FeedTabs` exporté dans le même fichier), monté sur `/feed/posts` et l'alias `/feeds`.
+## Étapes
+1. [x] `ConversationDrawer` : `useEffect` Escape→`onClose` (actif `isOpen`) +
+   `role="dialog"`/`aria-modal`/`aria-labelledby` (id sur `<h2>`).
+2. [x] `AgentTopicEditModal` : `useEffect` Escape→`onClose` **gardé `!saving`** +
+   `role/aria-modal/aria-labelledby` (id sur `<h3>`) + `aria-label` close.
+3. [x] `agent.topicEditModal.close` ×4 locales (Close/Fermer/Cerrar/Fechar).
+4. [x] Vérif parité clés admin ×4 + JSON valide + diff minimal.
+5. [x] Annoter analyse + `branch-tracking.md` (collision #783 + 56wb soldé).
+6. [ ] Commit + push + PR ; merge dans `main` après CI vert ; supprimer la branche.
 
-**Note collision** : l'idée initiale de 58w (ReelsFeedScreen) avait été livrée en parallèle par 57wb (#780) pendant ce run. Pivot vers le volet réellement restant — PostsFeedScreen — pour éviter la duplication.
-
-## Constat
-`PostsFeedScreen.tsx` n'avait **aucun hook i18n** : ~40 chaînes figées, avec une **incohérence FR/EN flagrante** :
-- Toasts FR durs : `Story publiée !`, `Lien copié !`, `Publié !`, `Post supprimé`, `Reposté !`, `Cité !`, `Mood publié !`, `Erreur`…
-- UI EN dure : `Updating...`, `Unable to load feed.`, `No posts yet…`, `Retry`, `Feed`, `Unknown`, `new post`/`new posts`.
-- `aria-label`/`sr-only`/sections FR : `Type de fil`, `Stories publiques`, `Humeurs`, `Composer une publication`, `Enregistrer un post audio`, `Mise à jour du fil…`, `Fil d'actualité — …`.
-- `formatRelativeTime` renvoie `À l'instant`/`Il y a {n}min/h/j` FR durs.
-
-## Périmètre
-- `components/feed/PostsFeedScreen.tsx` — `useI18n('feed')` sur `PostsFeedScreen` ET `FeedTabs`
-- `locales/{en,fr,es,pt}/feed.json` — **nouveau namespace** (47 clés)
-
-## Méthode
-- Namespace dédié `feed` (cohérent avec `reel` pour le sous-cluster reels).
-- `formatRelativeTime(date, t)` reçoit `t` (helper hors composant) → clés `time.{now,minutes,hours,days}` paramétrées.
-- Fallbacks EN 2e arg pour chaînes simples (anti-flash, leçon 50w) ; clés paramétrées (`{count}`/`{id}`/`time.*`) sans fallback string (parité ×4 = zéro flash).
-- `t` ajouté aux deps de tous les `useCallback` de handlers concernés.
-
-## Exclusions documentées (NE PAS re-flagger)
-- `mockStatuses` (lignes ~64-76) : données démo placeholder « to be replaced » — PAS du chrome UI.
-- Onglet `Reels` (marque produit) laissé littéral, cohérent avec `ReelsFeedScreen` (57wb).
-
-## Vérifications
-- JSON valide ×4, parité 47 clés ×4 (script flatten).
-- Grep résiduel : seules les 3 lignes mock subsistent.
+## Contraintes / décisions
+- **Pas de backdrop-dismiss** sur le modal de formulaire admin (perte de saisie
+  accidentelle) — Échap réversible suffit.
+- Focus-trap complet **hors périmètre** (invasif) → 59w+.
+- Aucune dépendance ajoutée ; pattern identique sur les 2 modales.
+- Aucune autre frontend (iOS/Android hors périmètre).
 
 ## Suite (59w+)
-Cluster feed soldé. Candidats : `next-themes` orphan (isolé, lock), gestes/a11y modales hand-rolled (56wb), audit qualité es/pt.
+`PostsFeedScreen.tsx` (~30, **large** — seul gros reliquat feed), focus-trap
+dialogues, `Badge` off-palette (arbitrage tokens), `app/settings/loading.tsx`
+(server component i18n), console.error FR, `next-themes` orphelin.

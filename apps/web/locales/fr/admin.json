@@ -302,6 +302,7 @@
       "fieldCooldown": "Cooldown (minutes)",
       "cooldownHint": "Délai avant de pouvoir re-piocher ce topic sur la même conversation.",
       "fieldActive": "Actif (pris en compte par le strategist)",
+      "close": "Fermer",
       "cancel": "Annuler",
       "saving": "Sauvegarde…",
       "save": "Sauvegarder",
