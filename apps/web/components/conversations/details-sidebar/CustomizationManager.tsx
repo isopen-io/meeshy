@@ -88,7 +88,7 @@ export function CustomizationManager({ conversationId, currentUser, onPreference
   };
 
   if (isLoading) {
-    return <div className="text-xs text-muted-foreground italic">{t('common.loading') || 'Loading...'}</div>;
+    return <div className="text-xs text-muted-foreground italic">{t('common.loading', 'Loading...')}</div>;
   }
 
   return (

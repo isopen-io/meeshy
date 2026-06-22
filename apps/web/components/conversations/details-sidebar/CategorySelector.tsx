@@ -176,7 +176,7 @@ export function CategorySelector({ conversationId, currentUser, onCategoryUpdate
   const selectedCategory = categories.find(c => c.id === selectedCategoryId);
 
   if (isLoading) {
-    return <div className="text-xs text-muted-foreground italic">{t('common.loading') || 'Loading...'}</div>;
+    return <div className="text-xs text-muted-foreground italic">{t('common.loading', 'Loading...')}</div>;
   }
 
   return (
