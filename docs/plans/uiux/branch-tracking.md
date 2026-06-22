@@ -225,4 +225,5 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 61wb | claude/practical-fermat-bhskup-61w (anti-pattern `t()||fallback` chrome global layout/) | #841 | ✅ |
 | 61we | claude/practical-fermat-xzf7uf (i18n message-bubble + bubble.forwarded) | #842 | ✅ |
 | 62wb | claude/practical-fermat-am6uvs (Badge variants gold/success/warning → tokens --gp-* dark-mode) | #847 | ✅ |
-| 63w | claude/practical-fermat-yly7ym (anti-pattern t()||fallback sidebar détails conv) | #849 | ⏳ |
+| 63w | claude/practical-fermat-yly7ym (anti-pattern t()||fallback sidebar détails conv) | #849 | ✅ |
+| 64wb | claude/practical-fermat-y6vyvh (anti-pattern t()||fallback en-têtes catégories liste conv — CommunityCarousel + ConversationGroup) | (en vol) | ⏳ |

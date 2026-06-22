@@ -15,7 +15,7 @@ interface ConversationGroupProps {
   isCollapsed: boolean;
   hasUnreadMessages: boolean;
   onToggleSection: (sectionId: string) => void;
-  t: (key: string) => string;
+  t: (key: string, fallback?: string) => string;
   categoriesLength: number;
   children: React.ReactNode;
 }
@@ -61,7 +61,7 @@ export const ConversationGroup = memo(function ConversationGroup({
                 "text-xs font-semibold text-muted-foreground uppercase tracking-wide",
                 hasUnreadMessages && "font-bold text-foreground"
               )}>
-                {t('conversationsList.pinned') || 'Épinglées'}
+                {t('conversationsList.pinned', 'Pinned')}
               </h4>
             </>
           ) : type === 'uncategorized' ? (
@@ -71,7 +71,7 @@ export const ConversationGroup = memo(function ConversationGroup({
                 "text-xs font-semibold text-muted-foreground uppercase tracking-wide",
                 hasUnreadMessages && "font-bold text-foreground"
               )}>
-                {t('conversationsList.uncategorized') || 'Non catégorisées'}
+                {t('conversationsList.uncategorized', 'Uncategorized')}
               </h4>
             </>
           ) : (
