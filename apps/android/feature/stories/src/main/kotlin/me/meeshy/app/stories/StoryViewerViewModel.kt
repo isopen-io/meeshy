@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.StoryItem
@@ -30,6 +31,7 @@ data class StorySlideView(
     val isTranslated: Boolean,
     val imageUrl: String?,
     val accentHex: String,
+    val reactionCount: Int = 0,
 )
 
 /**
@@ -45,6 +47,9 @@ data class StoryViewerUiState(
     val groupIndex: Int = 0,
     val isLoading: Boolean = true,
     val isDismissed: Boolean = false,
+    val reactionCount: Int = 0,
+    val myReactions: Set<String> = emptySet(),
+    val quickReactions: List<String> = EmojiCatalog.defaultQuickReactions,
 ) {
     val current: StorySlideView? get() = slides.getOrNull(index)
     val hasNext: Boolean get() = index < slides.lastIndex
@@ -62,6 +67,9 @@ class StoryViewerViewModel @Inject constructor(
     private val userId: String = savedStateHandle.get<String>(USER_ID_ARG).orEmpty()
 
     private var playback: StoryPlayback = StoryPlayback(groups = emptyList())
+
+    /** Optimistic reaction state per slide id, seeded lazily from the slide's count. */
+    private val reactionStates = mutableMapOf<String, StoryReactionState>()
 
     private val _state = MutableStateFlow(StoryViewerUiState())
     val state: StateFlow<StoryViewerUiState> = _state.asStateFlow()
@@ -108,7 +116,42 @@ class StoryViewerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Quick-strip reaction on the current slide. The count moves optimistically;
+     * a repeat of the same emoji is inert (no network); a network failure rolls
+     * back to the snapshot so the UI never shows a phantom reaction.
+     */
+    fun react(emoji: String) {
+        val slide = playback.currentSlide ?: return
+        val slideId = slide.id
+        val snapshot = reactionStateFor(slide)
+        val optimistic = snapshot.reactedLocally(emoji)
+        if (optimistic == snapshot) return
+        reactionStates[slideId] = optimistic
+        emit()
+        viewModelScope.launch {
+            try {
+                if (storyRepository.react(slideId, emoji) is NetworkResult.Failure) {
+                    rollback(slideId, snapshot)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                rollback(slideId, snapshot)
+            }
+        }
+    }
+
+    private fun rollback(slideId: String, snapshot: StoryReactionState) {
+        reactionStates[slideId] = snapshot
+        emit()
+    }
+
+    private fun reactionStateFor(slide: StorySlideView): StoryReactionState =
+        reactionStates[slide.id] ?: StoryReactionState(count = slide.reactionCount)
+
     private fun emit() {
+        val reaction = playback.currentSlide?.let { reactionStateFor(it) } ?: StoryReactionState()
         _state.value = StoryViewerUiState(
             authorName = playback.authorName,
             slides = playback.slides,
@@ -116,6 +159,8 @@ class StoryViewerViewModel @Inject constructor(
             groupIndex = playback.groupIndex,
             isLoading = false,
             isDismissed = playback.isDismissed,
+            reactionCount = reaction.count,
+            myReactions = reaction.mine,
         )
     }
 
@@ -143,6 +188,7 @@ class StoryViewerViewModel @Inject constructor(
             isTranslated = resolved.isTranslated,
             imageUrl = imageUrl,
             accentHex = accentHex,
+            reactionCount = reactionCount,
         )
     }
 

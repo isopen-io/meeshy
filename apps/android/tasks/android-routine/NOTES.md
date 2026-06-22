@@ -37,9 +37,22 @@ Append-only log of gotchas and decisions that save time next run.
   `UiState` from it, the Composable only wires gestures + the auto-advance timer
   and observes `isDismissed` to pop. Keeps all branch logic JVM-testable.
 
+## Decisions (cont.)
+- **Optimistic story reactions > iOS fire-and-forget.** iOS `sendReaction` does
+  not bump locally and waits for the socket echo (`applyStoryReactionDelta`) for
+  its own +1. Android `StoryReactionState.reactedLocally` bumps instantly; to keep
+  the eventual socket echo from double-counting, `applyDelta(emoji, delta, isOwn)`
+  treats an own ADD of an emoji already in `mine` as a no-op. The VM rolls back to
+  a snapshot on `NetworkResult.Failure`/exception. Reducer lives in
+  `:feature:stories` (the "when to count" rule is product UX, not an SDK atom).
+- Quick-strip source of truth = `EmojiCatalog.defaultQuickReactions` (sdk model),
+  NOT a screen-local literal — keeps the strip consistent with the picker.
+
 ## Open follow-ups (cross-slice)
 - Wire **Kover** with a 90% per-module verification rule.
 - Add a dedicated **Android CI workflow** (touches `.github/` → separate run).
 - Story viewer richness: horizontal swipe = group jump (engine already supports
-  `jumpToNext/PreviousGroup`), vertical swipe = dismiss, reactions strip,
-  comments overlay, viewers sheet, media prefetch, SWR/Room backing for the tray.
+  `jumpToNext/PreviousGroup`), vertical swipe = dismiss, **reactions strip done**
+  (this loop), comments overlay, viewers sheet, media prefetch, SWR/Room backing.
+- `story:reacted`/`story:unreacted` socket wiring into `applyDelta` is the next
+  reaction slice; needs server `currentUserReactions` to seed `mine` on load.
