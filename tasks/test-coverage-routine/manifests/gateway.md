@@ -98,10 +98,10 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/voice-profile.ts`
 - [ ] `services/gateway/src/routes/voice.ts`
 
-## routes/admin  (13/19 have a test)
+## routes/admin  (14/19 have a test)
 
 - [x] `services/gateway/src/routes/admin/agent-topics.ts`
-- [~] `services/gateway/src/routes/admin/agent.ts`
+- [x] `services/gateway/src/routes/admin/agent.ts`
 - [x] `services/gateway/src/routes/admin/analytics.ts`
 - [x] `services/gateway/src/routes/admin/anonymous-users.ts`
 - [x] `services/gateway/src/routes/admin/broadcasts.ts`

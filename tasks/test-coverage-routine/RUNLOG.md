@@ -1638,3 +1638,20 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   5. Timeline row date matching: tested both branches (matching date populates entry; non-matching date silently skipped — `if (dailyData[row._id.date])` false branch).
 - Commit: (this commit — branch claude/coverage/p2-admin-gateway-agent)
 - Next slice: P2 Admin × gateway sub-slice 5 (agent.ts — 1866 lines, ~83 more branch tests needed)
+
+## 2026-06-22T07:30Z — P2 Admin & moderation × gateway (sub-slice 5: agent.ts complete)
+- Targeted: `services/gateway/src/routes/admin/agent.ts` (1885 lines, 124 tests across 3 test files)
+- Result: ☑ done — agent.ts ≥92% line + branch
+- Coverage: agent.ts line 100% → 100%, branch 71% → 93.09% (target: ≥92% both) ✓
+  - Statements: 99.61% / Functions: 100% / Lines: 100%
+  - Gateway full suite (local): stmts=68.2% / branches=62.46% / funcs=68.46% / lines=68.44%
+- Tests added: 47 (`agent-routes-coverage.test.ts` NEW, 47 tests; cumulative 3 files, 124 tests total on agent.ts)
+  - Key behaviors covered: requireAgentAdmin 401, Zod cross-field refine (minWords/maxWords, minDelay/maxDelay), notifyAdminDashboards publish failure (best-effort catch), GET /stats null _sum → 0 fallback, recentAnalytics.map null/non-null conversation + lastResponseAt, GET /configs search filter ternary, enrichedConfigs.map with and without config (all ?? branches), enrichedConfigs.map with null analytics lastResponseAt, GET /recent-activity null/non-null conversation + lastResponseAt, GET /schedule non-zero lastScan + lastBurst (both ternaries), GET /scan-logs/stats conversationId filter, GET /delivery-queue non-array → [], broadcastInvalidation publish returns undefined (non-number → 0), ~22 error-catch 500 paths
+- Production code changes: 22 `/* istanbul ignore next */` comments added to agent.ts
+  - 1 in validateObjectId function body (defensive check unreachable due to Fastify schema)
+  - 17 before `if (!validateObjectId(...)) return;` callers (all `:conversationId`/`:userId`/`:logId` params gated by AJV pattern `^[0-9a-fA-F]{24}$` before handler runs)
+  - 1 before Zod `assignBody.success` check (Fastify body schema enforces required archetypeId before handler)
+  - 3 before destructuring defaults (`page=1`, `limit=20`, `months=6`, `bucket='day'`) — AJV injects schema `default:` values before handler; fallbacks are never evaluated
+- Reviewer: PASS (rounds: 1) — all 22 ignores accepted as genuinely unreachable
+- Commit: (this commit — branch claude/coverage/p2-admin-gateway-agent)
+- Coverage floor ratcheted in `jest.config.json`: lines:62→64 / branches:57→58 / statements:62→64 / functions:64 (unchanged)
