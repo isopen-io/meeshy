@@ -9,6 +9,15 @@
   "notAReelBody": "El enlace apunta a una publicación, no a un reel.",
   "goneBody": "No se encuentra el reel que buscas.",
   "backToFeed": "Volver al feed",
+  "feed": {
+    "title": "Reels",
+    "loading": "Cargando reels…",
+    "unavailableTitle": "Reels no disponibles",
+    "retry": "Reintentar",
+    "emptyTitle": "Aún no hay reels",
+    "emptyBody": "Vuelve más tarde o explora las publicaciones de tu red.",
+    "viewPosts": "Ver publicaciones"
+  },
   "player": {
     "position": "Reel {current} de {total}",
     "byAuthor": "Reel de {name}",

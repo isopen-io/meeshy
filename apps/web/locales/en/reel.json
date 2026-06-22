@@ -9,6 +9,15 @@
   "notAReelBody": "The link points to a post, not a reel.",
   "goneBody": "The reel you're looking for can't be found.",
   "backToFeed": "Back to feed",
+  "feed": {
+    "title": "Reels",
+    "loading": "Loading reels…",
+    "unavailableTitle": "Reels unavailable",
+    "retry": "Try again",
+    "emptyTitle": "No reels yet",
+    "emptyBody": "Come back later or explore posts from your network.",
+    "viewPosts": "View posts"
+  },
   "player": {
     "position": "Reel {current} of {total}",
     "byAuthor": "Reel by {name}",
