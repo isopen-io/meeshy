@@ -1,29 +1,37 @@
-# Plan d'itération 60w (web only)
-
-**Objectif** : éliminer l'anti-pattern i18n `t('key') || 'fallback'` (dead-code +
-flash-of-raw-keys, leçon 50w) sur la surface `auth` et basculer vers la signature
-native `t('key', 'fallback')`.
+# Plan — Itération 60w (web)
 
 ## Base
-- Branche tirée de `main` HEAD post-merge iter-58wd / #796 / #779 / #799 (`9857819`).
-- Branche de travail : `claude/practical-fermat-o2g4dt`.
+- `main` HEAD `684d33f` (post-merge #774→#794, iter-57w→59w).
+- Branche de travail : `claude/practical-fermat-r4vwgd` (repivotée après #775 fermée
+  — collision ReelPlayer absorbée par #774).
+
+## Objectif
+i18n + a11y de la **modale de configuration globale**
+`components/settings/config-modal.tsx` (lazy-loadée, live) — 9 chaînes FR figées
+(6 onglets visibles + titre + 2 surfaces a11y) en TOUTES langues. Surface
+**orthogonale** au cluster feed/reels/modales fortement contesté (recommandation
+explicite `branch-tracking.md` « Next iteration 60 »).
 
 ## Étapes
-1. [x] Confirmer le bug au niveau de l'implémentation `use-i18n.ts` (`return fallback || key`).
-2. [x] Mesurer la classe de bug (405 occ / 59 fichiers ; 125 / 11 sur auth).
-3. [x] Vérifier l'absence de `t(args,params) || 'x'` (cas multi-arg risqué) → aucun.
-4. [x] Transformer `t(k) || 'x'` → `t(k, 'x')` sur 10 fichiers auth (76 remplacements).
-5. [x] Exclure `PhoneResetFlow.tsx` (collision PR #800 / iter-59w OTP).
-6. [x] Vérifier que les clés existent dans `locales/{en,fr}/auth.json` (zéro changement visible).
-7. [x] Angliciser les fallbacks FR → valeur EN exacte du locale (anti-flash).
-8. [x] Vérifier 0 anti-pattern restant + parenthèses équilibrées sur les 10 fichiers.
-9. [ ] Commit + push, ouvrir PR, attendre CI verte, merger dans `main`.
-10. [ ] Mettre à jour `branch-tracking.md` (base suivante, history) + supprimer la branche.
+1. [x] Resync branche sur `main` HEAD ; retirer les artefacts 57w superseded.
+2. [x] Bloc additif `settings.configModal` (9 clés, dont `tabs.*` ×6) ×4 locales.
+3. [x] `config-modal.tsx` → `useI18n('settings')` + 9 `t()` (fallbacks EN 2e arg).
+4. [x] Mettre à jour `__tests__/.../config-modal.test.tsx` (mock i18n + assertions EN).
+5. [x] Vérif : grep FR vide, parité 9 clés ×4, JSON valide ×4.
+6. [x] Analyse 60w + `branch-tracking.md`.
+7. [ ] Commit + push + PR ; merge dans `main` après CI vert ; supprimer la branche.
 
-## Hors périmètre / différé
-- `PhoneResetFlow.tsx` (post-#800).
-- ~270 occurrences sur ~48 fichiers web (admin/conversations/audio/settings/video-calls) → 60wb+.
+## Contraintes
+- Bloc dédié `configModal` (PAS réutiliser `settings.tabs.*` — libellés + ensemble
+  distincts). Diffs locale strictement additifs (round-trip JSON).
+- Fallbacks EN 2e arg sur les 9 `t()` (anti-flash, leçon 50w).
+- Aucune autre frontend (iOS/Android hors périmètre).
 
-## Risque
-Minimal : transformation mécanique string-level, chaque ligne revue, clés présentes
-(comportement runtime inchangé), aucun fichier de test ni JSON locale touché.
+## Leçon collision (à appliquer chaque run)
+`git fetch origin main` + `list_pull_requests` AVANT de coder ; surface
+orthogonale ; en cas de PR jumelle déjà mergée → fermer la sienne, repivoter.
+
+## Suite (61w+)
+`PhoneResetFlow.tsx:490` (sr-only indicatif), `AttachmentPreviewReply.tsx:205-206`
+(title/aria FR), `app/settings/loading.tsx` (server-side i18n), console.error FR,
+`next-themes` orphelin, épuration `settings/_archived/`.

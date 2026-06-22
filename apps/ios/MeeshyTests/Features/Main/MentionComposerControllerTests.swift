@@ -122,14 +122,19 @@ final class MentionComposerControllerTests: XCTestCase {
         XCTAssertEqual(mock.lastQuery, "ali")
     }
 
-    func test_handleQuery_short_doesNotTriggerAPI() async {
-        let (sut, mock) = makeSUT()
+    func test_handleQuery_emptyQuery_triggersAPIFetch_showsDefaultList() async {
+        let mockService = MockMentionService()
+        mockService.suggestionsResult = .success([makeSuggestion(username: "alicia")])
+        let (sut, mock) = makeSUT(service: mockService)
 
-        sut.handleQuery(in: "@a")  // query length = 1 < minQueryLengthForAPI (2)
+        // Taper juste « @ » (requête vide) doit afficher la liste par défaut
+        // (auteur du post + personnes ayant commenté + contacts) → appel API.
+        sut.handleQuery(in: "Hey @")
 
         try? await Task.sleep(nanoseconds: 400_000_000)
 
-        XCTAssertEqual(mock.suggestionsCallCount, 0)
+        XCTAssertGreaterThanOrEqual(mock.suggestionsCallCount, 1)
+        XCTAssertEqual(mock.lastQuery, "")
     }
 
     // MARK: - insertMention
