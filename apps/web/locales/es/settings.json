@@ -27,6 +27,19 @@
       "fonts": "Fuentes",
       "stats": "Estadísticas"
     },
+    "configModal": {
+      "title": "Ajustes y Configuración",
+      "selectSection": "Seleccionar una sección",
+      "sectionAriaLabel": "Sección de ajustes",
+      "tabs": {
+        "user": "Perfil de usuario",
+        "language": "Idiomas y Traducción",
+        "theme": "Apariencia",
+        "stats": "Estadísticas",
+        "notifications": "Notificaciones",
+        "privacy": "Privacidad"
+      }
+    },
     "profile": {
       "title": "Perfil",
       "description": "Información personal",

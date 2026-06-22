@@ -33,6 +33,19 @@
       "fonts": "Fonts",
       "stats": "Stats"
     },
+    "configModal": {
+      "title": "Settings & Configuration",
+      "selectSection": "Select a section",
+      "sectionAriaLabel": "Settings section",
+      "tabs": {
+        "user": "User profile",
+        "language": "Languages & Translation",
+        "theme": "Appearance",
+        "stats": "Statistics",
+        "notifications": "Notifications",
+        "privacy": "Privacy"
+      }
+    },
     "profile": {
       "title": "Profile",
       "description": "Personal information",

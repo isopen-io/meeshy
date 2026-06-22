@@ -41,6 +41,30 @@ jest.mock('@/components/translation/translation-stats', () => ({
 // Mock du module CSS
 jest.mock('./config-modal.module.css', () => ({}), { virtual: true });
 
+// Mock i18n : résout les clés configModal vers les libellés FR attendus
+// (le composant charge maintenant ses libellés via useI18n('settings'))
+const I18N_FR: Record<string, string> = {
+  'configModal.title': 'Paramètres et Configuration',
+  'configModal.selectSection': 'Sélectionner une section',
+  'configModal.sectionAriaLabel': 'Section des paramètres',
+  'configModal.tabs.user': 'Profil utilisateur',
+  'configModal.tabs.language': 'Langues & Traduction',
+  'configModal.tabs.theme': 'Apparence',
+  'configModal.tabs.stats': 'Statistiques',
+  'configModal.tabs.notifications': 'Notifications',
+  'configModal.tabs.privacy': 'Confidentialité',
+};
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, fallback?: string) => I18N_FR[key] ?? fallback ?? key,
+    tArray: () => [],
+    locale: 'fr',
+    currentLanguage: 'fr',
+    setLocale: jest.fn(),
+    isLoading: false,
+  }),
+}));
+
 describe('ConfigModal', () => {
   const mockUser: UserType = {
     id: 'user-1',

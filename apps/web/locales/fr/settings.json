@@ -40,6 +40,19 @@
       "application": "Application",
       "beta": "Beta"
     },
+    "configModal": {
+      "title": "Paramètres et Configuration",
+      "selectSection": "Sélectionner une section",
+      "sectionAriaLabel": "Section des paramètres",
+      "tabs": {
+        "user": "Profil utilisateur",
+        "language": "Langues & Traduction",
+        "theme": "Apparence",
+        "stats": "Statistiques",
+        "notifications": "Notifications",
+        "privacy": "Confidentialité"
+      }
+    },
     "profile": {
       "title": "Profil",
       "description": "Informations personnelles",
