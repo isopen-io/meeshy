@@ -1,0 +1,59 @@
+{
+  "title": "Feed",
+  "srHeading": "Feed de noticias — publicaciones, reels e historias",
+  "recordAudioPost": "Grabar una publicación de audio",
+  "loadingMore": "Cargando más publicaciones",
+  "updating": "Actualizando…",
+  "errorTitle": "No se pudo cargar el feed.",
+  "retry": "Reintentar",
+  "empty": "Aún no hay publicaciones. ¡Sé el primero en compartir algo!",
+  "newPost": "{count} publicación nueva",
+  "newPosts": "{count} publicaciones nuevas",
+  "tabs": {
+    "ariaLabel": "Tipo de feed",
+    "posts": "Publicaciones",
+    "reels": "Reels"
+  },
+  "sections": {
+    "stories": "Historias públicas",
+    "storiesHeading": "Historias",
+    "moods": "Estados de ánimo",
+    "moodsHeading": "Estados de ánimo",
+    "compose": "Crear una publicación",
+    "composeHeading": "Crear una publicación",
+    "posts": "Publicaciones",
+    "postsHeading": "Publicaciones"
+  },
+  "time": {
+    "now": "Ahora mismo",
+    "minutesAgo": "Hace {minutes}min",
+    "hoursAgo": "Hace {hours}h",
+    "daysAgo": "Hace {days}d"
+  },
+  "toast": {
+    "error": "Error",
+    "storyPublished": "¡Historia publicada!",
+    "storyPublishedDesc": "Tu historia es visible para tus amigos.",
+    "storyPublishedDescMedia": "Tu historia es visible para tus amigos ({count} archivos).",
+    "storyPublishError": "No se pudo publicar la historia.",
+    "storyDeleted": "Historia eliminada",
+    "storyDeleteError": "No se pudo eliminar la historia.",
+    "replySent": "Respuesta enviada",
+    "published": "¡Publicado!",
+    "publishedDesc": "Tu publicación se ha compartido.",
+    "publishError": "No se pudo publicar la publicación.",
+    "linkCopied": "¡Enlace copiado!",
+    "linkCopyError": "No se pudo copiar el enlace.",
+    "postDeleted": "Publicación eliminada",
+    "postEdited": "Publicación editada",
+    "reposted": "¡Republicado!",
+    "quoted": "¡Citado!",
+    "audioPublished": "¡Publicación de audio publicada!",
+    "publishErrorShort": "No se pudo publicar.",
+    "uploadError": "Error de subida",
+    "audioUploadError": "No se pudo subir el audio.",
+    "statusTitle": "Estado",
+    "statusSelected": "Estado {id} seleccionado",
+    "moodPublished": "¡Estado de ánimo publicado!"
+  }
+}

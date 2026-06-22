@@ -1,0 +1,59 @@
+{
+  "title": "Feed",
+  "srHeading": "News feed — posts, reels and stories",
+  "recordAudioPost": "Record an audio post",
+  "loadingMore": "Loading more posts",
+  "updating": "Updating…",
+  "errorTitle": "Unable to load feed.",
+  "retry": "Retry",
+  "empty": "No posts yet. Be the first to share something!",
+  "newPost": "{count} new post",
+  "newPosts": "{count} new posts",
+  "tabs": {
+    "ariaLabel": "Feed type",
+    "posts": "Posts",
+    "reels": "Reels"
+  },
+  "sections": {
+    "stories": "Public stories",
+    "storiesHeading": "Stories",
+    "moods": "Moods",
+    "moodsHeading": "Moods",
+    "compose": "Compose a post",
+    "composeHeading": "Compose a post",
+    "posts": "Posts",
+    "postsHeading": "Posts"
+  },
+  "time": {
+    "now": "Just now",
+    "minutesAgo": "{minutes}min ago",
+    "hoursAgo": "{hours}h ago",
+    "daysAgo": "{days}d ago"
+  },
+  "toast": {
+    "error": "Error",
+    "storyPublished": "Story published!",
+    "storyPublishedDesc": "Your story is visible to your friends.",
+    "storyPublishedDescMedia": "Your story is visible to your friends ({count} media).",
+    "storyPublishError": "Unable to publish the story.",
+    "storyDeleted": "Story deleted",
+    "storyDeleteError": "Unable to delete the story.",
+    "replySent": "Reply sent",
+    "published": "Published!",
+    "publishedDesc": "Your post has been shared.",
+    "publishError": "Unable to publish the post.",
+    "linkCopied": "Link copied!",
+    "linkCopyError": "Unable to copy the link.",
+    "postDeleted": "Post deleted",
+    "postEdited": "Post edited",
+    "reposted": "Reposted!",
+    "quoted": "Quoted!",
+    "audioPublished": "Audio post published!",
+    "publishErrorShort": "Unable to publish.",
+    "uploadError": "Upload error",
+    "audioUploadError": "Unable to upload the audio.",
+    "statusTitle": "Status",
+    "statusSelected": "Status {id} selected",
+    "moodPublished": "Mood published!"
+  }
+}

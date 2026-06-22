@@ -1,0 +1,59 @@
+{
+  "title": "Fil d'actualité",
+  "srHeading": "Fil d'actualité — posts, reels et stories",
+  "recordAudioPost": "Enregistrer un post audio",
+  "loadingMore": "Chargement de plus de publications",
+  "updating": "Mise à jour du fil…",
+  "errorTitle": "Impossible de charger le fil.",
+  "retry": "Réessayer",
+  "empty": "Aucune publication pour le moment. Soyez le premier à partager quelque chose !",
+  "newPost": "{count} nouvelle publication",
+  "newPosts": "{count} nouvelles publications",
+  "tabs": {
+    "ariaLabel": "Type de fil",
+    "posts": "Publications",
+    "reels": "Reels"
+  },
+  "sections": {
+    "stories": "Stories publiques",
+    "storiesHeading": "Stories",
+    "moods": "Humeurs",
+    "moodsHeading": "Humeurs",
+    "compose": "Composer une publication",
+    "composeHeading": "Composer une publication",
+    "posts": "Publications",
+    "postsHeading": "Publications"
+  },
+  "time": {
+    "now": "À l'instant",
+    "minutesAgo": "Il y a {minutes}min",
+    "hoursAgo": "Il y a {hours}h",
+    "daysAgo": "Il y a {days}j"
+  },
+  "toast": {
+    "error": "Erreur",
+    "storyPublished": "Story publiée !",
+    "storyPublishedDesc": "Votre story est visible par vos amis.",
+    "storyPublishedDescMedia": "Votre story est visible par vos amis ({count} media).",
+    "storyPublishError": "Impossible de publier la story.",
+    "storyDeleted": "Story supprimée",
+    "storyDeleteError": "Impossible de supprimer la story.",
+    "replySent": "Réponse envoyée",
+    "published": "Publié !",
+    "publishedDesc": "Votre post a été partagé.",
+    "publishError": "Impossible de publier le post.",
+    "linkCopied": "Lien copié !",
+    "linkCopyError": "Impossible de copier le lien.",
+    "postDeleted": "Post supprimé",
+    "postEdited": "Post modifié",
+    "reposted": "Reposté !",
+    "quoted": "Cité !",
+    "audioPublished": "Audio post publié !",
+    "publishErrorShort": "Impossible de publier.",
+    "uploadError": "Erreur upload",
+    "audioUploadError": "Impossible d'uploader l'audio.",
+    "statusTitle": "Statut",
+    "statusSelected": "Statut {id} sélectionné",
+    "moodPublished": "Humeur publiée !"
+  }
+}

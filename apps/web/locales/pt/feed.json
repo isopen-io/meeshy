@@ -1,0 +1,59 @@
+{
+  "title": "Feed",
+  "srHeading": "Feed de notícias — publicações, reels e stories",
+  "recordAudioPost": "Gravar uma publicação de áudio",
+  "loadingMore": "Carregando mais publicações",
+  "updating": "Atualizando…",
+  "errorTitle": "Não foi possível carregar o feed.",
+  "retry": "Tentar novamente",
+  "empty": "Ainda não há publicações. Seja o primeiro a compartilhar algo!",
+  "newPost": "{count} nova publicação",
+  "newPosts": "{count} novas publicações",
+  "tabs": {
+    "ariaLabel": "Tipo de feed",
+    "posts": "Publicações",
+    "reels": "Reels"
+  },
+  "sections": {
+    "stories": "Stories públicos",
+    "storiesHeading": "Stories",
+    "moods": "Humores",
+    "moodsHeading": "Humores",
+    "compose": "Criar uma publicação",
+    "composeHeading": "Criar uma publicação",
+    "posts": "Publicações",
+    "postsHeading": "Publicações"
+  },
+  "time": {
+    "now": "Agora mesmo",
+    "minutesAgo": "Há {minutes}min",
+    "hoursAgo": "Há {hours}h",
+    "daysAgo": "Há {days}d"
+  },
+  "toast": {
+    "error": "Erro",
+    "storyPublished": "Story publicado!",
+    "storyPublishedDesc": "Seu story está visível para seus amigos.",
+    "storyPublishedDescMedia": "Seu story está visível para seus amigos ({count} mídias).",
+    "storyPublishError": "Não foi possível publicar o story.",
+    "storyDeleted": "Story excluído",
+    "storyDeleteError": "Não foi possível excluir o story.",
+    "replySent": "Resposta enviada",
+    "published": "Publicado!",
+    "publishedDesc": "Sua publicação foi compartilhada.",
+    "publishError": "Não foi possível publicar a publicação.",
+    "linkCopied": "Link copiado!",
+    "linkCopyError": "Não foi possível copiar o link.",
+    "postDeleted": "Publicação excluída",
+    "postEdited": "Publicação editada",
+    "reposted": "Republicado!",
+    "quoted": "Citado!",
+    "audioPublished": "Publicação de áudio publicada!",
+    "publishErrorShort": "Não foi possível publicar.",
+    "uploadError": "Erro de upload",
+    "audioUploadError": "Não foi possível enviar o áudio.",
+    "statusTitle": "Status",
+    "statusSelected": "Status {id} selecionado",
+    "moodPublished": "Humor publicado!"
+  }
+}
