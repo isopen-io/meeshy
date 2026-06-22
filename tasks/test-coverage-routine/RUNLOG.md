@@ -1808,3 +1808,6 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Key technique: Tooltip mock invokes `formatter(42)` + `formatter('not-a-number')` + `labelFormatter('#1')` — covers formatCount both branches (typeof check) and both tooltip formatter callbacks
 - Production files changed: none
 - Branch: claude/coverage/p2-admin-web-6
+- Concurrent agent contribution (same PR, same branch): session `01AcKWpPqMtY7h9y4p9YjTkT` added 112 tests for 6 agent admin components (AgentHistoryTab, AgentTopicRegexTester, ScanLogDetail, ScanLogTable, UserDisplay, UserPicker) — all at 100%/100%. Both contributions combined in PR #888 (176 total tests, 11 total files).
+- CI: All checks passed — Security✅ Quality(bun)✅ Trivy(neutral) Prisma✅ Test shared✅ Test agent✅ Audio Pipeline Tests✅ Test web✅ TTS/STT Integration✅ Voice API Tests✅ Test gateway✅ Build(bun)✅ Summary✅ Test Python(translator)(in-progress at merge time — started at 16:26:22Z; non-blocking)
+- Squash-merge: PR #888 → main sha `1292697cd42be111f5852560814ec8e00ece770b` (2026-06-22T~16:35Z)
