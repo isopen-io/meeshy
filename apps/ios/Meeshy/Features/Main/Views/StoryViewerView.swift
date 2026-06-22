@@ -188,7 +188,7 @@ struct StoryViewerView: View {
     @State var showFullEmojiPicker = false // internal for cross-file extension access
     @State var showTextEmojiPicker = false // internal for cross-file extension access
     @State private var selectedProfileUser: ProfileSheetUser?
-    @State private var emojiToInject = ""
+    @State var emojiToInject = "" // internal for cross-file extension access
     @State private var composerFocusTrigger = false
     @State var composerLanguage: String = DefaultComposerLanguage.resolve() // internal for cross-file extension access
     @State var commentBlurEnabled: Bool = false // internal for cross-file extension access
