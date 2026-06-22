@@ -1,32 +1,41 @@
-# Plan d'itération 54w — i18n/a11y design-system v2 (composer/reply/audio)
+# Plan — Iteration 54w (2026-06-22)
 
-**Date** : 2026-06-22 · **Périmètre** : Web (`apps/web`) · **Base** : `main` `8e9c95e`
-**Branche** : `claude/practical-fermat-indb44` (assignée) → merge `main` après CI vert.
+## Contexte
+Continuité directe de 53wb (#764, page reel `/reel/[postId]`). La page de deep-link **story**
+`/story/[postId]` est sa jumelle plein écran et restait 100 % FR dure. Base : `main` HEAD
+`34585d5` (post-merge 53wb). Itération **web exclusivement**.
 
 ## Objectif
-Solder le différé i18n/a11y des building blocks v2 `PostComposer`, `ReplyPreview`,
-`AudioPlayer` (suite de 53w `ConversationItem`). Logique épurée : aucune nouvelle UI,
-uniquement bascule des chaînes dures vers `useI18n('common')` + réutilisation des clés existantes.
+i18n de la page de **deep-link story** `/story/[postId]` — 11 chaînes FR dures user-facing
+(toasts delete/reply, loading sr-only, titres/corps d'états, bouton) affichées en toutes langues.
+
+## Périmètre (web uniquement)
+- `apps/web/app/story/[postId]/page.tsx`
+- `apps/web/locales/{en,fr,es,pt}/story.json` (nouveau namespace)
 
 ## Étapes
-1. [x] Localiser et confirmer les chaînes dures (3 fichiers v2).
-2. [x] Ajouter les clés sous `common` × 4 locales (en/fr/es/pt) :
-   - `postComposer.{contentLabel,addPhoto,addVideo,changeVisibility,visibility.{public,friends,except,only,private}}`
-   - `replyPreview.{image,audio,video}`
-   - `audioProgress`, `audioUnavailable`
-   - réutilisées : `publish`, `play`, `pause`
-3. [x] `PostComposer` : `label`→`labelKey` + `t()` sur libellés, aria-labels, bouton Publish.
-4. [x] `ReplyPreview` : `CONTENT_TYPE_META {emoji,key}` + `t()` ; emoji hors i18n.
-5. [x] `AudioPlayer` : `useI18n('common')` en tête + `t()` sur 2 aria-labels + garde.
-6. [x] Parité JSON 14/14 vérifiée sur 4 locales (script).
-7. [ ] `tsc --noEmit` 0 erreur sur les 3 fichiers (après `bun install`).
-8. [ ] Commit, push, PR, CI vert, merge `main`, suppression branche, MAJ branch-tracking.
+1. **Locales** — créer `story.json` ×4 (11 clés à parité : `deleted`, `deleteError`, `replySent`,
+   `loading`, `unavailableTitle`, `notAStoryTitle`, `goneTitle`, `unavailableBody`, `notAStoryBody`,
+   `goneBody`, `backToFeed`). ✅
+2. **page.tsx** — `import { useI18n }` + `const { t } = useI18n('story')` ; remplacer les 11
+   littéraux par `t('key', '<fallback EN>')` (2e arg = fallback anti-flash, leçon 50w) ; ajouter
+   `t` aux deps des `useCallback` `handleDelete` / `handleReply`. ✅
 
-## Risques / garde-fous
-- `AudioPlayer` early-return avant hooks (pré-existant) : `useI18n` placé **avant** le return
-  pour rester appelé inconditionnellement — ne pas déplacer après.
-- Emojis conservés hors i18n (langue-agnostiques) — ne pas les traduire.
+## Décisions
+- **Namespace dédié `story`** : aucune surface story-page n'avait de namespace ; convention
+  namespace-par-feature (cohérent avec `reel` en 53wb).
+- **Fallbacks anglais en 2e argument** : `t()` renvoie la clé brute pendant le load (leçon 50w).
+- **`index.ts` non touché** : barrel non importé (runtime = import dynamique).
+- **`settings/loading.tsx` EXCLU** : server component → hook client inutilisable sans casser le
+  streaming skeleton. Documenté comme exclusion, à arbitrer séparément.
 
-## Suite (55w+)
-`components/v2/ReplyPreview` SOLDÉ. Reste cluster 53w : `AttachmentDeleteDialog.tsx`,
-`auth/PhoneExistsModal.tsx`, autres aria-labels statiques v2 non audités.
+## Validation
+- 4 `story.json` valides + parité 11 clés ; 0 chaîne FR résiduelle dans `page.tsx`.
+- Diff = miroir fidèle de la page reel (53wb) qui compile en CI.
+
+## Risques
+- Très faible. 1 page `'use client'` isolée + 4 fichiers de locale neufs.
+- **Note CI** : `Test web` rouge sur `main` (préexistant, `42a6b60`) — 2 suites sur deps non
+  déclarées, indépendantes de ce diff. Job non bloquant (cf. #764/#765/#766). À corriger isolément.
+
+## Statut : ✅ implémenté — voir analyse 2026-06-22-iteration-54w

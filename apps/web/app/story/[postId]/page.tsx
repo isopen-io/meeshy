@@ -8,6 +8,7 @@ import { useDeleteStoryMutation, useRecordStoryViewMutation } from '@/hooks/soci
 import { postToStoryData } from '@/lib/story-transforms';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { useAuthStore } from '@/stores/auth-store';
+import { useI18n } from '@/hooks/useI18n';
 
 /**
  * Immersive single-story viewer (`/story/:id`).
@@ -24,6 +25,7 @@ export default function StoryPage() {
   const userLanguage = usePreferredLanguage();
   const currentUserId = useAuthStore((s) => s.user?.id) ?? '';
   const toastCtx = useToast();
+  const { t } = useI18n('story');
 
   const { data: post, isLoading, isError } = usePostQuery(postId);
   const { recordView } = useRecordStoryViewMutation();
@@ -46,18 +48,18 @@ export default function StoryPage() {
     (storyId: string) => {
       deleteStoryMutation.mutate(storyId, {
         onSuccess: () => {
-          toastCtx.addToast('Story supprimée', 'success');
+          toastCtx.addToast(t('deleted', 'Story deleted'), 'success');
           close();
         },
-        onError: () => toastCtx.addToast('Impossible de supprimer la story', 'error'),
+        onError: () => toastCtx.addToast(t('deleteError', "Couldn't delete the story"), 'error'),
       });
     },
-    [deleteStoryMutation, toastCtx, close]
+    [deleteStoryMutation, toastCtx, close, t]
   );
 
   const handleReply = useCallback(
-    () => toastCtx.addToast('Réponse envoyée', 'success'),
-    [toastCtx]
+    () => toastCtx.addToast(t('replySent', 'Reply sent'), 'success'),
+    [toastCtx, t]
   );
 
   if (stories.length > 0) {
@@ -80,25 +82,29 @@ export default function StoryPage() {
       {isLoading ? (
         <>
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/20 border-t-white" aria-hidden="true" />
-          <p className="sr-only">Chargement de la story…</p>
+          <p className="sr-only">{t('loading', 'Loading story…')}</p>
         </>
       ) : (
         <>
           <h1 className="text-lg font-semibold">
-            {isError ? 'Story indisponible' : post && !postIsStory ? 'Ce contenu n’est pas une story' : 'Cette story n’existe plus'}
+            {isError
+              ? t('unavailableTitle', 'Story unavailable')
+              : post && !postIsStory
+                ? t('notAStoryTitle', "This content isn't a story")
+                : t('goneTitle', 'This story no longer exists')}
           </h1>
           <p className="max-w-sm text-center text-sm text-white/70">
             {isError
-              ? 'Cette story est privée ou a expiré.'
+              ? t('unavailableBody', 'This story is private or has expired.')
               : post && !postIsStory
-                ? 'Le lien pointe vers une publication, pas vers une story.'
-                : 'La story que vous cherchez a peut-être expiré (les stories durent 24h).'}
+                ? t('notAStoryBody', 'The link points to a post, not a story.')
+                : t('goneBody', "The story you're looking for may have expired (stories last 24h).")}
           </p>
           <button
             onClick={close}
             className="mt-2 rounded-full bg-white/15 px-6 py-2 text-sm font-medium hover:bg-white/25 transition-colors"
           >
-            Retour au fil
+            {t('backToFeed', 'Back to feed')}
           </button>
         </>
       )}

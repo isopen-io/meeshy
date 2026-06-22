@@ -1,0 +1,12 @@
+{
+  "linkCopied": "Lien copié !",
+  "linkCopyError": "Impossible de copier le lien",
+  "loading": "Chargement du reel…",
+  "unavailableTitle": "Reel indisponible",
+  "notAReelTitle": "Ce contenu n’est pas un reel",
+  "goneTitle": "Ce reel n’existe plus",
+  "unavailableBody": "Ce reel est privé ou a été supprimé.",
+  "notAReelBody": "Le lien pointe vers une publication, pas vers un reel.",
+  "goneBody": "Le reel que vous cherchez est introuvable.",
+  "backToFeed": "Retour au fil"
+}
