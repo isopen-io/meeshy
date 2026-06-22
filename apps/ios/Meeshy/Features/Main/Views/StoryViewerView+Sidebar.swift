@@ -287,26 +287,29 @@ struct StoryActionSidebarView: View {
                 )
             }
 
-            // 5. Comments toggle — visible only when count > 0. Below the
-            // sidebar the composer pill already gives an obvious affordance
-            // to write the first comment, so an extra empty button would just
-            // be visual noise (user spec 2026-05-28: « Inutile d'afficher à
-            // 0 […] la zone d'écriture en bas permet déjà de commenter »).
-            if storyCommentCount > 0 {
-                StoryActionButton(
-                    icon: "bubble.left.fill",
-                    label: "\(storyCommentCount)",
-                    isActive: showCommentsOverlay,
-                    activeColor: MeeshyColors.indigo400,
-                    activeGlow: showCommentsOverlay ? MeeshyColors.indigo400 : nil
-                ) {
-                    HapticFeedback.light()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showCommentsOverlay.toggle()
-                    }
-                    if showCommentsOverlay && isStoryCommentsEmpty {
-                        loadStoryComments()
-                    }
+            // 5. Comments toggle — TOUJOURS visible (auteur ET visiteur).
+            // L'ancien gate `storyCommentCount > 0` créait un dead-lock : le
+            // compteur n'est semé que depuis le payload feed (souvent 0/obsolète,
+            // jamais rafraîchi réseau au survol) et `loadStoryComments()` ne se
+            // déclenche qu'à l'ouverture du panneau — qui exigeait le bouton, qui
+            // exigeait le compteur > 0. Résultat : une story AVEC commentaires au
+            // compteur stale 0 masquait le bouton pour tout le monde, donc la
+            // liste des commentaires devenait inatteignable (bug reporté). On
+            // affiche donc toujours le bouton ; le compteur apparaît quand connu,
+            // l'ouverture charge la liste (l'empty-state gère 0 commentaire).
+            StoryActionButton(
+                icon: "bubble.left.fill",
+                label: storyCommentCount > 0 ? "\(storyCommentCount)" : "Commenter",
+                isActive: showCommentsOverlay,
+                activeColor: MeeshyColors.indigo400,
+                activeGlow: showCommentsOverlay ? MeeshyColors.indigo400 : nil
+            ) {
+                HapticFeedback.light()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showCommentsOverlay.toggle()
+                }
+                if showCommentsOverlay && isStoryCommentsEmpty {
+                    loadStoryComments()
                 }
             }
 
