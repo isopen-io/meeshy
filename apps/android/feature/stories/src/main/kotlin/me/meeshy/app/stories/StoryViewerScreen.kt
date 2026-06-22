@@ -62,26 +62,28 @@ fun StoryViewerScreen(
 
     val progress = remember { Animatable(0f) }
 
-    androidx.compose.runtime.LaunchedEffect(state.index, state.slides.size) {
-        if (state.slides.isEmpty()) return@LaunchedEffect
+    androidx.compose.runtime.LaunchedEffect(state.isDismissed) {
+        if (state.isDismissed) onClose()
+    }
+
+    androidx.compose.runtime.LaunchedEffect(state.groupIndex, state.index, state.slides.size) {
+        if (state.slides.isEmpty() || state.isDismissed) return@LaunchedEffect
         viewModel.markCurrentViewed()
         progress.snapTo(0f)
         progress.animateTo(1f, tween(durationMillis = SLIDE_DURATION_MS, easing = LinearEasing))
-        if (state.hasNext) viewModel.advance() else onClose()
+        viewModel.advance()
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(hexColor(accent))
-            .pointerInput(state.index, state.slides.size) {
+            .pointerInput(state.groupIndex, state.index, state.slides.size) {
                 detectTapGestures { offset ->
                     if (offset.x < size.width / 2f) {
                         viewModel.back()
-                    } else if (state.hasNext) {
-                        viewModel.advance()
                     } else {
-                        onClose()
+                        viewModel.advance()
                     }
                 }
             },

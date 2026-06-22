@@ -32,11 +32,19 @@ data class StorySlideView(
     val accentHex: String,
 )
 
+/**
+ * Viewer state, derived from the cross-group [StoryPlayback] engine. The screen
+ * reads the CURRENT group's slides plus the index so its segmented progress and
+ * auto-advance stay simple; group roll-over and dismissal are decided by the
+ * pure engine.
+ */
 data class StoryViewerUiState(
     val authorName: String = "",
     val slides: List<StorySlideView> = emptyList(),
     val index: Int = 0,
+    val groupIndex: Int = 0,
     val isLoading: Boolean = true,
+    val isDismissed: Boolean = false,
 ) {
     val current: StorySlideView? get() = slides.getOrNull(index)
     val hasNext: Boolean get() = index < slides.lastIndex
@@ -53,6 +61,8 @@ class StoryViewerViewModel @Inject constructor(
 
     private val userId: String = savedStateHandle.get<String>(USER_ID_ARG).orEmpty()
 
+    private var playback: StoryPlayback = StoryPlayback(groups = emptyList())
+
     private val _state = MutableStateFlow(StoryViewerUiState())
     val state: StateFlow<StoryViewerUiState> = _state.asStateFlow()
 
@@ -65,10 +75,11 @@ class StoryViewerViewModel @Inject constructor(
             try {
                 when (val result = storyRepository.list()) {
                     is NetworkResult.Success -> {
-                        val group = result.data
+                        val groups = result.data
                             .toStoryGroups(currentUserId = sessionRepository.currentUserId)
-                            .firstOrNull { it.id == userId }
-                        _state.update { it.fromGroup(group) }
+                            .map { it.toGroupSlides() }
+                        playback = StoryPlayback.startingAt(groups, userId)
+                        emit()
                     }
                     is NetworkResult.Failure -> _state.update { it.copy(isLoading = false) }
                 }
@@ -81,28 +92,39 @@ class StoryViewerViewModel @Inject constructor(
     }
 
     fun advance() {
-        _state.update { if (it.hasNext) it.copy(index = it.index + 1) else it }
+        playback = playback.advance()
+        emit()
     }
 
     fun back() {
-        _state.update { if (it.hasPrevious) it.copy(index = it.index - 1) else it }
+        playback = playback.back()
+        emit()
     }
 
     fun markCurrentViewed() {
-        val slideId = _state.value.current?.id ?: return
+        val slideId = playback.currentSlide?.id ?: return
         viewModelScope.launch {
             runCatching { storyRepository.markViewed(slideId) }
         }
     }
 
-    private fun StoryViewerUiState.fromGroup(group: StoryGroup?): StoryViewerUiState {
-        if (group == null) return copy(isLoading = false, slides = emptyList())
-        val prefs = sessionRepository.currentUser.value ?: EmptyContentPreferences
-        return copy(
-            authorName = group.username,
-            slides = group.stories.map { it.toSlideView(group.avatarColor, prefs) },
-            index = 0,
+    private fun emit() {
+        _state.value = StoryViewerUiState(
+            authorName = playback.authorName,
+            slides = playback.slides,
+            index = playback.slideIndex,
+            groupIndex = playback.groupIndex,
             isLoading = false,
+            isDismissed = playback.isDismissed,
+        )
+    }
+
+    private fun StoryGroup.toGroupSlides(): StoryGroupSlides {
+        val prefs = sessionRepository.currentUser.value ?: EmptyContentPreferences
+        return StoryGroupSlides(
+            userId = id,
+            authorName = username,
+            slides = stories.map { it.toSlideView(avatarColor, prefs) },
         )
     }
 
