@@ -345,7 +345,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
               <button
                 onClick={() => setSearchQuery('')}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                aria-label={t('picker.clearSearch') || 'Effacer la recherche'}
+                aria-label={t('picker.clearSearch', 'Effacer la recherche')}
               >
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -365,7 +365,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
 
         {/* Catégories tabs */}
         {!searchQuery && (
-          <div className="flex items-center gap-1 mt-2 overflow-x-auto scrollbar-hide" role="tablist" aria-label={t('picker.categories.label') || 'Catégories d\'emojis'}>
+          <div className="flex items-center gap-1 mt-2 overflow-x-auto scrollbar-hide" role="tablist" aria-label={t('picker.categories.label', 'Catégories d\'emojis')}>
             {EMOJI_CATEGORIES.map((category) => (
               <button
                 key={category.id}
