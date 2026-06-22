@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { Repeat2 } from 'lucide-react';
 import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
 import { TranslationToggle } from './TranslationToggle';
@@ -56,13 +57,16 @@ export interface PostDetailProps {
   commentsHasMore?: boolean;
   commentsLoadingMore?: boolean;
   onLike?: () => void;
-  onUnlike?: () => void;
   onReact?: (emoji: string) => void;
   onBookmark?: () => void;
-  onUnbookmark?: () => void;
+  isLiked?: boolean;
+  isBookmarked?: boolean;
+  userReaction?: string;
   onShare?: () => void;
+  onRepost?: () => void;
   onDelete?: () => void;
   onEdit?: () => void;
+  onTranslate?: () => void;
   onSubmitComment?: (content: string, parentId?: string) => void;
   onLoadMoreComments?: () => void;
   onLikeComment?: (commentId: string) => void;
@@ -111,14 +115,12 @@ function PostDetail({
   const hasReactions = post.reactionSummary && Object.keys(post.reactionSummary).length > 0;
 
   const handleLikeToggle = useCallback(() => {
-    if (isLiked) onUnlike?.();
-    else onLike?.();
-  }, [isLiked, onLike, onUnlike]);
+    onLike?.();
+  }, [onLike]);
 
   const handleBookmarkToggle = useCallback(() => {
-    if (isBookmarked) onUnbookmark?.();
-    else onBookmark?.();
-  }, [isBookmarked, onBookmark, onUnbookmark]);
+    onBookmark?.();
+  }, [onBookmark]);
 
   return (
     <div className={cn('max-w-2xl mx-auto', className)} data-testid="post-detail">
@@ -182,7 +184,17 @@ function PostDetail({
                   variant="block"
                 />
               ) : (
-                <p className="text-[var(--gp-text-primary)] whitespace-pre-wrap">{post.content}</p>
+                <>
+                  <p className="text-[var(--gp-text-primary)] whitespace-pre-wrap">{post.content}</p>
+                  {onTranslate && post.originalLanguage && post.originalLanguage !== userLanguage && (
+                    <button
+                      onClick={onTranslate}
+                      className="mt-2 text-xs text-[var(--gp-terracotta)] hover:underline"
+                    >
+                      Translate post
+                    </button>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -281,6 +293,17 @@ function PostDetail({
               </svg>
               Share
             </button>
+
+            {onRepost && (
+              <button
+                onClick={onRepost}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)] transition-colors"
+                aria-label="Repost"
+              >
+                <Repeat2 className="w-5 h-5" />
+                Repost
+              </button>
+            )}
 
             <button
               onClick={handleBookmarkToggle}

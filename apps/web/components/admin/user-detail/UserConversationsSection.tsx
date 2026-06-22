@@ -95,7 +95,7 @@ function ParticipantAvatar({ p, size = 28 }: { p: ConversationParticipant; size?
       style={{ width: size, height: size }}
     >
       {avatar ? (
-        <img src={avatar} alt="" className="w-full h-full object-cover" />
+        <img src={avatar} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
       ) : (
         name.charAt(0).toUpperCase()
       )}
@@ -277,7 +277,7 @@ export function UserConversationsSection({ userId }: { userId: string }) {
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-medium overflow-hidden flex-shrink-0">
                         {conv.avatar ? (
-                          <img src={conv.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+                          <img src={conv.avatar} alt="" loading="lazy" decoding="async" className="w-8 h-8 rounded-full object-cover" />
                         ) : (
                           (conv.title || conv.identifier || '#').charAt(0).toUpperCase()
                         )}
