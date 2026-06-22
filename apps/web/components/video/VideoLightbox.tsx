@@ -665,7 +665,7 @@ export function VideoLightbox({
                 size="sm"
                 variant="ghost"
                 className="w-9 h-9 p-0 text-white hover:bg-white/10"
-                title={isFullscreen ? "Quitter le plein écran (F)" : "Plein écran (F)"}
+                title={isFullscreen ? t('common.exitFullscreen') : t('common.enterFullscreen')}
                 aria-label={isFullscreen ? t('common.exitFullscreen') : t('common.enterFullscreen')}
               >
                 {isFullscreen ? (
@@ -680,10 +680,7 @@ export function VideoLightbox({
 
         {/* Instructions clavier (desktop uniquement) */}
         <div className="hidden md:block absolute bottom-24 left-1/2 -translate-x-1/2 text-white/60 text-xs text-center">
-          <p>
-            Utilisez les flèches ← → pour naviguer • Espace pour play/pause • M
-            pour mute • F pour plein écran • Échap pour fermer
-          </p>
+          <p>{t('common.videoLightboxKeyboardHelp')}</p>
         </div>
       </motion.div>
     </AnimatePresence>,
