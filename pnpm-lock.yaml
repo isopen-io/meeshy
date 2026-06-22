@@ -179,8 +179,8 @@ importers:
         specifier: ^1.12.42
         version: 1.12.42
       lucide-react:
-        specifier: ^0.525.0
-        version: 0.525.0(react@19.2.5)
+        specifier: ^1.21.0
+        version: 1.21.0(react@19.2.5)
       markdown-it:
         specifier: 14.2.0
         version: 14.2.0
@@ -540,8 +540,8 @@ importers:
         specifier: ^9.0.3
         version: 9.0.3
       libphonenumber-js:
-        specifier: ^1.12.42
-        version: 1.12.42
+        specifier: ^1.13.7
+        version: 1.13.7
       music-metadata:
         specifier: 7.14.0
         version: 7.14.0
@@ -7058,6 +7058,9 @@ packages:
   libphonenumber-js@1.12.42:
     resolution: {integrity: sha512-oKQFPTibqQwZZkChCDVMFVJXMZdyJNqDWZWYNn8BgyAaK/6yFJEowxCY0RVFirRyWP63hMRuKlkSEd9qlvbWXg==}
 
+  libphonenumber-js@1.13.7:
+    resolution: {integrity: sha512-rvr3HIMdOgzhz1RFGjftji+wjoAFlzhqCNqJOU/MKTZQ8d9NZxAR/tI+0weDicyoucqVR0U1GCniqHJ0f8aM2A==}
+
   light-my-request@6.6.0:
     resolution: {integrity: sha512-CHYbu8RtboSIoVsHZ6Ye4cj4Aw/yg2oAFimlF7mNvfDV192LR7nDiKtSIfCuLT7KokPSTn/9kfVLm5OGN0A28A==}
 
@@ -7205,8 +7208,8 @@ packages:
   lru-memoizer@2.3.0:
     resolution: {integrity: sha512-GXn7gyHAMhO13WSKrIiNfztwxodVsP8IoZ3XfrJV4yH2x0/OeTO/FIaAHTY5YekdGgW94njfuKmyyt1E0mR6Ug==}
 
-  lucide-react@0.525.0:
-    resolution: {integrity: sha512-Tm1txJ2OkymCGkvwoHt33Y2JpN5xucVq1slHcgE6Lk0WjDfjgKWor5CdVER8U6DvcfMwh4M8XxmpTiyzfmfDYQ==}
+  lucide-react@1.21.0:
+    resolution: {integrity: sha512-reEZMXq8Qdd5jg5XYkQ5TR1fB/GiQ7ih4vcrthYDtgjSDwh0i6/YLiGjsWsIwgN49gpAnd4J2elSNzncMEEUUQ==}
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
@@ -17381,6 +17384,8 @@ snapshots:
 
   libphonenumber-js@1.12.42: {}
 
+  libphonenumber-js@1.13.7: {}
+
   light-my-request@6.6.0:
     dependencies:
       cookie: 1.1.1
@@ -17519,7 +17524,7 @@ snapshots:
       lodash.clonedeep: 4.5.0
       lru-cache: 6.0.0
 
-  lucide-react@0.525.0(react@19.2.5):
+  lucide-react@1.21.0(react@19.2.5):
     dependencies:
       react: 19.2.5
 

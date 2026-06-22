@@ -64,7 +64,7 @@
     "highlight.js": "^11.11.1",
     "idb-keyval": "^6.2.2",
     "libphonenumber-js": "^1.12.42",
-    "lucide-react": "^0.525.0",
+    "lucide-react": "^1.21.0",
     "markdown-it": "^14.1.1",
     "markdown-it-emoji": "^3.0.0",
     "mermaid": "^11.14.0",
