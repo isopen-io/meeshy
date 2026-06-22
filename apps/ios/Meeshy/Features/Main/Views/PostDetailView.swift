@@ -41,6 +41,9 @@ struct PostDetailView: View {
     /// @mention quand on répond à une réponse (niveau 2) — l'auteur ciblé est
     /// notifié via `user_mentioned` même si la réponse est reparentée à la racine.
     @State private var composerText: String = ""
+    /// @mention auto-injectée par `beginReply` (réponse à une réponse) — suivie
+    /// pour la retirer proprement si on change de cible sans envoyer.
+    @State private var prefilledMention: String? = nil
     // Comment attachments + real voice capture (parity with feed/reels composer).
     @State private var commentAttachments: [ComposerAttachment] = []
     @State private var showCommentPhotoPicker: Bool = false
@@ -1850,12 +1853,19 @@ struct PostDetailView: View {
     private func beginReply(to target: FeedComment) {
         viewModel.replyingTo = target
         composerFocusTrigger = true
+        // Retire la @mention auto-injectée d'une cible précédente avant d'en poser
+        // une nouvelle (évite accumulation / mauvais auteur notifié).
+        if let old = prefilledMention, composerText.hasPrefix(old) {
+            composerText = String(composerText.dropFirst(old.count))
+        }
+        prefilledMention = nil
         guard target.parentId != nil,
               let username = target.authorUsername, !username.isEmpty else { return }
         let mention = "@\(username) "
-        if !composerText.contains("@\(username)") {
+        if !composerText.hasPrefix(mention) {
             composerText = mention + composerText
         }
+        prefilledMention = mention
     }
 
     // MARK: - Comment send + voice (parity with feed/reels composer)

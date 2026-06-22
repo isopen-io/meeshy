@@ -159,6 +159,9 @@ struct CommentsSheetView: View {
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @State private var replyingTo: FeedComment? = nil
+    /// @mention auto-injectée par `beginReply` lors d'une réponse à une réponse —
+    /// suivie pour pouvoir la retirer proprement si on change de cible.
+    @State private var prefilledMention: String? = nil
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var liveComments: [FeedComment]?
     @State private var liveCommentCount: Int?
@@ -450,6 +453,16 @@ struct CommentsSheetView: View {
             let media = (data.comment.media ?? []).map { $0.toFeedMedia() }
             guard !media.isEmpty else { return }
             applyCommentMediaUpdate(commentId: data.commentId, parentId: data.comment.parentId, media: media)
+        }
+        // Suppression en temps réel : retire le commentaire et resynchronise le
+        // compteur sur la valeur autoritative serveur (heale la dérive optimiste).
+        // Idempotent avec le retrait optimiste du client qui supprime.
+        .onReceive(
+            SocialSocketManager.shared.commentDeleted
+                .receive(on: DispatchQueue.main)
+                .filter { [postId = post.id] in $0.postId == postId }
+        ) { data in
+            applyCommentDeletion(commentId: data.commentId, commentCount: data.commentCount)
         }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
@@ -936,12 +949,21 @@ struct CommentsSheetView: View {
     private func beginReply(to target: FeedComment) {
         replyingTo = target
         composerFocusTrigger = true
+        // Retire d'abord la @mention auto-injectée pour une cible précédente (si on
+        // change de cible sans envoyer) — sinon les mentions s'accumulent ou un
+        // mauvais auteur est notifié. La mention auto est toujours préfixée.
+        if let old = prefilledMention, composerText.hasPrefix(old) {
+            composerText = String(composerText.dropFirst(old.count))
+        }
+        prefilledMention = nil
         guard target.parentId != nil,
               let username = target.authorUsername, !username.isEmpty else { return }
         let mention = "@\(username) "
-        if !composerText.contains("@\(username)") {
+        // Match exact en préfixe (pas un `contains` qui confondrait @bob et @bobby).
+        if !composerText.hasPrefix(mention) {
             composerText = mention + composerText
         }
+        prefilledMention = mention
     }
 
     // MARK: - Comment Send (optimistic, with single media)
@@ -1008,7 +1030,7 @@ struct CommentsSheetView: View {
             current.insert(optimistic, at: 0)
             liveComments = current
         }
-        liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
+        liveCommentCount = (liveCommentCount ?? post.commentCount) + 1
 
         let lang = composerLanguage
 
@@ -1070,7 +1092,7 @@ struct CommentsSheetView: View {
                     current.removeAll { $0.id == tempId }
                     liveComments = current
                 }
-                liveCommentCount = max((liveCommentCount ?? post.comments.count) - 1, 0)
+                liveCommentCount = max((liveCommentCount ?? post.commentCount) - 1, 0)
                 FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
             }
         }
@@ -1103,6 +1125,28 @@ struct CommentsSheetView: View {
         }
     }
 
+    /// Retire un commentaire (racine + ses réponses chargées, ou réponse avec
+    /// décrément du compteur de son parent) et resynchronise le total sur la valeur
+    /// autoritative serveur. Déclenché par le socket `comment:deleted` — idempotent
+    /// avec le retrait optimiste local.
+    private func applyCommentDeletion(commentId: String, commentCount: Int) {
+        var current = liveComments ?? post.comments
+        current.removeAll { $0.id == commentId }
+        repliesMap[commentId] = nil
+        expandedThreads.remove(commentId)
+        for (key, var replies) in repliesMap {
+            if let idx = replies.firstIndex(where: { $0.id == commentId }) {
+                replies.remove(at: idx)
+                repliesMap[key] = replies
+                if let pIdx = current.firstIndex(where: { $0.id == key }), current[pIdx].replies > 0 {
+                    current[pIdx].replies -= 1
+                }
+            }
+        }
+        liveComments = current
+        liveCommentCount = commentCount
+    }
+
     // MARK: - Comment Deletion
 
     /// Supprime un commentaire (auteur uniquement, gated par `CommentRowView`).
@@ -1119,6 +1163,9 @@ struct CommentsSheetView: View {
             if var existing = repliesMap[parentId] {
                 existing.removeAll { $0.id == comment.id }
                 repliesMap[parentId] = existing
+                // Met à jour le cache d'aperçu pour ne pas réafficher la réponse
+                // supprimée à la ré-ouverture du post.
+                try? await CacheCoordinator.shared.comments.save(existing, for: "replies-\(parentId)")
             }
             var current = liveComments ?? post.comments
             if let idx = current.firstIndex(where: { $0.id == parentId }), current[idx].replies > 0 {
@@ -1182,6 +1229,9 @@ struct CommentRowView: View, Equatable {
         lhs.likeCount == rhs.likeCount &&
         lhs.isInFlight == rhs.isInFlight &&
         lhs.showSeeReplies == rhs.showSeeReplies &&
+        // Re-render si l'éligibilité à la suppression change (ex: changement de
+        // compte avec la feuille ouverte) — sinon l'item « Supprimer » reste figé.
+        (lhs.onDeleteComment == nil) == (rhs.onDeleteComment == nil) &&
         lhs.comment.replies == rhs.comment.replies &&
         lhs.comment.content == rhs.comment.content &&
         lhs.comment.translatedContent == rhs.comment.translatedContent &&

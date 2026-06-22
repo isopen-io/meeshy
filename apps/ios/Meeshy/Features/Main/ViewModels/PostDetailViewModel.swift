@@ -154,18 +154,24 @@ class PostDetailViewModel: ObservableObject {
         case .fresh(let cached, _):
             if comments.isEmpty { comments = cached }
             seedCommentLikes(from: cached)
-            await preloadReplyPreviews(postId: postId)
+            schedulePreloadReplyPreviews(postId: postId)
             return
         case .stale(let cached, _):
             if comments.isEmpty { comments = cached }
             seedCommentLikes(from: cached)
             await fetchCommentsFromNetwork(postId, cacheKey: cacheKey)
-            await preloadReplyPreviews(postId: postId)
+            schedulePreloadReplyPreviews(postId: postId)
         case .expired, .empty:
             isLoadingComments = comments.isEmpty
             await fetchCommentsFromNetwork(postId, cacheKey: cacheKey)
-            await preloadReplyPreviews(postId: postId)
+            schedulePreloadReplyPreviews(postId: postId)
         }
+    }
+
+    /// Lance le préchargement des aperçus de réponses SANS bloquer `loadComments`
+    /// (sinon le chargement des commentaires sérialisait jusqu'à 5 appels REST).
+    private func schedulePreloadReplyPreviews(postId: String) {
+        Task { [weak self] in await self?.preloadReplyPreviews(postId: postId) }
     }
 
     func loadMoreComments(_ postId: String) async {
@@ -659,6 +665,9 @@ class PostDetailViewModel: ObservableObject {
             if var existing = repliesMap[parentId] {
                 existing.removeAll { $0.id == comment.id }
                 repliesMap[parentId] = existing
+                // Met à jour l'aperçu en cache pour ne pas réafficher la réponse
+                // supprimée à la ré-ouverture du post.
+                try? await CacheCoordinator.shared.comments.save(existing, for: "replies-\(parentId)")
             }
             if let idx = comments.firstIndex(where: { $0.id == parentId }), comments[idx].replies > 0 {
                 comments[idx].replies -= 1
@@ -758,6 +767,35 @@ class PostDetailViewModel: ObservableObject {
                 } else if let idx = self.comments.firstIndex(where: { $0.id == commentId }) {
                     self.comments[idx].media = media
                 }
+            }
+            .store(in: &socketCancellables)
+
+        // Suppression de commentaire en temps réel : retire la ligne sur TOUS les
+        // clients et resynchronise le compteur sur la valeur autoritative du serveur
+        // (heale toute dérive de l'arithmétique optimiste locale). Sans ce sink, un
+        // commentaire supprimé ailleurs persistait et le total dérivait sans se
+        // corriger. Idempotent avec le retrait optimiste du client qui supprime.
+        socialSocket.commentDeleted
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] data in
+                guard let self else { return }
+                let id = data.commentId
+                self.comments.removeAll { $0.id == id }
+                self.repliesMap[id] = nil
+                self.expandedThreads.remove(id)
+                // Réponse supprimée : retire-la de son fil + décrémente le compteur
+                // de réponses de son parent racine.
+                for (key, var replies) in self.repliesMap {
+                    if let idx = replies.firstIndex(where: { $0.id == id }) {
+                        replies.remove(at: idx)
+                        self.repliesMap[key] = replies
+                        if let pIdx = self.comments.firstIndex(where: { $0.id == key }), self.comments[pIdx].replies > 0 {
+                            self.comments[pIdx].replies -= 1
+                        }
+                    }
+                }
+                self.post?.commentCount = data.commentCount
             }
             .store(in: &socketCancellables)
 
