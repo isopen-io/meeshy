@@ -133,14 +133,13 @@ describe('ResetPasswordPage', () => {
 
     it('should render description text', () => {
       render(<ResetPasswordPage />);
-      const description = screen.getByText(/resetPassword\.description/i);
+      const description = screen.getByText(/enter your new password/i);
       expect(description).toBeInTheDocument();
     });
 
     it('should render security tips', () => {
       render(<ResetPasswordPage />);
-      // Security tips text (mock returns the key)
-      const tips = screen.getAllByText(/resetPassword\.securityTip/i);
+      const tips = screen.getAllByText(/unique password|password manager/i);
       expect(tips.length).toBeGreaterThan(0);
     });
 
@@ -164,9 +163,8 @@ describe('ResetPasswordPage', () => {
     it('should show error state when token is missing', () => {
       render(<ResetPasswordPage />);
 
-      // Should show error message (mock returns the key)
       const errorHeading = screen.getByRole('heading', { level: 1 });
-      expect(errorHeading).toHaveTextContent(/resetPassword\.errors\.invalidLink/i);
+      expect(errorHeading).toHaveTextContent(/invalid reset link/i);
     });
 
     it('should show error icon when token is missing', () => {
@@ -180,7 +178,7 @@ describe('ResetPasswordPage', () => {
     it('should show request new link button when token is missing', () => {
       render(<ResetPasswordPage />);
 
-      const newLinkButton = screen.getByRole('link', { name: /resetPassword\.requestNewLink/i });
+      const newLinkButton = screen.getByRole('link', { name: /request new reset link/i });
       expect(newLinkButton).toBeInTheDocument();
       expect(newLinkButton).toHaveAttribute('href', '/forgot-password');
     });
@@ -188,7 +186,7 @@ describe('ResetPasswordPage', () => {
     it('should display helpful error message', () => {
       render(<ResetPasswordPage />);
 
-      const errorMessages = screen.getAllByText(/resetPassword\.errors/i);
+      const errorMessages = screen.getAllByText(/invalid reset link|no reset token/i);
       expect(errorMessages.length).toBeGreaterThan(0);
     });
 
@@ -201,21 +199,21 @@ describe('ResetPasswordPage', () => {
   describe('Footer Links', () => {
     it('should render terms of service link', () => {
       render(<ResetPasswordPage />);
-      const termsLink = screen.getByRole('link', { name: /register\.termsOfService/i });
+      const termsLink = screen.getByRole('link', { name: /terms of service/i });
       expect(termsLink).toBeInTheDocument();
       expect(termsLink).toHaveAttribute('href', '/terms');
     });
 
     it('should render privacy policy link', () => {
       render(<ResetPasswordPage />);
-      const privacyLink = screen.getByRole('link', { name: /register\.privacyPolicy/i });
+      const privacyLink = screen.getByRole('link', { name: /privacy policy/i });
       expect(privacyLink).toBeInTheDocument();
       expect(privacyLink).toHaveAttribute('href', '/privacy');
     });
 
     it('should render contact link', () => {
       render(<ResetPasswordPage />);
-      const contactLink = screen.getByRole('link', { name: /register\.contactUs/i });
+      const contactLink = screen.getByRole('link', { name: /contact us/i });
       expect(contactLink).toBeInTheDocument();
       expect(contactLink).toHaveAttribute('href', '/contact');
     });
@@ -251,7 +249,7 @@ describe('ResetPasswordPage', () => {
     it('should have accessible link for requesting new reset link', () => {
       mockToken = null;
       render(<ResetPasswordPage />);
-      const link = screen.getByRole('link', { name: /resetPassword\.requestNewLink/i });
+      const link = screen.getByRole('link', { name: /request new reset link/i });
       expect(link).toHaveAttribute('href', '/forgot-password');
     });
   });
@@ -323,7 +321,7 @@ describe('ResetPasswordPage', () => {
 
     it('should display security tips', () => {
       render(<ResetPasswordPage />);
-      const tips = screen.getAllByText(/resetPassword\.securityTip/i);
+      const tips = screen.getAllByText(/unique password|password manager/i);
       expect(tips.length).toBeGreaterThan(0);
     });
   });
