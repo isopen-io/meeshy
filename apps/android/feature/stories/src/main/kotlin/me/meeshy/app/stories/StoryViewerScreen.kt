@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -159,12 +161,61 @@ fun StoryViewerScreen(
             }
         }
 
+        if (slide != null && !state.isDismissed) {
+            ReactionStrip(
+                emojis = state.quickReactions,
+                myReactions = state.myReactions,
+                onReact = viewModel::react,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = MeeshySpacing.lg, start = MeeshySpacing.md, end = MeeshySpacing.md),
+            )
+        }
+
         if (state.slides.isEmpty() && !state.isLoading) {
             Text(
                 text = stringResource(R.string.stories_empty),
                 color = MeeshyPalette.White,
                 modifier = Modifier.align(Alignment.Center),
             )
+        }
+    }
+}
+
+/**
+ * Quick-reaction strip pinned above the navigation bar. Each emoji fires an
+ * optimistic [onReact]; already-sent emojis read as selected. Tapping an emoji
+ * is consumed here so it never leaks to the tap-to-advance gesture behind it.
+ */
+@Composable
+private fun ReactionStrip(
+    emojis: List<String>,
+    myReactions: Set<String>,
+    onReact: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.35f))
+            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        emojis.forEach { emoji ->
+            val selected = emoji in myReactions
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(
+                        if (selected) MeeshyPalette.White.copy(alpha = 0.25f) else Color.Transparent,
+                    )
+                    .clickable { onReact(emoji) }
+                    .padding(MeeshySpacing.xs),
+            ) {
+                Text(text = emoji, style = MaterialTheme.typography.titleLarge)
+            }
         }
     }
 }

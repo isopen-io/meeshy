@@ -4,17 +4,20 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → **Stories (in progress)** → Calls → rest`
 
-Stories so far: tray (ring carousel) + minimal viewer shipped earlier loops;
-this loop adds the **cross-group viewer playback engine**.
+Stories so far: tray (ring carousel) + cross-group viewer playback engine
+shipped earlier loops; this loop adds the **quick-reaction strip** (optimistic
+count + rollback) to the viewer.
 
 ## Next slice (pick one for the next run)
 
 Ordered by value within the Stories area:
 1. `story-viewer-swipe-gestures` — wire horizontal swipe → `jumpToNext/PreviousGroup`
    (engine already supports it) and vertical drag → dismiss; instrumentation-free
-   logic lives in the engine, Composable wires the gesture. 
-2. `story-reactions-strip` — emoji quick-strip + optimistic count (pure reducer +
-   outbox-style optimistic update, VM-tested).
+   logic lives in the engine, Composable wires the gesture.
+2. `story-reaction-socket-delta` — wire `story:reacted`/`story:unreacted` realtime
+   events into `StoryReactionState.applyDelta` (reducer already supports it) so other
+   users' reactions update the open viewer live; seed `mine` from server
+   `currentUserReactions` once the API exposes it.
 3. `story-tray-swr` — Room/SWR backing for the tray so it is genuinely
    cache-first (skeleton only on cold empty), per Instant-App principles.
 4. `story-composer` — publish flow (text/media) via the outbox/WorkManager chain.
@@ -23,6 +26,41 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-22 — slice `story-viewer-reactions` ✅
+- **Branch:** `claude/apps/android/story-viewer-reactions`
+- **What:** quick-reaction strip on the story viewer with an **optimistic** count
+  and rollback-on-failure (iOS `sendReaction` is fire-and-forget; Android does
+  better). Parity with iOS quick emojis + `currentUserReactions`.
+- **Added (production):**
+  - `StoryReactionState.kt` — pure reducer: `reactedLocally(emoji)` (additive,
+    idempotent per emoji), `applyDelta(emoji, delta, isOwn)` (realtime
+    `story:reacted`/`unreacted` reconciliation; own-add idempotent vs the
+    optimistic count; count clamped ≥0; `mine` set tracks the user's emojis).
+  - `StoryViewerViewModel.react(emoji)` — snapshot → optimistic apply → emit →
+    `storyRepository.react` → rollback on `Failure`/exception; per-slide state
+    map; idempotent repeat taps skip the network. `StoryViewerUiState` gains
+    `reactionCount`/`myReactions`/`quickReactions`; `StorySlideView` gains
+    `reactionCount` (seeded from `reactionSummary` via `toStoryGroups`).
+  - `StoryViewerScreen` `ReactionStrip` — accent-coherent emoji row over the nav
+    bar (`EmojiCatalog.defaultQuickReactions`), selected-emoji highlight, taps
+    consumed so they never leak to the advance/back gesture behind it.
+- **Tests:** +11 `StoryReactionStateTest` (every reducer branch: local add /
+  idempotent / distinct emoji / others' add / own-add idempotent / own-add
+  un-optimistic / removal own & others / clamp-at-0 / zero-delta inert / empty)
+  and +5 `StoryViewerViewModelTest` (optimistic bump+mine+calls repo / failure
+  rollback / idempotent twice = 1 network call / per-slide isolation / strip
+  exposed). 22 stories tests in the two files green.
+- **Edge cases covered:** empty/zero base, idempotent repeat, switch emoji,
+  own vs others' deltas, count never negative, zero-delta inert, network failure
+  → graceful rollback (`CancellationException` rethrown), per-slide state reset.
+- **Verify:** `./apps/android/meeshy.sh check` → BUILD SUCCESSFUL in 5m44s
+  (full `assembleDebug` + all JVM unit tests across modules);
+  `StoryReactionStateTest` 11/0/0, `StoryViewerViewModelTest` 11/0/0.
+- **Reviewer:** PASS — scope `apps/android` only; behavioural tests, no
+  tautologies; SDK purity (the "when/how to count optimistically" rule lives in
+  `:feature:stories`, not the SDK); UDF + immutable `UiState`; single source of
+  truth for emojis (`EmojiCatalog`) and accent visuals; no dead ends.
 
 ### 2026-06-22 — slice `story-viewer-playback` ✅ merged-pending
 - **Branch:** `claude/apps/android/story-viewer-playback`

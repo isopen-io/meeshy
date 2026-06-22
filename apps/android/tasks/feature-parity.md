@@ -361,7 +361,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       jump/dismiss API, cross-dissolve transitions, opening/closing effects.
 - [ ] Timed auto-advance gated on media-load readiness; adjacent-slide prefetch (sliding window)
 - [ ] Story content rendering: text/positioning/background/filters/media overlays
-- [ ] Story reactions: emoji quick-strip + full picker, big floating animation, heart bounce, count
+- [~] Story reactions: emoji quick-strip + full picker, big floating animation, heart bounce, count
+      — done: pure **`StoryReactionState`** reducer (optimistic local tap + idempotent
+      reconciliation with realtime `story:reacted`/`unreacted` deltas, count clamped ≥0,
+      `mine` set = iOS `currentUserReactions`); `StoryViewerViewModel.react()` does an
+      **optimistic** bump with rollback-on-failure (better than iOS fire-and-forget),
+      per-slide state; `ReactionStrip` quick-emoji row (`EmojiCatalog.defaultQuickReactions`)
+      in `StoryViewerScreen`. Pending: full categorised picker, big floating animation,
+      heart bounce, server-side `currentUserReactions` seeding, socket-delta wiring.
 - [ ] Story comments overlay: live-chat panel, 1-level threading, composer with effects/blur,
       per-comment language switcher, optimistic posting + reaction likes
 - [ ] Story actions: reply privately (DM with context), forward/send, reshare-as-story,

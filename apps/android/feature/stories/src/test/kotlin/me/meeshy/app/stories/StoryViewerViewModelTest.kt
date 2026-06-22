@@ -44,13 +44,19 @@ class StoryViewerViewModelTest {
     private val now = Instant.parse("2026-06-17T12:00:00Z").toEpochMilli()
     private fun isoAgo(hours: Long) = Instant.ofEpochMilli(now - hours * 3_600_000).toString()
 
-    private fun storyPost(id: String, authorId: String, hoursAgo: Long) = ApiPost(
+    private fun storyPost(
+        id: String,
+        authorId: String,
+        hoursAgo: Long,
+        reactionSummary: Map<String, Int>? = null,
+    ) = ApiPost(
         id = id,
         type = "STORY",
         content = "text-$id",
         createdAt = isoAgo(hoursAgo),
         author = ApiAuthor(id = authorId, username = "name-$authorId"),
         isViewedByMe = false,
+        reactionSummary = reactionSummary,
     )
 
     private fun viewModel(
@@ -61,6 +67,7 @@ class StoryViewerViewModelTest {
         every { session.currentUserId } returns null
         coEvery { storyRepository.list(any(), any()) } returns NetworkResult.Success(posts)
         coEvery { storyRepository.markViewed(any()) } returns NetworkResult.Success(Unit)
+        coEvery { storyRepository.react(any(), any()) } returns NetworkResult.Success(Unit)
         val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to startUserId))
         return StoryViewerViewModel(storyRepository, session, config, handle)
     }
@@ -123,6 +130,73 @@ class StoryViewerViewModelTest {
         val vm = viewModel(startUserId = "b", posts = twoAuthors())
         vm.markCurrentViewed()
         coVerify { storyRepository.markViewed("b1") }
+    }
+
+    @Test
+    fun `reacting optimistically bumps the count, records mine, and calls the repository`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(storyPost("a1", "a", hoursAgo = 1, reactionSummary = mapOf("❤️" to 2))),
+        )
+        assertThat(vm.state.value.reactionCount).isEqualTo(2)
+
+        vm.react("🔥")
+
+        assertThat(vm.state.value.reactionCount).isEqualTo(3)
+        assertThat(vm.state.value.myReactions).containsExactly("🔥")
+        coVerify(exactly = 1) { storyRepository.react("a1", "🔥") }
+    }
+
+    @Test
+    fun `a failed reaction rolls back the optimistic count and mine`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(storyPost("a1", "a", hoursAgo = 1, reactionSummary = mapOf("❤️" to 2))),
+        )
+        coEvery { storyRepository.react("a1", "🔥") } returns
+            NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "nope"))
+
+        vm.react("🔥")
+
+        assertThat(vm.state.value.reactionCount).isEqualTo(2)
+        assertThat(vm.state.value.myReactions).isEmpty()
+    }
+
+    @Test
+    fun `reacting twice with the same emoji is idempotent and hits the network once`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(storyPost("a1", "a", hoursAgo = 1)),
+        )
+
+        vm.react("🔥")
+        vm.react("🔥")
+
+        assertThat(vm.state.value.reactionCount).isEqualTo(1)
+        assertThat(vm.state.value.myReactions).containsExactly("🔥")
+        coVerify(exactly = 1) { storyRepository.react("a1", "🔥") }
+    }
+
+    @Test
+    fun `reaction state is tracked per slide, not shared across the group`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+        vm.react("🔥") // on b1
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+        assertThat(vm.state.value.reactionCount).isEqualTo(1)
+
+        vm.advance() // → b2
+
+        assertThat(vm.state.value.current?.id).isEqualTo("b2")
+        assertThat(vm.state.value.reactionCount).isEqualTo(0)
+        assertThat(vm.state.value.myReactions).isEmpty()
+    }
+
+    @Test
+    fun `the viewer exposes the quick-reaction strip`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        assertThat(vm.state.value.quickReactions)
+            .containsExactlyElementsIn(me.meeshy.sdk.model.EmojiCatalog.defaultQuickReactions)
+            .inOrder()
     }
 
     @Test
