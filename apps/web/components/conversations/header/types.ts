@@ -19,7 +19,7 @@ export interface ConversationHeaderProps {
   onStartCall?: (type?: 'audio' | 'video') => void;
   onOpenGallery?: () => void;
   onOpenSearch?: () => void;
-  t: (key: string) => string;
+  t: (key: string, fallback?: string) => string;
   showBackButton?: boolean;
   otherUnreadCount?: number;
 }
