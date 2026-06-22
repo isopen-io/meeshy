@@ -1,54 +1,69 @@
-# Itération 60wb — Analyse UI/UX (web)
+# Iteration 60wb — Analyse UI/UX (web only)
 
 **Date** : 2026-06-22
-**Périmètre** : application web (`apps/web`) **uniquement**
-**Base** : `main` HEAD post-merge iter-59w/60w (`09b7a84`, après config-modal #806)
-**Branche** : `claude/practical-fermat-8e8nhk`
+**Périmètre** : `apps/web` exclusivement (les frontends iOS/Android sont traités par d'autres agents)
+**Surface** : composants d'authentification (`components/auth/**`)
 
-## Contexte
+> **Numérotation** : renumérotée **60w → 60wb** au merge. Un agent parallèle
+> (`claude/practical-fermat-r4vwgd`) a livré une autre 60w (i18n `config-modal.tsx`)
+> mergée en premier. Périmètres **disjoints** (config-modal vs auth anti-pattern) :
+> les deux conservées.
 
-Toutes les analyses 1→60w et leurs plans de correction sont **complets et annotés** dans `docs/plans/uiux/branch-tracking.md` (chaque surface soldée porte un « NE PLUS re-flagger »). Forte contention des agents parallèles sur les surfaces feed/reels/modales (57w–60w) — la 60w « config-modal i18n » (#806) couvre exactement le candidat que cette branche avait initialement préparé, d'où la **renumérotation en 60wb** et le pivot sur une surface orthogonale.
+## Constat — anti-pattern i18n `t('key') || 'fallback'` (classe de bug, leçon 50w)
 
-La revue d'optimisation a relevé un **bug de correctness** (et non une finition i18n/a11y), prioritaire car il provoque un **crash runtime** réel.
+L'implémentation de `t()` (`apps/web/hooks/use-i18n.ts`) retourne, lorsqu'une clé
+est manquante ou en cours de chargement, **la clé brute** (`return fallback || key`,
+l. 172/181) — une string **toujours truthy**.
 
-## Constat — BUG : `setTheme` non défini dans `AdminLayout`
+Conséquence : le pattern répandu `t('forgotPassword.emailLabel') || 'Email Address'`
+ne tombe **jamais** sur le fallback : l'opérateur `||` court-circuite sur la clé brute.
+Pendant le chargement / si une clé manque, l'utilisateur voit la **clé pointée brute**
+(`forgotPassword.emailLabel`) au lieu d'un texte lisible — rupture du Prisme (UI cassée
+en TOUTES langues) et flash-of-raw-keys sur des écrans d'**entrée** (login, mot de passe
+oublié, reset, récupération de compte).
 
-**Fichier** : `apps/web/components/admin/AdminLayout.tsx`
-**Lignes** : 355, 359, 363 (sélecteur de thème de l'en-tête admin)
+La signature de `t()` supporte nativement un fallback en 2e argument
+(`t(key, paramsOrFallback?: Record | string)`), qui est correctement renvoyé
+quand la clé est absente. Le fix élégant = remplacer `t(k) || 'x'` par `t(k, 'x')`.
 
-Le menu déroulant « Dark Mode Toggle » de l'en-tête admin appelle `setTheme('light' | 'dark' | 'auto')` sur le `onClick` de chacun de ses trois `DropdownMenuItem`. Or **`setTheme` n'est ni importé ni défini** dans le composant :
-- aucun `import`,
-- aucun hook ne le fournit (les hooks présents : `useI18n`, `useCurrentInterfaceLanguage`, `useUser`, `useAuth`, `useRouter`),
-- aucune déclaration locale.
+### Mesure (état du codebase)
+- **405** occurrences de `t(...) || '...'` réparties sur **59** fichiers `apps/web`.
+- Concentration sur l'`auth` (entry surfaces, flash le plus visible) : **125** occurrences / 11 fichiers.
 
-**Conséquence** : tout clic sur une option de thème dans **n'importe quelle page admin** lève une `ReferenceError: setTheme is not defined` → crash de l'interaction (et potentiellement de la vue via l'error boundary).
+## Périmètre traité en 60wb (borné, orthogonal aux PR en vol)
+10 fichiers `components/auth/**` (**76** remplacements `|| 'x'` → `, 'x'`) :
+- `FeatureGate.tsx`, `ForgotPasswordForm.tsx`, `PasswordRequirementsChecklist.tsx`,
+  `PasswordStrengthMeter.tsx`, `ResetPasswordForm.tsx`, `account-recovery-modal.tsx`,
+  `recovery/EmailRecoveryStep.tsx`, `recovery/SuccessStep.tsx`,
+  `wizard-steps/ContactStep.tsx`, `wizard-steps/SecurityStep.tsx`.
 
-**Pourquoi ce n'a pas été capté à la compilation** : `next.config.ts` porte `typescript.ignoreBuildErrors: true` (l.17-18). Le `Cannot find name 'setTheme'` qu'aurait remonté `tsc` strict est donc masqué au build. Bug latent classique de référence non résolue masquée par un build permissif.
+**Exclu volontairement** : `components/auth/PhoneResetFlow.tsx` (56 occurrences) — touché
+par l'iter-59w OTP (#786, mergé) et la PR ouverte **#800**. Reporté pour éviter tout
+conflit de merge (leçon collision 57w/58wb/60w).
 
-## Correctif retenu (Single Source of Truth)
+## Vérifications
+- Toutes les clés ciblées **existent** dans `locales/{en,fr}/auth.json` → le fallback
+  n'est jamais atteint au runtime : **zéro changement visible** pour l'utilisateur sur les
+  clés présentes. Le fix est purement correctif (sémantique du filet de sécurité) +
+  suppression de dead-code.
+- **Anglicisation des fallbacks FR** (leçon 50w : fallback EN anti-flash) : les filets de
+  sécurité qui étaient en français (`PasswordRequirementsChecklist` ×3, `account-recovery-modal`
+  ×6, `EmailRecoveryStep` ×4, `SuccessStep` ×2) sont alignés sur la valeur **EN exacte** du
+  locale → plus aucune fuite FR possible en cas de clé manquante.
+- Parenthèses équilibrées (le remplacement retire un `)` et en réinjecte un) ; préfixes
+  `cond || t(...)` préservés (ex. `localError || t('resetPassword.errors.tokenInvalid', '…')`).
+- `grep` anti-pattern restant sur les 10 fichiers = **0**.
+- CI #808 : Quality (bun) / Security / Test web / Test gateway / Test shared / Build (bun)
+  + tous les jobs → **success**.
 
-Réutiliser le **setter de thème canonique** déjà en production (aucune réimplémentation) :
-- `setTheme` est exposé par `useAppActions()` (`stores/app-store.ts:138`, ré-exporté par `stores/index.ts`).
-- Sa signature `(theme: 'light' | 'dark' | 'auto') => void` correspond **exactement** aux 3 appels d'`AdminLayout`.
-- L'implémentation applique déjà la classe `.light`/`.dark` sur `documentElement` (et résout `auto` via `matchMedia`), avec garde `typeof window !== 'undefined'`.
+## Reste différé (60wc+ / 61w+)
+~270 occurrences de `t(...) || '...'` sur ~48 autres fichiers web (admin, conversations,
+audio, settings, video-calls…) — même transformation mécanique, par lots bornés et
+orthogonaux. + `PhoneResetFlow.tsx` une fois #800 mergée/fermée.
 
-Diff minimal (2 lignes, 1 fichier) :
-1. `import { useUser, useAppActions } from '@/stores';` (ajout à l'import existant).
-2. `const { setTheme } = useAppActions();` dans le corps du composant.
+---
 
-C'est le même pattern que `components/settings/theme-settings.tsx` (l.28 `const { setTheme } = useAppActions();`) → cohérence avec l'écran de réglages principal.
-
-## Hors périmètre / différé (documenté, ne pas re-flagger à l'aveugle)
-
-- **`AdminLayout.tsx:351`** `<span className="sr-only">Toggle theme</span>` — label a11y **en anglais dur**. Ce n'est PAS une rupture Prisme « FR figé en toutes langues » (l'anglais reste une langue valide pour un lecteur d'écran) ; l'i18n exigerait une clé neuve `layout.toggleTheme` ×4 locales pour un gain marginal. **Différé 61w+** (candidat parité a11y, non prioritaire).
-
-## Vérification
-
-- `useAppActions` confirmé exporté par `@/stores` (`stores/index.ts:20`) et exposant `setTheme` (`app-store.ts:138`).
-- Type `'light' | 'dark' | 'auto'` ↔ 3 appels d'`AdminLayout` : OK.
-- Aucun fichier locale touché (les clés `layout.themeLight/Dark/Auto` existent déjà — `admin.json:2008-2010` — et résolvaient déjà ; seul le *handler* était cassé).
-- CI verte sur PR #805 (Quality bun, Build bun, Test web/gateway/shared/agent/python, Security — tous ✅) avant détection du conflit `branch-tracking.md` (renumérotation 60w→60wb).
-
-## Statut
-
-✅ **Corrigé & complet.** NE PLUS re-flagger `AdminLayout.tsx` pour `setTheme` non défini.
+## ✅ Statut : COMPLÈTE & CORRIGÉE (60wb — PR #808)
+**NE PLUS re-flagger** l'anti-pattern `t(k) || 'x'` sur ces 10 fichiers auth — soldé.
+Les fallbacks de ces fichiers sont désormais EN et corrects. Le reste de la classe de
+bug (48 fichiers) reste un différé borné explicite, à traiter en 60wc+.

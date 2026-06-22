@@ -97,6 +97,13 @@ updates:
       - dependency-type: "direct"
       - dependency-type: "indirect"
     versioning-strategy: increase
+    ignore:
+      # Prisma v7 désactivé jusqu'à la prise en compte de MongoDB
+      # (Prisma 7 retire `datasource url` du schema → P1012 ; migration vers prisma.config.ts + adapter requise)
+      - dependency-name: "prisma"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/*"
+        update-types: ["version-update:semver-major"]
 
   # Service Translator (Python/AI)
   - package-ecosystem: "pip"
@@ -165,6 +172,13 @@ updates:
       - dependency-type: "direct"
       - dependency-type: "indirect"
     versioning-strategy: increase
+    ignore:
+      # Prisma v7 désactivé jusqu'à la prise en compte de MongoDB
+      # (Prisma 7 retire `datasource url` du schema → P1012 ; migration vers prisma.config.ts + adapter requise)
+      - dependency-name: "prisma"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/*"
+        update-types: ["version-update:semver-major"]
 
   # Racine du monorepo (turbo, outils globaux)
   - package-ecosystem: "npm"
