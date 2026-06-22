@@ -7,6 +7,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { VideoPlayer, CompactVideoPlayer } from '../../../components/video/VideoPlayer';
+import { VideoControls } from '../../../components/video/VideoControls';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 
 // Mock MediaManager
@@ -735,5 +736,170 @@ describe('CompactVideoPlayer', () => {
         expect(mockVideoState.currentTime).toBe(0);
       });
     });
+  });
+
+  describe('Pause branch', () => {
+    it('should pause when clicking play button while already playing', async () => {
+      render(<CompactVideoPlayer attachment={createMockAttachment()} />);
+
+      const playButton = screen.getByTestId('play-icon').closest('button');
+
+      // Start playing
+      await act(async () => {
+        if (playButton) fireEvent.click(playButton);
+      });
+      expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+
+      // The play mock sets paused=false; now the component shows pause button
+      // Click again to pause
+      const pauseButton = screen.queryByTestId('pause-icon')?.closest('button');
+      await act(async () => {
+        if (pauseButton) fireEvent.click(pauseButton);
+      });
+
+      expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled();
+    });
+
+    it('should handle error thrown during play', async () => {
+      (HTMLMediaElement.prototype.play as jest.Mock).mockRejectedValueOnce(new Error('play failed'));
+
+      render(<CompactVideoPlayer attachment={createMockAttachment()} />);
+
+      const playButton = screen.getByTestId('play-icon').closest('button');
+
+      await act(async () => {
+        if (playButton) fireEvent.click(playButton);
+      });
+
+      // Error is caught and logged — component should still be in DOM
+      expect(screen.getByTestId('play-icon')).toBeInTheDocument();
+    });
+  });
+
+  describe('handleLoadedMetadata', () => {
+    it('sets duration from video element when loadedmetadata fires with finite duration', async () => {
+      mockVideoState.duration = 90;
+
+      const { container } = render(
+        <CompactVideoPlayer attachment={createMockAttachment({ duration: undefined })} />
+      );
+
+      const video = container.querySelector('video');
+      if (video) {
+        fireEvent.loadedMetadata(video);
+      }
+
+      // duration from video element (90s) should now be displayed
+      await waitFor(() => {
+        expect(screen.getByText('1:30')).toBeInTheDocument();
+      });
+    });
+  });
+});
+
+describe('VideoControls', () => {
+  const noop = () => {};
+  const baseProps = {
+    isPlaying: false,
+    isLoading: false,
+    hasError: false,
+    currentTime: 0,
+    duration: 60,
+    volume: 1,
+    isMuted: false,
+    isFullscreen: false,
+    downloadUrl: 'https://example.com/video.mp4',
+    downloadName: 'video.mp4',
+    onTogglePlay: noop,
+    onSeek: noop,
+    onVolumeChange: noop,
+    onToggleMute: noop,
+    onToggleFullscreen: noop,
+  };
+
+  it('shows Minimize icon when isFullscreen=true', () => {
+    render(<VideoControls {...baseProps} isFullscreen={true} />);
+    expect(screen.getByTestId('minimize-icon')).toBeInTheDocument();
+    expect(screen.queryByTestId('maximize-icon')).not.toBeInTheDocument();
+  });
+
+  it('shows Maximize icon when isFullscreen=false', () => {
+    render(<VideoControls {...baseProps} isFullscreen={false} />);
+    expect(screen.getByTestId('maximize-icon')).toBeInTheDocument();
+    expect(screen.queryByTestId('minimize-icon')).not.toBeInTheDocument();
+  });
+
+  it('formatTime returns 0:00 for negative currentTime', () => {
+    render(<VideoControls {...baseProps} currentTime={-5} duration={60} />);
+    // Both times should show 0:00 (negative currentTime → formatTime returns '0:00')
+    const timeDisplays = screen.getAllByText(/0:00/);
+    expect(timeDisplays.length).toBeGreaterThan(0);
+  });
+
+  it('formatTime returns 0:00 for NaN duration', () => {
+    render(<VideoControls {...baseProps} currentTime={NaN} duration={NaN} />);
+    const timeDisplays = screen.getAllByText(/0:00/);
+    expect(timeDisplays.length).toBeGreaterThan(0);
+  });
+});
+
+describe('CompactVideoPlayer additional branch coverage', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockVideoState = {
+      currentTime: 0,
+      duration: 60,
+      paused: true,
+      muted: false,
+      volume: 1,
+      readyState: 4,
+      videoWidth: 320,
+      videoHeight: 180,
+      error: null,
+    };
+  });
+
+  it('skips src loading when attachmentFileUrl is empty', () => {
+    render(
+      <CompactVideoPlayer attachment={createMockAttachment({ fileUrl: '' })} />
+    );
+    expect(HTMLMediaElement.prototype.load).not.toHaveBeenCalled();
+  });
+
+  it('skips src assignment when URL scheme is not http/https', () => {
+    render(
+      <CompactVideoPlayer attachment={createMockAttachment({ fileUrl: 'ftp://example.com/video.mp4' })} />
+    );
+    expect(HTMLMediaElement.prototype.load).not.toHaveBeenCalled();
+  });
+
+  it('handleLoadedMetadata: skips setDuration when duration is NaN', async () => {
+    mockVideoState.duration = NaN;
+
+    const { container } = render(
+      <CompactVideoPlayer attachment={createMockAttachment({ duration: undefined })} />
+    );
+
+    const video = container.querySelector('video');
+    if (video) fireEvent.loadedMetadata(video);
+
+    expect(screen.getByText('0:00')).toBeInTheDocument();
+  });
+});
+
+describe('VideoPlayer attachment without duration', () => {
+  it('renders without attachment duration (undefined attachmentDuration branch)', () => {
+    const attachmentNoDuration = {
+      id: 'video-no-dur',
+      fileUrl: 'https://example.com/video.mp4',
+      originalName: 'test.mp4',
+      mimeType: 'video/mp4',
+      fileSize: 1024,
+      duration: undefined,
+      createdAt: new Date().toISOString(),
+    } as any;
+
+    const { container } = render(<VideoPlayer attachment={attachmentNoDuration} />);
+    expect(container.querySelector('video')).toBeInTheDocument();
   });
 });

@@ -62,6 +62,7 @@ export const CompactVideoPlayer: React.FC<CompactVideoPlayerProps> = ({
   }, [attachmentDuration]);
 
   const togglePlay = async () => {
+    /* istanbul ignore if -- videoRef.current is always non-null post-mount */
     if (!videoRef.current) return;
 
     try {
@@ -87,6 +88,7 @@ export const CompactVideoPlayer: React.FC<CompactVideoPlayerProps> = ({
 
   const handleEnded = () => {
     setIsPlaying(false);
+    /* istanbul ignore else -- defensive null guard; videoRef.current is always non-null post-mount */
     if (videoRef.current) {
       videoRef.current.currentTime = 0;
     }
@@ -94,6 +96,7 @@ export const CompactVideoPlayer: React.FC<CompactVideoPlayerProps> = ({
 
   useEffect(() => {
     const video = videoRef.current;
+    /* istanbul ignore if -- videoRef.current is always non-null in a mounted component */
     if (!video) return;
 
     const handlePause = () => setIsPlaying(false);

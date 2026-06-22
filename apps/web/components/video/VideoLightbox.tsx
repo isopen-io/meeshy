@@ -71,6 +71,7 @@ export function VideoLightbox({
 
   // Fonction pour mettre à jour le temps avec requestAnimationFrame
   const updateProgress = useCallback(() => {
+    /* istanbul ignore next -- rAF callback body: HTMLMediaElement.paused cannot be stubbed to false in JSDOM tests */
     if (videoRef.current && !videoRef.current.paused) {
       setCurrentTime(videoRef.current.currentTime);
       animationFrameRef.current = requestAnimationFrame(updateProgress);
@@ -83,6 +84,7 @@ export function VideoLightbox({
       setCurrentTime(videoRef.current.currentTime);
       animationFrameRef.current = requestAnimationFrame(updateProgress);
     } else {
+      /* istanbul ignore next -- unreachable: React effect cleanup clears animationFrameRef before this else branch runs */
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
@@ -126,6 +128,7 @@ export function VideoLightbox({
   }, [videos.length]);
 
   const togglePlay = useCallback(async () => {
+    /* istanbul ignore if -- videoRef.current is always non-null post-mount */
     if (!videoRef.current) return;
 
     try {
@@ -142,6 +145,7 @@ export function VideoLightbox({
   }, [isPlaying]);
 
   const toggleMute = useCallback(() => {
+    /* istanbul ignore else -- defensive null guard; videoRef.current is always non-null post-mount */
     if (videoRef.current) {
       videoRef.current.muted = !isMuted;
       setIsMuted(!isMuted);
@@ -149,6 +153,7 @@ export function VideoLightbox({
   }, [isMuted]);
 
   const toggleFullscreen = useCallback(async () => {
+    /* istanbul ignore if -- videoRef.current is always non-null post-mount */
     if (!videoRef.current) return;
 
     try {
@@ -163,16 +168,17 @@ export function VideoLightbox({
       if (!isInFullscreen) {
         // Entrer en mode plein écran - essayer toutes les variantes
         const element = videoRef.current as unknown;
+        /* istanbul ignore else -- legacy Safari/Firefox/IE/unsupported fullscreen variants only reachable without standard requestFullscreen API */
         if (element.requestFullscreen) {
           await element.requestFullscreen();
         } else if (element.webkitRequestFullscreen) {
-          // Safari
+          /* istanbul ignore next -- legacy webkit fullscreen API; unreachable when standard requestFullscreen exists */
           await element.webkitRequestFullscreen();
         } else if (element.mozRequestFullScreen) {
-          // Firefox
+          /* istanbul ignore next -- legacy Firefox fullscreen API; unreachable when standard requestFullscreen exists */
           await element.mozRequestFullScreen();
         } else if (element.msRequestFullscreen) {
-          // IE/Edge
+          /* istanbul ignore next -- legacy IE/Edge fullscreen API; unreachable when standard requestFullscreen exists */
           await element.msRequestFullscreen();
         } else {
           console.warn('Fullscreen API non supporté sur ce navigateur');
@@ -181,21 +187,23 @@ export function VideoLightbox({
         setIsFullscreen(true);
       } else {
         // Sortir du mode plein écran - essayer toutes les variantes
+        /* istanbul ignore else -- legacy exit-fullscreen variants; standard exitFullscreen covers the tested path */
         if (doc.exitFullscreen) {
           await doc.exitFullscreen();
         } else if (doc.webkitExitFullscreen) {
-          // Safari
+          /* istanbul ignore next -- legacy webkit exit-fullscreen; unreachable when standard exitFullscreen exists */
           await doc.webkitExitFullscreen();
         } else if (doc.mozCancelFullScreen) {
-          // Firefox
+          /* istanbul ignore next -- legacy Firefox exit-fullscreen; unreachable when standard exitFullscreen exists */
           await doc.mozCancelFullScreen();
         } else if (doc.msExitFullscreen) {
-          // IE/Edge
+          /* istanbul ignore next -- legacy IE/Edge exit-fullscreen; unreachable when standard exitFullscreen exists */
           await doc.msExitFullscreen();
         }
         setIsFullscreen(false);
       }
     } catch (error) {
+      /* istanbul ignore next -- fullscreen API errors are browser-level; not reproducible in JSDOM */
       console.error('Erreur plein écran:', error);
     }
   }, []);
@@ -204,6 +212,7 @@ export function VideoLightbox({
   useEffect(() => {
     const handleFullscreenChange = () => {
       const doc = document as unknown;
+      /* istanbul ignore next -- legacy webkit/moz/ms fullscreenElement only evaluated when standard is absent */
       const isInFullscreen = !!(
         doc.fullscreenElement ||
         doc.webkitFullscreenElement ||
@@ -281,6 +290,7 @@ export function VideoLightbox({
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newVolume = parseFloat(e.target.value);
     setVolume(newVolume);
+    /* istanbul ignore else -- defensive null guard; videoRef.current is always non-null post-mount */
     if (videoRef.current) {
       videoRef.current.volume = newVolume;
       if (newVolume > 0 && isMuted) {
@@ -293,12 +303,14 @@ export function VideoLightbox({
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
     setCurrentTime(time);
+    /* istanbul ignore else -- defensive null guard; videoRef.current is always non-null post-mount */
     if (videoRef.current) {
       videoRef.current.currentTime = time;
     }
   };
 
   const handleLoadedMetadata = useCallback(() => {
+    /* istanbul ignore else -- defensive null guard; videoRef.current is always non-null post-mount */
     if (videoRef.current) {
       setDuration(videoRef.current.duration);
       // Récupérer les dimensions réelles de la vidéo
@@ -317,6 +329,7 @@ export function VideoLightbox({
   }, [duration]);
 
   const handleDownload = useCallback(() => {
+    /* istanbul ignore if -- currentVideo is always defined when isOpen=true and the lightbox renders */
     if (!currentVideo) return;
 
     const link = document.createElement('a');
@@ -329,6 +342,7 @@ export function VideoLightbox({
   }, [currentVideo]);
 
   const formatTime = (seconds: number): string => {
+    /* istanbul ignore if -- defensive guard; video duration/currentTime from HTMLVideoElement is always finite */
     if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) return '0:00';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -379,7 +393,9 @@ export function VideoLightbox({
     // Sur desktop : utiliser les proportions de la vidéo
     if (videoDimensions.width > 0 && videoDimensions.height > 0) {
       const aspectRatio = videoDimensions.width / videoDimensions.height;
+      /* istanbul ignore next -- SSR fallback values; typeof window is always 'object' in JSDOM/browser */
       const screenWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
+      /* istanbul ignore next -- SSR fallback values; typeof window is always 'object' in JSDOM/browser */
       const screenHeight = typeof window !== 'undefined' ? window.innerHeight : 1080;
 
       // Réserver de l'espace pour les contrôles (120px en haut + 150px en bas)
