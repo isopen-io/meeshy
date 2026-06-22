@@ -1,33 +1,35 @@
-# Plan — Itération 63w (web only)
+# Plan itération 63w (web) — anti-pattern `t()||fallback` sur le flow reset de mot de passe
 
-**Surface** : cohérence de thème (design tokens) sur les empty states web.
-**Base** : `main` HEAD `4172b8f` (post iter-62wb #847). Branche `claude/practical-fermat-ep7mkb`.
+## Base
+- Branche de travail : `claude/practical-fermat-ctjjy0` réinitialisée sur `main` HEAD `d63c4a5`
+  (post-#835 iter-61w / post-#840 iter-62w).
+- Surface **orthogonale** aux PR en vol : #842/#843 (message-bubble 62w), #847 (Badge 62wb).
 
 ## Objectif
-Aligner les deux composants **empty state rendus en production** sur la charte de
-tokens CSS HSL (comme le reste de `components/notifications/`), pour un dark/light
-mode correct et theme-safe. Surface **orthogonale** au cluster i18n/Badge en vol.
+Solder la classe de bug `t('key') || 'French'` sur le **flow de récupération de mot de passe**
+(3 pages) en remplaçant par la signature de secours native `t('key', 'English')`.
 
 ## Étapes
-1. [x] Revue analyses/plans + sync `main` (collisions 60we→62wb absorbées).
-2. [x] Identifier les outliers couleurs codées en dur (grep `gray-*`/`white` sur
-   `components/notifications/` + tous `*Empty*.tsx`).
-3. [x] `NotificationEmptyState.tsx` : `gray-*`/`white` → `bg-card`/`muted`/
-   `text-muted-foreground`/`text-foreground`/`border-border` (5 groupes).
-4. [x] `NotificationEmptyState.tsx` : fix destructuring `isSearching: _isSearching`
-   (retire TS2339 latent).
-5. [x] `ConversationEmptyState.tsx` : `bg-white/50 dark:bg-gray-950/50` → `bg-card/50` ;
-   `text-white` → `text-primary-foreground`.
-6. [x] Vérifier tests (`ConversationEmptyState.test` n'assert que `bg-primary`).
-7. [x] Docs analyse + plan + `branch-tracking.md`.
-8. [ ] Commit, push, PR ; CI verte ; merge `main` ; supprimer la branche.
+1. [x] `git fetch origin main` + reset de la branche sur `main` HEAD.
+2. [x] Inventorier l'anti-pattern (`grep`) sur les 3 pages → 43 occ. / 41 clés.
+3. [x] Vérifier par script que les 41 clés existent ×4 locales (en/fr/es/pt) → **toutes présentes**.
+4. [x] Remplacer `t('k') || 'FR'` → `t('k', 'EN')` (EN = valeur exacte `en/auth.json`,
+       double-quote pour gérer les apostrophes).
+5. [x] Vérifier grep résiduel = 0, diff mécanique conforme.
+6. [x] **0 fichier locale touché** (clés déjà présentes).
+7. [ ] Commit + push, créer PR, CI vert, merge dans `main`, suppression branche.
+8. [x] Mettre à jour `branch-tracking.md` (ligne 63w, Next = 64, base, PR).
 
-## Non-objectifs (hors scope, documentés)
-- `NotificationTest.tsx` (dev harness) — `bg-gray-500` intentionnel.
-- Pas de changement i18n, de comportement, ni de dépendance.
-- `v2/EmptyState*`, `EmptyConversations` déjà conformes — ne pas toucher.
+## Fichiers touchés
+- `apps/web/app/forgot-password/page.tsx` (8)
+- `apps/web/app/forgot-password/check-email/page.tsx` (23)
+- `apps/web/app/reset-password/page.tsx` (12)
+- `docs/analyses/uiux/2026-06-22-iteration-63w.md` (nouveau)
+- `docs/plans/uiux/2026-06-22-plan-iteration-63w.md` (ce fichier)
+- `docs/plans/uiux/branch-tracking.md` (ledger)
 
-## Critères de succès
-- 0 couleur `gray-*`/`white` codée en dur sur les empty states de production.
-- `bg-primary` conservé (test vert).
-- Type-check CI sans TS2339 sur `NotificationEmptyState`.
+## Hors périmètre / différé 64w+
+- `PhoneResetFlow.tsx` (56 occ) — gros porteur, lot dédié.
+- Reste ~29 fichiers de l'anti-pattern → lots bornés par feature.
+- `app/settings/loading.tsx` (server component, i18n server-side dédiée), `next-themes`
+  orphelin, épuration `settings/_archived/`.
