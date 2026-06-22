@@ -133,7 +133,14 @@ final class MessagePipelineIntegrationTests: XCTestCase {
             computedState: .delivered
         )
         await actor.bufferIncoming([incoming])
-        try await Task.sleep(for: .milliseconds(150))
+        // Poll for the GRDB ValueObservation to surface the row instead of a
+        // fixed 150 ms sleep: on a cold/loaded CI runner the observation can take
+        // longer than 150 ms to fire, which flaked this assert at count 0. The
+        // bounded wait exits as soon as the row lands (typically <50 ms locally).
+        let deadline = Date().addingTimeInterval(3.0)
+        while store.messages.isEmpty && Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
 
         XCTAssertEqual(store.messages.count, 1, "message must appear in store via observation alone")
         XCTAssertEqual(store.messages.first?.localId, "t14_msg_001")
