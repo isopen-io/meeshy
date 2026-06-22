@@ -154,7 +154,7 @@ export const socketSignalSchema = z.object({
   callId: objectIdSchema,
   signal: z.object({
     type: z.enum(['offer', 'answer', 'ice-candidate', 'ice-restart'], {
-      errorMap: () => ({ message: 'Signal type must be offer, answer, ice-candidate, or ice-restart' })
+      error: () => 'Signal type must be offer, answer, ice-candidate, or ice-restart'
     }),
     from: z.string().min(1, 'from field is required'),
     to: z.string().min(1, 'to field is required'),

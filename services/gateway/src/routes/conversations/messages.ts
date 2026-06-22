@@ -90,7 +90,7 @@ export const SendMessageBodySchema = z.object({
   forwardedFromConversationId: z.string().optional(),
   encryptedContent: z.string().optional(),
   encryptionMode: z.enum(['e2ee', 'server', 'hybrid']).optional(),
-  encryptionMetadata: z.record(z.unknown())
+  encryptionMetadata: z.record(z.string(), z.unknown())
     .refine(
       (m) => { try { return JSON.stringify(m).length <= 8 * 1024; } catch { return false; } },
       { message: 'encryptionMetadata exceeds 8KB serialized' }
