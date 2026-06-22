@@ -388,6 +388,9 @@ struct PostDetailView: View {
                 onLikeComment: { commentId in
                     Task { await viewModel.toggleCommentLike(commentId, postId: postId) }
                 },
+                onDeleteComment: { target in
+                    Task { await viewModel.deleteComment(target) }
+                },
                 moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                 storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
                 presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state ?? .offline,

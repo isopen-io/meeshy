@@ -604,6 +604,49 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Comment Deletion
+
+    /// Supprime un commentaire (auteur uniquement — le gating se fait côté vue
+    /// via `CommentRowView`). Retrait optimiste immédiat (racine + réponses, ou
+    /// réponse avec décrément du parent), puis appel API, rollback du snapshot
+    /// si l'API échoue. Miroir du flux optimiste de `submitCommentWithMedia`.
+    func deleteComment(_ comment: FeedComment) async {
+        guard let post else { return }
+        let snapshotComments = comments
+        let snapshotReplies = repliesMap
+        let snapshotExpanded = expandedThreads
+        let snapshotCount = post.commentCount
+
+        if let parentId = comment.parentId {
+            if var existing = repliesMap[parentId] {
+                existing.removeAll { $0.id == comment.id }
+                repliesMap[parentId] = existing
+            }
+            if let idx = comments.firstIndex(where: { $0.id == parentId }), comments[idx].replies > 0 {
+                comments[idx].replies -= 1
+            }
+            self.post?.commentCount = max(0, snapshotCount - 1)
+        } else {
+            comments.removeAll { $0.id == comment.id }
+            repliesMap[comment.id] = nil
+            expandedThreads.remove(comment.id)
+            // Suppression d'un commentaire racine → cascade serveur de ses réponses.
+            self.post?.commentCount = max(0, snapshotCount - 1 - comment.replies)
+        }
+
+        do {
+            try await postService.deleteComment(postId: post.id, commentId: comment.id)
+            try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main))
+        } catch {
+            comments = snapshotComments
+            repliesMap = snapshotReplies
+            expandedThreads = snapshotExpanded
+            self.post?.commentCount = snapshotCount
+            FeedbackToastManager.shared.showError(String(localized: "feed.comments.delete_error", defaultValue: "Impossible de supprimer le commentaire", bundle: .main))
+        }
+    }
+
     // MARK: - Socket
 
     /// Id du post couvert par les sinks actifs. Keyer la garde sur le postId

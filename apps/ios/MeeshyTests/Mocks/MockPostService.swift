@@ -28,6 +28,7 @@ final class MockPostService: PostServiceProviding {
     var addCommentResult: Result<APIPostComment, Error> = .success(stubComment)
     var likeCommentResult: Result<Void, Error> = .success(())
     var unlikeCommentResult: Result<Void, Error> = .success(())
+    var deleteCommentResult: Result<Void, Error> = .success(())
     var repostResult: Result<APIPost, Error> = .success(stubPost)
     var shareResult: Result<Void, Error> = .success(())
     var createStoryResult: Result<APIPost, Error> = .success(stubPost)
@@ -73,6 +74,9 @@ final class MockPostService: PostServiceProviding {
     var unlikeCommentCallCount = 0
     var lastUnlikeCommentPostId: String?
     var lastUnlikeCommentCommentId: String?
+    var deleteCommentCallCount = 0
+    var lastDeleteCommentPostId: String?
+    var lastDeleteCommentCommentId: String?
 
     var repostCallCount = 0
     var lastRepostPostId: String?
@@ -216,6 +220,13 @@ final class MockPostService: PostServiceProviding {
         lastUnlikeCommentPostId = postId
         lastUnlikeCommentCommentId = commentId
         try unlikeCommentResult.get()
+    }
+
+    func deleteComment(postId: String, commentId: String) async throws {
+        deleteCommentCallCount += 1
+        lastDeleteCommentPostId = postId
+        lastDeleteCommentCommentId = commentId
+        try deleteCommentResult.get()
     }
 
     func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool) async throws -> APIPost {
@@ -399,6 +410,10 @@ final class MockPostService: PostServiceProviding {
         unlikeCommentCallCount = 0
         lastUnlikeCommentPostId = nil
         lastUnlikeCommentCommentId = nil
+        deleteCommentResult = .success(())
+        deleteCommentCallCount = 0
+        lastDeleteCommentPostId = nil
+        lastDeleteCommentCommentId = nil
 
         repostResult = .success(stubPost)
         repostCallCount = 0

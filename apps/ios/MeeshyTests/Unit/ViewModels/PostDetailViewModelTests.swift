@@ -314,6 +314,72 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTFail("Observer continuation never registered for cmid=\(cmid)")
     }
 
+    // MARK: - deleteComment
+
+    func test_deleteComment_topLevel_removesOptimisticallyAndCallsService() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let comment = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 0)
+        sut.comments = [comment]
+        sut.post?.commentCount = 1
+
+        await sut.deleteComment(comment)
+
+        XCTAssertTrue(sut.comments.isEmpty)
+        XCTAssertEqual(mock.deleteCommentCallCount, 1)
+        XCTAssertEqual(mock.lastDeleteCommentPostId, "p1")
+        XCTAssertEqual(mock.lastDeleteCommentCommentId, "c1")
+        XCTAssertEqual(sut.post?.commentCount, 0)
+    }
+
+    func test_deleteComment_topLevel_subtractsReplyCountFromTotal() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let comment = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 2)
+        sut.comments = [comment]
+        sut.post?.commentCount = 3 // 1 racine + 2 réponses
+
+        await sut.deleteComment(comment)
+
+        XCTAssertEqual(sut.post?.commentCount, 0, "racine + ses réponses retirées du total")
+    }
+
+    func test_deleteComment_failure_rollsBack() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        mock.deleteCommentResult = .failure(NSError(domain: "test", code: 500))
+        let comment = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 0)
+        sut.comments = [comment]
+        sut.post?.commentCount = 1
+
+        await sut.deleteComment(comment)
+
+        XCTAssertEqual(sut.comments.count, 1, "le commentaire est restauré si l'API échoue")
+        XCTAssertEqual(sut.comments[0].id, "c1")
+        XCTAssertEqual(sut.post?.commentCount, 1)
+    }
+
+    func test_deleteComment_reply_decrementsParentReplyCount() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let parent = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 1)
+        let reply = FeedComment(id: "r1", author: "bob", authorId: "a2", content: "Reply", parentId: "c1")
+        sut.comments = [parent]
+        sut.repliesMap = ["c1": [reply]]
+        sut.post?.commentCount = 2
+
+        await sut.deleteComment(reply)
+
+        XCTAssertEqual(sut.repliesMap["c1"]?.isEmpty, true)
+        XCTAssertEqual(sut.comments.first(where: { $0.id == "c1" })?.replies, 0)
+        XCTAssertEqual(sut.post?.commentCount, 1)
+        XCTAssertEqual(mock.lastDeleteCommentCommentId, "r1")
+    }
+
     // MARK: - topLevelComments
 
     func test_topLevelComments_filtersParentComments() async {
