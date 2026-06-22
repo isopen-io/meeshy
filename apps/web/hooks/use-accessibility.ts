@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type RefObject } from 'react';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // REDUCED MOTION HOOK
@@ -211,13 +211,22 @@ export const SoundFeedback = {
 
 /**
  * Hook to manage focus trap within a container
- * Useful for modals, dialogs, and dropdown menus
+ * Useful for modals, dialogs, and dropdown menus.
+ *
+ * Follows the ARIA dialog pattern: when the trap activates it moves focus to
+ * the first focusable element and cycles Tab/Shift+Tab inside the container;
+ * when it deactivates (or the component unmounts) it restores focus to whatever
+ * element was focused before — typically the trigger — so keyboard users are
+ * not dropped back at the top of the page.
  */
-export function useFocusTrap(containerRef: React.RefObject<HTMLElement>, isActive: boolean) {
+export function useFocusTrap<T extends HTMLElement>(
+  containerRef: RefObject<T | null>,
+  isActive: boolean
+) {
   useEffect(() => {
-    if (!isActive || !containerRef.current) return;
-
     const container = containerRef.current;
+    if (!isActive || !container) return;
+
     const focusableElements = container.querySelectorAll<HTMLElement>(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     );
@@ -226,6 +235,9 @@ export function useFocusTrap(containerRef: React.RefObject<HTMLElement>, isActiv
 
     const firstElement = focusableElements[0];
     const lastElement = focusableElements[focusableElements.length - 1];
+
+    // Remember what had focus so we can return it on close (ARIA dialog pattern).
+    const previouslyFocused = document.activeElement as HTMLElement | null;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
@@ -248,6 +260,9 @@ export function useFocusTrap(containerRef: React.RefObject<HTMLElement>, isActiv
 
     return () => {
       container.removeEventListener('keydown', handleKeyDown);
+      if (previouslyFocused && previouslyFocused.isConnected) {
+        previouslyFocused.focus();
+      }
     };
   }, [containerRef, isActive]);
 }

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useI18n } from '@/hooks/use-i18n';
+import { useFocusTrap } from '@/hooks/use-accessibility';
 import { Input } from './Input';
 import { TagInput, TagItem } from './TagInput';
 import { Label } from './Label';
@@ -78,6 +79,12 @@ export function ConversationDrawer({
   const { t: tConv } = useI18n('conversations');
   const [localName, setLocalName] = useState(conversationName);
   const [mounted, setMounted] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+
+  // Keep keyboard focus inside the open drawer and restore it to the trigger on close.
+  // Gate on `mounted` too: the drawer node only exists once mounted, so the trap must
+  // (re)activate after the ref is attached, not on the initial null-ref render.
+  useFocusTrap(drawerRef, isOpen && mounted);
 
   useEffect(() => {
     if (isOpen) {
@@ -121,6 +128,7 @@ export function ConversationDrawer({
 
       {/* Drawer */}
       <div
+        ref={drawerRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="conversation-drawer-title"
