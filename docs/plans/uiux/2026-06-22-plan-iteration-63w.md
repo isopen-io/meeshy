@@ -1,38 +1,45 @@
-# Plan — Itération 63w (web)
+# Plan itération 63w (web) — épuration `components/settings/_archived/`
 
-## Contexte
-Itération web. Base = `main` HEAD `d63c4a5` (post-merge iter-61w #835/#818, iter-62w #840).
-Contention forte des agents parallèles sur l'anti-pattern `t()||fallback` (message-bubble #842/#843,
-layout chrome #840 mergé, conversation header #835 mergé, image dialogs #814 mergé) et sur les variants
-Badge (#847 ouvert). → Cible **orthogonale** non touchée.
+**Base** : `main` HEAD post-merge #847 (iter-62wb, commit `4172b8f`).
+**Branche** : `claude/practical-fermat-5f6moi`.
+**Type** : épuration code mort (orthogonal à la vague i18n `t()||fallback` #843/#849).
 
-## Découverte (revue d'optimisation Prisme)
-`app/(connected)/me/page.tsx` — la page **profil `/me`** (« Mon profil »), destination de navigation
-**primaire** (raccourci depuis le menu utilisateur, hero + stats + langues + actions), consomme
-**`useI18n('settings')`** pour ses toasts (`v2me.*`) MAIS affiche **28 chaînes FR codées en dur** dans
-TOUTES les langues — rupture Prisme majeure sur une surface d'entrée :
+## Objectif
 
-- **EditProfileModal** : titre `Modifier le profil`, labels `Nom`/`Bio`, placeholders `Votre nom`/`Parlez-nous de vous...`, boutons `Annuler`/`Enregistrement...`/`Enregistrer`
-- **LogoutConfirmModal** : titre `Se déconnecter ?`, message de confirmation, `Annuler`, `Déconnexion...`/`Se déconnecter`
-- **Chrome page** : `DashboardLayout title="Mon profil"`, état erreur `Profil non trouvé` + `Retour aux conversations`
-- **Stats** : `aria-label="Statistiques"` + labels `Conversations`/`Messages`/`Contacts`
-- **Langues** : `aria-label`/`<h2>` `Mes langues`/`Langues`, niveaux `Natif`/`Courant`/`Apprentissage`
-- **Raccourcis** : `aria-label="Raccourcis"`, `Mes liens de partage`, `Mes contacts`, `Notifications`, bouton `Se déconnecter`, `Envoyer un message`
-- **Anti-pattern** : `label={t('title') || 'Paramètres'}` (dead-code + flash-of-raw-key)
+Supprimer le code mort `components/settings/_archived/` (jamais rendu en prod,
+tests déjà ignorés par jest) afin de **résoudre à la racine** le faux-positif
+récurrent `font-selector` (carry-over 59w) et de respecter la consigne
+« logique d'épuration ».
 
-## Plan
-1. Câbler `useI18n('settings')` dans les 3 sous-composants (`EditProfileModal`, `LogoutConfirmModal`, `ProfileShell`) — `ProfilePage` l'a déjà.
-2. Remplacer les 28 chaînes par `t('v2me.<clé>', '<EN fallback>')` (signature fallback native, anti-flash, leçon 50w).
-3. Corriger l'anti-pattern `t('title') || 'Paramètres'` → `t('title', 'Settings')`.
-4. Étendre le bloc `settings.v2me` (déjà existant, 5 clés) avec **28 nouvelles clés ×4 locales** (en/fr/es/pt) — parité stricte.
-5. `Pro` (badge tier produit) conservé non-localisé (marque universelle, comme l'existant).
+## Changements (5 fichiers)
 
-## Validation
-- Parité ×4 (33 clés chacune), JSON valide round-trip.
-- Grep FR résiduel = 0 (hors `Pro`).
-- Aucun test n'asserte ces chaînes (vérifié).
-- Diff confiné : 1 composant + 4 locales (bloc `v2me`).
+1. ✅ `rm components/settings/_archived/complete-user-settings.tsx`
+2. ✅ `rm components/settings/_archived/settings-layout.tsx`
+3. ✅ `rm __tests__/components/settings/_archived/complete-user-settings.test.tsx` (test déjà ignoré)
+4. ✅ `rm __tests__/components/settings/_archived/settings-layout.test.tsx` (test déjà ignoré)
+5. ✅ `jest.config.js` : retrait du pattern `'/_archived/'` (désormais mort)
+6. ✅ `app/settings/README.md` : section Migration Notes mise à jour (plus de `_archived/`)
 
-## Hors périmètre / différé
-- Poursuite anti-pattern `t()||fallback` (~270 occ) — laissée aux lots parallèles bornés.
-- `app/settings/loading.tsx` (server component — exclusion documentée, ne pas re-flagger).
+## Vérification
+
+- ✅ Sweep `grep -rn _archived` → seul reste la note explicative du README.
+- ✅ Aucun import prod/test réel des symboles archivés (barrels propres).
+- ✅ Suppression **CI-neutre** (tests étaient ignorés) et **coverage-positive**
+  (composants 0 %-couverts retirés du dénominateur).
+- ⏳ CI verte avant merge (gate dur).
+
+## Suivi (carry-over mis à jour)
+
+- **NOUVEAU (63w)** : `components/settings/font-selector.tsx` est désormais
+  **fully orphaned** (plus aucun consommateur après suppression de `_archived/` ;
+  subsistent : réexports `components/index.ts` + `components/settings/index.ts`,
+  et son test `__tests__/components/settings/font-selector.test.tsx`). Candidat
+  épuration **complète** en 64w+ : supprimer le composant + son test + les 2
+  réexports barrel. Bornée, orthogonale à l'i18n. NE PLUS i18n font-selector
+  (orphelin, supprimer plutôt).
+- `_archived/` n'existe plus → NE PLUS le re-flagger ni comme candidat épuration.
+
+## Numérotation
+
+`62w` (#843) et `62wb` (#847, mergée) existent ; cette passe = **63w** pour éviter
+toute collision avec la vague i18n en vol.
