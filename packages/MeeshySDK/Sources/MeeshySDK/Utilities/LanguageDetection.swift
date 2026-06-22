@@ -5,9 +5,9 @@ import NaturalLanguage
 /// l'émission. Atome SDK : entrée opaque (texte) → code ISO 639-1.
 public enum LanguageDetection {
     /// Nombre minimum de lettres pour tenter une détection.
-    static let minAlphaCount = 4
+    public static let minAlphaCount = 4
     /// Confiance minimale de la langue dominante.
-    static let minConfidence = 0.65
+    public static let minConfidence = 0.65
 
     public static func detectLanguageCode(for text: String, fallback: String?) -> String? {
         let alpha = text.unicodeScalars.filter { CharacterSet.letters.contains($0) }.count
