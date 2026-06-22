@@ -488,7 +488,7 @@ export function PhoneResetFlow({ onClose }: PhoneResetFlowProps) {
               <div className="space-y-2">
                 <Label htmlFor="phone-reset-number">{t('phoneReset.phoneLabel') || 'Numéro de téléphone'}</Label>
                 <div className="flex gap-2">
-                  <label htmlFor="phone-reset-country" className="sr-only">Indicatif pays</label>
+                  <label htmlFor="phone-reset-country" className="sr-only">{t('phoneReset.selectCountry', 'Select country')}</label>
                   <select
                     id="phone-reset-country"
                     value={selectedCountry.code}
