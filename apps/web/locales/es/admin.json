@@ -302,6 +302,7 @@
       "fieldCooldown": "Cooldown (minutos)",
       "cooldownHint": "Tiempo antes de poder volver a seleccionar este topic en la misma conversación.",
       "fieldActive": "Activo (usado por el estratega)",
+      "close": "Cerrar",
       "cancel": "Cancelar",
       "saving": "Guardando...",
       "save": "Guardar",
