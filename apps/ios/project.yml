@@ -8,7 +8,12 @@ options:
 settings:
   SWIFT_VERSION: "6.0"
   IPHONEOS_DEPLOYMENT_TARGET: "16.0"
-  PRODUCT_NAME: Meeshy
+  # NOTE: PRODUCT_NAME is intentionally NOT set globally. As a project-wide
+  # setting it propagates to every target, so MeeshyWidgets and
+  # MeeshyNotificationExtension would both build as "Meeshy.appex" and Xcode
+  # fails with "Multiple commands produce …/Meeshy.appex". Each target's
+  # PRODUCT_NAME defaults to $(TARGET_NAME), which is correct
+  # (Meeshy.app, MeeshyWidgets.appex, MeeshyNotificationExtension.appex).
   TARGETED_DEVICE_FAMILY: "1,2"
   # Swift 6.2 Approachable Concurrency (WWDC25).
   # - SWIFT_APPROACHABLE_CONCURRENCY umbrella flag (includes Sendable
