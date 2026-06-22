@@ -89,6 +89,16 @@ export function ConversationDrawer({
     }
   }, [isOpen, conversationName]);
 
+  // Standard dismiss gesture: Escape closes the drawer while it is open.
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   // Ne rien rendre si le composant n'est pas monté
   // Cela évite les overlays fantômes qui bloquent les interactions
   if (!mounted) return null;
@@ -111,6 +121,9 @@ export function ConversationDrawer({
 
       {/* Drawer */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="conversation-drawer-title"
         className={`
           fixed top-0 left-0 bottom-0 w-80 max-w-[85vw] z-50
           flex flex-col overflow-hidden
@@ -125,6 +138,7 @@ export function ConversationDrawer({
           className="flex items-center justify-between p-4 border-b border-[var(--gp-border)] transition-colors duration-300"
         >
           <h2
+            id="conversation-drawer-title"
             className="text-lg font-semibold text-[var(--gp-text-primary)] transition-colors duration-300"
             style={{ fontFamily: 'var(--font-display, inherit)' }}
           >
