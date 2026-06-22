@@ -2,6 +2,7 @@ import XCTest
 import CoreGraphics
 @testable import Meeshy
 
+@MainActor
 final class PostDetailReachAndVisibilityTests: XCTestCase {
 
     // MARK: PostReachFormatter.compact

@@ -16,6 +16,7 @@ import XCTest
 /// Runs purely in-process (no subprocess — `Process` is unavailable on iOS) by
 /// reading the source tree relative to this file. A command-line mirror lives at
 /// `apps/ios/scripts/check_localization.py`.
+@MainActor
 final class LocalizationConsistencyTests: XCTestCase {
 
     // Targets whose `String(localized:)` calls resolve against the app's main

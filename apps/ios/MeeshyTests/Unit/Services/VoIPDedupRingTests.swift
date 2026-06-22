@@ -8,6 +8,7 @@ import XCTest
 /// and produced phantom CallKit cards. Switching to a TTL-bounded ring
 /// closes that hole while still allowing reuse of callIds across genuinely
 /// separate calls.
+@MainActor
 final class VoIPDedupRingTests: XCTestCase {
 
     // MARK: - Empty

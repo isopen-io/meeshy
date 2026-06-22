@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class CallManagerAudioSessionTests: XCTestCase {
 
     func test_callManager_sourceCode_doesNotForceAudioSessionActiveBeforeBridge() throws {

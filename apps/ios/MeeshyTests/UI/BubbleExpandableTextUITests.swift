@@ -7,6 +7,7 @@ import XCTest
 /// 1. The button is tappable even when reactions are present.
 /// 2. The button takes priority over parent gestures (swipe/long press).
 /// 3. Tapping the button expands the text correctly.
+@MainActor
 final class BubbleExpandableTextUITests: XCTestCase {
 
     let app = XCUIApplication()

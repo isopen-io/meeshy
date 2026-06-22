@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class CallMediaConfigTests: XCTestCase {
 
     func test_default_audioConfig_hasOpusBitrateRange() {

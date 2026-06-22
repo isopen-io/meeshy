@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class StarredMessagesStoreTests: XCTestCase {
 
     @MainActor

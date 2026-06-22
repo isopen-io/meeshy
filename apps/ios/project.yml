@@ -137,6 +137,16 @@ targets:
       CODE_SIGN_STYLE: Automatic
       GENERATE_INFOPLIST_FILE: YES
       SWIFT_VERSION: "6.0"
+      # The project-wide SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor (SE-0466)
+      # targets UI-centric production code. Applied to an XCTest bundle it makes
+      # every `XCTestCase` subclass main-actor-isolated, so the synthesised
+      # init()/init(invocation:)/init(selector:) conflict with XCTestCase's own
+      # `nonisolated` initialisers and the compiler rejects every test class.
+      # The SDK's Package.swift does the same: its test targets use
+      # `coreSwiftSettings` (no `.defaultIsolation(MainActor)`) precisely because
+      # `uiSwiftSettings` "breaks every XCTestCase subclass". Test classes opt
+      # into `@MainActor` explicitly when they exercise main-actor code.
+      SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
       # Host the tests inside the Meeshy.app process so they can hit
       # UIKit-bound APIs (UIApplication, UNUserNotificationCenter, etc.).
       BUNDLE_LOADER: "$(TEST_HOST)"

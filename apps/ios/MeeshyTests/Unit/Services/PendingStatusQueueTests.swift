@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class PendingStatusQueueTests: XCTestCase {
 
     // PendingStatusQueue is an actor using UserDefaults for persistence.

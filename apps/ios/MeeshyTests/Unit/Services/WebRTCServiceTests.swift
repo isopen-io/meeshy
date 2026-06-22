@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class WebRTCServiceTests: XCTestCase {
 
     // MARK: - Factory
@@ -165,7 +166,7 @@ final class WebRTCServiceTests: XCTestCase {
 
 // MARK: - Testable WebRTC Client
 
-private final class TestableWebRTCClient: WebRTCClientProviding {
+private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     weak var delegate: (any WebRTCClientDelegate)?
     var isConnected: Bool = false
     var localVideoTrack: Any? = nil

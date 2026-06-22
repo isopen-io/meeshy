@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 final class SingleSourceOfTruthTests: XCTestCase {
 
     /// Phase 1 invariant: optimistic UI updates must NOT mutate

@@ -5,6 +5,7 @@ import MeeshySDK
 /// Façade d'aperçu vidéo : l'ancien `VideoEmbedModel` (player WKWebView inline) a été retiré —
 /// YouTube bloque la lecture embarquée par vérification d'origine (erreurs 15x). La façade
 /// ouvre désormais la vidéo via un lien. Ces tests couvrent la résolution de l'URL ouverte.
+@MainActor
 final class VideoEmbedDestinationTests: XCTestCase {
 
     private func makeVideo(start: Int? = nil) -> EmbeddedVideo {

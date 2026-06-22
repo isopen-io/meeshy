@@ -113,6 +113,7 @@ final class AttachmentDownloaderTests: XCTestCase {
 /// still never starting a download offline. `autoDownload: false` (conversation
 /// bubbles) must delegate entirely to `MediaDownloadPolicyEngine`, preserving the
 /// user's WiFi-only / data-saver UX.
+@MainActor
 final class MediaAutoDownloadDecisionTests: XCTestCase {
 
     // MARK: - Video resolver

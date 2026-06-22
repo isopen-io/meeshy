@@ -3,6 +3,7 @@ import XCTest
 
 // MARK: - CallState Tests
 
+@MainActor
 final class CallStateTests: XCTestCase {
 
     func test_idle_isNotActive() {
@@ -54,6 +55,7 @@ final class CallStateTests: XCTestCase {
 
 // MARK: - Perfect Negotiation Role (§3.4)
 
+@MainActor
 final class PerfectNegotiationRoleTests: XCTestCase {
     // The polite peer is the lexicographically-smaller userId. The rule MUST be
     // symmetric: whichever side we view it from, exactly one peer is polite.
@@ -90,6 +92,7 @@ final class PerfectNegotiationRoleTests: XCTestCase {
 
 // MARK: - Negotiation Epoch (§3.5)
 
+@MainActor
 final class NegotiationEpochTests: XCTestCase {
     func test_isStale_olderGeneration_isStale() {
         XCTAssertTrue(CallManager.isStaleNegotiation(incoming: 1, highWaterMark: 2))
@@ -112,6 +115,7 @@ final class NegotiationEpochTests: XCTestCase {
 
 // MARK: - WebRTC Types Tests
 
+@MainActor
 final class WebRTCTypesTests: XCTestCase {
 
     func test_sessionDescription_codable() throws {
@@ -182,7 +186,7 @@ final class WebRTCTypesTests: XCTestCase {
 
 // MARK: - Mock WebRTC Client
 
-final class MockWebRTCClient: WebRTCClientProviding {
+nonisolated final class MockWebRTCClient: WebRTCClientProviding {
     weak var delegate: (any WebRTCClientDelegate)?
     var isConnected: Bool = false
     var localVideoTrack: Any?
@@ -247,6 +251,7 @@ final class MockWebRTCClient: WebRTCClientProviding {
     func updateAudioEffectParams(_ config: AudioEffectConfig) throws {}
 }
 
+@MainActor
 final class MockWebRTCClientTests: XCTestCase {
 
     func test_mockCreateOffer_returnsConfiguredResult() async throws {
@@ -764,6 +769,7 @@ final class CallReliabilityPolicyTests: XCTestCase {
 
 // MARK: - CallPillStatus (minimised call pill never shows a running timer pre-connection)
 
+@MainActor
 final class CallPillStatusTests: XCTestCase {
 
     func test_connected_isConnected_showsDuration() {
@@ -797,6 +803,7 @@ final class CallPillStatusTests: XCTestCase {
 /// can read why the call ended (and the final duration) before the state resets
 /// to `.idle`. The cover gate must therefore stay presented across `.ended`,
 /// otherwise `CallView.endedView` is dead code that flashes away instantly.
+@MainActor
 final class CallCoverPresentationTests: XCTestCase {
 
     func test_isEnded_trueOnlyForEnded() {

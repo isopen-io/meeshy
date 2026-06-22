@@ -23,6 +23,7 @@ private final class MockBackSoundFileProvider: BackSoundFileProviding, @unchecke
     }
 }
 
+@MainActor
 final class CallAudioEffectsServiceTests: XCTestCase {
 
     // MARK: - Audio Hardware Guard

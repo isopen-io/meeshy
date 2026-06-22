@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class WebRTCErrorTests: XCTestCase {
 
     func test_simulatorVideoUnsupported_caseExists() {

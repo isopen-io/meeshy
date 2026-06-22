@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-final class MockReactionService: ReactionServiceProviding {
+final class MockReactionService: ReactionServiceProviding, @unchecked Sendable {
 
     // MARK: - Stubbing
 
@@ -35,7 +35,7 @@ final class MockReactionService: ReactionServiceProviding {
             lastAddMessageId = messageId
             lastAddEmoji = emoji
         }
-        try await MainActor.run { try addResult.get() }
+        try addResult.get()
     }
 
     nonisolated func remove(messageId: String, emoji: String) async throws {
@@ -44,7 +44,7 @@ final class MockReactionService: ReactionServiceProviding {
             lastRemoveMessageId = messageId
             lastRemoveEmoji = emoji
         }
-        try await MainActor.run { try removeResult.get() }
+        try removeResult.get()
     }
 
     nonisolated func fetchDetails(messageId: String) async throws -> ReactionSyncResponse {
@@ -52,7 +52,7 @@ final class MockReactionService: ReactionServiceProviding {
             fetchDetailsCallCount += 1
             lastFetchDetailsMessageId = messageId
         }
-        return try await MainActor.run { try fetchDetailsResult.get() }
+        return try fetchDetailsResult.get()
     }
 
     // MARK: - Reset

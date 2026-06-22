@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class QualityThresholdsHeartbeatTests: XCTestCase {
 
     func test_heartbeatIntervalSeconds_is10() {
@@ -22,6 +23,7 @@ final class QualityThresholdsHeartbeatTests: XCTestCase {
 }
 
 // §5.6 — thermal-aware video encoder ceiling.
+@MainActor
 final class VideoThermalProfileTests: XCTestCase {
 
     func test_nominal_isStrictNoOp() {
@@ -76,6 +78,7 @@ final class VideoThermalProfileTests: XCTestCase {
 }
 
 // §7.1 — Continuity / external camera catalog (pure ordering/labeling).
+@MainActor
 final class CameraCatalogTests: XCTestCase {
     private func desc(_ id: String, _ name: String, _ facing: CameraFacing) -> CameraCatalog.Descriptor {
         CameraCatalog.Descriptor(uniqueID: id, localizedName: name, facing: facing)

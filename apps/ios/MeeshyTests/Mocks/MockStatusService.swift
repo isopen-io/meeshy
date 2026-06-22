@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-private let emptyPaginatedPosts: PaginatedAPIResponse<[APIPost]> = JSONStub.decode("""
+nonisolated(unsafe) private let emptyPaginatedPosts: PaginatedAPIResponse<[APIPost]> = JSONStub.decode("""
 {"success":true,"data":[],"pagination":null,"error":null}
 """)
 
@@ -10,7 +10,7 @@ private let stubStatusPost: APIPost = JSONStub.decode("""
 {"id":"status-stub","type":"STATUS","content":"stub","moodEmoji":"\u{1F60A}","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"a1","username":"stub"}}
 """)
 
-final class MockStatusService: StatusServiceProviding {
+final class MockStatusService: StatusServiceProviding, @unchecked Sendable {
 
     // MARK: - Stubbing
 

@@ -11,6 +11,7 @@ import CoreMedia
 import CoreVideo
 @testable import Meeshy
 
+@MainActor
 final class VideoFrameConverterTests: XCTestCase {
 
     private func makeSUT() -> VideoFrameConverter {

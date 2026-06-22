@@ -3,6 +3,7 @@ import GRDB
 @testable import MeeshySDK
 @testable import Meeshy
 
+@MainActor
 final class MessagePipelineIntegrationTests: XCTestCase {
 
     private var dbQueue: DatabaseQueue!
@@ -232,12 +233,13 @@ final class MessagePipelineIntegrationTests: XCTestCase {
     }
 
     func test_100ConcurrentInserts_allPersisted() async throws {
+        let actor = self.actor!
         try await withThrowingTaskGroup(of: Void.self) { group in
             for i in 0..<100 {
                 group.addTask {
                     let record = MessageRecordFactory.make(
                         localId: "stress_\(i)", conversationId: "conv_stress")
-                    try await self.actor.insertOptimistic(record)
+                    try await actor.insertOptimistic(record)
                 }
             }
             try await group.waitForAll()

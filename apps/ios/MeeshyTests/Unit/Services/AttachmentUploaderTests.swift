@@ -2,6 +2,7 @@ import XCTest
 import UIKit
 @testable import Meeshy
 
+@MainActor
 final class AttachmentUploaderTests: XCTestCase {
 
     func test_compress_reducesImageBelow500KB_whenLargerInput() {

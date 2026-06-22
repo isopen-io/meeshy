@@ -14,6 +14,7 @@ import MeeshySDK
 /// 3. Duplicates are dropped case-insensitively (the gateway can return
 ///    `"FR"` and `"fr"` for the same code).
 /// 4. The struct is `Equatable` so the ViewModel can keep an O(1) cache.
+@MainActor
 final class ConversationLanguagePreferencesTests: XCTestCase {
 
     // MARK: - Order

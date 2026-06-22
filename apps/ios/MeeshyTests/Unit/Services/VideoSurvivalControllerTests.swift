@@ -13,6 +13,7 @@ import XCTest
 
 // MARK: - Policy (pure)
 
+@MainActor
 final class VideoSurvivalPolicyTests: XCTestCase {
     private func makePolicy() -> VideoSurvivalPolicy {
         VideoSurvivalPolicy(suspendAfter: 6, resumeAfter: 10)

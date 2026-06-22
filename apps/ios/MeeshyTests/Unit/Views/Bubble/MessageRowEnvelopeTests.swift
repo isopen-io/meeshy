@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class MessageRowEnvelopeTests: XCTestCase {
 
     func test_equality_sameMessage_sameFlags_returnsTrue() {

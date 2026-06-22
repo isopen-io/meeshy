@@ -14,6 +14,7 @@ import MeeshySDK
 ///
 /// Without this two-step lookup the bubble would show `"paperclip"` + the
 /// generic "Media" fallback every time a stale cached payload renders.
+@MainActor
 final class BubbleQuotedReplyAttachmentKindTests: XCTestCase {
 
     // MARK: - nil / empty input

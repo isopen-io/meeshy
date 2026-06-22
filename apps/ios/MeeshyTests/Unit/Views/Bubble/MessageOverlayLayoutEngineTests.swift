@@ -2,6 +2,7 @@ import XCTest
 import SwiftUI
 @testable import Meeshy
 
+@MainActor
 final class MessageOverlayLayoutEngineTests: XCTestCase {
 
     private static let iPhone16ProSize = CGSize(width: 393, height: 852)

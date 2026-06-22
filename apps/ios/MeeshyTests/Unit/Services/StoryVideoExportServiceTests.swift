@@ -301,11 +301,11 @@ final class MockStoryExporter: StoryExporting, @unchecked Sendable {
         languages: [String],
         progress: (@Sendable (Double) -> Void)?
     ) async throws {
-        lock.lock()
-        _exportCallCount += 1
-        _lastOutputURL = outputURL
-        _lastLanguages = languages
-        lock.unlock()
+        lock.withLock {
+            _exportCallCount += 1
+            _lastOutputURL = outputURL
+            _lastLanguages = languages
+        }
 
         switch behavior {
         case .success:

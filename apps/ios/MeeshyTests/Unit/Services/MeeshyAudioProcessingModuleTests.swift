@@ -2,6 +2,7 @@ import XCTest
 import AVFoundation
 @testable import Meeshy
 
+@MainActor
 final class MeeshyAudioProcessingModuleTests: XCTestCase {
 
     // MARK: - Factory

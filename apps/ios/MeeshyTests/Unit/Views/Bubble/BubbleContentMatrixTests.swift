@@ -2,6 +2,7 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
+@MainActor
 final class BubbleContentMatrixTests: XCTestCase {
 
     func test_simpleText_hasOnlyTextAndMeta() {
@@ -571,6 +572,7 @@ final class BubbleContentMatrixTests: XCTestCase {
 
 // MARK: - BubbleBodyFooterLayout.bodyHeight (sizeThatFits double-measure removal)
 
+@MainActor
 final class BubbleBodyFooterLayoutHeightTests: XCTestCase {
 
     func test_bodyHeight_whenFooterDoesNotWiden_reusesProbeHeightWithoutRemeasure() {

@@ -8,6 +8,7 @@ import MeeshySDK
 /// resolver returns a Bool. These tests pin down the contract that the
 /// View layer relies on so a regression in one screen can't drift
 /// without breaking the rest.
+@MainActor
 final class SkeletonVisibilityResolverTests: XCTestCase {
 
     // MARK: - shouldShowSkeleton(loadState:hasCachedData:)

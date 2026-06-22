@@ -5,6 +5,7 @@ private struct StubHook: MediaPipelineHook {
     let identifier: String
 }
 
+@MainActor
 final class CallEventQueueTests: XCTestCase {
 
     func test_initialState_isIdle() async {

@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-final class MockStoryService: StoryServiceProviding {
+final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
 
     // MARK: - Stubbing
 

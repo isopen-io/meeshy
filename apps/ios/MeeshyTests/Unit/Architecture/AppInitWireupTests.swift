@@ -27,6 +27,7 @@ import MeeshyUI
 /// regression (a developer accidentally removing the call) — is a
 /// source-scan of `AppDelegate.swift`. This mirrors the approach taken
 /// by `SingleSourceOfTruthTests` for the optimistic-mutation invariant.
+@MainActor
 final class AppInitWireupTests: XCTestCase {
 
     // MARK: - Source-scan invariants

@@ -2,6 +2,7 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
+@MainActor
 final class AudioQueueBuilderTests: XCTestCase {
 
     // MARK: - Factories

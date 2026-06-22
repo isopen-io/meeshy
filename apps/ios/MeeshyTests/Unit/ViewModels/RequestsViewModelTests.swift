@@ -348,7 +348,7 @@ final class RequestsViewModelTests: XCTestCase {
     /// "No spinner when cache has data" from the architecture bible.
     func test_loadReceived_withCachedFreshData_skipsNetworkAndAppliesCache() async {
         let cached = [FriendRequestFixture.make(id: "cached-1", status: "pending")]
-        await CacheCoordinator.shared.friendRequests.save(cached, for: "requests:received")
+        try? await CacheCoordinator.shared.friendRequests.save(cached, for: "requests:received")
 
         let (sut, mock) = makeSUT()
         mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [
@@ -384,7 +384,7 @@ final class RequestsViewModelTests: XCTestCase {
     /// items.
     func test_loadSent_withCachedFreshData_skipsNetworkAndAppliesCache() async {
         let cached = [FriendRequestFixture.make(id: "sent-cached", status: "pending")]
-        await CacheCoordinator.shared.friendRequests.save(cached, for: "requests:sent")
+        try? await CacheCoordinator.shared.friendRequests.save(cached, for: "requests:sent")
 
         let (sut, mock) = makeSUT()
         mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [

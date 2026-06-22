@@ -4,6 +4,7 @@ import MeeshySDK
 
 // MARK: - DeepLinkParser Tests
 
+@MainActor
 final class DeepLinkParserTests: XCTestCase {
 
     // MARK: - Custom Scheme (meeshy://)
@@ -723,6 +724,7 @@ final class DeepLinkRouterChatLinkTests: XCTestCase {
 
 // MARK: - DeepLink Equatable Tests
 
+@MainActor
 final class DeepLinkEquatableTests: XCTestCase {
 
     func test_joinLink_equality() {
@@ -769,6 +771,7 @@ final class DeepLinkEquatableTests: XCTestCase {
 
 // MARK: - DeepLinkParser Post Detail Tests
 
+@MainActor
 final class DeepLinkParserPostDetailTests: XCTestCase {
 
     func test_parse_webUrl_feedsPost_returnsPostDetail() {
@@ -882,6 +885,7 @@ final class DeepLinkParserPostDetailTests: XCTestCase {
 
 // MARK: - DeepLinkParser Story Detail Tests
 
+@MainActor
 final class DeepLinkParserStoryDetailTests: XCTestCase {
 
     func test_parse_webUrl_story_returnsStoryDetail() {
@@ -1210,6 +1214,7 @@ final class DeepLinkRouterShortAliasTests: XCTestCase {
 
 // MARK: - DeepLink Equatable — Profile / Self cases
 
+@MainActor
 final class DeepLinkProfileEquatableTests: XCTestCase {
 
     func test_userProfile_equality() {

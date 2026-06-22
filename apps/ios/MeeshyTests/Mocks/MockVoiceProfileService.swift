@@ -36,7 +36,7 @@ final class MockVoiceProfileService: VoiceProfileServiceProviding, @unchecked Se
 
     nonisolated func getConsentStatus() async throws -> VoiceConsentStatus {
         await MainActor.run { getConsentStatusCallCount += 1 }
-        return try await MainActor.run { try getConsentStatusResult.get() }
+        return try getConsentStatusResult.get()
     }
 
     nonisolated func grantConsent(ageVerification: Bool, birthDate: String?) async throws -> VoiceConsentResponse {
@@ -44,22 +44,22 @@ final class MockVoiceProfileService: VoiceProfileServiceProviding, @unchecked Se
             grantConsentCallCount += 1
             lastGrantConsentAgeVerification = ageVerification
         }
-        return try await MainActor.run { try grantConsentResult.get() }
+        return try grantConsentResult.get()
     }
 
     nonisolated func revokeConsent() async throws {
         await MainActor.run { revokeConsentCallCount += 1 }
-        try await MainActor.run { try revokeConsentResult.get() }
+        try revokeConsentResult.get()
     }
 
     nonisolated func getProfile() async throws -> VoiceProfile? {
         await MainActor.run { getProfileCallCount += 1 }
-        return try await MainActor.run { try getProfileResult.get() }
+        return try getProfileResult.get()
     }
 
     nonisolated func getSamples() async throws -> [VoiceSample] {
         await MainActor.run { getSamplesCallCount += 1 }
-        return try await MainActor.run { try getSamplesResult.get() }
+        return try getSamplesResult.get()
     }
 
     nonisolated func uploadSample(audioData: Data, durationMs: Int) async throws -> VoiceSampleUploadResponse {
@@ -67,7 +67,7 @@ final class MockVoiceProfileService: VoiceProfileServiceProviding, @unchecked Se
             uploadSampleCallCount += 1
             lastUploadSampleDurationMs = durationMs
         }
-        return try await MainActor.run { try uploadSampleResult.get() }
+        return try uploadSampleResult.get()
     }
 
     nonisolated func toggleVoiceCloning(enabled: Bool) async throws {
@@ -75,12 +75,12 @@ final class MockVoiceProfileService: VoiceProfileServiceProviding, @unchecked Se
             toggleVoiceCloningCallCount += 1
             lastToggleEnabled = enabled
         }
-        try await MainActor.run { try toggleVoiceCloningResult.get() }
+        try toggleVoiceCloningResult.get()
     }
 
     nonisolated func deleteProfile() async throws {
         await MainActor.run { deleteProfileCallCount += 1 }
-        try await MainActor.run { try deleteProfileResult.get() }
+        try deleteProfileResult.get()
     }
 
     nonisolated func deleteSample(sampleId: String) async throws {
@@ -88,7 +88,7 @@ final class MockVoiceProfileService: VoiceProfileServiceProviding, @unchecked Se
             deleteSampleCallCount += 1
             lastDeleteSampleId = sampleId
         }
-        try await MainActor.run { try deleteSampleResult.get() }
+        try deleteSampleResult.get()
     }
 
     // MARK: - Reset

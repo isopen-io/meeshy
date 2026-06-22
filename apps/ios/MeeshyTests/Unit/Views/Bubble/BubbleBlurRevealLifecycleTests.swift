@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class BubbleBlurRevealLifecycleTests: XCTestCase {
 
     func test_phaseDurations_sumToExpected() {

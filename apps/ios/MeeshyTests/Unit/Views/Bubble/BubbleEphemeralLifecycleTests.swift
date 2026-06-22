@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class BubbleEphemeralLifecycleTests: XCTestCase {
 
     func test_initial_pastExpiry_returnsExpired() {

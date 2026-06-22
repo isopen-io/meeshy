@@ -2,6 +2,7 @@ import XCTest
 import CryptoKit
 @testable import Meeshy
 
+@MainActor
 final class E2EEServiceTests: XCTestCase {
 
     private var service: E2EEService { E2EEService.shared }

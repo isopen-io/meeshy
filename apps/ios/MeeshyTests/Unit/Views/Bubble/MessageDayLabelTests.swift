@@ -14,6 +14,7 @@ import XCTest
 ///
 /// Toutes les comparaisons se font sur la frontière minuit du calendrier
 /// fourni — on ne compte pas des "24h" mais des bascules de date locale.
+@MainActor
 final class MessageDayLabelTests: XCTestCase {
 
     /// Calendrier fr_FR / Europe Paris, point d'ancrage commun aux cas.

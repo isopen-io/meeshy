@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class EditHistoryStoreTests: XCTestCase {
 
     private func makeSUT() -> EditHistoryStore {

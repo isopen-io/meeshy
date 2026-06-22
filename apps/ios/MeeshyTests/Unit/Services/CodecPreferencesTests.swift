@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class CodecPreferencesTests: XCTestCase {
 
     func test_p2pClient_uses_addTransceiver_audio() throws {

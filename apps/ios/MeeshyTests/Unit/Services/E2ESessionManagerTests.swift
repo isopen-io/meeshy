@@ -2,6 +2,7 @@ import XCTest
 import CryptoKit
 @testable import Meeshy
 
+@MainActor
 final class E2ESessionManagerTests: XCTestCase {
 
     // The SessionManager is an actor with tight coupling to E2EAPI, E2EEService, and KeychainManager.

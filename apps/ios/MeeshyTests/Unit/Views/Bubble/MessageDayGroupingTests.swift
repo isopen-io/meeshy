@@ -5,6 +5,7 @@ import XCTest
 /// liste de groupes consécutifs partageant la même date locale. Cette
 /// structure alimente la datasource diffable du collectionView de messages :
 /// on insère un séparateur de jour entre chaque groupe.
+@MainActor
 final class MessageDayGroupingTests: XCTestCase {
 
     private func makeCalendar() -> Calendar {

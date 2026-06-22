@@ -3,6 +3,7 @@ import GRDB
 @testable import MeeshySDK
 @testable import Meeshy
 
+@MainActor
 final class FeedPipelineIntegrationTests: XCTestCase {
 
     private var dbQueue: DatabaseQueue!

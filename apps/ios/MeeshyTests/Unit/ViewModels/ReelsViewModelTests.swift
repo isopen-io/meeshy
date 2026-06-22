@@ -173,6 +173,7 @@ final class ReelsViewModelTests: XCTestCase {
 
 // MARK: - Reel Media Layout (pure classification of a reel's media surfaces)
 
+@MainActor
 final class ReelMediaLayoutTests: XCTestCase {
 
     private func img(_ id: String) -> FeedMedia { FeedMedia(id: id, type: .image, url: "https://x/\(id).jpg") }

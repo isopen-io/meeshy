@@ -1,6 +1,7 @@
 import XCTest
 @testable import MeeshySDK
 
+@MainActor
 final class ThumbHashTests: XCTestCase {
 
     // MARK: - thumbHashToRGBA

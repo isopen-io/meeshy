@@ -11,6 +11,7 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
+@MainActor
 final class BubbleSimpleMessagePerfTests: XCTestCase {
 
     func test_simpleHelloMessage_construction_isFast() {

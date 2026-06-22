@@ -6,6 +6,7 @@ import MeeshySDK
 /// de composition — jamais en créer un second (même contrat que l'éditeur
 /// d'image : remplacement par id). Reproduit le bug « deux audio dans les
 /// attachements » signalé sur le composeur de message.
+@MainActor
 final class ConversationComposerStateTests: XCTestCase {
 
     private func makeStateWithAudio(

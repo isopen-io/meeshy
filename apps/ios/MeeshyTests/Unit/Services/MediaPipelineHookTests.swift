@@ -6,6 +6,7 @@ private struct EmptyHook: MediaPipelineHook {
     let identifier = "test.empty"
 }
 
+@MainActor
 final class MediaPipelineHookTests: XCTestCase {
 
     func test_callContext_initStoresAllFields() {

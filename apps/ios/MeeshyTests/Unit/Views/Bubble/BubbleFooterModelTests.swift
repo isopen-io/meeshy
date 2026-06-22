@@ -2,6 +2,7 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
+@MainActor
 final class BubbleFooterModelTests: XCTestCase {
 
     private func makeModel(

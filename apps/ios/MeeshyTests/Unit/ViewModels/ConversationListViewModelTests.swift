@@ -2642,6 +2642,7 @@ final class ConvListTestCategoryWriter: UserCategoryWriting, @unchecked Sendable
 
 // MARK: - RelativeTimeFormatter.shortString (conversation list / feed timestamps)
 
+@MainActor
 final class RelativeTimeFormatterShortTests: XCTestCase {
 
     private let now = Date(timeIntervalSince1970: 1_750_000_000)

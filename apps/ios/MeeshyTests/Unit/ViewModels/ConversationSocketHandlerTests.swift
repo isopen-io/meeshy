@@ -93,6 +93,7 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
 
 // MARK: - Tests
 
+@MainActor
 final class ConversationSocketHandlerTests: XCTestCase {
 
     private let conversationId = "000000000000000000000099"
@@ -1394,9 +1395,10 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         try await Task.sleep(nanoseconds: 600_000_000)
 
+        let conversationId = self.conversationId
         let rows = try await db.read { db in
             try MessageRecord
-                .filter(Column("conversationId") == self.conversationId)
+                .filter(Column("conversationId") == conversationId)
                 .fetchAll(db)
         }
         XCTAssertEqual(rows.count, 1,
@@ -1464,9 +1466,10 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         try await Task.sleep(nanoseconds: 600_000_000)
 
+        let conversationId = self.conversationId
         let rows = try await db.read { db in
             try MessageRecord
-                .filter(Column("conversationId") == self.conversationId)
+                .filter(Column("conversationId") == conversationId)
                 .fetchAll(db)
         }
         XCTAssertEqual(rows.count, 1,

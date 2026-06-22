@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class BubbleLanguageFlagControllerTests: XCTestCase {
 
     private func makeTranslation(target: String, content: String = "Hi") -> MessageTranslation {

@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class WidgetDataManagerTests: XCTestCase {
 
     // MARK: - WidgetConversation Data Model
