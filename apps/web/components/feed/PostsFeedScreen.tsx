@@ -22,6 +22,7 @@ import { useStoryPreferences } from '@/stores/user-preferences-store';
 // Posts (real API integration — same hooks as v2)
 import { useFeedQuery, useFeedPosts, usePrefetchPost } from '@/hooks/queries/use-feed-query';
 import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useSharePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useTranslatePostMutation, useDeletePostMutation, usePinPostMutation, useRepostMutation, useUpdatePostMutation } from '@/hooks/queries/use-post-mutations';
+import { useCreateCommentMutation } from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
 
@@ -286,9 +287,19 @@ export function PostsFeedScreen() {
 
   const handleStoryViewerClose = useCallback(() => setStoryViewerOpen(false), []);
   const handleStoryComposerClose = useCallback(() => setStoryComposerOpen(false), []);
+
+  const createCommentMutation = useCreateCommentMutation();
   const handleStoryReply = useCallback(
-    (_id: string, text: string) => showToast(t('toast.replySent', 'Reply sent'), 'success', text),
-    [showToast, t],
+    (storyId: string, text: string) => {
+      createCommentMutation.mutate(
+        { postId: storyId, content: text },
+        {
+          onSuccess: () => showToast('Réponse envoyée', 'success'),
+          onError: () => showToast('Erreur', 'error', 'Impossible d\'envoyer la réponse'),
+        }
+      );
+    },
+    [createCommentMutation, showToast],
   );
 
   // ─── Post handlers ────────────────────────────────────────────────────
@@ -328,19 +339,35 @@ export function PostsFeedScreen() {
     [likeMutation, unlikeMutation],
   );
 
-  const handleComment = useCallback((postId: string) => router.push(`/feeds/post/${postId}`), [router]);
+  const handleComment = useCallback(
+    (postId: string) => {
+      const post = posts.find((p) => p.id === postId);
+      if (post?.type === 'REEL') {
+        router.push(`/reel/${postId}`);
+      } else {
+        router.push(`/feeds/post/${postId}`);
+      }
+    },
+    [router, posts],
+  );
 
   const handleShare = useCallback(
     async (postId: string) => {
       try {
-        await navigator.clipboard.writeText(`${window.location.origin}/feeds/post/${postId}`);
+        const post = posts.find((p) => p.id === postId);
+        const url =
+          post?.type === 'REEL'
+            ? `${window.location.origin}/reel/${postId}`
+            : `${window.location.origin}/feeds/post/${postId}`;
+
+        await navigator.clipboard.writeText(url);
         shareMutation.mutate({ postId });
         showToast(t('toast.linkCopied', 'Link copied!'), 'success');
       } catch {
         showToast(t('toast.error', 'Error'), 'error', t('toast.linkCopyError', "Couldn't copy the link."));
       }
     },
-    [shareMutation, showToast, t],
+    [shareMutation, showToast, posts],
   );
 
   const handleBookmark = useCallback(
@@ -640,7 +667,13 @@ export function PostsFeedScreen() {
                     onEdit={() => handleEditPost(post.id)}
                     onDelete={() => handleDeletePost(post.id)}
                     onPin={() => handlePinPost(post.id, post.isPinned)}
-                    onClick={() => router.push(`/feeds/post/${post.id}`)}
+                    onClick={() => {
+                      if (post.type === 'REEL') {
+                        router.push(`/reel/${post.id}`);
+                      } else {
+                        router.push(`/feeds/post/${post.id}`);
+                      }
+                    }}
                   />
                 </article>
               );

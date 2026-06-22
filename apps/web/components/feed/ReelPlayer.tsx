@@ -49,6 +49,15 @@ function firstImage(post: Post) {
 
 // ─── Action rail button ──────────────────────────────────────────────────
 
+interface RailButtonProps {
+  label: string;
+  count?: number;
+  active?: boolean;
+  activeColor?: string;
+  onClick: (e: React.MouseEvent) => void;
+  children: React.ReactNode;
+}
+
 function RailButton({
   label,
   count,
@@ -56,29 +65,22 @@ function RailButton({
   activeColor,
   onClick,
   children,
-}: {
-  label: string;
-  count?: number;
-  active?: boolean;
-  activeColor?: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+}: RailButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
       aria-pressed={active}
-      className="flex flex-col items-center gap-1 text-white"
+      className="flex flex-col items-center gap-1 text-white group"
     >
       <span
-        className="flex h-12 w-12 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm transition-transform active:scale-90"
+        className="flex h-12 w-12 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm transition-all group-active:scale-90 group-hover:bg-black/50"
         style={active && activeColor ? { color: activeColor } : undefined}
       >
         {children}
       </span>
-      {typeof count === 'number' && <span className="text-xs font-medium tabular-nums">{count}</span>}
+      {typeof count === 'number' && <span className="text-xs font-medium tabular-nums drop-shadow-sm">{count}</span>}
     </button>
   );
 }
@@ -256,12 +258,15 @@ export function ReelPlayer({
         )}
 
         {/* Top bar */}
-        <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4">
+        <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4 z-10">
           <button
             type="button"
-            onClick={onClose}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
             aria-label={t('player.close', 'Close')}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm hover:bg-black/50 transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -269,19 +274,19 @@ export function ReelPlayer({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={goPrev}
+              onClick={(e) => { e.stopPropagation(); goPrev(); }}
               disabled={!hasPrev}
               aria-label={t('player.previous', 'Previous reel')}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm transition-opacity disabled:opacity-30"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm transition-all disabled:opacity-30 hover:bg-black/50"
             >
               <ChevronUp className="h-5 w-5" />
             </button>
             <button
               type="button"
-              onClick={goNext}
+              onClick={(e) => { e.stopPropagation(); goNext(); }}
               disabled={!hasNext}
               aria-label={t('player.next', 'Next reel')}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm transition-opacity disabled:opacity-30"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm transition-all disabled:opacity-30 hover:bg-black/50"
             >
               <ChevronDown className="h-5 w-5" />
             </button>
@@ -289,9 +294,9 @@ export function ReelPlayer({
           {video ? (
             <button
               type="button"
-              onClick={toggleMute}
+              onClick={(e) => { e.stopPropagation(); toggleMute(); }}
               aria-label={muted ? t('player.unmute', 'Unmute') : t('player.mute', 'Mute')}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm hover:bg-black/50 transition-colors"
             >
               {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
             </button>
@@ -301,31 +306,31 @@ export function ReelPlayer({
         </div>
 
         {/* Action rail */}
-        <div className="absolute bottom-28 right-3 flex flex-col items-center gap-5">
-          <RailButton label={t('player.like', 'Like')} count={reel.likeCount} active={isLiked} activeColor="#fb7185" onClick={onLike}>
+        <div className="absolute bottom-28 right-3 flex flex-col items-center gap-5 z-10">
+          <RailButton label={t('player.like', 'Like')} count={reel.likeCount} active={isLiked} activeColor="#fb7185" onClick={(e) => { e.stopPropagation(); onLike(); }}>
             <Heart className="h-6 w-6" fill={isLiked ? 'currentColor' : 'none'} />
           </RailButton>
-          <RailButton label={t('player.comment', 'Comment')} count={reel.commentCount} onClick={onComment}>
+          <RailButton label={t('player.comment', 'Comment')} count={reel.commentCount} onClick={(e) => { e.stopPropagation(); onComment(); }}>
             <MessageCircle className="h-6 w-6" />
           </RailButton>
-          <RailButton label={t('player.share', 'Share')} onClick={onShare}>
+          <RailButton label={t('player.share', 'Share')} onClick={(e) => { e.stopPropagation(); onShare(); }}>
             <Share2 className="h-6 w-6" />
           </RailButton>
-          <RailButton label={t('player.save', 'Save')} active={isBookmarked} activeColor="#fbbf24" onClick={onBookmark}>
+          <RailButton label={t('player.save', 'Save')} active={isBookmarked} activeColor="#fbbf24" onClick={(e) => { e.stopPropagation(); onBookmark(); }}>
             <Bookmark className="h-6 w-6" fill={isBookmarked ? 'currentColor' : 'none'} />
           </RailButton>
         </div>
 
         {/* Author + caption */}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4 pb-6 pr-20 text-white">
-          <div className="flex items-center gap-2">
-            <Avatar className="h-9 w-9 ring-2 ring-white/70">
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 pb-8 pr-20 text-white z-10">
+          <div className="flex items-center gap-3">
+            <Avatar className="h-10 w-10 ring-2 ring-white/50">
               {reel.author?.avatar ? <AvatarImage src={reel.author.avatar} alt="" /> : null}
-              <AvatarFallback>{initials(name)}</AvatarFallback>
+              <AvatarFallback className="bg-indigo-600">{initials(name)}</AvatarFallback>
             </Avatar>
-            <span className="font-semibold">{name}</span>
+            <span className="font-semibold text-lg drop-shadow-sm">{name}</span>
           </div>
-          {caption && <p className="mt-2 line-clamp-3 text-sm text-white/90">{caption}</p>}
+          {caption && <p className="mt-3 line-clamp-3 text-sm text-white/90 leading-relaxed drop-shadow-sm">{caption}</p>}
         </div>
 
       </div>
