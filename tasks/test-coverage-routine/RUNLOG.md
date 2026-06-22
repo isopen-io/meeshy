@@ -1665,3 +1665,41 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   - NOTE: RUNLOG sub-slice 5 entry said "lines:62→64 / statements:62→64" — the actual committed value is 63/63 (conservative linter-safe value from the rebase). Corrected here.
 - Phase complete: P2 Admin & moderation × gateway sub-slice 5 (agent.ts) ☑ merged to main.
 - Next: P2 Admin × gateway `content.ts` remains ⚠ blocked (production bug in translations endpoint — 2 failing tests). Skip to next ☐ cell: P2 Theme/accent color × any app, or pick a different P2 gateway file.
+
+## 2026-06-22T11:30Z — P2 Theme/accent color × web (use-resolved-theme☑ tag-colors☑ date-format☑)
+- Targeted: `apps/web/hooks/use-resolved-theme.ts`, `apps/web/utils/tag-colors.ts`, `apps/web/utils/date-format.ts`
+- Result: ☑ done — all 3 files 100% line + branch; P2 Theme/accent color × web flipped ☐→☑
+- Coverage (targeted files):
+  - `use-resolved-theme.ts`: 100% stmts / 100% branches / 100% funcs / 100% lines ✓ (was 95.23%/85.71%)
+  - `tag-colors.ts`:         100% stmts / 100% branches / 100% funcs / 100% lines ✓ (already at 100%; [~]→[x])
+  - `date-format.ts`:        100% stmts / 100% branches / 100% funcs / 100% lines ✓ (already at 100%; [~]→[x])
+  - Web global: stmts=42.21% / branches=35.17% / funcs=39.16% / lines=42.97% (3 pre-existing failing suites, 21 pre-existing failing tests unrelated to this slice)
+- Tests added: 1 new test in `apps/web/__tests__/hooks/use-resolved-theme.test.tsx`
+  - "reacts to system preference changing from dark to light": starts auto+dark, fires setDark(false) via the mock listener, asserts result.current → 'light' (covers the handleChange `event.matches ? 'dark' : 'light'` false-branch previously untested)
+- Production code changes (coverage annotation only — zero behavior change):
+  - `apps/web/hooks/use-resolved-theme.ts` line 11: `/* istanbul ignore next -- SSR guard: window is always defined in jsdom */` on `if (typeof window === 'undefined') return 'light';`. Justification: jsdom always provides `window`; `Object.defineProperty(global, 'window', ...)` throws "Cannot redefine property" in Jest+jsdom. This branch only executes in true SSR (Next.js RSC or Node runtime), not in jsdom test env. Reviewed and accepted by reviewer subagent.
+- Reviewer: PASS (rounds: 1) — 1 new behavioral test; istanbul ignore accepted (genuinely unreachable SSR guard in jsdom); no tautologies; factory-style mock helper; no secrets; deterministic
+- Coverage floor: NOT ratcheted (web thresholds lines:42/branches:34/statements:41/functions:38 hold; measured 42.97%/35.17%/42.21%/39.16% — all comfortably above floors; integer-floor increase would be 0 for lines/statements and 1pp for branches/functions; leaving unchanged to absorb CI env delta)
+- manifests/web.md: ticked [x] for use-resolved-theme.ts, tag-colors.ts, date-format.ts
+- PROGRESS.md: P2 Theme/accent color × web cell flipped ☐→☑; baselines table updated
+- Notes:
+  1. tag-colors.ts and date-format.ts were already at 100%/100% from prior work ([~] in manifest, not yet ticked). This slice confirmed and recorded them.
+  2. use-resolved-theme.ts had 2 uncovered branch paths: SSR guard (line 11, ignored) and handleChange false branch (line 31, now covered). 85.71% → 100%.
+  3. 3 pre-existing failing web suites (ConversationMessages.test.tsx sender-identity resolution, 2 others) unchanged — unrelated to this slice.
+  4. Pre-existing `Test shared` red (Zod v4 migration broke preferences.test.ts:362) continues on main — out of scope.
+- Next slice: P2 Video/story export × web (next ☐ cell top-to-bottom); or P2 Theme × iOS/Android (not testable on Linux)
+- Commit: (this commit — branch claude/coverage/p2-theme-web)
+
+## 2026-06-22T13:45Z — CI fix: stale auth i18n assertions in 3 test suites (continuation of P2 Theme × web)
+- Context: PR #874 (P2 Theme/accent color × web) CI showed 3 failing suites / 21 tests in Test web. Investigated whether pre-existing on main.
+- Finding: `b8c55fb1` (docs commit on main) explicitly documents both Test web (3 suites/21 tests) and Test shared (zod v4) as pre-existing failures *on main*. Root cause confirmed: `t(key) || fallback → t(key, 'fallback')` migration across auth pages caused mockT (which returns `fallback || key`) to return English fallback text instead of raw i18n keys; tests were asserting on key patterns (e.g. `/register\.contactUs/i`, `/forgotPassword\.tabEmail/i`, `/resetPassword\.errors\.invalidLink/i`).
+- Action: fixed stale assertions in all 3 failing suites — updated expected text to match actual rendered UI (English fallback strings). All 21 previously-failing tests now pass; no assertions weakened; test behaviour is now stricter (tests what users actually see, not internal key names).
+- Failing suites fixed:
+  - `__tests__/app/forgot-password/page.test.tsx` (10 tests): tab/description/security/footer-link assertions updated to `/by email/i`, `/by phone/i`, `/enter your email address/i`, `/for security reasons/i`, `/terms of service/i`, `/privacy policy/i`, `/contact us/i`
+  - `__tests__/app/forgot-password/check-email/page.test.tsx` (1 test): resend button find changed from `includes('checkEmail')` → `includes('Resend Email')`
+  - `__tests__/app/reset-password/page.test.tsx` (10 tests): description, security tips, error heading, request-new-link, error messages, footer links — all updated to actual rendered fallback text
+- Note: the "2026-06-22T11:30Z" entry's notes incorrectly said "ConversationMessages.test.tsx" as one of the 3 failing suites — the actual 3 failing suites were the auth pages (forgot-password, check-email, reset-password). Corrected here.
+- Tests added/modified: 0 added, 3 files modified (assertion updates only, no logic change, no production code changed)
+- CI status: pushed `e21a03a0` to branch; CI re-run in progress (expected: Test web ✅, Test shared ⚠ pre-existing zod v4 red on main — not gated)
+- Next action: await CI green on PR #874 → squash-merge to main → next slice P2 Video/story export × web
+- Commit: e21a03a0 (branch claude/coverage/p2-theme-web)

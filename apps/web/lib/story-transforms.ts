@@ -146,8 +146,103 @@ export function postToStoryItem(
 }
 
 // ============================================================================
+// Author group -> StoryItem (one tray bubble per author)
+// ============================================================================
+
+/// Collapse an author's stories into a single tray bubble. The bubble is keyed
+/// by `authorId` (the group id used to scope the viewer), shows the first
+/// story's thumbnail, and is considered unviewed when ANY story in the group is
+/// still unviewed. `group` is assumed non-empty (callers map over the grouped
+/// values produced by `groupStoriesByAuthor`).
+export function groupToStoryItem(
+  group: Post[],
+  currentUserId: string,
+  viewedIds: Set<string>
+): StoryItem {
+  const [first] = group;
+  const author = first.author;
+  return {
+    id: first.authorId,
+    author: {
+      name: author?.displayName ?? author?.username ?? 'Unknown',
+      avatar: author?.avatar ?? undefined,
+    },
+    thumbnailUrl: first.media?.[0]?.thumbnailUrl ?? first.media?.[0]?.fileUrl ?? undefined,
+    hasUnviewed: group.some((post) => !viewedIds.has(post.id)),
+    isOwn: first.authorId === currentUserId,
+  };
+}
+
+// ============================================================================
 // Post -> StoryData (for StoryViewer)
 // ============================================================================
+
+// ============================================================================
+// Story timeline duration — single source of truth ported 1:1 from the iOS SDK
+// (`StorySlide.computedTotalDuration()` / `contentDerivedDuration()` in
+// MeeshySDK/Models/StoryModels.swift). The story lasts as long as its timeline,
+// NOT a fixed slide duration: a 14s background video plays its full 14s, a
+// looped 4s clip extends to the next full repetition past 6s, long text earns
+// reading time, and an author-pinned `timelineDuration` overrides everything.
+// The legacy `slideDuration` field is deliberately IGNORED (backend values are
+// arbitrary; the composer stopped writing it).
+// ============================================================================
+
+const DEFAULT_STATIC_DURATION_S = 6.0;
+const LONG_TEXT_THRESHOLD_WORDS = 30;
+const LONG_TEXT_SECONDS_PER_WORD = 1 / 6;
+
+function positiveNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && value > 0 ? value : undefined;
+}
+
+function asObjectArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? (value.filter((v) => v && typeof v === 'object') as Record<string, unknown>[]) : [];
+}
+
+export function computeStoryDurationMs(effects: Record<string, unknown> | undefined): number {
+  // Priority 0 — author-pinned timeline duration is authoritative (the timeline
+  // IS the story). `nil` for everything existing → falls back to content.
+  const pinned = positiveNumber(effects?.timelineDuration);
+  if (pinned !== undefined) return Math.round(pinned * 1000);
+
+  const mediaObjects = asObjectArray(effects?.mediaObjects);
+  const audioObjects = asObjectArray(effects?.audioPlayerObjects);
+  const textObjects = asObjectArray(effects?.textObjects);
+
+  // Component 1 — background video/audio of natural duration.
+  const bgVideoDur = positiveNumber(
+    mediaObjects.find((m) => m.isBackground === true && m.mediaType === 'video')?.duration,
+  );
+  const bgAudioDur = positiveNumber(audioObjects.find((a) => a.isBackground === true)?.duration);
+  const rawMediaDur = bgVideoDur ?? bgAudioDur;
+
+  // Component 2 — long text earns reading time (>30 words → 6s + 1s per 6 words).
+  const totalWords = textObjects.reduce((acc, t) => {
+    const text = typeof t.text === 'string' ? t.text.trim() : '';
+    return acc + (text ? text.split(/\s+/).length : 0);
+  }, 0);
+  const textDur = totalWords > LONG_TEXT_THRESHOLD_WORDS
+    ? DEFAULT_STATIC_DURATION_S + (totalWords - LONG_TEXT_THRESHOLD_WORDS) * LONG_TEXT_SECONDS_PER_WORD
+    : DEFAULT_STATIC_DURATION_S;
+
+  const target = Math.max(textDur, DEFAULT_STATIC_DURATION_S);
+
+  // Background media looped up to the target (or its natural duration if longer).
+  const bgResult = rawMediaDur === undefined
+    ? target
+    : rawMediaDur >= target
+      ? rawMediaDur
+      : Math.ceil(target / rawMediaDur) * rawMediaDur;
+
+  // Foreground (non-bg) videos: the slide must at least cover their natural length.
+  const fgMediaMax = mediaObjects
+    .filter((m) => m.isBackground !== true)
+    .map((m) => positiveNumber(m.duration) ?? 0)
+    .reduce((a, b) => Math.max(a, b), 0);
+
+  return Math.round(Math.max(bgResult, fgMediaMax) * 1000);
+}
 
 export function postToStoryData(post: Post): StoryData {
   const author = post.author;
@@ -191,10 +286,9 @@ export function postToStoryData(post: Post): StoryData {
   const textObjects = effects ? parseTextObjects(effects.textObjects) : undefined;
   const mediaObjects = effects ? parseMediaObjects(effects.mediaObjects) : undefined;
   const audioObjects = effects ? parseAudioObjects(effects.audioPlayerObjects) : undefined;
-  const slideDurationRaw = effects?.slideDuration;
-  const slideDurationMs = (typeof slideDurationRaw === 'number' && slideDurationRaw > 0)
-    ? slideDurationRaw * 1000
-    : undefined;
+  // Duration derived from the timeline (background video length, looped clips,
+  // long-text reading time, author pin) — never the fixed legacy slide duration.
+  const slideDurationMs = computeStoryDurationMs(effects);
 
   return {
     id: post.id,

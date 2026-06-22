@@ -112,4 +112,21 @@ describe('useResolvedTheme', () => {
 
     expect(system.listenerCount()).toBe(0);
   });
+
+  it('reacts to system preference changing from dark to light', () => {
+    const system = mockSystemPreference(true);
+    act(() => {
+      useAppStore.getState().setTheme('auto');
+    });
+
+    const { result } = renderHook(() => useResolvedTheme());
+    expect(result.current).toBe('dark');
+
+    act(() => {
+      system.setDark(false);
+    });
+
+    expect(result.current).toBe('light');
+  });
+
 });

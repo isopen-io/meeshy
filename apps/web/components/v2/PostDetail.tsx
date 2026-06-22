@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { buildAttachmentUrl } from '@/utils/attachment-url';
 import { Repeat2 } from 'lucide-react';
 import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
@@ -99,8 +100,10 @@ function PostDetail({
   onBookmark,
   onUnbookmark,
   onShare,
+  onRepost,
   onDelete,
   onEdit,
+  onTranslate,
   onSubmitComment,
   onLoadMoreComments,
   onLikeComment,
@@ -205,10 +208,10 @@ function PostDetail({
               {post.media.map((m) => (
                 <div key={m.id} className="rounded-xl overflow-hidden bg-[var(--gp-parchment)]">
                   {m.mimeType.startsWith('image/') && (
-                    <img src={m.fileUrl} alt={m.alt ?? ''} className="w-full object-cover max-h-96" loading="lazy" />
+                    <img src={buildAttachmentUrl(m.fileUrl) ?? undefined} alt={m.alt ?? ''} className="w-full object-cover max-h-96" loading="lazy" />
                   )}
                   {m.mimeType.startsWith('video/') && (
-                    <video src={m.fileUrl} controls className="w-full max-h-96" />
+                    <video src={buildAttachmentUrl(m.fileUrl) ?? undefined} controls className="w-full max-h-96" />
                   )}
                 </div>
               ))}

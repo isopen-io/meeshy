@@ -26,7 +26,7 @@ import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { PostDetail } from '@/components/v2/PostDetail';
 import { PostEditor } from '@/components/v2/PostEditor';
 import { RepostModal } from '@/components/v2/RepostModal';
-import { PageHeader, useToast } from '@/components/v2';
+import { useToast } from '@/components/v2';
 import { Skeleton } from '@/components/v2/Skeleton';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuthStore } from '@/stores/auth-store';
@@ -95,9 +95,8 @@ export default function PostDetailPage() {
 
   if (postQuery.isLoading) {
     return (
-      <DashboardLayout title="Post" className="!max-w-none !px-0">
+      <DashboardLayout title="Post" className="!max-w-none !px-0" backHref="/feed/posts">
         <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors">
-          <PageHeader title="Post" onBack={() => router.back()} hideNotificationButton hideProfileButton />
           <div className="max-w-2xl mx-auto px-6 py-8 space-y-4">
             <Skeleton className="h-48 rounded-2xl" />
             <Skeleton className="h-32 rounded-2xl" />
@@ -109,9 +108,8 @@ export default function PostDetailPage() {
 
   if (postQuery.isError || !postQuery.data) {
     return (
-      <DashboardLayout title="Post" className="!max-w-none !px-0">
+      <DashboardLayout title="Post" className="!max-w-none !px-0" backHref="/feed/posts">
         <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors">
-          <PageHeader title="Post" onBack={() => router.back()} hideNotificationButton hideProfileButton />
           <div className="max-w-2xl mx-auto px-6 py-16 text-center">
             <p className="text-[var(--gp-text-muted)]">Post not found or an error occurred.</p>
           </div>
@@ -184,9 +182,8 @@ export default function PostDetailPage() {
   };
 
   return (
-    <DashboardLayout title="Post" className="!max-w-none !px-0">
+    <DashboardLayout title="Post" className="!max-w-none !px-0" backHref="/feed/posts">
       <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors">
-        <PageHeader title="Post" onBack={() => router.back()} hideNotificationButton hideProfileButton />
         <main className="px-6 py-8">
           <PostDetail
             post={post}

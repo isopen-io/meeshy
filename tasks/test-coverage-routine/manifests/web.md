@@ -999,7 +999,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/hooks/use-registration-submit.ts`
 - [ ] `apps/web/hooks/use-registration-validation.ts`
 - [ ] `apps/web/hooks/use-registration-wizard.ts`
-- [~] `apps/web/hooks/use-resolved-theme.ts`
+- [x] `apps/web/hooks/use-resolved-theme.ts`
 - [ ] `apps/web/hooks/use-single-tap.ts`
 - [x] `apps/web/hooks/use-socketio-messaging.ts`
 - [ ] `apps/web/hooks/use-stream-messages.ts`
@@ -1347,7 +1347,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/utils/console-override.ts`
 - [~] `apps/web/utils/conversation-id-utils.ts`
 - [~] `apps/web/utils/custom-toast.tsx`
-- [~] `apps/web/utils/date-format.ts`
+- [x] `apps/web/utils/date-format.ts`
 - [~] `apps/web/utils/debounce.ts`
 - [~] `apps/web/utils/error-context-collector.ts`
 - [ ] `apps/web/utils/fcm-manager.ts`
@@ -1381,7 +1381,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/utils/service-worker-registration.ts`
 - [ ] `apps/web/utils/service-worker.ts`
 - [~] `apps/web/utils/socket-validator.ts`
-- [~] `apps/web/utils/tag-colors.ts`
+- [x] `apps/web/utils/tag-colors.ts`
 - [~] `apps/web/utils/token-utils.ts`
 - [ ] `apps/web/utils/translation-adapter.ts`
 - [ ] `apps/web/utils/translation-cleaner.ts`
