@@ -323,6 +323,27 @@ class ConversationViewModel: ObservableObject {
     /// When true, the effects picker sheet is presented
     @Published var showEffectsPicker: Bool = false
 
+    /// True when the current user has not yet granted voice-cloning consent.
+    /// Drives the in-bubble `AudioConsentNotice` nudge on outgoing audio
+    /// messages. Set asynchronously after `start()` via a one-shot
+    /// `VoiceProfileService` call; default is `false` so a network error
+    /// never shows a false positive.
+    @Published var voiceConsentMissing: Bool = false
+
+    /// Pure, testable: maps a `hasConsent` fetch to "missing", fail-safe to false.
+    nonisolated static func resolveVoiceConsentMissing(_ fetchHasConsent: () async throws -> Bool) async -> Bool {
+        do { return try await !fetchHasConsent() } catch { return false }
+    }
+
+    private func loadVoiceConsentStatus() {
+        Task { [weak self] in
+            let missing = await Self.resolveVoiceConsentMissing {
+                try await VoiceProfileService.shared.getConsentStatus().hasConsent
+            }
+            await MainActor.run { self?.voiceConsentMissing = missing }
+        }
+    }
+
     // MARK: - Audio Continuous Playback (Phase 4)
 
     /// Attachments already played to completion. Excluded from the auto-built
@@ -980,6 +1001,7 @@ class ConversationViewModel: ObservableObject {
         subscribeToAudioCoordinatorFinishedEvents()
         mirrorMessagesIntoStateStore()
         hydrateCurrentConversationFromCache()
+        loadVoiceConsentStatus()
         // Cross-conversation unread aggregator powers the back-button pill.
         // `setCurrentlyOpenConversation(conversationId)` (called above) makes the
         // sync engine EXCLUDE this conversation from `totalConversationsUnread`,

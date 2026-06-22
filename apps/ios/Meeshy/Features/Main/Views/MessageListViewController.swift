@@ -805,6 +805,15 @@ final class MessageListViewController: UIViewController {
             }
             .store(in: &cancellables)
 
+        vm.$voiceConsentMissing
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.applySnapshot(animated: false)
+            }
+            .store(in: &cancellables)
+
         // In-conversation search term changes (enter / exit / refine the
         // filtered-conversation search) require re-running the cell registration
         // so each bubble shows or clears the highlight. `applySnapshot`
