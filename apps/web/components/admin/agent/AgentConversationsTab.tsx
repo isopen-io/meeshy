@@ -25,15 +25,6 @@ const AgentMessagesModal = dynamic(() => import('./AgentMessagesModal'), {
   loading: () => null,
 });
 
-const TYPE_LABELS: Record<string, string> = {
-  direct: 'Direct',
-  group: 'Groupe',
-  public: 'Public',
-  global: 'Globale',
-  broadcast: 'Communication',
-  channel: 'Canal',
-};
-
 function conversationLabel(config: AgentConfigData): string {
   if (config.conversation?.title) return config.conversation.title;
   return config.conversationId.slice(0, 8) + '...';
@@ -107,7 +98,7 @@ export function AgentConversationsTab() {
   };
 
   const handleDelete = async (conversationId: string) => {
-    if (!confirm('Supprimer cette configuration agent ?')) return;
+    if (!confirm(t('agent.conversations.deleteConfirm', 'Delete this agent configuration?'))) return;
     try {
       await agentAdminService.deleteConfig(conversationId);
       setConfigs(prev => prev.filter(c => c.conversationId !== conversationId));
@@ -165,14 +156,14 @@ export function AgentConversationsTab() {
       <Card>
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <CardTitle className="text-lg">Configurations Agent</CardTitle>
-            <p className="text-xs text-gray-500 mt-0.5">{total} conversations configurées</p>
+            <CardTitle className="text-lg">{t('agent.conversations.title', 'Agent Configurations')}</CardTitle>
+            <p className="text-xs text-gray-500 mt-0.5">{t('agent.conversations.subtitle', { total })}</p>
           </div>
           <div className="flex w-full sm:w-auto gap-2">
             <div className="relative flex-1 sm:w-64">
               <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Rechercher..."
+                placeholder={t('agent.conversations.searchPlaceholder', 'Search...')}
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && fetchConfigs()}
@@ -181,27 +172,27 @@ export function AgentConversationsTab() {
             </div>
             <Button size="sm" onClick={handleCreate}>
               <Plus className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Configurer</span>
+              <span className="hidden sm:inline">{t('agent.conversations.configure', 'Configure')}</span>
             </Button>
           </div>
         </CardHeader>
         <CardContent>
           {configs.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-8">
-              Aucune conversation configur&eacute;e pour l&apos;agent
+              {t('agent.conversations.empty', 'No conversation configured for the agent')}
             </p>
           ) : (
             <div className="space-y-1">
               {/* Desktop header */}
               <div className="hidden lg:grid grid-cols-12 gap-3 px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                <span className="col-span-3">Conversation</span>
-                <span>Statut</span>
-                <span>Triggers</span>
-                <span className="col-span-2">Contrôlés</span>
-                <span className="text-right">Messages</span>
-                <span className="text-right">Confiance</span>
-                <span className="text-right">Dernière rép.</span>
-                <span>Actions</span>
+                <span className="col-span-3">{t('agent.conversations.headers.conversation', 'Conversation')}</span>
+                <span>{t('agent.conversations.headers.status', 'Status')}</span>
+                <span>{t('agent.conversations.headers.triggers', 'Triggers')}</span>
+                <span className="col-span-2">{t('agent.conversations.headers.controlled', 'Controlled')}</span>
+                <span className="text-right">{t('agent.conversations.headers.messages', 'Messages')}</span>
+                <span className="text-right">{t('agent.conversations.headers.confidence', 'Confidence')}</span>
+                <span className="text-right">{t('agent.conversations.headers.lastResponse', 'Last resp.')}</span>
+                <span>{t('agent.conversations.headers.actions', 'Actions')}</span>
               </div>
 
               {configs.map(config => {
@@ -221,7 +212,7 @@ export function AgentConversationsTab() {
                         </span>
                         {config.conversation?.type && (
                           <Badge variant="outline" className="text-[10px] shrink-0">
-                            {TYPE_LABELS[config.conversation.type] ?? config.conversation.type}
+                            {t(`agent.conversations.types.${config.conversation.type}`, config.conversation.type)}
                           </Badge>
                         )}
                       </div>
@@ -243,12 +234,12 @@ export function AgentConversationsTab() {
                           {config.isScanning ? (
                             <>
                               <Square className="h-2.5 w-2.5 fill-current" />
-                              <span className="text-[9px] font-bold tracking-tighter">Stop</span>
+                              <span className="text-[9px] font-bold tracking-tighter">{t('agent.conversations.stop', 'Stop')}</span>
                             </>
                           ) : (
                             <>
                               <Play className="h-3 w-3 fill-current" />
-                              <span className="text-[9px] font-bold">Play</span>
+                              <span className="text-[9px] font-bold">{t('agent.conversations.play', 'Play')}</span>
                             </>
                           )}
                         </Button>
@@ -258,7 +249,7 @@ export function AgentConversationsTab() {
                             onCheckedChange={() => handleToggle(config)}
                           />
                           <Badge variant={config.enabled ? 'default' : 'secondary'} className="text-[10px]">
-                            {config.enabled ? 'Actif' : 'Off'}
+                            {config.enabled ? t('agent.conversations.active', 'Active') : t('agent.conversations.off', 'Off')}
                           </Badge>
                         </div>
                         {config.isScanning && config.currentNode && (
@@ -295,7 +286,7 @@ export function AgentConversationsTab() {
                         <button
                           onClick={() => setMessagesModalConfig(config)}
                           className="flex items-center gap-1 justify-end hover:text-indigo-500 transition-colors"
-                          title="Voir les messages agent"
+                          title={t('agent.conversations.viewMessages', 'View agent messages')}
                         >
                           <MessageSquare className="h-3 w-3 text-gray-400 hidden lg:block" />
                           <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 tabular-nums">
@@ -323,7 +314,7 @@ export function AgentConversationsTab() {
                         <button
                           onClick={() => setScheduleModalConfig(config)}
                           className="flex items-center gap-1 justify-end hover:text-indigo-500 transition-colors"
-                          title="Planificateur de triggers"
+                          title={t('agent.conversations.triggerScheduler', 'Trigger scheduler')}
                         >
                           <Clock className="h-3 w-3 text-gray-400 hidden lg:block" />
                           <span className="text-xs text-gray-500 tabular-nums">
@@ -334,7 +325,7 @@ export function AgentConversationsTab() {
 
                       {/* Actions */}
                       <div className="flex gap-0.5 shrink-0">
-                        <Button variant="ghost" size="sm" onClick={() => handleEdit(config)} className="h-7 w-7 p-0" aria-label="Edit agent configuration">
+                        <Button variant="ghost" size="sm" onClick={() => handleEdit(config)} className="h-7 w-7 p-0" aria-label={t('agent.conversations.editConfig', 'Edit agent configuration')}>
                           <Settings className="h-3.5 w-3.5" />
                         </Button>
                         <Button
@@ -342,7 +333,7 @@ export function AgentConversationsTab() {
                           size="sm"
                           onClick={() => handleDelete(config.conversationId)}
                           className="text-red-500 hover:text-red-700 h-7 w-7 p-0"
-                          aria-label="Delete configuration"
+                          aria-label={t('agent.conversations.deleteConfig', 'Delete configuration')}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -357,7 +348,7 @@ export function AgentConversationsTab() {
           {total > limit && (
             <div className="flex items-center justify-between mt-4 pt-4 border-t">
               <span className="text-sm text-gray-500">
-                Page {page} sur {Math.ceil(total / limit)} ({total} résultats)
+                {t('agent.conversations.pagination', { page, pages: Math.ceil(total / limit), total })}
               </span>
               <div className="flex gap-2">
                 <Button

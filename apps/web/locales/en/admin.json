@@ -207,6 +207,54 @@
       "configDeleted": "Configuration deleted",
       "deleteError": "Error deleting"
     },
+    "roles": {
+      "empty": "No role observed for this conversation",
+      "origin": {
+        "observed": "Observed",
+        "archetype": "Archetype",
+        "hybrid": "Hybrid"
+      },
+      "locked": "Locked",
+      "unlock": "Unlock",
+      "messagesAnalyzed": "{count} msg analyzed",
+      "confidence": "Confidence",
+      "assignPlaceholder": "Assign an archetype..."
+    },
+    "conversations": {
+      "title": "Agent Configurations",
+      "subtitle": "{total} configured conversations",
+      "searchPlaceholder": "Search...",
+      "configure": "Configure",
+      "empty": "No conversation configured for the agent",
+      "deleteConfirm": "Delete this agent configuration?",
+      "headers": {
+        "conversation": "Conversation",
+        "status": "Status",
+        "triggers": "Triggers",
+        "controlled": "Controlled",
+        "messages": "Messages",
+        "confidence": "Confidence",
+        "lastResponse": "Last resp.",
+        "actions": "Actions"
+      },
+      "active": "Active",
+      "off": "Off",
+      "stop": "Stop",
+      "play": "Play",
+      "viewMessages": "View agent messages",
+      "triggerScheduler": "Trigger scheduler",
+      "editConfig": "Edit agent configuration",
+      "deleteConfig": "Delete configuration",
+      "pagination": "Page {page} of {pages} ({total} results)",
+      "types": {
+        "direct": "Direct",
+        "group": "Group",
+        "public": "Public",
+        "global": "Global",
+        "broadcast": "Broadcast",
+        "channel": "Channel"
+      }
+    },
     "scheduling": {
       "fixedTime": "Fixed time",
       "delay": "After X time",

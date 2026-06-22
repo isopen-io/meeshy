@@ -207,6 +207,54 @@
       "configDeleted": "Configuration supprimée",
       "deleteError": "Erreur lors de la suppression"
     },
+    "roles": {
+      "empty": "Aucun rôle observé pour cette conversation",
+      "origin": {
+        "observed": "Observé",
+        "archetype": "Archétype",
+        "hybrid": "Hybride"
+      },
+      "locked": "Verrouillé",
+      "unlock": "Déverrouiller",
+      "messagesAnalyzed": "{count} msg analysés",
+      "confidence": "Confiance",
+      "assignPlaceholder": "Assigner un archétype..."
+    },
+    "conversations": {
+      "title": "Configurations Agent",
+      "subtitle": "{total} conversations configurées",
+      "searchPlaceholder": "Rechercher...",
+      "configure": "Configurer",
+      "empty": "Aucune conversation configurée pour l'agent",
+      "deleteConfirm": "Supprimer cette configuration agent ?",
+      "headers": {
+        "conversation": "Conversation",
+        "status": "Statut",
+        "triggers": "Triggers",
+        "controlled": "Contrôlés",
+        "messages": "Messages",
+        "confidence": "Confiance",
+        "lastResponse": "Dernière rép.",
+        "actions": "Actions"
+      },
+      "active": "Actif",
+      "off": "Off",
+      "stop": "Stop",
+      "play": "Play",
+      "viewMessages": "Voir les messages agent",
+      "triggerScheduler": "Planificateur de triggers",
+      "editConfig": "Modifier la configuration agent",
+      "deleteConfig": "Supprimer la configuration",
+      "pagination": "Page {page} sur {pages} ({total} résultats)",
+      "types": {
+        "direct": "Direct",
+        "group": "Groupe",
+        "public": "Public",
+        "global": "Globale",
+        "broadcast": "Communication",
+        "channel": "Canal"
+      }
+    },
     "scheduling": {
       "fixedTime": "Heure fixe",
       "delay": "Dans X temps",

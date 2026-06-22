@@ -207,6 +207,54 @@
       "configDeleted": "Configuração excluída",
       "deleteError": "Erro ao excluir"
     },
+    "roles": {
+      "empty": "Nenhuma função observada para esta conversa",
+      "origin": {
+        "observed": "Observado",
+        "archetype": "Arquétipo",
+        "hybrid": "Híbrido"
+      },
+      "locked": "Bloqueado",
+      "unlock": "Desbloquear",
+      "messagesAnalyzed": "{count} msg analisadas",
+      "confidence": "Confiança",
+      "assignPlaceholder": "Atribuir um arquétipo..."
+    },
+    "conversations": {
+      "title": "Configurações do agente",
+      "subtitle": "{total} conversas configuradas",
+      "searchPlaceholder": "Pesquisar...",
+      "configure": "Configurar",
+      "empty": "Nenhuma conversa configurada para o agente",
+      "deleteConfirm": "Eliminar esta configuração do agente?",
+      "headers": {
+        "conversation": "Conversa",
+        "status": "Estado",
+        "triggers": "Gatilhos",
+        "controlled": "Controladas",
+        "messages": "Mensagens",
+        "confidence": "Confiança",
+        "lastResponse": "Últ. resp.",
+        "actions": "Ações"
+      },
+      "active": "Ativo",
+      "off": "Off",
+      "stop": "Parar",
+      "play": "Iniciar",
+      "viewMessages": "Ver mensagens do agente",
+      "triggerScheduler": "Agendador de gatilhos",
+      "editConfig": "Editar configuração do agente",
+      "deleteConfig": "Eliminar configuração",
+      "pagination": "Página {page} de {pages} ({total} resultados)",
+      "types": {
+        "direct": "Direto",
+        "group": "Grupo",
+        "public": "Público",
+        "global": "Global",
+        "broadcast": "Difusão",
+        "channel": "Canal"
+      }
+    },
     "scheduling": {
       "fixedTime": "Hora fixa",
       "delay": "Em X tempo",
