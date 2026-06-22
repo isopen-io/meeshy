@@ -275,11 +275,6 @@
         "private": "Privé"
       }
     },
-    "replyPreview": {
-      "image": "Photo",
-      "audio": "Audio",
-      "video": "Vidéo"
-    },
     "audioUnavailable": "URL audio non disponible",
     "audioProgress": "Progression audio",
     "statusComposer": {

@@ -24,9 +24,12 @@ Monté dans `components/feed/PostsFeedScreen.tsx` (composeur de post du fil). Ch
 - `aria-label="Post content"`, `"Add photo"`, `"Add video"`, `"Change visibility"` (a11y EN dure).
 - Bouton `Publish` en dur (la clé `common.publish` existait déjà, non utilisée ici).
 
-### P2 — `components/v2/ReplyPreview.tsx` (building block design-system)
+### P2 — `components/v2/ReplyPreview.tsx` — ⚠️ SUPERSÉDÉ par 55w (#769)
 `CONTENT_TYPE_LABELS` mappait des libellés **FR durs mixés** : `📷 Photo` / `🎤 Audio` / `🎬 Vidéo`.
-Composant exporté du barrel v2 ; l'aperçu de réponse media s'affichait en FR quelle que soit la langue.
+**Un agent parallèle (55w, #769) a soldé ce fichier pendant cette itération** (via
+`useI18n('conversations')` + `v2chat.{photo,audio,video}`). Mon correctif `ReplyPreview` a donc été
+**retiré du diff final** (et les clés `common.replyPreview.*` que j'avais ajoutées, supprimées) pour
+éviter la divergence. Périmètre final 54wb = **PostComposer + AudioPlayer** uniquement.
 
 ### P3 — `components/v2/AudioPlayer.tsx` (building block design-system)
 - `aria-label={isPlaying ? 'Pause' : 'Play'}` et `aria-label="Audio progress"` : a11y EN dure
@@ -37,12 +40,12 @@ Composant exporté du barrel v2 ; l'aperçu de réponse media s'affichait en FR 
 1. **PostComposer** : `label` → `labelKey` (clés `common.postComposer.visibility.*`) ;
    aria-labels → `t('postComposer.{contentLabel,addPhoto,addVideo,changeVisibility}')` ;
    bouton → `t('publish')`.
-2. **ReplyPreview** : `CONTENT_TYPE_LABELS` → `CONTENT_TYPE_META { emoji, key }` ;
-   `displayContent` = `${emoji} ${t('replyPreview.{image,audio,video}')}` ; emoji conservé hors i18n.
-3. **AudioPlayer** : `useI18n('common')` ajouté ; aria-labels → `t('play'|'pause'|'audioProgress')` ;
+2. **AudioPlayer** : `useI18n('common')` ajouté ; aria-labels → `t('play'|'pause'|'audioProgress')` ;
    garde → `t('audioUnavailable')`.
+3. ~~ReplyPreview~~ → retiré (soldé par 55w #769, voir P2).
 
-15 clés nouvelles/réutilisées sous `common` × 4 locales (en/fr/es/pt), parité vérifiée.
+11 clés sous `common` × 4 locales (en/fr/es/pt) — `postComposer.*`, `audioProgress`,
+`audioUnavailable` + réutilisation `publish`/`play`/`pause` ; parité vérifiée.
 
 ## Validation
 - `tsc --noEmit` sur le projet web : **0 erreur dans les 3 fichiers touchés** (le reste = bruit
@@ -54,8 +57,9 @@ Composant exporté du barrel v2 ; l'aperçu de réponse media s'affichait en FR 
   `audio-post-composer` vise `AudioPostComposer`, distinct).
 
 ## ✅ Statut — CORRIGÉ & COMPLET (54wb)
-**NE PLUS re-flagger** les chaînes de `components/v2/{PostComposer,ReplyPreview,AudioPlayer}.tsx`
-ni les clés `common.{postComposer.*,replyPreview.*,audioProgress,audioUnavailable}`.
+**NE PLUS re-flagger** les chaînes de `components/v2/{PostComposer,AudioPlayer}.tsx`
+ni les clés `common.{postComposer.*,audioProgress,audioUnavailable}`.
+(`ReplyPreview` soldé séparément par 55w — voir P2.)
 Restes du cluster 53w pour 55w+ : `AttachmentDeleteDialog.tsx`, `auth/PhoneExistsModal.tsx`
 (voir branch-tracking « Deferred carry-over — web »).
 
