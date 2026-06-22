@@ -11,7 +11,18 @@ struct PostDetailView: View {
     var showComments: Bool = false
 
     @StateObject private var viewModel = PostDetailViewModel()
+    /// Autocomplétion @mention pour le composer de commentaire — contexte `.post`,
+    /// donc le backend suggère l'auteur du post, les personnes ayant commenté, puis
+    /// les contacts (parité avec `FeedCommentsSheet`).
+    @StateObject private var mentionController: MentionComposerController
     private var theme: ThemeManager { ThemeManager.shared }
+
+    init(postId: String, initialPost: FeedPost? = nil, showComments: Bool = false) {
+        self.postId = postId
+        self.initialPost = initialPost
+        self.showComments = showComments
+        _mentionController = StateObject(wrappedValue: MentionComposerController(context: .post(id: postId)))
+    }
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var router: Router
@@ -499,7 +510,19 @@ struct PostDetailView: View {
                 Spacer()
             }
 
-            composer
+            VStack(spacing: 0) {
+                if mentionController.activeQuery != nil {
+                    MentionSuggestionPanel(
+                        controller: mentionController,
+                        accentColor: accentColor,
+                        currentText: composerText,
+                        onSelect: { updated in composerText = updated }
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                composer
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: mentionController.activeQuery != nil)
         }
         .background(theme.backgroundGradient.ignoresSafeArea())
         .navigationBarHidden(true)
@@ -556,6 +579,10 @@ struct PostDetailView: View {
             //   comptées IMMÉDIATEMENT, avant tout tracking d'engagement (durée de lecture).
             try? await PostService.shared.viewPost(postId: postId, duration: nil)
             await viewModel.registerDetailOpen(postId)
+            // Reprend le brouillon de commentaire laissé sur ce post (cache-first).
+            if composerText.isEmpty, let draft = CommentDraftStore.shared.load(postId: postId) {
+                composerText = draft
+            }
         }
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: postId)
@@ -1767,6 +1794,10 @@ struct PostDetailView: View {
             onSendMessage: { text, attachments, _ in submitComment(text: text, attachments: attachments) },
             textBinding: $composerText,
             replyBanner: replyBannerView,
+            onTextChange: { text in
+                mentionController.handleQuery(in: text)
+                CommentDraftStore.shared.save(postId: postId, text: text)
+            },
             customAttachmentsPreview: commentAttachments.isEmpty
                 ? nil
                 : AnyView(CommentAttachmentsTray(attachments: commentAttachments) { id in

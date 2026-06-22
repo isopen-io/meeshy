@@ -355,6 +355,10 @@ struct CommentsSheetView: View {
             // Sème l'état "liké par moi" des commentaires top-level déjà chargés
             // (`post.comments` porte `currentUserReactions` depuis `toFeedPost`).
             seedLikedIds(from: comments)
+            // Reprend le brouillon de commentaire laissé sur ce post (cache-first).
+            if composerText.isEmpty, let draft = CommentDraftStore.shared.load(postId: post.id) {
+                composerText = draft
+            }
         }
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: post.id)
@@ -733,6 +737,8 @@ struct CommentsSheetView: View {
                 : AnyView(commentAttachmentsPreview),
             onTextChange: { text in
                 mentionController.handleQuery(in: text)
+                // Persiste le brouillon par post (un envoi vide le texte → efface).
+                CommentDraftStore.shared.save(postId: post.id, text: text)
             },
             // Capture voix réelle — mêmes composants que les conversations.
             onStartRecording: { startCommentRecording() },
