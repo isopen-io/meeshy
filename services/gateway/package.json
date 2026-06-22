@@ -73,7 +73,7 @@
     "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
-    "@jest/globals": "^30.3.0",
+    "@jest/globals": "^30.4.1",
     "@types/bcrypt": "^6.0.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/fluent-ffmpeg": "^2.1.28",
