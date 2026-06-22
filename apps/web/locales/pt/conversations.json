@@ -704,5 +704,22 @@
       "file": "Arquivo",
       "document": "Documento"
     }
+  },
+  "bubbleStream": {
+    "messageSentSuccessfully": "Mensagem enviada com sucesso",
+    "retryFailed": "Falha ao reenviar. Clique para restaurar a mensagem.",
+    "retryError": "Erro ao reenviar",
+    "messageRestored": "Mensagem restaurada no compositor",
+    "messageDismissed": "Mensagem descartada",
+    "allMessagesDismissed": "Todas as mensagens com falha foram descartadas",
+    "messageSendFailed": "Falha ao enviar a mensagem",
+    "retries": "tentativa(s)",
+    "attachments": "anexo(s)",
+    "emptyMessage": "Mensagem vazia",
+    "restoreMessage": "Restaurar",
+    "retrying": "Reenviando...",
+    "retryNow": "Reenviar",
+    "dismiss": "Descartar",
+    "dismissAll": "Descartar tudo"
   }
 }

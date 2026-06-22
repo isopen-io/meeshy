@@ -1,44 +1,45 @@
-# Plan de correction — Itération 63w (web)
+# Plan itération 63w (web) — épuration `components/settings/_archived/`
 
-**Date** : 2026-06-22
-**Cible** : anti-pattern i18n `t('key') || 'fallback'` dans la sidebar de détails de conversation
-**Branche** : `claude/practical-fermat-yly7ym` (base `main` HEAD `9dafd59`)
+**Base** : `main` HEAD post-merge #847 (iter-62wb, commit `4172b8f`).
+**Branche** : `claude/practical-fermat-5f6moi`.
+**Type** : épuration code mort (orthogonal à la vague i18n `t()||fallback` #843/#849).
 
-## Problème
+## Objectif
 
-`useI18n().t(key)` retourne la clé brute (truthy) pendant le flash de chargement async des namespaces.
-`t('key') || 'fallback'` ⇒ (1) `||` dead-code quand la clé existe, (2) clé brute affichée à l'écran
-pendant le chargement, dans toutes les langues. Même classe que 50w/60w/60wb/62w.
+Supprimer le code mort `components/settings/_archived/` (jamais rendu en prod,
+tests déjà ignorés par jest) afin de **résoudre à la racine** le faux-positif
+récurrent `font-selector` (carry-over 59w) et de respecter la consigne
+« logique d'épuration ».
 
-## Périmètre (orthogonal aux PR en vol)
+## Changements (5 fichiers)
 
-Cluster **sidebar de détails** — aucune PR ouverte ne le touche (#835 = header, #843/#842 = bubble,
-#814 = dialogues image, #841 = layout déjà mergé) :
+1. ✅ `rm components/settings/_archived/complete-user-settings.tsx`
+2. ✅ `rm components/settings/_archived/settings-layout.tsx`
+3. ✅ `rm __tests__/components/settings/_archived/complete-user-settings.test.tsx` (test déjà ignoré)
+4. ✅ `rm __tests__/components/settings/_archived/settings-layout.test.tsx` (test déjà ignoré)
+5. ✅ `jest.config.js` : retrait du pattern `'/_archived/'` (désormais mort)
+6. ✅ `app/settings/README.md` : section Migration Notes mise à jour (plus de `_archived/`)
 
-| Fichier | Occ. | Clé(s) |
-|---------|------|--------|
-| `details-sidebar/DetailsHeader.tsx` | 1 | `conversationDetails.clickToChangeImage` |
-| `details-sidebar/CategorySelector.tsx` | 1 | `common.loading` |
-| `details-sidebar/TagsManager.tsx` | 1 | `common.loading` |
-| `details-sidebar/CustomizationManager.tsx` | 1 | `common.loading` |
-| `conversation-details-sidebar.tsx` | 2 | `conversationDetails.imageUpdated`, `conversationDetails.imageUploadError` |
+## Vérification
 
-## Étapes
+- ✅ Sweep `grep -rn _archived` → seul reste la note explicative du README.
+- ✅ Aucun import prod/test réel des symboles archivés (barrels propres).
+- ✅ Suppression **CI-neutre** (tests étaient ignorés) et **coverage-positive**
+  (composants 0 %-couverts retirés du dénominateur).
+- ⏳ CI verte avant merge (gate dur).
 
-1. [x] Vérifier la parité 4-locales des clés ciblées (`en/fr/es/pt/conversations.json`) → toutes présentes.
-2. [x] Remplacer `t('key') || 'fb'` → `t('key', 'EN fallback')` (secours alignés sur la valeur EN exacte du locale).
-3. [x] Ne PAS toucher les `|| ''` nullables légitimes (customName, title, description, firstName…).
-4. [x] Documenter l'analyse + annoter `branch-tracking.md`.
-5. [ ] Commit + push, ouvrir PR, CI vert, merge dans `main`, supprimer la branche.
+## Suivi (carry-over mis à jour)
 
-## Critères d'acceptation
+- **NOUVEAU (63w)** : `components/settings/font-selector.tsx` est désormais
+  **fully orphaned** (plus aucun consommateur après suppression de `_archived/` ;
+  subsistent : réexports `components/index.ts` + `components/settings/index.ts`,
+  et son test `__tests__/components/settings/font-selector.test.tsx`). Candidat
+  épuration **complète** en 64w+ : supprimer le composant + son test + les 2
+  réexports barrel. Bornée, orthogonale à l'i18n. NE PLUS i18n font-selector
+  (orphelin, supprimer plutôt).
+- `_archived/` n'existe plus → NE PLUS le re-flagger ni comme candidat épuration.
 
-- 0 occurrence `t(...) || '...'` restante dans les 5 fichiers du cluster.
-- 0 ajout/modification de locale (clés déjà présentes ×4).
-- Aucun changement de comportement runtime (valeur traduite rendue à l'identique quand la clé existe).
+## Numérotation
 
-## Suite (64w+)
-
-~41 fichiers conservent l'anti-pattern (failed-message-banner, emoji-picker, SystemStatusBanner,
-ConversationSettingsModal, hooks conversations, video-calls/audio-effects…). Continuer par lots cohérents
-bornés, toujours après `git fetch` + `list_pull_requests`.
+`62w` (#843) et `62wb` (#847, mergée) existent ; cette passe = **63w** pour éviter
+toute collision avec la vague i18n en vol.
