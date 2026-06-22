@@ -44,8 +44,9 @@ class FeedViewModelTest {
 
     private fun post(id: String) = ApiPost(id = id, content = "Post $id")
 
-    private fun viewModel(): FeedViewModel {
+    private fun viewModel(hasMore: Boolean = true): FeedViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
+        every { repository.feedHasMore } returns MutableStateFlow(hasMore)
         return FeedViewModel(repository, session, config)
     }
 
@@ -116,5 +117,47 @@ class FeedViewModelTest {
         vm.toggleLike("p1")
 
         coVerify(exactly = 1) { repository.toggleLike("p1") }
+    }
+
+    @Test
+    fun `hasMore is reflected from repository`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Fresh(listOf(post("1")), 0L))
+
+        val vm = viewModel(hasMore = false)
+
+        assertThat(vm.state.value.hasMore).isFalse()
+    }
+
+    @Test
+    fun `loadMoreIfNeeded near the end delegates to repository`() = runTest {
+        val posts = (1..6).map { post(it.toString()) }
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Fresh(posts, 0L))
+
+        val vm = viewModel(hasMore = true)
+        vm.loadMoreIfNeeded("6")
+
+        coVerify(exactly = 1) { repository.loadMore() }
+    }
+
+    @Test
+    fun `loadMoreIfNeeded far from the end is a no-op`() = runTest {
+        val posts = (1..10).map { post(it.toString()) }
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Fresh(posts, 0L))
+
+        val vm = viewModel(hasMore = true)
+        vm.loadMoreIfNeeded("1")
+
+        coVerify(exactly = 0) { repository.loadMore() }
+    }
+
+    @Test
+    fun `loadMoreIfNeeded does nothing when no more pages remain`() = runTest {
+        val posts = (1..6).map { post(it.toString()) }
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Fresh(posts, 0L))
+
+        val vm = viewModel(hasMore = false)
+        vm.loadMoreIfNeeded("6")
+
+        coVerify(exactly = 0) { repository.loadMore() }
     }
 }

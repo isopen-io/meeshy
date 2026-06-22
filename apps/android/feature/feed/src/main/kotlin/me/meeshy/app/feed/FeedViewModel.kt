@@ -24,6 +24,8 @@ data class FeedUiState(
     val isSyncing: Boolean = false,
     val showSkeleton: Boolean = false,
     val errorMessage: String? = null,
+    val hasMore: Boolean = true,
+    val isLoadingMore: Boolean = false,
 )
 
 @HiltViewModel
@@ -47,10 +49,37 @@ class FeedViewModel @Inject constructor(
                     },
                 ),
                 sessionRepository.currentUser,
-            ) { result, user -> result to user }
-                .collect { (result, user) ->
-                    _state.update { it.applyResult(result, user, config.socketUrl) }
+                postRepository.feedHasMore,
+            ) { result, user, hasMore -> Triple(result, user, hasMore) }
+                .collect { (result, user, hasMore) ->
+                    _state.update { it.applyResult(result, user, config.socketUrl).copy(hasMore = hasMore) }
                 }
+        }
+    }
+
+    /**
+     * Infinite-scroll trigger (port of FeedViewModel.loadMoreIfNeeded): once the
+     * given post is within [LOAD_MORE_THRESHOLD] of the tail and more pages remain,
+     * fetch the next page. Re-entrancy is guarded by [FeedUiState.isLoadingMore];
+     * failures are swallowed so the user can simply scroll again.
+     */
+    fun loadMoreIfNeeded(postId: String) {
+        val current = _state.value
+        val index = current.posts.indexOfFirst { it.id == postId }
+        if (index < 0 || index < current.posts.size - LOAD_MORE_THRESHOLD) return
+        if (!current.hasMore || current.isLoadingMore) return
+
+        _state.update { it.copy(isLoadingMore = true) }
+        viewModelScope.launch {
+            try {
+                postRepository.loadMore()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Silent: the next scroll re-triggers the fetch.
+            } finally {
+                _state.update { it.copy(isLoadingMore = false) }
+            }
         }
     }
 
@@ -77,6 +106,10 @@ class FeedViewModel @Inject constructor(
                 _state.update { it.copy(errorMessage = e.message) }
             }
         }
+    }
+
+    private companion object {
+        const val LOAD_MORE_THRESHOLD = 5
     }
 }
 
