@@ -40,7 +40,7 @@ jest.mock('@/hooks/use-accessibility', () => ({
 // Mock de react-easy-crop
 const mockOnCropComplete = jest.fn();
 jest.mock('react-easy-crop', () => {
-  const MockCropper = ({ onCropComplete, onCropChange, onZoomChange }: any) => {
+  const MockCropper = ({ onCropComplete, onCropChange, onZoomChange, style }: any) => {
     // Simuler un appel de onCropComplete apres le rendu
     React.useEffect(() => {
       if (onCropComplete) {
@@ -52,7 +52,10 @@ jest.mock('react-easy-crop', () => {
     }, [onCropComplete]);
 
     return (
-      <div data-testid="cropper-mock">
+      <div
+        data-testid="cropper-mock"
+        data-container-bg={style?.containerStyle?.backgroundColor}
+      >
         <button
           data-testid="trigger-crop-change"
           onClick={() => onCropChange?.({ x: 10, y: 10 })}
@@ -257,6 +260,18 @@ describe('AvatarCropDialog', () => {
       // Les valeurs devraient etre a leur etat initial
       expect(screen.getByText('100%')).toBeInTheDocument();
       expect(screen.getByText('0°')).toBeInTheDocument();
+    });
+  });
+
+  describe('Theme / dark mode', () => {
+    it('utilise un token du design system (dark-mode-aware) pour le fond du recadrage, pas un hex fige', () => {
+      render(<AvatarCropDialog {...defaultProps} />);
+
+      const cropper = screen.getByTestId('cropper-mock');
+      const bg = cropper.getAttribute('data-container-bg');
+
+      expect(bg).toBe('var(--gp-background)');
+      expect(bg).not.toMatch(/#[0-9A-Fa-f]{3,8}/);
     });
   });
 
