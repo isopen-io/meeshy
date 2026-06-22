@@ -368,7 +368,7 @@
         "authRequiredTitle": "Authentication required",
         "authRequiredDesc": "You must be logged in to view this link's statistics. Redirecting to the login page...",
         "unauthorizedTitle": "Access denied",
-        "unauthorizedDesc": "You are not authorized to view this link's statistics. Only the creator can access it."
+        "unauthorizedDesc": "You are not authorized to view this link's statistics. Only the creator can access them."
       }
     },
     "v2": {

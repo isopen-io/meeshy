@@ -192,7 +192,7 @@ export default function TrackingLinkDetailsPage() {
       errorIcon = <Activity className="h-16 w-16 text-orange-600 mb-4" />;
     } else if (error === 'unauthorized') {
       errorTitle = t('tracking.errors.unauthorizedTitle', 'Access denied');
-      errorDescription = t('tracking.errors.unauthorizedDesc', 'You are not authorized to view this link\'s statistics. Only the creator can access it.');
+      errorDescription = t('tracking.errors.unauthorizedDesc', 'You are not authorized to view this link\'s statistics. Only the creator can access them.');
       errorIcon = <XCircle className="h-16 w-16 text-red-600 mb-4" />;
     } else if (error === 'not_found') {
       errorTitle = t('tracking.details.linkNotFound', 'Link not found');

@@ -362,13 +362,13 @@
         "deleteFailed": "Erro ao excluir link",
         "urlRequired": "Digite uma URL",
         "invalidUrl": "Digite uma URL válida",
-        "authRequired": "Você precisa estar conectado para ver essas estatísticas",
-        "unauthorized": "Você não está autorizado a ver essas estatísticas",
+        "authRequired": "Você precisa estar conectado para ver estas estatísticas",
+        "unauthorized": "Você não tem autorização para ver estas estatísticas",
         "notFound": "Link de rastreamento não encontrado",
         "authRequiredTitle": "Autenticação necessária",
         "authRequiredDesc": "Você precisa estar conectado para ver as estatísticas deste link. Redirecionando para a página de login...",
         "unauthorizedTitle": "Acesso negado",
-        "unauthorizedDesc": "Você não está autorizado a ver as estatísticas deste link. Apenas o criador pode acessá-lo."
+        "unauthorizedDesc": "Você não tem autorização para ver as estatísticas deste link. Apenas o criador pode acessá-las."
       }
     },
     "v2": {

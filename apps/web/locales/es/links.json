@@ -363,12 +363,12 @@
         "urlRequired": "Por favor ingrese una URL",
         "invalidUrl": "Por favor ingrese una URL válida",
         "authRequired": "Debes iniciar sesión para ver estas estadísticas",
-        "unauthorized": "No estás autorizado para ver estas estadísticas",
+        "unauthorized": "No tienes autorización para ver estas estadísticas",
         "notFound": "Enlace de seguimiento no encontrado",
         "authRequiredTitle": "Autenticación requerida",
         "authRequiredDesc": "Debes iniciar sesión para ver las estadísticas de este enlace. Redirigiendo a la página de inicio de sesión...",
         "unauthorizedTitle": "Acceso denegado",
-        "unauthorizedDesc": "No estás autorizado para ver las estadísticas de este enlace. Solo el creador puede acceder."
+        "unauthorizedDesc": "No tienes autorización para ver las estadísticas de este enlace. Solo el creador puede acceder a ellas."
       }
     },
     "v2": {
