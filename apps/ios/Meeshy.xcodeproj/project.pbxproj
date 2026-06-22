@@ -238,7 +238,6 @@
 		BBLX0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLX0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift */; };
 		BBLY0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLY0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift */; };
 		BBLZ0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLZ0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift */; };
-		MCPB0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/MediaConsumptionProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = MCPB0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MediaConsumptionProgressBar.swift */; };
 		BC20CA996A5E2D0E46BB3F06 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 748FC5520967BD43D7FB9582 /* MessageStore.swift */; };
 		BCNV0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleCallNoticeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCNV0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleCallNoticeView.swift */; };
 		BFMT0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleFooterModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFMT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleFooterModelTests.swift */; };
@@ -863,7 +862,6 @@
 		BBLX0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift; sourceTree = SOURCE_ROOT; };
 		BBLY0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift; sourceTree = SOURCE_ROOT; };
 		BBLZ0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift; sourceTree = SOURCE_ROOT; };
-		MCPB0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MediaConsumptionProgressBar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/MediaConsumptionProgressBar.swift; sourceTree = SOURCE_ROOT; };
 		BC091A1BD89E4244D04EAED9 /* MeeshyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyApp.swift; sourceTree = "<group>"; };
 		BCNV0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleCallNoticeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleCallNoticeView.swift; sourceTree = SOURCE_ROOT; };
 		BDC4F50D912C4CFBA6887850 /* VideoLegacySupport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoLegacySupport.swift; sourceTree = "<group>"; };
@@ -1781,7 +1779,6 @@
 				BBLR0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleReactionsOverlay.swift */,
 				BBLY0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift */,
 				BBLZ0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift */,
-				MCPB0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MediaConsumptionProgressBar.swift */,
 				ABRT0001000100010001F001 /* AudioBubbleRouter.swift */,
 				ACRV0001000100010001F001 /* AudioCarouselView.swift */,
 				BBLX0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift */,
@@ -2656,7 +2653,6 @@
 				BBLR0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleReactionsOverlay.swift in Sources */,
 				BBLY0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift in Sources */,
 				BBLZ0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift in Sources */,
-				MCPB0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/MediaConsumptionProgressBar.swift in Sources */,
 				BBLX0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift in Sources */,
 				BBLRETRY00010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleFailedRetryBar.swift in Sources */,
 				BBLV0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleSystemViews.swift in Sources */,
