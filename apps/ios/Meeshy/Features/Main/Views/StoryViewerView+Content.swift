@@ -1068,6 +1068,74 @@ struct StoryViewersSheet: View {
 /// Extracted from `StoryViewerView.storyCommentsOverlay` (formerly an
 /// `AnyView`) so the deeply-nested comment panel becomes its own
 /// type-metadata unit instead of inflating the viewer's opaque type.
+/// Listing threadé d'UN commentaire racine d'une story : la ligne racine, l'aperçu
+/// auto des 2 premières réponses, le bouton « Voir N autres réponses » / « Masquer »,
+/// et les réponses dépliées. Composant réutilisable extrait de `StoryCommentsOverlayView`
+/// (le rendu est préservé à l'identique) — paramétré par un builder de ligne opaque
+/// (`makeRow`) pour rester agnostique du style de la ligne.
+struct StoryCommentThread: View {
+    let comment: FeedComment
+    let replies: [FeedComment]
+    let isExpanded: Bool
+    let isLoadingReplies: Bool
+    let userLang: String
+    let makeRow: (FeedComment, String) -> StoryCommentRowView
+    let onToggleThread: () -> Void
+
+    var body: some View {
+        makeRow(comment, userLang)
+            .id(comment.id)
+
+        let autoPreview = Array(replies.prefix(2))
+        if !autoPreview.isEmpty && !isExpanded {
+            ForEach(autoPreview) { reply in
+                makeRow(reply, userLang)
+                    .padding(.leading, 32)
+                    .id(reply.id)
+            }
+        }
+
+        if comment.replies > 2 {
+            Button {
+                HapticFeedback.light()
+                onToggleThread()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                    let remaining = max(0, comment.replies - 2)
+                    Text(isExpanded
+                         ? "Masquer"
+                         : "Voir \(remaining) autre\(remaining > 1 ? "s" : "") r\u{00E9}ponse\(remaining > 1 ? "s" : "")")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundColor(StoryCommentRowView.legibleAuthorColor(hex: comment.authorColor))
+                .padding(.leading, 40)
+                .padding(.vertical, 4)
+                .storyOverlayLegible()
+            }
+        }
+
+        if isExpanded {
+            if isLoadingReplies && replies.isEmpty {
+                HStack {
+                    Spacer()
+                    ProgressView().tint(.white.opacity(0.5)).scaleEffect(0.7)
+                    Spacer()
+                }
+                .padding(.leading, 32)
+                .padding(.vertical, 4)
+            }
+
+            ForEach(replies) { reply in
+                makeRow(reply, userLang)
+                    .padding(.leading, 32)
+                    .id(reply.id)
+            }
+        }
+    }
+}
+
 struct StoryCommentsOverlayView: View {
     let storyComments: [FeedComment]
     let storyCommentCount: Int
@@ -1217,57 +1285,15 @@ struct StoryCommentsOverlayView: View {
                                 .padding(.vertical, 4)
                         }
 
-                        makeStoryCommentRow(comment, userLang)
-                            .id(comment.id)
-
-                        let replies = storyCommentRepliesMap[comment.id] ?? []
-                        let autoPreview = Array(replies.prefix(2))
-                        if !autoPreview.isEmpty && !storyCommentExpandedThreads.contains(comment.id) {
-                            ForEach(autoPreview) { reply in
-                                makeStoryCommentRow(reply, userLang)
-                                    .padding(.leading, 32)
-                                    .id(reply.id)
-                            }
-                        }
-
-                        if comment.replies > 2 {
-                            Button {
-                                HapticFeedback.light()
-                                Task { await toggleStoryCommentThread(comment.id) }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: storyCommentExpandedThreads.contains(comment.id) ? "chevron.up" : "chevron.down")
-                                        .font(.system(size: 9, weight: .bold))
-                                    let remaining = max(0, comment.replies - 2)
-                                    Text(storyCommentExpandedThreads.contains(comment.id)
-                                         ? "Masquer"
-                                         : "Voir \(remaining) autre\(remaining > 1 ? "s" : "") r\u{00E9}ponse\(remaining > 1 ? "s" : "")")
-                                        .font(.system(size: 11, weight: .semibold))
-                                }
-                                .foregroundColor(StoryCommentRowView.legibleAuthorColor(hex: comment.authorColor))
-                                .padding(.leading, 40)
-                                .padding(.vertical, 4)
-                                .storyOverlayLegible()
-                            }
-                        }
-
-                        if storyCommentExpandedThreads.contains(comment.id) {
-                            if storyCommentLoadingReplies.contains(comment.id) && replies.isEmpty {
-                                HStack {
-                                    Spacer()
-                                    ProgressView().tint(.white.opacity(0.5)).scaleEffect(0.7)
-                                    Spacer()
-                                }
-                                .padding(.leading, 32)
-                                .padding(.vertical, 4)
-                            }
-
-                            ForEach(replies) { reply in
-                                makeStoryCommentRow(reply, userLang)
-                                    .padding(.leading, 32)
-                                    .id(reply.id)
-                            }
-                        }
+                        StoryCommentThread(
+                            comment: comment,
+                            replies: storyCommentRepliesMap[comment.id] ?? [],
+                            isExpanded: storyCommentExpandedThreads.contains(comment.id),
+                            isLoadingReplies: storyCommentLoadingReplies.contains(comment.id),
+                            userLang: userLang,
+                            makeRow: makeStoryCommentRow,
+                            onToggleThread: { Task { await toggleStoryCommentThread(comment.id) } }
+                        )
                     }
 
                     if isLoadingComments {
@@ -1365,6 +1391,7 @@ extension StoryViewerView {
                 )
                 return FeedComment(
                     id: c.id, author: c.author.name, authorId: c.author.id,
+                    authorUsername: c.author.username,
                     authorAvatarURL: c.author.avatar,
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
@@ -1394,6 +1421,12 @@ extension StoryViewerView {
             onReply: {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                     replyingToStoryComment = comment
+                }
+                // Répondre à une réponse (niveau 2) : la réponse reste plate au niveau 2
+                // (parent racine, cf. submitStoryComment) — on injecte une @mention de
+                // l'auteur ciblé dans le composer pour qu'il soit notifié (`user_mentioned`).
+                if comment.parentId != nil, let username = comment.authorUsername, !username.isEmpty {
+                    emojiToInject = "@\(username) "
                 }
                 HapticFeedback.light()
             },
@@ -1572,6 +1605,7 @@ extension StoryViewerView {
                 }()
                 return FeedComment(
                     id: c.id, author: c.author.name, authorId: c.author.id,
+                    authorUsername: c.author.username,
                     authorAvatarURL: c.author.avatar,
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
