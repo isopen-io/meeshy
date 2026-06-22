@@ -2,7 +2,9 @@
  * Utilitaires pour la détection et gestion des langues
  */
 
+import { detectAll } from 'tinyld';
 import { SUPPORTED_LANGUAGES as SHARED_LANGUAGES } from '@meeshy/shared/utils/languages';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
 export interface Language {
   code: string;
@@ -201,8 +203,28 @@ export function detectBestInterfaceLanguage(): string {
  */
 export function saveUserPreferredLanguage(code: string): void {
   if (typeof window === 'undefined') return;
-  
+
   if (isSupportedLanguage(code)) {
     localStorage.setItem('meeshy-preferred-language', code);
   }
+}
+
+const COMPOSE_MIN_ALPHA = 4;
+const COMPOSE_MIN_ACCURACY = 0.5;
+
+/**
+ * Détecte la langue du message composé (on-device, via tinyld) pour fixer
+ * `originalLanguage` à l'émission. Repli sur `fallback` (langue annoncée /
+ * systemLanguage) si le texte est trop court ou la confiance trop faible.
+ * tinyld renvoie déjà de l'ISO 639-1 ; on normalise par sûreté.
+ */
+export function detectComposeLanguage(text: string, fallback: string): string {
+  const safeFallback = normalizeLanguageCode(fallback) ?? fallback;
+  const cleaned = (text || '').replace(/https?:\/\/\S+/g, ' ');
+  const alpha = (cleaned.match(/\p{L}/gu) || []).length;
+  if (alpha < COMPOSE_MIN_ALPHA) return safeFallback;
+  const ranked = detectAll(cleaned);
+  const top = ranked && ranked[0];
+  if (!top || top.accuracy < COMPOSE_MIN_ACCURACY) return safeFallback;
+  return normalizeLanguageCode(top.lang) ?? safeFallback;
 }
