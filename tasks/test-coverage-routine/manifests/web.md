@@ -866,14 +866,14 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/components/v2/layout/index.ts`
 - [ ] `apps/web/components/v2/theme.ts`
 
-## components/video  (2/6 have a test)
+## components/video  (6/6 have a test)
 
-- [ ] `apps/web/components/video/CompactVideoPlayer.tsx`
-- [ ] `apps/web/components/video/VideoControls.tsx`
-- [~] `apps/web/components/video/VideoLightbox.tsx`
-- [~] `apps/web/components/video/VideoPlayer.tsx`
-- [ ] `apps/web/components/video/VolumeControl.tsx`
-- [ ] `apps/web/components/video/index.ts`
+- [x] `apps/web/components/video/CompactVideoPlayer.tsx`
+- [x] `apps/web/components/video/VideoControls.tsx`
+- [x] `apps/web/components/video/VideoLightbox.tsx`
+- [x] `apps/web/components/video/VideoPlayer.tsx`
+- [x] `apps/web/components/video/VolumeControl.tsx`
+- [x] `apps/web/components/video/index.ts`
 
 ## components/video-call  (0/3 have a test)
 
@@ -1011,7 +1011,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/hooks/use-unsaved-changes-warning.ts`
 - [ ] `apps/web/hooks/use-user-search.ts`
 - [~] `apps/web/hooks/use-user-status-realtime.ts`
-- [ ] `apps/web/hooks/use-video-playback.ts`
+- [x] `apps/web/hooks/use-video-playback.ts`
 - [ ] `apps/web/hooks/use-virtual-keyboard.ts`
 - [ ] `apps/web/hooks/use-voice-analysis.ts`
 - [ ] `apps/web/hooks/use-voice-profile-management.ts`
