@@ -608,6 +608,18 @@ export class MessageReadStatusService {
     receivedBy: Array<{ participantId: string; displayName: string; avatarURL: string | null; receivedAt: Date }>;
     readBy: Array<{ participantId: string; displayName: string; avatarURL: string | null; readAt: Date }>;
     notSeenBy: Array<{ participantId: string; displayName: string; avatarURL: string | null }>;
+    attachmentConsumption: Array<{
+      attachmentId: string;
+      participants: Array<{
+        participantId: string;
+        displayName: string;
+        avatarURL: string | null;
+        lastPlayPositionMs: number | null;
+        listenedComplete: boolean;
+        lastWatchPositionMs: number | null;
+        watchedComplete: boolean;
+      }>;
+    }>;
   }> {
     try {
       const message = await this.prisma.message.findUnique({
@@ -694,6 +706,70 @@ export class MessageReadStatusService {
         }
       }
 
+      // Per-attachment, per-participant media consumption (audio/video positions).
+      // Mirrors the read-receipt detail above: surfaces how far each OTHER
+      // participant listened to an audio / watched a video on this message.
+      // Read straight from AttachmentStatusEntry (per-user rows the gateway
+      // already persists on consumption). Exposed with the same visibility as
+      // receivedBy/readBy — no extra privacy gate (parity with read receipts).
+      const consumptionEntries = await this.prisma.attachmentStatusEntry.findMany({
+        where: {
+          messageId,
+          participantId: { not: message.senderId },
+        },
+        select: {
+          attachmentId: true,
+          participantId: true,
+          lastPlayPositionMs: true,
+          listenedComplete: true,
+          lastWatchPositionMs: true,
+          watchedComplete: true,
+        },
+      });
+
+      const consumptionByAttachment = new Map<
+        string,
+        Array<{
+          participantId: string;
+          displayName: string;
+          avatarURL: string | null;
+          lastPlayPositionMs: number | null;
+          listenedComplete: boolean;
+          lastWatchPositionMs: number | null;
+          watchedComplete: boolean;
+        }>
+      >();
+
+      for (const entry of consumptionEntries) {
+        const participant = participantById.get(entry.participantId);
+        if (!participant) continue; // orphan entry — participant deleted/banned/inactive
+
+        // Skip rows with no audio/video signal (e.g. download-only or image
+        // entries): nothing to display as playback progress.
+        const hasMediaSignal =
+          entry.lastPlayPositionMs != null ||
+          entry.listenedComplete ||
+          entry.lastWatchPositionMs != null ||
+          entry.watchedComplete;
+        if (!hasMediaSignal) continue;
+
+        const list = consumptionByAttachment.get(entry.attachmentId) ?? [];
+        list.push({
+          participantId: entry.participantId,
+          displayName: participant.displayName,
+          avatarURL: participant.avatar ?? participant.user?.avatar ?? null,
+          lastPlayPositionMs: entry.lastPlayPositionMs ?? null,
+          listenedComplete: entry.listenedComplete,
+          lastWatchPositionMs: entry.lastWatchPositionMs ?? null,
+          watchedComplete: entry.watchedComplete,
+        });
+        consumptionByAttachment.set(entry.attachmentId, list);
+      }
+
+      const attachmentConsumption = Array.from(consumptionByAttachment.entries()).map(
+        ([attachmentId, participants]) => ({ attachmentId, participants })
+      );
+
       // Compute not-seen participants (active but no cursor matching this message)
       const receivedIds = new Set(receivedBy.map(r => r.participantId));
       const readIds = new Set(readBy.map(r => r.participantId));
@@ -718,6 +794,7 @@ export class MessageReadStatusService {
         receivedBy,
         readBy,
         notSeenBy,
+        attachmentConsumption,
       };
     } catch (error) {
       logger.error(
