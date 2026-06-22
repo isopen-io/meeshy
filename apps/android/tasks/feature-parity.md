@@ -153,6 +153,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       freshness watermark — port of `FeedViewModel.loadMoreIfNeeded`)
 - [ ] Pending: Stories / Calls slices, feed new-posts banner + post detail, reactions UI polish
       optimistic like toggle (`isLikedByMe`), image collage, like/comment/repost stats
+- [~] `:feature:stories` — story **tray** end-to-end : `toStoryGroups` (sdk-core,
+      port fidèle = filtre STORY, groupe par auteur, tri stories asc, tri groupes
+      moi→non-vus→récent desc) + `hasUnviewed`/`latestStory`/`isExpired` (fallback
+      21h)/`isFullyExpired` ; `StoryTrayBuilder` (self vs others, filtre groupes
+      expirés, URL avatar résolue) ; `StoriesViewModel` ; `StoryTray` carrousel
+      d'anneaux (anneau dégradé accent si non-vu, gris sinon, badge + sur sa story) ;
+      **viewer minimal** `StoryViewerScreen` (barres de progression segmentées,
+      tap-avance/recule/ferme, auto-advance 5s, texte Prisme, média de fond, mark
+      viewed) câblé via route `story/{userId}` (+ deep link `meeshy://story/...`).
+      19 tests verts. Pending : count-dots, composer/publish, reactions/comments
+      overlay, viewers sheet, SWR/Room backing du tray, prefetch média.
+- [ ] Pending: Stories composer + viewer richness, Calls slice, feed pagination +
+      post detail, reactions UI polish
 - [ ] Pending: Stories / Calls slices, feed pagination + post detail
 - [x] Reactions UI: usage-ordered quick-strip (`EmojiQuickStrip`) + full categorised picker
       (`EmojiFullPicker`) wired into chat long-press sheet
@@ -307,7 +320,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Per-language flag / native name / colour metadata (~40 languages)
 
 ## E. Stories
-- [ ] Story tray carousel (my-story button, rings, count dots, upload progress + retry/cancel)
+- [~] Story tray carousel : carrousel d'anneaux + bouton « ma story » (badge +) +
+      ring non-vu (dégradé accent) / vu (gris) done ; count dots, progression
+      d'upload + retry/cancel pending (`:feature:stories` `StoryTray`)
 - [ ] Multi-slide composer (≤10 slides; add/remove/duplicate/reorder; slide mini-preview strip)
 - [ ] 9:16 canvas with pinch-zoom + drag-pan; FAB + bottom-band toolbar (Contenu/Effets)
 - [ ] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,

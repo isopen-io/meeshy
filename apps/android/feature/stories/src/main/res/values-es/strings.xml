@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_my_story">Tu historia</string>
+    <string name="stories_add">Añadir</string>
+    <string name="stories_open">Abrir la historia de %1$s</string>
+    <string name="stories_viewer_close">Cerrar</string>
+    <string name="stories_viewer_next">Historia siguiente</string>
+    <string name="stories_viewer_previous">Historia anterior</string>
+    <string name="stories_translated">Traducido</string>
+    <string name="stories_empty">No hay ninguna historia</string>
+</resources>

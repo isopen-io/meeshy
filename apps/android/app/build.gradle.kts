@@ -52,6 +52,7 @@ dependencies {
     implementation(project(":feature:notifications"))
     implementation(project(":feature:settings"))
     implementation(project(":feature:contacts"))
+    implementation(project(":feature:stories"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
