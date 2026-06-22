@@ -43,9 +43,9 @@ struct FeedView: View {
     // injected by `iPadRootView`'s environment.
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
-    @State private var showStoryViewer = false
-    @State private var selectedStoryUserId: String?
-    @State private var storyViewerSingleGroup = false
+    // Présentation unifiée du viewer de story (même coordinator que la story tray
+    // et que `ThemedFeedOverlay` côté iPhone). Injecté par `iPadRootView`.
+    @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @StateObject var viewModel = FeedViewModel()
     /// Élit le réel le plus centré dans le viewport et pilote sa lecture muette
     /// (source UNIQUE de "quel réel joue"). Call-aware via son init par défaut.
@@ -448,13 +448,25 @@ struct FeedView: View {
             // reserves `CollapsibleHeaderMetrics.expandedHeight` of top padding,
             // so on iPad it simply fills the space that was previously left empty.
             VStack(spacing: 0) {
+                // Compact story trail integrated inside the header (accessory
+                // slot) — reveals as the full-size trail scrolls up under it.
                 CollapsibleHeader(
                     title: "Meeshy Feed",
                     scrollOffset: headerScrollOffset,
                     showBackButton: false,
                     titleColor: theme.textPrimary,
                     backArrowColor: MeeshyColors.indigo500,
-                    backgroundColor: theme.backgroundPrimary
+                    backgroundColor: theme.backgroundPrimary,
+                    accessory: {
+                        AnyView(
+                            // Lancement unifié via StoryViewerCoordinator (cf.
+                            // PinnedStoryTrailBand.presentStory) — même chemin que la trail des chats.
+                            PinnedStoryTrailBand(
+                                viewModel: storyViewModel,
+                                scrollOffset: headerScrollOffset
+                            )
+                        )
+                    }
                 )
                 Spacer()
             }
@@ -793,6 +805,15 @@ struct FeedView: View {
             moodLookup: { userId in
                 (emoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
                  tapHandler: statusViewModel.moodTapHandler(for: userId))
+            },
+            authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),
+            onViewAuthorStory: {
+                // Parité iPhone (`ThemedFeedOverlay`) : toucher l'avatar d'un auteur
+                // qui a une story ouvre SA story via le coordinator unique. Sans ce
+                // câblage, l'anneau de story et le tap étaient inertes sur iPad.
+                storyViewerCoordinator.present(
+                    StoryViewerRequest(id: post.authorId, startAtFirstUnviewed: true, singleGroup: true)
+                )
             }
         )
         .equatable()
@@ -839,12 +860,10 @@ struct FeedView: View {
                     Color.clear.frame(height: 0).id("feed-top")
 
                     // Story tray — same component used by the conversation list
-                    // and the iPhone feed so stories load identically here.
-                    StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
-                        selectedStoryUserId = userId
-                        storyViewerSingleGroup = false
-                        showStoryViewer = true
-                    })
+                    // and the iPhone feed so stories load identically here. Le tap
+                    // ouvre le viewer via StoryViewerCoordinator (chemin unique),
+                    // exactement comme la liste de conversations.
+                    StoryTrayView(viewModel: storyViewModel)
 
                     // Composer placeholder
                     composerPlaceholder
@@ -1090,26 +1109,10 @@ struct FeedView: View {
                 }
             }
         }
-        // Story viewer opened from the tray (mirror of the iPhone feed overlay).
-        // fullScreenCover creates a fresh environment, so re-inject the objects
-        // StoryViewerContainer / its inner SharePickerView read.
-        .fullScreenCover(isPresented: $showStoryViewer) {
-            StoryViewerContainer(
-                viewModel: storyViewModel,
-                userId: selectedStoryUserId,
-                isPresented: $showStoryViewer,
-                onReplyToStory: { replyContext in
-                    showStoryViewer = false
-                    router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
-                },
-                singleGroup: storyViewerSingleGroup,
-                startAtFirstUnviewed: true,
-                presentationSource: "iPadFeed"
-            )
-            .environmentObject(router)
-            .environmentObject(statusViewModel)
-            .environmentObject(conversationListViewModel)
-        }
+        // Story viewer présentation : unifiée via StoryViewerCoordinator au
+        // niveau root (`.fullScreenCover(item:)`). L'ancien cover local
+        // `(isPresented:)` + `selectedStoryUserId` séparé provoquait une capture
+        // périmée de l'uid (écran noir « story introuvable »). Supprimé.
         .sheet(isPresented: $showComposerLanguagePicker) {
             AudioLanguagePickerView(
                 selectedLocale: Binding(

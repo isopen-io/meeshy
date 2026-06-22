@@ -33,6 +33,9 @@ function createMockPrisma() {
     friendRequest: {
       findMany: jest.fn(),
     },
+    communityMember: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   } as any;
 }
 
@@ -275,6 +278,20 @@ describe('SocialEventsHandler', () => {
       expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
       expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.STORY_CREATED, { story });
+    });
+
+    it('should fan a COMMUNITY story to community co-members + author (not friends)', async () => {
+      mockPrisma.communityMember.findMany
+        .mockResolvedValueOnce([{ communityId: 'c1' }])
+        .mockResolvedValueOnce([{ userId: 'co-1' }]);
+      const story = createMockPost({ id: 'story-2', type: 'STORY', visibility: 'COMMUNITY' });
+
+      await handler.broadcastStoryCreated(story, AUTHOR_ID);
+
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed('co-1'));
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
+      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_1));
+      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
     });
   });
 

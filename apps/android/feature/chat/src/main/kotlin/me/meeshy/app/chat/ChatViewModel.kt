@@ -20,10 +20,13 @@ import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.EmojiCatalog
+import me.meeshy.sdk.model.EmojiUsageRanker
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -48,6 +51,8 @@ data class ChatUiState(
     val conversationTitle: String? = null,
     val accentColorHex: String? = null,
     val actionMessageId: String? = null,
+    val emojiPickerMessageId: String? = null,
+    val quickReactions: List<String> = EmojiCatalog.defaultQuickReactions,
     val editingMessageId: String? = null,
     val replyingToMessageId: String? = null,
     val ownReactions: Map<String, Set<String>> = emptyMap(),
@@ -65,6 +70,7 @@ class ChatViewModel @Inject constructor(
     private val conversationRepository: ConversationRepository,
     private val sessionRepository: SessionRepository,
     private val reactionRepository: ReactionRepository,
+    private val emojiUsageStore: EmojiUsageStore,
     private val messageSocketManager: MessageSocketManager,
     private val workManager: WorkManager,
     private val config: MeeshyConfig,
@@ -88,6 +94,17 @@ class ChatViewModel @Inject constructor(
 
     init {
         viewModelScope.launch { markConversationRead() }
+
+        viewModelScope.launch {
+            emojiUsageStore.usage.collect { usage ->
+                val ordered = EmojiUsageRanker.topEmojis(
+                    usage = usage,
+                    defaults = EmojiCatalog.defaultQuickReactions,
+                    count = QUICK_REACTION_COUNT,
+                )
+                _state.update { it.copy(quickReactions = ordered) }
+            }
+        }
 
         viewModelScope.launch {
             conversationRepository.conversationStream(conversationId).collect { conversation ->
@@ -329,11 +346,20 @@ class ChatViewModel @Inject constructor(
         _state.update { it.copy(actionMessageId = null) }
     }
 
+    fun openEmojiPicker(messageId: String) {
+        _state.update { it.copy(emojiPickerMessageId = messageId, actionMessageId = null) }
+    }
+
+    fun dismissEmojiPicker() {
+        _state.update { it.copy(emojiPickerMessageId = null) }
+    }
+
     fun toggleReaction(messageId: String, emoji: String) {
         val mine = ownReactions.value[messageId] ?: emptySet()
         val isAdding = emoji !in mine
+        if (isAdding) emojiUsageStore.record(emoji)
         ownReactions.update { it + (messageId to if (isAdding) mine + emoji else mine - emoji) }
-        _state.update { it.copy(actionMessageId = null) }
+        _state.update { it.copy(actionMessageId = null, emojiPickerMessageId = null) }
         viewModelScope.launch {
             try {
                 if (messageRepository.toggleReactionOptimistic(messageId, emoji, isAdding)) {
@@ -464,6 +490,7 @@ class ChatViewModel @Inject constructor(
 
     companion object {
         const val CONVERSATION_ID_ARG: String = "conversationId"
+        private const val QUICK_REACTION_COUNT = 8
         private const val TYPING_TIMEOUT_MS = 5_000L
         private const val TYPING_REEMIT_MS = 3_000L
         private const val TYPING_IDLE_MS = 3_000L

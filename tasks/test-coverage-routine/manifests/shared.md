@@ -50,7 +50,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `packages/shared/types/audio-transcription.ts`
 - [ ] `packages/shared/types/community.ts`
 - [x] `packages/shared/types/conversation.ts`
-- [ ] `packages/shared/types/delivery-queue.ts`
+- [x] `packages/shared/types/delivery-queue.ts`
 - [ ] `packages/shared/types/dma.ts`
 - [ ] `packages/shared/types/encryption.ts`
 - [~] `packages/shared/types/errors.ts`
@@ -101,15 +101,15 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 ## utils  (11/13 have a test)
 
 - [x] `packages/shared/utils/attachment-validators.ts`
-- [~] `packages/shared/utils/call-summary.ts`
+- [x] `packages/shared/utils/call-summary.ts`
 - [x] `packages/shared/utils/client-message-id.ts`
 - [x] `packages/shared/utils/conversation-helpers.ts`
 - [~] `packages/shared/utils/email-validator.ts`
 - [x] `packages/shared/utils/errors.ts`
 - [ ] `packages/shared/utils/index.ts`
 - [~] `packages/shared/utils/language-normalize.ts`
-- [~] `packages/shared/utils/languages.ts`
+- [x] `packages/shared/utils/languages.ts`
 - [~] `packages/shared/utils/mention-parser.ts`
 - [x] `packages/shared/utils/notification-strings.ts`
-- [~] `packages/shared/utils/sender-identity.ts`
+- [x] `packages/shared/utils/sender-identity.ts`
 - [~] `packages/shared/utils/validation.ts`

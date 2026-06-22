@@ -143,6 +143,23 @@ export interface ImageVariant {
 }
 
 /**
+ * The requesting participant's own playback progress for a media attachment,
+ * derived from their `AttachmentStatusEntry`. Surfaced on the attachment
+ * payload (per-request) so a client can seed the in-bubble waveform tint
+ * (audio) / progress bar (video) on load. @see schema.prisma AttachmentStatusEntry
+ */
+export interface CurrentUserAttachmentConsumption {
+  /** Last audio playback position in ms (null = never played / unknown). */
+  readonly lastPlayPositionMs: number | null;
+  /** Whether the current user listened to the audio to completion. */
+  readonly listenedComplete: boolean;
+  /** Last video playback position in ms (null = never watched / unknown). */
+  readonly lastWatchPositionMs: number | null;
+  /** Whether the current user watched the video to completion. */
+  readonly watchedComplete: boolean;
+}
+
+/**
  * Attachement de message
  * Aligned with schema.prisma MessageAttachment model
  */
@@ -219,6 +236,17 @@ export interface Attachment {
   readonly viewedCount: number;
   readonly downloadedCount: number;
   readonly consumedCount: number;    // Listened or watched
+
+  // ===== CURRENT-USER CONSUMPTION (per-request, cross-device sync) =====
+  /**
+   * The requesting participant's OWN media playback progress, surfaced so a
+   * client can seed the in-bubble waveform tint (audio) / progress bar (video)
+   * the moment a conversation loads — without waiting for the detail sheet.
+   * `null` when the current user has never consumed this attachment (or when
+   * the payload is a broadcast with no participant context).
+   * Mirror of `currentUserReactions`. @see AttachmentStatusEntry in schema.prisma
+   */
+  readonly currentUserConsumption?: CurrentUserAttachmentConsumption | null;
 
   // ===== ENCRYPTION =====
   // Note: encryptionMode is only on Conversation, not Attachment

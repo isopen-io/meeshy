@@ -8,6 +8,7 @@ import type { Server as SocketIOServer, Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { getCommunityCoMemberIds } from '../../services/posts/communityVisibility';
 import type {
   Post,
   PostComment,
@@ -25,6 +26,7 @@ import type {
   CommentLikedEventData,
   PostTranslationUpdatedEventData,
   CommentTranslationUpdatedEventData,
+  CommentMediaUpdatedEventData,
 } from '@meeshy/shared/types/post';
 
 // enhancedLogger (Pino) sort en prod ; le `logger` Winston de server.ts est
@@ -136,6 +138,10 @@ export class SocialEventsHandler {
     visibility: string,
     visibilityUserIds: string[] = []
   ): Promise<string[]> {
+    if (visibility === 'COMMUNITY') {
+      return getCommunityCoMemberIds(this.prisma, authorId);
+    }
+
     const friendIds = await this.getFriendIds(authorId);
 
     switch (visibility) {
@@ -326,6 +332,16 @@ export class SocialEventsHandler {
   async broadcastCommentTranslationUpdated(data: CommentTranslationUpdatedEventData, postAuthorId: string): Promise<void> {
     const friendIds = await this.getFriendIds(postAuthorId);
     this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, data);
+  }
+
+  /**
+   * Diffuse `comment:media-updated` (transcription/traductions audio d'un média de
+   * commentaire prêtes) à la même audience que `comment:translation-updated` :
+   * l'auteur du post et ses amis.
+   */
+  async broadcastCommentMediaUpdated(data: CommentMediaUpdatedEventData, postAuthorId: string): Promise<void> {
+    const friendIds = await this.getFriendIds(postAuthorId);
+    this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.COMMENT_MEDIA_UPDATED, data);
   }
 
   // ==============================================

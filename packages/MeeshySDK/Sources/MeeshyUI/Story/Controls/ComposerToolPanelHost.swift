@@ -157,13 +157,13 @@ struct ComposerToolPanelHost: View {
 
     private static func title(for tool: StoryToolMode) -> String {
         switch tool {
-        case .media:    return "Médias"
-        case .audio:    return "Son"
-        case .drawing:  return "Dessin"
-        case .text:     return "Texte"
-        case .texture:  return "Fond"
-        case .filters:  return "Effets"
-        case .timeline: return "Timeline"
+        case .media:    return String(localized: "story.tool.media", defaultValue: "Médias", bundle: .module)
+        case .audio:    return String(localized: "story.tool.audio", defaultValue: "Son", bundle: .module)
+        case .drawing:  return String(localized: "story.tool.drawing", defaultValue: "Dessin", bundle: .module)
+        case .text:     return String(localized: "story.tool.text", defaultValue: "Texte", bundle: .module)
+        case .texture:  return String(localized: "story.tool.texture", defaultValue: "Fond", bundle: .module)
+        case .filters:  return String(localized: "story.tool.filters", defaultValue: "Effets", bundle: .module)
+        case .timeline: return String(localized: "story.tool.timeline", defaultValue: "Timeline", bundle: .module)
         }
     }
 
@@ -299,7 +299,9 @@ struct ComposerToolPanelHost: View {
                                     HStack(spacing: 6) {
                                         Image(systemName: media.kind == .image ? "photo.fill" : "video.fill")
                                             .font(.system(size: 14))
-                                        Text(media.kind == .image ? "Image" : "Vidéo")
+                                        Text(media.kind == .image
+                                             ? String(localized: "story.media.image", defaultValue: "Image", bundle: .module)
+                                             : String(localized: "story.media.video", defaultValue: "Vidéo", bundle: .module))
                                             .font(.system(size: 13, weight: .semibold))
                                     }
                                     .foregroundColor(primaryText)
@@ -377,10 +379,14 @@ struct ComposerToolPanelHost: View {
 
             // Type + role
             VStack(alignment: .leading, spacing: 1) {
-                Text(isImage ? "Image" : "Vidéo")
+                Text(isImage
+                     ? String(localized: "story.media.image", defaultValue: "Image", bundle: .module)
+                     : String(localized: "story.media.video", defaultValue: "Vidéo", bundle: .module))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(primaryText)
-                Text(isBg ? "Fond" : "Premier plan")
+                Text(isBg
+                     ? String(localized: "story.media.background", defaultValue: "Fond", bundle: .module)
+                     : String(localized: "story.media.foreground", defaultValue: "Premier plan", bundle: .module))
                     .font(.system(size: 9, weight: .medium))
                     .foregroundColor(isBg ? MeeshyColors.indigo400 : secondaryText)
             }
@@ -393,29 +399,31 @@ struct ComposerToolPanelHost: View {
                 mediaActionBtn(
                     icon: isBg ? "square.3.layers.3d.top.filled" : "square.3.layers.3d.bottom.filled",
                     color: isBg ? MeeshyColors.indigo400 : actionTint,
-                    tip: isBg ? "Premier plan" : "Fond"
+                    tip: isBg
+                        ? String(localized: "story.media.foreground", defaultValue: "Premier plan", bundle: .module)
+                        : String(localized: "story.media.background", defaultValue: "Fond", bundle: .module)
                 ) {
                     viewModel.toggleBackground(id: media.id)
                 }
 
                 // Edit
-                mediaActionBtn(icon: "pencil", color: actionTint, tip: "Éditer") {
+                mediaActionBtn(icon: "pencil", color: actionTint, tip: String(localized: "common.edit", defaultValue: "Éditer", bundle: .module)) {
                     onEditMedia?(media.id)
                 }
 
                 // Timeline
-                mediaActionBtn(icon: "timeline.selection", color: actionTint, tip: "Timeline") {
+                mediaActionBtn(icon: "timeline.selection", color: actionTint, tip: String(localized: "story.tool.timeline", defaultValue: "Timeline", bundle: .module)) {
                     viewModel.selectedElementId = media.id
                     onShowInTimeline?()
                 }
 
                 // Duplicate
-                mediaActionBtn(icon: "doc.on.doc", color: actionTint, tip: "Dupliquer") {
+                mediaActionBtn(icon: "doc.on.doc", color: actionTint, tip: String(localized: "common.duplicate", defaultValue: "Dupliquer", bundle: .module)) {
                     viewModel.duplicateElement(id: media.id)
                 }
 
                 // Delete
-                mediaActionBtn(icon: "trash", color: .red.opacity(0.8), tip: "Supprimer") {
+                mediaActionBtn(icon: "trash", color: .red.opacity(0.8), tip: String(localized: "common.delete", defaultValue: "Supprimer", bundle: .module)) {
                     viewModel.deleteElement(id: media.id)
                     HapticFeedback.medium()
                 }

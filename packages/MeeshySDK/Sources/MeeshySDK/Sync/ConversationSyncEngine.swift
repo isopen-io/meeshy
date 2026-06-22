@@ -1101,10 +1101,18 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             await recomputeTotalUnread()
         }
 
-        // Update delivery status of own messages in the message cache
+        // Update delivery status of own messages in the message cache.
+        // WhatsApp-style all-or-nothing: the double-gray "delivered" / indigo
+        // "read" indicator must represent EVERY recipient, never a single member
+        // of a group. `summary.totalMembers` is the active recipient count
+        // (sender excluded); a 0 denominator falls back to legacy "any > 0" so
+        // 1:1 keeps working.
         let summary = event.summary
-        let newStatus: MeeshyMessage.DeliveryStatus = summary.readCount > 0 ? .read
-            : summary.deliveredCount > 0 ? .delivered : .sent
+        let newStatus = DeliveryStatusResolver.fromCounts(
+            deliveredCount: summary.deliveredCount,
+            readCount: summary.readCount,
+            recipientCount: summary.totalMembers
+        )
 
         await cache.messages.update(for: event.conversationId) { messages in
             Self.applyReadReceipt(
@@ -1253,6 +1261,18 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         // from a stale `conversation:unread-updated` broadcast or from a
         // REST refresh that ran against the buggy server fallback.
         Task {
+            // Re-check the conversation is STILL the open one before applying the
+            // defensive zero. A rapid open→close
+            // (setCurrentlyOpenConversation("x") then (nil)) could otherwise let
+            // this deferred zero-write land after — and clobber — a fresh
+            // `conversation:unread-updated` that legitimately arrived once the
+            // conversation was no longer open. Guarding here keeps the
+            // pass-through restore correct (see ConversationSyncEngineTests
+            // .test_setCurrentlyOpenConversation_nil_restoresNormalPassThrough).
+            guard self.currentlyOpenConversationId == id else {
+                await self.recomputeTotalUnread()
+                return
+            }
             await self.cache.conversations.update(for: "list") { conversations in
                 var updated = conversations
                 if let idx = updated.firstIndex(where: { $0.id == id }) {

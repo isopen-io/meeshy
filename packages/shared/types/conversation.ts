@@ -150,6 +150,15 @@ export interface Message {
   readonly readByAllAt?: Date;
   readonly deliveredCount: number;
   readonly readCount: number;
+  /**
+   * Server-authoritative count of ACTIVE recipients (conversation participants
+   * excluding this message's sender) — the denominator for the all-or-nothing
+   * delivery indicator. Computed per message by the REST messages route from
+   * the active-participant set. Optional: absent on payloads that do not
+   * compute it (e.g. socket-constructed messages), where clients fall back to
+   * their local member count.
+   */
+  readonly recipientCount?: number;
 
   // ===== REACTION SUMMARY (denormalized) =====
   readonly reactionSummary?: Record<string, number>;

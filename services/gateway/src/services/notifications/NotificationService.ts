@@ -1290,6 +1290,9 @@ export class NotificationService {
         avatar: reactor.avatar,
       },
 
+      // postId/commentId vivent dans context (cible de navigation = contexte
+      // central de la notif). Ils sont désormais exposés par le schema de
+      // réponse (notificationContextSchema) — plus de strip côté REST.
       context: {
         postId: params.postId,
         commentId: params.commentId,
@@ -2978,10 +2981,49 @@ export class NotificationService {
       this.prisma.notification.count({ where }),
     ]);
 
+    const withFreshAvatars = await this.overlayLiveActorAvatars(notifications);
+
     return {
-      notifications: notifications.map((n) => this.formatNotification(n)),
+      notifications: withFreshAvatars.map((n) => this.formatNotification(n)),
       total,
     };
+  }
+
+  /**
+   * `Notification.actor` is a frozen JSON snapshot captured at creation time,
+   * so its `avatar` URL becomes a dead link as soon as the actor changes their
+   * avatar (old file deleted) — producing recurring 404s when `/notifications`
+   * renders. The avatar is a presentation asset, not historical content: it
+   * must always reflect the actor's current avatar. Re-resolve each distinct
+   * actor's avatar live from the User table in a single batched query, then
+   * overlay it onto each notification. Actors with no live record (e.g. a
+   * deleted account) keep their snapshot untouched.
+   */
+  private async overlayLiveActorAvatars(notifications: any[]): Promise<any[]> {
+    const actorIds = [
+      ...new Set(
+        notifications
+          .map((n) => n.actor?.id)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    ];
+    if (actorIds.length === 0) {
+      return notifications;
+    }
+
+    const liveUsers = await this.prisma.user.findMany({
+      where: { id: { in: actorIds } },
+      select: { id: true, avatar: true },
+    });
+    const liveAvatarById = new Map(liveUsers.map((u) => [u.id, u.avatar ?? null]));
+
+    return notifications.map((n) => {
+      const actorId = n.actor?.id;
+      if (!actorId || !liveAvatarById.has(actorId)) {
+        return n;
+      }
+      return { ...n, actor: { ...n.actor, avatar: liveAvatarById.get(actorId) ?? null } };
+    });
   }
 
   /**

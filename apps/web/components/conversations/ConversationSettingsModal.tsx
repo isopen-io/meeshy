@@ -571,7 +571,7 @@ export function ConversationSettingsModal({
               </Avatar>
               <div className="flex-1 min-w-0 overflow-hidden">
                 <SheetTitle className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent leading-tight break-words" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
-                  {t('conversationDetails.title') || 'Paramètres'}
+                  {t('conversationDetails.title', 'Conversation details')}
                 </SheetTitle>
                 <SheetDescription
                   className={cn(
@@ -580,7 +580,7 @@ export function ConversationSettingsModal({
                   )}
                   style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                 >
-                  {conversation.title || t('conversationDetails.conversation') || 'Conversation'}
+                  {conversation.title || t('conversationDetails.conversation', 'Conversation')}
                 </SheetDescription>
               </div>
             </motion.div>
@@ -634,7 +634,7 @@ export function ConversationSettingsModal({
                   >
                     <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2 min-w-0">
                       <FolderOpen className="h-4 w-4 flex-shrink-0" />
-                      <span className="truncate">{t('conversationDetails.organization') || 'Organisation'}</span>
+                      <span className="truncate">{t('conversationDetails.organization', 'Organization')}</span>
                     </h3>
 
                     <div className="space-y-3 min-w-0">
@@ -656,9 +656,9 @@ export function ConversationSettingsModal({
                             )} />
                           </div>
                           <div className="min-w-0">
-                            <p className="font-semibold text-sm truncate">{t('conversationHeader.pin') || 'Épingler'}</p>
+                            <p className="font-semibold text-sm truncate">{t('conversationHeader.pin', 'Pin')}</p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                              {t('conversationDetails.pinDescription') || 'Garder en haut de la liste'}
+                              {t('conversationDetails.pinDescription', 'Keep at top of list')}
                             </p>
                           </div>
                         </div>
@@ -688,9 +688,9 @@ export function ConversationSettingsModal({
                             )} />
                           </div>
                           <div className="min-w-0">
-                            <p className="font-semibold text-sm truncate">{t('conversationHeader.mute') || 'Silencieux'}</p>
+                            <p className="font-semibold text-sm truncate">{t('conversationHeader.mute', 'Mute notifications')}</p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                              {t('conversationDetails.muteDescription') || 'Désactiver les notifications'}
+                              {t('conversationDetails.muteDescription', 'Disable notifications')}
                             </p>
                           </div>
                         </div>
@@ -720,9 +720,9 @@ export function ConversationSettingsModal({
                             )} />
                           </div>
                           <div className="min-w-0">
-                            <p className="font-semibold text-sm truncate">{t('conversationHeader.archive') || 'Archiver'}</p>
+                            <p className="font-semibold text-sm truncate">{t('conversationHeader.archive', 'Archive')}</p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                              {t('conversationDetails.archiveDescription') || 'Masquer de la liste principale'}
+                              {t('conversationDetails.archiveDescription', 'Hide from main list')}
                             </p>
                           </div>
                         </div>
@@ -746,10 +746,10 @@ export function ConversationSettingsModal({
                   >
                     <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2 min-w-0">
                       <Sparkles className="h-4 w-4 flex-shrink-0" />
-                      <span className="truncate">{t('conversationDetails.customization') || 'Personnalisation'}</span>
+                      <span className="truncate">{t('conversationDetails.customization', 'Customization')}</span>
                     </h3>
 
-                    <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">Chargement...</div>}>
+                    <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">{t('conversationDetails.loading', 'Loading...')}</div>}>
                       <div className="space-y-4 min-w-0">
                         {/* Tags personnels */}
                         <div className="space-y-2 p-4 rounded-xl backdrop-blur-xl bg-gradient-to-br from-green-50/80 to-emerald-50/80 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200/50 dark:border-green-800/30 min-w-0">
@@ -777,7 +777,7 @@ export function ConversationSettingsModal({
                           <div className="flex items-center gap-2 mb-2 min-w-0">
                             <Smile className="h-4 w-4 text-amber-700 dark:text-amber-300 flex-shrink-0" />
                             <label className="text-sm font-medium text-amber-900 dark:text-amber-100 truncate">
-                              {t('conversationDetails.reaction') || 'Réaction'}
+                              {t('conversationDetails.reaction', 'Reaction')}
                             </label>
                             <TooltipProvider>
                               <Tooltip>
@@ -785,7 +785,7 @@ export function ConversationSettingsModal({
                                   <Info className="h-3.5 w-3.5 text-amber-700/60 dark:text-amber-300/60 cursor-help flex-shrink-0" />
                                 </TooltipTrigger>
                                 <TooltipContent side="right" className="max-w-xs">
-                                  <p className="text-xs break-words">{t('conversationDetails.reactionTooltip') || 'Choisissez une réaction rapide pour cette conversation'}</p>
+                                  <p className="text-xs break-words">{t('conversationDetails.reactionTooltip', 'Add an emoji reaction to this conversation, visible only to you.')}</p>
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
@@ -819,7 +819,7 @@ export function ConversationSettingsModal({
                             <Input
                               value={reaction && !['❤️', '👍', '😊', '🎉', '🔥', '⭐'].includes(reaction) ? reaction : ''}
                               onChange={(e) => setReaction(e.target.value.slice(0, 4))}
-                              placeholder={t('conversationDetails.customReactionPlaceholder') || '🎯 Personnalisée'}
+                              placeholder={t('conversationDetails.customReactionPlaceholder', '🎯 Custom')}
                               className="h-9 text-center text-lg backdrop-blur-xl bg-white/60 dark:bg-gray-800/60 border-amber-200/50 dark:border-amber-800/30 w-32"
                               maxLength={4}
                             />
@@ -882,10 +882,10 @@ export function ConversationSettingsModal({
                   >
                     <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2 min-w-0">
                       <Languages className="h-4 w-4 flex-shrink-0" />
-                      <span className="truncate">{t('conversationDetails.activity') || 'Activité'}</span>
+                      <span className="truncate">{t('conversationDetails.activity', 'Activity')}</span>
                     </h3>
 
-                    <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">Chargement...</div>}>
+                    <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">{t('conversationDetails.loading', 'Loading...')}</div>}>
                       <div className="space-y-4 min-w-0">
                         {/* Stats langues */}
                         {messages.length > 0 && (
@@ -928,7 +928,7 @@ export function ConversationSettingsModal({
                                 className="w-full min-w-0 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 hover:bg-blue-500/10 border-white/30 dark:border-gray-700/40"
                               >
                                 <Users className="h-4 w-4 mr-2 flex-shrink-0" />
-                                <span className="truncate">{t('conversationDetails.viewAllParticipants') || 'Voir tous les participants'}</span>
+                                <span className="truncate">{t('conversationDetails.viewAllParticipants', 'View all participants')}</span>
                               </Button>
                             )}
                           </div>
@@ -950,12 +950,12 @@ export function ConversationSettingsModal({
                       {isSavingPrefs ? (
                         <>
                           <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                          {t('conversationDetails.saving') || 'Enregistrement...'}
+                          {t('conversationDetails.saving', 'Saving...')}
                         </>
                       ) : (
                         <>
                           <Check className="mr-2 h-5 w-5" />
-                          {t('conversationDetails.savePreferences') || 'Enregistrer'}
+                          {t('conversationDetails.savePreferences', 'Save my preferences')}
                         </>
                       )}
                     </Button>
@@ -977,7 +977,7 @@ export function ConversationSettingsModal({
                   >
                     <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2 min-w-0">
                       <ImageIcon className="h-4 w-4 flex-shrink-0" />
-                      <span className="truncate">{t('conversationDetails.mediaAndAppearance') || 'Médias & Apparence'}</span>
+                      <span className="truncate">{t('conversationDetails.mediaAndAppearance', 'Media & Appearance')}</span>
                     </h3>
 
                     {/* Container visuel avec bannière + avatar */}
@@ -1004,8 +1004,8 @@ export function ConversationSettingsModal({
                               <Upload className="h-6 w-6" />
                               <p className="text-sm font-medium">
                                 {(conversation as unknown).bannerImage
-                                  ? (t('conversationDetails.changeBanner') || 'Modifier la bannière')
-                                  : (t('conversationDetails.uploadBanner') || 'Ajouter une bannière')}
+                                  ? (t('conversationDetails.changeBanner', 'Change banner'))
+                                  : (t('conversationDetails.uploadBanner', 'Add a banner'))}
                               </p>
                             </div>
                           </div>
@@ -1058,7 +1058,7 @@ export function ConversationSettingsModal({
                             {!isEditingTitle ? (
                               <div className="flex items-center gap-2 group/title min-w-0">
                                 <h4 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 truncate min-w-0">
-                                  {convTitle || 'Sans titre'}
+                                  {convTitle || t('conversationDetails.untitled', 'Untitled')}
                                 </h4>
                                 <Button
                                   type="button"
@@ -1143,7 +1143,7 @@ export function ConversationSettingsModal({
                             setIsEditingDescription(true);
                           }}>
                             <p className="text-xs text-gray-600 dark:text-gray-400 group-hover/desc:text-gray-800 dark:group-hover/desc:text-gray-300 transition-colors line-clamp-2 break-words">
-                              {convDescription || 'Cliquez pour ajouter une description...'}
+                              {convDescription || t('conversationDetails.addDescription', 'Click to add a description...')}
                             </p>
                           </div>
                         ) : (
@@ -1174,7 +1174,7 @@ export function ConversationSettingsModal({
                                 className="h-7 text-xs text-red-600 hover:text-red-700"
                               >
                                 <X className="h-3 w-3 mr-1" />
-                                Annuler
+                                {t('conversationDetails.cancel', 'Cancel')}
                               </Button>
                               <Button
                                 type="button"
@@ -1189,7 +1189,7 @@ export function ConversationSettingsModal({
                                 ) : (
                                   <Check className="h-3 w-3 mr-1" />
                                 )}
-                                Valider
+                                {t('conversationDetails.confirm', 'Confirm')}
                               </Button>
                             </div>
                           </div>
@@ -1208,14 +1208,14 @@ export function ConversationSettingsModal({
                 >
                   <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2 min-w-0">
                     <Shield className="h-4 w-4 flex-shrink-0" />
-                    <span className="truncate">{t('conversationDetails.security') || 'Sécurité'}</span>
+                    <span className="truncate">{t('conversationDetails.security', 'Security')}</span>
                   </h3>
 
                   {/* Mode d'encryption */}
                   <div className="space-y-2 p-3 rounded-xl backdrop-blur-xl bg-gradient-to-br from-purple-50/80 to-pink-50/80 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200/50 dark:border-purple-800/30 min-w-0">
                     <Label className="flex items-center gap-2 font-semibold text-purple-900 dark:text-purple-100 min-w-0">
                       <Lock className="h-4 w-4 flex-shrink-0" />
-                      <span className="truncate">{t('conversationDetails.encryptionMode') || 'Mode de chiffrement'}</span>
+                      <span className="truncate">{t('conversationDetails.encryptionMode', 'Encryption mode')}</span>
                     </Label>
                     <Select
                       value={encryptionMode || 'none'}
@@ -1228,34 +1228,34 @@ export function ConversationSettingsModal({
                         <SelectItem value="none">
                           <span className="flex items-center gap-2">
                             <Globe className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                            <span className="truncate">{t('conversationDetails.noEncryption') || 'Aucun chiffrement'}</span>
+                            <span className="truncate">{t('conversationDetails.noEncryption', 'No encryption')}</span>
                           </span>
                         </SelectItem>
                         <SelectItem value="e2ee">
                           <span className="flex items-center gap-2">
                             <Lock className="h-4 w-4 text-green-600 flex-shrink-0" />
-                            <span className="truncate">{t('conversationDetails.e2ee') || 'Bout en bout (E2EE)'}</span>
+                            <span className="truncate">{t('conversationDetails.e2ee', 'End-to-end (E2EE)')}</span>
                           </span>
                         </SelectItem>
                         <SelectItem value="hybrid">
                           <span className="flex items-center gap-2">
                             <LockOpen className="h-4 w-4 text-yellow-600 flex-shrink-0" />
-                            <span className="truncate">{t('conversationDetails.hybrid') || 'Hybride'}</span>
+                            <span className="truncate">{t('conversationDetails.hybrid', 'Hybrid')}</span>
                           </span>
                         </SelectItem>
                         <SelectItem value="server">
                           <span className="flex items-center gap-2">
                             <Key className="h-4 w-4 text-blue-600 flex-shrink-0" />
-                            <span className="truncate">{t('conversationDetails.serverEncryption') || 'Serveur'}</span>
+                            <span className="truncate">{t('conversationDetails.serverEncryption', 'Server')}</span>
                           </span>
                         </SelectItem>
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-purple-700 dark:text-purple-300 break-words">
-                      {encryptionMode === 'e2ee' && (t('conversationDetails.e2eeDescription') || 'Les messages sont chiffrés de bout en bout.')}
-                      {encryptionMode === 'hybrid' && (t('conversationDetails.hybridDescription') || 'Chiffrement côté serveur avec clés partagées.')}
-                      {encryptionMode === 'server' && (t('conversationDetails.serverDescription') || 'Les messages sont chiffrés sur le serveur.')}
-                      {!encryptionMode && (t('conversationDetails.noEncryptionDescription') || 'Les messages ne sont pas chiffrés.')}
+                      {encryptionMode === 'e2ee' && (t('conversationDetails.e2eeDescription', 'Messages are end-to-end encrypted. Only participants can read them.'))}
+                      {encryptionMode === 'hybrid' && (t('conversationDetails.hybridDescription', 'Server-side encryption with shared keys.'))}
+                      {encryptionMode === 'server' && (t('conversationDetails.serverDescription', 'Messages are encrypted on the server.'))}
+                      {!encryptionMode && (t('conversationDetails.noEncryptionDescription', 'Messages are not encrypted.'))}
                     </p>
 
                     {/* Badge du mode de chiffrement actuel */}
@@ -1282,8 +1282,7 @@ export function ConversationSettingsModal({
                     <p className="text-xs text-yellow-800 dark:text-yellow-200 flex items-start gap-2 min-w-0">
                       <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
                       <span className="break-words min-w-0">
-                        {t('conversationDetails.directConversationWarning') ||
-                        'Une conversation directe ne devrait normalement avoir que 2 participants.'}
+                        {t('conversationDetails.directConversationWarning', 'A direct conversation should normally have only 2 participants.')}
                       </span>
                     </p>
                   </motion.div>
@@ -1305,7 +1304,7 @@ export function ConversationSettingsModal({
                     transition={{ delay: 0.4 }}
                     className="space-y-4"
                   >
-                    <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">Chargement...</div>}>
+                    <Suspense fallback={<div className="text-xs text-muted-foreground italic p-4">{t('conversationDetails.loading', 'Loading...')}</div>}>
                       <FoldableSection
                         title={t('conversationDetails.shareLinks')}
                         icon={<Link2 className="h-4 w-4 mr-2" />}

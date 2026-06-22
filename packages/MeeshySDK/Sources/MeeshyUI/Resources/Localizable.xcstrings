@@ -1,6 +1,76 @@
 {
   "sourceLanguage" : "fr",
   "strings" : {
+    "profile.connection.context.received" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ möchte sich mit dir verbinden. Akzeptiere, um Nachrichten auszutauschen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ wants to connect with you. Accept to exchange messages."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ quiere conectar contigo. Acepta para intercambiar mensajes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ souhaite entrer en contact avec vous. Acceptez pour échanger des messages."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ quer se conectar com você. Aceite para trocar mensagens."
+          }
+        }
+      }
+    },
+    "profile.connection.context.sent" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du hast %@ eine Verbindungsanfrage gesendet. Warten auf Antwort."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You sent a connection request to %@. Waiting for their reply."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviaste una solicitud de conexión a %@. Esperando su respuesta."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous avez envoyé une demande de connexion à %@. En attente de sa réponse."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você enviou um pedido de conexão para %@. Aguardando a resposta."
+          }
+        }
+      }
+    },
     "userIdentity.translation.available" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -36,21 +106,11 @@
         }
       }
     },
-    "" : {
-
-    },
-    "@%@" : {
-
-    },
-    "*" : {
-
-    },
-    "/" : {
-
-    },
-    "#%@" : {
-
-    },
+    "" : {},
+    "@%@" : {},
+    "*" : {},
+    "/" : {},
+    "#%@" : {},
     "%@  %@" : {
       "localizations" : {
         "fr" : {
@@ -101,9 +161,7 @@
         }
       }
     },
-    "%@ partage sa position" : {
-
-    },
+    "%@ partage sa position" : {},
     "%@. %@" : {
       "localizations" : {
         "fr" : {
@@ -124,21 +182,11 @@
         }
       }
     },
-    "%@s" : {
-
-    },
-    "%lld" : {
-
-    },
-    "%lld éléments actifs" : {
-
-    },
-    "%lld lignes de plus" : {
-
-    },
-    "%lld messages" : {
-
-    },
+    "%@s" : {},
+    "%lld" : {},
+    "%lld éléments actifs" : {},
+    "%lld lignes de plus" : {},
+    "%lld messages" : {},
     "%lld non lue%@" : {
       "localizations" : {
         "fr" : {
@@ -149,12 +197,8 @@
         }
       }
     },
-    "%lld pages" : {
-
-    },
-    "%lld sous-titres" : {
-
-    },
+    "%lld pages" : {},
+    "%lld sous-titres" : {},
     "%lld trait%@" : {
       "localizations" : {
         "fr" : {
@@ -185,78 +229,30 @@
         }
       }
     },
-    "%lld%%" : {
-
-    },
-    "%lld°" : {
-
-    },
-    "%llds" : {
-
-    },
-    "%llds max" : {
-
-    },
-    "🏘️" : {
-
-    },
-    "1min" : {
-
-    },
-    "5min" : {
-
-    },
-    "10s" : {
-
-    },
-    "30s" : {
-
-    },
-    "Aa" : {
-
-    },
-    "Absent" : {
-
-    },
-    "Actif" : {
-
-    },
-    "Activer lecture en boucle" : {
-
-    },
-    "Activer picture in picture" : {
-
-    },
-    "Admin" : {
-
-    },
-    "Admins" : {
-
-    },
-    "AirPlay" : {
-
-    },
-    "Ajouter le tag %@" : {
-
-    },
-    "Ajouter un tag..." : {
-
-    },
-    "Analyse de l'audio…" : {
-
-    },
-    "Annuler" : {
-
-    },
-    "Astuce : poignées disponibles sur la timeline principale." : {
-
-    },
-    "Aucun élément" : {
-
-    },
-    "Aucun membre trouve" : {
-
-    },
+    "%lld%%" : {},
+    "%lld°" : {},
+    "%llds" : {},
+    "%llds max" : {},
+    "🏘️" : {},
+    "1min" : {},
+    "5min" : {},
+    "10s" : {},
+    "30s" : {},
+    "Aa" : {},
+    "Absent" : {},
+    "Actif" : {},
+    "Activer lecture en boucle" : {},
+    "Activer picture in picture" : {},
+    "Admin" : {},
+    "Admins" : {},
+    "AirPlay" : {},
+    "Ajouter le tag %@" : {},
+    "Ajouter un tag..." : {},
+    "Analyse de l'audio…" : {},
+    "Annuler" : {},
+    "Astuce : poignées disponibles sur la timeline principale." : {},
+    "Aucun élément" : {},
+    "Aucun membre trouve" : {},
     "audio.editor.apply" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -2830,18 +2826,10 @@
         }
       }
     },
-    "Bannir" : {
-
-    },
-    "Cette conversation disparaitra definitivement de votre liste. Les autres membres ne seront pas affectes." : {
-
-    },
-    "Cette conversation sera fermee pour tous les membres. Plus personne ne pourra ecrire." : {
-
-    },
-    "Choisir ou créer une catégorie..." : {
-
-    },
+    "Bannir" : {},
+    "Cette conversation disparaitra definitivement de votre liste. Les autres membres ne seront pas affectes." : {},
+    "Cette conversation sera fermee pour tous les membres. Plus personne ne pourra ecrire." : {},
+    "Choisir ou créer une catégorie..." : {},
     "common.cancel" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -2873,6 +2861,286 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Cancelar"
+          }
+        }
+      }
+    },
+    "report.reason.other" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sonstiges"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otro"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autre"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outro"
+          }
+        }
+      }
+    },
+    "report.reason.impersonation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Identitätsdiebstahl"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impersonation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suplantación de identidad"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usurpation d'identité"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Falsidade ideológica"
+          }
+        }
+      }
+    },
+    "report.reason.fake_profile" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gefälschtes Profil"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fake profile"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perfil falso"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Faux profil"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perfil falso"
+          }
+        }
+      }
+    },
+    "report.reason.hate_speech" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hassrede"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hate speech"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discurso de odio"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discours haineux"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discurso de ódio"
+          }
+        }
+      }
+    },
+    "report.reason.violence" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gewalt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Violence"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Violencia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Violence"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Violência"
+          }
+        }
+      }
+    },
+    "report.reason.harassment" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Belästigung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Harassment"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acoso"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Harcèlement"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assédio"
+          }
+        }
+      }
+    },
+    "report.reason.inappropriate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unangemessener Inhalt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inappropriate content"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contenido inapropiado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contenu inapproprié"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conteúdo inapropriado"
+          }
+        }
+      }
+    },
+    "report.reason.spam" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spam"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spam"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spam"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spam"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spam"
           }
         }
       }
@@ -7918,51 +8186,21 @@
         }
       }
     },
-    "Couleur" : {
-
-    },
-    "Couleur du trait" : {
-
-    },
-    "Couper le son" : {
-
-    },
-    "Creator" : {
-
-    },
-    "Créer \"%@\"" : {
-
-    },
-    "Créer la catégorie %@" : {
-
-    },
-    "Créer le tag %@" : {
-
-    },
-    "Desactive" : {
-
-    },
-    "Desactiver lecture en boucle" : {
-
-    },
-    "Deutsch" : {
-
-    },
-    "Diviser au point de lecture" : {
-
-    },
-    "Easing" : {
-
-    },
-    "Echantillon %lld" : {
-
-    },
-    "Effacer" : {
-
-    },
-    "Effacer la saisie" : {
-
-    },
+    "Couleur" : {},
+    "Couleur du trait" : {},
+    "Couper le son" : {},
+    "Creator" : {},
+    "Créer \"%@\"" : {},
+    "Créer la catégorie %@" : {},
+    "Créer le tag %@" : {},
+    "Desactive" : {},
+    "Desactiver lecture en boucle" : {},
+    "Deutsch" : {},
+    "Diviser au point de lecture" : {},
+    "Easing" : {},
+    "Echantillon %lld" : {},
+    "Effacer" : {},
+    "Effacer la saisie" : {},
     "emoji.category.animals" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -8208,72 +8446,28 @@
         }
       }
     },
-    "En ligne" : {
-
-    },
-    "English" : {
-
-    },
-    "Espanol" : {
-
-    },
-    "Expire %@" : {
-
-    },
-    "Export %lld %%" : {
-
-    },
-    "Export impossible" : {
-
-    },
-    "Expulser" : {
-
-    },
-    "Faites glisser vers le bas pour réduire ou fermer." : {
-
-    },
-    "Faites glisser vers le haut pour afficher les options de l'outil." : {
-
-    },
-    "Faites glisser vers le haut pour agrandir, vers le bas pour réduire ou replier." : {
-
-    },
-    "Ferme l'éditeur et masque le clavier" : {
-
-    },
-    "Ferme les contrôles de dessin" : {
-
-    },
-    "Fermer" : {
-
-    },
-    "Filtre %@" : {
-
-    },
-    "Fond" : {
-
-    },
-    "Francais" : {
-
-    },
-    "Hors ligne" : {
-
-    },
-    "Hors zone visible" : {
-
-    },
-    "Image" : {
-
-    },
-    "Indisponible" : {
-
-    },
-    "Invite par %@" : {
-
-    },
-    "Italiano" : {
-
-    },
+    "En ligne" : {},
+    "English" : {},
+    "Espanol" : {},
+    "Expire %@" : {},
+    "Export %lld %%" : {},
+    "Export impossible" : {},
+    "Expulser" : {},
+    "Faites glisser vers le bas pour réduire ou fermer." : {},
+    "Faites glisser vers le haut pour afficher les options de l'outil." : {},
+    "Faites glisser vers le haut pour agrandir, vers le bas pour réduire ou replier." : {},
+    "Ferme l'éditeur et masque le clavier" : {},
+    "Ferme les contrôles de dessin" : {},
+    "Fermer" : {},
+    "Filtre %@" : {},
+    "Fond" : {},
+    "Francais" : {},
+    "Hors ligne" : {},
+    "Hors zone visible" : {},
+    "Image" : {},
+    "Indisponible" : {},
+    "Invite par %@" : {},
+    "Italiano" : {},
     "joinFlow.close.accessibilityLabel" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -9674,9 +9868,7 @@
         }
       }
     },
-    "Kind" : {
-
-    },
+    "Kind" : {},
     "languagePicker.search" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -9747,21 +9939,11 @@
         }
       }
     },
-    "Langue du contenu" : {
-
-    },
-    "Langue parlée" : {
-
-    },
-    "Langues: %@" : {
-
-    },
-    "Les messages sont traduits automatiquement" : {
-
-    },
-    "Location: %@" : {
-
-    },
+    "Langue du contenu" : {},
+    "Langue parlée" : {},
+    "Langues: %@" : {},
+    "Les messages sont traduits automatiquement" : {},
+    "Location: %@" : {},
     "location.fullscreen.directions" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -9937,9 +10119,7 @@
         }
       }
     },
-    "Lu" : {
-
-    },
+    "Lu" : {},
     "media.audio.cancel" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -11893,33 +12073,15 @@
         }
       }
     },
-    "Membres" : {
-
-    },
-    "min %llds" : {
-
-    },
-    "Mode annonce" : {
-
-    },
-    "Moderateur" : {
-
-    },
-    "Moderateurs" : {
-
-    },
-    "mshy_" : {
-
-    },
-    "Muet" : {
-
-    },
-    "Nederlands" : {
-
-    },
-    "Nom de la catégorie" : {
-
-    },
+    "Membres" : {},
+    "min %llds" : {},
+    "Mode annonce" : {},
+    "Moderateur" : {},
+    "Moderateurs" : {},
+    "mshy_" : {},
+    "Muet" : {},
+    "Nederlands" : {},
+    "Nom de la catégorie" : {},
     "notifications.category.all" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -12830,36 +12992,16 @@
         }
       }
     },
-    "Nouvelle catégorie" : {
-
-    },
-    "Ouvrir l'outil %@" : {
-
-    },
-    "Pause" : {
-
-    },
-    "Placez la tête de lecture puis divisez la vidéo en segments." : {
-
-    },
-    "Play" : {
-
-    },
-    "Poignée de la barre d'outils" : {
-
-    },
-    "Polski" : {
-
-    },
-    "Portugues" : {
-
-    },
-    "Premier plan" : {
-
-    },
-    "Préparation…" : {
-
-    },
+    "Nouvelle catégorie" : {},
+    "Ouvrir l'outil %@" : {},
+    "Pause" : {},
+    "Placez la tête de lecture puis divisez la vidéo en segments." : {},
+    "Play" : {},
+    "Poignée de la barre d'outils" : {},
+    "Polski" : {},
+    "Portugues" : {},
+    "Premier plan" : {},
+    "Préparation…" : {},
     "profile.action.acceptConnection" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -13031,6 +13173,41 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Recusar conexão"
+          }
+        }
+      }
+    },
+    "profile.action.report" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Melden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Report"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Denunciar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signaler"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Denunciar"
           }
         }
       }
@@ -13595,6 +13772,146 @@
         }
       }
     },
+    "profile.stats.daysShort" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tage"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Days"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Días"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jours"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dias"
+          }
+        }
+      }
+    },
+    "profile.stats.languagesShort" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sprachen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Languages"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Idiomas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Langues"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Idiomas"
+          }
+        }
+      }
+    },
+    "profile.stats.translationsShort" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übersetzungen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translations"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traducciones"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traductions"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traduções"
+          }
+        }
+      }
+    },
+    "profile.stats.messagesShort" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nachrichten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messages"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mensajes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messages"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mensagens"
+          }
+        }
+      }
+    },
     "profile.stats.messagesSent" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -13700,6 +14017,181 @@
         }
       }
     },
+    "profile.toast.reportFailed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meldung konnte nicht gesendet werden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to send the report"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo enviar la denuncia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d'envoyer le signalement"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível enviar a denúncia"
+          }
+        }
+      }
+    },
+    "profile.toast.reportSent" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meldung gesendet"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Report sent"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Denuncia enviada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signalement envoyé"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Denúncia enviada"
+          }
+        }
+      }
+    },
+    "profile.voice.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stimme"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voice"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voz"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voix"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voz"
+          }
+        }
+      }
+    },
+    "profile.posts.noText" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beitrag ohne Text"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Post without text"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publicación sin texto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publication sans texte"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publicação sem texto"
+          }
+        }
+      }
+    },
+    "profile.posts.empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Beiträge"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No posts"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ninguna publicación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun poste"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nenhum post"
+          }
+        }
+      }
+    },
     "profile.tab.conversations" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -13731,6 +14223,76 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Conversas"
+          }
+        }
+      }
+    },
+    "profile.tab.details" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Details"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Details"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detalles"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Détails"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detalhes"
+          }
+        }
+      }
+    },
+    "profile.tab.posts" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beiträge"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Posts"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publicaciones"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Postes"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Posts"
           }
         }
       }
@@ -14225,12 +14787,8 @@
         }
       }
     },
-    "Promouvoir Admin" : {
-
-    },
-    "Promouvoir Moderateur" : {
-
-    },
+    "Promouvoir Admin" : {},
+    "Promouvoir Moderateur" : {},
     "pull_refresh.armed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -14264,21 +14822,11 @@
         }
       }
     },
-    "Reactiver le son" : {
-
-    },
-    "Read" : {
-
-    },
-    "Recherche…" : {
-
-    },
-    "Rechercher un membre..." : {
-
-    },
-    "Rechercher une langue" : {
-
-    },
+    "Reactiver le son" : {},
+    "Read" : {},
+    "Recherche…" : {},
+    "Rechercher un membre..." : {},
+    "Rechercher une langue" : {},
     "Recommandé pour %@ : %@" : {
       "localizations" : {
         "fr" : {
@@ -14289,63 +14837,25 @@
         }
       }
     },
-    "Recommencer" : {
-
-    },
-    "Réinitialiser" : {
-
-    },
-    "Reprendre l'édition ?" : {
-
-    },
-    "Restaurer" : {
-
-    },
-    "Retirer la catégorie %@" : {
-
-    },
-    "Retirer le tag %@" : {
-
-    },
-    "Retour" : {
-
-    },
-    "Retrograder Membre" : {
-
-    },
-    "Rotation" : {
-
-    },
-    "Ruler" : {
-
-    },
-    "Safe area" : {
-
-    },
-    "Segment %lld" : {
-
-    },
-    "Segment sélectionné" : {
-
-    },
-    "Sélectionner la catégorie %@" : {
-
-    },
-    "Seuls les admins peuvent ecrire" : {
-
-    },
-    "Si un compte existe avec %@, un lien de reinitialisation a ete envoye." : {
-
-    },
-    "Son" : {
-
-    },
-    "Sortir du picture in picture" : {
-
-    },
-    "Sticker %@" : {
-
-    },
+    "Recommencer" : {},
+    "Réinitialiser" : {},
+    "Reprendre l'édition ?" : {},
+    "Restaurer" : {},
+    "Retirer la catégorie %@" : {},
+    "Retirer le tag %@" : {},
+    "Retour" : {},
+    "Retrograder Membre" : {},
+    "Rotation" : {},
+    "Ruler" : {},
+    "Safe area" : {},
+    "Segment %lld" : {},
+    "Segment sélectionné" : {},
+    "Sélectionner la catégorie %@" : {},
+    "Seuls les admins peuvent ecrire" : {},
+    "Si un compte existe avec %@, un lien de reinitialisation a ete envoye." : {},
+    "Son" : {},
+    "Sortir du picture in picture" : {},
+    "Sticker %@" : {},
     "story.audioEditor.retranscribe" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -20256,69 +20766,27 @@
         }
       }
     },
-    "Supprimer" : {
-
-    },
-    "Supprimer le trait" : {
-
-    },
-    "Supprimer pour moi" : {
-
-    },
-    "Supprimer pour moi ?" : {
-
-    },
-    "Supprimer pour tous" : {
-
-    },
-    "Tap to open full map" : {
-
-    },
-    "Terminer" : {
-
-    },
-    "Terminer l'édition du dessin" : {
-
-    },
-    "Terminer l'édition du texte" : {
-
-    },
-    "Timeline" : {
-
-    },
-    "Touchez deux fois pour fermer." : {
-
-    },
-    "Touchez deux fois pour ouvrir." : {
-
-    },
-    "Tout le monde" : {
-
-    },
-    "Toute la vidéo" : {
-
-    },
-    "Traduction automatique" : {
-
-    },
-    "Traduction disponible" : {
-
-    },
-    "Transcription: %@" : {
-
-    },
-    "Transitions" : {
-
-    },
-    "Turkce" : {
-
-    },
-    "Une session d'édition non terminée a été retrouvée pour cette vidéo." : {
-
-    },
-    "Vidéo" : {
-
-    },
+    "Supprimer" : {},
+    "Supprimer le trait" : {},
+    "Supprimer pour moi" : {},
+    "Supprimer pour moi ?" : {},
+    "Supprimer pour tous" : {},
+    "Tap to open full map" : {},
+    "Terminer" : {},
+    "Terminer l'édition du dessin" : {},
+    "Terminer l'édition du texte" : {},
+    "Timeline" : {},
+    "Touchez deux fois pour fermer." : {},
+    "Touchez deux fois pour ouvrir." : {},
+    "Tout le monde" : {},
+    "Toute la vidéo" : {},
+    "Traduction automatique" : {},
+    "Traduction disponible" : {},
+    "Transcription: %@" : {},
+    "Transitions" : {},
+    "Turkce" : {},
+    "Une session d'édition non terminée a été retrouvée pour cette vidéo." : {},
+    "Vidéo" : {},
     "voiceProfile.age.birthDate" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -22244,9 +22712,7 @@
         }
       }
     },
-    "Volume" : {
-
-    },
+    "Volume" : {},
     "Vous avez rejoint %@ en tant que %@" : {
       "localizations" : {
         "fr" : {
@@ -22257,20 +22723,115 @@
         }
       }
     },
-    "Русский" : {
-
+    "Русский" : {},
+    "العربية" : {},
+    "한국어" : {},
+    "中文" : {},
+    "日本語" : {},
+    "media.audio.play" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio abspielen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play audio"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reproducir audio"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lire l'audio"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reproduzir áudio"
+          }
+        }
+      }
     },
-    "العربية" : {
-
+    "profile.avatar.viewFullscreen.hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffnet das Foto im Vollbild"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the photo fullscreen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre la foto en pantalla completa"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvre la photo en plein écran"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre a foto em tela cheia"
+          }
+        }
+      }
     },
-    "한국어" : {
-
-    },
-    "中文" : {
-
-    },
-    "日本語" : {
-
+    "profile.banner.label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profilbanner"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profile banner"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Banner de perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bannière de profil"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Banner de perfil"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

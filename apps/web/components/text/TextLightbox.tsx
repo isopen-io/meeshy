@@ -335,7 +335,7 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
 
         {/* Instructions (desktop only) */}
         <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 text-white/60 text-xs text-center">
-          <p>Appuyez sur Échap pour fermer</p>
+          <p>{tViewers('text.escToClose')}</p>
         </div>
       </motion.div>
     </AnimatePresence>,

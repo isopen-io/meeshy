@@ -24,6 +24,7 @@ final class TimelinePublisher {
             content: nil,
             storyEffects: slide.effects,
             visibility: visibility,
+            visibilityUserIds: nil,
             originalLanguage: nil,
             mediaIds: nil,
             repostOfId: nil
@@ -40,7 +41,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     private(set) var lastStoryEffects: StoryEffects?
 
     func createStory(content: String?, storyEffects: StoryEffects?, visibility: String,
-                     originalLanguage: String?, mediaIds: [String]?, repostOfId: String?) async throws -> APIPost {
+                     visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?) async throws -> APIPost {
         createStoryCallCount += 1
         lastStoryEffects = storyEffects
         return try createStoryResult.get()
@@ -75,11 +76,14 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     func getComments(postId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]> {
         throw NSError(domain: "mock", code: -1)
     }
-    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?) async throws -> APIPostComment {
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+                    attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
+                    originalLanguage: String?) async throws -> APIPostComment {
         throw NSError(domain: "mock", code: -1)
     }
     func likeComment(postId: String, commentId: String) async throws {}
     func unlikeComment(postId: String, commentId: String) async throws {}
+    func deleteComment(postId: String, commentId: String) async throws {}
     func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool) async throws -> APIPost {
         throw NSError(domain: "mock", code: -1)
     }

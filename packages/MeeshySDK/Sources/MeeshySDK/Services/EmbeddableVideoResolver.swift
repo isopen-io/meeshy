@@ -29,6 +29,23 @@ public struct EmbeddedVideo: Sendable, Codable, Equatable, Identifiable {
     public var embedURL: URL {
         URL(string: "https://www.youtube.com/embed/\(videoId)")!
     }
+
+    /// URL canonique « watch » reconstruite depuis le `videoId` (+ start éventuel).
+    /// Atome agnostique : la façade vidéo ouvre cette URL (ou un lien tracké `/l/token`
+    /// qui y redirige) au tap, plutôt que de tenter une lecture inline en WKWebView
+    /// (bloquée par la vérification d'origine YouTube, erreurs 15x).
+    public var watchURL: URL {
+        var comps = URLComponents()
+        comps.scheme = "https"
+        comps.host = "www.youtube.com"
+        comps.path = "/watch"
+        var items = [URLQueryItem(name: "v", value: videoId)]
+        if let startSeconds, startSeconds > 0 {
+            items.append(URLQueryItem(name: "t", value: "\(startSeconds)s"))
+        }
+        comps.queryItems = items
+        return comps.url ?? URL(string: "https://www.youtube.com/watch?v=\(videoId)")!
+    }
 }
 
 public enum EmbeddableVideoResolver {

@@ -11,6 +11,8 @@
 		00CDA82D2AC8F3D9847F02C4 /* StatsTimelineChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA306483025A83773D87DED /* StatsTimelineChart.swift */; };
 		0135B9488688ACDA9A26DB98 /* ReplyThreadLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6004F67A016838BA122ED6E /* ReplyThreadLoaderTests.swift */; };
 		031EA7F524ECB3B634B6CFAD /* FeedViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7789A854759F389975CB9906 /* FeedViewModelTests.swift */; };
+		B1405EFA6179220F5EBF24B4 /* MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17BCBE9DBF14D8BB0E17EC99 /* MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift */; };
+		LOCC0001000100010001BLD /* MeeshyTests/Unit/LocalizationConsistencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = LOCC0001000100010001REF /* MeeshyTests/Unit/LocalizationConsistencyTests.swift */; };
 		0CA1A0DE0000000000000001 /* ReelsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA1A0DE0000000000000002 /* ReelsViewModelTests.swift */; };
 		0CA1B0DE0000000000000003 /* VideoEmbedModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA1B0DE0000000000000004 /* VideoEmbedModelTests.swift */; };
 		044D99CB3F85BD65437758B8 /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71C9C50ECED369B628670C7 /* ThreadView.swift */; };
@@ -52,6 +54,13 @@
 		443B3C791B4DDEDC517D35DF /* MockCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11B9A13244FA9699333355B /* MockCacheService.swift */; };
 		447EB12B85279B3E448C2456 /* BlockedTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8711AA999D4B45FFEA4492 /* BlockedTab.swift */; };
 		44C6640DF69BEB3FF362DE4A /* ContactsHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B77619804147529F134986 /* ContactsHubView.swift */; };
+		36EA1DD300DB95C44D3619FA /* CallsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB4BBA29AEC1D8D39E56ABAE /* CallsViewModel.swift */; };
+		6354817D4751DBCD1D41FA55 /* CallStarter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04C7F658F411CA89494B4204 /* CallStarter.swift */; };
+		1F26B618A56CEA57B8408E7B /* CallDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 658141E84AE3DB02533425BA /* CallDetailSheet.swift */; };
+		83BD51218A1F70484C0E2E41 /* CallsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778C4719074ED676630AE6B2 /* CallsTab.swift */; };
+		51B8DB24C49E4007DCE3460C /* PeopleDiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20FBA05C1AAA4EE765F12DA3 /* PeopleDiscoveryView.swift */; };
+		154D81017A2D9E725E1BB2B0 /* KeypadTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */; };
+		2D3563D04A488B10C2B3D2CE /* KeypadViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB2A3B95A3287DB42D5FF468 /* KeypadViewModel.swift */; };
 		46B9CEA8F388C548AEED4A2E /* MockVoIPTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE78D3B42AA19F0490A676B0 /* MockVoIPTokenStore.swift */; };
 		470F5AC07EAF99E5F119C3E6 /* MeeshyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC091A1BD89E4244D04EAED9 /* MeeshyApp.swift */; };
 		4A2C3C40E1AC07C9F9EDD570 /* CommentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6365D304746755CB4497B79 /* CommentStore.swift */; };
@@ -120,6 +129,7 @@
 		AA00BB11CC22DD33EE440002 /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440012 /* Message.swift */; };
 		AA00BB11CC22DD33EE440003 /* FeedModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440013 /* FeedModels.swift */; };
 		AA00BB11CC22DD33EE440005 /* RootViewComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440015 /* RootViewComponents.swift */; };
+		AA00BB11CC22DD33EE4400F1 /* ProfileUserPostsList.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE4400F2 /* ProfileUserPostsList.swift */; };
 		AA00BB11CC22DD33EE440007 /* MessageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440017 /* MessageModels.swift */; };
 		AA00BB11CC22DD33EE440021 /* FeedPostCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440031 /* FeedPostCard.swift */; };
 		RFLAYOUT0001000100010001 /* ReelFeedLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = RFLAYOUT0001000100010002 /* ReelFeedLayout.swift */; };
@@ -134,6 +144,9 @@
 		AA00BB11CC22DD33EE44002A /* PostModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE44001A /* PostModels.swift */; };
 		AA00BB11CC22DD33EE44002B /* StoryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE44001B /* StoryModels.swift */; };
 		AA00BB11CC22DD33EE440070 /* PostDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440080 /* PostDetailView.swift */; };
+		5044E69CDF8E382FAFFDDFB7 /* CommentComposerMedia.swift in Sources */ = {isa = PBXBuildFile; fileRef = 951D3ABCE298BDDD84656C2F /* CommentComposerMedia.swift */; };
+		3FA8A1CB257108F15D2C5C75 /* CommentMediaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 470486BAC05DD7653423FE3E /* CommentMediaView.swift */; };
+		4ACB6E94F109C35C1479F09F /* PostDetailReachAndVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A57C111D90BEEAFF9BEE822 /* PostDetailReachAndVisibility.swift */; };
 		AA00BB11CC22DD33EE4400A1 /* ReelsPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE4400B1 /* ReelsPlayerView.swift */; };
 		AA00BB11CC22DD33EE4400A2 /* ReelsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE4400B2 /* ReelsViewModel.swift */; };
 		AA00BB11CC22DD33EE440071 /* BookmarksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440081 /* BookmarksView.swift */; };
@@ -178,6 +191,7 @@
 		FBA0C8000000000000000001 /* FeedButtonAnchorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA0C8000000000000000002 /* FeedButtonAnchorTests.swift */; };
 		AEFX000100010001000100B0 /* AudioEffectTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFX000100010001000100F0 /* AudioEffectTypes.swift */; };
 		AMVRT0001000100010001001 /* AudioMediaViewRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */; };
+		CNDTST0001000100010001001 /* ConsentNoticeDecisionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CNDTST0001000100010001000 /* ConsentNoticeDecisionTests.swift */; };
 		ANA00100010001000100B001 /* AnalyticsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANA00100010001000100F001 /* AnalyticsManager.swift */; };
 		ANONSC00000000002001 /* AnonymousSessionContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANONSC00000000001001 /* AnonymousSessionContext.swift */; };
 		ANYCD00000000002001 /* AnyCodable.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANYCD00000000001001 /* AnyCodable.swift */; };
@@ -190,6 +204,7 @@
 		RFLAYOUTTST0100010001001 /* ReelFeedLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = RFLAYOUTTST0100010001002 /* ReelFeedLayoutTests.swift */; };
 		RFAUTOPLAYTST01000100001 /* ReelFeedAutoplayCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = RFAUTOPLAYTST01000100002 /* ReelFeedAutoplayCoordinatorTests.swift */; };
 		ATTLT002000000000000F002 /* AttachmentLoadingTile.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATTLT001000000000000F001 /* AttachmentLoadingTile.swift */; };
+		BRTAG002000000000000F002 /* BrandSignature.swift in Sources */ = {isa = PBXBuildFile; fileRef = BRTAG001000000000000F001 /* BrandSignature.swift */; };
 		ATUP00200000000001F00 /* AttachmentUploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATUP00100000000001F00 /* AttachmentUploader.swift */; };
 		ATUT00200000000001F00 /* AttachmentUploaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATUT00100000000001F00 /* AttachmentUploaderTests.swift */; };
 		AUDFS001B001B001B0000002 /* AudioFullscreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AUDFS001A001A001A0000001 /* AudioFullscreenView.swift */; };
@@ -265,6 +280,7 @@
 		CEQ000000002F01 /* CallEventQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEQ000000001F01 /* CallEventQueue.swift */; };
 		CEQT000000002F01 /* CallEventQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEQT000000001F01 /* CallEventQueueTests.swift */; };
 		CF236AB810E070AE44B8AE2F /* Bubble/BubbleStandardLayout+Media.swift in Sources */ = {isa = PBXBuildFile; fileRef = 161B698A5C7ABD5B61A9F071 /* Bubble/BubbleStandardLayout+Media.swift */; };
+		FDE9A5D13C7C053E78FC8A1C /* Bubble/MediaConsumptionProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8960C90225E408EDBE735C2 /* Bubble/MediaConsumptionProgressBar.swift */; };
 		CHPW002A002A002A002A0002 /* ChangePasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CHPW001A001A001A001A0001 /* ChangePasswordView.swift */; };
 		CL6001A001A001A001A00001 /* CommunityLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CL6002A002A002A002A00002 /* CommunityLinksView.swift */; };
 		CLRT0001000100010001002 /* ComposerLanguageResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLRT0001000100010001001 /* ComposerLanguageResolverTests.swift */; };
@@ -273,6 +289,7 @@
 		CMCFG000000002F01 /* CallMediaConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMCFG000000001F01 /* CallMediaConfig.swift */; };
 		CMCFT000000002F01 /* CallMediaConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMCFT000000001F01 /* CallMediaConfigTests.swift */; };
 		CMGT000000002F01 /* CallManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMGT000000001F01 /* CallManagerTests.swift */; };
+		VFCONVT00000002F01 /* VideoFrameConverterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = VFCONVT00000001F01 /* VideoFrameConverterTests.swift */; };
 		CMPAU0001000100010001001 /* ConversationComposerStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMPAU0001000100010001000 /* ConversationComposerStateTests.swift */; };
 		CPREF0000000004F01 /* ConversationPreferencesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = CPREF0000000003F01 /* ConversationPreferencesTab.swift */; };
 		CRS00100010001000100B001 /* CrashReportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CRS00100010001000100F001 /* CrashReportSheet.swift */; };
@@ -310,6 +327,7 @@
 		DD0100000000004F01 /* ConversationDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0100000000003F01 /* ConversationDashboardView.swift */; };
 		DD22EE33FF44AA55BB660099 /* StatusBubbleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */; };
 		DD22EE33FF44AA55BB6600AA /* UniversalComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */; };
+		13592BA2A5E911C34C7D1CF1 /* RecentMediaStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 958B07268694D7A98F773DC8 /* RecentMediaStrip.swift */; };
 		DD22EE33FF44AA55BB6600AC /* ComposerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500AC /* ComposerModels.swift */; };
 		DD22EE33FF44AA55BB6600AD /* UniversalComposerBar+Recording.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500AD /* UniversalComposerBar+Recording.swift */; };
 		DD22EE33FF44AA55BB6600AE /* UniversalComposerBar+Attachments.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11DD22EE33FF44AA5500AE /* UniversalComposerBar+Attachments.swift */; };
@@ -325,6 +343,8 @@
 		DLNK0001000100010001001 /* DeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DLNK0001000100010001000 /* DeepLinkTests.swift */; };
 		DRRT01001001001001002 /* DraftStoreReplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DRRT01001001001001001 /* DraftStoreReplyTests.swift */; };
 		DSCV0001000100010001001 /* DiscoverViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DSCV0001000100010001000 /* DiscoverViewModelTests.swift */; };
+		84F7F4F68D86DBF31288E369 /* CallsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 685A93EB1B26AC66D11BA2F1 /* CallsViewModelTests.swift */; };
+		5C2F9A90859A929847D5CBD7 /* KeypadViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5EB1C8E0E7ADA2081B50F4B /* KeypadViewModelTests.swift */; };
 		DSTV002A002A002A002A0002 /* DataStorageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DSTV001A001A001A001A0001 /* DataStorageView.swift */; };
 		E1491C65FE46FF6941B00642 /* E2EAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 409C08F1FC8A1E6C810690CF /* E2EAPI.swift */; };
 		E2EA0000000004F010 /* E2EAPIEncryptionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2EA0000000003F010 /* E2EAPIEncryptionTests.swift */; };
@@ -335,6 +355,8 @@
 		E5F6A7B8C9D0E1F2A3B4C5D6 /* FeedViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A7B8C9D0E1F2A3B4C5D6E7 /* FeedViewModel.swift */; };
 		E73445377212602BE34F97F6 /* ConversationHelperViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B68A3F235224E0F01B3D8C1 /* ConversationHelperViews.swift */; };
 		E78951D32E58D4C0A1CF3A8F /* AffiliateCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0239AD0031D90A2CF73F176E /* AffiliateCreateView.swift */; };
+		CL2L0001000100010001B001 /* ComposeLanguageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CL2L0001000100010001F001 /* ComposeLanguageTests.swift */; };
+		CLPR0001000100010001B001 /* ConversationLanguagePreferencesResolveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLPR0001000100010001F001 /* ConversationLanguagePreferencesResolveTests.swift */; };
 		E941B8BFDFFF2E342CA6DCCF /* ConversationViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12EC32EE90955ED041C92F06 /* ConversationViewModelTests.swift */; };
 		EA1633ABFFD1EF8C75888ADA /* ConversationCreator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDE7BECE4410F852255F0BFD /* ConversationCreator.swift */; };
 		EC1921BE268440D89FE21571 /* MessageRowEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BAF88A8D2D470CA7D1217A /* MessageRowEnvelope.swift */; };
@@ -439,9 +461,13 @@
 		0CA1A0DE0000000000000003 /* MockReelFeedCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA1A0DE0000000000000004 /* MockReelFeedCache.swift */; };
 		MOCK0009000900090009001 /* MockStatusService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK0009000900090009000 /* MockStatusService.swift */; };
 		MOCK000A000A000A000A001 /* MockUserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000A000A000A000A000 /* MockUserService.swift */; };
+		5272EA9BC9720E2DAF8D073A /* MockCallHistoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33156577D70F643D24E1E15F /* MockCallHistoryService.swift */; };
 		MOCK000B000B000B000B001 /* MockBlockService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000B000B000B000B000 /* MockBlockService.swift */; };
 		MOCK000C000C000C000C001 /* MockLanguageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000C000C000C000C000 /* MockLanguageProvider.swift */; };
 		MPHK000000002F01 /* MediaPipelineHook.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHK000000001F01 /* MediaPipelineHook.swift */; };
+		PIPRND00000002F01 /* PiPVideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = PIPRND00000001F01 /* PiPVideoRenderer.swift */; };
+		PIPCTL00000002F01 /* PiPCallController.swift in Sources */ = {isa = PBXBuildFile; fileRef = PIPCTL00000001F01 /* PiPCallController.swift */; };
+		VFCONV000000002F01 /* VideoFrameConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = VFCONV000000001F01 /* VideoFrameConverter.swift */; };
 		MPHT000000002F01 /* MediaPipelineHookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHT000000001F01 /* MediaPipelineHookTests.swift */; };
 		MSTS02002002002002001 /* MessageStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MSTS01001001001001001 /* MessageStoreTests.swift */; };
 		MUIEXP002A002A002A002A02 /* MeeshyUIExports.swift in Sources */ = {isa = PBXBuildFile; fileRef = MUIEXP001A001A001A001A01 /* MeeshyUIExports.swift */; };
@@ -539,6 +565,7 @@
 		THSM0001000100010001B001 /* ThermalStateMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = THSM0001000100010001F001 /* ThermalStateMonitorTests.swift */; };
 		TL6001A001A001A001A00001 /* TrackingLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TL6002A002A002A002A00002 /* TrackingLinksView.swift */; };
 		TM2800000000002F28 /* FeedbackToastManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = TM2800000000001F28 /* FeedbackToastManager.swift */; };
+		CDFT00000000002F28 /* CommentDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDFT00000000001F28 /* CommentDraftStore.swift */; };
 		TNAV0001000100010001001 /* TabNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TNAV0001000100010001000 /* TabNavigationTests.swift */; };
 		TOSV002A002A002A002A0002 /* TermsOfServiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */; };
 		TSSU00200000000001F00 /* FeedbackToastSurfacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = TSSU00100000000001F00 /* FeedbackToastSurfacing.swift */; };
@@ -550,6 +577,7 @@
 		VP01WZ01A001A001A001A001 /* VoiceProfileWizardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = VP01WZ01B001B001B001B001 /* VoiceProfileWizardViewModel.swift */; };
 		VP02000000000002F002 /* VoiceProfileManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = VP02000000000001F002 /* VoiceProfileManageView.swift */; };
 		VP3600000000002F36 /* VoIPPushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = VP3600000000001F36 /* VoIPPushManager.swift */; };
+		VCFT0001000100010001001 /* VoiceConsentFetchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = VCFT0001000100010001000 /* VoiceConsentFetchTests.swift */; };
 		VPMT0001000100010001001 /* VoiceProfileManageViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = VPMT0001000100010001000 /* VoiceProfileManageViewModelTests.swift */; };
 		VPWT0001000100010001001 /* VoiceProfileWizardViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = VPWT0001000100010001000 /* VoiceProfileWizardViewModelTests.swift */; };
 		VSURVCTRL0000002F01 /* VideoSurvivalController.swift in Sources */ = {isa = PBXBuildFile; fileRef = VSURVCTRL0000001F01 /* VideoSurvivalController.swift */; };
@@ -564,6 +592,7 @@
 		WT86A001000100010001B001 /* WebRTCServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = WT86A001000100010001F001 /* WebRTCServiceTests.swift */; };
 		WTTT000000002F01 /* WebRTCTypesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = WTTT000000001F01 /* WebRTCTypesTests.swift */; };
 		WV4400000000002F44 /* WebRTCVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WV4400000000001F44 /* WebRTCVideoView.swift */; };
+		PIPSBV00000002F01 /* PiPVideoSampleBufferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = PIPSBV00000001F01 /* PiPVideoSampleBufferView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -615,11 +644,14 @@
 		0CA24A84F29125EC7C338F81 /* BubbleQuotedReplyAttachmentKindTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BubbleQuotedReplyAttachmentKindTests.swift; sourceTree = "<group>"; };
 		0DC6B1EFE559FE8634F4D330 /* ConversationOptionsViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationOptionsViewModel.swift; sourceTree = "<group>"; };
 		0F5FEBA083B51BF23F6F3C9E /* ConversationOptionsViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationOptionsViewModelTests.swift; sourceTree = "<group>"; };
+		CL2L0001000100010001F001 /* ComposeLanguageTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ComposeLanguageTests.swift; sourceTree = "<group>"; };
+		CLPR0001000100010001F001 /* ConversationLanguagePreferencesResolveTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationLanguagePreferencesResolveTests.swift; sourceTree = "<group>"; };
 		12EC32EE90955ED041C92F06 /* ConversationViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationViewModelTests.swift; sourceTree = "<group>"; };
 		13A020468B6C8367F8121928 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		13BCD5ADC318DEED40437A0F /* TaskTimeoutTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TaskTimeoutTests.swift; sourceTree = "<group>"; };
 		147B06F4C6BA47BCD48D03C6 /* apps/ios/MeeshyTests/Unit/Services/PresenceManagerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = apps/ios/MeeshyTests/Unit/Services/PresenceManagerTests.swift; sourceTree = SOURCE_ROOT; };
 		161B698A5C7ABD5B61A9F071 /* Bubble/BubbleStandardLayout+Media.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "Bubble/BubbleStandardLayout+Media.swift"; sourceTree = "<group>"; };
+		D8960C90225E408EDBE735C2 /* Bubble/MediaConsumptionProgressBar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "Bubble/MediaConsumptionProgressBar.swift"; sourceTree = "<group>"; };
 		17F9BAE1DE897740FE5B367B /* FeedListView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeedListView.swift; sourceTree = "<group>"; };
 		17FD2C4BEA6C9C218634F16B /* CallTranscriptionService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CallTranscriptionService.swift; sourceTree = "<group>"; };
 		18D41D2818B5E73E616A792D /* MeeshyWidgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyWidgets.swift; sourceTree = "<group>"; };
@@ -699,6 +731,8 @@
 		750FE2A49FB88DF459390587 /* ThemedConversationRow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ThemedConversationRow.swift; sourceTree = "<group>"; };
 		75BB3BB6E01A899FDB29E8A8 /* ConversationCommandHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationCommandHandler.swift; sourceTree = "<group>"; };
 		7789A854759F389975CB9906 /* FeedViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeedViewModelTests.swift; sourceTree = "<group>"; };
+		17BCBE9DBF14D8BB0E17EC99 /* MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift; sourceTree = SOURCE_ROOT; };
+		LOCC0001000100010001REF /* MeeshyTests/Unit/LocalizationConsistencyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/LocalizationConsistencyTests.swift; sourceTree = SOURCE_ROOT; };
 		0CA1A0DE0000000000000002 /* ReelsViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReelsViewModelTests.swift; sourceTree = "<group>"; };
 		0CA1B0DE0000000000000004 /* VideoEmbedModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoEmbedModelTests.swift; sourceTree = "<group>"; };
 		7A27F2AB5AC64E0CA5724730 /* MultiAttachmentSendPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiAttachmentSendPlanner.swift; sourceTree = "<group>"; };
@@ -734,6 +768,7 @@
 		AA00BB11CC22DD33EE440012 /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440013 /* FeedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedModels.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440015 /* RootViewComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootViewComponents.swift; sourceTree = "<group>"; };
+		AA00BB11CC22DD33EE4400F2 /* ProfileUserPostsList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileUserPostsList.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440017 /* MessageModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageModels.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440018 /* AuthModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthModels.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE44001A /* PostModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostModels.swift; sourceTree = "<group>"; };
@@ -748,6 +783,9 @@
 		AA00BB11CC22DD33EE440032 /* FeedPostCard+Media.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FeedPostCard+Media.swift"; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440033 /* FeedCommentsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedCommentsSheet.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440080 /* PostDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostDetailView.swift; sourceTree = "<group>"; };
+		951D3ABCE298BDDD84656C2F /* CommentComposerMedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentComposerMedia.swift; sourceTree = "<group>"; };
+		470486BAC05DD7653423FE3E /* CommentMediaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentMediaView.swift; sourceTree = "<group>"; };
+		7A57C111D90BEEAFF9BEE822 /* PostDetailReachAndVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostDetailReachAndVisibility.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE4400B1 /* ReelsPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelsPlayerView.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE4400B2 /* ReelsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelsViewModel.swift; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440081 /* BookmarksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarksView.swift; sourceTree = "<group>"; };
@@ -776,6 +814,7 @@
 		AE4100000000001F41 /* AudioEffectsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEffectsPanel.swift; sourceTree = "<group>"; };
 		AEFX000100010001000100F0 /* AudioEffectTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEffectTypes.swift; sourceTree = "<group>"; };
 		AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMediaViewRenderTests.swift; sourceTree = "<group>"; };
+		CNDTST0001000100010001000 /* ConsentNoticeDecisionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConsentNoticeDecisionTests.swift; sourceTree = "<group>"; };
 		ANA00100010001000100F001 /* AnalyticsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsManager.swift; sourceTree = "<group>"; };
 		ANONSC00000000001001 /* AnonymousSessionContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousSessionContext.swift; sourceTree = "<group>"; };
 		ANYCD00000000001001 /* AnyCodable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyCodable.swift; sourceTree = "<group>"; };
@@ -788,6 +827,7 @@
 		RFLAYOUTTST0100010001002 /* ReelFeedLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelFeedLayoutTests.swift; sourceTree = "<group>"; };
 		RFAUTOPLAYTST01000100002 /* ReelFeedAutoplayCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelFeedAutoplayCoordinatorTests.swift; sourceTree = "<group>"; };
 		ATTLT001000000000000F001 /* AttachmentLoadingTile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentLoadingTile.swift; sourceTree = "<group>"; };
+		BRTAG001000000000000F001 /* BrandSignature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandSignature.swift; sourceTree = "<group>"; };
 		ATUP00100000000001F00 /* AttachmentUploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentUploader.swift; sourceTree = "<group>"; };
 		ATUT00100000000001F00 /* AttachmentUploaderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AttachmentUploaderTests.swift; sourceTree = "<group>"; };
 		AUDFS001A001A001A0000001 /* AudioFullscreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFullscreenView.swift; sourceTree = "<group>"; };
@@ -860,6 +900,7 @@
 		CC1000000000001F10 /* MediaPlayerContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPlayerContext.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBubbleOverlay.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UniversalComposerBar.swift; sourceTree = "<group>"; };
+		958B07268694D7A98F773DC8 /* RecentMediaStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentMediaStrip.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500AC /* ComposerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerModels.swift; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500AD /* UniversalComposerBar+Recording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UniversalComposerBar+Recording.swift"; sourceTree = "<group>"; };
 		CC11DD22EE33FF44AA5500AE /* UniversalComposerBar+Attachments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UniversalComposerBar+Attachments.swift"; sourceTree = "<group>"; };
@@ -891,6 +932,7 @@
 		CMCFG000000001F01 /* CallMediaConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallMediaConfig.swift; sourceTree = "<group>"; };
 		CMCFT000000001F01 /* CallMediaConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallMediaConfigTests.swift; sourceTree = "<group>"; };
 		CMGT000000001F01 /* CallManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManagerTests.swift; sourceTree = "<group>"; };
+		VFCONVT00000001F01 /* VideoFrameConverterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFrameConverterTests.swift; sourceTree = "<group>"; };
 		CMPAU0001000100010001000 /* ConversationComposerStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationComposerStateTests.swift; sourceTree = "<group>"; };
 		CPREF0000000003F01 /* ConversationPreferencesTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationPreferencesTab.swift; sourceTree = "<group>"; };
 		CRS00100010001000100F001 /* CrashReportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashReportSheet.swift; sourceTree = "<group>"; };
@@ -933,6 +975,8 @@
 		DLNK001A001A001A001A0001 /* DeepLinkRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRouter.swift; sourceTree = "<group>"; };
 		DRRT01001001001001001 /* DraftStoreReplyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftStoreReplyTests.swift; sourceTree = "<group>"; };
 		DSCV0001000100010001000 /* DiscoverViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverViewModelTests.swift; sourceTree = "<group>"; };
+		685A93EB1B26AC66D11BA2F1 /* CallsViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallsViewModelTests.swift; sourceTree = "<group>"; };
+		C5EB1C8E0E7ADA2081B50F4B /* KeypadViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeypadViewModelTests.swift; sourceTree = "<group>"; };
 		DSTV001A001A001A001A0001 /* DataStorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataStorageView.swift; sourceTree = "<group>"; };
 		E101FEA7BBFB4FDC8474B10C /* MeeshyTests/Unit/Views/Bubble/MessageRowEnvelopeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/MessageRowEnvelopeTests.swift; sourceTree = SOURCE_ROOT; };
 		E2EA0000000003F010 /* E2EAPIEncryptionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = E2EAPIEncryptionTests.swift; sourceTree = "<group>"; };
@@ -962,6 +1006,13 @@
 		F71C9C50ECED369B628670C7 /* ThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadView.swift; sourceTree = "<group>"; };
 		F724878269B34D64666FE22F /* SharePickerViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharePickerViewModelTests.swift; sourceTree = "<group>"; };
 		F7B77619804147529F134986 /* ContactsHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsHubView.swift; sourceTree = "<group>"; };
+		AB4BBA29AEC1D8D39E56ABAE /* CallsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallsViewModel.swift; sourceTree = "<group>"; };
+		04C7F658F411CA89494B4204 /* CallStarter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallStarter.swift; sourceTree = "<group>"; };
+		658141E84AE3DB02533425BA /* CallDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDetailSheet.swift; sourceTree = "<group>"; };
+		778C4719074ED676630AE6B2 /* CallsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallsTab.swift; sourceTree = "<group>"; };
+		20FBA05C1AAA4EE765F12DA3 /* PeopleDiscoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeopleDiscoveryView.swift; sourceTree = "<group>"; };
+		B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeypadTab.swift; sourceTree = "<group>"; };
+		EB2A3B95A3287DB42D5FF468 /* KeypadViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeypadViewModel.swift; sourceTree = "<group>"; };
 		F7C8FDC10EBAC576B77E8347 /* MediaPostCell.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MediaPostCell.swift; sourceTree = "<group>"; };
 		F96C9A03A8540DCCEB3528A8 /* AuthServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthServiceTests.swift; sourceTree = "<group>"; };
 		FBCF87A60F92454FA8977EA8 /* StoryViewerView+Sidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryViewerView+Sidebar.swift"; sourceTree = "<group>"; };
@@ -1042,9 +1093,13 @@
 		0CA1A0DE0000000000000004 /* MockReelFeedCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockReelFeedCache.swift; sourceTree = "<group>"; };
 		MOCK0009000900090009000 /* MockStatusService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockStatusService.swift; sourceTree = "<group>"; };
 		MOCK000A000A000A000A000 /* MockUserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockUserService.swift; sourceTree = "<group>"; };
+		33156577D70F643D24E1E15F /* MockCallHistoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockCallHistoryService.swift; sourceTree = "<group>"; };
 		MOCK000B000B000B000B000 /* MockBlockService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBlockService.swift; sourceTree = "<group>"; };
 		MOCK000C000C000C000C000 /* MockLanguageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockLanguageProvider.swift; sourceTree = "<group>"; };
 		MPHK000000001F01 /* MediaPipelineHook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHook.swift; sourceTree = "<group>"; };
+		PIPRND00000001F01 /* PiPVideoRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiPVideoRenderer.swift; sourceTree = "<group>"; };
+		PIPCTL00000001F01 /* PiPCallController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiPCallController.swift; sourceTree = "<group>"; };
+		VFCONV000000001F01 /* VideoFrameConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFrameConverter.swift; sourceTree = "<group>"; };
 		MPHT000000001F01 /* MediaPipelineHookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHookTests.swift; sourceTree = "<group>"; };
 		MSTS01001001001001001 /* MessageStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStoreTests.swift; sourceTree = "<group>"; };
 		MUIEXP001A001A001A001A01 /* MeeshyUIExports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyUIExports.swift; sourceTree = "<group>"; };
@@ -1140,6 +1195,7 @@
 		THSM0001000100010001F001 /* ThermalStateMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThermalStateMonitorTests.swift; sourceTree = "<group>"; };
 		TL6002A002A002A002A00002 /* TrackingLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingLinksView.swift; sourceTree = "<group>"; };
 		TM2800000000001F28 /* FeedbackToastManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackToastManager.swift; sourceTree = "<group>"; };
+		CDFT00000000001F28 /* CommentDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentDraftStore.swift; sourceTree = "<group>"; };
 		TNAV0001000100010001000 /* TabNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabNavigationTests.swift; sourceTree = "<group>"; };
 		TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TermsOfServiceView.swift; sourceTree = "<group>"; };
 		TSSU00100000000001F00 /* FeedbackToastSurfacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackToastSurfacing.swift; sourceTree = "<group>"; };
@@ -1152,6 +1208,7 @@
 		VP01WZ01B001B001B001B001 /* VoiceProfileWizardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileWizardViewModel.swift; sourceTree = "<group>"; };
 		VP02000000000001F002 /* VoiceProfileManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileManageView.swift; sourceTree = "<group>"; };
 		VP3600000000001F36 /* VoIPPushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoIPPushManager.swift; sourceTree = "<group>"; };
+		VCFT0001000100010001000 /* VoiceConsentFetchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceConsentFetchTests.swift; sourceTree = "<group>"; };
 		VPMT0001000100010001000 /* VoiceProfileManageViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileManageViewModelTests.swift; sourceTree = "<group>"; };
 		VPWT0001000100010001000 /* VoiceProfileWizardViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileWizardViewModelTests.swift; sourceTree = "<group>"; };
 		VSURVCTRL0000001F01 /* VideoSurvivalController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoSurvivalController.swift; sourceTree = "<group>"; };
@@ -1166,6 +1223,7 @@
 		WT86A001000100010001F001 /* WebRTCServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCServiceTests.swift; sourceTree = "<group>"; };
 		WTTT000000001F01 /* WebRTCTypesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCTypesTests.swift; sourceTree = "<group>"; };
 		WV4400000000001F44 /* WebRTCVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCVideoView.swift; sourceTree = "<group>"; };
+		PIPSBV00000001F01 /* PiPVideoSampleBufferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiPVideoSampleBufferView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1254,9 +1312,11 @@
 				AA2000000000001FA2 /* LocationPickerView.swift */,
 				AA5000000000001FA5 /* VideoPreviewView.swift */,
 				ATTLT001000000000000F001 /* AttachmentLoadingTile.swift */,
+				BRTAG001000000000000F001 /* BrandSignature.swift */,
 				CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */,
 				CC11DD22EE33FF44AA5500AC /* ComposerModels.swift */,
 				CC11DD22EE33FF44AA5500AA /* UniversalComposerBar.swift */,
+				958B07268694D7A98F773DC8 /* RecentMediaStrip.swift */,
 				CC11DD22EE33FF44AA5500AD /* UniversalComposerBar+Recording.swift */,
 				CC11DD22EE33FF44AA5500AE /* UniversalComposerBar+Attachments.swift */,
 				EF01020304050607080900AB /* EffectsPickerView.swift */,
@@ -1431,6 +1491,9 @@
 				EE88FF99AA00BB11CC220002 /* EmojiPickerSheet.swift */,
 				AA00BB11CC22DD33EE440033 /* FeedCommentsSheet.swift */,
 				AA00BB11CC22DD33EE440080 /* PostDetailView.swift */,
+				951D3ABCE298BDDD84656C2F /* CommentComposerMedia.swift */,
+				470486BAC05DD7653423FE3E /* CommentMediaView.swift */,
+				7A57C111D90BEEAFF9BEE822 /* PostDetailReachAndVisibility.swift */,
 				AA00BB11CC22DD33EE4400B1 /* ReelsPlayerView.swift */,
 				AA00BB11CC22DD33EE440081 /* BookmarksView.swift */,
 				EDIT001A001A001A001A0001 /* EditProfileView.swift */,
@@ -1460,6 +1523,7 @@
 				D4E5F6A7B8C9D0E1F2A3B4D1 /* iPadRootView+Sheets.swift */,
 				31BB909122D8D9361EC72DF1 /* RootView.swift */,
 				AA00BB11CC22DD33EE440015 /* RootViewComponents.swift */,
+				AA00BB11CC22DD33EE4400F2 /* ProfileUserPostsList.swift */,
 				SP3400000000001F34 /* SharePickerView.swift */,
 				BB22CC33DD44EE55FF660044 /* StoryTrayView.swift */,
 				BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */,
@@ -1490,6 +1554,7 @@
 				CC6D1F93BD7E43668D8041AB /* MessageContextOverlay.swift */,
 				529B682AC1214F9C9016713C /* ConversationView+ContextOverlay.swift */,
 				161B698A5C7ABD5B61A9F071 /* Bubble/BubbleStandardLayout+Media.swift */,
+				D8960C90225E408EDBE735C2 /* Bubble/MediaConsumptionProgressBar.swift */,
 				56FAE7930C60B05A39A5DAF2 /* ConversationMediaViews.swift */,
 				ABE2501A2F8D4343B50DA1FF /* VideoAvailabilityResolver.swift */,
 				0CA1B0DE0000000000000002 /* VideoEmbedContainer.swift */,
@@ -1508,6 +1573,7 @@
 				VF4200000000001F42 /* VideoFiltersPanel.swift */,
 				CE4300000000001F43 /* CallEffectsOverlay.swift */,
 				WV4400000000001F44 /* WebRTCVideoView.swift */,
+				PIPSBV00000001F01 /* PiPVideoSampleBufferView.swift */,
 				IC3900000000001F39 /* IncomingCallView.swift */,
 				3D8B8C79D3A388D45C5B5EEF /* UserStatsView.swift */,
 				3CA306483025A83773D87DED /* StatsTimelineChart.swift */,
@@ -1570,6 +1636,7 @@
 				PQ7000000000001FPQ /* PendingStatusQueue.swift */,
 				CC2400000000001F24 /* ConversationLockManager.swift */,
 				TM2800000000001F28 /* FeedbackToastManager.swift */,
+				CDFT00000000001F28 /* CommentDraftStore.swift */,
 				SPS2800000000001F28 /* StoryPublishService.swift */,
 				SVES000000000001F28 /* StoryVideoExportService.swift */,
 				CM3600000000001F36 /* CallManager.swift */,
@@ -1649,6 +1716,8 @@
 				B3E242276EB00910AF9B59F7 /* ConversationListViewModelTests.swift */,
 				4EBFCC5061B469FCAB2CE547 /* ConversationSocketHandlerTests.swift */,
 				12EC32EE90955ED041C92F06 /* ConversationViewModelTests.swift */,
+				CL2L0001000100010001F001 /* ComposeLanguageTests.swift */,
+				CLPR0001000100010001F001 /* ConversationLanguagePreferencesResolveTests.swift */,
 				D3AD91E4BFD44CDA82DEAD02 /* ConversationViewModelOtherUnreadTests.swift */,
 				CVAT0001000100010001F001 /* ConversationViewModelAudioTests.swift */,
 				CVOQ000F000F000F000F000 /* ConversationViewModelOfflineQueueTests.swift */,
@@ -1666,7 +1735,10 @@
 				PDTL0001000100010001000 /* PostDetailViewModelTests.swift */,
 				EMVF0001000100010001000 /* EmailVerificationViewModelTests.swift */,
 				DSCV0001000100010001000 /* DiscoverViewModelTests.swift */,
+				685A93EB1B26AC66D11BA2F1 /* CallsViewModelTests.swift */,
+				C5EB1C8E0E7ADA2081B50F4B /* KeypadViewModelTests.swift */,
 				BLKD0001000100010001000 /* BlockedViewModelTests.swift */,
+				VCFT0001000100010001000 /* VoiceConsentFetchTests.swift */,
 				VPMT0001000100010001000 /* VoiceProfileManageViewModelTests.swift */,
 				VPWT0001000100010001000 /* VoiceProfileWizardViewModelTests.swift */,
 				0F5FEBA083B51BF23F6F3C9E /* ConversationOptionsViewModelTests.swift */,
@@ -1750,6 +1822,8 @@
 				BFMT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleFooterModelTests.swift */,
 				931AA0F3F0BB4DA4A5292189 /* MeeshyTests/Unit/Views/Bubble/MessageOverlayLayoutEngineTests.swift */,
 				68F3549575D94405B9476C73 /* MeeshyTests/Unit/Views/Bubble/MessageFrameTrackerTests.swift */,
+				17BCBE9DBF14D8BB0E17EC99 /* MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift */,
+				LOCC0001000100010001REF /* MeeshyTests/Unit/LocalizationConsistencyTests.swift */,
 				E101FEA7BBFB4FDC8474B10C /* MeeshyTests/Unit/Views/Bubble/MessageRowEnvelopeTests.swift */,
 				BBLE0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleEquatableTests.swift */,
 				BBLI0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/ThemedMessageBubbleEquatableTests.swift */,
@@ -1779,6 +1853,13 @@
 				4B8711AA999D4B45FFEA4492 /* BlockedTab.swift */,
 				F573D0F41F068B1CDCAB79C6 /* BlockedViewModel.swift */,
 				F7B77619804147529F134986 /* ContactsHubView.swift */,
+				AB4BBA29AEC1D8D39E56ABAE /* CallsViewModel.swift */,
+				04C7F658F411CA89494B4204 /* CallStarter.swift */,
+				658141E84AE3DB02533425BA /* CallDetailSheet.swift */,
+				778C4719074ED676630AE6B2 /* CallsTab.swift */,
+				20FBA05C1AAA4EE765F12DA3 /* PeopleDiscoveryView.swift */,
+				B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */,
+				EB2A3B95A3287DB42D5FF468 /* KeypadViewModel.swift */,
 				73E4ECF08EDFD91908B42081 /* ContactsListTab.swift */,
 				B00553F0559287EB62084EAD /* ContactsListViewModel.swift */,
 				674A915642772CC82D9344C6 /* ContactsShared.swift */,
@@ -1877,6 +1958,7 @@
 				CVLT0001000100010001000 /* ConversationViewLifecycleTests.swift */,
 				CVRC0001000100010001000 /* ConversationReplyContextTests.swift */,
 				AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */,
+				CNDTST0001000100010001000 /* ConsentNoticeDecisionTests.swift */,
 				ATDLT0001000100010001000 /* AttachmentDownloaderTests.swift */,
 				RFLAYOUTTST0100010001002 /* ReelFeedLayoutTests.swift */,
 				RFAUTOPLAYTST01000100002 /* ReelFeedAutoplayCoordinatorTests.swift */,
@@ -1950,6 +2032,7 @@
 				MOCK000C000C000C000C000 /* MockLanguageProvider.swift */,
 				MOCK0009000900090009000 /* MockStatusService.swift */,
 				MOCK000A000A000A000A000 /* MockUserService.swift */,
+				33156577D70F643D24E1E15F /* MockCallHistoryService.swift */,
 				MOCK000B000B000B000B000 /* MockBlockService.swift */,
 				TFA0MK01B001B001B001B001 /* MockTwoFactorService.swift */,
 				MCAE000100010001000100F0 /* MockCallAudioEffectsService.swift */,
@@ -2171,6 +2254,7 @@
 				MPHT000000001F01 /* MediaPipelineHookTests.swift */,
 				CEQT000000001F01 /* CallEventQueueTests.swift */,
 				CMGT000000001F01 /* CallManagerTests.swift */,
+				VFCONVT00000001F01 /* VideoFrameConverterTests.swift */,
 				CMAS000000001F01 /* CallManagerAudioSessionTests.swift */,
 				WRET000000001F01 /* WebRTCErrorTests.swift */,
 				WTTT000000001F01 /* WebRTCTypesTests.swift */,
@@ -2212,6 +2296,9 @@
 				P2PWRTC000000001F01 /* P2PWebRTCClient.swift */,
 				CMCFG000000001F01 /* CallMediaConfig.swift */,
 				MPHK000000001F01 /* MediaPipelineHook.swift */,
+				PIPRND00000001F01 /* PiPVideoRenderer.swift */,
+				PIPCTL00000001F01 /* PiPCallController.swift */,
+				VFCONV000000001F01 /* VideoFrameConverter.swift */,
 			);
 			path = WebRTC;
 			sourceTree = "<group>";
@@ -2426,6 +2513,9 @@
 				NEWCONV002A3B4C5D6E7F8901 /* NewConversationView.swift in Sources */,
 				AA00BB11CC22DD33EE440023 /* FeedCommentsSheet.swift in Sources */,
 				AA00BB11CC22DD33EE440070 /* PostDetailView.swift in Sources */,
+				5044E69CDF8E382FAFFDDFB7 /* CommentComposerMedia.swift in Sources */,
+				3FA8A1CB257108F15D2C5C75 /* CommentMediaView.swift in Sources */,
+				4ACB6E94F109C35C1479F09F /* PostDetailReachAndVisibility.swift in Sources */,
 				AA00BB11CC22DD33EE4400A1 /* ReelsPlayerView.swift in Sources */,
 				AA00BB11CC22DD33EE4400A2 /* ReelsViewModel.swift in Sources */,
 				AA00BB11CC22DD33EE440072 /* PostTranslationSheet.swift in Sources */,
@@ -2474,6 +2564,7 @@
 				AA11BB22CC33DD44EE55FF07 /* StatusComposerView.swift in Sources */,
 				DD22EE33FF44AA55BB660099 /* StatusBubbleOverlay.swift in Sources */,
 				DD22EE33FF44AA55BB6600AA /* UniversalComposerBar.swift in Sources */,
+				13592BA2A5E911C34C7D1CF1 /* RecentMediaStrip.swift in Sources */,
 				EF01020304050607080900AC /* EffectsPickerView.swift in Sources */,
 				DD22EE33FF44AA55BB6600AC /* ComposerModels.swift in Sources */,
 				DD22EE33FF44AA55BB6600AD /* UniversalComposerBar+Recording.swift in Sources */,
@@ -2504,6 +2595,7 @@
 				AA3000000000002FA3 /* MediaCompressor.swift in Sources */,
 				APREPS02000000000000F002 /* AttachmentPreparationService.swift in Sources */,
 				ATTLT002000000000000F002 /* AttachmentLoadingTile.swift in Sources */,
+				BRTAG002000000000000F002 /* BrandSignature.swift in Sources */,
 				OAA0000000000002F01 /* OptimisticAttachmentAdopter.swift in Sources */,
 				AA5000000000002FA5 /* VideoPreviewView.swift in Sources */,
 				AA6000000000002FA6 /* AttachmentSendService.swift in Sources */,
@@ -2535,6 +2627,7 @@
 				ANYCD00000000002001 /* AnyCodable.swift in Sources */,
 				D41332567A1DF21830750E35 /* AnonymousSessionStore.swift in Sources */,
 				AA00BB11CC22DD33EE440005 /* RootViewComponents.swift in Sources */,
+				AA00BB11CC22DD33EE4400F1 /* ProfileUserPostsList.swift in Sources */,
 				BB22CC33DD44EE55FF660058 /* StoryViewerView+Content.swift in Sources */,
 				82C6C143D1C7470481A1B2FE /* ConversationListView+Rows.swift in Sources */,
 				5E3B82855928421D99F204C2 /* StoryViewerView+Canvas.swift in Sources */,
@@ -2558,6 +2651,7 @@
 				53922BC2159445F08DC37D42 /* MessageContextOverlay.swift in Sources */,
 				C795FFC6761046EAB134E478 /* ConversationView+ContextOverlay.swift in Sources */,
 				CF236AB810E070AE44B8AE2F /* Bubble/BubbleStandardLayout+Media.swift in Sources */,
+				FDE9A5D13C7C053E78FC8A1C /* Bubble/MediaConsumptionProgressBar.swift in Sources */,
 				BBLC0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleContent.swift in Sources */,
 				BBLB0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift in Sources */,
 				BBLS0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleStyle.swift in Sources */,
@@ -2599,6 +2693,7 @@
 				PP2600000000002F26 /* AddParticipantSheet.swift in Sources */,
 				ML2700000000002F27 /* MagicLinkView.swift in Sources */,
 				TM2800000000002F28 /* FeedbackToastManager.swift in Sources */,
+				CDFT00000000002F28 /* CommentDraftStore.swift in Sources */,
 				SPS2800000000002F28 /* StoryPublishService.swift in Sources */,
 				SVES000000000002F28 /* StoryVideoExportService.swift in Sources */,
 				SESH000000000002F28 /* StoryExportShareSheet.swift in Sources */,
@@ -2635,6 +2730,9 @@
 				P2PWRTC000000002F01 /* P2PWebRTCClient.swift in Sources */,
 				CMCFG000000002F01 /* CallMediaConfig.swift in Sources */,
 				MPHK000000002F01 /* MediaPipelineHook.swift in Sources */,
+				PIPRND00000002F01 /* PiPVideoRenderer.swift in Sources */,
+				PIPCTL00000002F01 /* PiPCallController.swift in Sources */,
+				VFCONV000000002F01 /* VideoFrameConverter.swift in Sources */,
 				CEQ000000002F01 /* CallEventQueue.swift in Sources */,
 				AEFX000100010001000100B0 /* AudioEffectTypes.swift in Sources */,
 				CAES000100010001000100B0 /* CallAudioEffectsService.swift in Sources */,
@@ -2644,6 +2742,7 @@
 				VF4200000000002F42 /* VideoFiltersPanel.swift in Sources */,
 				CE4300000000002F43 /* CallEffectsOverlay.swift in Sources */,
 				WV4400000000002F44 /* WebRTCVideoView.swift in Sources */,
+				PIPSBV00000002F01 /* PiPVideoSampleBufferView.swift in Sources */,
 				IC3900000000002F39 /* IncomingCallView.swift in Sources */,
 				2A62EA2A80A8037FCA288EE2 /* OnboardingAnimations.swift in Sources */,
 				2D6AD43B267CD9FA109110AF /* OnboardingStepViews.swift in Sources */,
@@ -2682,6 +2781,13 @@
 				447EB12B85279B3E448C2456 /* BlockedTab.swift in Sources */,
 				D90603ED4F5C335BE9FA78D9 /* BlockedViewModel.swift in Sources */,
 				44C6640DF69BEB3FF362DE4A /* ContactsHubView.swift in Sources */,
+				36EA1DD300DB95C44D3619FA /* CallsViewModel.swift in Sources */,
+				6354817D4751DBCD1D41FA55 /* CallStarter.swift in Sources */,
+				1F26B618A56CEA57B8408E7B /* CallDetailSheet.swift in Sources */,
+				83BD51218A1F70484C0E2E41 /* CallsTab.swift in Sources */,
+				51B8DB24C49E4007DCE3460C /* PeopleDiscoveryView.swift in Sources */,
+				154D81017A2D9E725E1BB2B0 /* KeypadTab.swift in Sources */,
+				2D3563D04A488B10C2B3D2CE /* KeypadViewModel.swift in Sources */,
 				F7273BAD84FB8B7281518D59 /* ContactsListTab.swift in Sources */,
 				3171CBE21C1C4D6409B2DE3D /* ContactsListViewModel.swift in Sources */,
 				55E92C6A456D714A38A06932 /* ContactsShared.swift in Sources */,
@@ -2762,6 +2868,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				LOCC0001000100010001BLD /* MeeshyTests/Unit/LocalizationConsistencyTests.swift in Sources */,
 				MOCK0001000100010001001 /* MockMessageSocket.swift in Sources */,
 				MOCK0002000200020002001 /* MockSocialSocket.swift in Sources */,
 				MOCK0003000300030003001 /* MockAuthManager.swift in Sources */,
@@ -2790,12 +2897,16 @@
 				SPRT0001000100010001TST1 /* SyncPillRotatorTests.swift in Sources */,
 				MOCK0009000900090009001 /* MockStatusService.swift in Sources */,
 				MOCK000A000A000A000A001 /* MockUserService.swift in Sources */,
+				5272EA9BC9720E2DAF8D073A /* MockCallHistoryService.swift in Sources */,
 				MOCK000B000B000B000B001 /* MockBlockService.swift in Sources */,
 				D14C3755B0EF1D3FCE57FF8B /* ConversationListViewModelTests.swift in Sources */,
 				ABEF9530C003C1159F8B9049 /* ConversationSocketHandlerTests.swift in Sources */,
 				E941B8BFDFFF2E342CA6DCCF /* ConversationViewModelTests.swift in Sources */,
+				CL2L0001000100010001B001 /* ComposeLanguageTests.swift in Sources */,
+				CLPR0001000100010001B001 /* ConversationLanguagePreferencesResolveTests.swift in Sources */,
 				FB41480E2ACB451CBEA4AE9B /* ConversationViewModelOtherUnreadTests.swift in Sources */,
 				031EA7F524ECB3B634B6CFAD /* FeedViewModelTests.swift in Sources */,
+				B1405EFA6179220F5EBF24B4 /* MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift in Sources */,
 				0CA1A0DE0000000000000001 /* ReelsViewModelTests.swift in Sources */,
 				0CA1B0DE0000000000000003 /* VideoEmbedModelTests.swift in Sources */,
 				34135EFA521513464A6DEE23 /* GlobalSearchViewModelTests.swift in Sources */,
@@ -2817,6 +2928,7 @@
 				CVLT0001000100010001001 /* ConversationViewLifecycleTests.swift in Sources */,
 				CVRC0001000100010001001 /* ConversationReplyContextTests.swift in Sources */,
 				AMVRT0001000100010001001 /* AudioMediaViewRenderTests.swift in Sources */,
+				CNDTST0001000100010001001 /* ConsentNoticeDecisionTests.swift in Sources */,
 				ATDLT0001000100010001001 /* AttachmentDownloaderTests.swift in Sources */,
 				RFLAYOUTTST0100010001001 /* ReelFeedLayoutTests.swift in Sources */,
 				RFAUTOPLAYTST01000100001 /* ReelFeedAutoplayCoordinatorTests.swift in Sources */,
@@ -2846,6 +2958,7 @@
 				MPHT000000002F01 /* MediaPipelineHookTests.swift in Sources */,
 				CEQT000000002F01 /* CallEventQueueTests.swift in Sources */,
 				CMGT000000002F01 /* CallManagerTests.swift in Sources */,
+				VFCONVT00000002F01 /* VideoFrameConverterTests.swift in Sources */,
 				CMAS000000002F01 /* CallManagerAudioSessionTests.swift in Sources */,
 				WRET000000002F01 /* WebRTCErrorTests.swift in Sources */,
 				WTTT000000002F01 /* WebRTCTypesTests.swift in Sources */,
@@ -2871,7 +2984,10 @@
 				PDTL0001000100010001001 /* PostDetailViewModelTests.swift in Sources */,
 				EMVF0001000100010001001 /* EmailVerificationViewModelTests.swift in Sources */,
 				DSCV0001000100010001001 /* DiscoverViewModelTests.swift in Sources */,
+				84F7F4F68D86DBF31288E369 /* CallsViewModelTests.swift in Sources */,
+				5C2F9A90859A929847D5CBD7 /* KeypadViewModelTests.swift in Sources */,
 				BLKD0001000100010001001 /* BlockedViewModelTests.swift in Sources */,
+				VCFT0001000100010001001 /* VoiceConsentFetchTests.swift in Sources */,
 				VPMT0001000100010001001 /* VoiceProfileManageViewModelTests.swift in Sources */,
 				VPWT0001000100010001001 /* VoiceProfileWizardViewModelTests.swift in Sources */,
 				MASK0001000100010001001 /* MockAuthServiceSDK.swift in Sources */,
@@ -2981,7 +3097,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1175;
+				CURRENT_PROJECT_VERSION = 1191;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -3089,7 +3205,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1175;
+				CURRENT_PROJECT_VERSION = 1191;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Dev";
@@ -3187,7 +3303,7 @@
 				CODE_SIGN_ENTITLEMENTS = Meeshy/Meeshy.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1175;
+				CURRENT_PROJECT_VERSION = 1191;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Meeshy;
@@ -3220,7 +3336,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1175;
+				CURRENT_PROJECT_VERSION = 1191;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -3258,7 +3374,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1175;
+				CURRENT_PROJECT_VERSION = 1191;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -3298,7 +3414,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1175;
+				CURRENT_PROJECT_VERSION = 1191;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;

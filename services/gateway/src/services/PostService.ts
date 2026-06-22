@@ -1,4 +1,4 @@
-import { generateShortToken } from './TrackingLinkService';
+import { generateShortToken, TrackingLinkService } from './TrackingLinkService';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
@@ -6,6 +6,7 @@ import { PostReactionService } from './PostReactionService';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
+import { getCommunityCoMemberIds } from './posts/communityVisibility';
 import { MediaService } from './MediaService';
 import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
 import type { OrphanMediaCleanupService } from './storage/OrphanMediaCleanupService';
@@ -56,6 +57,7 @@ function detectLanguage(text: string): string {
 
 export class PostService {
   private readonly postReactionService: PostReactionService;
+  private readonly trackingLinkService: TrackingLinkService;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -73,8 +75,13 @@ export class PostService {
     // Reference: SOTA audit Pilier 4.
     private readonly orphanCleanup?: OrphanMediaCleanupService,
     postReactionService?: PostReactionService,
+    // Source UNIQUE du mapping `metadata.trackingLinks` (URLs brutes → token
+    // `/l/<token>`), partagée avec messages/stories/commentaires. Injectable
+    // pour les tests ; défaut = instance câblée sur le même prisma.
+    trackingLinkService?: TrackingLinkService,
   ) {
     this.postReactionService = postReactionService ?? new PostReactionService(prisma);
+    this.trackingLinkService = trackingLinkService ?? new TrackingLinkService(prisma);
   }
 
   async createPost(data: {
@@ -206,6 +213,37 @@ export class PostService {
       }
 
       this.triggerStoryTextObjectTranslation(post.id, textObjects);
+    }
+
+    // Tracking des URLs brutes du post/story : mapping `url → token` rangé dans
+    // `metadata.trackingLinks`. Même mécanisme que les messages — le client rend
+    // le lien (texte + façade vidéo) vers `/l/<token>` SANS réécrire le contenu
+    // (aperçu vidéo + URL lisible préservés). Le texte effectif est le corps du
+    // post, le texte de la story (`content`) ou l'index de recherche des
+    // textObjects. JAMAIS bloquant : le helper avale ses erreurs (→ []) et
+    // l'écriture metadata est gardée.
+    const trackingContent =
+      data.content
+      ?? (textObjects?.length
+        ? textObjects.map((t) => t.content).filter(Boolean).join(' ')
+        : undefined);
+    if (trackingContent) {
+      try {
+        const trackingLinks = await this.trackingLinkService.collectContentTrackingLinks({
+          content: trackingContent,
+          createdBy: userId,
+          postId: post.id,
+        });
+        if (trackingLinks.length > 0) {
+          const existingMetadata = (post.metadata as Record<string, unknown> | null) ?? {};
+          await this.prisma.post.update({
+            where: { id: post.id },
+            data: { metadata: { ...existingMetadata, trackingLinks } as Prisma.InputJsonValue },
+          });
+        }
+      } catch (err) {
+        log.warn('createPost: tracking link persistence failed', { postId: post.id, err });
+      }
     }
 
     // Refetch pour inclure transcription et translations après toutes les opérations media
@@ -451,11 +489,15 @@ export class PostService {
     if (!viewerUserId) {
       return { visibility: PostVisibility.PUBLIC };
     }
-    const friendIds = await this.getFriendIdsForViewer(viewerUserId);
+    const [friendIds, communityCoMemberIds] = await Promise.all([
+      this.getFriendIdsForViewer(viewerUserId),
+      getCommunityCoMemberIds(this.prisma, viewerUserId),
+    ]);
     return {
       OR: [
         { authorId: viewerUserId },
         { visibility: PostVisibility.PUBLIC },
+        { visibility: PostVisibility.COMMUNITY, authorId: { in: communityCoMemberIds } },
         { visibility: PostVisibility.FRIENDS, authorId: { in: friendIds } },
         { visibility: PostVisibility.EXCEPT, authorId: { in: friendIds }, NOT: { visibilityUserIds: { has: viewerUserId } } },
         { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerUserId } },

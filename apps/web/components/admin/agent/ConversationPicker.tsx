@@ -21,7 +21,7 @@ interface ConversationPickerProps {
 }
 
 export function ConversationPicker({ selectedId, onSelect, onClear, label, placeholder = "Search a conversation..." }: ConversationPickerProps) {
-  const { locale } = useI18n('admin');
+  const { t, locale } = useI18n('admin');
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch] = useDebounce(searchTerm, 500);
   const [results, setResults] = useState<Conversation[]>([]);
@@ -89,7 +89,7 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-3 min-w-0">
                   {selectedConversation.avatar ? (
-                    <img src={selectedConversation.avatar} alt="" className="h-10 w-10 rounded-full object-cover shrink-0" />
+                    <img src={selectedConversation.avatar} alt="" loading="lazy" decoding="async" className="h-10 w-10 rounded-full object-cover shrink-0" />
                   ) : (
                     <div className="p-2 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 shrink-0">
                       {getIcon(selectedConversation.type)}
@@ -97,7 +97,7 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
                   )}
                   <div className="flex flex-col min-w-0">
                     <span className="text-sm font-bold text-indigo-900 dark:text-indigo-100 truncate">
-                      {selectedConversation.title || "Sans titre"}
+                      {selectedConversation.title || t('agent.conversationPicker.untitled', 'Untitled')}
                     </span>
                     <div className="flex items-center gap-2 text-xs text-indigo-600/70 dark:text-indigo-400/70">
                       <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-tighter px-1.5 py-0">
@@ -150,7 +150,7 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
                     autoFocus
-                    placeholder="Chercher par titre, ID ou identifier..."
+                    placeholder={t('agent.conversationPicker.searchPlaceholder', 'Search by title, ID or identifier...')}
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
                     className="pl-9 h-10 bg-white dark:bg-gray-800"
@@ -161,7 +161,7 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
                 {loading ? (
                   <div className="flex flex-col items-center justify-center h-full p-8 gap-3">
                     <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
-                    <span className="text-sm text-gray-500">Recherche dans les salons...</span>
+                    <span className="text-sm text-gray-500">{t('agent.conversationPicker.searching', 'Searching rooms...')}</span>
                   </div>
                 ) : results.length > 0 ? (
                   <div className="p-2 space-y-1">
@@ -182,7 +182,7 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
                               <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
-                                {conv.title || "Sans titre"}
+                                {conv.title || t('agent.conversationPicker.untitled', 'Untitled')}
                               </span>
                               <div className="flex items-center gap-1.5 shrink-0">
                                 {conv.memberCount > 0 && (
@@ -222,12 +222,12 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
                   </div>
                 ) : searchTerm.length >= 2 ? (
                   <div className="p-12 text-center text-sm text-gray-400 italic">
-                    Aucune conversation trouvée pour &quot;{searchTerm}&quot;
+                    {t('agent.conversationPicker.noResults', { term: searchTerm })}
                   </div>
                 ) : (
                   <div className="p-12 text-center text-sm text-gray-400 italic flex flex-col items-center gap-2">
                     <MessageSquare className="h-8 w-8 opacity-20" />
-                    Entrez au moins 2 caractères pour rechercher
+                    {t('agent.conversationPicker.minChars', 'Enter at least 2 characters to search')}
                   </div>
                 )}
               </ScrollArea>

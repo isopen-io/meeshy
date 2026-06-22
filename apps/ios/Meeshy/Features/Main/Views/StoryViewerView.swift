@@ -188,7 +188,7 @@ struct StoryViewerView: View {
     @State var showFullEmojiPicker = false // internal for cross-file extension access
     @State var showTextEmojiPicker = false // internal for cross-file extension access
     @State private var selectedProfileUser: ProfileSheetUser?
-    @State private var emojiToInject = ""
+    @State var emojiToInject = "" // internal for cross-file extension access
     @State private var composerFocusTrigger = false
     @State var composerLanguage: String = DefaultComposerLanguage.resolve() // internal for cross-file extension access
     @State var commentBlurEnabled: Bool = false // internal for cross-file extension access
@@ -565,7 +565,7 @@ struct StoryViewerView: View {
                     authorHandle: wrapper.authorHandle
                 ),
                 onPublishSlide: { _, _, _, _, _ in },
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility in
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
                     viewModel.publishStoryInBackground(
                         slides: slides,
                         slideImages: slideImages,
@@ -573,7 +573,8 @@ struct StoryViewerView: View {
                         loadedVideoURLs: loadedVideoURLs,
                         loadedAudioURLs: loadedAudioURLs,
                         originalLanguage: originalLanguage,
-                        visibility: visibility
+                        visibility: visibility,
+                        visibilityUserIds: visibilityUserIds
                     )
                     repostStoryComposerSource = nil
                 },
@@ -1096,8 +1097,8 @@ struct StoryViewerView: View {
             dismissComposer: { dismissComposer() },
             goToPrevious: { goToPrevious() },
             goToNext: { goToNext() },
-            sendComment: { text, effectFlags, parentId in
-                sendComment(text: text, effectFlags: effectFlags, parentId: parentId)
+            sendComment: { text, effectFlags, parentId, pendingMedia in
+                sendComment(text: text, effectFlags: effectFlags, parentId: parentId, pendingMedia: pendingMedia)
             },
             makeStoryCommentRow: { comment, userLang in
                 makeStoryCommentRow(comment, userLang: userLang)

@@ -1350,7 +1350,7 @@ final class FeedViewModelTests: XCTestCase {
     // MARK: - pinPost()
 
     func test_pinPost_callsPostService() async {
-        let (sut, _, _, postService) = makeSUT()
+        let (sut, _, _, _) = makeSUT()
 
         await sut.pinPost("pin-post")
 

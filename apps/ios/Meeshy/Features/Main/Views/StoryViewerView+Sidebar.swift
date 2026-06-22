@@ -725,9 +725,16 @@ struct StoryHeaderView: View {
             .accessibilityHint(String(localized: "story.viewer.a11y.close.hint", defaultValue: "Ferme le lecteur de stories", bundle: .main))
         }
         .sheet(item: $selectedProfileUser) { user in
-            UserProfileSheet(user: user)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            UserProfileSheet(
+                user: user,
+                postsContent: { uid in AnyView(ProfileUserPostsList(
+                    userId: uid,
+                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
+                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
+                )) }
+            )
+            .presentationDetents([.large, .medium])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showReportSheet) {
             ReportMessageSheet(accentColor: currentGroup?.avatarColor ?? "FF2D55") { type, reason in

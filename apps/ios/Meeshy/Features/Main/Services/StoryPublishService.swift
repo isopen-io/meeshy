@@ -25,14 +25,14 @@ protocol StoryPublishExecutor: AnyObject, Sendable {
 /// App-side orchestrator for `StoryPublishQueue`. Owns three responsibilities :
 ///
 ///   1. Registers the publish handler at app startup so the queue can drive
-///      retry attempts. The handler is currently a STUB that always throws
-///      a retryable error — this is intentional : the actual upload flow
-///      lives in `StoryViewModel.launchUploadTask` and re-routing it through
-///      the queue requires reconstructing `StoryUploadState` from the
-///      serialized payload, which is a sprint-level refactor (Pilier 22 V3).
-///      Until that lands, the queue persists items across restarts and
-///      surfaces them via `pendingItemsPublisher`, but actual publication
-///      still happens through the existing direct path.
+///      retry attempts. The handler delegates each queued item to the
+///      app-side `StoryPublishExecutor` (mounted by RootView via
+///      `setExecutor`), which reconstructs a headless `StoryUploadState`
+///      from the serialized payload and runs the full TUS upload pipeline.
+///      When no executor is mounted yet (boot race, post-logout window
+///      before RootView mounts), the handler throws a retryable
+///      `StoryPublishExecutorMissingError` so the queue preserves the item
+///      until the next attempt.
 ///
 ///   2. Subscribes to the queue's success / failure publishers and surfaces
 ///      user-facing toasts. Centralizing this here means every queue
@@ -43,7 +43,7 @@ protocol StoryPublishExecutor: AnyObject, Sendable {
 ///      StatusBubble) can render a "N en attente" indicator without
 ///      having to subscribe to the queue actor directly.
 ///
-/// Reference: SOTA audit Pilier 22, V2 scope.
+/// Reference: SOTA audit Pilier 22, V3 (offline-first publish).
 @MainActor
 final class StoryPublishService: ObservableObject {
     static let shared = StoryPublishService()
@@ -140,7 +140,7 @@ final class StoryPublishService: ObservableObject {
         await refreshPendingCount()
     }
 
-    // MARK: - Handler registration (stub until V3)
+    // MARK: - Handler registration
 
     private func registerPublishHandler() async {
         await StoryPublishQueue.shared.setPublishHandler { [weak self] item in

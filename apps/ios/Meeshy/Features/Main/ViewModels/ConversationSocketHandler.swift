@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import GRDB
 import MeeshySDK
+import UIKit
 import os
 
 // MARK: - Delegate Protocol
@@ -27,6 +28,11 @@ protocol ConversationSocketDelegate: AnyObject {
     var activeLiveLocations: [ActiveLiveLocation] { get set }
     var isConversationClosed: Bool { get set }
     var pendingServerIds: [String: String] { get set }
+
+    /// `true` when the message list is scrolled to (or near) the bottom, where a
+    /// newly arrived message is visible. Read-receipt precision gate: an inbound
+    /// message is only auto-marked read when the user could actually see it.
+    var isViewportAtBottom: Bool { get }
 
     /// O(1) index lookup by message ID (backed by dictionary)
     func messageIndex(for id: String) -> Int?
@@ -69,6 +75,11 @@ final class ConversationSocketHandler {
     private let currentUserId: String
     private let messageSocket: MessageSocketProviding
     weak var delegate: ConversationSocketDelegate?
+
+    /// Foreground/active probe for the read-receipt precision gate. Injected so
+    /// the XCTest host — which never reaches `.active` — can force a known value.
+    /// Production reads the real application state on the main actor.
+    private let isApplicationActive: @MainActor () -> Bool
 
     /// Optional persistence actor — when set, message-related socket events
     /// write through the actor in addition to updating the delegate/ViewModel.
@@ -114,11 +125,15 @@ final class ConversationSocketHandler {
     init(
         conversationId: String,
         currentUserId: String,
-        messageSocket: MessageSocketProviding = MessageSocketManager.shared
+        messageSocket: MessageSocketProviding = MessageSocketManager.shared,
+        isApplicationActive: @escaping @MainActor () -> Bool = {
+            UIApplication.shared.applicationState == .active
+        }
     ) {
         self.conversationId = conversationId
         self.currentUserId = currentUserId
         self.messageSocket = messageSocket
+        self.isApplicationActive = isApplicationActive
     }
 
     /// Side-effects d'ouverture : join de la room socket + publication de la
@@ -435,15 +450,24 @@ final class ConversationSocketHandler {
                         self.clearTypingSafetyTimer(for: senderName)
                     }
 
-                    // The handler is only subscribed while this conversation is on
-                    // screen, so an incoming message means the recipient is actively
-                    // looking at it — fire `mark-as-read` so the sender's checkmark
-                    // upgrades from `.delivered` (gray ✓✓) to `.read` (purple ✓✓)
-                    // without waiting for the user to navigate away and back.
-                    // markAsRead is idempotent (REST endpoint dedups within 2s and
-                    // the cache update is local-first), so calling it per inbound
-                    // message is safe.
-                    delegate.markAsRead()
+                    // Read PRECISION gate. Being subscribed to the socket is NOT
+                    // proof the user is reading: the handler stays wired while the
+                    // app is backgrounded (phone in a pocket) and while the user is
+                    // scrolled up reading history. Emitting `mark-as-read` in those
+                    // cases produces a FALSE read receipt — the sender's check turns
+                    // indigo "read" although nobody read anything. Only fire when the
+                    // app is foregrounded AND the viewport is at the bottom (the new
+                    // message is, or auto-scrolls into, view). A deferred read is
+                    // re-emitted when the user foregrounds or scrolls back to the
+                    // bottom (`onNearBottomChanged`), so receipts stay truthful and
+                    // eventually complete. markAsRead is idempotent (REST dedups
+                    // within 2s, cache update is local-first).
+                    if ReadReceiptGate.shouldEmitAutoRead(
+                        isApplicationActive: self.isApplicationActive(),
+                        isViewportAtBottom: delegate.isViewportAtBottom
+                    ) {
+                        delegate.markAsRead()
+                    }
 
                     // mark-as-received is handled globally by ConversationListViewModel
                 }
@@ -628,14 +652,31 @@ final class ConversationSocketHandler {
             .filter { ($0.userId ?? $0.participantId) != userId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self else { return }
+                guard let self, let persistence = self.persistence else { return }
                 let summary = event.summary
-                if let persistence = self.persistence {
-                    // Batch-update delivery state; store observation will rebuild
-                    // the message list with updated deliveryStatus for all rows.
-                    let deliveryEvent: MessageEvent = summary.readCount > 0
-                        ? .readBy(userId: userId, at: Date())
-                        : .delivered(count: summary.deliveredCount, at: Date())
+                // WhatsApp-style all-or-nothing: the sender's ✓✓ / read indicator
+                // must reflect EVERY recipient, never a single member of a group.
+                // `totalMembers` is the active recipient count (sender excluded);
+                // a partial summary advances NOTHING — the bubbles stay at their
+                // current (lower) state until the whole group catches up. The
+                // threshold is owned by DeliveryStatusResolver (single source of
+                // truth; a 0 denominator falls back to legacy "any > 0" for 1:1).
+                let deliveryEvent: MessageEvent?
+                switch DeliveryStatusResolver.fromCounts(
+                    deliveredCount: summary.deliveredCount,
+                    readCount: summary.readCount,
+                    recipientCount: summary.totalMembers
+                ) {
+                case .read:
+                    deliveryEvent = .readBy(userId: userId, at: event.updatedAt)
+                case .delivered:
+                    deliveryEvent = .delivered(count: summary.deliveredCount, at: event.updatedAt)
+                default:
+                    deliveryEvent = nil
+                }
+                // Batch-update delivery state; store observation will rebuild
+                // the message list with updated deliveryStatus for all rows.
+                if let deliveryEvent {
                     Task { await persistence.bufferBatchDelivery(conversationId: convId, event: deliveryEvent) }
                 }
             }

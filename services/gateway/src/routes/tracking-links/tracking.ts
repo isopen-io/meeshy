@@ -312,7 +312,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({
           success: false,
           error: 'Données invalides',
-          details: error.errors
+          details: error.issues
         });
       }
 
@@ -564,7 +564,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({
           success: false,
           error: 'Paramètres invalides',
-          details: error.errors
+          details: error.issues
         });
       }
       logError(fastify.log, 'Get tracking link stats error:', error);

@@ -9,12 +9,21 @@ final class VoiceProfileManageViewModel: ObservableObject {
     @Published var consentStatus: VoiceConsentStatus?
     @Published var isLoading = false
     @Published var isCloningEnabled = false
+    @Published var isVoicePublic = false
     @Published var error: String?
 
     private let service: VoiceProfileServiceProviding
+    private let userService: UserServiceProviding
+    private let authManager: AuthManaging
 
-    init(service: VoiceProfileServiceProviding = VoiceProfileService.shared) {
+    init(
+        service: VoiceProfileServiceProviding = VoiceProfileService.shared,
+        userService: UserServiceProviding = UserService.shared,
+        authManager: AuthManaging = AuthManager.shared
+    ) {
         self.service = service
+        self.userService = userService
+        self.authManager = authManager
     }
 
     func loadProfile() async {
@@ -31,8 +40,21 @@ final class VoiceProfileManageViewModel: ObservableObject {
             samples = s
             consentStatus = c
             isCloningEnabled = c.voiceCloningEnabled
+            isVoicePublic = authManager.currentUser?.voicePublic ?? false
         } catch {
             self.error = "Impossible de charger le profil vocal."
+        }
+    }
+
+    func toggleVoicePublic(enabled: Bool) async {
+        let previous = isVoicePublic
+        isVoicePublic = enabled
+
+        do {
+            _ = try await userService.updateProfile(UpdateProfileRequest(voicePublic: enabled))
+        } catch {
+            isVoicePublic = previous
+            self.error = "Erreur lors du changement de visibilite du profil vocal."
         }
     }
 

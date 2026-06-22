@@ -187,8 +187,8 @@ export async function initiateEmailChange(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
-          error: error.errors[0]?.message || 'Invalid data',
-          details: error.errors
+          error: error.issues[0]?.message || 'Invalid data',
+          details: error.issues
         });
       }
 
@@ -319,8 +319,8 @@ export async function verifyEmailChange(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
-          error: error.errors[0]?.message || 'Invalid data',
-          details: error.errors
+          error: error.issues[0]?.message || 'Invalid data',
+          details: error.issues
         });
       }
 
@@ -577,8 +577,8 @@ export async function initiatePhoneChange(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
-          error: error.errors[0]?.message || 'Invalid data',
-          details: error.errors
+          error: error.issues[0]?.message || 'Invalid data',
+          details: error.issues
         });
       }
 
@@ -706,8 +706,8 @@ export async function verifyPhoneChange(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
-          error: error.errors[0]?.message || 'Invalid data',
-          details: error.errors
+          error: error.issues[0]?.message || 'Invalid data',
+          details: error.issues
         });
       }
 

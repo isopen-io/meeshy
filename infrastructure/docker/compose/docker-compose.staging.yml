@@ -182,7 +182,8 @@ services:
       - meeshy-staging-network
       - meeshy-network
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      # /live = liveness instantané (cf. prod) — évite le flapping unhealthy sous charge ML.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/live', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 5

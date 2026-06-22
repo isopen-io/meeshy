@@ -16,6 +16,19 @@ import { getUserDisplayName } from './user-display-name';
 type TranslateFunction = (key: string, params?: Record<string, string>) => string;
 
 /**
+ * Accent « non-lu » des notifications — source UNIQUE.
+ * Le thème est monochrome (token `accent` = gris) ; on porte ici le sens
+ * « nouveau » via un bleu sobre, réutilisé par le rail, le badge cloche et
+ * l'action « marquer lu ». Centralisé pour éviter toute divergence.
+ */
+export const NOTIFICATION_ACCENT = {
+  rail: 'border-blue-600 dark:border-blue-400',
+  badge: 'bg-blue-600 text-white dark:bg-blue-500',
+  ring: 'ring-blue-500',
+  text: 'text-blue-600 dark:text-blue-400',
+} as const;
+
+/**
  * Configuration des icônes et couleurs par type de notification
  */
 export const NOTIFICATION_ICONS: Record<NotificationType, NotificationIcon> = {
@@ -117,19 +130,102 @@ export function formatMessagePreview(content: string, attachments?: any[]): stri
 }
 
 /**
- * Retourne le lien de navigation pour une notification
+ * Types ami/contact qui pointent vers la page contacts
+ */
+const FRIEND_CONTACT_TYPES = new Set<string>([
+  NotificationTypeEnum.FRIEND_REQUEST,
+  NotificationTypeEnum.FRIEND_ACCEPTED,
+  NotificationTypeEnum.CONTACT_REQUEST,
+  NotificationTypeEnum.CONTACT_ACCEPTED,
+  NotificationTypeEnum.CONTACT_REJECTED,
+  NotificationTypeEnum.CONTACT_BLOCKED,
+  NotificationTypeEnum.CONTACT_UNBLOCKED,
+]);
+
+/**
+ * Résout la route de base d'un contenu social (post/story/mood).
+ * Priorité au discriminant `metadata.contentType` (friend_new_*), sinon
+ * dérivé du type de notification, défaut `/post`.
+ */
+function resolveContentRoute(notification: Notification): '/post' | '/story' | '/mood' | '/reel' {
+  // Le discriminant de cible vit dans metadata : `postType` (post_like/post_comment…)
+  // ou `contentType` (friend_new_*). On lit les deux.
+  const meta = notification.metadata as any;
+  const kind = (meta?.contentType ?? meta?.postType) as string | undefined;
+  if (kind === 'STORY') return '/story';
+  if (kind === 'MOOD' || kind === 'STATUS') return '/mood';
+  if (kind === 'REEL') return '/reel';
+  if (kind === 'POST') return '/post';
+
+  const type = notification.type;
+  if (typeof type === 'string') {
+    if (type === NotificationTypeEnum.STATUS_REACTION || type === NotificationTypeEnum.FRIEND_NEW_MOOD) return '/mood';
+    if (type === NotificationTypeEnum.FRIEND_NEW_STORY || type.startsWith('story')) return '/story';
+  }
+  return '/post';
+}
+
+/**
+ * Retourne le lien de navigation pour une notification.
+ * Couvre conversations, contenu social (post/story/mood + ancre commentaire)
+ * et amis/contacts. Source unique réutilisée par les toasts, le dropdown et la page.
  */
 export function getNotificationLink(notification: Notification): string | null {
-  const conversationId = notification.context?.conversationId;
-  const messageId = notification.context?.messageId;
+  const context = notification.context;
+  const metadata = notification.metadata as any;
 
+  // 1. Conversation (messages, mentions, réactions message, appels, membres)
+  const conversationId = context?.conversationId;
   if (conversationId) {
+    const messageId = context?.messageId;
     return messageId
       ? `/conversations/${conversationId}?messageId=${messageId}`
       : `/conversations/${conversationId}`;
   }
 
+  // 2. Contenu social (posts, stories, moods, commentaires)
+  const postId = context?.postId ?? metadata?.postId ?? metadata?.originalPostId;
+  if (postId) {
+    const commentId = context?.commentId ?? metadata?.commentId;
+    const anchor = commentId ? `#comment-${commentId}` : '';
+    return `${resolveContentRoute(notification)}/${postId}${anchor}`;
+  }
+
+  // 3. Amis / contacts
+  if (typeof notification.type === 'string' && FRIEND_CONTACT_TYPES.has(notification.type)) {
+    return '/contacts';
+  }
+
   return null;
+}
+
+/**
+ * Formate un timestamp de notification en libellé relatif court
+ * (« à l'instant », « 5 min », « 2h », « 3j », puis date absolue au-delà d'une semaine).
+ * Source unique réutilisée par le dropdown et la page.
+ */
+export function formatNotificationTimeAgo(
+  timestamp: Date | string | null,
+  t: TranslateFunction,
+  locale?: string
+): string {
+  if (!timestamp) return '';
+
+  const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+  if (isNaN(date.getTime())) return '';
+
+  const diffMinutes = Math.floor((Date.now() - date.getTime()) / (1000 * 60));
+
+  if (diffMinutes < 1) return t('timeAgo.now');
+  if (diffMinutes < 60) return t('timeAgo.minute').replace('{count}', String(diffMinutes));
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return t('timeAgo.hour').replace('{count}', String(diffHours));
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return t('timeAgo.day').replace('{count}', String(diffDays));
+
+  return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
 }
 
 /**
@@ -281,6 +377,35 @@ export function buildNotificationTitle(
     case NotificationTypeEnum.SYSTEM:
       return t('titles.system');
 
+    case NotificationTypeEnum.POST_LIKE:
+      return t('titles.postLike', { sender: actorName });
+    case NotificationTypeEnum.POST_COMMENT:
+      return t('titles.postComment', { sender: actorName });
+    case NotificationTypeEnum.POST_REPOST:
+      return t('titles.postRepost', { sender: actorName });
+    case NotificationTypeEnum.COMMENT_REPLY:
+      return t('titles.commentReply', { sender: actorName });
+    case NotificationTypeEnum.COMMENT_LIKE:
+      return t('titles.commentLike', { sender: actorName });
+    case NotificationTypeEnum.COMMENT_REACTION:
+      return t('titles.commentReaction', { sender: actorName });
+    case NotificationTypeEnum.STORY_REACTION:
+      return t('titles.storyReaction', { sender: actorName });
+    case NotificationTypeEnum.STATUS_REACTION:
+      return t('titles.statusReaction', { sender: actorName });
+    case NotificationTypeEnum.FRIEND_REQUEST:
+      return t('titles.contactRequest', { sender: actorName });
+    case NotificationTypeEnum.FRIEND_ACCEPTED:
+      return t('titles.contactAccepted', { sender: actorName });
+    case NotificationTypeEnum.FRIEND_NEW_POST:
+      return t('titles.friendNewPost', { sender: actorName });
+    case NotificationTypeEnum.FRIEND_NEW_STORY:
+      return t('titles.friendNewStory', { sender: actorName });
+    case NotificationTypeEnum.FRIEND_NEW_MOOD:
+      return t('titles.friendNewMood', { sender: actorName });
+    case NotificationTypeEnum.LOGIN_NEW_DEVICE:
+      return t('titles.loginNewDevice');
+
     default:
       return t('titles.default');
   }
@@ -291,10 +416,28 @@ export function buildNotificationTitle(
  * Utilise getActorDisplayName pour afficher le bon nom
  * Supporte les traductions i18n avec la fonction t fournie
  */
+/**
+ * Types dont le titre explicite (like/réaction) se suffit à lui-même :
+ * le `content` backend duplique le titre → corps vide pour éviter la redondance.
+ */
+const TITLE_SELF_SUFFICIENT_CONTENT = new Set<string>([
+  NotificationTypeEnum.POST_LIKE,
+  NotificationTypeEnum.POST_REPOST,
+  NotificationTypeEnum.COMMENT_LIKE,
+  NotificationTypeEnum.COMMENT_REACTION,
+  NotificationTypeEnum.STORY_REACTION,
+  NotificationTypeEnum.STATUS_REACTION,
+]);
+
 export function buildNotificationContent(
   notification: Notification,
   t?: TranslateFunction
 ): string {
+  // Titre déjà explicite (ex. « @X a aimé votre publication ») → pas de corps redondant.
+  if (typeof notification.type === 'string' && TITLE_SELF_SUFFICIENT_CONTENT.has(notification.type)) {
+    return '';
+  }
+
   // Pour les réactions : afficher le contenu du message original (stocké dans metadata)
   if (
     notification.type === NotificationTypeEnum.MESSAGE_REACTION ||

@@ -251,7 +251,7 @@ export function PhoneExistsModal({
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white"
               >
                 <LogIn className="h-4 w-4 mr-2" />
-                C&apos;est mon compte - Me connecter
+                {t('register.wizard.phoneExistsModal.isMyAccount', 'This is my account - Sign in')}
               </Button>
 
               {/* Secondary: Continue without phone */}
@@ -261,7 +261,7 @@ export function PhoneExistsModal({
                 className="w-full"
               >
                 <UserPlus className="h-4 w-4 mr-2" />
-                Ce n&apos;est pas mon compte - Continuer sans numéro
+                {t('register.wizard.phoneExistsModal.notMyAccount', 'Not my account - Continue without number')}
               </Button>
 
               {/* Tertiary: Transfer phone */}
@@ -270,7 +270,7 @@ export function PhoneExistsModal({
                   <span className="w-full border-t" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-white dark:bg-gray-900 px-2 text-gray-500">ou</span>
+                  <span className="bg-white dark:bg-gray-900 px-2 text-gray-500">{t('register.wizard.phoneExistsModal.or', 'or')}</span>
                 </div>
               </div>
 
@@ -285,10 +285,10 @@ export function PhoneExistsModal({
                 ) : (
                   <ArrowRight className="h-4 w-4 mr-2" />
                 )}
-                Transférer le numéro vers mon nouveau compte
+                {t('register.wizard.phoneExistsModal.transferNumber', 'Transfer the number to my new account')}
               </Button>
               <p className="text-xs text-center text-gray-500">
-                Un code SMS sera envoyé pour vérifier la propriété du numéro
+                {t('register.wizard.phoneExistsModal.transferHint', 'An SMS code will be sent to verify ownership of the number')}
               </p>
             </div>
           </>
@@ -299,10 +299,10 @@ export function PhoneExistsModal({
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Phone className="h-5 w-5 text-blue-500" />
-                Vérification SMS
+                {t('register.wizard.phoneExistsModal.smsVerificationTitle', 'SMS Verification')}
               </DialogTitle>
               <DialogDescription>
-                Entrez le code à 6 chiffres envoyé au {phoneOwnerInfo.phoneNumber}
+                {t('register.wizard.phoneExistsModal.enterCodeSentTo', { phone: phoneOwnerInfo.phoneNumber })}
               </DialogDescription>
             </DialogHeader>
 
@@ -310,7 +310,7 @@ export function PhoneExistsModal({
               {/* Code Input */}
               <div className="flex justify-center">
                 <label htmlFor="phone-exists-code" className="sr-only">
-                  Code de vérification à 6 chiffres
+                  {t('register.wizard.phoneExistsModal.codeInputLabel', '6-digit verification code')}
                 </label>
                 <Input
                   id="phone-exists-code"
@@ -326,7 +326,7 @@ export function PhoneExistsModal({
                   aria-describedby="phone-exists-code-desc"
                 />
                 <span id="phone-exists-code-desc" className="sr-only">
-                  Entrez le code à 6 chiffres envoyé par SMS
+                  {t('register.wizard.phoneExistsModal.codeInputHint', 'Enter the 6-digit code sent by SMS')}
                 </span>
               </div>
 
@@ -341,7 +341,7 @@ export function PhoneExistsModal({
                 ) : (
                   <CheckCircle className="h-4 w-4 mr-2" />
                 )}
-                Vérifier
+                {t('register.wizard.phoneExistsModal.verify', 'Verify')}
               </Button>
 
               {/* Resend */}
@@ -353,11 +353,11 @@ export function PhoneExistsModal({
                     disabled={isLoading}
                     className="text-blue-600"
                   >
-                    Renvoyer le code
+                    {t('register.wizard.phoneExistsModal.resendCode', 'Resend code')}
                   </Button>
                 ) : (
                   <p className="text-sm text-gray-500">
-                    Renvoyer dans {resendCooldown}s
+                    {t('register.wizard.phoneExistsModal.resendIn', { seconds: resendCooldown })}
                   </p>
                 )}
               </div>
@@ -369,7 +369,7 @@ export function PhoneExistsModal({
                 className="w-full"
               >
                 <XCircle className="h-4 w-4 mr-2" />
-                Annuler
+                {t('register.wizard.phoneExistsModal.cancel', 'Cancel')}
               </Button>
             </div>
           </>
@@ -380,10 +380,10 @@ export function PhoneExistsModal({
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-green-600">
                 <CheckCircle className="h-5 w-5" />
-                Vérification réussie !
+                {t('register.wizard.phoneExistsModal.successTitle', 'Verification successful!')}
               </DialogTitle>
               <DialogDescription>
-                Création de votre compte en cours...
+                {t('register.wizard.phoneExistsModal.creatingAccount', 'Creating your account...')}
               </DialogDescription>
             </DialogHeader>
             <div className="flex justify-center py-8">

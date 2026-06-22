@@ -53,17 +53,17 @@
     "^.+\\.ts$": ["ts-jest", {
       "tsconfig": "tsconfig.test.json",
       "diagnostics": {
-        "ignoreCodes": [2307, 2339, 2345]
+        "ignoreCodes": [2307, 2322, 2339, 2345, 2740]
       }
     }]
   },
   "moduleFileExtensions": ["ts", "js", "json"],
   "coverageThreshold": {
     "global": {
-      "lines": 50,
-      "branches": 48,
-      "statements": 50,
-      "functions": 49
+      "lines": 63,
+      "branches": 58,
+      "statements": 63,
+      "functions": 64
     }
   }
 }

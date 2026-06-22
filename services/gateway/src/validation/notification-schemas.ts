@@ -43,19 +43,19 @@ export const GetNotificationsQuerySchema = z.object({
     .regex(/^\d+$/, 'Offset must be a non-negative integer')
     .transform(Number)
     .refine(val => val >= 0, 'Offset must be >= 0')
-    .default('0'),
+    .prefault('0'),
 
   limit: z
     .string()
     .regex(/^\d+$/, 'Limit must be a positive integer')
     .transform(Number)
     .refine(val => val >= 1 && val <= 100, 'Limit must be between 1 and 100')
-    .default('20'),
+    .prefault('20'),
 
   unread: z
     .enum(['true', 'false'])
     .transform(val => val === 'true')
-    .default('false'),
+    .prefault('false'),
 
   type: NotificationTypeEnum.or(z.literal('all')).default('all'),
 
@@ -160,7 +160,7 @@ export const CreateNotificationSchema = z.object({
 
   // Additional data (sanitized JSON)
   data: z
-    .record(z.unknown())
+    .record(z.string(), z.unknown())
     .optional(),
 
   expiresAt: z

@@ -26,10 +26,10 @@ const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
             'bg-[var(--gp-hover)] text-[var(--gp-text-primary)]': variant === 'default',
             'bg-[var(--gp-terracotta-light)] text-[var(--gp-terracotta)]': variant === 'terracotta',
             'bg-[var(--gp-deep-teal)]/10 text-[var(--gp-deep-teal)]': variant === 'teal',
-            'bg-[#E9C46A]/20 text-[#B8860B]': variant === 'gold',
-            'bg-[#2A9D8F]/10 text-[#2A9D8F]': variant === 'success',
-            'bg-[#F4A261]/20 text-[#D68A3A]': variant === 'warning',
-            'bg-[#C1292E]/10 text-[#C1292E]': variant === 'error',
+            'bg-[var(--gp-gold-accent)]/20 text-[var(--gp-gold-accent)]': variant === 'gold',
+            'bg-[var(--gp-success)]/10 text-[var(--gp-success)]': variant === 'success',
+            'bg-[var(--gp-warning)]/20 text-[var(--gp-warning)]': variant === 'warning',
+            'bg-[var(--gp-error)]/10 text-[var(--gp-error)]': variant === 'error',
           },
           className
         )}

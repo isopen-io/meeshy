@@ -1,13 +1,17 @@
 package me.meeshy.sdk.di
 
+import android.content.Context
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.reaction.EmojiUsageStore
+import me.meeshy.sdk.reaction.SharedPrefsEmojiUsageStore
 import javax.inject.Singleton
 
 /**
@@ -24,6 +28,11 @@ object SdkModule {
     @Provides
     @Singleton
     fun providesCacheClock(): CacheClock = SystemCacheClock
+
+    @Provides
+    @Singleton
+    fun providesEmojiUsageStore(@ApplicationContext context: Context): EmojiUsageStore =
+        SharedPrefsEmojiUsageStore(context)
 
     @Provides
     @Singleton

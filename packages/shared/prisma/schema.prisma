@@ -2619,6 +2619,9 @@ model UserVoiceModel {
   /// Prochaine recalibration prévue (mensuelle)
   nextRecalibrationAt DateTime?
 
+  /// Profil vocal rendu public par l'utilisateur (null = privé ; non-null = public + horodatage)
+  voicePublicAt DateTime?
+
   /// Relation vers l'utilisateur
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -2768,6 +2771,12 @@ model Post {
   /// }
   /// Chaque langue est ajoutée au premier accès d'un viewer dans cette langue.
   translations     Json?
+
+  /// Métadonnées structurées libres (parité avec Message.metadata). Contient
+  /// notamment `trackingLinks: [{ url, token }]` — mapping des URLs brutes du
+  /// contenu vers leur token `/l/<token>` (clic tracé + redirection) sans
+  /// réécrire le contenu (aperçu vidéo + URL lisible préservés).
+  metadata         Json?
 
   // ============================================
   // CONTEXTE
@@ -2934,6 +2943,11 @@ model StoryBackgroundAudio {
 model PostMedia {
   id           String  @id @default(auto()) @map("_id") @db.ObjectId
   postId       String? @db.ObjectId
+  /// Quand non-null, ce média appartient à un commentaire (PostComment) et non à
+  /// un post. `postId` et `commentId` sont mutuellement exclusifs : permet de
+  /// réutiliser tout le pipeline média (upload TUS, transcription/traduction audio,
+  /// viewers) pour les commentaires. Un commentaire ne porte QU'UN SEUL média.
+  commentId    String? @db.ObjectId
 
   // Fichier
   fileName     String
@@ -3000,9 +3014,11 @@ model PostMedia {
 
   createdAt    DateTime @default(now())
 
-  post Post? @relation(fields: [postId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  post    Post?        @relation(fields: [postId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  comment PostComment? @relation("CommentMedia", fields: [commentId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   @@index([postId, order])
+  @@index([commentId, order])
 }
 
 /// Commentaire sur un post (hiérarchique — réponses imbriquées)
@@ -3021,6 +3037,10 @@ model PostComment {
   /// Chaque langue est ajoutée au premier accès d'un viewer dans cette langue.
   /// { "en": { text, translationModel, confidenceScore, createdAt }, ... }
   translations     Json?
+
+  /// Métadonnées structurées libres (parité avec Message.metadata / Post.metadata).
+  /// Contient `trackingLinks: [{ url, token }]` (clic tracé `/l/<token>` sans réécriture).
+  metadata         Json?
 
   /// Compteurs dénormalisés
   likeCount     Int @default(0)
@@ -3045,6 +3065,10 @@ model PostComment {
   replies   PostComment[]    @relation("CommentReplies")
   reactions CommentReaction[] @relation("PostCommentReactions")
   mentions  CommentMention[]  @relation("CommentMentions")
+  /// Média unique attaché au commentaire (image/vidéo/audio). Réutilise PostMedia
+  /// via le FK nullable `commentId`. Relation array pour cohérence Prisma mais la
+  /// couche API/app n'en lie jamais plus d'un.
+  media     PostMedia[]       @relation("CommentMedia")
 
   @@index([postId, createdAt])
   @@index([parentId])

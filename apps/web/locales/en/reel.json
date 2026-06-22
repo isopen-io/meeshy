@@ -1,0 +1,34 @@
+{
+  "linkCopied": "Link copied!",
+  "linkCopyError": "Couldn't copy the link",
+  "loading": "Loading reel…",
+  "unavailableTitle": "Reel unavailable",
+  "notAReelTitle": "This content isn't a reel",
+  "goneTitle": "This reel no longer exists",
+  "unavailableBody": "This reel is private or has been deleted.",
+  "notAReelBody": "The link points to a post, not a reel.",
+  "goneBody": "The reel you're looking for can't be found.",
+  "backToFeed": "Back to feed",
+  "player": {
+    "position": "Reel {current} of {total}",
+    "byAuthor": "Reel by {name}",
+    "play": "Play",
+    "close": "Close",
+    "previous": "Previous reel",
+    "next": "Next reel",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "like": "Like",
+    "comment": "Comment",
+    "share": "Share",
+    "save": "Save"
+  },
+  "feed": {
+    "loadingReels": "Loading reels…",
+    "errorTitle": "Reels unavailable",
+    "retry": "Try again",
+    "emptyTitle": "No reels yet",
+    "emptyBody": "Come back later or explore your network's posts.",
+    "seePosts": "See posts"
+  }
+}

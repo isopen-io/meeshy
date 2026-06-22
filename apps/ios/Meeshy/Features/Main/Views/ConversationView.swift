@@ -217,6 +217,7 @@ struct ConversationView: View {
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) var colorScheme
     var isDark: Bool { colorScheme == .dark }
@@ -237,7 +238,7 @@ struct ConversationView: View {
     /// path — safe (même pattern que ConversationListView). Seuls les blocages
     /// SORTANTS sont connus du client ; un blocage entrant remonte en erreur
     /// d'envoi côté gateway.
-    @ObservedObject var blockService = BlockService.shared
+    private var blockService: BlockService { BlockService.shared }
     /// Texte du composer, ISOLÉ de l'arbre racine : tenu via `@State` (stockage
     /// stable) mais JAMAIS lu dans ce body ni observé ici — seul
     /// `ComposerTextHost` (+Composer) s'y abonne, donc la frappe ne ré-évalue
@@ -435,10 +436,10 @@ struct ConversationView: View {
         let timeStr = minute == 0 ? "\(hour)h" : String(format: "%dh%02d", hour, minute)
 
         if calendar.isDateInToday(date) {
-            return "\(String(localized: "date.today", defaultValue: "Aujourd'hui")) \(timeStr)"
+            return "\(String(localized: "date.today")) \(timeStr)"
         }
         if calendar.isDateInYesterday(date) {
-            return "\(String(localized: "date.yesterday", defaultValue: "Hier")) \(timeStr)"
+            return "\(String(localized: "date.yesterday")) \(timeStr)"
         }
         if let sevenDaysAgo = calendar.date(byAdding: .day, value: -7, to: now), date > sevenDaysAgo {
             return "\(Self.dateSectionDayFormatter.string(from: date).capitalized) \(timeStr)"
@@ -453,9 +454,9 @@ struct ConversationView: View {
         HStack(spacing: 6) {
             Spacer()
             Image(systemName: "person.badge.plus")
-                .font(.system(size: 10, weight: .semibold))
-            Text(String(localized: "conversation.view.joined_on", defaultValue: "Rejoint le \(Self.joinedDateFormatter.string(from: date))", bundle: .main))
-                .font(.system(size: 11, weight: .medium))
+                .font(MeeshyFont.relative(10, weight: .semibold))
+            Text(String(localized: "conversation.view.joined_on", bundle: .main))
+                .font(MeeshyFont.relative(11, weight: .medium))
             Spacer()
         }
         .foregroundColor(Color(hex: accentColor).opacity(0.7))
@@ -474,7 +475,7 @@ struct ConversationView: View {
         HStack {
             Spacer()
             Text(formatDateSection(for: date))
-                .font(.system(size: 11, weight: .semibold))
+                .font(MeeshyFont.relative(11, weight: .semibold))
                 .foregroundColor(
                     isDark
                         ? Color(hex: accentColor).opacity(0.85)
@@ -513,13 +514,13 @@ struct ConversationView: View {
         if let conv = conversation, conv.encryptionMode != nil, !viewModel.hasOlderMessages, !viewModel.isLoadingInitial {
             VStack(spacing: 8) {
                 Image(systemName: "lock.fill")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(MeeshyFont.relative(14, weight: .bold))
                     .foregroundColor(MeeshyColors.indigo400)
                     .padding(8)
                     .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
 
-                Text(String(localized: "conversation.view.e2e_notice", defaultValue: "Les messages dans cette conversation sont chiffrés de bout en bout. Personne, pas même Meeshy, ne peut les lire.", bundle: .main))
-                    .font(.system(size: 12))
+                Text(String(localized: "conversation.view.e2e_notice", bundle: .main))
+                    .font(MeeshyFont.relative(12))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 8)
@@ -542,7 +543,7 @@ struct ConversationView: View {
         HStack(spacing: 8) {
             Image(systemName: "lock.fill")
                 .foregroundColor(.secondary)
-            Text(String(localized: "conversation.view.closed", defaultValue: "Cette conversation a ete fermee", bundle: .main))
+            Text(String(localized: "conversation.view.closed", bundle: .main))
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }
@@ -561,11 +562,11 @@ struct ConversationView: View {
             HStack(spacing: 8) {
                 Image(systemName: "hand.raised.fill")
                     .foregroundColor(.secondary)
-                Text(String(localized: "conversation.composer.blocked.title", defaultValue: "Vous avez bloqué cet utilisateur", bundle: .main))
+                Text(String(localized: "conversation.composer.blocked.title", bundle: .main))
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.secondary)
             }
-            Text(String(localized: "conversation.composer.blocked.subtitle", defaultValue: "Débloquez-le pour lui écrire et recevoir ses messages.", bundle: .main))
+            Text(String(localized: "conversation.composer.blocked.subtitle", bundle: .main))
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -576,14 +577,14 @@ struct ConversationView: View {
                     await MainActor.run { HapticFeedback.success() }
                 }
             } label: {
-                Text(String(localized: "conversation.composer.blocked.unblock", defaultValue: "Débloquer", bundle: .main))
+                Text(String(localized: "conversation.composer.blocked.unblock", bundle: .main))
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 10)
                     .background(Capsule().fill(Color(hex: accentColor)))
             }
-            .accessibilityLabel(String(localized: "conversation.composer.blocked.unblock", defaultValue: "Débloquer", bundle: .main))
+            .accessibilityLabel(String(localized: "conversation.composer.blocked.unblock", bundle: .main))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
@@ -598,14 +599,14 @@ struct ConversationView: View {
             Spacer()
 
             Image(systemName: conversation?.type == .direct ? "person.crop.circle" : "bubble.left.and.bubble.right")
-                .font(.system(size: 36, weight: .light))
+                .font(MeeshyFont.relative(36, weight: .light))
                 .foregroundColor(Color(hex: accentColor).opacity(0.5))
 
             Button {
                 isTyping = true
             } label: {
-                Text(String(localized: "empty.send_first", defaultValue: "Envoyer un message"))
-                    .font(.system(size: 13, weight: .semibold))
+                Text(String(localized: "empty.send_first"))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
@@ -613,9 +614,9 @@ struct ConversationView: View {
             }
 
             Text(conversation?.type == .direct
-                 ? String(localized: "empty.direct_hint", defaultValue: "Commencez la conversation")
-                 : String(localized: "empty.group_hint", defaultValue: "Soyez le premier a envoyer un message"))
-                .font(.system(size: 12))
+                 ? String(localized: "empty.direct_hint")
+                 : String(localized: "empty.group_hint"))
+                .font(MeeshyFont.relative(12))
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
@@ -633,8 +634,8 @@ struct ConversationView: View {
                 .fill(MeeshyColors.error.opacity(0.5))
                 .frame(height: 1)
                 .accessibilityHidden(true)
-            Text(String(localized: "conversation.view.new_messages", defaultValue: "Nouveaux messages", bundle: .main))
-                .font(.system(size: 11, weight: .semibold))
+            Text(String(localized: "conversation.view.new_messages", bundle: .main))
+                .font(MeeshyFont.relative(11, weight: .semibold))
                 .foregroundColor(MeeshyColors.error)
                 .lineLimit(1)
                 .fixedSize()
@@ -647,7 +648,7 @@ struct ConversationView: View {
         .id("unread_separator")
         .transition(.opacity)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "conversation.view.new_messages_unread", defaultValue: "Nouveaux messages non lus", bundle: .main))
+        .accessibilityLabel(String(localized: "conversation.view.new_messages_unread", bundle: .main))
         .accessibilityAddTraits(.isHeader)
     }
 
@@ -703,11 +704,11 @@ struct ConversationView: View {
             .sheet(isPresented: $composerState.showConversationInfo) {
                 if let conv = conversation { ConversationInfoSheet(conversation: conv, accentColor: accentColor, messages: viewModel.messages) }
             }
-            .alert(String(localized: "conversation.view.action_selected", defaultValue: "Action sélectionnée", bundle: .main), isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
-                Button(String(localized: "common.ok", defaultValue: "OK", bundle: .main)) { composerState.actionAlert = nil }
+            .alert(String(localized: "conversation.view.action_selected", bundle: .main), isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
+                Button(String(localized: "common.ok", bundle: .main)) { composerState.actionAlert = nil }
             } message: { Text(composerState.actionAlert ?? "") }
             .confirmationDialog(
-                String(localized: "conversation.view.delete_message.title", defaultValue: "Supprimer ce message ?", bundle: .main),
+                String(localized: "conversation.view.delete_message.title", bundle: .main),
                 isPresented: Binding(
                     get: { overlayState.deleteConfirmMessageId != nil },
                     set: { if !$0 { overlayState.deleteConfirmMessageId = nil } }
@@ -720,18 +721,18 @@ struct ConversationView: View {
                 // WhatsApp's "Delete for everyone" gating.
                 if let idx = viewModel.messageIndex(for: msgId),
                    viewModel.canDeleteForEveryone(viewModel.messages[idx]) {
-                    Button(String(localized: "conversation.view.delete_for_everyone", defaultValue: "Supprimer pour tout le monde", bundle: .main), role: .destructive) {
+                    Button(String(localized: "conversation.view.delete_for_everyone", bundle: .main), role: .destructive) {
                         Task { await viewModel.deleteMessage(messageId: msgId, mode: .everyone) }
                         overlayState.deleteConfirmMessageId = nil
                     }
                 }
-                Button(String(localized: "conversation.view.delete_for_me", defaultValue: "Supprimer pour moi", bundle: .main), role: .destructive) {
+                Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
                     Task { await viewModel.deleteMessage(messageId: msgId, mode: .local) }
                     overlayState.deleteConfirmMessageId = nil
                 }
-                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { overlayState.deleteConfirmMessageId = nil }
+                Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { overlayState.deleteConfirmMessageId = nil }
             } message: { _ in
-                Text(String(localized: "conversation.view.delete_for_everyone.hint", defaultValue: "La suppression pour tout le monde est disponible pendant 2 h après l'envoi.", bundle: .main))
+                Text(String(localized: "conversation.view.delete_for_everyone.hint", bundle: .main))
             }
             .sheet(item: $composerState.forwardMessage) { msgToForward in
                 ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { composerState.forwardMessage = nil }
@@ -836,6 +837,7 @@ struct ConversationView: View {
                         scrollState.scrollToMessageTrigger += 1
                     } else {
                         await viewModel.loadMessagesAround(messageId: messageId)
+                        if Task.isCancelled { return }
                         try? await Task.sleep(nanoseconds: 100_000_000)
                         guard !Task.isCancelled else { return }
                         scrollState.scrollToMessageId = messageId
@@ -845,24 +847,27 @@ struct ConversationView: View {
             }
             .onAppear {
                 if let context = replyContext { composerState.pendingReplyReference = context.toReplyReference }
-                // Language priority: active keyboard layout > user's primary
-                // content language (Prisme Linguistique source of truth) >
-                // existing composer default.
+                // Language priority (Prisme Linguistique): the user's primary
+                // configured content language is the source of truth and wins
+                // the compose default. The active keyboard layout is only a
+                // FALLBACK — used for anonymous users or unsupported content
+                // languages. It must NEVER override the in-app preference, the
+                // same way `deviceLocale` ranks last in language resolution.
                 //
-                // Locale.current is intentionally NOT consulted here: it
-                // reflects the device's UI language, which is decoupled from
-                // the user's chosen content language (CLAUDE.md "Prisme
-                // Linguistique"). A French-speaker on an English iPhone must
-                // compose in French unless their keyboard says otherwise.
-                if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
+                // Locale.current is likewise NOT consulted: it reflects the
+                // device's UI language, decoupled from the chosen content
+                // language. A French-speaker on an English keyboard / English
+                // iPhone composes in French; live detection corrects in-flight
+                // if they actually type another language.
+                if let userLang = AuthManager.shared.currentUser?
+                        .preferredContentLanguages.first,
+                   LanguageOption.defaults.contains(where: { $0.code == userLang }) {
+                    composerState.selectedLanguage = userLang
+                } else if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
                     let code = String(kbd.prefix(2))
                     if LanguageOption.defaults.contains(where: { $0.code == code }) {
                         composerState.selectedLanguage = code
                     }
-                } else if let userLang = AuthManager.shared.currentUser?
-                            .preferredContentLanguages.first,
-                          LanguageOption.defaults.contains(where: { $0.code == userLang }) {
-                    composerState.selectedLanguage = userLang
                 }
                 // Brancher la persistance du brouillon (immédiate à chaque
                 // fin de mot / champ vidé, débouncée 400 ms en milieu de mot
@@ -929,6 +934,18 @@ struct ConversationView: View {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
                 }
             }
+            .adaptiveOnChange(of: scenePhase) { _, phase in
+                // Read-receipt precision: messages that arrived while the app was
+                // backgrounded were deliberately NOT auto-marked read (the user
+                // wasn't looking). On return to the foreground, if the user is at
+                // the bottom they now see the latest message — re-emit the read so
+                // the deferred receipt completes. If scrolled up, the message is
+                // still off-screen and stays unread until they scroll down. The
+                // gateway-level dedup makes a redundant call harmless.
+                if phase == .active && scrollState.isNearBottom {
+                    viewModel.markAsRead()
+                }
+            }
             .adaptiveOnChange(of: viewModel.accessRevoked) { _, revoked in
                 // Server signalled the user no longer has access to this
                 // conversation (kicked, group deleted, blocked, etc.). The
@@ -936,7 +953,7 @@ struct ConversationView: View {
                 // local message state. We dismiss the screen here and
                 // surface a toast so the user knows why.
                 guard revoked else { return }
-                FeedbackToastManager.shared.showError(viewModel.error ?? String(localized: "conversation.accessRevoked", defaultValue: "You no longer have access to this conversation", bundle: .main))
+                FeedbackToastManager.shared.showError(viewModel.error ?? String(localized: "conversation.accessRevoked", bundle: .main))
                 dismiss()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
@@ -995,7 +1012,7 @@ struct ConversationView: View {
         .padding(.bottom, composerHeight + 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(String(localized: "conversation.view.loading_messages", defaultValue: "Chargement des messages", bundle: .main)))
+        .accessibilityLabel(Text(String(localized: "conversation.view.loading_messages", bundle: .main)))
     }
 
     // MARK: - Body Content (extracted to help type-checker)
@@ -1051,7 +1068,7 @@ struct ConversationView: View {
                             scrollState.scrollToMessageTrigger += 1
                         case .notFound:
                             HapticFeedback.error()
-                            FeedbackToastManager.shared.show(String(localized: "conversation.messageNotFound", defaultValue: "Message not found", bundle: .main), type: .info)
+                            FeedbackToastManager.shared.show(String(localized: "conversation.messageNotFound", bundle: .main), type: .info)
                         }
                     }
                 },
@@ -1064,10 +1081,19 @@ struct ConversationView: View {
                     await viewModel.loadOlderMessages()
                 },
                 onNearBottomChanged: { nearBottom in
+                    let wasNearBottom = scrollState.isNearBottom
                     if scrollState.isNearBottom != nearBottom {
                         scrollState.isNearBottom = nearBottom
                     }
                     viewModel.isCurrentlyNearBottom = nearBottom
+                    // Read-receipt precision: a message that arrived while the
+                    // user was scrolled up was deliberately NOT auto-marked read
+                    // (it was off-screen). Scrolling back to the bottom means the
+                    // user now sees it — re-emit the read so the deferred receipt
+                    // completes. Idempotent; only on the false→true edge.
+                    if nearBottom && !wasNearBottom {
+                        viewModel.markAsRead()
+                    }
                 },
                 onStoryReplyTap: { storyId in
                     // Open the story viewer at the slide that originated the
@@ -1201,7 +1227,7 @@ struct ConversationView: View {
                     .onTapGesture { onOpenFullConversation?() }
                     .padding(.bottom, composerHeight)
                     .zIndex(49)
-                    .accessibilityLabel(String(localized: "conversation.preview.open", defaultValue: "Ouvrir la conversation", bundle: .main))
+                    .accessibilityLabel(String(localized: "conversation.preview.open", bundle: .main))
             }
 
             floatingHeaderSection
@@ -1289,6 +1315,18 @@ struct ConversationView: View {
                         mentionSuggestionPanel
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
+                    if let blockedId = blockedDirectParticipantId {
+                        blockedComposerZone(userId: blockedId)
+                    } else if viewModel.isConversationClosed {
+                        closedConversationBanner
+                    } else {
+                        themedComposer
+                    }
+                    // Panneau emoji inline — glisse vers le haut À LA PLACE DU
+                    // CLAVIER, donc EN DESSOUS de la barre de composition (jamais
+                    // au-dessus). Même placement que le carrousel de pièces
+                    // jointes et que le composer story, pour une bascule
+                    // clavier ⇄ emoji sans saut visuel.
                     if composerState.showTextEmojiPicker {
                         EmojiKeyboardPanel(
                             style: isDark ? .dark : .light,
@@ -1298,13 +1336,6 @@ struct ConversationView: View {
                         )
                         .frame(height: 260)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                    if let blockedId = blockedDirectParticipantId {
-                        blockedComposerZone(userId: blockedId)
-                    } else if viewModel.isConversationClosed {
-                        closedConversationBanner
-                    } else {
-                        themedComposer
                     }
                 }
                 .background(.ultraThinMaterial)
@@ -1345,10 +1376,10 @@ struct ConversationView: View {
                             )
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(candidate.displayName)
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(MeeshyFont.relative(14, weight: .semibold))
                                     .foregroundColor(theme.textPrimary)
                                 Text("@\(candidate.username)")
-                                    .font(.system(size: 12))
+                                    .font(MeeshyFont.relative(12))
                                     .foregroundColor(theme.textSecondary)
                             }
                             Spacer()
@@ -1356,7 +1387,7 @@ struct ConversationView: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                     }
-                    .accessibilityLabel(String(localized: "conversation.view.mention", defaultValue: "Mentionner \(candidate.displayName)", bundle: .main))
+                    .accessibilityLabel(String(localized: "conversation.view.mention", bundle: .main))
                     if candidate.id != viewModel.mentionSuggestions.last?.id {
                         Divider()
                             .padding(.leading, 58)
@@ -1426,12 +1457,12 @@ struct ConversationView: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(MeeshyFont.relative(11, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(theme.textMuted.opacity(0.12)))
             }
-            .accessibilityLabel(String(localized: "conversation.view.close", defaultValue: "Fermer la conversation", bundle: .main))
+            .accessibilityLabel(String(localized: "conversation.view.close", bundle: .main))
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
@@ -1491,9 +1522,10 @@ struct ConversationView: View {
             HStack(alignment: .top, spacing: 4) {
                 Button { composerState.showConversationInfo = true } label: {
                     expandedHeaderTitleLabel
+                        .meeshyTapTarget()
                 }
                 .accessibilityLabel(conversation?.name ?? "Conversation")
-                .accessibilityHint(String(localized: "conversation.view.open_info", defaultValue: "Ouvre les informations de la conversation", bundle: .main))
+                .accessibilityHint(String(localized: "conversation.view.open_info", bundle: .main))
 
                 Spacer(minLength: 4)
                 headerCallButtons.layoutPriority(1)
@@ -1532,10 +1564,10 @@ struct ConversationView: View {
             // REST response lands — no blocking spinner.
             if viewModel.isRevalidating {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MeeshyFont.relative(10, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.85))
                     .adaptiveSymbolPulse()
-                    .accessibilityLabel(String(localized: "conversation.view.refreshing_background", defaultValue: "Actualisation en arriere-plan", bundle: .main))
+                    .accessibilityLabel(String(localized: "conversation.view.refreshing_background", bundle: .main))
             }
         }
     }
@@ -1546,12 +1578,15 @@ struct ConversationView: View {
             isSearchFocused = true
         } label: {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
+                .meeshyTapTarget()
         }
-        .accessibilityLabel(String(localized: "conversation.view.search_in_conversation", defaultValue: "Rechercher dans la conversation", bundle: .main))
+        .accessibilityLabel(String(localized: "conversation.view.search_in_conversation", bundle: .main))
+        .accessibilityHint(String(localized: "accessibility.search.hint", bundle: .main))
+        .accessibilityIdentifier("conversation.header.search")
     }
 
     @ViewBuilder

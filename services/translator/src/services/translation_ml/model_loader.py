@@ -41,6 +41,30 @@ from utils.performance import (
 )
 
 
+def build_model_load_kwargs(device: str, dtype: Any, cache_dir: str) -> Dict[str, Any]:
+    """Construit les kwargs de `from_pretrained` selon le device.
+
+    Sur CPU on n'utilise PAS `low_cpu_mem_usage` : ce mode charge le modèle via le
+    device `meta` puis matérialise les poids, et sous pression mémoire certains
+    poids restaient sur `meta` → `RuntimeError: Tensor on device cpu is not on the
+    expected device meta!` à l'inférence (→ `[ML-Pipeline-Error]`). Le gain mémoire
+    de `low_cpu_mem_usage` sur CPU est négligeable au regard de cette instabilité.
+
+    Sur CUDA on garde `device_map="auto"` + `low_cpu_mem_usage` (le chargement meta
+    via accelerate y est nominal et nécessaire au sharding GPU).
+    """
+    kwargs: Dict[str, Any] = {
+        "cache_dir": cache_dir,
+        "torch_dtype": dtype,
+    }
+    if device == "cuda":
+        kwargs["low_cpu_mem_usage"] = True
+        kwargs["device_map"] = "auto"
+    else:
+        kwargs["device_map"] = None
+    return kwargs
+
+
 class ModelLoader:
     """
     Gestionnaire de chargement et cache des modèles ML
@@ -218,13 +242,13 @@ class ModelLoader:
                     else torch.float32
                 )
 
-                # Charger le modèle
+                # Charger le modèle.
+                # ⚠️ Sur CPU : PAS de low_cpu_mem_usage (évite les poids restés sur
+                # le device `meta` → RuntimeError à l'inférence). Voir
+                # build_model_load_kwargs().
                 model = AutoModelForSeq2SeqLM.from_pretrained(
                     model_name,
-                    cache_dir=str(self.huggingface_cache),
-                    torch_dtype=dtype,
-                    low_cpu_mem_usage=True,
-                    device_map="auto" if device == "cuda" else None
+                    **build_model_load_kwargs(device, dtype, str(self.huggingface_cache))
                 )
 
                 # Mode evaluation pour désactiver dropout

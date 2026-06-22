@@ -54,6 +54,7 @@
       "communities": "Comunidades",
       "loading": "Cargando...",
       "loadingInProgress": "Carga en curso...",
+      "loadingGroups": "Cargando grupos…",
       "selectCommunity": "Seleccione una comunidad",
       "selectCommunityDescription": "Elija una comunidad para ver sus detalles",
       "newCommunity": "Nueva comunidad",
@@ -86,6 +87,7 @@
       "createdOn": "Creada el",
       "lastActivity": "Última actividad",
       "loadingConversations": "Cargando conversaciones...",
+      "loadingGroup": "Cargando grupo…",
       "noConversations": "No hay conversaciones",
       "noConversationsDescription": "Sea el primero en iniciar una conversación"
     },

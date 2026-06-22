@@ -53,7 +53,11 @@
     "deleteVideoNamed": "Supprimer la vidéo {name}",
     "deleteFileNamed": "Supprimer le fichier {name}",
     "openImageNamed": "Ouvrir l'image {name}",
-    "openFileNamed": "Ouvrir le fichier {name}"
+    "openFileNamed": "Ouvrir le fichier {name}",
+    "imagePreviewNamed": "Aperçu de l'image {name}",
+    "openVideoFullscreenNamed": "Ouvrir la vidéo {name} en plein écran",
+    "openPdfNamed": "Ouvrir le PDF : {name}",
+    "openTextFileNamed": "Ouvrir le fichier texte : {name}"
   },
   "contextMenu": {
     "close": "Fermer",
@@ -70,5 +74,13 @@
     "confirmDeleteIrreversible": "Cette action est irréversible. Le fichier sera définitivement supprimé.",
     "cancel": "Annuler",
     "deleting": "Suppression..."
+  },
+  "deleteDialog": {
+    "title": "Confirmer la suppression",
+    "description": "Êtes-vous sûr de vouloir supprimer ce fichier ? Cette action est irréversible.",
+    "serverNote": "Le fichier sera définitivement supprimé du serveur.",
+    "cancel": "Annuler",
+    "deleting": "Suppression...",
+    "delete": "Supprimer"
   }
 }

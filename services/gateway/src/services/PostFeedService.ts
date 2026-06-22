@@ -8,6 +8,7 @@ import {
   type ReelSeed,
 } from './posts/reelAffinity';
 import type { CacheStore } from './CacheStore';
+import { getCommunityCoMemberIds, isActiveCommunityMember } from './posts/communityVisibility';
 
 const FEED_SOCIAL_CACHE_TTL = 300; // 5 min — friend lists change infrequently
 
@@ -213,12 +214,13 @@ export class PostFeedService {
 
   async getStories(userId: string) {
     const now = new Date();
-    const [friendIds, dmContactIds] = await Promise.all([
+    const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
       this.getFriendIds(userId),
       this.getDirectConversationContactIds(userId),
+      getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds);
+    const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds, communityCoMemberIds);
 
     const where: any = {
       deletedAt: NOT_DELETED,
@@ -267,12 +269,13 @@ export class PostFeedService {
   async getStatuses(userId: string, cursor?: string, limit: number = 20) {
     const now = new Date();
     const cursorData = cursor ? decodeCursor(cursor) : null;
-    const [friendIds, dmContactIds] = await Promise.all([
+    const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
       this.getFriendIds(userId),
       this.getDirectConversationContactIds(userId),
+      getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds);
+    const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds, communityCoMemberIds);
 
     const whereClause: any = {
       deletedAt: NOT_DELETED,
@@ -374,14 +377,15 @@ export class PostFeedService {
     const candidatePoolSize = Math.min(limit * 4, 120);
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
-    const [friendIds, dmContactIds, viewerLanguages, seed] = await Promise.all([
+    const [friendIds, dmContactIds, viewerLanguages, seed, communityCoMemberIds] = await Promise.all([
       this.getFriendIds(userId),
       this.getDirectConversationContactIds(userId),
       this.getViewerLanguages(userId),
       seedReelId ? this.getReelSeed(seedReelId) : Promise.resolve(null),
+      getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const contactIds = new Set([...friendIds, ...dmContactIds]);
-    const visibilityFilter = this.buildVisibilityFilter(userId, [...contactIds]);
+    const visibilityFilter = this.buildVisibilityFilter(userId, [...contactIds], communityCoMemberIds);
 
     const andClauses: any[] = [
       visibilityFilter,
@@ -637,11 +641,17 @@ export class PostFeedService {
   async getCommunityFeed(communityId: string, viewerUserId: string | undefined, cursor?: string, limit: number = 20) {
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
+    // ACL : seuls les membres actifs voient les posts COMMUNITY ; un non-membre
+    // (ou un viewer anonyme) est limité aux posts PUBLIC de la communauté.
+    const isMember = viewerUserId
+      ? await isActiveCommunityMember(this.prisma, viewerUserId, communityId)
+      : false;
+
     const where: any = {
       communityId,
       deletedAt: NOT_DELETED,
       type: { in: [PostType.POST, PostType.REEL] },
-      visibility: { in: ['PUBLIC', 'COMMUNITY'] },
+      visibility: isMember ? { in: ['PUBLIC', 'COMMUNITY'] } : 'PUBLIC',
     };
 
     if (cursorData) {
@@ -749,11 +759,12 @@ export class PostFeedService {
   // PRIVATE HELPERS
   // ============================================
 
-  private buildVisibilityFilter(viewerId: string, friendIds: string[]) {
+  private buildVisibilityFilter(viewerId: string, friendIds: string[], communityCoMemberIds: string[] = []) {
     return {
       OR: [
         { authorId: viewerId },
         { visibility: PostVisibility.PUBLIC },
+        { visibility: PostVisibility.COMMUNITY, authorId: { in: communityCoMemberIds } },
         { visibility: PostVisibility.FRIENDS, authorId: { in: friendIds } },
         { visibility: PostVisibility.EXCEPT, authorId: { in: friendIds }, NOT: { visibilityUserIds: { has: viewerId } } },
         { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerId } },

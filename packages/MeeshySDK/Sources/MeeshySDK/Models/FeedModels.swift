@@ -328,6 +328,11 @@ public struct FeedComment: Identifiable, Sendable {
     /// Persisté dans le cache GRDB iOS via le Codable manuel ci-dessous —
     /// permet de restaurer l'état "liké par moi" au cold start sans API call.
     public var currentUserReactions: [String]?
+    /// Média unique attaché au commentaire (image/vidéo/audio). Réutilise `FeedMedia`
+    /// (même bridge `toMessageAttachment()` que les posts → mêmes viewers inline +
+    /// plein écran que les messages). Vide pour un commentaire texte. Le pipeline
+    /// audio enrichit la transcription/`translatedAudios` via `comment:media-updated`.
+    public var media: [FeedMedia]
 
     public var displayContent: String { translatedContent ?? content }
 
@@ -340,7 +345,7 @@ public struct FeedComment: Identifiable, Sendable {
                 content: String, timestamp: Date = Date(), likes: Int = 0, replies: Int = 0,
                 parentId: String? = nil, effectFlags: Int = 0,
                 originalLanguage: String? = nil, translatedContent: String? = nil,
-                currentUserReactions: [String]? = nil) {
+                currentUserReactions: [String]? = nil, media: [FeedMedia] = []) {
         self.id = id; self.author = author; self.authorId = authorId; self.authorUsername = authorUsername
         self.authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
         self.authorAvatarURL = authorAvatarURL; self.parentId = parentId
@@ -348,6 +353,7 @@ public struct FeedComment: Identifiable, Sendable {
         self.effectFlags = effectFlags
         self.originalLanguage = originalLanguage; self.translatedContent = translatedContent
         self.currentUserReactions = currentUserReactions
+        self.media = media
     }
 }
 
@@ -356,7 +362,7 @@ extension FeedComment: CacheIdentifiable {}
 extension FeedComment: Codable {
     enum CodingKeys: String, CodingKey {
         case id, author, authorId, authorUsername, authorAvatarURL, parentId, content, timestamp, likes, replies
-        case effectFlags, originalLanguage, translatedContent, currentUserReactions
+        case effectFlags, originalLanguage, translatedContent, currentUserReactions, media
     }
 
     public init(from decoder: Decoder) throws {
@@ -375,6 +381,7 @@ extension FeedComment: Codable {
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
         translatedContent = try c.decodeIfPresent(String.self, forKey: .translatedContent)
         currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
+        media = try c.decodeIfPresent([FeedMedia].self, forKey: .media) ?? []
         authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
     }
 
@@ -394,6 +401,9 @@ extension FeedComment: Codable {
         try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
         try c.encodeIfPresent(translatedContent, forKey: .translatedContent)
         try c.encodeIfPresent(currentUserReactions, forKey: .currentUserReactions)
+        if !media.isEmpty {
+            try c.encode(media, forKey: .media)
+        }
     }
 }
 
@@ -456,6 +466,20 @@ public struct FeedPost: Identifiable, Sendable {
     public var originalLanguage: String?
     public var translations: [String: PostTranslation]?
     public var translatedContent: String?
+    /// `[rawURL: token]` outbound-link tracking map carried from
+    /// `APIPost.trackedLinkMap`. Empty when the post has no tracked links.
+    /// Runtime-only (set via `toFeedPost`, like the engagement counters) —
+    /// consumed by the post body renderer (`/l/<token>` rewrite) and the
+    /// embedded-video façade destination. Backward-compatible by construction.
+    public var trackedLinkMap: [String: String] = [:]
+
+    /// Story canvas payload (`StoryEffects`) when this post is a story. `nil`
+    /// for normal posts. Mirrors `RepostContent.storyEffects`. Carried on the
+    /// domain model (not just the API model) so the post-detail story canvas
+    /// survives the `CacheCoordinator.feed` round-trip.
+    public var storyEffects: StoryEffects? = nil
+    /// Legacy voice-note audio URL for story/status posts. `nil` for normal posts.
+    public var audioUrl: String? = nil
 
     public var hasMedia: Bool { !media.isEmpty }
     public var mediaUrl: String? { media.first?.url }
@@ -521,6 +545,7 @@ extension FeedPost: Codable {
         case id, author, authorId, authorUsername, authorAvatarURL, type, content, timestamp, likes, isLiked
         case comments, commentCount, repost, repostAuthor, isQuote, media
         case originalLanguage, translations, translatedContent
+        case storyEffects, audioUrl
     }
 
     public init(from decoder: Decoder) throws {
@@ -544,6 +569,8 @@ extension FeedPost: Codable {
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
         translations = try c.decodeIfPresent([String: PostTranslation].self, forKey: .translations)
         translatedContent = try c.decodeIfPresent(String.self, forKey: .translatedContent)
+        storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
+        audioUrl = try c.decodeIfPresent(String.self, forKey: .audioUrl)
         let stableId = authorId.isEmpty ? author : authorId
         authorColor = DynamicColorGenerator.colorForPost(authorId: stableId, type: type, originalLanguage: originalLanguage)
     }
@@ -569,6 +596,8 @@ extension FeedPost: Codable {
         try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
         try c.encodeIfPresent(translations, forKey: .translations)
         try c.encodeIfPresent(translatedContent, forKey: .translatedContent)
+        try c.encodeIfPresent(storyEffects, forKey: .storyEffects)
+        try c.encodeIfPresent(audioUrl, forKey: .audioUrl)
     }
 }
 
@@ -592,6 +621,10 @@ public extension FeedPost {
     var isReel: Bool {
         (type ?? "").uppercased() == "REEL"
     }
+
+    /// True when the server marks this post as a story (`type == "STORY"`).
+    /// Mirrors `isReel`; used by `PostDetailView` to render the inline canvas.
+    var isStory: Bool { (type ?? "").uppercased() == "STORY" }
 
     /// Media surfaced first when the reel opens full-screen: the first video,
     /// else the first audio, else the first image. `nil` when the post is not a
@@ -670,5 +703,26 @@ public enum ReelComposition {
     /// MIME-type convenience overload of `defaultType`.
     public static func defaultType(mimeTypes: [String], forcePlainPost: Bool = false) -> PostType {
         (!forcePlainPost && suggestsReel(mimeTypes: mimeTypes)) ? .reel : .post
+    }
+}
+
+// MARK: - StoryItem bridge
+
+public extension StoryItem {
+    /// Synthesize a `StoryItem` from a story `FeedPost` (post-detail inline
+    /// rendering). Mirrors the `RepostContent` bridge used by
+    /// `StoryReaderRepresentable.init(repost:)`. `FeedPost` has no `expiresAt`,
+    /// which is irrelevant to in-place playback.
+    init(feedPost: FeedPost) {
+        self.init(
+            id: feedPost.id,
+            content: feedPost.content,
+            media: feedPost.media,
+            storyEffects: feedPost.storyEffects,
+            createdAt: feedPost.timestamp,
+            expiresAt: nil,
+            audioUrl: feedPost.audioUrl,
+            isViewed: false
+        )
     }
 }

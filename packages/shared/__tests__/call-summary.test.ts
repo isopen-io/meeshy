@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildCallSummary,
   buildCallSummaryMetadata,
+  buildCallSummaryWithMetadata,
   formatCallDuration,
   formatCallDataSize,
   callSummaryClientMessageId,
@@ -237,5 +238,42 @@ describe('callSummaryClientMessageId', () => {
     expect(callSummaryClientMessageId('abc123')).toBe('call-summary:abc123');
     expect(callSummaryClientMessageId('abc123')).toBe(callSummaryClientMessageId('abc123'));
     expect(callSummaryClientMessageId('a')).not.toBe(callSummaryClientMessageId('b'));
+  });
+});
+
+describe('buildCallSummaryWithMetadata', () => {
+  it('returns null when the summary is suppressed (garbageCollected)', () => {
+    const result = buildCallSummaryWithMetadata(makeMetaInput({ endReason: 'garbageCollected' }));
+    expect(result).toBeNull();
+  });
+
+  it('returns null for a non-terminal status (ringing)', () => {
+    const result = buildCallSummaryWithMetadata(makeMetaInput({ status: 'ringing', endReason: null }));
+    expect(result).toBeNull();
+  });
+
+  it('returns both summary and metadata for a completed video call', () => {
+    const result = buildCallSummaryWithMetadata(makeMetaInput({
+      callType: 'video',
+      durationSeconds: 272,
+    }));
+    expect(result).not.toBeNull();
+    expect(result?.summary.durationSeconds).toBe(272);
+    expect(result?.summary.callType).toBe('video');
+    expect(result?.metadata.outcome).toBe('completed');
+  });
+
+  it('summary in combined result matches standalone buildCallSummary', () => {
+    const input = makeMetaInput({ callType: 'audio', durationSeconds: 60 });
+    const combined = buildCallSummaryWithMetadata(input);
+    const standalone = buildCallSummary(input);
+    expect(combined?.summary).toEqual(standalone);
+  });
+
+  it('metadata in combined result matches standalone buildCallSummaryMetadata', () => {
+    const input = makeMetaInput({ callType: 'video', durationSeconds: 100, bytesSent: 500_000, bytesReceived: 300_000, networkQuality: 'good' });
+    const combined = buildCallSummaryWithMetadata(input);
+    const standalone = buildCallSummaryMetadata(input);
+    expect(combined?.metadata).toEqual(standalone);
   });
 });

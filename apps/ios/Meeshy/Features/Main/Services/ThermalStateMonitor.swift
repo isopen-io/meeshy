@@ -10,21 +10,37 @@ final class ThermalStateMonitor {
 
     private(set) var currentState: ProcessInfo.ThermalState = .nominal
 
+    /// Token de l'observateur bloc (l'API sélecteur ne permet pas de cibler la
+    /// queue de livraison ni de hopper sur le main actor).
+    private var thermalObserver: NSObjectProtocol?
+
     func startMonitoring() {
         currentState = ProcessInfo.processInfo.thermalState
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(thermalStateChanged),
-            name: ProcessInfo.thermalStateDidChangeNotification,
-            object: nil
-        )
+        // ⚠️ Crash SIGTRAP : le système poste `thermalStateDidChangeNotification`
+        // sur une queue de FOND (com.apple.root.user-interactive-qos). Cette classe
+        // est @MainActor (target app, SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor) et
+        // `thermalStateChanged()` mute `currentState`, lu par des computed @MainActor.
+        // Un observateur sélecteur @MainActor invoqué sur ce thread de fond fait
+        // échouer l'assertion d'isolation Swift 6 → l'app crashait après qu'un appel
+        // long ait fait chauffer l'appareil (~5 min). On hoppe explicitement sur le
+        // main actor (`MainActor.assumeIsolated` indispo en iOS 16 → `Task`).
+        thermalObserver = NotificationCenter.default.addObserver(
+            forName: ProcessInfo.thermalStateDidChangeNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            Task { @MainActor in self?.thermalStateChanged() }
+        }
     }
 
     func stopMonitoring() {
-        NotificationCenter.default.removeObserver(self)
+        if let thermalObserver {
+            NotificationCenter.default.removeObserver(thermalObserver)
+            self.thermalObserver = nil
+        }
     }
 
-    @objc private func thermalStateChanged() {
+    private func thermalStateChanged() {
         let newState = ProcessInfo.processInfo.thermalState
         guard newState != currentState else { return }
         currentState = newState

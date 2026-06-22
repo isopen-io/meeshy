@@ -111,6 +111,17 @@ export const getActiveCallSchema = z.object({
 export const getActiveCallForUserSchema = z.object({});
 
 /**
+ * GET /api/calls/history - Paginated call journal (query params)
+ * Parsed in-handler (mirrors the feed route), so this is the query shape only.
+ */
+export const callHistoryQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(30),
+  cursor: objectIdSchema.optional(),
+  filter: z.enum(['all', 'missed']).default('all')
+});
+export type CallHistoryQueryInput = z.infer<typeof callHistoryQuerySchema>;
+
+/**
  * Socket.IO Event: call:initiate
  */
 export const socketInitiateCallSchema = z.object({
@@ -143,7 +154,7 @@ export const socketSignalSchema = z.object({
   callId: objectIdSchema,
   signal: z.object({
     type: z.enum(['offer', 'answer', 'ice-candidate', 'ice-restart'], {
-      errorMap: () => ({ message: 'Signal type must be offer, answer, ice-candidate, or ice-restart' })
+      error: () => 'Signal type must be offer, answer, ice-candidate, or ice-restart'
     }),
     from: z.string().min(1, 'from field is required'),
     to: z.string().min(1, 'to field is required'),
@@ -162,9 +173,11 @@ export const socketSignalSchema = z.object({
       if (data.type === 'offer' || data.type === 'answer' || data.type === 'ice-restart') {
         return typeof data.sdp === 'string' && data.sdp.length > 0;
       }
+      /* istanbul ignore else -- enum guarantees all 4 types are handled */
       if (data.type === 'ice-candidate') {
         return typeof data.candidate === 'string';
       }
+      /* istanbul ignore next -- enum guarantees all 4 types handled above */
       return true;
     },
     {

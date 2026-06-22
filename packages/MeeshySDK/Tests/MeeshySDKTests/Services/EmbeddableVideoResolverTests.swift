@@ -79,4 +79,16 @@ struct EmbeddableVideoResolverTests {
         #expect(v.thumbnailURL().absoluteString == "https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg")
         #expect(v.embedURL.absoluteString == "https://www.youtube.com/embed/dQw4w9WgXcQ")
     }
+
+    @Test("watchURL canonique reconstruite depuis le videoId")
+    func watchURLCanonical() {
+        let v = EmbeddableVideoResolver.resolve(urlString: "https://youtu.be/dQw4w9WgXcQ")!
+        #expect(v.watchURL.absoluteString == "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    }
+
+    @Test("watchURL ajoute le timestamp quand un start est présent")
+    func watchURLWithStart() {
+        let v = EmbeddableVideoResolver.resolve(urlString: "https://youtu.be/dQw4w9WgXcQ?t=90")!
+        #expect(v.watchURL.absoluteString == "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=90s")
+    }
 }

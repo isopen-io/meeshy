@@ -60,9 +60,9 @@ struct BubbleCallNoticeView: View, Equatable {
             leadingGlyph
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.subheadline.weight(.medium))
                     .foregroundColor(ThemeManager.shared.textPrimary)
-                    .lineLimit(2)
+                    .lineLimit(1)
                 if hasDetailContent {
                     detailLine
                 }
@@ -73,8 +73,8 @@ struct BubbleCallNoticeView: View, Equatable {
         .padding(.horizontal, 13)
         .padding(.vertical, 10)
         .frame(minHeight: 44)
-        .background(doubleContour)
-        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(simpleContour)
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     // MARK: - Leading direction/media glyph
@@ -82,10 +82,10 @@ struct BubbleCallNoticeView: View, Equatable {
     private var leadingGlyph: some View {
         ZStack {
             Circle()
-                .fill(tint.opacity(isDark ? 0.20 : 0.14))
-                .frame(width: 34, height: 34)
+                .fill(tint.opacity(isDark ? 0.12 : 0.08))
+                .frame(width: 30, height: 30)
             Image(systemName: glyphName)
-                .font(.subheadline.weight(.semibold))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundColor(tint)
         }
         .accessibilityHidden(true)
@@ -149,28 +149,24 @@ struct BubbleCallNoticeView: View, Equatable {
     private var callBackBadge: some View {
         ZStack {
             Circle()
-                .fill(tint.opacity(isDark ? 0.22 : 0.16))
-                .frame(width: 34, height: 34)
+                .fill(tint.opacity(isDark ? 0.15 : 0.10))
+                .frame(width: 30, height: 30)
             Image(systemName: "phone.arrow.up.right.fill")
-                .font(.footnote.weight(.semibold))
+                .font(.system(size: 13, weight: .medium))
                 .foregroundColor(tint)
         }
         .accessibilityHidden(true)
     }
 
-    // MARK: - Double contour background
+    // MARK: - Simple contour background
 
-    private var doubleContour: some View {
+    private var simpleContour: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(tint.opacity(isDark ? 0.12 : 0.07))
-            // Outer stroke
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(tint.opacity(isDark ? 0.55 : 0.45), lineWidth: 1.5)
-            // Inner stroke, inset → the "double contour"
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(tint.opacity(isDark ? 0.28 : 0.22), lineWidth: 1)
-                .padding(3.5)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(tint.opacity(isDark ? 0.06 : 0.03))
+            // Thinner single border
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(tint.opacity(isDark ? 0.25 : 0.15), lineWidth: 0.5)
         }
     }
 
@@ -185,33 +181,44 @@ struct BubbleCallNoticeView: View, Equatable {
     }
 
     private var glyphName: String {
+        let isVideo = summary.callType == .video
         switch summary.outcome {
         case .missed:
-            return summary.callType == .video ? "video.slash.fill" : "phone.down.fill"
+            return isVideo ? "video.slash.fill" : "phone.arrow.down.left.fill"
         case .rejected:
-            return "phone.down.fill"
+            if isVideo { return "video.slash.fill" }
+            return isOutgoing ? "phone.arrow.up.right.fill" : "phone.arrow.down.left.fill"
         case .failed:
-            return summary.callType == .video ? "video.slash.fill" : "phone.down.fill"
+            return isVideo ? "video.slash.fill" : "phone.down.fill"
         case .completed:
-            if summary.callType == .video { return "video.fill" }
+            if isVideo {
+                return isOutgoing ? "video.fill" : "video.fill"
+            }
             return isOutgoing ? "phone.arrow.up.right.fill" : "phone.arrow.down.left.fill"
         }
     }
 
     private var title: String {
+        let isVideo = summary.callType == .video
         switch summary.outcome {
         case .completed:
-            return summary.callType == .video
+            let type = isVideo
                 ? String(localized: "bubble.call.video", defaultValue: "Appel vidéo", bundle: .main)
                 : String(localized: "bubble.call.audio", defaultValue: "Appel audio", bundle: .main)
+            let direction = isOutgoing
+                ? String(localized: "bubble.call.outgoing.suffix", defaultValue: "sortant", bundle: .main)
+                : String(localized: "bubble.call.incoming.suffix", defaultValue: "entrant", bundle: .main)
+            return "\(type) \(direction)"
         case .missed:
-            return summary.callType == .video
+            return isVideo
                 ? String(localized: "bubble.call.video.missed", defaultValue: "Appel vidéo manqué", bundle: .main)
                 : String(localized: "bubble.call.audio.missed", defaultValue: "Appel audio manqué", bundle: .main)
         case .rejected:
-            return String(localized: "bubble.call.rejected", defaultValue: "Appel refusé", bundle: .main)
+            return isOutgoing
+                ? String(localized: "bubble.call.rejected.sent", defaultValue: "Appel refusé", bundle: .main)
+                : String(localized: "bubble.call.rejected.received", defaultValue: "Appel rejeté", bundle: .main)
         case .failed:
-            return summary.callType == .video
+            return isVideo
                 ? String(localized: "bubble.call.video.failed", defaultValue: "Appel vidéo interrompu", bundle: .main)
                 : String(localized: "bubble.call.audio.failed", defaultValue: "Appel audio interrompu", bundle: .main)
         }

@@ -1310,7 +1310,8 @@ describe('PostCommentService', () => {
           data: { commentCount: { increment: 1 } },
         }),
       );
-      expect(result).toEqual(createdComment);
+      // `media: []` — addComment now returns the (possibly empty) comment media.
+      expect(result).toEqual({ ...createdComment, media: [] });
     });
 
     it('throws PARENT_NOT_FOUND when parentId does not exist', async () => {
@@ -1354,7 +1355,7 @@ describe('PostCommentService', () => {
           data: { replyCount: { increment: 1 } },
         }),
       );
-      expect(result).toEqual(reply);
+      expect(result).toEqual({ ...reply, media: [] });
     });
   });
 

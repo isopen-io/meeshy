@@ -95,10 +95,10 @@ export const NotificationFilters = memo(function NotificationFilters({
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             className={cn(
-              'flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap',
+              'flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:px-4',
               isActive
-                ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25'
-                : 'backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 hover:bg-white/70 dark:hover:bg-gray-800/70 border border-white/30 dark:border-gray-700/40'
+                ? 'bg-primary text-primary-foreground'
+                : 'border border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
             )}
           >
             <Icon className="h-4 w-4" />
@@ -106,10 +106,10 @@ export const NotificationFilters = memo(function NotificationFilters({
             <span className="sm:hidden">{filter.labelShort || filter.label}</span>
             {count > 0 && (
               <span className={cn(
-                'px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums',
+                'rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums',
                 isActive
-                  ? 'bg-white/20 text-white'
-                  : 'bg-gray-200/50 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300'
+                  ? 'bg-primary-foreground/20 text-primary-foreground'
+                  : 'bg-foreground/10 text-muted-foreground'
               )}>
                 {count}
               </span>

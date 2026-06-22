@@ -181,7 +181,7 @@ public struct StoryComposerView: View {
 
     // MARK: - Pickers
     private var transitionPicker: some View {
-        Text("Transitions")
+        Text(String(localized: "story.composer.transitions", defaultValue: "Transitions", bundle: .module))
             .foregroundColor(.white)
     }
 
@@ -211,6 +211,8 @@ public struct StoryComposerView: View {
     @State private var mediaLoadProgress: Double = 0
     @State private var mediaLoadLabel: String = ""
     @State private var visibility: String = "PUBLIC"
+    @State private var visibilityUserIds: [String] = []
+    @State private var audiencePickerMode: PostVisibility?
     @State private var lostMediaCount: Int = 0  // > 0 triggers an alert after restoreDraft
 
     // MARK: - Transition effects (local until synced to effects)
@@ -237,14 +239,15 @@ public struct StoryComposerView: View {
         _ loadedVideoURLs: [String: URL],
         _ loadedAudioURLs: [String: URL],
         _ originalLanguage: String?,
-        _ visibility: String
+        _ visibility: String,
+        _ visibilityUserIds: [String]
     ) -> Void
     public var onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     public var onDismiss: () -> Void
 
     public init(
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String) -> Void,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String]) -> Void,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -264,7 +267,7 @@ public struct StoryComposerView: View {
     public init(
         viewModel: StoryComposerViewModel,
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String) -> Void,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String]) -> Void,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void = { _, _, _, _, _ in },
         onDismiss: @escaping () -> Void
     ) {
@@ -699,10 +702,18 @@ public struct StoryComposerView: View {
             slideStrip
                 .frame(maxWidth: .infinity)
 
-            HStack(spacing: 8) {
-                previewButton
-                publishButton
-                overflowMenu
+            // Unified Liquid Glass action group (iOS 26 GlassEffectContainer →
+            // adjacent glass morphs into one continuous surface; iOS 16–25 falls
+            // back to material/solid via the adaptiveGlass wrappers). Publish keeps
+            // the primary brand tint via prominent glass; overflow (⋯) sits last,
+            // right of Publish.
+            AdaptiveGlassContainer(spacing: 6) {
+                HStack(spacing: 6) {
+                    visibilityMenu
+                    previewButton
+                    publishButton
+                    overflowMenu
+                }
             }
             .padding(.trailing, 16)
         }
@@ -718,13 +729,8 @@ public struct StoryComposerView: View {
             Image(systemName: "xmark")
                 .font(.system(size: 15, weight: .bold))
                 .foregroundColor(.white)
-                .frame(width: 34, height: 34)
-                .background(
-                    Circle()
-                        .fill(.black.opacity(0.55))
-                        .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
-                )
-                .frame(width: 44, height: 44)
+                .frame(width: 36, height: 36)
+                .adaptiveGlass(in: Circle())
                 .contentShape(Circle())
         }
     }
@@ -740,13 +746,8 @@ public struct StoryComposerView: View {
             Image(systemName: "play.fill")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(.white)
-                .frame(width: 32, height: 32)
-                .background(
-                    Circle()
-                        .fill(.black.opacity(0.55))
-                        .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
-                )
-                .frame(width: 44, height: 44)
+                .frame(width: 36, height: 36)
+                .adaptiveGlass(in: Circle())
                 .contentShape(Circle())
         }
     }
@@ -769,10 +770,42 @@ public struct StoryComposerView: View {
             .fixedSize()
             .foregroundColor(.white)
             .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(Capsule().fill(MeeshyColors.brandGradient))
+            .padding(.vertical, 9)
+            .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
         }
         .disabled(isPublishing)
+    }
+
+    private var visibilityMenu: some View {
+        Menu {
+            ForEach(PostVisibility.composerSelectableCases) { mode in
+                Button {
+                    visibility = mode.rawValue
+                    if mode.requiresUserSelection { audiencePickerMode = mode }
+                } label: {
+                    Label(mode.label, systemImage: visibility == mode.rawValue ? "checkmark" : mode.icon)
+                }
+            }
+        } label: {
+            let current = PostVisibility(rawValue: visibility) ?? .public
+            let showCount = current.requiresUserSelection && !visibilityUserIds.isEmpty
+            HStack(spacing: 4) {
+                Image(systemName: current.icon)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(showCount ? "\(current.label) (\(visibilityUserIds.count))" : current.label)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .adaptiveGlass(in: Capsule(), tint: .white.opacity(0.18))
+        }
+        .sheet(item: $audiencePickerMode) { mode in
+            AudienceUserPickerView(mode: mode, initialSelection: visibilityUserIds) { ids in
+                visibilityUserIds = ids
+            }
+        }
     }
 
     private var overflowMenu: some View {
@@ -802,19 +835,6 @@ public struct StoryComposerView: View {
             Button { saveDraft() } label: {
                 Label(String(localized: "story.composer.saveDraft", defaultValue: "Sauvegarder le brouillon", bundle: .module), systemImage: "square.and.arrow.down")
             }
-            Menu {
-                Button { visibility = "PUBLIC" } label: {
-                    Label(String(localized: "story.composer.public", defaultValue: "Public", bundle: .module), systemImage: visibility == "PUBLIC" ? "checkmark" : "globe")
-                }
-                Button { visibility = "FRIENDS" } label: {
-                    Label(String(localized: "story.composer.friends", defaultValue: "Amis", bundle: .module), systemImage: visibility == "FRIENDS" ? "checkmark" : "person.2")
-                }
-                Button { visibility = "PRIVATE" } label: {
-                    Label(String(localized: "story.composer.private", defaultValue: "Prive", bundle: .module), systemImage: visibility == "PRIVATE" ? "checkmark" : "lock")
-                }
-            } label: {
-                Label(String(localized: "story.composer.visibility", defaultValue: "Visibilite", bundle: .module), systemImage: "eye")
-            }
             Divider()
             Button(role: .destructive) {
                 // Bug fix: viewModel.reset() wipes ViewModel data (slides, effects,
@@ -834,13 +854,8 @@ public struct StoryComposerView: View {
             Image(systemName: "ellipsis")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundColor(.white)
-                .frame(width: 32, height: 32)
-                .background(
-                    Circle()
-                        .fill(.black.opacity(0.55))
-                        .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
-                )
-                .frame(width: 44, height: 44)
+                .frame(width: 36, height: 36)
+                .adaptiveGlass(in: Circle())
                 .contentShape(Circle())
         }
     }
@@ -1239,6 +1254,7 @@ public struct StoryComposerView: View {
             .padding(6)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(.isButton)
         .accessibilityLabel(title)
         .accessibilityHint(subtitle)
     }
@@ -2110,7 +2126,9 @@ public struct StoryComposerView: View {
             guard !Task.isCancelled else { return }
             clearAllDrafts()
             HapticFeedback.success()
-            onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs, storyLanguage, visibility)
+            let mode = PostVisibility(rawValue: visibility) ?? .public
+            let ids = mode.requiresUserSelection ? visibilityUserIds : []
+            onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs, storyLanguage, visibility, ids)
         }
     }
 
@@ -2372,12 +2390,12 @@ struct StoryLanguagePickerView: View {
                     }
                 }
             }
-            .searchable(text: $searchText, prompt: "Rechercher une langue")
-            .navigationTitle("Langue du contenu")
+            .searchable(text: $searchText, prompt: String(localized: "story.language.search", defaultValue: "Rechercher une langue", bundle: .module))
+            .navigationTitle(String(localized: "story.language.title", defaultValue: "Langue du contenu", bundle: .module))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Fermer") { dismiss() }
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .module)) { dismiss() }
                         .foregroundColor(MeeshyColors.indigo500)
                 }
             }

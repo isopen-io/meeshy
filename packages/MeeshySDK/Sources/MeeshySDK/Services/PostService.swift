@@ -39,13 +39,14 @@ public protocol PostServiceProviding: Sendable {
     func removeBookmark(postId: String) async throws
     func getPost(postId: String) async throws -> APIPost
     func getComments(postId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
-    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?) async throws -> APIPostComment
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?) async throws -> APIPostComment
     func likeComment(postId: String, commentId: String) async throws
     func unlikeComment(postId: String, commentId: String) async throws
+    func deleteComment(postId: String, commentId: String) async throws
     func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool) async throws -> APIPost
     func share(postId: String) async throws
     func share(postId: String, platform: String?, generateLink: Bool) async throws -> PostShareResult
-    func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?) async throws -> APIPost
+    func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?) async throws -> APIPost
     func createWithType(_ type: PostType, content: String, visibility: String, moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost
     func requestTranslation(postId: String, targetLanguage: String) async throws
     func pinPost(postId: String) async throws
@@ -58,6 +59,16 @@ public protocol PostServiceProviding: Sendable {
     func recordImpressions(postIds: [String], source: String) async throws
     func recordImpression(postId: String, source: String) async throws
     func recordEngagement(_ sessions: [EngagementSession]) async throws
+}
+
+public extension PostServiceProviding {
+    /// Convenience texte-seul (attachements = nil). Préserve les appels existants
+    /// depuis que `addComment` porte `attachmentIds` / `mobileTranscription` /
+    /// `originalLanguage` (les protocoles Swift ne supportent pas les valeurs par défaut).
+    func addComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async throws -> APIPostComment {
+        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
+                             attachmentIds: nil, mobileTranscription: nil, originalLanguage: nil)
+    }
 }
 
 public final class PostService: PostServiceProviding, @unchecked Sendable {
@@ -101,8 +112,12 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(postId)/bookmark", method: "POST")
     }
 
-    public func addComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async throws -> APIPostComment {
-        let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags)
+    public func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+                           attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
+                           originalLanguage: String?) async throws -> APIPostComment {
+        let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags,
+                                        attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
+                                        originalLanguage: originalLanguage)
         let response: APIResponse<APIPostComment> = try await api.post(endpoint: "/posts/\(postId)/comments", body: body)
         return response.data
     }
@@ -198,13 +213,13 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(postId)/comments/\(commentId)")
     }
 
-    public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String = "PUBLIC", originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil) async throws -> APIPost {
+    public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil) async throws -> APIPost {
         // Strip composer-local `file://` paths from mediaObjects before the
         // payload hits the wire — they only resolve in the author's sandbox
         // and break the canvas for every reader (cf. StoryEffects+Sanitization
         // and StoryMediaLayer.swift:132-134).
         let sanitizedEffects = storyEffects?.sanitizedForServerPublish()
-        let body = CreateStoryRequest(content: content, storyEffects: sanitizedEffects, visibility: visibility, originalLanguage: originalLanguage, mediaIds: mediaIds, repostOfId: repostOfId)
+        let body = CreateStoryRequest(content: content, storyEffects: sanitizedEffects, visibility: visibility, visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage, mediaIds: mediaIds, repostOfId: repostOfId)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }

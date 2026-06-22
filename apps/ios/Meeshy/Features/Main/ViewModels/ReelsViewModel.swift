@@ -372,10 +372,24 @@ final class ReelsViewModel: ObservableObject {
         }
     }
 
-    func share(_ post: FeedPost) {
+    /// Records a share on `post` and mints a **deduplicated** tracking link —
+    /// aligned with the feed's `sharePost(_:generateLink:)`. Returns the absolute
+    /// `meeshy.me/l/<token>` short URL so the caller can present the system share
+    /// sheet, or `nil` on failure (the caller falls back to the raw post URL).
+    ///
+    /// Replaces the old plain `share(postId:)` path, which incremented the server
+    /// `shareCount` on EVERY tap with no dedup — re-taps inflated the counter even
+    /// though nothing new was shared (a reel showed 23 shares for 4 unique views).
+    /// The `generateLink: true` path upserts one link per (post, sharer): the
+    /// counter rises at most once per sharer, exactly like the feed.
+    func shareLink(for post: FeedPost) async -> String? {
         EngagementTracker.shared.recordAction(.shared, surface: .reels)
-        HapticFeedback.light()
-        Task { try? await service.share(postId: post.id) }
+        do {
+            let result = try await service.share(postId: post.id, platform: "system", generateLink: true)
+            return result.shortUrl
+        } catch {
+            return nil
+        }
     }
 
     func recordView(_ id: String) {

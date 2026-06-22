@@ -24,7 +24,8 @@ import {
   endCallSchema,
   joinCallSchema,
   leaveCallSchema,
-  getActiveCallSchema
+  getActiveCallSchema,
+  callHistoryQuerySchema
 } from '../validation/call-schemas.js';
 import {
   callSessionSchema,
@@ -1075,6 +1076,141 @@ export default async function callRoutes(fastify: FastifyInstance) {
         error: {
           code: 'INTERNAL_ERROR',
           message: 'Failed to get active call'
+        }
+      });
+    }
+  });
+
+  // ─── GET /api/calls/history — Paginated call journal ───
+
+  fastify.get('/calls/history', {
+    preValidation: [requiredAuth],
+    ...ROUTE_RATE_LIMITS.callOperations,
+    schema: {
+      description: 'Paginated call journal for the authenticated user: terminal calls (ended/missed/rejected/failed) in their conversations over a 3-month sliding window, newest first. Cursor-paginated.',
+      tags: ['calls'],
+      summary: 'List call history',
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'integer', minimum: 1, maximum: 50, default: 30 },
+          cursor: { type: 'string', description: 'Opaque cursor (call id) for the next page' },
+          filter: { type: 'string', enum: ['all', 'missed'], default: 'all' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Call history page',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  callId: { type: 'string' },
+                  conversationId: { type: 'string' },
+                  conversationType: { type: 'string' },
+                  conversationTitle: { type: ['string', 'null'] },
+                  conversationAvatar: { type: ['string', 'null'] },
+                  mode: { type: 'string' },
+                  status: { type: 'string' },
+                  endReason: { type: ['string', 'null'] },
+                  direction: { type: 'string', enum: ['incoming', 'outgoing', 'missed'] },
+                  isVideo: { type: 'boolean' },
+                  startedAt: { type: 'string' },
+                  answeredAt: { type: ['string', 'null'] },
+                  endedAt: { type: ['string', 'null'] },
+                  durationSec: { type: 'integer' },
+                  bytesSent: { type: ['integer', 'null'] },
+                  bytesReceived: { type: ['integer', 'null'] },
+                  peer: {
+                    type: ['object', 'null'],
+                    properties: {
+                      userId: { type: 'string' },
+                      username: { type: 'string' },
+                      displayName: { type: ['string', 'null'] },
+                      avatar: { type: ['string', 'null'] },
+                      phoneNumber: { type: ['string', 'null'] },
+                      isOnline: { type: 'boolean' }
+                    }
+                  }
+                }
+              }
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                limit: { type: 'integer' },
+                hasMore: { type: 'boolean' },
+                nextCursor: { type: 'string' }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Authentication required',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: {
+              type: 'object',
+              properties: {
+                code: { type: 'string', example: 'NOT_AUTHENTICATED' },
+                message: { type: 'string' }
+              }
+            }
+          }
+        },
+        500: {
+          description: 'Internal server error',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: {
+              type: 'object',
+              properties: {
+                code: { type: 'string', example: 'INTERNAL_ERROR' },
+                message: { type: 'string' }
+              }
+            }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const authRequest = request as unknown as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+
+      if (!userId) {
+        return reply.status(401).send({
+          success: false,
+          error: {
+            code: 'NOT_AUTHENTICATED',
+            message: 'Authentication required'
+          }
+        });
+      }
+
+      const parsed = callHistoryQuerySchema.safeParse(request.query);
+      const { limit, cursor, filter } = parsed.success
+        ? parsed.data
+        : { limit: 30, cursor: undefined as string | undefined, filter: 'all' as const };
+
+      const result = await callService.listHistory(userId, { limit, cursor, filter });
+
+      return sendSuccess(reply, result.items, {
+        pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor }
+      });
+    } catch (error: any) {
+      logger.error('❌ REST: Error listing call history', error);
+      return reply.status(500).send({
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to get call history'
         }
       });
     }

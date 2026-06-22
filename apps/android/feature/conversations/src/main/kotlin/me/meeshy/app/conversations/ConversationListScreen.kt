@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
@@ -65,6 +66,7 @@ fun ConversationListScreen(
     onConversationClick: (String) -> Unit,
     onLogout: () -> Unit,
     onNewConversation: () -> Unit = {},
+    onContacts: () -> Unit = {},
     viewModel: ConversationListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -103,6 +105,9 @@ fun ConversationListScreen(
                     } else {
                         IconButton(onClick = { viewModel.setSearchActive(true) }) {
                             Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.conversations_search))
+                        }
+                        IconButton(onClick = onContacts) {
+                            Icon(Icons.Filled.People, contentDescription = stringResource(R.string.conversations_contacts))
                         }
                         IconButton(onClick = onLogout) {
                             Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.conversations_logout))

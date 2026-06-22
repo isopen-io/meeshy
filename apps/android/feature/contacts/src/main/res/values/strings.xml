@@ -7,4 +7,10 @@
     <string name="contacts_tab_discover">Discover</string>
     <string name="contacts_tab_blocked">Blocked</string>
     <string name="contacts_coming_soon">Coming soon</string>
+    <string name="contacts_requests_received">Received</string>
+    <string name="contacts_requests_sent">Sent</string>
+    <string name="contacts_requests_empty">No pending requests</string>
+    <string name="contacts_request_accept">Accept</string>
+    <string name="contacts_request_decline">Decline</string>
+    <string name="contacts_request_cancel">Cancel</string>
 </resources>

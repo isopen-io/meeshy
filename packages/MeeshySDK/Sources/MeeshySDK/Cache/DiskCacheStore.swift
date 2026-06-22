@@ -157,6 +157,28 @@ public actor DiskCacheStore: ReadableCacheStore {
 
     // MARK: - Adoption (PR B — optimistic local file → canonical cache key)
 
+    /// Variante NON-DESTRUCTIVE d'`adopt` : COPIE le fichier local dans le cache
+    /// sous `canonicalKey` et laisse la source en place. À utiliser quand le
+    /// caller a encore besoin du fichier source (ex : un asset d'upload de story
+    /// encore référencé par la preview live du composer). Idempotent : si la clé
+    /// existe déjà, no-op. Seed l'auteur AU PUBLISH pour que ses propres stories
+    /// jouent depuis le disque (offline) sans jamais re-télécharger ce qu'il
+    /// possède déjà localement.
+    public func seed(copyingLocalFile localURL: URL, for canonicalKey: String) async {
+        guard fileManager.fileExists(atPath: localURL.path) else { return }
+        let key = Self.fileKey(for: canonicalKey)
+        let destination = diskFilePath(for: key)
+        if fileManager.fileExists(atPath: destination.path) { return }
+        do {
+            try fileManager.copyItem(at: localURL, to: destination)
+        } catch {
+            logger.error("seed copy failed for key \(key): \(error.localizedDescription)")
+            return
+        }
+        try? fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: destination.path)
+        fileTimestamps[key] = Date()
+    }
+
     /// Adopts an existing local file as the cached entry for `canonicalKey`.
     /// Move-if-same-volume (atomic), fallback copy + remove. Idempotent: if the
     /// key already exists on disk, the source is left alone (cached version wins).
