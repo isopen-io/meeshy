@@ -7,7 +7,7 @@ import "../styles/z-index-fix.css";
 import "../styles/custom-toast.css";
 import { Toaster } from "@/components/ui/sonner";
 import { StoreInitializer } from "@/stores";
-import { ThemeProvider, QueryProvider, PresenceProvider } from "@/components/providers";
+import { ThemeProvider, QueryProvider, PresenceProvider, MotionProvider } from "@/components/providers";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { ClientOnly } from "@/components/common/client-only";
 import { MessageViewProvider } from "@/hooks/use-message-view-state";
@@ -97,20 +97,22 @@ export default async function RootLayout({
         <QueryProvider>
           <StoreInitializer>
             <ThemeProvider>
-              <MessageViewProvider>
-                <ErrorBoundary>
-                  <ClientOnly>
-                    <SystemStatusBanner />
-                    <PresenceProvider>
-                      <main id="main-content">
-                        {children}
-                      </main>
-                    </PresenceProvider>
-                    <CallManager />
-                    <TabNotificationManager />
-                  </ClientOnly>
-                </ErrorBoundary>
-              </MessageViewProvider>
+              <MotionProvider>
+                <MessageViewProvider>
+                  <ErrorBoundary>
+                    <ClientOnly>
+                      <SystemStatusBanner />
+                      <PresenceProvider>
+                        <main id="main-content">
+                          {children}
+                        </main>
+                      </PresenceProvider>
+                      <CallManager />
+                      <TabNotificationManager />
+                    </ClientOnly>
+                  </ErrorBoundary>
+                </MessageViewProvider>
+              </MotionProvider>
             </ThemeProvider>
           </StoreInitializer>
         </QueryProvider>

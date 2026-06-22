@@ -1,34 +1,28 @@
-# Plan — Itération 64w (web)
+# Plan d'itération 64w (web only)
 
-## Objectif
-Solder un cluster **orthogonal** de l'anti-pattern `t()||fallback` (différé 60w) sur des
-bannières/labels où les clés étaient **absentes des locales** (vrai bug i18n, pas que dead-code).
-
-## Périmètre (bounded)
-1. `failed-message-banner.tsx` → `bubbleStream.*` (15 clés)
-2. `SystemStatusBanner.tsx` → `offlineMessage`/`updateAvailable`/`updateNow`/`wait`
-3. `language-selector.tsx` → `languageSelector.{selectLanguage,searchLanguage,noLanguageFound}`
-4. `emoji-picker.tsx` → `picker.{clearSearch,categories.label}`
+**Objectif** : éliminer l'anti-pattern `t('key') || 'fallback FR'` sur la page de
+connexion par lien magique (`app/auth/magic-link/page.tsx`) — surface d'entrée non
+authentifiée (deep-link email). Continuité du travail auth de 63w (forgot/reset).
 
 ## Étapes
-- [x] Convertir `t('k') || 'fr'` → `t('k', 'fr')` sur les 4 composants
-- [x] Regrouper les 5 clés génériques du banner sous `bubbleStream`
-- [x] Ajouter 24 clés ×4 locales (fr/en/es/pt) — append-only, JSON valide
-- [x] Vérifier 0 anti-pattern restant + JSON valide
-- [ ] `bun install` + `jest` sur les 3 tests des composants touchés
-- [ ] Commit + push branche `claude/practical-fermat-gq4cjc`
-- [ ] PR → CI vert → merge dans `main`
-- [ ] MAJ `branch-tracking.md` (History + Next iteration 65w)
+1. ✅ Revue cohérence : confirmer aucun doublon d'analyse ; choisir une surface
+   **orthogonale** aux PR en vol (#849/#852/#853/#854/#855).
+2. ✅ Vérifier l'existence des 43 clés ×4 locales (script) → toutes présentes sauf
+   `featureGate.backToHome`.
+3. ✅ Ajouter `auth.featureGate.backToHome` aux 4 locales (en/fr/es/pt), insert ciblé
+   (pas de reformat JSON).
+4. ✅ Convertir `t('key') || 'FR'` → `t('key', 'English')` (44 occ.) ; supprimer le
+   `|| fb` mort des 2 cas paramétrés (`expiresIn`, `retriesRemaining`).
+5. ✅ Grep résiduel = 0 ; JSON valides.
+6. ⏳ Commit + push branche `claude/practical-fermat-w6ianf` ; PR ; CI ; merge `main`.
+7. ⏳ Mettre à jour `branch-tracking.md` (base + History + Next iteration = 65).
 
-## Différé restant (pour 65w+) — classe `t()||fallback`
-Surfaces orthogonales encore ouvertes (ne pas dupliquer #843/#849/#844) :
-`app/(connected)/{contacts,me}/page.tsx`, `app/forgot-password/*`, `app/reset-password/page.tsx`,
-`app/settings/page.tsx`, `components/common/SystemStatusBanner` ✅, `LastMessagePreview.tsx`,
-`hooks/use-recovery-*.ts`, `hooks/use-conversation-details.ts`, `CommunityCarousel.tsx`,
-`ConversationLayout.tsx`, `ConversationSettingsModal.tsx`, `conversation-participants-drawer.tsx`,
-`steps/ConversationDetailsStep.tsx`, `video-calls/audio-effects/hooks/useAudioEffects.ts`,
-`PhoneResetFlow.tsx` (post-#800). Procéder par lots **bornés et orthogonaux**.
+## Critères d'acceptation
+- 0 occurrence `t()||fallback` dans `app/auth/magic-link/page.tsx`.
+- Aucune clé brute ni secours FR affichable en toutes langues sur cette page.
+- 4 locales auth.json valides, parité stricte, `featureGate.backToHome` présente ×4.
+- CI vert (typecheck/build/tests).
 
-## Continuité
-- Base de départ : `main` (4172b8f). Branche de travail : `claude/practical-fermat-gq4cjc`.
-- Après merge : supprimer la branche, repartir de `main` HEAD pour 65w.
+## Risques
+- **Faible** : changement mécanique. Seul ajout de contenu = 1 clé ×4 (déjà vérifiée
+  absente). Signature `t()` exclusive params/fallback respectée (cas paramétrés gérés).

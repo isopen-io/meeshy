@@ -1,31 +1,50 @@
 # Plan — Itération 65w (web)
 
 ## Objectif
-Corriger le **bug i18n live** de la page de détails d'un lien de tracking
-`app/links/tracked/[token]/page.tsx` : 7 clés d'erreur absentes des locales font afficher la
-**clé brute** (toasts + écran d'erreur plein cadre) à TOUS les utilisateurs. Solder en même
-temps l'anti-pattern `t()||fallback` résiduel du fichier + 3 chaînes FR figées.
+Solder l'anti-pattern buggé **`t('key') || 'fallback'`** sur la modale de réglages de
+conversation `components/conversations/ConversationSettingsModal.tsx` (surface
+orthogonale aux 6 PR 64w en vol) ET corriger le **vrai bug i18n** des 6 clés
+`fr`-only affichées en clé brute aux non-francophones.
 
-## Surface (orthogonale aux PR en vol #858/#859/#860/#861/#862/#863)
-- 1 composant : `app/links/tracked/[token]/page.tsx`
-- 4 locales : `locales/{en,fr,es,pt}/links.json`
-
-## Étapes
-1. [x] Confirmer la cause racine : `useI18n('links')` déballe la clé racine ; `tracking.errors.*`
-   absentes → `t()` renvoie la clé brute, `||` court-circuite.
-2. [x] Convertir les 15 `t(k) || 'FR'` → `t(k, 'EN')` (signature de secours native, anti-flash).
-3. [x] `Une erreur inattendue s'est produite` → `t('tracking.details.unexpectedError', '…')`.
-4. [x] `{n} clics` / `{n} uniques` → `t('tracking.details.clicksCount'|'uniqueCount', { count })`.
-5. [x] Ajouter 8 clés ×4 locales (7 `errors.*` + 1 `details.unexpectedError`) via `jq` (append-only).
-6. [x] Valider JSON (`jq empty`) + parité 14 clés `errors` ×4.
-7. [x] `grep` anti-pattern + FR user-facing = 0.
-8. [x] Tests jest verts (30 passed / 8 skipped, inchangés).
-9. [ ] Commit, push, PR, CI verte, merge `main`, supprimer la branche, MAJ `branch-tracking.md`.
-
-## Risques / non-régression
-- Mock de test `t` ignore le 2ᵉ arg (clé renvoyée) → assertions par clé inchangées. ✅
-- `t('…', { count })` : `count` numérique → `params[k].toString()` OK. ✅
-- Append-only locales : aucune clé existante touchée. ✅
+## Base
+- `main` HEAD `be9a663` (post-merge #853, iter-63wb sur `main`).
+- Branche assignée : `claude/practical-fermat-s5hyhl` (resync sur `main`).
 
 ## Numérotation
-**65w** : 64w (#858/#860) et 64wb (#861/#863) déjà occupés par d'autres agents web.
+**65w** — le slot 64w est saturé (#854/#857/#858/#859/#860). `branch-tracking.md`
+(édité par #857) réserve explicitement « 65w+ » pour les fichiers restants de
+l'anti-pattern.
+
+## Périmètre (bounded, 1 composant)
+- 30 occ. `t(k) || 'FR'` → `t(k, 'English')`.
+- 24 clés déjà présentes ×4 → 0 ajout (dead-code + flash).
+- 6 clés `fr`-only → ajoutées en en/es/pt (vrai bug : clé brute affichée).
+
+## Étapes
+1. [x] Resync branche assignée sur `main` HEAD.
+2. [x] Mesurer (30 occ. / 1 fichier ; namespace `conversations`).
+3. [x] Vérifier l'existence des clés ×4 → 24 OK, 6 `fr`-only.
+4. [x] `t(k) || 'FR'` → `t(k, 'En')` (secours = valeur EN exacte du locale).
+5. [x] Ajouter les 6 clés manquantes en/es/pt (`fr` intact) ; parité ×4 ; JSON valide.
+6. [x] Ajouter les 6 clés au mock du test (cohérence).
+7. [x] Vérifier 0 anti-pattern restant dans le fichier.
+8. [ ] Commit + push branche `claude/practical-fermat-s5hyhl`.
+9. [ ] PR → CI verte → merge dans `main`.
+10. [ ] MAJ minimale `branch-tracking.md` (note SOLDÉ + History 65w).
+11. [ ] Supprimer la branche après merge ; repartir de `main` HEAD pour 66w.
+
+## Changements
+- `components/conversations/ConversationSettingsModal.tsx` (30 occ.).
+- `locales/{en,es,pt}/conversations.json` (+6 clés chacun).
+- `__tests__/components/conversations/ConversationSettingsModal.test.tsx` (+6 mock).
+- Docs 65w (analyse + plan) + note `branch-tracking.md`.
+
+## Risque
+Faible : transformation mécanique vérifiée ; 24 clés présentes (correctif pur
+anti-flash) ; 6 clés ajoutées en parité ×4 (corrige un bug visible). Test = mock
+1-arg insensible au 2ᵉ arg.
+
+## Suite (66w+)
+- ~190 occ. / ~34 fichiers restants de l'anti-pattern → lots bornés orthogonaux.
+- Nettoyage documentaire dédié de `branch-tracking.md` (blocs pointeurs + History
+  dupliqués) — toujours différé.
