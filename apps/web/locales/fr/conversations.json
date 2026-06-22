@@ -686,6 +686,8 @@
       "tag": "Tag",
       "call": "Appeler",
       "photo": "Photo",
+      "audio": "Audio",
+      "video": "Vidéo",
       "voiceMessage": "Message vocal",
       "typing": "écrit…",
       "online": "En ligne",

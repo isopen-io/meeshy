@@ -676,6 +676,8 @@
       "tag": "Tag",
       "call": "Call",
       "photo": "Photo",
+      "audio": "Audio",
+      "video": "Video",
       "voiceMessage": "Voice message",
       "typing": "typing…",
       "online": "Online",
