@@ -20,6 +20,9 @@ struct MessageReadStatusResponse: Decodable {
     let readCount: Int
     let receivedBy: [ReceivedEntry]
     let readBy: [ReadEntry]
+    /// Per-attachment, per-participant playback progress (audio/video).
+    /// Optional so older gateway responses (before this shipped) still decode.
+    let attachmentConsumption: [AttachmentConsumptionEntry]?
 
     struct ReceivedEntry: Decodable {
         let participantId: String
@@ -34,7 +37,24 @@ struct MessageReadStatusResponse: Decodable {
         let avatarURL: String?
         let readAt: Date
     }
+
+    struct AttachmentConsumptionEntry: Decodable {
+        let attachmentId: String
+        let participants: [ParticipantConsumption]
+
+        struct ParticipantConsumption: Decodable {
+            let participantId: String
+            let displayName: String
+            let avatarURL: String?
+            let lastPlayPositionMs: Int?
+            let listenedComplete: Bool
+            let lastWatchPositionMs: Int?
+            let watchedComplete: Bool
+        }
+    }
 }
+
+private typealias ParticipantMediaConsumption = MessageReadStatusResponse.AttachmentConsumptionEntry.ParticipantConsumption
 
 struct MessageInfoSheet: View {
     let message: Message
@@ -46,6 +66,11 @@ struct MessageInfoSheet: View {
 
     @State private var appearAnimation = false
     @State private var receipts: [ParticipantReceipt] = []
+    /// Per-attachment playback progress of OTHER participants, keyed by
+    /// attachmentId. Populated alongside the read receipts from the same
+    /// `/read-status` response. Lets the author see how far each participant
+    /// listened to an audio / watched a video.
+    @State private var attachmentConsumption: [String: [ParticipantMediaConsumption]] = [:]
     @State private var isLoadingReceipts = false
     /// Active-recipient denominator fetched alongside read receipts. Falls back
     /// to the message's server-projected `recipientCount` when the read-status
@@ -366,37 +391,105 @@ struct MessageInfoSheet: View {
         )
         let byAll = status.isCompleteByAll
 
-        return HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill((byAll ? accentColor : theme.textMuted).opacity(byAll ? 0.15 : 0.08))
-                    .frame(width: 32, height: 32)
-                Image(systemName: consumptionIcon(for: status.action))
-                    .font(MeeshyFont.relative(13, weight: .semibold))
-                    .foregroundColor(byAll ? accentColor : theme.textMuted)
-            }
-            .accessibilityHidden(true)
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill((byAll ? accentColor : theme.textMuted).opacity(byAll ? 0.15 : 0.08))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: consumptionIcon(for: status.action))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .foregroundColor(byAll ? accentColor : theme.textMuted)
+                }
+                .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(attachmentDisplayName(attachment))
-                    .font(MeeshyFont.relative(14, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(1)
-                Text(consumptionLabel(for: status))
-                    .font(MeeshyFont.relative(11, weight: .medium))
-                    .foregroundColor(byAll ? theme.textSecondary : theme.textMuted)
-            }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(attachmentDisplayName(attachment))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                        .lineLimit(1)
+                    Text(consumptionLabel(for: status))
+                        .font(MeeshyFont.relative(11, weight: .medium))
+                        .foregroundColor(byAll ? theme.textSecondary : theme.textMuted)
+                }
 
-            Spacer()
+                Spacer()
 
-            if byAll {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(MeeshyFont.relative(16, weight: .semibold))
-                    .foregroundColor(accentColor)
-                    .accessibilityHidden(true)
+                if byAll {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(MeeshyFont.relative(16, weight: .semibold))
+                        .foregroundColor(accentColor)
+                        .accessibilityHidden(true)
+                }
             }
+            .accessibilityElement(children: .combine)
+
+            participantProgressRows(for: attachment)
         }
-        .accessibilityElement(children: .combine)
+    }
+
+    /// Per-participant playback progress beneath an audio/video attachment row:
+    /// how far each OTHER participant listened/watched (position bar + label).
+    /// Renders nothing for attachments with no per-participant consumption data.
+    @ViewBuilder
+    private func participantProgressRows(for attachment: MeeshyMessageAttachment) -> some View {
+        let entries = attachmentConsumption[attachment.id] ?? []
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                ForEach(entries, id: \.participantId) { entry in
+                    ParticipantMediaProgressRow(
+                        name: entry.displayName,
+                        color: DynamicColorGenerator.colorForName(entry.displayName),
+                        fraction: mediaFraction(for: entry, type: attachment.type, durationMs: attachment.duration ?? 0),
+                        label: mediaProgressLabel(for: entry, type: attachment.type, durationMs: attachment.duration ?? 0),
+                        accentHex: contactColor,
+                        isDark: isDark
+                    )
+                }
+            }
+            .padding(.leading, 44)
+            .padding(.top, MeeshySpacing.xs)
+        }
+    }
+
+    private func mediaFraction(
+        for entry: ParticipantMediaConsumption,
+        type: MeeshyMessageAttachment.AttachmentType,
+        durationMs: Int
+    ) -> Double {
+        let isVideo = type == .video
+        let complete = isVideo ? entry.watchedComplete : entry.listenedComplete
+        if complete { return 1 }
+        let position = isVideo ? entry.lastWatchPositionMs : entry.lastPlayPositionMs
+        guard durationMs > 0, let position else { return 0 }
+        return min(1, max(0, Double(position) / Double(durationMs)))
+    }
+
+    private func mediaProgressLabel(
+        for entry: ParticipantMediaConsumption,
+        type: MeeshyMessageAttachment.AttachmentType,
+        durationMs: Int
+    ) -> String {
+        let isVideo = type == .video
+        let complete = isVideo ? entry.watchedComplete : entry.listenedComplete
+        if complete {
+            return isVideo
+                ? String(localized: "message-info.consumption.watched-fully", defaultValue: "Regarde en entier", bundle: .main)
+                : String(localized: "message-info.consumption.listened-fully", defaultValue: "Ecoute en entier", bundle: .main)
+        }
+        let position = isVideo ? entry.lastWatchPositionMs : entry.lastPlayPositionMs
+        guard let position else {
+            return String(localized: "common.pending", defaultValue: "En attente", bundle: .main)
+        }
+        if durationMs > 0 {
+            return "\(Self.formatMediaTime(position)) / \(Self.formatMediaTime(durationMs))"
+        }
+        return Self.formatMediaTime(position)
+    }
+
+    static func formatMediaTime(_ milliseconds: Int) -> String {
+        let totalSeconds = max(0, milliseconds) / 1000
+        return String(format: "%d:%02d", totalSeconds / 60, totalSeconds % 60)
     }
 
     private func attachmentDisplayName(_ attachment: MeeshyMessageAttachment) -> String {
@@ -681,8 +774,68 @@ struct MessageInfoSheet: View {
             }
 
             receipts = Array(allReceipts.values).sorted { ($0.readAt ?? .distantPast) > ($1.readAt ?? .distantPast) }
+
+            if let consumption = status.attachmentConsumption {
+                attachmentConsumption = Dictionary(
+                    uniqueKeysWithValues: consumption.map { ($0.attachmentId, $0.participants) }
+                )
+            }
         } catch {
             // Non-critical — aggregated counts still visible in timeline
         }
+    }
+}
+
+// MARK: - Participant Media Progress Row
+
+/// One participant's playback progress on an attachment: a colored identity dot,
+/// the name, a position label, and a thin progress bar mirroring the in-bubble
+/// `MediaConsumptionProgressBar`. Equatable + primitive inputs so it never
+/// re-evaluates unless its own values change.
+private struct ParticipantMediaProgressRow: View, Equatable {
+    let name: String
+    let color: String
+    let fraction: Double
+    let label: String
+    let accentHex: String
+    let isDark: Bool
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            Circle()
+                .fill(Color(hex: color))
+                .frame(width: 8, height: 8)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: MeeshySpacing.sm) {
+                    Text(name)
+                        .font(MeeshyFont.relative(12, weight: .medium))
+                        .foregroundColor(theme.textSecondary)
+                        .lineLimit(1)
+                    Spacer(minLength: MeeshySpacing.sm)
+                    Text(label)
+                        .font(MeeshyFont.relative(10, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                        .monospacedDigit()
+                }
+
+                GeometryReader { geo in
+                    let clamped = min(1, max(0, fraction))
+                    ZStack(alignment: .leading) {
+                        Capsule(style: .continuous)
+                            .fill(theme.textMuted.opacity(isDark ? 0.18 : 0.12))
+                        Capsule(style: .continuous)
+                            .fill(Color(hex: accentHex).opacity(0.85))
+                            .frame(width: max(clamped > 0 ? 2 : 0, geo.size.width * CGFloat(clamped)))
+                    }
+                }
+                .frame(height: 3)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(name): \(label)")
     }
 }
