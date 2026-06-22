@@ -120,7 +120,19 @@ const logger = enhancedLogger.child({ module: 'messages' });
  * Nettoie les attachments pour l'API en transformant les valeurs invalides
  * Fixe spécifiquement voiceSimilarityScore: false -> null pour compatibilité schéma
  */
-function cleanAttachmentsForApi(attachments: any[], languageFilter?: readonly string[], currentParticipantId?: string): any[] {
+type CurrentUserConsumption = {
+  lastPlayPositionMs: number | null;
+  listenedComplete: boolean;
+  lastWatchPositionMs: number | null;
+  watchedComplete: boolean;
+};
+
+function cleanAttachmentsForApi(
+  attachments: any[],
+  languageFilter?: readonly string[],
+  currentParticipantId?: string,
+  consumptionMap?: Map<string, CurrentUserConsumption>
+): any[] {
   if (!attachments || !Array.isArray(attachments)) {
     return attachments;
   }
@@ -144,6 +156,12 @@ function cleanAttachmentsForApi(attachments: any[], languageFilter?: readonly st
     cleaned.reactionSummary = __reactions.reactionSummary;
     cleaned.currentUserReactions = __reactions.currentUserReactions;
     delete cleaned.reactions;
+
+    // Phase 2 — progression de consommation PERSONNELLE (sync cross-device) :
+    // position/complétion du participant courant, pour seeder le tint waveform
+    // (audio) et la progress-bar (vidéo) dès l'ouverture. `null` = jamais
+    // consommé par ce participant. Miroir de currentUserReactions.
+    cleaned.currentUserConsumption = consumptionMap?.get(att.id) ?? null;
 
     // Nettoyer la transcription
     if (cleaned.transcription && cleaned.transcription.segments) {
@@ -828,6 +846,37 @@ export function registerMessagesRoutes(
       }
       timings.userReactions = performance.now() - t0;
 
+      // Phase 2 — progression de consommation média du participant courant
+      // (sync cross-device). Une seule requête bornée à la page, scopée au
+      // participant : on n'élargit pas les `select` partagés (cf.
+      // attachmentIncludes) ni les broadcasts socket.
+      const consumptionMap = new Map<string, CurrentUserConsumption>();
+      if (currentParticipantId && messages.length > 0) {
+        const attachmentIds: string[] = (messages as any[]).flatMap(m =>
+          Array.isArray(m.attachments) ? m.attachments.map((a: any) => a.id) : []
+        );
+        if (attachmentIds.length > 0) {
+          const consumptionRows = await prisma.attachmentStatusEntry.findMany({
+            where: { attachmentId: { in: attachmentIds }, participantId: currentParticipantId },
+            select: {
+              attachmentId: true,
+              lastPlayPositionMs: true,
+              listenedComplete: true,
+              lastWatchPositionMs: true,
+              watchedComplete: true,
+            },
+          });
+          for (const row of consumptionRows) {
+            consumptionMap.set(row.attachmentId, {
+              lastPlayPositionMs: row.lastPlayPositionMs ?? null,
+              listenedComplete: row.listenedComplete ?? false,
+              lastWatchPositionMs: row.lastWatchPositionMs ?? null,
+              watchedComplete: row.watchedComplete ?? false,
+            });
+          }
+        }
+      }
+
       // Déterminer la langue préférée de l'utilisateur
       const userPreferredLanguage = userPrefs
         ? resolveUserLanguage(userPrefs)
@@ -1023,7 +1072,7 @@ export function registerMessagesRoutes(
             isOnline: message.sender.user?.isOnline ?? message.sender.isOnline ?? null,
             lastActiveAt: message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null,
           } : null,
-          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId),
+          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, consumptionMap),
           _count: message._count
         };
 
