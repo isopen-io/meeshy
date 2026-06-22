@@ -8,5 +8,19 @@
   "unavailableBody": "Ce reel est privé ou a été supprimé.",
   "notAReelBody": "Le lien pointe vers une publication, pas vers un reel.",
   "goneBody": "Le reel que vous cherchez est introuvable.",
-  "backToFeed": "Retour au fil"
+  "backToFeed": "Retour au fil",
+  "player": {
+    "position": "Reel {current} sur {total}",
+    "byAuthor": "Reel de {name}",
+    "play": "Lecture",
+    "close": "Fermer",
+    "previous": "Reel précédent",
+    "next": "Reel suivant",
+    "unmute": "Activer le son",
+    "mute": "Couper le son",
+    "like": "J’aime",
+    "comment": "Commenter",
+    "share": "Partager",
+    "bookmark": "Enregistrer"
+  }
 }

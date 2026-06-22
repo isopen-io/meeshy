@@ -8,5 +8,19 @@
   "unavailableBody": "This reel is private or has been deleted.",
   "notAReelBody": "The link points to a post, not a reel.",
   "goneBody": "The reel you're looking for can't be found.",
-  "backToFeed": "Back to feed"
+  "backToFeed": "Back to feed",
+  "player": {
+    "position": "Reel {current} of {total}",
+    "byAuthor": "Reel by {name}",
+    "play": "Play",
+    "close": "Close",
+    "previous": "Previous reel",
+    "next": "Next reel",
+    "unmute": "Turn on sound",
+    "mute": "Turn off sound",
+    "like": "Like",
+    "comment": "Comment",
+    "share": "Share",
+    "bookmark": "Save"
+  }
 }
