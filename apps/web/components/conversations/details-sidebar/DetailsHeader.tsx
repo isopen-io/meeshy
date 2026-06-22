@@ -72,7 +72,7 @@ export function DetailsHeader({
             <Camera className="h-6 w-6 text-white" />
           </div>
           <p className="text-xs text-muted-foreground mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {t('conversationDetails.clickToChangeImage') || 'Click to change image'}
+            {t('conversationDetails.clickToChangeImage', 'Click to change image')}
           </p>
         </div>
       ) : (
