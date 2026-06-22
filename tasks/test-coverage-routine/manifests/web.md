@@ -244,7 +244,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/components/index.ts`
 - [ ] `apps/web/components/not-found-page.tsx`
 
-## components/admin  (32/62 have a test)
+## components/admin  (38/62 have a test)
 
 - [ ] `apps/web/components/admin/AdminLayout.tsx`
 - [x] `apps/web/components/admin/Charts.tsx`
@@ -255,7 +255,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/components/admin/agent/AgentConfigDialog.tsx`
 - [ ] `apps/web/components/admin/agent/AgentConversationsTab.tsx`
 - [ ] `apps/web/components/admin/agent/AgentGlobalConfigTab.tsx`
-- [ ] `apps/web/components/admin/agent/AgentHistoryTab.tsx`
+- [x] `apps/web/components/admin/agent/AgentHistoryTab.tsx`
 - [ ] `apps/web/components/admin/agent/AgentLiveTab.tsx`
 - [ ] `apps/web/components/admin/agent/AgentLlmTab.tsx`
 - [ ] `apps/web/components/admin/agent/AgentMessagesModal.tsx`
@@ -263,7 +263,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/components/admin/agent/AgentRolesSection.tsx`
 - [ ] `apps/web/components/admin/agent/AgentScheduleTimeline.tsx`
 - [ ] `apps/web/components/admin/agent/AgentTopicEditModal.tsx`
-- [ ] `apps/web/components/admin/agent/AgentTopicRegexTester.tsx`
+- [x] `apps/web/components/admin/agent/AgentTopicRegexTester.tsx`
 - [ ] `apps/web/components/admin/agent/AgentTopicsTab.tsx`
 - [ ] `apps/web/components/admin/agent/ConversationPicker.tsx`
 - [ ] `apps/web/components/admin/agent/DeliveryQueueItemCard.tsx`
@@ -271,11 +271,11 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `apps/web/components/admin/agent/InfoIcon.tsx`
 - [ ] `apps/web/components/admin/agent/ScanControlPanel.tsx`
 - [ ] `apps/web/components/admin/agent/ScanHistoryChart.tsx`
-- [ ] `apps/web/components/admin/agent/ScanLogDetail.tsx`
-- [ ] `apps/web/components/admin/agent/ScanLogTable.tsx`
+- [x] `apps/web/components/admin/agent/ScanLogDetail.tsx`
+- [x] `apps/web/components/admin/agent/ScanLogTable.tsx`
 - [ ] `apps/web/components/admin/agent/TriggerSchedulingModal.tsx`
-- [ ] `apps/web/components/admin/agent/UserDisplay.tsx`
-- [ ] `apps/web/components/admin/agent/UserPicker.tsx`
+- [x] `apps/web/components/admin/agent/UserDisplay.tsx`
+- [x] `apps/web/components/admin/agent/UserPicker.tsx`
 - [x] `apps/web/components/admin/agent/config-form-merge.ts`
 - [x] `apps/web/components/admin/ranking/ConversationRankCard.tsx`
 - [x] `apps/web/components/admin/ranking/LinkRankCard.tsx`
