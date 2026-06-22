@@ -109,6 +109,21 @@ class StoryViewerViewModel @Inject constructor(
         emit()
     }
 
+    /**
+     * Dispatch a resolved swipe gesture into the pure playback engine: horizontal
+     * swipes jump whole author groups, a downward swipe dismisses, and an
+     * unresolved drag is inert (so a small drift during a tap is harmless).
+     */
+    fun onSwipe(action: StorySwipeAction) {
+        playback = when (action) {
+            StorySwipeAction.NextGroup -> playback.jumpToNextGroup()
+            StorySwipeAction.PreviousGroup -> playback.jumpToPreviousGroup()
+            StorySwipeAction.Dismiss -> playback.dismissed()
+            StorySwipeAction.None -> return
+        }
+        emit()
+    }
+
     fun markCurrentViewed() {
         val slideId = playback.currentSlide?.id ?: return
         viewModelScope.launch {

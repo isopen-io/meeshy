@@ -200,6 +200,49 @@ class StoryViewerViewModelTest {
     }
 
     @Test
+    fun `onSwipe NextGroup jumps to the next group's first slide`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        assertThat(vm.state.value.authorName).isEqualTo("name-a")
+
+        vm.onSwipe(StorySwipeAction.NextGroup)
+
+        assertThat(vm.state.value.authorName).isEqualTo("name-b")
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+        assertThat(vm.state.value.isDismissed).isFalse()
+    }
+
+    @Test
+    fun `onSwipe PreviousGroup jumps back to the previous group's first slide`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+        vm.advance() // b1 → b2, mid-group
+
+        vm.onSwipe(StorySwipeAction.PreviousGroup)
+
+        assertThat(vm.state.value.authorName).isEqualTo("name-a")
+        assertThat(vm.state.value.current?.id).isEqualTo("a1")
+    }
+
+    @Test
+    fun `onSwipe Dismiss dismisses the viewer without changing the slide`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+
+        vm.onSwipe(StorySwipeAction.Dismiss)
+
+        assertThat(vm.state.value.isDismissed).isTrue()
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+    }
+
+    @Test
+    fun `onSwipe None leaves the state untouched`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        val before = vm.state.value
+
+        vm.onSwipe(StorySwipeAction.None)
+
+        assertThat(vm.state.value).isEqualTo(before)
+    }
+
+    @Test
     fun `a failed load stops loading without dismissing`() = runTest {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         every { session.currentUserId } returns null

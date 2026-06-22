@@ -4,22 +4,20 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Stories) — slice `story-viewer-playback` ✅
-Cross-group story-viewer playback engine, parity with iOS `StoryViewerView`.
+## This loop (Phase: Stories) — slice `story-viewer-swipe-gestures` ✅
+Swipe navigation wired into the story viewer, parity with iOS `StoryViewerView`.
 
-- [x] `StoryPlayback` pure engine (`:feature:stories`): `advance` / `back` /
-      `jumpToNextGroup` / `jumpToPreviousGroup` / `startingAt`, all immutable.
-- [x] TDD `StoryPlaybackTest` (22 cases — every `when` arm, boundaries, inert).
-- [x] Rewire `StoryViewerViewModel` to load all groups and derive `UiState`
-      (`groupIndex`, `isDismissed`) from the engine.
-- [x] Rewire `StoryViewerScreen` auto-advance + tap to the engine, `isDismissed`
-      → `onClose` (tap-advance now rolls across authors, no dead end).
-- [x] `StoryViewerViewModelTest` (6 cases: load/advance/dismiss/back/markViewed/
-      failure).
+- [x] `StorySwipeResolver` pure resolver (`:feature:stories`): drag → `NextGroup`
+      / `PreviousGroup` / `Dismiss` / `None` on the dominant axis; downward-only
+      dismiss; sub-threshold = `None`; thresholds as params (testable).
+- [x] `StoryPlayback.dismissed()` pure transition (preserve position, idempotent).
+- [x] `StoryViewerViewModel.onSwipe(action)` dispatch into the engine.
+- [x] `StoryViewerScreen` `detectDragGestures` → `onSwipe(resolve(...))` wiring.
+- [x] TDD: +12 `StorySwipeResolverTest`, +2 `StoryPlaybackTest`, +4
+      `StoryViewerViewModelTest` — every branch/arm covered.
 - [x] `./apps/android/meeshy.sh check` green.
 
 ## Next loop (see PROGRESS.md "Next")
-1. `story-viewer-swipe-gestures` (horizontal = group jump, vertical = dismiss).
-2. `story-reactions-strip`.
-3. `story-tray-swr` (cache-first tray).
-4. `story-composer` (publish via outbox/WorkManager).
+1. `story-reaction-socket-delta` (realtime `story:reacted/unreacted` → `applyDelta`).
+2. `story-tray-swr` (cache-first tray).
+3. `story-composer` (publish via outbox/WorkManager).

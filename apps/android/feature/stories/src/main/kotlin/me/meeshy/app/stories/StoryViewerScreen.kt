@@ -5,6 +5,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,6 +48,8 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
 private const val SLIDE_DURATION_MS = 5000
+private val SWIPE_HORIZONTAL_THRESHOLD = 64.dp
+private val SWIPE_VERTICAL_THRESHOLD = 120.dp
 
 /**
  * Minimal but real story viewer: segmented progress, tap-to-advance/dismiss,
@@ -88,6 +91,30 @@ fun StoryViewerScreen(
                         viewModel.advance()
                     }
                 }
+            }
+            .pointerInput(state.groupIndex, state.index, state.slides.size) {
+                val horizontalThreshold = SWIPE_HORIZONTAL_THRESHOLD.toPx()
+                val verticalThreshold = SWIPE_VERTICAL_THRESHOLD.toPx()
+                var dragX = 0f
+                var dragY = 0f
+                detectDragGestures(
+                    onDragStart = { dragX = 0f; dragY = 0f },
+                    onDragEnd = {
+                        viewModel.onSwipe(
+                            StorySwipeResolver.resolve(
+                                dragX = dragX,
+                                dragY = dragY,
+                                horizontalThreshold = horizontalThreshold,
+                                verticalThreshold = verticalThreshold,
+                            ),
+                        )
+                    },
+                    onDrag = { change, drag ->
+                        change.consume()
+                        dragX += drag.x
+                        dragY += drag.y
+                    },
+                )
             },
     ) {
         if (slide?.imageUrl != null) {
