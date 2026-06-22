@@ -16,8 +16,13 @@ Itération **66w** (64w=magic-link #857, 65w=ConvSettingsModal #864 pris).
 - [x] Transformer les 15 `t(k) || 'FR'` → `t(k, 'EN')`
 - [x] Grep résiduel = 0 ; parité JSON symdiff = 0
 - [x] Test `page.test.tsx` vert (30 passed / 8 skipped)
-- [ ] Commit + push ; PR ; CI verte
-- [ ] Merge `main` ; MAJ `branch-tracking.md` ; suppression de branche
+- [x] Commit + push ; PR #872 ; CI `Quality (bun)`/`Security`/`Test web` vertes (résolution conflit `branch-tracking.md` vs main)
+- [x] Merge `main` (#872, commit `b421ab3`) ; MAJ `branch-tracking.md` ; suppression de branche
+
+## Note CI
+Le job `Test shared` est **rouge sur `main`** depuis la migration zod v4 (`3281f32`),
+indépendamment de cette PR (web-only). Détail + recommandation consignés dans
+`branch-tracking.md` (bloc « ⚠️ MAIN ROUGE — `Test shared` »). Non bloquant pour le merge.
 
 ## Garde-fous
 - Surface orthogonale aux PR en vol (#855–#860, #864, #857)
