@@ -55,8 +55,9 @@ public struct StoryAudioPanel: View {
     @Binding var selectedAudioId: String?
     @Binding var selectedAudioTitle: String?
     @Binding var audioVolume: Float
-    /// Appelé quand un enregistrement est prêt — le parent gère la présentation de l'éditeur
-    var onRecordingReady: ((URL) -> Void)? = nil
+    /// Appelé quand un enregistrement est prêt (URL + langue taggée) — le parent
+    /// gère la présentation de l'éditeur.
+    var onRecordingReady: ((URL, String) -> Void)? = nil
 
     @State private var activeTab: AudioPanelTab = .library
     @State private var searchQuery = ""
@@ -68,7 +69,7 @@ public struct StoryAudioPanel: View {
     // (`isPlaying`) n'étaient pas observés.
     @StateObject private var previewPlayer = AudioPlayerManager()
 
-    public init(selectedAudioId: Binding<String?>, selectedAudioTitle: Binding<String?>, audioVolume: Binding<Float>, onRecordingReady: ((URL) -> Void)? = nil) {
+    public init(selectedAudioId: Binding<String?>, selectedAudioTitle: Binding<String?>, audioVolume: Binding<Float>, onRecordingReady: ((URL, String) -> Void)? = nil) {
         _selectedAudioId = selectedAudioId
         _selectedAudioTitle = selectedAudioTitle
         _audioVolume = audioVolume
@@ -158,9 +159,9 @@ public struct StoryAudioPanel: View {
             libraryTab
         case .record:
             StoryVoiceRecorder(
-                onRecordComplete: { url in
+                onRecordComplete: { url, language in
                     previewPlayer.stop()
-                    onRecordingReady?(url)
+                    onRecordingReady?(url, language)
                 }
             )
         }

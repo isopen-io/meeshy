@@ -452,6 +452,7 @@ public struct StoryComposerView: View {
         .fullScreenCover(item: $mediaAudioEditorItem) { item in
             MeeshyAudioEditorView(
                 url: item.url,
+                preferredLanguage: item.language ?? "fr",
                 onConfirm: { url, _, _, _ in
                     confirmedMediaAudioURL = url
                     mediaAudioEditorItem = nil
@@ -462,8 +463,8 @@ public struct StoryComposerView: View {
         }
         .sheet(isPresented: $showVoiceRecorderSheet) {
             NavigationStack {
-                StoryVoiceRecorder { recordedURL in
-                    mediaAudioEditorItem = AudioEditorItemWrapper(url: recordedURL)
+                StoryVoiceRecorder { recordedURL, language in
+                    mediaAudioEditorItem = AudioEditorItemWrapper(url: recordedURL, language: language)
                     showVoiceRecorderSheet = false
                 }
                 .navigationTitle(String(localized: "story.composer.recordVocal", defaultValue: "Enregistrer un vocal", bundle: .module))
@@ -2315,6 +2316,9 @@ public struct StoryComposerView: View {
 private struct AudioEditorItemWrapper: Identifiable {
     let id = UUID()
     let url: URL
+    /// Language tagged at record time (recorder strip); seeds the editor's
+    /// transcription language. `nil` for file imports → editor default.
+    var language: String? = nil
 }
 
 // MARK: - Media Editor Wrappers
