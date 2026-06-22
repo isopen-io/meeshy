@@ -60,7 +60,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -68,7 +67,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.ZoneId
@@ -76,6 +74,8 @@ import java.util.Locale
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
+import me.meeshy.ui.component.EmojiFullPicker
+import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.DeliveryStatus
@@ -291,13 +291,30 @@ fun ChatScreen(
         MessageActionsSheet(
             bubble = actionTarget,
             ownReactions = state.ownReactions[actionTarget.messageId] ?: emptySet(),
+            quickReactions = state.quickReactions,
+            accentColor = accentColor,
             onReact = { emoji -> viewModel.toggleReaction(actionTarget.messageId, emoji) },
+            onExpandPicker = { viewModel.openEmojiPicker(actionTarget.messageId) },
             onEdit = { viewModel.startEdit(actionTarget.messageId) },
             onDelete = { viewModel.deleteMessage(actionTarget.messageId) },
             onReply = { viewModel.startReply(actionTarget.messageId) },
             onToggleOriginal = { viewModel.toggleShowOriginal(actionTarget.messageId) },
             onDismiss = viewModel::dismissMessageActions,
         )
+    }
+
+    val pickerMessageId = state.emojiPickerMessageId
+    if (pickerMessageId != null) {
+        ModalBottomSheet(
+            onDismissRequest = viewModel::dismissEmojiPicker,
+            containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        ) {
+            EmojiFullPicker(
+                onSelect = { emoji -> viewModel.toggleReaction(pickerMessageId, emoji) },
+                accentColor = accentColor,
+                modifier = Modifier.navigationBarsPadding(),
+            )
+        }
     }
 }
 
@@ -339,14 +356,15 @@ private fun DaySeparator(dayMillis: Long, modifier: Modifier = Modifier) {
     }
 }
 
-private val QuickReactions = listOf("❤️", "😂", "🔥", "👏", "😮", "😢", "🥰", "👍")
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MessageActionsSheet(
     bubble: BubbleContent,
     ownReactions: Set<String>,
+    quickReactions: List<String>,
+    accentColor: Color,
     onReact: (String) -> Unit,
+    onExpandPicker: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onReply: () -> Unit,
@@ -363,20 +381,17 @@ private fun MessageActionsSheet(
     ) {
         Column(modifier = Modifier.padding(bottom = MeeshySpacing.xl)) {
             if (isActionable) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    QuickReactions.forEach { emoji ->
-                        QuickReactionButton(
-                            emoji = emoji,
-                            isMine = emoji in ownReactions,
-                            onClick = { onReact(emoji) },
-                        )
-                    }
-                }
+                EmojiQuickStrip(
+                    emojis = quickReactions,
+                    ownReactions = ownReactions,
+                    accentColor = accentColor,
+                    onReact = onReact,
+                    onExpand = onExpandPicker,
+                    modifier = Modifier.padding(
+                        horizontal = MeeshySpacing.lg,
+                        vertical = MeeshySpacing.sm,
+                    ),
+                )
                 HorizontalDivider(color = MeeshyTheme.tokens.backgroundTertiary)
             }
 
@@ -421,27 +436,6 @@ private fun MessageActionsSheet(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun QuickReactionButton(emoji: String, isMine: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .background(
-                if (isMine) MeeshyPalette.Indigo500.copy(alpha = 0.22f) else Color.Transparent,
-            )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        val description = stringResource(R.string.chat_react_with, emoji)
-        Text(
-            text = emoji,
-            fontSize = 22.sp,
-            modifier = Modifier.semantics { contentDescription = description },
-        )
     }
 }
 
