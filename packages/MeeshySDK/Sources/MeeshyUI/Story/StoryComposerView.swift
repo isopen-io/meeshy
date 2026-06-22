@@ -452,6 +452,7 @@ public struct StoryComposerView: View {
         .fullScreenCover(item: $mediaAudioEditorItem) { item in
             MeeshyAudioEditorView(
                 url: item.url,
+                preferredLanguage: item.language ?? "fr",
                 onConfirm: { url, _, _, _ in
                     confirmedMediaAudioURL = url
                     mediaAudioEditorItem = nil
@@ -462,8 +463,8 @@ public struct StoryComposerView: View {
         }
         .sheet(isPresented: $showVoiceRecorderSheet) {
             NavigationStack {
-                StoryVoiceRecorder { recordedURL in
-                    mediaAudioEditorItem = AudioEditorItemWrapper(url: recordedURL)
+                StoryVoiceRecorder { recordedURL, language in
+                    mediaAudioEditorItem = AudioEditorItemWrapper(url: recordedURL, language: language)
                     showVoiceRecorderSheet = false
                 }
                 .navigationTitle(String(localized: "story.composer.recordVocal", defaultValue: "Enregistrer un vocal", bundle: .module))
@@ -536,6 +537,18 @@ public struct StoryComposerView: View {
                 context: .story,
                 onAccept: { edited in
                     viewModel.loadedImages[item.elementId] = edited
+                    // Un recadrage change le ratio de l'image : sans réécrire
+                    // `mediaAspectRatios`, la layer ré-affichait le NOUVEAU bitmap
+                    // mais étiré au ratio d'ORIGINE → la modification (crop)
+                    // n'apparaissait pas géométriquement dans le canvas (#1).
+                    let editedSize = edited.size
+                    if editedSize.width > 0, editedSize.height > 0 {
+                        viewModel.setMediaAspectRatio(
+                            id: item.elementId,
+                            aspectRatio: Double(editedSize.width / editedSize.height),
+                            slideId: viewModel.currentSlide.id
+                        )
+                    }
                     // Bump version pour signaler au `StoryComposerCanvasView`
                     // qu'un bitmap intra-clé a muté. SwiftUI ne peut pas
                     // détecter ce genre de mutation sur un `[String: UIImage]`
@@ -589,6 +602,18 @@ public struct StoryComposerView: View {
                     let thumbnail = Self.generateVideoThumbnail(url: cachedURL)
                     if let thumbnail {
                         viewModel.loadedImages[item.elementId] = thumbnail
+                        // Un recadrage vidéo change le ratio : on le réécrit
+                        // depuis la frame éditée (sinon la vidéo s'affiche au
+                        // ratio d'origine après crop). Même rationale que le
+                        // bloc image editor (#1).
+                        let thumbSize = thumbnail.size
+                        if thumbSize.width > 0, thumbSize.height > 0 {
+                            viewModel.setMediaAspectRatio(
+                                id: item.elementId,
+                                aspectRatio: Double(thumbSize.width / thumbSize.height),
+                                slideId: viewModel.currentSlide.id
+                            )
+                        }
                         // Bump version : même rationale que le bloc image
                         // editor — la vignette vidéo est une mutation
                         // intra-clé non détectable par SwiftUI.
@@ -2315,6 +2340,9 @@ public struct StoryComposerView: View {
 private struct AudioEditorItemWrapper: Identifiable {
     let id = UUID()
     let url: URL
+    /// Language tagged at record time (recorder strip); seeds the editor's
+    /// transcription language. `nil` for file imports → editor default.
+    var language: String? = nil
 }
 
 // MARK: - Media Editor Wrappers

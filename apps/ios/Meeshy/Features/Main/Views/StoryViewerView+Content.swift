@@ -1637,13 +1637,14 @@ extension StoryViewerView {
 
     /// Seeds `storyCommentCount` for the slide that just became visible.
     ///
-    /// Uses the count baked into the story payload as the authoritative number
-    /// (the gateway feed pipeline writes it on every read), then opportunistically
-    /// reconciles with the local comments cache if one exists. **Never** hits
-    /// the network here — fetching the comment list at every slide change just
-    /// to recompute a counter was an `O(N stories)` cost on swipe and is exactly
-    /// what `loadStoryComments()` already covers when the user opens the panel
-    /// (bug 2026-05-28).
+    /// Uses the count baked into the story payload as the first approximation,
+    /// then reconciles with the local comments cache if one exists. The payload
+    /// is frequently a >24h client cache, so its count can be a stale 0 for a
+    /// story that has since gained comments — and the sidebar hides the comments
+    /// button at 0. To break that, when (and ONLY when) the count is still 0
+    /// after the cache check, a single debounced network reconciliation confirms
+    /// the real count. The 400ms dwell + stale-id guard keep this O(1) per
+    /// *watched* story (never the O(N)-on-swipe fetch removed in 2026-05-28).
     func loadStoryCommentCount() {
         guard let story = currentStory else {
             storyCommentCount = 0
@@ -1662,9 +1663,34 @@ extension StoryViewerView {
                 let top = comments.filter { $0.parentId == nil }
                 let total = top.count + top.reduce(0) { $0 + $1.replies }
                 if total != storyCommentCount { storyCommentCount = total }
+                return
             case .expired, .empty:
                 break
             }
+
+            // Stale-0 reconciliation. The story payload is frequently served from
+            // a >24h client cache, so its `commentCount` can read 0 for a story
+            // that has since received comments; with no comment cache above we
+            // cannot distinguish a genuine 0 from a stale 0, and the sidebar's
+            // `count > 0` gate then hides the comments button even though the
+            // thread exists (user-reported: « malgré les commentaires on ne
+            // voyait rien »). Confirm against the network — but ONLY for the
+            // ambiguous 0, and debounced so a fast swipe-through never spams it
+            // (the O(N)-on-swipe regression of 2026-05-28). 400ms dwell + the
+            // stale-id guard mean only stories the viewer actually pauses on
+            // trigger a single lightweight reconciliation.
+            guard storyCommentCount == 0 else { return }
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            if let now = currentStory?.id, now != story.id { return }
+            guard let response = try? await PostService.shared.getComments(
+                postId: story.id, cursor: nil, limit: 50
+            ) else { return }
+            if let now = currentStory?.id, now != story.id { return }
+            // Same formula as the cache/open paths: top-level comments + their
+            // replies. A genuinely empty thread stays 0 → button stays hidden.
+            let top = response.data.filter { $0.parentId == nil }
+            let total = top.count + top.reduce(0) { $0 + ($1.replyCount ?? 0) }
+            if total != storyCommentCount { storyCommentCount = total }
         }
     }
 }

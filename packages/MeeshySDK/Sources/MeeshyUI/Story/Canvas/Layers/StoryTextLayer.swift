@@ -97,8 +97,18 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
             options: [.usesLineFragmentOrigin, .usesFontLeading],
             context: nil
         ).size
-        // Symmetric pad in design pixels (16 design px ≈ ~6 px on iPhone, ~12 on iPad).
-        let designBounds = CGSize(width: ceil(designSize.width) + 16,
+        // Symmetric pad in design pixels. Horizontally, a FRAMED text (solid /
+        // glass background) reserves at least the advance width of one "o" glyph
+        // before the first and after the last character so the framing box never
+        // hugs the glyphs (bug #7 : "padding automatique ≥ 1 caractère 'o'").
+        // Unframed text keeps the historical 8 px-per-side inset so existing
+        // layout/snapshot expectations are unchanged.
+        let isFramed = text.resolvedBackgroundStyle != .none
+        let oGlyphWidth = isFramed
+            ? ceil(("o" as NSString).size(withAttributes: [.font: designFont]).width)
+            : 0
+        let hPadPerSide = max(8, oGlyphWidth)
+        let designBounds = CGSize(width: ceil(designSize.width) + hPadPerSide * 2,
                                   height: ceil(designSize.height) + 16)
 
         // Render-space bounds is the linear projection of the design bounds.
@@ -202,12 +212,12 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
             // arrondit le fond sans rogner les glyphes (le contenu n'est clippé
             // que si `masksToBounds == true`).
             backgroundColor = (parseHexColor(hex) ?? .black.withAlphaComponent(0.5)).cgColor
-            cornerRadius = max(4, bounds.height * 0.15)
+            cornerRadius = frameCornerRadius(height: bounds.height)
 
         case .glass(let radius):
             let backdrop = StoryGlassBackdropLayer()
             backdrop.frame = bounds
-            backdrop.cornerRadius = max(4, bounds.height * 0.15)
+            backdrop.cornerRadius = frameCornerRadius(height: bounds.height)
             backdrop.masksToBounds = true
             backdrop.zPosition = -1
             backdrop.contentsScale = UIScreen.main.scale
@@ -253,6 +263,17 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
     }
 
     // MARK: - Helpers
+
+    /// Corner radius of the framing box, derived from the text object's
+    /// `frameShape`. `.rounded` ≈ 15 % of height (legacy), `.pill` = full
+    /// capsule, `.rectangle` = near-square corners.
+    private func frameCornerRadius(height: CGFloat) -> CGFloat {
+        switch textObject?.parsedFrameShape ?? .rounded {
+        case .rounded:   return max(4, height * 0.15)
+        case .pill:      return height / 2
+        case .rectangle: return max(2, height * 0.04)
+        }
+    }
 
     /// Calcule les attributs de stroke (`strokeColor`, `strokeWidth`) pour un
     /// `StoryTextObject`. Retourne un dictionnaire VIDE si aucun stroke ne doit

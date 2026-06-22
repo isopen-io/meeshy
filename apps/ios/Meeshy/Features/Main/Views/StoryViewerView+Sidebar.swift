@@ -292,6 +292,10 @@ struct StoryActionSidebarView: View {
             // to write the first comment, so an extra empty button would just
             // be visual noise (user spec 2026-05-28: « Inutile d'afficher à
             // 0 […] la zone d'écriture en bas permet déjà de commenter »).
+            // La fiabilité du compteur est garantie par `loadStoryCommentCount()`
+            // (côté +Content) qui réconcilie le payload feed avec un fetch réseau
+            // autoritatif quand le payload annonce 0 — sinon une story AVEC
+            // commentaires mais au compteur stale 0 masquait à tort ce bouton.
             if storyCommentCount > 0 {
                 StoryActionButton(
                     icon: "bubble.left.fill",

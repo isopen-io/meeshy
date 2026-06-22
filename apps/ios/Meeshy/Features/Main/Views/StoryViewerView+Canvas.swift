@@ -877,6 +877,12 @@ struct StoryCardView: View {
                                       preloadedImages: preloadedImages,
                                       preloadedVideoURLs: preloadedVideoURLs,
                                       preloadedAudioURLs: preloadedAudioURLs,
+                                      // Le mute est une préférence VIEWER persistante (`isGlobalMuted`,
+                                      // @State qui survit aux avances). Le canvas est recréé à chaque
+                                      // story (`.id(story.id)`) → sans passer l'état ici, chaque
+                                      // nouvelle story repartait à `mute: false` (bug : on remute
+                                      // chaque story). On sème donc l'état persistant à l'init.
+                                      mute: isGlobalMuted,
                                       isPaused: isCanvasPlaybackPaused,
                                       onContentReady: { isContentReady = true },
                                       onContentProgress: { p in
