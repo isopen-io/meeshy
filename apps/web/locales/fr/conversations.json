@@ -707,5 +707,22 @@
       "file": "Fichier",
       "document": "Document"
     }
+  },
+  "bubbleStream": {
+    "messageSentSuccessfully": "Message envoyé avec succès",
+    "retryFailed": "Échec du renvoi. Cliquez pour restaurer le message.",
+    "retryError": "Erreur lors du renvoi",
+    "messageRestored": "Message restauré dans le compositeur",
+    "messageDismissed": "Message ignoré",
+    "allMessagesDismissed": "Tous les messages en échec ont été ignorés",
+    "messageSendFailed": "Échec d'envoi du message",
+    "retries": "tentative(s)",
+    "attachments": "pièce(s) jointe(s)",
+    "emptyMessage": "Message vide",
+    "restoreMessage": "Restaurer",
+    "retrying": "Renvoi...",
+    "retryNow": "Renvoyer",
+    "dismiss": "Ignorer",
+    "dismissAll": "Ignorer tout"
   }
 }

@@ -21,10 +21,7 @@ apps/web/
 │   ├── video-settings.tsx          # Video tab (NEW)
 │   ├── document-settings.tsx       # Documents tab (NEW)
 │   ├── application-settings.tsx    # Application tab (NEW)
-│   ├── beta-playground.tsx         # Beta features tab (NEW)
-│   └── _archived/                  # Old files archived here
-│       ├── complete-user-settings.tsx
-│       └── settings-layout.tsx
+│   └── beta-playground.tsx         # Beta features tab (NEW)
 └── locales/en/
     └── settings.json               # i18n translations updated
 ```
@@ -188,13 +185,14 @@ Coverage targets:
 ## Migration Notes
 
 ### From Old to New
-Old files archived in `_archived/`:
-- `complete-user-settings.tsx` → Split into modular tabs
-- `settings-layout.tsx` → Replaced by page-level implementation
+The legacy `complete-user-settings.tsx` (monolithic) was split into modular
+per-tab components, and `settings-layout.tsx` was replaced by the page-level
+implementation in `app/settings/page.tsx`. Both legacy files (previously kept
+under `_archived/`) have been removed (iter-63w) — they had no production or
+test consumers.
 
 ### Breaking Changes
-- None - Fully backward compatible
-- Old imports still work (re-exported)
+- None - the live page-level implementation is the single source of truth
 
 ## Future Enhancements
 

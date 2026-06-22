@@ -161,14 +161,14 @@ export function ConversationDetailsSidebar({
         await conversationsService.updateConversation(conversation.id, updatedData);
 
         onConversationUpdated?.(updatedData);
-        toast.success(t('conversationDetails.imageUpdated') || 'Image updated');
+        toast.success(t('conversationDetails.imageUpdated', 'Conversation image updated'));
         setIsImageUploadDialogOpen(false);
       } else {
         throw new Error('Upload failed');
       }
     } catch (error) {
       console.error('Error uploading image:', error);
-      toast.error(t('conversationDetails.imageUploadError') || 'Error uploading image');
+      toast.error(t('conversationDetails.imageUploadError', 'Error uploading image'));
     } finally {
       setIsUploadingImage(false);
     }

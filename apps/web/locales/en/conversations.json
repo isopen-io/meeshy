@@ -697,5 +697,22 @@
       "file": "File",
       "document": "Document"
     }
+  },
+  "bubbleStream": {
+    "messageSentSuccessfully": "Message sent successfully",
+    "retryFailed": "Resend failed. Click to restore the message.",
+    "retryError": "Error while resending",
+    "messageRestored": "Message restored to the composer",
+    "messageDismissed": "Message dismissed",
+    "allMessagesDismissed": "All failed messages have been dismissed",
+    "messageSendFailed": "Message failed to send",
+    "retries": "attempt(s)",
+    "attachments": "attachment(s)",
+    "emptyMessage": "Empty message",
+    "restoreMessage": "Restore",
+    "retrying": "Resending...",
+    "retryNow": "Resend",
+    "dismiss": "Dismiss",
+    "dismissAll": "Dismiss all"
   }
 }

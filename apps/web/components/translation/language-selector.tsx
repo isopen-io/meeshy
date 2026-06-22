@@ -89,7 +89,7 @@ export function LanguageSelector({
       <PopoverContent className="w-[150px] max-w-[96vw] p-0">
         <Command>
           {showSearchInput && (
-            <CommandInput placeholder={t('languageSelector.searchLanguage') || "Search language..."} />
+            <CommandInput placeholder={t('languageSelector.searchLanguage', 'Rechercher une langue...')} />
           )}
           <CommandList className="max-h-[60vh]">
             <CommandEmpty>{t('languageSelector.noLanguageFound')}</CommandEmpty>
