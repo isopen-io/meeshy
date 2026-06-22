@@ -124,6 +124,7 @@ export function ConversationDrawer({
         role="dialog"
         aria-modal="true"
         aria-labelledby="conversation-drawer-title"
+        inert={!isOpen}
         className={`
           fixed top-0 left-0 bottom-0 w-80 max-w-[85vw] z-50
           flex flex-col overflow-hidden
