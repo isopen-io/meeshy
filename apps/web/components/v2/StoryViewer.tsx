@@ -780,6 +780,7 @@ function StoryViewer({
                         translations={story.translations}
                         userLanguage={userLanguage}
                         variant="inline"
+                        showContent={false}
                       />
                     </div>
                   )}

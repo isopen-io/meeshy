@@ -6,6 +6,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useToast } from '@/components/v2';
 import { FeedTabs } from '@/components/feed/PostsFeedScreen';
 import { ReelPlayer } from '@/components/feed/ReelPlayer';
+import { CommentList } from '@/components/v2/CommentList';
 import { useReelsFeedQuery, useReelsFeedPosts } from '@/hooks/queries/use-reels-feed-query';
 import {
   useLikePostMutation,
@@ -14,9 +15,17 @@ import {
   useUnbookmarkPostMutation,
   useSharePostMutation,
 } from '@/hooks/queries/use-post-mutations';
+import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-comments-query';
+import {
+  useCreateCommentMutation,
+  useLikeCommentMutation,
+  useUnlikeCommentMutation,
+  useDeleteCommentMutation,
+} from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { useI18n } from '@/hooks/use-i18n';
+import { useAuthStore } from '@/stores/auth-store';
 import type { Post } from '@meeshy/shared/types/post';
 
 const LIKE_EMOJI = '❤️';
@@ -46,13 +55,20 @@ export function ReelsFeedScreen() {
   const reelsQuery = useReelsFeedQuery();
   const reels = useReelsFeedPosts(reelsQuery);
 
+  const authUser = useAuthStore((s) => s.user);
+
   const likeMutation = useLikePostMutation();
   const unlikeMutation = useUnlikePostMutation();
   const bookmarkMutation = useBookmarkPostMutation();
   const unbookmarkMutation = useUnbookmarkPostMutation();
   const shareMutation = useSharePostMutation();
+  const createCommentMutation = useCreateCommentMutation();
+  const likeCommentMutation = useLikeCommentMutation();
+  const unlikeCommentMutation = useUnlikeCommentMutation();
+  const deleteCommentMutation = useDeleteCommentMutation();
 
   const [index, setIndex] = useState(0);
+  const [showComments, setShowComments] = useState(false);
 
   // Clamp the cursor if the thread shrinks (cache eviction / refetch).
   useEffect(() => {
@@ -68,8 +84,34 @@ export function ReelsFeedScreen() {
   }, [index, reels.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const current = reels[index];
+  const currentId = current?.id ?? '';
+
+  // Comments overlay — scoped to the reel in view; reset when the reel changes.
+  useEffect(() => setShowComments(false), [currentId]);
+  const commentsQuery = useCommentsInfiniteQuery({ postId: currentId, enabled: showComments && !!currentId });
+  const comments = useCommentsList(commentsQuery);
 
   const close = useCallback(() => router.push('/feed/posts'), [router]);
+
+  const handleCloseComments = useCallback(() => setShowComments(false), []);
+  const handleSubmitComment = useCallback(
+    (content: string, parentId?: string) => {
+      if (currentId) createCommentMutation.mutate({ postId: currentId, content, parentId });
+    },
+    [currentId, createCommentMutation],
+  );
+  const handleLikeComment = useCallback(
+    (commentId: string) => { if (currentId) likeCommentMutation.mutate({ postId: currentId, commentId }); },
+    [currentId, likeCommentMutation],
+  );
+  const handleUnlikeComment = useCallback(
+    (commentId: string) => { if (currentId) unlikeCommentMutation.mutate({ postId: currentId, commentId }); },
+    [currentId, unlikeCommentMutation],
+  );
+  const handleDeleteComment = useCallback(
+    (commentId: string) => { if (currentId) deleteCommentMutation.mutate({ postId: currentId, commentId }); },
+    [currentId, deleteCommentMutation],
+  );
 
   const onLike = useCallback(() => {
     if (!current) return;
@@ -95,8 +137,8 @@ export function ReelsFeedScreen() {
   }, [current, shareMutation, toastCtx, t]);
 
   const onComment = useCallback(() => {
-    if (current) router.push(`/feeds/post/${current.id}`);
-  }, [current, router]);
+    if (current) setShowComments(true);
+  }, [current]);
 
   const content = useMemo(() => {
     if (current) {
@@ -163,7 +205,56 @@ export function ReelsFeedScreen() {
       <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[60] w-full max-w-md px-4">
         <FeedTabs active="reels" />
       </div>
-      <div className="relative h-full w-full">{content}</div>
+      <div className="relative h-full w-full">
+        {content}
+
+        {/* Comments overlay — slides up over the reel instead of navigating away */}
+        {showComments && current && (
+          <div
+            className="absolute inset-0 z-[70] flex flex-col justify-end"
+            onClick={handleCloseComments}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('feed.comments', 'Comments')}
+          >
+            <div className="absolute inset-0 bg-black/50" />
+            <div
+              className="relative flex max-h-[70%] flex-col rounded-t-2xl bg-[var(--gp-surface)]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-[var(--gp-border)] px-4 py-3">
+                <span className="font-semibold text-[var(--gp-text-primary)]">
+                  {t('feed.comments', 'Comments')}
+                </span>
+                <button
+                  onClick={handleCloseComments}
+                  className="text-[var(--gp-text-muted)] transition-colors hover:text-[var(--gp-text-primary)]"
+                  aria-label={t('feed.closeComments', 'Close comments')}
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-4 py-3">
+                <CommentList
+                  postId={currentId}
+                  comments={comments}
+                  currentUserId={authUser?.id ?? null}
+                  currentUser={authUser ? { username: authUser.username, avatar: authUser.avatar } : null}
+                  userLanguage={userLanguage}
+                  isLoading={commentsQuery.isLoading}
+                  hasMore={commentsQuery.hasNextPage}
+                  onLoadMore={() => commentsQuery.fetchNextPage()}
+                  isLoadingMore={commentsQuery.isFetchingNextPage}
+                  onLikeComment={handleLikeComment}
+                  onUnlikeComment={handleUnlikeComment}
+                  onDeleteComment={handleDeleteComment}
+                  onSubmitComment={handleSubmitComment}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </DashboardLayout>
   );
 }
