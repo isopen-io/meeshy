@@ -1,0 +1,48 @@
+{
+  "title": "Feed",
+  "srHeading": "Feed — posts, reels and stories",
+  "tabs": {
+    "label": "Feed type",
+    "posts": "Posts",
+    "reels": "Reels"
+  },
+  "sections": {
+    "stories": "Stories",
+    "storiesPublic": "Public stories",
+    "moods": "Moods",
+    "compose": "Compose a post"
+  },
+  "recordAudio": "Record an audio post",
+  "updating": "Updating feed…",
+  "loadError": "Unable to load feed.",
+  "retry": "Retry",
+  "newPost": "{count} new post",
+  "newPosts": "{count} new posts",
+  "empty": "No posts yet. Be the first to share something!",
+  "loadingMore": "Loading more posts",
+  "unknownAuthor": "Unknown",
+  "toast": {
+    "error": "Error",
+    "published": "Published!",
+    "publishedBody": "Your post has been shared.",
+    "publishError": "Couldn't publish the post.",
+    "linkCopied": "Link copied!",
+    "linkCopyError": "Couldn't copy the link.",
+    "postDeleted": "Post deleted",
+    "postUpdated": "Post updated",
+    "reposted": "Reposted!",
+    "quoted": "Quoted!",
+    "audioPublished": "Audio post published!",
+    "audioPublishError": "Couldn't publish.",
+    "uploadError": "Upload error",
+    "uploadErrorBody": "Couldn't upload the audio.",
+    "moodPublished": "Mood published!",
+    "statusSelected": "Mood selected"
+  },
+  "relativeTime": {
+    "now": "Just now",
+    "minutes": "{count}m ago",
+    "hours": "{count}h ago",
+    "days": "{count}d ago"
+  }
+}

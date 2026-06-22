@@ -1,0 +1,48 @@
+{
+  "title": "Feed",
+  "srHeading": "Feed — publicaciones, reels e historias",
+  "tabs": {
+    "label": "Tipo de feed",
+    "posts": "Publicaciones",
+    "reels": "Reels"
+  },
+  "sections": {
+    "stories": "Historias",
+    "storiesPublic": "Historias públicas",
+    "moods": "Estados de ánimo",
+    "compose": "Crear una publicación"
+  },
+  "recordAudio": "Grabar una publicación de audio",
+  "updating": "Actualizando el feed…",
+  "loadError": "No se pudo cargar el feed.",
+  "retry": "Reintentar",
+  "newPost": "{count} publicación nueva",
+  "newPosts": "{count} publicaciones nuevas",
+  "empty": "Aún no hay publicaciones. ¡Sé el primero en compartir algo!",
+  "loadingMore": "Cargando más publicaciones",
+  "unknownAuthor": "Desconocido",
+  "toast": {
+    "error": "Error",
+    "published": "¡Publicado!",
+    "publishedBody": "Tu publicación se ha compartido.",
+    "publishError": "No se pudo publicar la entrada.",
+    "linkCopied": "¡Enlace copiado!",
+    "linkCopyError": "No se pudo copiar el enlace.",
+    "postDeleted": "Publicación eliminada",
+    "postUpdated": "Publicación modificada",
+    "reposted": "¡Republicado!",
+    "quoted": "¡Citado!",
+    "audioPublished": "¡Publicación de audio publicada!",
+    "audioPublishError": "No se pudo publicar.",
+    "uploadError": "Error de subida",
+    "uploadErrorBody": "No se pudo subir el audio.",
+    "moodPublished": "¡Estado de ánimo publicado!",
+    "statusSelected": "Estado de ánimo seleccionado"
+  },
+  "relativeTime": {
+    "now": "Justo ahora",
+    "minutes": "hace {count} min",
+    "hours": "hace {count} h",
+    "days": "hace {count} d"
+  }
+}

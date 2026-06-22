@@ -1,0 +1,48 @@
+{
+  "title": "Feed",
+  "srHeading": "Feed — publicações, reels e stories",
+  "tabs": {
+    "label": "Tipo de feed",
+    "posts": "Publicações",
+    "reels": "Reels"
+  },
+  "sections": {
+    "stories": "Stories",
+    "storiesPublic": "Stories públicos",
+    "moods": "Humores",
+    "compose": "Criar uma publicação"
+  },
+  "recordAudio": "Gravar uma publicação de áudio",
+  "updating": "Atualizando o feed…",
+  "loadError": "Não foi possível carregar o feed.",
+  "retry": "Tentar novamente",
+  "newPost": "{count} nova publicação",
+  "newPosts": "{count} novas publicações",
+  "empty": "Ainda não há publicações. Seja o primeiro a compartilhar algo!",
+  "loadingMore": "Carregando mais publicações",
+  "unknownAuthor": "Desconhecido",
+  "toast": {
+    "error": "Erro",
+    "published": "Publicado!",
+    "publishedBody": "Sua publicação foi compartilhada.",
+    "publishError": "Não foi possível publicar.",
+    "linkCopied": "Link copiado!",
+    "linkCopyError": "Não foi possível copiar o link.",
+    "postDeleted": "Publicação excluída",
+    "postUpdated": "Publicação modificada",
+    "reposted": "Repostado!",
+    "quoted": "Citado!",
+    "audioPublished": "Publicação de áudio publicada!",
+    "audioPublishError": "Não foi possível publicar.",
+    "uploadError": "Erro no envio",
+    "uploadErrorBody": "Não foi possível enviar o áudio.",
+    "moodPublished": "Humor publicado!",
+    "statusSelected": "Humor selecionado"
+  },
+  "relativeTime": {
+    "now": "Agora mesmo",
+    "minutes": "há {count} min",
+    "hours": "há {count} h",
+    "days": "há {count} d"
+  }
+}

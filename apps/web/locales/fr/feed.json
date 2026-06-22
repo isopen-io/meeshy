@@ -1,0 +1,48 @@
+{
+  "title": "Fil d’actualité",
+  "srHeading": "Fil d’actualité — posts, reels et stories",
+  "tabs": {
+    "label": "Type de fil",
+    "posts": "Publications",
+    "reels": "Reels"
+  },
+  "sections": {
+    "stories": "Stories",
+    "storiesPublic": "Stories publiques",
+    "moods": "Humeurs",
+    "compose": "Composer une publication"
+  },
+  "recordAudio": "Enregistrer un post audio",
+  "updating": "Mise à jour du fil…",
+  "loadError": "Impossible de charger le fil.",
+  "retry": "Réessayer",
+  "newPost": "{count} nouvelle publication",
+  "newPosts": "{count} nouvelles publications",
+  "empty": "Aucune publication pour le moment. Soyez le premier à partager quelque chose !",
+  "loadingMore": "Chargement de plus de publications",
+  "unknownAuthor": "Inconnu",
+  "toast": {
+    "error": "Erreur",
+    "published": "Publié !",
+    "publishedBody": "Votre post a été partagé.",
+    "publishError": "Impossible de publier le post.",
+    "linkCopied": "Lien copié !",
+    "linkCopyError": "Impossible de copier le lien.",
+    "postDeleted": "Post supprimé",
+    "postUpdated": "Post modifié",
+    "reposted": "Reposté !",
+    "quoted": "Cité !",
+    "audioPublished": "Post audio publié !",
+    "audioPublishError": "Impossible de publier.",
+    "uploadError": "Erreur d’envoi",
+    "uploadErrorBody": "Impossible d’envoyer l’audio.",
+    "moodPublished": "Humeur publiée !",
+    "statusSelected": "Humeur sélectionnée"
+  },
+  "relativeTime": {
+    "now": "À l’instant",
+    "minutes": "Il y a {count} min",
+    "hours": "Il y a {count} h",
+    "days": "Il y a {count} j"
+  }
+}
