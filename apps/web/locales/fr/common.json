@@ -201,7 +201,10 @@
       "title": "Oups ! Une erreur s'est produite",
       "description": "Une erreur inattendue s'est produite. Veuillez réessayer.",
       "details": "Détails de l'erreur",
-      "reload": "Recharger la page"
+      "reload": "Recharger la page",
+      "featureError": "Une erreur s'est produite dans {feature}",
+      "featureUnavailable": "Cette section n'est pas disponible pour le moment.",
+      "retry": "Réessayer"
     },
     "download": "Télécharger",
     "play": "Lire",

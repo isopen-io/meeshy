@@ -201,7 +201,10 @@
       "title": "Oops! Something went wrong",
       "description": "An unexpected error occurred. Please try again.",
       "details": "Error details",
-      "reload": "Reload page"
+      "reload": "Reload page",
+      "featureError": "Something went wrong in {feature}",
+      "featureUnavailable": "This section is unavailable right now.",
+      "retry": "Try again"
     },
     "download": "Download",
     "play": "Play",

@@ -201,7 +201,10 @@
       "title": "¡Vaya! Algo salió mal",
       "description": "Ocurrió un error inesperado. Por favor, inténtalo de nuevo.",
       "details": "Detalles del error",
-      "reload": "Recargar página"
+      "reload": "Recargar página",
+      "featureError": "Algo salió mal en {feature}",
+      "featureUnavailable": "Esta sección no está disponible en este momento.",
+      "retry": "Reintentar"
     },
     "download": "Descargar",
     "play": "Reproducir",
