@@ -225,8 +225,11 @@ public enum StorySlideRenderer {
         }
         style.lineBreakMode = .byWordWrapping
 
+        // Honor an explicit weight override; otherwise keep the bold approximation
+        // historically used for the low-fidelity thumbHash composite.
+        let compositeWeight = textObj.parsedFontWeight?.uiFontWeight ?? .bold
         var attrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: fontSize, weight: .bold),
+            .font: UIFont.systemFont(ofSize: fontSize, weight: compositeWeight),
             .foregroundColor: textColor,
             .paragraphStyle: style,
         ]

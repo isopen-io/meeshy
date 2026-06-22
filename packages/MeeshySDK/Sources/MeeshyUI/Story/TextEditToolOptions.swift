@@ -19,10 +19,12 @@ struct TextEditToolOptions: View {
         Group {
             switch tool {
             case .style:      styleOptions
+            case .weight:     weightOptions
             case .color:      colorOptions
             case .size:       sizeOptions
             case .align:      alignOptions
             case .background: backgroundOptions
+            case .frame:      frameOptions
             case .border:     borderOptions
             }
         }
@@ -62,6 +64,38 @@ struct TextEditToolOptions: View {
                     .buttonStyle(.plain)
                 }
             }
+        }
+    }
+
+    // MARK: - Weight
+
+    /// Graisse indépendante : fin / normal / semi-gras / gras. Écrit
+    /// `fontWeight` (override) sur le `StoryTextObject`.
+    private var weightOptions: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(StoryTextWeight.allCases, id: \.self) { weight in
+                    let isSel = textObject.parsedFontWeight == weight
+                    Button {
+                        textObject.fontWeight = weight.rawValue
+                        HapticFeedback.light()
+                    } label: {
+                        Text(weight.displayName)
+                            .font(.system(size: 14, weight: weight.swiftUIWeight))
+                            .foregroundStyle(isSel ? Color.white : Color.primary)
+                            .frame(minWidth: 54)
+                            .padding(.horizontal, 6)
+                            .frame(height: 42)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(isSel ? AnyShapeStyle(MeeshyColors.brandGradient)
+                                                : AnyShapeStyle(Color.gray.opacity(0.18)))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 2)
         }
     }
 
@@ -151,7 +185,60 @@ struct TextEditToolOptions: View {
                 bgSolidChip(hex: "000000A6", label: "Noir 65%")
                 bgSolidChip(hex: "FFFFFF", label: "Blanc")
                 bgSolidChip(hex: "FFFFFFA6", label: "Blanc 65%")
+                bgSolidChip(hex: "6366F1", label: "Indigo")
+                bgSolidChip(hex: "6366F1A6", label: "Indigo 65%")
+                bgSolidChip(hex: "F472B6", label: "Rose")
+                bgSolidChip(hex: "34D399", label: "Vert")
+                bgSolidChip(hex: "FBBF24", label: "Ambre")
+                bgSolidChip(hex: "F87171", label: "Rouge")
             }
+        }
+    }
+
+    // MARK: - Frame (cadrage)
+
+    /// Forme de la boîte de cadrage derrière le texte (actif uniquement quand un
+    /// fond est présent). Le padding ≥ 1 'o' est automatique côté rendu.
+    private var frameOptions: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(StoryTextFrameShape.allCases, id: \.self) { shape in
+                    let isSel = textObject.parsedFrameShape == shape
+                    Button {
+                        textObject.frameShape = shape.rawValue
+                        // Un cadrage n'a de sens qu'avec un fond : si aucun fond
+                        // n'est actif, on en pose un (verre discret) pour rendre
+                        // le choix visible immédiatement.
+                        if case .none = textObject.resolvedBackgroundStyle {
+                            textObject.backgroundStyle = .solid(hex: "000000A6")
+                            textObject.textBg = nil
+                        }
+                        HapticFeedback.light()
+                    } label: {
+                        Text(shape.displayName)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(isSel ? Color.white : Color.primary)
+                            .padding(.horizontal, 14)
+                            .frame(height: 38)
+                            .background(
+                                RoundedRectangle(cornerRadius: frameChipRadius(shape))
+                                    .fill(isSel ? AnyShapeStyle(MeeshyColors.brandGradient)
+                                                : AnyShapeStyle(Color.gray.opacity(0.18)))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 2)
+        }
+    }
+
+    /// Corner radius of the chip itself, previewing the shape it selects.
+    private func frameChipRadius(_ shape: StoryTextFrameShape) -> CGFloat {
+        switch shape {
+        case .rounded:   return 10
+        case .pill:      return 19
+        case .rectangle: return 2
         }
     }
 
@@ -292,5 +379,17 @@ struct TextEditToolOptions: View {
             .overlay(Circle().stroke(Color.black.opacity(0.15), lineWidth: 0.5))
             .scaleEffect(selected ? 1.1 : 1.0)
             .animation(.spring(response: 0.2), value: selected)
+    }
+}
+
+private extension StoryTextWeight {
+    /// SwiftUI weight used to preview the chip label in its own graisse.
+    var swiftUIWeight: Font.Weight {
+        switch self {
+        case .thin: return .thin
+        case .normal: return .regular
+        case .semibold: return .semibold
+        case .bold: return .bold
+        }
     }
 }

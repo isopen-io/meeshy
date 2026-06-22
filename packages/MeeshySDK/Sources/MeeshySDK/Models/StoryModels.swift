@@ -41,6 +41,27 @@ public enum StoryTextStyle: String, Codable, CaseIterable, Sendable {
     }
 }
 
+// MARK: - Story Text Weight
+
+/// Independent font-weight override for a `StoryTextObject`. `nil` on the object
+/// means "derive the weight from `textStyle`" (legacy behavior); a non-nil value
+/// lets the user pick fin / normal / semi-gras / gras regardless of style.
+public enum StoryTextWeight: String, Codable, CaseIterable, Sendable {
+    case thin       // fin
+    case normal     // normal
+    case semibold   // semi-gras
+    case bold       // gras
+
+    public var displayName: String {
+        switch self {
+        case .thin: return "Fin"
+        case .normal: return "Normal"
+        case .semibold: return "Semi"
+        case .bold: return "Gras"
+        }
+    }
+}
+
 // MARK: - Story Filter
 
 public enum StoryFilter: String, Codable, CaseIterable, Sendable {
@@ -199,6 +220,26 @@ public enum StoryTextBackgroundStyle: Codable, Sendable, Equatable {
     }
 }
 
+// MARK: - Story Text Frame Shape
+
+/// Shape of the framing box drawn behind a `StoryTextObject` when a background
+/// (`.solid` / `.glass`) is active. Controls only the corner geometry — the
+/// horizontal padding is always ≥ the width of one "o" glyph (see
+/// `StoryTextLayer`). `nil` on the object means `.rounded` (legacy default).
+public enum StoryTextFrameShape: String, Codable, CaseIterable, Sendable {
+    case rounded     // cornerRadius ≈ 15% of height (default)
+    case pill        // full capsule (cornerRadius = 50% of height)
+    case rectangle   // near-square corners
+
+    public var displayName: String {
+        switch self {
+        case .rounded: return "Arrondi"
+        case .pill: return "Pilule"
+        case .rectangle: return "Carré"
+        }
+    }
+}
+
 // MARK: - Story Text Object (texte sur canvas)
 
 public struct StoryTextObject: Codable, Identifiable, Sendable {
@@ -231,6 +272,14 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     /// `nil` means "fall back to legacy `textBg`" for backward compat.
     public var backgroundStyle: StoryTextBackgroundStyle?
 
+    /// Independent font-weight override (`StoryTextWeight` rawValue). `nil` ⇒
+    /// weight derived from `textStyle` (legacy). Lets the user pick fin / normal
+    /// / semi-gras / gras without changing the style family.
+    public var fontWeight: String?
+    /// Framing box shape (`StoryTextFrameShape` rawValue). Only meaningful when a
+    /// background is active. `nil` ⇒ `.rounded` (legacy default).
+    public var frameShape: String?
+
     /// Outline / contour du texte. `borderColor == nil` ⇒ pas de bord
     /// (pas de booléen séparé). Hex "RRGGBB" ou "RRGGBBAA".
     public var borderColor: String?
@@ -256,6 +305,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         case id, text, x, y, scale, rotation, zIndex, anchor
         case fontSize, fontFamily
         case textStyle, textColor, textAlign, textBg, backgroundStyle
+        case fontWeight, frameShape
         case borderColor, borderWidth
         case translations, sourceLanguage
         case startTime, duration, fadeIn, fadeOut
@@ -277,6 +327,8 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
                 textAlign: String? = "center",
                 textBg: String? = nil,
                 backgroundStyle: StoryTextBackgroundStyle? = nil,
+                fontWeight: String? = nil,
+                frameShape: String? = nil,
                 borderColor: String? = nil,
                 borderWidth: Double? = nil,
                 translations: [String: String]? = nil,
@@ -296,6 +348,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         self.textStyle = textStyle; self.textColor = textColor
         self.textAlign = textAlign; self.textBg = textBg
         self.backgroundStyle = backgroundStyle
+        self.fontWeight = fontWeight; self.frameShape = frameShape
         self.borderColor = borderColor; self.borderWidth = borderWidth
         self.translations = translations
         self.sourceLanguage = sourceLanguage
@@ -343,6 +396,8 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         textAlign = try c.decodeIfPresent(String.self, forKey: .textAlign)
         textBg = try c.decodeIfPresent(String.self, forKey: .textBg)
         backgroundStyle = try c.decodeIfPresent(StoryTextBackgroundStyle.self, forKey: .backgroundStyle)
+        fontWeight = try c.decodeIfPresent(String.self, forKey: .fontWeight)
+        frameShape = try c.decodeIfPresent(String.self, forKey: .frameShape)
         borderColor = try c.decodeIfPresent(String.self, forKey: .borderColor)
         borderWidth = try c.decodeIfPresent(Double.self, forKey: .borderWidth)
         translations = try c.decodeIfPresent([String: String].self, forKey: .translations)
@@ -379,6 +434,8 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(textAlign, forKey: .textAlign)
         try c.encodeIfPresent(textBg, forKey: .textBg)
         try c.encodeIfPresent(backgroundStyle, forKey: .backgroundStyle)
+        try c.encodeIfPresent(fontWeight, forKey: .fontWeight)
+        try c.encodeIfPresent(frameShape, forKey: .frameShape)
         try c.encodeIfPresent(borderColor, forKey: .borderColor)
         try c.encodeIfPresent(borderWidth, forKey: .borderWidth)
         try c.encodeIfPresent(translations, forKey: .translations)
@@ -398,6 +455,18 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var parsedTextStyle: StoryTextStyle {
         guard let raw = textStyle else { return .bold }
         return StoryTextStyle(rawValue: raw) ?? .bold
+    }
+
+    /// Independent weight override. `nil` ⇒ derive from `textStyle`.
+    public var parsedFontWeight: StoryTextWeight? {
+        guard let raw = fontWeight else { return nil }
+        return StoryTextWeight(rawValue: raw)
+    }
+
+    /// Framing box shape; defaults to `.rounded` when unset.
+    public var parsedFrameShape: StoryTextFrameShape {
+        guard let raw = frameShape, let shape = StoryTextFrameShape(rawValue: raw) else { return .rounded }
+        return shape
     }
 
     /// Legacy helper — returns design-pixel fontSize.

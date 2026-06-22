@@ -7,19 +7,23 @@ import MeeshySDK
 /// `case` fixe l'ordre d'affichage des bulles dans la rangée.
 public enum TextEditTool: String, CaseIterable, Sendable, Equatable {
     case style
+    case weight
     case color
     case size
     case align
     case background
+    case frame
     case border
 
     var sfSymbol: String {
         switch self {
         case .style:      return "textformat"
+        case .weight:     return "bold"
         case .color:      return "paintpalette.fill"
         case .size:       return "textformat.size"
         case .align:      return "text.alignleft"
         case .background: return "a.square.fill"
+        case .frame:      return "rectangle.roundedtop"
         case .border:     return "square"
         }
     }
@@ -27,10 +31,12 @@ public enum TextEditTool: String, CaseIterable, Sendable, Equatable {
     var accessibilityLabel: String {
         switch self {
         case .style:      return "Style de texte"
+        case .weight:     return "Graisse du texte"
         case .color:      return "Couleur du texte"
         case .size:       return "Taille du texte"
         case .align:      return "Alignement du texte"
         case .background: return "Fond du texte"
+        case .frame:      return "Cadrage du texte"
         case .border:     return "Contour du texte"
         }
     }
