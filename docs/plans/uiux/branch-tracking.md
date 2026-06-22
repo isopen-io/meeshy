@@ -260,6 +260,7 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 61wb | claude/practical-fermat-bhskup-61w (anti-pattern `t()||fallback` chrome global layout/) | #841 | ✅ |
 | 61we | claude/practical-fermat-xzf7uf (i18n message-bubble + bubble.forwarded) | #842 | ✅ |
 | 62wb | claude/practical-fermat-am6uvs (Badge variants gold/success/warning → tokens --gp-* dark-mode) | #847 | ✅ |
+| 63w | claude/practical-fermat-yly7ym (anti-pattern t()||fallback sidebar détails conv) | #849 | ✅ |
 | 62wp | claude/practical-fermat-n1xcdq (perf lazy-load + async-decode vignettes admin) | #850 | ✅ |
 | 63w | claude/practical-fermat-ctjjy0 (cohérence tokens empty states) | #851 | ✅ |
 | 63w | claude/practical-fermat-ep7mkb (`t()||fallback` flow reset mot de passe) | #856 | ✅ |
@@ -267,3 +268,4 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 63wc | claude/practical-fermat-lxjyk5 (dark-mode parité fond recadreurs image inline-style `#f3f4f6` → `var(--gp-background)`) | (en vol) | ⏳ |
 | 63w | claude/practical-fermat-ep7mkb (cohérence tokens empty states dark/light) | #856 | ✅ |
 | 64w | claude/practical-fermat-ypjp47 (i18n + tokens tooltip profil vocal TranscriptionViewer) | — | ⏳ |
+| 64wb | claude/practical-fermat-y6vyvh (anti-pattern t()||fallback en-têtes catégories liste conv — CommunityCarousel + ConversationGroup) | #863 | ⏳ |
