@@ -7,11 +7,11 @@ import MeeshyUI
 ///
 /// Three primary tabs sit under a collapsing header and swipe horizontally:
 /// **Appels** (call journal), **Clavier** (dial pad), **Contacts** (the
-/// directory, with its own sticky Tous / Demandes / Bloques / Decouvrir
-/// sub-tabs in `ContactsSection`).
+/// directory — an annuaire filtered by `ContactFilter`).
 ///
-/// Deep links still arrive as `.contacts(ContactsTab)`; they open the hub on
-/// the Contacts tab with that sub-tab pre-selected.
+/// Connection management and user discovery (Demandes / Decouvrir / Bloques)
+/// no longer clutter the Contacts tab — they live in `PeopleDiscoveryView`,
+/// reachable from the floating menu ladder.
 struct ContactsHubView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
@@ -19,14 +19,10 @@ struct ContactsHubView: View {
     @EnvironmentObject private var router: Router
     @State private var scrollOffset: CGFloat = 0
     @State private var selectedTab: PeopleTab = .contacts
-    private let initialContactsSubTab: ContactsTab
 
     @StateObject private var keypadVM = KeypadViewModel()
     @StateObject private var callsVM = CallsViewModel()
-
-    init(initialTab: ContactsTab = .contacts) {
-        initialContactsSubTab = initialTab
-    }
+    @StateObject private var contactsListVM = ContactsListViewModel()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -107,8 +103,7 @@ struct ContactsHubView: View {
 
     private func badgeCount(for tab: PeopleTab) -> Int {
         switch tab {
-        case .contacts: return FriendshipCache.shared.pendingReceivedCount
-        case .calls, .keypad: return 0
+        case .contacts, .calls, .keypad: return 0
         }
     }
 
@@ -130,8 +125,8 @@ struct ContactsHubView: View {
             )
             .tag(PeopleTab.keypad)
 
-            ContactsSection(
-                initialTab: initialContactsSubTab,
+            ContactsListTab(
+                viewModel: contactsListVM,
                 isActive: selectedTab == .contacts,
                 onScrollOffsetChange: { scrollOffset = $0 }
             )

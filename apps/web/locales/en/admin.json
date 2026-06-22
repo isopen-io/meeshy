@@ -302,6 +302,7 @@
       "fieldCooldown": "Cooldown (minutes)",
       "cooldownHint": "Delay before re-selecting this topic for the same conversation.",
       "fieldActive": "Active (used by strategist)",
+      "close": "Close",
       "cancel": "Cancel",
       "saving": "Saving...",
       "save": "Save",
