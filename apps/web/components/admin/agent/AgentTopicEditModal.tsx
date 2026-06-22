@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { agentAdminService, type TopicCatalogItem, type TopicInput } from '@/services/agent-admin.service';
 import { AgentTopicRegexTester } from './AgentTopicRegexTester';
 import { useI18n } from '@/hooks/use-i18n';
+import { useFocusTrap } from '@/hooks/use-accessibility';
 
 interface Props {
   topic: TopicCatalogItem | null;
@@ -53,6 +54,10 @@ export function AgentTopicEditModal({ topic, onClose, onSaved }: Props) {
   );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Keep keyboard focus within the modal while it is open (standard dialog behaviour).
+  useFocusTrap(dialogRef as React.RefObject<HTMLElement>, true);
 
   // Standard dismiss gesture: close on Escape (but never interrupt an in-flight save).
   useEffect(() => {
@@ -98,6 +103,7 @@ export function AgentTopicEditModal({ topic, onClose, onSaved }: Props) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="agent-topic-edit-modal-title"

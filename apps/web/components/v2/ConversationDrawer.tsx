@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useI18n } from '@/hooks/use-i18n';
+import { useFocusTrap } from '@/hooks/use-accessibility';
 import { Input } from './Input';
 import { TagInput, TagItem } from './TagInput';
 import { Label } from './Label';
@@ -78,6 +79,10 @@ export function ConversationDrawer({
   const { t: tConv } = useI18n('conversations');
   const [localName, setLocalName] = useState(conversationName);
   const [mounted, setMounted] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Keep keyboard focus within the drawer while it is open (standard dialog behaviour).
+  useFocusTrap(panelRef as React.RefObject<HTMLElement>, isOpen);
 
   useEffect(() => {
     if (isOpen) {
@@ -121,6 +126,7 @@ export function ConversationDrawer({
 
       {/* Drawer */}
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="conversation-drawer-title"
