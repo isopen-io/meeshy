@@ -298,5 +298,14 @@
     "anonymousUser": "Anonymous user"
   },
   "copied": "Copied",
-  "never": "Never"
+  "never": "Never",
+  "offlineMessage": "You're offline — messages will be sent once you reconnect",
+  "updateAvailable": "A new version of Meeshy is available!",
+  "updateNow": "Update now",
+  "wait": "Later",
+  "languageSelector": {
+    "selectLanguage": "Select a language",
+    "searchLanguage": "Search language...",
+    "noLanguageFound": "No language found"
+  }
 }
