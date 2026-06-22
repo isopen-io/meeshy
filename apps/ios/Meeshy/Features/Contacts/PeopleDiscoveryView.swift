@@ -2,49 +2,56 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// The **Contacts** tab of the People hub.
+/// **Découverte d'utilisateurs Meeshy** — the people-discovery hub.
 ///
-/// Hosts the contact directory's four sticky sub-tabs — Tous / Demandes /
-/// Bloques / Decouvrir — above their respective content. The sub-tab bar stays
+/// Hosts the three sticky sub-tabs that used to clutter the contact directory —
+/// Demandes / Decouvrir / Bloques — above their respective content. Splitting
+/// them out keeps the Contacts tab an exploitable annuaire (filtered by
+/// `ContactFilter`) while connection management and user discovery live here.
+///
+/// Pushed full-screen from the floating menu ladder (`RootView`) and reachable
+/// via deep links (`Route.peopleDiscovery(DiscoveryTab)`). The sub-tab bar stays
 /// pinned while the active sub-tab scrolls; that scroll is forwarded up so the
-/// hub's collapsing header reacts to it.
-///
-/// Sub-tabs switch by tap (not horizontal paging) so the hub's primary swipe
-/// between Appels / Clavier / Contacts is never ambiguous. Each sub-view owns
-/// its own scroll + cache-first load; the view-models are held here so state
+/// collapsing header reacts to it. Sub-tabs switch by tap; each sub-view owns
+/// its own scroll + cache-first load, and the view-models are held here so state
 /// survives sub-tab switches.
-struct ContactsSection: View {
+struct PeopleDiscoveryView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemeManager { ThemeManager.shared }
+    @EnvironmentObject private var router: Router
 
-    @StateObject private var contactsListVM = ContactsListViewModel()
     @StateObject private var requestsVM = RequestsViewModel()
     @StateObject private var discoverVM = DiscoverViewModel()
     @StateObject private var blockedVM = BlockedViewModel()
+    @ObservedObject private var friendship = FriendshipCache.shared
 
-    @State private var subTab: ContactsTab
-    var isActive: Bool
-    var onScrollOffsetChange: (CGFloat) -> Void
+    @State private var scrollOffset: CGFloat = 0
+    @State private var subTab: DiscoveryTab
 
-    init(
-        initialTab: ContactsTab = .contacts,
-        isActive: Bool,
-        onScrollOffsetChange: @escaping (CGFloat) -> Void
-    ) {
+    init(initialTab: DiscoveryTab = .requests) {
         _subTab = State(initialValue: initialTab)
-        self.isActive = isActive
-        self.onScrollOffsetChange = onScrollOffsetChange
     }
 
     var body: some View {
         VStack(spacing: 0) {
+            CollapsibleHeader(
+                title: String(localized: "discovery.title", defaultValue: "Decouvrir", bundle: .main),
+                scrollOffset: scrollOffset,
+                onBack: { router.pop() },
+                titleColor: theme.textPrimary,
+                backArrowColor: MeeshyColors.indigo500,
+                backgroundColor: theme.backgroundPrimary
+            )
+
             subTabBar
             subContent
         }
+        .background(theme.backgroundPrimary.ignoresSafeArea())
+        .navigationBarHidden(true)
         .adaptiveOnChange(of: subTab) { _, _ in
-            // Re-expand the hub header when switching sub-tabs (the freshly
-            // shown sub-tab only re-reports its offset once scrolled).
-            onScrollOffsetChange(0)
+            // Re-expand the header when switching sub-tabs (the freshly shown
+            // sub-tab only re-reports its offset once scrolled).
+            scrollOffset = 0
             HapticFeedback.light()
         }
     }
@@ -54,7 +61,7 @@ struct ContactsSection: View {
     private var subTabBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(ContactsTab.allCases, id: \.self) { tab in
+                ForEach(DiscoveryTab.allCases, id: \.self) { tab in
                     subTabChip(tab)
                 }
             }
@@ -64,7 +71,7 @@ struct ContactsSection: View {
         .overlay(alignment: .bottom) { Divider().opacity(0.2) }
     }
 
-    private func subTabChip(_ tab: ContactsTab) -> some View {
+    private func subTabChip(_ tab: DiscoveryTab) -> some View {
         let isSelected = subTab == tab
         let badge = subBadge(for: tab)
 
@@ -93,10 +100,10 @@ struct ContactsSection: View {
         .accessibilityLabel(tab.rawValue)
     }
 
-    private func subBadge(for tab: ContactsTab) -> Int {
+    private func subBadge(for tab: DiscoveryTab) -> Int {
         switch tab {
-        case .requests: return FriendshipCache.shared.pendingReceivedCount
-        case .contacts, .discover, .blocked: return 0
+        case .requests: return friendship.pendingReceivedCount
+        case .discover, .blocked: return 0
         }
     }
 
@@ -105,29 +112,23 @@ struct ContactsSection: View {
     @ViewBuilder
     private var subContent: some View {
         switch subTab {
-        case .contacts:
-            ContactsListTab(
-                viewModel: contactsListVM,
-                isActive: isActive,
-                onScrollOffsetChange: onScrollOffsetChange
-            )
         case .requests:
             RequestsTab(
                 viewModel: requestsVM,
-                isActive: isActive,
-                onScrollOffsetChange: onScrollOffsetChange
+                isActive: true,
+                onScrollOffsetChange: { scrollOffset = $0 }
             )
         case .discover:
             DiscoverTab(
                 viewModel: discoverVM,
-                isActive: isActive,
-                onScrollOffsetChange: onScrollOffsetChange
+                isActive: true,
+                onScrollOffsetChange: { scrollOffset = $0 }
             )
         case .blocked:
             BlockedTab(
                 viewModel: blockedVM,
-                isActive: isActive,
-                onScrollOffsetChange: onScrollOffsetChange
+                isActive: true,
+                onScrollOffsetChange: { scrollOffset = $0 }
             )
         }
     }

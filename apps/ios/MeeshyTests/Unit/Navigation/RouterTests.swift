@@ -30,7 +30,11 @@ final class RouterTests: XCTestCase {
     }
 
     func test_isHub_contacts_returnsTrue() {
-        XCTAssertTrue(Route.contacts().isHub)
+        XCTAssertTrue(Route.contacts.isHub)
+    }
+
+    func test_isHub_peopleDiscovery_returnsTrue() {
+        XCTAssertTrue(Route.peopleDiscovery().isHub)
     }
 
     func test_isHub_links_returnsTrue() {
@@ -223,16 +227,23 @@ final class RouterTests: XCTestCase {
 
     func test_push_contacts_addsToPath() {
         let router = Router()
-        router.push(.contacts())
+        router.push(.contacts)
         XCTAssertEqual(router.path.count, 1)
-        XCTAssertEqual(router.currentRoute, .contacts())
+        XCTAssertEqual(router.currentRoute, .contacts)
     }
 
-    func test_push_contacts_withTab_addsToPath() {
+    func test_push_peopleDiscovery_addsToPath() {
         let router = Router()
-        router.push(.contacts(.requests))
+        router.push(.peopleDiscovery())
         XCTAssertEqual(router.path.count, 1)
-        XCTAssertEqual(router.currentRoute, .contacts(.requests))
+        XCTAssertEqual(router.currentRoute, .peopleDiscovery())
+    }
+
+    func test_push_peopleDiscovery_withTab_addsToPath() {
+        let router = Router()
+        router.push(.peopleDiscovery(.requests))
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .peopleDiscovery(.requests))
     }
 
     func test_push_communityList_addsToPath() {
