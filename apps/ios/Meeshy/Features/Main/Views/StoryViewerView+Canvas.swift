@@ -716,6 +716,11 @@ struct StoryCardView: View {
     let triggerStoryReaction: (String) -> Void
     let pauseTimer: () -> Void
     let resumeTimer: () -> Void
+    /// Unified-timeline gate : the canvas reports whether its PRIMARY video is
+    /// actually progressing (`true`) or stalled/buffering (`false`). The parent
+    /// owns `slideTimer` and forwards this to `setPlaybackStalled(!progressing)`
+    /// — the stall decision stays app-side (the SDK only emits the raw signal).
+    let onPlaybackProgressing: (Bool) -> Void
     let loadStoryComments: () -> Void
     let dismissComposer: () -> Void
     let goToPrevious: () -> Void
@@ -910,7 +915,7 @@ struct StoryCardView: View {
                                       // n'émet alors jamais). Décision produit câblée app-side ;
                                       // le SDK n'expose que le signal `onPlaybackProgressing`.
                                       onPlaybackProgressing: { progressing in
-                                          slideTimer.setPlaybackStalled(!progressing)
+                                          onPlaybackProgressing(progressing)
                                       })
                     .id(story.id)
                     // Strict 9:16-fit (parité avec UnifiedPostComposer:324).

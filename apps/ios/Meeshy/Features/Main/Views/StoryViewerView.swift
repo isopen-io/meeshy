@@ -1093,6 +1093,7 @@ struct StoryViewerView: View {
             triggerStoryReaction: { triggerStoryReaction($0) },
             pauseTimer: { pauseTimer() },
             resumeTimer: { resumeTimer() },
+            onPlaybackProgressing: { progressing in slideTimer.setPlaybackStalled(!progressing) },
             loadStoryComments: { loadStoryComments() },
             dismissComposer: { dismissComposer() },
             goToPrevious: { goToPrevious() },
