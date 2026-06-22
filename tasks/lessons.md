@@ -88,6 +88,9 @@
 
 28. **Avant tout `push --force-with-lease` sur `dev` : `git fetch` PUIS vérifier `git log main..origin/dev`** — un agent parallèle peut avoir mergé une PR sur dev uniquement (PR #570 écrasée puis réintégrée par merge `cb3cd8a9e`). Le lease ne protège que contre ce qu'on a déjà VU ; il faut regarder ce qu'on s'apprête à effacer.
 
+## 2026-06-22 — iOS : ne JAMAIS hand-éditer project.pbxproj (XcodeGen)
+
+29. **Le projet Xcode iOS est généré par XcodeGen depuis `apps/ios/project.yml`.** Les `targets` utilisent des globs de répertoire (`sources: - path: Meeshy`), donc **tout nouveau fichier `.swift` posé dans l'arborescence est auto-découvert** à `xcodegen generate`. J'ai édité `Meeshy.xcodeproj/project.pbxproj` à la main pour enregistrer `MediaConsumptionProgressBar.swift` — inutile ET nuisible : le pbxproj est un artefact généré, mes entrées manuelles (UUIDs ad-hoc) sont écrasées à la régénération. **Règle : pour ajouter un fichier à l'app, le créer au bon endroit sous `Meeshy/` (ou un sous-dossier d'un target déclaré) — jamais toucher le pbxproj. Pour le SDK (`packages/MeeshySDK/`), c'est SwiftPM qui découvre aussi par répertoire — pas de pbxproj non plus.** Indice de détection : présence de `apps/ios/project.yml` = XcodeGen actif.
 ## 2026-06-22 — Gateway test coverage (admin routes)
 
 29. **Fastify response serialization strips response-body fields not declared in the route schema.** When a route handler returns `{ success, data, cacheInvalidation }` but the JSON schema only declares `{ success, data }`, Fastify's `fast-json-stringify` silently drops `cacheInvalidation`. Tests that assert `body.cacheInvalidation.*` will always fail. **Fix:** either add the extra field to the response schema, or (when verifying side-effects) assert on mock.calls instead of the response body.

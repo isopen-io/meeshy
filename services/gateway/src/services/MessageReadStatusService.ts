@@ -1,10 +1,15 @@
 /**
  * Service de gestion des statuts de lecture/réception des messages
  *
- * Architecture simplifiée (Time-Based Cursor):
- * - ConversationReadCursor: Source de vérité unique pour le statut de lecture via `lastReadAt`.
- * - Plus de création coûteuse de MessageStatusEntry pour chaque message texte.
- * - Les statuts "Lu par" sont calculés dynamiquement en comparant message.createdAt <= cursor.lastReadAt.
+ * Architecture hybride (Cursor + per-message freeze):
+ * - ConversationReadCursor: index rapide du front de lecture/livraison
+ *   (`lastReadAt`/`lastDeliveredAt`) — sert au comptage des non-lus.
+ * - MessageStatusEntry: date FIGÉE (write-once) de livraison/réception/lecture
+ *   PAR message PAR participant, capturée la première fois que le message
+ *   franchit le front. Garantit la précision absolue : la date affichée d'un
+ *   message ne suit plus le curseur mobile (qui ré-avance à chaque ouverture).
+ *   Cf. `freezeMessageStatus` (écriture) + `getMessageStatusDetails` (lecture,
+ *   l'entrée figée prime, fallback curseur pour le legacy non figé).
  * - AttachmentStatusEntry est conservé pour le suivi granulaire des médias (audio écouté, vidéo vue).
  */
 
@@ -331,6 +336,21 @@ export class MessageReadStatusService {
 
       const now = new Date();
 
+      // Best-effort (cf. markMessagesAsRead) : borne la fenêtre du gel sans
+      // jamais faire échouer le marquage du curseur.
+      let prevDeliveredAt: Date | null = null;
+      try {
+        const prevCursor = await this.prisma.conversationReadCursor.findUnique({
+          where: {
+            conversation_participant_cursor: { participantId, conversationId },
+          },
+          select: { lastDeliveredAt: true },
+        });
+        prevDeliveredAt = prevCursor?.lastDeliveredAt ?? null;
+      } catch {
+        prevDeliveredAt = null;
+      }
+
       await this.prisma.conversationReadCursor.upsert({
         where: {
           conversation_participant_cursor: { participantId, conversationId },
@@ -348,6 +368,17 @@ export class MessageReadStatusService {
           lastDeliveredAt: now,
           version: { increment: 1 },
         },
+      });
+
+      // Précision absolue : fige `deliveredAt`/`receivedAt` par message
+      // nouvellement livré (write-once), pour persister la date de réception
+      // de CHAQUE message au lieu de la dériver du curseur mobile.
+      await this.freezeMessageStatus({
+        participantId,
+        conversationId,
+        since: prevDeliveredAt,
+        at: now,
+        field: "deliveredAt",
       });
 
       await this.updateUnreadCount(participantId, conversationId);
@@ -399,6 +430,22 @@ export class MessageReadStatusService {
         messageId = latestMessage.id;
       }
 
+      // Lecture best-effort du front précédent : sert uniquement à borner la
+      // fenêtre du gel. Une erreur ici ne doit pas faire échouer le marquage
+      // (on retombe sur `null` = gel depuis l'origine, lui-même résilient).
+      let prevReadAt: Date | null = null;
+      try {
+        const prevCursor = await this.prisma.conversationReadCursor.findUnique({
+          where: {
+            conversation_participant_cursor: { participantId, conversationId },
+          },
+          select: { lastReadAt: true },
+        });
+        prevReadAt = prevCursor?.lastReadAt ?? null;
+      } catch {
+        prevReadAt = null;
+      }
+
       await this.prisma.conversationReadCursor.upsert({
         where: {
           conversation_participant_cursor: { participantId, conversationId },
@@ -417,6 +464,20 @@ export class MessageReadStatusService {
           unreadCount: 0,
           version: { increment: 1 },
         },
+      });
+
+      // Précision absolue : fige un `MessageStatusEntry.readAt` par message
+      // nouvellement franchi (write-once). Sans cela, le statut "lu" de chaque
+      // message suivrait le curseur mobile `lastReadAt`, qui ré-avance à
+      // `now` à chaque ouverture — collapsant tous les anciens messages à la
+      // même date. Le curseur reste l'index rapide ; la date par message est
+      // gelée à la première lecture.
+      await this.freezeMessageStatus({
+        participantId,
+        conversationId,
+        since: prevReadAt,
+        at: now,
+        field: "readAt",
       });
 
       logger.info(
@@ -452,6 +513,83 @@ export class MessageReadStatusService {
         error
       );
       throw error;
+    }
+  }
+
+  /**
+   * Fige (write-once) la date de livraison/lecture par message pour les
+   * messages d'une fenêtre temporelle nouvellement franchie par un
+   * participant. Chaque champ (`deliveredAt`/`receivedAt` ou `readAt`) n'est
+   * écrit qu'une seule fois : une entrée déjà figée n'est jamais réécrite, ce
+   * qui garantit la précision historique (le curseur, lui, ré-avance à chaque
+   * ouverture). Résilient : ne jette jamais — une erreur ici ne doit pas faire
+   * échouer le marquage du curseur.
+   */
+  private async freezeMessageStatus(params: {
+    participantId: string;
+    conversationId: string;
+    since: Date | null;
+    at: Date;
+    field: "readAt" | "deliveredAt";
+  }): Promise<void> {
+    const { participantId, conversationId, since, at, field } = params;
+    try {
+      const messages = await this.prisma.message.findMany({
+        where: {
+          conversationId,
+          deletedAt: null,
+          senderId: { not: participantId },
+          createdAt: { lte: at, ...(since ? { gt: since } : {}) },
+        },
+        select: { id: true },
+      });
+
+      if (messages.length === 0) return;
+      const ids = messages.map((m) => m.id);
+
+      const existing = await this.prisma.messageStatusEntry.findMany({
+        where: { messageId: { in: ids }, participantId },
+        select: { messageId: true, deliveredAt: true, readAt: true },
+      });
+      const existingIds = new Set(existing.map((e) => e.messageId));
+      const toCreate = ids.filter((id) => !existingIds.has(id));
+
+      if (toCreate.length > 0) {
+        await this.prisma.messageStatusEntry.createMany({
+          data: toCreate.map((messageId) =>
+            field === "readAt"
+              ? { messageId, conversationId, participantId, readAt: at }
+              : {
+                  messageId,
+                  conversationId,
+                  participantId,
+                  deliveredAt: at,
+                  receivedAt: at,
+                }
+          ),
+        });
+      }
+
+      // Write-once: ne renseigne le champ que sur les entrées où il est encore
+      // nul (ex: une entrée créée par la livraison reçoit ensuite son `readAt`).
+      const toUpdate = existing
+        .filter((e) => (field === "readAt" ? e.readAt === null : e.deliveredAt === null))
+        .map((e) => e.messageId);
+
+      if (toUpdate.length > 0) {
+        await this.prisma.messageStatusEntry.updateMany({
+          where:
+            field === "readAt"
+              ? { messageId: { in: toUpdate }, participantId, readAt: null }
+              : { messageId: { in: toUpdate }, participantId, deliveredAt: null },
+          data: field === "readAt" ? { readAt: at } : { deliveredAt: at, receivedAt: at },
+        });
+      }
+    } catch (error) {
+      logger.error(
+        `[MessageReadStatus] freezeMessageStatus(${field}) failed for participant ${participantId} in conversation ${conversationId}:`,
+        error
+      );
     }
   }
 
@@ -714,6 +852,23 @@ export class MessageReadStatusService {
         participants.map(p => [p.id, p])
       );
 
+      // Précision absolue : les dates figées par message (write-once) priment
+      // sur la dérivation curseur. Le fallback curseur ne sert que pour les
+      // messages lus AVANT l'introduction du gel (legacy, sans entrée).
+      const frozenEntries = await this.prisma.messageStatusEntry.findMany({
+        where: { messageId },
+        select: {
+          participantId: true,
+          deliveredAt: true,
+          receivedAt: true,
+          readAt: true,
+          readDevice: true,
+        },
+      });
+      const frozenByParticipant = new Map(
+        frozenEntries.map(e => [e.participantId, e])
+      );
+
       let results: Array<{
         participantId: string;
         displayName: string;
@@ -728,14 +883,20 @@ export class MessageReadStatusService {
         const participant = participantById.get(cursor.participantId);
         if (!participant) continue; // orphan or inactive
 
-        const deliveredAt =
+        const cursorDelivered =
           cursor.lastDeliveredAt && cursor.lastDeliveredAt >= message.createdAt
             ? cursor.lastDeliveredAt
             : null;
-        const readAt =
+        const cursorRead =
           cursor.lastReadAt && cursor.lastReadAt >= message.createdAt
             ? cursor.lastReadAt
             : null;
+
+        const frozen = frozenByParticipant.get(cursor.participantId);
+        const deliveredAt = frozen?.deliveredAt ?? cursorDelivered;
+        const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
+        const readAt = frozen?.readAt ?? cursorRead;
+        const readDevice = frozen?.readDevice ?? null;
 
         if (filter === "delivered" && !deliveredAt) continue;
         if (filter === "read" && !readAt) continue;
@@ -746,9 +907,9 @@ export class MessageReadStatusService {
           displayName: participant.displayName,
           avatar: participant.avatar,
           deliveredAt,
-          receivedAt: deliveredAt,
+          receivedAt,
           readAt,
-          readDevice: null,
+          readDevice,
         });
       }
 

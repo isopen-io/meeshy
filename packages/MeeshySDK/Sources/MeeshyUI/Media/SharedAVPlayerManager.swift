@@ -245,6 +245,14 @@ public final class SharedAVPlayerManager: ObservableObject {
         let positionMs = Int(currentTime * 1000)
         let totalDurationMs = Int(duration * 1000)
 
+        // Persist the at-rest watch fraction (monotonic, kept after completion)
+        // so the bubble thumbnail can show a discreet progress bar at a glance.
+        if complete {
+            MediaConsumptionStore.shared.record(fraction: 1, complete: true, for: attId)
+        } else if duration > 0 {
+            MediaConsumptionStore.shared.record(fraction: currentTime / duration, complete: false, for: attId)
+        }
+
         Task {
             let body = AttachmentStatusBody(
                 action: "watched",

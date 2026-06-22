@@ -114,6 +114,9 @@ public struct APIMessageAttachment: Decodable, Sendable {
     public let reactionSummary: [String: Int]?
     /// BUG2 A' — emojis posés par l'utilisateur courant sur cette pièce jointe.
     public let currentUserReactions: [String]?
+    /// Phase 2 — progression de consommation PERSONNELLE du current-user
+    /// (position + complétion), pour seeder le tint waveform / progress-bar.
+    public let currentUserConsumption: MeeshyMediaConsumption?
 
     // ── Audio / video ──
     public let duration: Int?
@@ -184,7 +187,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, messageId
         case fileName, originalName, mimeType, fileSize, fileUrl
-        case thumbnailUrl, thumbHash, width, height, imageVariants, reactionSummary, currentUserReactions
+        case thumbnailUrl, thumbHash, width, height, imageVariants, reactionSummary, currentUserReactions, currentUserConsumption
         case duration, bitrate, sampleRate, codec, channels, fps, videoCodec
         case pageCount, lineCount
         case latitude, longitude
@@ -224,6 +227,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
         self.imageVariants = try c.decodeIfPresent([MeeshyImageVariant].self, forKey: .imageVariants)
         self.reactionSummary = try c.decodeIfPresent([String: Int].self, forKey: .reactionSummary)
         self.currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
+        self.currentUserConsumption = try c.decodeIfPresent(MeeshyMediaConsumption.self, forKey: .currentUserConsumption)
         self.duration = try c.decodeIfPresent(Int.self, forKey: .duration)
         self.bitrate = try c.decodeIfPresent(Int.self, forKey: .bitrate)
         self.sampleRate = try c.decodeIfPresent(Int.self, forKey: .sampleRate)
@@ -637,7 +641,8 @@ extension APIMessage {
                 deliveredToAllAt: apiAtt.deliveredToAllAt, viewedByAllAt: apiAtt.viewedByAllAt,
                 downloadedByAllAt: apiAtt.downloadedByAllAt, listenedByAllAt: apiAtt.listenedByAllAt,
                 watchedByAllAt: apiAtt.watchedByAllAt, viewedCount: apiAtt.viewedCount,
-                downloadedCount: apiAtt.downloadedCount, consumedCount: apiAtt.consumedCount
+                downloadedCount: apiAtt.downloadedCount, consumedCount: apiAtt.consumedCount,
+                currentUserConsumption: apiAtt.currentUserConsumption
             )
         }
 

@@ -1303,6 +1303,46 @@ class ConversationViewModel: ObservableObject {
     /// clock for a full minute on a single hung cellular attempt.
     static let sendRESTTimeoutSeconds: Double = 12
 
+    /// Phase 2 — seeds the local `MediaConsumptionStore` from the server-synced
+    /// per-user consumption surfaced on freshly loaded attachments, so the
+    /// in-bubble waveform tint (audio) / progress bar (video) reflect progress
+    /// made on other devices the moment the conversation opens. The store merges
+    /// with MAX semantics, so a further-along LOCAL position is never regressed
+    /// by a staler server value (and vice-versa). App-side orchestration: it
+    /// derives the playback fraction from the attachment duration and decides
+    /// when to seed — the store itself stays an opaque building block.
+    private func seedMediaConsumption(from messages: [Message]) {
+        for message in messages {
+            for attachment in message.attachments {
+                guard let consumption = attachment.currentUserConsumption else { continue }
+                let durationMs = attachment.duration ?? 0
+                let positionMs: Int?
+                let complete: Bool
+                switch attachment.type {
+                case .audio:
+                    positionMs = consumption.lastPlayPositionMs
+                    complete = consumption.listenedComplete
+                case .video:
+                    positionMs = consumption.lastWatchPositionMs
+                    complete = consumption.watchedComplete
+                default:
+                    continue
+                }
+                // Nothing to seed without either completion or a measurable position.
+                guard complete || (positionMs != nil && durationMs > 0) else { continue }
+                // `record` floors `complete` to fraction 1, so 0 here is safe
+                // when only completion is known (no position/duration).
+                let fraction: Double
+                if durationMs > 0, let pos = positionMs {
+                    fraction = Double(pos) / Double(durationMs)
+                } else {
+                    fraction = 0
+                }
+                MediaConsumptionStore.shared.record(fraction: fraction, complete: complete, for: attachment.id)
+            }
+        }
+    }
+
     func loadMessages() async {
         guard !isLoadingInitial else { return }
         isLoadingInitial = true
@@ -1491,6 +1531,10 @@ class ConversationViewModel: ObservableObject {
             // Keep legacy CacheCoordinator in sync so other parts of the app
             // (ConversationList preview, unread badge) that still read from it remain correct.
             let freshMessages = await processAPIMessages(response.data)
+            // Phase 2 — seed the local consumption store from the server-synced
+            // per-user progress so the waveform tint / video progress bar reflect
+            // cross-device consumption at a glance (MAX-merged with local).
+            seedMediaConsumption(from: freshMessages)
             scheduleTranscriptionRetry(for: response.data)
             let snapshot = freshMessages
             await CacheCoordinator.shared.messages.mergeUpdate(for: conversationId) { cached in

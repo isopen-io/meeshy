@@ -284,6 +284,9 @@ extension UniversalComposerBar {
         if show {
             attachRotation += 90
             isFocused = false
+            // Let the host dismiss any other bottom surface (e.g. an emoji
+            // panel) so the carousel never stacks on top of it.
+            onShowAttachments?()
         }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
             showAttachOptions = show

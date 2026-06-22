@@ -152,6 +152,15 @@ extension ConversationView {
             onPhotoLibrary: { composerState.showPhotoPicker = true },
             onCamera: { composerState.showCamera = true },
             onFilePicker: { composerState.showFilePicker = true },
+            onShowAttachments: {
+                // Carrousel de pièces jointes ouvert → ferme le panneau emoji
+                // pour ne jamais empiler deux surfaces d'entrée sous la barre.
+                if composerState.showTextEmojiPicker {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        composerState.showTextEmojiPicker = false
+                    }
+                }
+            },
             onRequestTextEmoji: {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     composerState.showTextEmojiPicker.toggle()
