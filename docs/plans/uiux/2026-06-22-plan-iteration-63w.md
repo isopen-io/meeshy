@@ -1,44 +1,38 @@
-# Plan de correction — Itération 63w (web)
+# Plan — Itération 63w (web)
 
-**Date** : 2026-06-22
-**Cible** : anti-pattern i18n `t('key') || 'fallback'` dans la sidebar de détails de conversation
-**Branche** : `claude/practical-fermat-yly7ym` (base `main` HEAD `9dafd59`)
+## Contexte
+Itération web. Base = `main` HEAD `d63c4a5` (post-merge iter-61w #835/#818, iter-62w #840).
+Contention forte des agents parallèles sur l'anti-pattern `t()||fallback` (message-bubble #842/#843,
+layout chrome #840 mergé, conversation header #835 mergé, image dialogs #814 mergé) et sur les variants
+Badge (#847 ouvert). → Cible **orthogonale** non touchée.
 
-## Problème
+## Découverte (revue d'optimisation Prisme)
+`app/(connected)/me/page.tsx` — la page **profil `/me`** (« Mon profil »), destination de navigation
+**primaire** (raccourci depuis le menu utilisateur, hero + stats + langues + actions), consomme
+**`useI18n('settings')`** pour ses toasts (`v2me.*`) MAIS affiche **28 chaînes FR codées en dur** dans
+TOUTES les langues — rupture Prisme majeure sur une surface d'entrée :
 
-`useI18n().t(key)` retourne la clé brute (truthy) pendant le flash de chargement async des namespaces.
-`t('key') || 'fallback'` ⇒ (1) `||` dead-code quand la clé existe, (2) clé brute affichée à l'écran
-pendant le chargement, dans toutes les langues. Même classe que 50w/60w/60wb/62w.
+- **EditProfileModal** : titre `Modifier le profil`, labels `Nom`/`Bio`, placeholders `Votre nom`/`Parlez-nous de vous...`, boutons `Annuler`/`Enregistrement...`/`Enregistrer`
+- **LogoutConfirmModal** : titre `Se déconnecter ?`, message de confirmation, `Annuler`, `Déconnexion...`/`Se déconnecter`
+- **Chrome page** : `DashboardLayout title="Mon profil"`, état erreur `Profil non trouvé` + `Retour aux conversations`
+- **Stats** : `aria-label="Statistiques"` + labels `Conversations`/`Messages`/`Contacts`
+- **Langues** : `aria-label`/`<h2>` `Mes langues`/`Langues`, niveaux `Natif`/`Courant`/`Apprentissage`
+- **Raccourcis** : `aria-label="Raccourcis"`, `Mes liens de partage`, `Mes contacts`, `Notifications`, bouton `Se déconnecter`, `Envoyer un message`
+- **Anti-pattern** : `label={t('title') || 'Paramètres'}` (dead-code + flash-of-raw-key)
 
-## Périmètre (orthogonal aux PR en vol)
+## Plan
+1. Câbler `useI18n('settings')` dans les 3 sous-composants (`EditProfileModal`, `LogoutConfirmModal`, `ProfileShell`) — `ProfilePage` l'a déjà.
+2. Remplacer les 28 chaînes par `t('v2me.<clé>', '<EN fallback>')` (signature fallback native, anti-flash, leçon 50w).
+3. Corriger l'anti-pattern `t('title') || 'Paramètres'` → `t('title', 'Settings')`.
+4. Étendre le bloc `settings.v2me` (déjà existant, 5 clés) avec **28 nouvelles clés ×4 locales** (en/fr/es/pt) — parité stricte.
+5. `Pro` (badge tier produit) conservé non-localisé (marque universelle, comme l'existant).
 
-Cluster **sidebar de détails** — aucune PR ouverte ne le touche (#835 = header, #843/#842 = bubble,
-#814 = dialogues image, #841 = layout déjà mergé) :
+## Validation
+- Parité ×4 (33 clés chacune), JSON valide round-trip.
+- Grep FR résiduel = 0 (hors `Pro`).
+- Aucun test n'asserte ces chaînes (vérifié).
+- Diff confiné : 1 composant + 4 locales (bloc `v2me`).
 
-| Fichier | Occ. | Clé(s) |
-|---------|------|--------|
-| `details-sidebar/DetailsHeader.tsx` | 1 | `conversationDetails.clickToChangeImage` |
-| `details-sidebar/CategorySelector.tsx` | 1 | `common.loading` |
-| `details-sidebar/TagsManager.tsx` | 1 | `common.loading` |
-| `details-sidebar/CustomizationManager.tsx` | 1 | `common.loading` |
-| `conversation-details-sidebar.tsx` | 2 | `conversationDetails.imageUpdated`, `conversationDetails.imageUploadError` |
-
-## Étapes
-
-1. [x] Vérifier la parité 4-locales des clés ciblées (`en/fr/es/pt/conversations.json`) → toutes présentes.
-2. [x] Remplacer `t('key') || 'fb'` → `t('key', 'EN fallback')` (secours alignés sur la valeur EN exacte du locale).
-3. [x] Ne PAS toucher les `|| ''` nullables légitimes (customName, title, description, firstName…).
-4. [x] Documenter l'analyse + annoter `branch-tracking.md`.
-5. [ ] Commit + push, ouvrir PR, CI vert, merge dans `main`, supprimer la branche.
-
-## Critères d'acceptation
-
-- 0 occurrence `t(...) || '...'` restante dans les 5 fichiers du cluster.
-- 0 ajout/modification de locale (clés déjà présentes ×4).
-- Aucun changement de comportement runtime (valeur traduite rendue à l'identique quand la clé existe).
-
-## Suite (64w+)
-
-~41 fichiers conservent l'anti-pattern (failed-message-banner, emoji-picker, SystemStatusBanner,
-ConversationSettingsModal, hooks conversations, video-calls/audio-effects…). Continuer par lots cohérents
-bornés, toujours après `git fetch` + `list_pull_requests`.
+## Hors périmètre / différé
+- Poursuite anti-pattern `t()||fallback` (~270 occ) — laissée aux lots parallèles bornés.
+- `app/settings/loading.tsx` (server component — exclusion documentée, ne pas re-flagger).
