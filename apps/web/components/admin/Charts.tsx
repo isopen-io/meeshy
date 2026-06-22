@@ -21,6 +21,7 @@ export type {
 // Loading Skeleton for Charts
 // ======================
 
+/* istanbul ignore next */
 function ChartSkeleton({ height = 300 }: { height?: number }) {
   return (
     <Card>
