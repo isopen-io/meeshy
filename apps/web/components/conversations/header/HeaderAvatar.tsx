@@ -27,7 +27,7 @@ interface HeaderAvatarProps {
   presenceFallback?: PresenceSource | null;
   encryptionInfo: EncryptionInfo | null;
   onImageUploadClick?: () => void;
-  t: (key: string) => string;
+  t: (key: string, fallback?: string) => string;
 }
 
 export const HeaderAvatar = memo(function HeaderAvatar({
@@ -50,7 +50,7 @@ export const HeaderAvatar = memo(function HeaderAvatar({
           <div
             className="h-10 w-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center"
             role="img"
-            aria-label={t('conversationHeader.anonymousUser') || 'Utilisateur anonyme'}
+            aria-label={t('conversationHeader.anonymousUser', 'Anonymous user')}
           >
             <Ghost className="h-5 w-5 text-purple-600 dark:text-purple-400" aria-hidden="true" />
           </div>
@@ -88,7 +88,7 @@ export const HeaderAvatar = memo(function HeaderAvatar({
                 type="button"
                 className="cursor-pointer group relative rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 onClick={onImageUploadClick}
-                aria-label={t('conversationHeader.changeImage') || 'Changer l\'image de la conversation'}
+                aria-label={t('conversationHeader.changeImage', 'Change image')}
               >
                 <Avatar className="h-9 w-9 sm:h-10 sm:w-10 ring-2 ring-transparent group-hover:ring-primary/50 transition-[box-shadow]">
                   <AvatarImage src={avatarUrl} alt={name} />
@@ -102,7 +102,7 @@ export const HeaderAvatar = memo(function HeaderAvatar({
               </button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>{t('conversationHeader.changeImage') || 'Changer l\'image'}</p>
+              <p>{t('conversationHeader.changeImage', 'Change image')}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
