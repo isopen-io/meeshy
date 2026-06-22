@@ -1,0 +1,57 @@
+{
+  "title": "Feed",
+  "srHeading": "Feed de noticias — publicaciones, reels e historias",
+  "tabs": {
+    "ariaLabel": "Tipo de feed",
+    "posts": "Publicaciones"
+  },
+  "sections": {
+    "stories": "Historias públicas",
+    "storiesShort": "Historias",
+    "moods": "Estados de ánimo",
+    "compose": "Crear una publicación",
+    "posts": "Publicaciones"
+  },
+  "audioRecordLabel": "Grabar una publicación de audio",
+  "updatingLive": "Actualizando el feed…",
+  "updating": "Actualizando…",
+  "loadError": "No se pudo cargar el feed.",
+  "retry": "Reintentar",
+  "newPost": "publicación nueva",
+  "newPosts": "publicaciones nuevas",
+  "unknownAuthor": "Desconocido",
+  "emptyPosts": "Aún no hay publicaciones. ¡Sé el primero en compartir algo!",
+  "loadingMore": "Cargando más publicaciones",
+  "time": {
+    "now": "Justo ahora",
+    "minutes": "Hace {minutes}min",
+    "hours": "Hace {hours}h",
+    "days": "Hace {days}d"
+  },
+  "toasts": {
+    "error": "Error",
+    "storyPublished": "¡Historia publicada!",
+    "storyPublishedDesc": "Tu historia es visible para tus amigos.",
+    "storyPublishedDescMedia": "Tu historia es visible para tus amigos ({count} media).",
+    "storyPublishError": "No se pudo publicar la historia.",
+    "storyDeleted": "Historia eliminada",
+    "storyDeleteError": "No se pudo eliminar la historia.",
+    "replySent": "Respuesta enviada",
+    "published": "¡Publicado!",
+    "publishedDesc": "Tu publicación se ha compartido.",
+    "publishError": "No se pudo publicar la publicación.",
+    "linkCopied": "¡Enlace copiado!",
+    "linkCopyError": "No se pudo copiar el enlace.",
+    "postDeleted": "Publicación eliminada",
+    "postEdited": "Publicación actualizada",
+    "reposted": "¡Republicado!",
+    "quoted": "¡Citado!",
+    "audioPublished": "¡Publicación de audio publicada!",
+    "publishErrorShort": "No se pudo publicar.",
+    "uploadError": "Error de subida",
+    "audioUploadError": "No se pudo subir el audio.",
+    "status": "Estado",
+    "statusSelected": "Estado {id} seleccionado",
+    "moodPublished": "¡Estado de ánimo publicado!"
+  }
+}

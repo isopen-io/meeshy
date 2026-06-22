@@ -23,6 +23,7 @@ import { useFeedQuery, useFeedPosts, usePrefetchPost } from '@/hooks/queries/use
 import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useSharePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useTranslatePostMutation, useDeletePostMutation, usePinPostMutation, useRepostMutation, useUpdatePostMutation } from '@/hooks/queries/use-post-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { useI18n } from '@/hooks/use-i18n';
 
 import { useAuthStore } from '@/stores/auth-store';
 import { TusUploadService } from '@/services/tusUploadService';
@@ -31,16 +32,18 @@ import type { Post } from '@meeshy/shared/types/post';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
-function formatRelativeTime(date: string | Date): string {
+type TranslateFn = (key: string, paramsOrFallback?: Record<string, string | number> | string) => string;
+
+function formatRelativeTime(date: string | Date, t: TranslateFn): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   const diff = Date.now() - d.getTime();
   const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "À l'instant";
-  if (minutes < 60) return `Il y a ${minutes}min`;
+  if (minutes < 1) return t('time.now', 'Just now');
+  if (minutes < 60) return t('time.minutes', { minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `Il y a ${hours}h`;
+  if (hours < 24) return t('time.hours', { hours });
   const days = Math.floor(hours / 24);
-  return `Il y a ${days}j`;
+  return t('time.days', { days });
 }
 
 function postToTranslations(post: Post) {
@@ -58,7 +61,9 @@ function postToTranslations(post: Post) {
 //
 // Mood/status entries are still mocked client-side because the gateway
 // surface for ephemeral statuses isn't wired into the web composer yet.
-// Stories and Posts below are 100% real.
+// Stories and Posts below are 100% real. The seed copy stays literal — it is
+// demo placeholder content, not UI chrome, and disappears once the real
+// status surface lands.
 
 const mockStatuses: StatusItem[] = [
   {
@@ -83,19 +88,20 @@ const mockStatuses: StatusItem[] = [
  * SEO / middle-click / a11y rather than client-only navigation.
  */
 export function FeedTabs({ active }: { active: 'posts' | 'reels' }) {
+  const { t } = useI18n('feed');
   const base =
     'flex-1 text-center text-sm font-medium rounded-full px-4 py-2 transition-colors';
   const on = 'bg-[var(--gp-terracotta)] text-white';
   const off = 'text-[var(--gp-text-muted)] hover:text-[var(--gp-text-primary)]';
   return (
-    <nav aria-label="Type de fil" className="mb-6">
+    <nav aria-label={t('tabs.ariaLabel', 'Feed type')} className="mb-6">
       <div className="flex gap-1 rounded-full bg-[var(--gp-surface)] border border-[var(--gp-border)] p-1">
         <Link
           href="/feed/posts"
           aria-current={active === 'posts' ? 'page' : undefined}
           className={`${base} ${active === 'posts' ? on : off}`}
         >
-          Publications
+          {t('tabs.posts', 'Posts')}
         </Link>
         <Link
           href="/feed/reels"
@@ -124,6 +130,7 @@ export function FeedTabs({ active }: { active: 'posts' | 'reels' }) {
  */
 export function PostsFeedScreen() {
   const router = useRouter();
+  const { t } = useI18n('feed');
   const toastCtx = useToast();
   const showToast = useCallback(
     (title: string, type: 'success' | 'error' | 'info', description?: string) =>
@@ -250,15 +257,15 @@ export function PostsFeedScreen() {
           onSuccess: () => {
             const mediaCount = story.mediaIds?.length ?? 0;
             const desc = mediaCount > 0
-              ? `Votre story est visible par vos amis (${mediaCount} media).`
-              : 'Votre story est visible par vos amis.';
-            showToast('Story publiée !', 'success', desc);
+              ? t('toasts.storyPublishedDescMedia', { count: mediaCount })
+              : t('toasts.storyPublishedDesc', 'Your story is visible to your friends.');
+            showToast(t('toasts.storyPublished', 'Story published!'), 'success', desc);
           },
-          onError: () => showToast('Erreur', 'error', 'Impossible de publier la story.'),
+          onError: () => showToast(t('toasts.error', 'Error'), 'error', t('toasts.storyPublishError', "Couldn't publish the story.")),
         },
       );
     },
-    [createStoryMutation, userLanguage, showToast],
+    [createStoryMutation, userLanguage, showToast, t],
   );
 
   const handleStoryView = useCallback(
@@ -272,18 +279,18 @@ export function PostsFeedScreen() {
   const handleStoryDelete = useCallback(
     (storyId: string) => {
       deleteStoryMutation.mutate(storyId, {
-        onSuccess: () => showToast('Story supprimée', 'success'),
-        onError: () => showToast('Erreur', 'error', 'Impossible de supprimer la story.'),
+        onSuccess: () => showToast(t('toasts.storyDeleted', 'Story deleted'), 'success'),
+        onError: () => showToast(t('toasts.error', 'Error'), 'error', t('toasts.storyDeleteError', "Couldn't delete the story.")),
       });
     },
-    [deleteStoryMutation, showToast],
+    [deleteStoryMutation, showToast, t],
   );
 
   const handleStoryViewerClose = useCallback(() => setStoryViewerOpen(false), []);
   const handleStoryComposerClose = useCallback(() => setStoryComposerOpen(false), []);
   const handleStoryReply = useCallback(
-    (_id: string, text: string) => showToast('Réponse envoyée', 'success', text),
-    [showToast],
+    (_id: string, text: string) => showToast(t('toasts.replySent', 'Reply sent'), 'success', text),
+    [showToast, t],
   );
 
   // ─── Post handlers ────────────────────────────────────────────────────
@@ -293,12 +300,12 @@ export function PostsFeedScreen() {
       createPostMutation.mutate(
         { content: data.content, type: data.type, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' },
         {
-          onSuccess: () => showToast('Publié !', 'success', 'Votre post a été partagé.'),
-          onError: () => showToast('Erreur', 'error', 'Impossible de publier le post.'),
+          onSuccess: () => showToast(t('toasts.published', 'Published!'), 'success', t('toasts.publishedDesc', 'Your post has been shared.')),
+          onError: () => showToast(t('toasts.error', 'Error'), 'error', t('toasts.publishError', "Couldn't publish the post.")),
         },
       );
     },
-    [createPostMutation, showToast],
+    [createPostMutation, showToast, t],
   );
 
   const handleLike = useCallback(
@@ -330,12 +337,12 @@ export function PostsFeedScreen() {
       try {
         await navigator.clipboard.writeText(`${window.location.origin}/feeds/post/${postId}`);
         shareMutation.mutate({ postId });
-        showToast('Lien copié !', 'success');
+        showToast(t('toasts.linkCopied', 'Link copied!'), 'success');
       } catch {
-        showToast('Erreur', 'error', 'Impossible de copier le lien.');
+        showToast(t('toasts.error', 'Error'), 'error', t('toasts.linkCopyError', "Couldn't copy the link."));
       }
     },
-    [shareMutation, showToast],
+    [shareMutation, showToast, t],
   );
 
   const handleBookmark = useCallback(
@@ -357,10 +364,10 @@ export function PostsFeedScreen() {
   const handleDeletePost = useCallback(
     (postId: string) => {
       deletePostMutation.mutate(postId, {
-        onSuccess: () => showToast('Post supprimé', 'success'),
+        onSuccess: () => showToast(t('toasts.postDeleted', 'Post deleted'), 'success'),
       });
     },
-    [deletePostMutation, showToast],
+    [deletePostMutation, showToast, t],
   );
 
   const handlePinPost = useCallback(
@@ -387,13 +394,13 @@ export function PostsFeedScreen() {
         {
           onSuccess: () => {
             setEditingPost(null);
-            showToast('Post modifié', 'success');
+            showToast(t('toasts.postEdited', 'Post updated'), 'success');
           },
-          onError: () => showToast('Erreur', 'error'),
+          onError: () => showToast(t('toasts.error', 'Error'), 'error'),
         },
       );
     },
-    [editingPost, updatePostMutation, showToast],
+    [editingPost, updatePostMutation, showToast, t],
   );
 
   const handleRepostOpen = useCallback(
@@ -411,12 +418,12 @@ export function PostsFeedScreen() {
       {
         onSuccess: () => {
           setRepostingPost(null);
-          showToast('Reposté !', 'success');
+          showToast(t('toasts.reposted', 'Reposted!'), 'success');
         },
-        onError: () => showToast('Erreur', 'error'),
+        onError: () => showToast(t('toasts.error', 'Error'), 'error'),
       },
     );
-  }, [repostingPost, repostMutation, showToast]);
+  }, [repostingPost, repostMutation, showToast, t]);
 
   const handleQuote = useCallback(
     (content: string) => {
@@ -426,13 +433,13 @@ export function PostsFeedScreen() {
         {
           onSuccess: () => {
             setRepostingPost(null);
-            showToast('Cité !', 'success');
+            showToast(t('toasts.quoted', 'Quoted!'), 'success');
           },
-          onError: () => showToast('Erreur', 'error'),
+          onError: () => showToast(t('toasts.error', 'Error'), 'error'),
         },
       );
     },
-    [repostingPost, repostMutation, showToast],
+    [repostingPost, repostMutation, showToast, t],
   );
 
   const handleDismissNewPosts = useCallback(() => {
@@ -459,45 +466,45 @@ export function PostsFeedScreen() {
           {
             onSuccess: () => {
               setAudioComposerOpen(false);
-              showToast('Audio post publié !', 'success');
+              showToast(t('toasts.audioPublished', 'Audio post published!'), 'success');
             },
-            onError: () => showToast('Erreur', 'error', 'Impossible de publier.'),
+            onError: () => showToast(t('toasts.error', 'Error'), 'error', t('toasts.publishErrorShort', "Couldn't publish.")),
           },
         );
       } catch {
-        showToast('Erreur upload', 'error', "Impossible d'uploader l'audio.");
+        showToast(t('toasts.uploadError', 'Upload error'), 'error', t('toasts.audioUploadError', "Couldn't upload the audio."));
       }
     },
-    [createPostMutation, showToast],
+    [createPostMutation, showToast, t],
   );
 
   // ─── Status (mock) ────────────────────────────────────────────────────
   const [statusComposerOpen, setStatusComposerOpen] = useState(false);
 
   const handleStatusPress = useCallback(
-    (statusId: string) => showToast('Status', 'info', `Status ${statusId} sélectionné`),
-    [showToast],
+    (statusId: string) => showToast(t('toasts.status', 'Status'), 'info', t('toasts.statusSelected', { id: statusId })),
+    [showToast, t],
   );
 
   const handleStatusPublish = useCallback(
     (status: { moodEmoji: string; content?: string }) => {
       setStatusComposerOpen(false);
-      showToast('Mood publié !', 'success', `${status.moodEmoji} ${status.content || ''}`);
+      showToast(t('toasts.moodPublished', 'Mood published!'), 'success', `${status.moodEmoji} ${status.content || ''}`);
     },
-    [showToast],
+    [showToast, t],
   );
 
   // ─── Render ──────────────────────────────────────────────────────────
 
   return (
-    <DashboardLayout title="Feed" className="!max-w-none !px-0">
+    <DashboardLayout title={t('title', 'Feed')} className="!max-w-none !px-0">
       <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 py-6">
-        <h1 className="sr-only">Fil d&apos;actualité — posts, reels et stories</h1>
+        <h1 className="sr-only">{t('srHeading', 'News feed — posts, reels and stories')}</h1>
         <FeedTabs active="posts" />
 
         {/* Story Tray */}
-        <section aria-label="Stories publiques">
-          <h2 className="sr-only">Stories</h2>
+        <section aria-label={t('sections.stories', 'Public stories')}>
+          <h2 className="sr-only">{t('sections.storiesShort', 'Stories')}</h2>
           <StoryTray
             stories={storyItems}
             onStoryPress={handleStoryPress}
@@ -508,8 +515,8 @@ export function PostsFeedScreen() {
         </section>
 
         {/* Status Bar */}
-        <section aria-label="Humeurs">
-          <h2 className="sr-only">Humeurs</h2>
+        <section aria-label={t('sections.moods', 'Moods')}>
+          <h2 className="sr-only">{t('sections.moods', 'Moods')}</h2>
           <StatusBar
             statuses={mockStatuses}
             onStatusPress={handleStatusPress}
@@ -520,8 +527,8 @@ export function PostsFeedScreen() {
         </section>
 
         {/* Post Composer */}
-        <section aria-label="Composer une publication">
-          <h2 className="sr-only">Composer une publication</h2>
+        <section aria-label={t('sections.compose', 'Compose a post')}>
+          <h2 className="sr-only">{t('sections.compose', 'Compose a post')}</h2>
           <div className="flex gap-3 items-start mb-6">
             <div className="flex-1">
               <PostComposer
@@ -533,7 +540,7 @@ export function PostsFeedScreen() {
             <button
               onClick={() => setAudioComposerOpen(true)}
               className="mt-3 flex-shrink-0 w-12 h-12 rounded-full bg-[var(--gp-terracotta)] text-white flex items-center justify-center hover:opacity-90 transition-opacity"
-              aria-label="Enregistrer un post audio"
+              aria-label={t('audioRecordLabel', 'Record an audio post')}
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
@@ -545,12 +552,12 @@ export function PostsFeedScreen() {
 
         {/* Stale indicator — only when cached data is older than 30s AND a refetch is in flight */}
         <div aria-live="polite" className="sr-only">
-          {cacheState === 'stale' && feedQuery.isFetching ? 'Mise à jour du fil…' : ''}
+          {cacheState === 'stale' && feedQuery.isFetching ? t('updatingLive', 'Updating feed…') : ''}
         </div>
         {cacheState === 'stale' && feedQuery.isFetching && (
           <div className="flex items-center justify-center gap-2 py-1 mb-2 text-xs text-[var(--gp-text-muted)]" data-testid="stale-indicator">
             <div className="w-3 h-3 border border-[var(--gp-text-muted)] border-t-transparent rounded-full animate-spin" aria-hidden="true" />
-            Updating...
+            {t('updating', 'Updating…')}
           </div>
         )}
 
@@ -576,9 +583,9 @@ export function PostsFeedScreen() {
         {/* Error state */}
         {feedQuery.isError && (
           <div className="text-center py-12" role="alert">
-            <p className="text-[var(--gp-text-muted)] mb-4">Unable to load feed.</p>
+            <p className="text-[var(--gp-text-muted)] mb-4">{t('loadError', 'Unable to load feed.')}</p>
             <Button variant="secondary" size="sm" onClick={() => feedQuery.refetch()}>
-              Retry
+              {t('retry', 'Retry')}
             </Button>
           </div>
         )}
@@ -591,14 +598,14 @@ export function PostsFeedScreen() {
             data-testid="new-posts-banner"
             aria-live="polite"
           >
-            {newPostsCount} {newPostsCount === 1 ? 'new post' : 'new posts'}
+            {newPostsCount} {newPostsCount === 1 ? t('newPost', 'new post') : t('newPosts', 'new posts')}
           </button>
         )}
 
         {/* Posts */}
         {feedQuery.isSuccess && (
-          <section aria-label="Publications" className="space-y-6">
-            <h2 className="sr-only">Publications</h2>
+          <section aria-label={t('sections.posts', 'Posts')} className="space-y-6">
+            <h2 className="sr-only">{t('sections.posts', 'Posts')}</h2>
             {posts.map((post) => {
               const postReactions = post.currentUserReactions ?? [];
               const isLiked = postReactions.includes('❤️') || (post.isLikedByMe ?? false);
@@ -608,14 +615,14 @@ export function PostsFeedScreen() {
                 <article key={post.id} onMouseEnter={() => prefetchPost(post.id)}>
                   <PostCard
                     author={{
-                      name: post.author?.displayName ?? post.author?.username ?? 'Unknown',
+                      name: post.author?.displayName ?? post.author?.username ?? t('unknownAuthor', 'Unknown'),
                       avatar: post.author?.avatar ?? undefined,
                     }}
                     lang={post.originalLanguage ?? 'unknown'}
                     content={post.content ?? ''}
                     translations={postToTranslations(post)}
                     userLanguage={userLanguage}
-                    time={formatRelativeTime(post.createdAt)}
+                    time={formatRelativeTime(post.createdAt, t)}
                     likes={post.likeCount}
                     comments={post.commentCount}
                     isLiked={isLiked}
@@ -643,14 +650,14 @@ export function PostsFeedScreen() {
 
             {posts.length === 0 && !feedQuery.isLoading && (
               <div className="text-center py-12">
-                <p className="text-[var(--gp-text-muted)]">No posts yet. Be the first to share something!</p>
+                <p className="text-[var(--gp-text-muted)]">{t('emptyPosts', 'No posts yet. Be the first to share something!')}</p>
               </div>
             )}
 
             <div ref={loadMoreRef} className="h-10">
               {feedQuery.isFetchingNextPage && (
                 <div className="flex justify-center py-4">
-                  <div className="w-6 h-6 border-2 border-[var(--gp-terracotta)] border-t-transparent rounded-full animate-spin" aria-label="Chargement de plus de publications" />
+                  <div className="w-6 h-6 border-2 border-[var(--gp-terracotta)] border-t-transparent rounded-full animate-spin" aria-label={t('loadingMore', 'Loading more posts')} />
                 </div>
               )}
             </div>

@@ -1,0 +1,57 @@
+{
+  "title": "Fil",
+  "srHeading": "Fil d'actualité — posts, reels et stories",
+  "tabs": {
+    "ariaLabel": "Type de fil",
+    "posts": "Publications"
+  },
+  "sections": {
+    "stories": "Stories publiques",
+    "storiesShort": "Stories",
+    "moods": "Humeurs",
+    "compose": "Composer une publication",
+    "posts": "Publications"
+  },
+  "audioRecordLabel": "Enregistrer un post audio",
+  "updatingLive": "Mise à jour du fil…",
+  "updating": "Mise à jour…",
+  "loadError": "Impossible de charger le fil.",
+  "retry": "Réessayer",
+  "newPost": "nouveau post",
+  "newPosts": "nouveaux posts",
+  "unknownAuthor": "Inconnu",
+  "emptyPosts": "Aucune publication pour le moment. Soyez le premier à partager quelque chose !",
+  "loadingMore": "Chargement de plus de publications",
+  "time": {
+    "now": "À l'instant",
+    "minutes": "Il y a {minutes}min",
+    "hours": "Il y a {hours}h",
+    "days": "Il y a {days}j"
+  },
+  "toasts": {
+    "error": "Erreur",
+    "storyPublished": "Story publiée !",
+    "storyPublishedDesc": "Votre story est visible par vos amis.",
+    "storyPublishedDescMedia": "Votre story est visible par vos amis ({count} media).",
+    "storyPublishError": "Impossible de publier la story.",
+    "storyDeleted": "Story supprimée",
+    "storyDeleteError": "Impossible de supprimer la story.",
+    "replySent": "Réponse envoyée",
+    "published": "Publié !",
+    "publishedDesc": "Votre post a été partagé.",
+    "publishError": "Impossible de publier le post.",
+    "linkCopied": "Lien copié !",
+    "linkCopyError": "Impossible de copier le lien.",
+    "postDeleted": "Post supprimé",
+    "postEdited": "Post modifié",
+    "reposted": "Reposté !",
+    "quoted": "Cité !",
+    "audioPublished": "Audio post publié !",
+    "publishErrorShort": "Impossible de publier.",
+    "uploadError": "Erreur upload",
+    "audioUploadError": "Impossible d'uploader l'audio.",
+    "status": "Status",
+    "statusSelected": "Status {id} sélectionné",
+    "moodPublished": "Mood publié !"
+  }
+}
