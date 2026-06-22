@@ -17,6 +17,8 @@ overrides:
   lodash-es: 4.17.23
   '@grpc/grpc-js': 1.14.4
   postcss: 8.5.13
+  serialize-javascript: 7.0.3
+  uuid: 11.1.1
 
 importers:
 
@@ -540,8 +542,8 @@ importers:
         specifier: ^9.0.3
         version: 9.0.3
       libphonenumber-js:
-        specifier: ^1.12.42
-        version: 1.12.42
+        specifier: ^1.13.7
+        version: 1.13.7
       music-metadata:
         specifier: 7.14.0
         version: 7.14.0
@@ -579,7 +581,7 @@ importers:
         specifier: ^2.0.9
         version: 2.0.9
       uuid:
-        specifier: ^11.1.1
+        specifier: 11.1.1
         version: 11.1.1
       winston:
         specifier: ^3.19.0
@@ -7058,6 +7060,9 @@ packages:
   libphonenumber-js@1.12.42:
     resolution: {integrity: sha512-oKQFPTibqQwZZkChCDVMFVJXMZdyJNqDWZWYNn8BgyAaK/6yFJEowxCY0RVFirRyWP63hMRuKlkSEd9qlvbWXg==}
 
+  libphonenumber-js@1.13.7:
+    resolution: {integrity: sha512-rvr3HIMdOgzhz1RFGjftji+wjoAFlzhqCNqJOU/MKTZQ8d9NZxAR/tI+0weDicyoucqVR0U1GCniqHJ0f8aM2A==}
+
   light-my-request@6.6.0:
     resolution: {integrity: sha512-CHYbu8RtboSIoVsHZ6Ye4cj4Aw/yg2oAFimlF7mNvfDV192LR7nDiKtSIfCuLT7KokPSTn/9kfVLm5OGN0A28A==}
 
@@ -8156,9 +8161,6 @@ packages:
   quick-format-unescaped@4.0.4:
     resolution: {integrity: sha512-tYC1Q1hgyRuHgloV/YXs2w15unPVh8qfu/qCTfhTYamaw7fyhumKa2yGpdSo87vY32rIclj+4fWYQXUMs9EHvg==}
 
-  randombytes@2.1.0:
-    resolution: {integrity: sha512-vYl3iOX+4CKUWuxGi9Ukhie6fsqXqS9FE2Zaic4tNFD2N2QQaXOMFbuKK4QmDHC0JO6B1Zp41J0LpT0oR68amQ==}
-
   rc9@2.1.2:
     resolution: {integrity: sha512-btXCnMmRIBINM2LDZoEmOogIZU7Qe7zn4BpomSKZ/ykbLObuBdvG+mFq11DL6fjH1DRwHhrlgtYWG96bJiC7Cg==}
 
@@ -8528,8 +8530,9 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
-  serialize-javascript@4.0.0:
-    resolution: {integrity: sha512-GaNA54380uFefWghODBWEGisLZFj00nS5ACs6yHa9nLqlLpVLO8ChDGeKRjZnV4Nh4n0Qi7nhYZD/9fCPzEqkw==}
+  serialize-javascript@7.0.3:
+    resolution: {integrity: sha512-h+cZ/XXarqDgCjo+YSyQU/ulDEESGGf8AMK9pPNmhNSl/FzPl6L8pMp1leca5z6NuG6tvV/auC8/43tmovowww==}
+    engines: {node: '>=20.0.0'}
 
   set-blocking@2.0.0:
     resolution: {integrity: sha512-KiKBS8AnWGEyLzofFfmvKwpdPzqiy16LvQfK3yv/fVH7Bj13/wl3JSR1J+rfgRE9q7xUJK4qvgS8raSOeLUehw==}
@@ -9382,23 +9385,8 @@ packages:
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
-  uuid@10.0.0:
-    resolution: {integrity: sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ==}
-    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
-    hasBin: true
-
   uuid@11.1.1:
     resolution: {integrity: sha512-vIYxrBCC/N/K+Js3qSN88go7kIfNPssr/hHCesKCQNAjmgvYS2oqr69kIufEG+O4+PfezOH4EbIeHCfFov8ZgQ==}
-    hasBin: true
-
-  uuid@8.3.2:
-    resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
-    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
-    hasBin: true
-
-  uuid@9.0.1:
-    resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
-    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   uzip@0.20201231.0:
@@ -11658,7 +11646,7 @@ snapshots:
       p-limit: 3.1.0
       retry-request: 7.0.2
       teeny-request: 9.0.0
-      uuid: 8.3.2
+      uuid: 11.1.1
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -12067,7 +12055,7 @@ snapshots:
       mustache: 4.2.0
       p-queue: 6.6.2
       p-retry: 4.6.2
-      uuid: 10.0.0
+      uuid: 11.1.1
       zod: 3.25.76
       zod-to-json-schema: 3.25.2(zod@3.25.76)
     transitivePeerDependencies:
@@ -12079,14 +12067,14 @@ snapshots:
   '@langchain/langgraph-checkpoint@0.0.18(@langchain/core@0.3.80(@opentelemetry/api@1.9.1)(openai@4.104.0(ws@8.20.0)(zod@3.25.76)))':
     dependencies:
       '@langchain/core': 0.3.80(@opentelemetry/api@1.9.1)(openai@4.104.0(ws@8.20.0)(zod@3.25.76))
-      uuid: 10.0.0
+      uuid: 11.1.1
 
   '@langchain/langgraph-sdk@0.0.112(@langchain/core@0.3.80(@opentelemetry/api@1.9.1)(openai@4.104.0(ws@8.20.0)(zod@3.25.76)))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
       '@types/json-schema': 7.0.15
       p-queue: 6.6.2
       p-retry: 4.6.2
-      uuid: 9.0.1
+      uuid: 11.1.1
     optionalDependencies:
       '@langchain/core': 0.3.80(@opentelemetry/api@1.9.1)(openai@4.104.0(ws@8.20.0)(zod@3.25.76))
       react: 19.2.5
@@ -12097,7 +12085,7 @@ snapshots:
       '@langchain/core': 0.3.80(@opentelemetry/api@1.9.1)(openai@4.104.0(ws@8.20.0)(zod@3.25.76))
       '@langchain/langgraph-checkpoint': 0.0.18(@langchain/core@0.3.80(@opentelemetry/api@1.9.1)(openai@4.104.0(ws@8.20.0)(zod@3.25.76)))
       '@langchain/langgraph-sdk': 0.0.112(@langchain/core@0.3.80(@opentelemetry/api@1.9.1)(openai@4.104.0(ws@8.20.0)(zod@3.25.76)))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      uuid: 10.0.0
+      uuid: 11.1.1
       zod: 3.25.76
     optionalDependencies:
       zod-to-json-schema: 3.25.2(zod@3.25.76)
@@ -13237,7 +13225,7 @@ snapshots:
     dependencies:
       node-gyp-build: 4.8.4
       type-fest: 4.41.0
-      uuid: 8.3.2
+      uuid: 11.1.1
     optional: true
 
   '@signalapp/libsignal-client@0.86.16':
@@ -16065,7 +16053,7 @@ snapshots:
       https-proxy-agent: 7.0.6
       is-stream: 2.0.1
       node-fetch: 2.7.0
-      uuid: 9.0.1
+      uuid: 11.1.1
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -16254,7 +16242,7 @@ snapshots:
       proto3-json-serializer: 2.0.2
       protobufjs: 7.6.1
       retry-request: 7.0.2
-      uuid: 9.0.1
+      uuid: 11.1.1
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -17357,7 +17345,7 @@ snapshots:
       console-table-printer: 2.15.0
       p-queue: 6.6.2
       semver: 7.7.4
-      uuid: 10.0.0
+      uuid: 11.1.1
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
       openai: 4.104.0(ws@8.20.0)(zod@3.25.76)
@@ -17380,6 +17368,8 @@ snapshots:
       type-check: 0.4.0
 
   libphonenumber-js@1.12.42: {}
+
+  libphonenumber-js@1.13.7: {}
 
   light-my-request@6.6.0:
     dependencies:
@@ -18674,10 +18664,6 @@ snapshots:
 
   quick-format-unescaped@4.0.4: {}
 
-  randombytes@2.1.0:
-    dependencies:
-      safe-buffer: 5.2.1
-
   rc9@2.1.2:
     dependencies:
       defu: 6.1.7
@@ -19028,7 +19014,7 @@ snapshots:
       '@babel/code-frame': 7.29.7
       jest-worker: 26.6.2
       rollup: 2.80.0
-      serialize-javascript: 4.0.0
+      serialize-javascript: 7.0.3
       terser: 5.46.2
 
   rollup@2.80.0:
@@ -19157,9 +19143,7 @@ snapshots:
 
   semver@7.8.5: {}
 
-  serialize-javascript@4.0.0:
-    dependencies:
-      randombytes: 2.1.0
+  serialize-javascript@7.0.3: {}
 
   set-blocking@2.0.0: {}
 
@@ -19624,7 +19608,7 @@ snapshots:
       https-proxy-agent: 5.0.1
       node-fetch: 2.7.0
       stream-events: 1.0.5
-      uuid: 9.0.1
+      uuid: 11.1.1
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -20108,14 +20092,7 @@ snapshots:
 
   util-deprecate@1.0.2: {}
 
-  uuid@10.0.0: {}
-
   uuid@11.1.1: {}
-
-  uuid@8.3.2:
-    optional: true
-
-  uuid@9.0.1: {}
 
   uzip@0.20201231.0: {}
 
