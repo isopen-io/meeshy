@@ -43,6 +43,14 @@ targets:
     dependencies:
       - target: MeeshyWidgets
       - target: MeeshyNotificationExtension
+    # Target-level scheme so `xcodegen generate` emits a shared "Meeshy"
+    # scheme wired to run the MeeshyTests bundle. CI invokes this via
+    # `xcodebuild -scheme Meeshy -only-testing:MeeshyTests`. A top-level
+    # `scheme:` key is NOT valid XcodeGen and is silently ignored, which
+    # would drop the shared scheme on regeneration.
+    scheme:
+      testTargets:
+        - MeeshyTests
 
   MeeshyWidgets:
     type: app-extension
@@ -99,7 +107,3 @@ targets:
       TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Meeshy.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Meeshy"
     dependencies:
       - target: Meeshy
-
-scheme:
-  testTargets:
-    - MeeshyTests
