@@ -290,6 +290,7 @@
     },
     "topicEditModal": {
       "titleEdit": "Editar \"{label}\"",
+      "closeAriaLabel": "Fechar",
       "titleNew": "Novo topic",
       "fieldSlug": "Slug",
       "fieldLabel": "Rótulo",
