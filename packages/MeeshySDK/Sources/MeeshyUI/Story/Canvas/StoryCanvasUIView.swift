@@ -202,6 +202,17 @@ public final class StoryCanvasUIView: UIView {
     /// cycle vidéo bg mid-loop.
     public var onPlaybackTime: (@MainActor (Double) -> Void)?
 
+    /// Émis quand l'état de progression RÉELLE de la lecture du média PRIMAIRE
+    /// de la slide change : `true` quand il joue (ou qu'aucune vidéo n'est à
+    /// gater), `false` quand il bufferise (`.waitingToPlayAtSpecifiedRate`) ou
+    /// se met en pause de façon inattendue. Le viewer parent câble ce signal sur
+    /// `StoryReaderTimerController.setPlaybackStalled(!progressing)` pour geler la
+    /// progress bar + l'auto-advance EN PHASE avec la lecture (timeline unifiée).
+    /// Le SDK n'émet QUE le signal bas niveau ; la décision produit « geler la
+    /// timeline » reste app-side (SDK purity). Emit-on-change uniquement ; jamais
+    /// émis pour une slide sans vidéo primaire (image / couleur / audio-only).
+    public var onPlaybackProgressing: (@MainActor (Bool) -> Void)?
+
     // MARK: - Internal layers
 
     private let rootLayer = CALayer()
@@ -2178,6 +2189,11 @@ public final class StoryCanvasUIView: UIView {
 
     private func startPlayback() {
         stopPlayback()
+        // Nouvelle session de lecture → on repart « progressant » (non gaté).
+        // Couvre init(.play), setMode(.play) au slide-change, et le re-arm
+        // `didMoveToWindow` (dismiss d'un cover). Le sondage du tick re-dérivera
+        // l'état réel dès la première frame.
+        resetPlaybackHealthState()
         // Proxy weak partagé : le link ne retient pas le canvas — un canvas
         // jamais fenêtré (setMode avant attach puis jeté) reste libérable.
         let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
@@ -2216,41 +2232,53 @@ public final class StoryCanvasUIView: UIView {
     }
 
     @objc private func displayLinkTick(_ link: CADisplayLink) {
-        // L'avancement de la timeline est gated sur :
-        // - mode == .play (l'edit a son propre `editDisplayLink`)
-        // - contentReadyFired (sans ça, currentTime avançait pendant le
-        //   chargement initial → progress bar du viewer sautait dès le content
-        //   ready)
-        // - !isPlaybackPaused (pauses propagées par le viewer via `setPaused`)
-        //
-        // Si le gate échoue, on RETOURNE sans rebuild — les mutations modèle
-        // sont déjà capturées par `slide.didSet → rebuildLayers()` à
-        // l'écriture, pas besoin de re-render à 60 Hz pendant le chargement
-        // initial. L'ancien `rebuildLayers()` ici causait un scintillement
-        // visible (60 rebuilds/s avant content ready → loader overlay et
-        // backgroundLayer alternaient leurs frames). Bug user-reporté
-        // 2026-05-27 « la story scintille seulement ».
-        guard mode == .play, contentReadyFired, !isPlaybackPaused else {
+        guard mode == .play else { return }
+        // Timeline unifiée : sonder la santé de lecture du média PRIMAIRE AVANT
+        // d'avancer le playhead, afin de geler EN PHASE avec un buffer stall
+        // (et de la reprendre dès que la vidéo rejoue). Le sondage tourne sur
+        // le displayLink déjà actif (zéro observer KVO à gérer / fuir) et reste
+        // un simple lecture d'enum + comparaisons — négligeable face au
+        // `rebuildLayers()` 60 Hz qui suit. Le link continue de ticker pendant
+        // un stall (seul `isPlaybackPaused` met le link en pause), donc ce
+        // sondage détecte aussi la reprise alors que le playhead est gelé.
+        refreshPlaybackHealth(now: link.timestamp)
+        advancePlayheadIfActive(by: link.targetTimestamp - link.timestamp)
+    }
+
+    /// Avance le playhead canvas (`currentTime`) si la lecture est active.
+    /// Gated sur :
+    /// - mode == .play (l'edit a son propre `editDisplayLink`)
+    /// - contentReadyFired (sans ça, currentTime avançait pendant le chargement
+    ///   initial → progress bar du viewer sautait dès le content ready)
+    /// - !isPlaybackPaused (pauses user/lifecycle propagées par le viewer via `setPaused`)
+    /// - !isPlaybackStalled (buffer stall du média primaire — parité in-canvas
+    ///   avec la progress bar du viewer ; sans ce gate les keyframes foreground
+    ///   et le playhead audio dériveraient devant une vidéo de fond gelée)
+    ///
+    /// Si le gate échoue, on RETOURNE sans rebuild — les mutations modèle sont
+    /// déjà capturées par `slide.didSet → rebuildLayers()` à l'écriture. L'ancien
+    /// `rebuildLayers()` inconditionnel ici causait un scintillement (60
+    /// rebuilds/s avant content ready). Bug user-reporté 2026-05-27 « la story
+    /// scintille seulement ».
+    private func advancePlayheadIfActive(by dt: Double) {
+        guard mode == .play, contentReadyFired, !isPlaybackPaused, !isPlaybackStalled else {
             return
         }
-        let dt = link.targetTimestamp - link.timestamp
         let nextSeconds = CMTimeGetSeconds(currentTime) + dt
         let effectiveDuration = slide.computedTotalDuration()
         let clamped = min(nextSeconds, effectiveDuration)
         currentTime = CMTime(seconds: clamped, preferredTimescale: 600_000)
-        // Publie le playhead pour les overlays SwiftUI (chip audio
-        // foreground). Préfère le clock audio réel du mixer
-        // (`slideElapsedSeconds`) quand une slide est en lecture audio —
-        // c'est le même référentiel host-time que les `AVAudioTime` qui
-        // schedulent les buffers, donc sample-accurate. Fallback sur le
-        // `clamped` du displayLink pour les slides sans audio (texte,
-        // image statique). Auto-throttle à ~30 Hz dans la state.
+        // Publie le playhead pour les overlays SwiftUI (chip audio foreground).
+        // Préfère le clock audio réel du mixer (`slideElapsedSeconds`) quand une
+        // slide est en lecture audio — même référentiel host-time que les
+        // `AVAudioTime` qui schedulent les buffers, donc sample-accurate.
+        // Fallback sur le `clamped` du displayLink pour les slides sans audio.
         let publishedTime = audioMixer.slideElapsedSeconds ?? clamped
         StoryReaderPlayheadState.shared.publish(min(publishedTime, effectiveDuration))
-        // Source de vérité timeline pour la progress bar du viewer —
-        // on émet la même valeur que celle utilisée pour le clamp ci-dessus
-        // (et non le `publishedTime` audio-priorisé) pour rester cohérent
-        // avec le check `clamped >= effectiveDuration` qui fire `onCompletion`.
+        // Source de vérité timeline pour la progress bar du viewer — on émet la
+        // même valeur que celle du clamp (et non le `publishedTime`
+        // audio-priorisé) pour rester cohérent avec le check
+        // `clamped >= effectiveDuration` qui fire `onCompletion`.
         onPlaybackTime?(clamped)
         rebuildLayers()
         if clamped >= effectiveDuration {
@@ -2260,6 +2288,109 @@ public final class StoryCanvasUIView: UIView {
                 readerContext.onCompletion?()
             }
         }
+    }
+
+    // MARK: - Playback health (unified timeline)
+
+    /// Watchdog : si la lecture du média primaire reste non-`.playing` en
+    /// CONTINU pendant ce laps, on retombe sur l'horloge murale
+    /// (progressing=true) pour qu'une story ne puisse JAMAIS rester gelée sur un
+    /// flux mort/jamais-prêt. Stall-relatif (et non « 5 s après content-ready »)
+    /// pour couvrir aussi le cas « la vidéo joue puis meurt » sans hard-stall.
+    static let playbackStallWatchdogSeconds: CFTimeInterval = 5.0
+
+    /// `true` quand le média primaire de la slide bufferise / est en pause
+    /// inattendue. Gèle l'avance du playhead canvas (`advancePlayheadIfActive`)
+    /// pour rester EN PHASE avec la progress bar du viewer.
+    private(set) public var isPlaybackStalled: Bool = false
+
+    /// Dernière valeur émise via `onPlaybackProgressing` — emit-on-change only.
+    /// Démarre à `true` : une slide commence « progressante » (non gatée).
+    private var lastProgressingEmitted: Bool = true
+
+    /// Timestamp `CADisplayLink` du début du dernier épisode CONTINU de
+    /// non-lecture. `nil` tant que la lecture est saine. Alimente le watchdog.
+    private var playbackStallSince: CFTimeInterval?
+
+    /// Le player média « primaire » de la slide qui pilote la timeline : vidéo
+    /// de fond en priorité, sinon première vidéo foreground. `nil` pour une
+    /// slide sans vidéo (image / couleur / audio-only) → jamais gatée.
+    private func primaryMediaPlayer() -> AVPlayer? {
+        if case .video = backgroundLayer.kind, let player = backgroundLayer.avPlayer {
+            return player
+        }
+        for sub in itemsContainer.sublayers ?? [] {
+            if let media = sub as? StoryMediaLayer,
+               media.media?.isBackground == false,
+               media.media?.kind == .video,
+               let player = media.avPlayer {
+                return player
+            }
+        }
+        return nil
+    }
+
+    /// Production feed : sonde le player primaire à chaque tick (uniquement une
+    /// fois le contenu prêt — avant ça la timeline est déjà gatée par
+    /// content-ready et la vidéo bg n'a pas démarré).
+    private func refreshPlaybackHealth(now: CFTimeInterval) {
+        guard contentReadyFired else { return }
+        let player = primaryMediaPlayer()
+        applyPlaybackHealth(status: player?.timeControlStatus,
+                            failed: player?.currentItem?.status == .failed,
+                            now: now)
+    }
+
+    /// Cœur testable : timing du watchdog + mapping pur (`StoryPlaybackHealth`)
+    /// + emit-on-change. Alimenté en prod par `refreshPlaybackHealth`, en test
+    /// par `_refreshPlaybackHealthForTesting` (statut injecté).
+    private func applyPlaybackHealth(status: AVPlayer.TimeControlStatus?,
+                                     failed: Bool,
+                                     now: CFTimeInterval) {
+        // Le watchdog n'accumule QUE pendant une non-lecture réelle d'un média
+        // gaté. `.playing`, absence de vidéo, pause user, et échec comptent comme
+        // « sains » (reset) — l'échec retombe déjà sur l'horloge murale.
+        let healthyForWatchdog = status == .playing || status == nil || isPlaybackPaused || failed
+        if healthyForWatchdog {
+            playbackStallSince = nil
+        } else if playbackStallSince == nil {
+            playbackStallSince = now
+        }
+        let watchdogExpired = playbackStallSince.map { now - $0 >= Self.playbackStallWatchdogSeconds } ?? false
+        let progressing = StoryPlaybackHealth.isProgressing(
+            status: status,
+            isUserPaused: isPlaybackPaused,
+            isFailed: failed,
+            watchdogExpired: watchdogExpired
+        )
+        isPlaybackStalled = !progressing
+        guard progressing != lastProgressingEmitted else { return }
+        lastProgressingEmitted = progressing
+        onPlaybackProgressing?(progressing)
+    }
+
+    /// Remet l'état de santé à « progressant » au démarrage d'une session de
+    /// lecture (nouveau slide / re-attach). N'ÉMET PAS — `setCurrentSlide`/`reset`
+    /// du timer côté viewer réinitialisent symétriquement leur propre `isPlaybackStalled`.
+    private func resetPlaybackHealthState() {
+        isPlaybackStalled = false
+        lastProgressingEmitted = true
+        playbackStallSince = nil
+    }
+
+    /// Test-only seam : drive the health core with an injected `timeControlStatus`
+    /// (and `failed`) at an explicit `now` so the watchdog + emit-on-change +
+    /// freeze contract is exercised without a live `AVPlayer` or `CADisplayLink`.
+    public func _refreshPlaybackHealthForTesting(status: AVPlayer.TimeControlStatus?,
+                                                 failed: Bool,
+                                                 now: CFTimeInterval) {
+        applyPlaybackHealth(status: status, failed: failed, now: now)
+    }
+
+    /// Test-only seam : run the gated playhead advance exactly as `displayLinkTick`
+    /// does, so the `!isPlaybackStalled` freeze can be asserted deterministically.
+    public func _advancePlayheadForTesting(by dt: Double) {
+        advancePlayheadIfActive(by: dt)
     }
 
     /// Test-only seam: simulate a displayLink tick at a specific timestamp

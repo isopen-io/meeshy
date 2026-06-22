@@ -60,6 +60,13 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// loop mid-cycle.
     let onPlaybackTime: ((Double) -> Void)?
 
+    /// `true`/`false` quand la lecture du média primaire de la slide
+    /// progresse / stalle (buffer). Le viewer câble ça sur
+    /// `StoryReaderTimerController.setPlaybackStalled(!progressing)` pour la
+    /// timeline unifiée (progress bar + auto-advance gelés en phase avec la
+    /// lecture). No-op pour les slides sans vidéo primaire.
+    let onPlaybackProgressing: ((Bool) -> Void)?
+
     /// Locally-loaded assets handed in by the composer "Preview" path for a
     /// story whose media has not been uploaded yet. Keyed by media id.
     /// `preloadedImages` are in-memory bitmaps (e.g. from `PhotosPicker`);
@@ -86,7 +93,8 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
                 onCompletion: (@Sendable () -> Void)? = nil,
                 onContentReady: (() -> Void)? = nil,
                 onContentProgress: ((Double) -> Void)? = nil,
-                onPlaybackTime: ((Double) -> Void)? = nil) {
+                onPlaybackTime: ((Double) -> Void)? = nil,
+                onPlaybackProgressing: ((Bool) -> Void)? = nil) {
         self.storyItem = story
         // `preferredContentLanguages` is the legacy label; it takes priority over
         // `preferredLanguages` when provided so existing call-sites compile unchanged.
@@ -102,6 +110,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.onContentReady = onContentReady
         self.onContentProgress = onContentProgress
         self.onPlaybackTime = onPlaybackTime
+        self.onPlaybackProgressing = onPlaybackProgressing
         self.preloadedImages = preloadedImages
         self.preloadedVideoURLs = preloadedVideoURLs
         self.preloadedAudioURLs = preloadedAudioURLs
@@ -156,6 +165,8 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         view.onContentProgress = { value in progress?(value) }
         let playback = onPlaybackTime
         view.onPlaybackTime = { t in playback?(t) }
+        let progressing = onPlaybackProgressing
+        view.onPlaybackProgressing = { p in progressing?(p) }
         view.setReaderContext(StoryReaderContext(
             preferredLanguages: preferredLanguages,
             mute: mute,

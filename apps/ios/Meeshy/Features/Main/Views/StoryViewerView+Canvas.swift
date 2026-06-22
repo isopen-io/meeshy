@@ -900,6 +900,17 @@ struct StoryCardView: View {
                                               return
                                           }
                                           slideContentProgress = p
+                                      },
+                                      // Timeline unifiée : la progress bar + l'auto-advance
+                                      // (pilotés par `slideTimer`) gèlent EN PHASE quand la
+                                      // lecture du média primaire stalle (buffer), et reprennent
+                                      // sans saut dès qu'elle rejoue. Input INDÉPENDANT de
+                                      // `setPaused` (long-press / sheets) — ils ne se clobberent
+                                      // jamais. No-op pour les slides sans vidéo (le canvas
+                                      // n'émet alors jamais). Décision produit câblée app-side ;
+                                      // le SDK n'expose que le signal `onPlaybackProgressing`.
+                                      onPlaybackProgressing: { progressing in
+                                          slideTimer.setPlaybackStalled(!progressing)
                                       })
                     .id(story.id)
                     // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
