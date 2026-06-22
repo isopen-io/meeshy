@@ -577,6 +577,7 @@
 		VP01WZ01A001A001A001A001 /* VoiceProfileWizardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = VP01WZ01B001B001B001B001 /* VoiceProfileWizardViewModel.swift */; };
 		VP02000000000002F002 /* VoiceProfileManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = VP02000000000001F002 /* VoiceProfileManageView.swift */; };
 		VP3600000000002F36 /* VoIPPushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = VP3600000000001F36 /* VoIPPushManager.swift */; };
+		VCFT0001000100010001001 /* VoiceConsentFetchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = VCFT0001000100010001000 /* VoiceConsentFetchTests.swift */; };
 		VPMT0001000100010001001 /* VoiceProfileManageViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = VPMT0001000100010001000 /* VoiceProfileManageViewModelTests.swift */; };
 		VPWT0001000100010001001 /* VoiceProfileWizardViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = VPWT0001000100010001000 /* VoiceProfileWizardViewModelTests.swift */; };
 		VSURVCTRL0000002F01 /* VideoSurvivalController.swift in Sources */ = {isa = PBXBuildFile; fileRef = VSURVCTRL0000001F01 /* VideoSurvivalController.swift */; };
@@ -1207,6 +1208,7 @@
 		VP01WZ01B001B001B001B001 /* VoiceProfileWizardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileWizardViewModel.swift; sourceTree = "<group>"; };
 		VP02000000000001F002 /* VoiceProfileManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileManageView.swift; sourceTree = "<group>"; };
 		VP3600000000001F36 /* VoIPPushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoIPPushManager.swift; sourceTree = "<group>"; };
+		VCFT0001000100010001000 /* VoiceConsentFetchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceConsentFetchTests.swift; sourceTree = "<group>"; };
 		VPMT0001000100010001000 /* VoiceProfileManageViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileManageViewModelTests.swift; sourceTree = "<group>"; };
 		VPWT0001000100010001000 /* VoiceProfileWizardViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileWizardViewModelTests.swift; sourceTree = "<group>"; };
 		VSURVCTRL0000001F01 /* VideoSurvivalController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoSurvivalController.swift; sourceTree = "<group>"; };
@@ -1736,6 +1738,7 @@
 				685A93EB1B26AC66D11BA2F1 /* CallsViewModelTests.swift */,
 				C5EB1C8E0E7ADA2081B50F4B /* KeypadViewModelTests.swift */,
 				BLKD0001000100010001000 /* BlockedViewModelTests.swift */,
+				VCFT0001000100010001000 /* VoiceConsentFetchTests.swift */,
 				VPMT0001000100010001000 /* VoiceProfileManageViewModelTests.swift */,
 				VPWT0001000100010001000 /* VoiceProfileWizardViewModelTests.swift */,
 				0F5FEBA083B51BF23F6F3C9E /* ConversationOptionsViewModelTests.swift */,
@@ -2984,6 +2987,7 @@
 				84F7F4F68D86DBF31288E369 /* CallsViewModelTests.swift in Sources */,
 				5C2F9A90859A929847D5CBD7 /* KeypadViewModelTests.swift in Sources */,
 				BLKD0001000100010001001 /* BlockedViewModelTests.swift in Sources */,
+				VCFT0001000100010001001 /* VoiceConsentFetchTests.swift in Sources */,
 				VPMT0001000100010001001 /* VoiceProfileManageViewModelTests.swift in Sources */,
 				VPWT0001000100010001001 /* VoiceProfileWizardViewModelTests.swift in Sources */,
 				MASK0001000100010001001 /* MockAuthServiceSDK.swift in Sources */,
