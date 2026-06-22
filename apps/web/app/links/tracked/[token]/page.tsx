@@ -750,8 +750,8 @@ export default function TrackingLinkDetailsPage() {
                           <div key={index} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded">
                             <span className="text-sm font-medium">{formatDate(item.date)}</span>
                             <div className="flex items-center gap-4">
-                              <span className="text-sm text-blue-600 font-bold">{item.clicks} clics</span>
-                              <span className="text-sm text-green-600 font-bold">{item.uniqueClicks} uniques</span>
+                              <span className="text-sm text-blue-600 font-bold">{t('tracking.details.clicksCount', { count: item.clicks })}</span>
+                              <span className="text-sm text-green-600 font-bold">{t('tracking.details.uniqueCount', { count: item.uniqueClicks })}</span>
                             </div>
                           </div>
                         ))}
