@@ -1,5 +1,13 @@
 {
   "settings": {
+    "configModal": {
+      "title": "Settings and Configuration",
+      "selectSection": "Select a section",
+      "sectionAriaLabel": "Settings section",
+      "userProfile": "User profile",
+      "languageTranslation": "Languages & Translation",
+      "appearance": "Appearance"
+    },
     "title": "Settings",
     "pageTitle": "Settings for {username}",
     "subtitle": "Manage your account preferences, language settings, and privacy options",

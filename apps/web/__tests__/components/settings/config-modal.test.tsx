@@ -41,6 +41,27 @@ jest.mock('@/components/translation/translation-stats', () => ({
 // Mock du module CSS
 jest.mock('./config-modal.module.css', () => ({}), { virtual: true });
 
+// Mock i18n: resolve config-modal keys to their FR values so the modal labels
+// render deterministically without relying on async translation loading.
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, fallback?: Record<string, unknown> | string) => {
+      const map: Record<string, string> = {
+        'configModal.title': 'Paramètres et Configuration',
+        'configModal.selectSection': 'Sélectionner une section',
+        'configModal.sectionAriaLabel': 'Section des paramètres',
+        'configModal.userProfile': 'Profil utilisateur',
+        'configModal.languageTranslation': 'Langues & Traduction',
+        'configModal.appearance': 'Apparence',
+        'tabs.stats': 'Statistiques',
+        'tabs.notifications': 'Notifications',
+        'tabs.privacy': 'Confidentialité',
+      };
+      return map[key] ?? (typeof fallback === 'string' ? fallback : key);
+    },
+  }),
+}));
+
 describe('ConfigModal', () => {
   const mockUser: UserType = {
     id: 'user-1',
