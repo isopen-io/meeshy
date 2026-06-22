@@ -78,12 +78,12 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
 
     // Email validation
     if (!email.trim()) {
-      setLocalError(t('forgotPassword.errors.emailRequired') || 'Email is required');
+      setLocalError(t('forgotPassword.errors.emailRequired', 'Email is required'));
       return;
     }
 
     if (!validateEmail(email)) {
-      setLocalError(t('forgotPassword.errors.invalidEmail') || 'Please enter a valid email address');
+      setLocalError(t('forgotPassword.errors.invalidEmail', 'Please enter a valid email address'));
       return;
     }
 
@@ -106,7 +106,7 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
       resetBotProtection();
 
       // Show success toast
-      toast.success(t('forgotPassword.success.emailSent') || 'Password reset link sent');
+      toast.success(t('forgotPassword.success.emailSent', 'Password reset link sent'));
 
       // Redirect to check email page or call onSuccess callback
       if (onSuccess) {
@@ -119,7 +119,7 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
       const errorMessage =
         error instanceof Error
           ? error.message
-          : t('forgotPassword.errors.requestFailed') || 'Failed to request password reset';
+          : t('forgotPassword.errors.requestFailed', 'Failed to request password reset');
       setLocalError(errorMessage);
       setStoreError(errorMessage);
       toast.error(errorMessage);
@@ -139,13 +139,13 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
         <Label htmlFor="email" className="text-sm font-medium">
           <div className="flex items-center gap-2">
             <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            <span>{t('forgotPassword.emailLabel') || 'Email Address'}</span>
+            <span>{t('forgotPassword.emailLabel', 'Email Address')}</span>
           </div>
         </Label>
         <Input
           id="email"
           type="email"
-          placeholder={t('forgotPassword.emailPlaceholder') || 'your.email@example.com'}
+          placeholder={t('forgotPassword.emailPlaceholder', 'your.email@example.com')}
           value={email}
           onChange={(e) => handleEmailChange(e.target.value)}
           disabled={isLoading}
@@ -155,7 +155,7 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
           className="h-11"
         />
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          {t('forgotPassword.emailHelp') || 'Enter the email address associated with your account'}
+          {t('forgotPassword.emailHelp', 'Enter the email address associated with your account')}
         </p>
       </div>
 
@@ -176,12 +176,12 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
         {isLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            {t('forgotPassword.sending') || 'Sending...'}
+            {t('forgotPassword.sending', 'Sending...')}
           </>
         ) : (
           <>
             <Mail className="mr-2 h-4 w-4" />
-            {t('forgotPassword.submitButton') || 'Send Reset Link'}
+            {t('forgotPassword.submitButton', 'Send Reset Link')}
           </>
         )}
       </Button>
@@ -192,7 +192,7 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
           href="/login"
           className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded"
         >
-          {t('forgotPassword.backToLogin') || 'Back to Login'}
+          {t('forgotPassword.backToLogin', 'Back to Login')}
         </Link>
       </div>
     </form>

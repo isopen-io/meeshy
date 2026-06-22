@@ -1,32 +1,33 @@
-# Plan — Itération 60wb (web only)
+# Plan d'itération 60wb (web only)
 
-**Objectif** : i18n des 7 libellés d'accessibilité FR figés de
-`components/attachments/AttachmentPreviewReply.tsx` (surface chat live).
-**Numérotée 60wb** : collision avec la 60w (#806, config-modal) — périmètres disjoints.
+> Renumérotée **60w → 60wb** (collision : 60w config-modal livré en parallèle par
+> `claude/practical-fermat-r4vwgd`, mergé en premier ; périmètres disjoints).
+
+**Objectif** : éliminer l'anti-pattern i18n `t('key') || 'fallback'` (dead-code +
+flash-of-raw-keys, leçon 50w) sur la surface `auth` et basculer vers la signature
+native `t('key', 'fallback')`.
+
+## Base
+- Branche tirée de `main` HEAD post-merge iter-58wd / #796 / #779 / #799 (`9857819`),
+  resynchronisée sur `main` post-60w config-modal (`09b7a84`) au merge.
+- Branche de travail : `claude/practical-fermat-o2g4dt`.
 
 ## Étapes
-1. ✅ Sync branche sur `main` HEAD.
-2. ✅ Revue anti-doublon : #802/#803 = doublons focus-trap 59w → à fermer.
-3. ✅ `useI18n('attachments')` ajouté au composant.
-4. ✅ 7 substitutions `t()` (3 clés réutilisées, 4 neuves).
-5. ✅ 4 clés neuves `attachments.actions.{imagePreviewNamed,
-   openVideoFullscreenNamed,openPdfNamed,openTextFileNamed}` ×4 locales.
-6. ✅ Mock `useI18n` dans le test (assertions par nom accessible FR).
-7. ✅ CI #804 verte (Quality bun + Test web + Build + tous tests + Summary).
-8. ⏳ Merge dans `main` (résolution conflit collision 60w/#806) + suppression branche.
+1. [x] Confirmer le bug au niveau de l'implémentation `use-i18n.ts` (`return fallback || key`).
+2. [x] Mesurer la classe de bug (405 occ / 59 fichiers ; 125 / 11 sur auth).
+3. [x] Vérifier l'absence de `t(args,params) || 'x'` (cas multi-arg risqué) → aucun.
+4. [x] Transformer `t(k) || 'x'` → `t(k, 'x')` sur 10 fichiers auth (76 remplacements).
+5. [x] Exclure `PhoneResetFlow.tsx` (collision #786 mergé / #800 ouverte).
+6. [x] Vérifier que les clés existent dans `locales/{en,fr}/auth.json` (zéro changement visible).
+7. [x] Angliciser les fallbacks FR → valeur EN exacte du locale (anti-flash).
+8. [x] Vérifier 0 anti-pattern restant + parenthèses équilibrées sur les 10 fichiers.
+9. [x] Commit + push, PR #808, CI verte (tous jobs success).
+10. [ ] Merger dans `main` (résolution collision 60w docs) + mettre à jour `branch-tracking.md` + supprimer la branche.
 
-## Fichiers touchés
-- `apps/web/components/attachments/AttachmentPreviewReply.tsx`
-- `apps/web/__tests__/components/attachments/AttachmentPreviewReply.test.tsx`
-- `apps/web/locales/{en,fr,es,pt}/attachments.json`
-- `docs/analyses/uiux/2026-06-22-iteration-60wb.md`
-- `docs/plans/uiux/2026-06-22-plan-iteration-60wb.md`
-- `docs/plans/uiux/branch-tracking.md`
+## Hors périmètre / différé
+- `PhoneResetFlow.tsx` (post-#800).
+- ~270 occurrences sur ~48 fichiers web (admin/conversations/audio/settings/video-calls) → 60wc+.
 
-## Leçon (à appliquer chaque run)
-- **« Code mort » côté web** : grep AUSSI `lib/lazy-components.tsx` (lazy registry)
-  + imports dynamiques `import(...)`, pas seulement les imports statiques.
-  (`config-modal.tsx` faussement jugé mort ici → en fait lazy + live, i18n par #806.)
-- `git fetch origin main` + `list_pull_requests` AVANT de coder ; surface
-  orthogonale ; renuméroter en cas de collision (`60wb`).
-</content>
+## Risque
+Minimal : transformation mécanique string-level, chaque ligne revue, clés présentes
+(comportement runtime inchangé), aucun fichier de test ni JSON locale touché.

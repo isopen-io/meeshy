@@ -102,7 +102,7 @@ export const SecurityStep = forwardRef<HTMLInputElement, SecurityStepProps>(({
         </div>
 
         {/* Password strength */}
-        <div className="flex gap-1" role="meter" aria-label={t('register.wizard.passwordStrength') || 'Password strength'} aria-valuemin={0} aria-valuemax={4} aria-valuenow={Math.min(4, Math.floor(formData.password.length / 2))}>
+        <div className="flex gap-1" role="meter" aria-label={t('register.wizard.passwordStrength', 'Password strength')} aria-valuemin={0} aria-valuemax={4} aria-valuenow={Math.min(4, Math.floor(formData.password.length / 2))}>
           {[1, 2, 3, 4].map((level) => (
             <div
               key={level}
