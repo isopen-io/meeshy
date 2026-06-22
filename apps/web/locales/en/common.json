@@ -262,6 +262,21 @@
       "friends": "Friends",
       "private": "Private"
     },
+    "postComposer": {
+      "contentLabel": "Post content",
+      "addPhoto": "Add photo",
+      "addVideo": "Add video",
+      "changeVisibility": "Change visibility",
+      "visibility": {
+        "public": "Public",
+        "friends": "Friends",
+        "except": "Friends except...",
+        "only": "Only...",
+        "private": "Private"
+      }
+    },
+    "audioUnavailable": "Audio URL unavailable",
+    "audioProgress": "Audio progress",
     "statusComposer": {
       "title": "What's your mood?",
       "placeholder": "What are you up to?",
