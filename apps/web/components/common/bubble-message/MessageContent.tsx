@@ -10,6 +10,7 @@ import { MessageReactions } from '@/components/common/message-reactions';
 import { MessageReplyPreview } from './MessageReplyPreview';
 import { useMessageReadStatus, useReadStatusSummary } from '@/stores/conversation-ui-store';
 import type { useReactionsQuery } from '@/hooks/queries/use-reactions-query';
+import type { TFunction } from '@/hooks/use-i18n';
 
 type UseReactionsQueryReturn = ReturnType<typeof useReactionsQuery>;
 
@@ -94,7 +95,7 @@ interface MessageContentProps {
   conversationId?: string;
   messageReactionsHook: UseReactionsQueryReturn;
   onNavigateToMessage?: (messageId: string) => void;
-  t: (key: string) => string;
+  t: TFunction;
 }
 
 export const MessageContent = memo(function MessageContent({
@@ -135,7 +136,7 @@ export const MessageContent = memo(function MessageContent({
               isOwnMessage ? "text-indigo-200" : "text-gray-400 dark:text-gray-500"
             )}>
               <CornerUpRight className="h-3 w-3 flex-shrink-0" />
-              <span>{t('bubble.forwarded') || 'Transféré'}</span>
+              <span>{t('bubble.forwarded', 'Forwarded')}</span>
             </div>
           )}
 

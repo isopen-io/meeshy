@@ -152,6 +152,9 @@
       "searchPlaceholder": "Tapez pour rechercher un utilisateur...",
       "noResults": "Aucun utilisateur trouvé pour \"{query}\"",
       "helpText": "↑↓ naviguer • Entrée sélectionner • Échap fermer"
+    },
+    "bubble": {
+      "forwarded": "Transféré"
     }
   }
 }
