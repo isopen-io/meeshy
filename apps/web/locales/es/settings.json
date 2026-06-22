@@ -7,6 +7,19 @@
     "settingsError": "Error al cargar la configuración",
     "settingsSaved": "Configuración guardada con éxito",
     "settingsSaveError": "Error al guardar la configuración",
+    "configModal": {
+      "title": "Ajustes y configuración",
+      "selectSection": "Selecciona una sección",
+      "sectionLabel": "Sección de ajustes",
+      "tabs": {
+        "user": "Perfil de usuario",
+        "language": "Idiomas y traducción",
+        "theme": "Apariencia",
+        "stats": "Estadísticas",
+        "notifications": "Notificaciones",
+        "privacy": "Privacidad"
+      }
+    },
     "errors": {
       "loadProfile": "Error al cargar el perfil",
       "loadSettings": "Error al cargar la configuración",
