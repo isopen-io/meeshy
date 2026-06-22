@@ -317,7 +317,21 @@
       "highConfidence": "Confianza alta",
       "mediumConfidence": "Confianza media",
       "veryLowConfidence": "Muy baja",
-      "uncertain": "Incierto"
+      "uncertain": "Incierto",
+      "voiceProfile": {
+        "title": "Perfil de voz",
+        "titleYou": "Perfil de voz - Tú",
+        "pitch": "Tono medio:",
+        "range": "Rango:",
+        "gender": "Género:",
+        "age": "Edad:",
+        "voiceType": "Tipo de voz:",
+        "quality": "Calidad (HNR):",
+        "speakingTime": "Tiempo de habla: {seconds}s",
+        "primarySpeaker": "Hablante principal",
+        "unknownSpeaker": "Hablante desconocido",
+        "createIdentity": "Crea una identidad de voz para identificarte y ver los detalles"
+      }
     },
     "timeline": {
       "title": "Línea de tiempo de efectos",

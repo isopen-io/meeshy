@@ -50,35 +50,35 @@ export const useAudioEffects = (effectsState: AudioEffectsState, onToggleEffect:
   };
 };
 
-export const useEffectTiles = (t: (key: string) => string): EffectTile[] => {
+export const useEffectTiles = (t: (key: string, fallback?: string) => string): EffectTile[] => {
   return [
     {
       id: 'reset',
-      title: t('resetAll') || 'Reset All',
+      title: t('resetAll', 'Reset All'),
       color: 'gray',
       gradient: 'from-gray-700 to-gray-900',
     },
     {
       id: 'voice-coder',
-      title: t('voiceCoder.title') || 'Voice Coder',
+      title: t('voiceCoder.title', 'Perfect Voice'),
       color: 'blue',
       gradient: 'from-blue-600 to-blue-800',
     },
     {
       id: 'back-sound',
-      title: t('backSound.title') || 'Background',
+      title: t('backSound.title', 'Background Ambiance'),
       color: 'green',
       gradient: 'from-green-600 to-green-800',
     },
     {
       id: 'baby-voice',
-      title: t('babyVoice.title') || 'Baby Voice',
+      title: t('babyVoice.title', 'Baby Voice'),
       color: 'pink',
       gradient: 'from-pink-600 to-pink-800',
     },
     {
       id: 'demon-voice',
-      title: t('demonVoice.title') || 'Demon Voice',
+      title: t('demonVoice.title', 'Demon Voice'),
       color: 'red',
       gradient: 'from-red-600 to-red-800',
     },
