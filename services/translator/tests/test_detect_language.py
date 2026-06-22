@@ -31,3 +31,9 @@ def test_uncertain_does_not_default_to_en():
 def test_no_fallback_uses_configured_default_not_en():
     # DEFAULT_DETECT_LANGUAGE = 'fr' par défaut (configurable), jamais 'en' arbitraire
     assert _engine().detect_language("xy") == "fr"
+
+
+def test_langdetect_unavailable_returns_default(monkeypatch):
+    import services.translation_ml.translator_engine as eng
+    monkeypatch.setattr(eng, "_LANGDETECT_OK", False)
+    assert _engine().detect_language("Bonjour tout le monde", fallback="fr") == "fr"

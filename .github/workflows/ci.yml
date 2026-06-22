@@ -275,7 +275,7 @@ jobs:
         run: pnpm install --no-frozen-lockfile
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
@@ -374,7 +374,7 @@ jobs:
         run: pnpm install --no-frozen-lockfile
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
@@ -485,7 +485,7 @@ jobs:
         run: pnpm install --no-frozen-lockfile
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
@@ -592,7 +592,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true

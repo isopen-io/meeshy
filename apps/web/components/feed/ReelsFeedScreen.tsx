@@ -15,6 +15,7 @@ import {
 } from '@/hooks/queries/use-post-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { useI18n } from '@/hooks/use-i18n';
 import type { Post } from '@meeshy/shared/types/post';
 
 const LIKE_EMOJI = '❤️';
@@ -35,6 +36,7 @@ function isReelLiked(post: Post): boolean {
  */
 export function ReelsFeedScreen() {
   const router = useRouter();
+  const { t } = useI18n('reel');
   const userLanguage = usePreferredLanguage();
   const toastCtx = useToast();
 
@@ -85,11 +87,11 @@ export function ReelsFeedScreen() {
     try {
       await navigator.clipboard.writeText(`${window.location.origin}/reel/${current.id}`);
       shareMutation.mutate({ postId: current.id });
-      toastCtx.addToast('Lien copié !', 'success');
+      toastCtx.addToast(t('linkCopied', 'Link copied!'), 'success');
     } catch {
-      toastCtx.addToast('Impossible de copier le lien', 'error');
+      toastCtx.addToast(t('linkCopyError', "Couldn't copy the link"), 'error');
     }
-  }, [current, shareMutation, toastCtx]);
+  }, [current, shareMutation, toastCtx, t]);
 
   const onComment = useCallback(() => {
     if (current) router.push(`/feeds/post/${current.id}`);
@@ -125,35 +127,35 @@ export function ReelsFeedScreen() {
         {reelsQuery.isLoading ? (
           <>
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/20 border-t-white" aria-hidden="true" />
-            <p className="sr-only">Chargement des reels…</p>
+            <p className="sr-only">{t('feed.loadingReels', 'Loading reels…')}</p>
           </>
         ) : reelsQuery.isError ? (
           <>
-            <h1 className="text-lg font-semibold">Reels indisponibles</h1>
+            <h1 className="text-lg font-semibold">{t('feed.errorTitle', 'Reels unavailable')}</h1>
             <button
               onClick={() => reelsQuery.refetch()}
               className="mt-2 rounded-full bg-white/15 px-6 py-2 text-sm font-medium transition-colors hover:bg-white/25"
             >
-              Réessayer
+              {t('feed.retry', 'Try again')}
             </button>
           </>
         ) : (
           <>
-            <h1 className="text-lg font-semibold">Aucun reel pour le moment</h1>
+            <h1 className="text-lg font-semibold">{t('feed.emptyTitle', 'No reels yet')}</h1>
             <p className="max-w-sm text-center text-sm text-white/70">
-              Revenez plus tard ou explorez les publications de votre réseau.
+              {t('feed.emptyBody', "Come back later or explore your network's posts.")}
             </p>
             <button
               onClick={close}
               className="mt-2 rounded-full bg-white/15 px-6 py-2 text-sm font-medium transition-colors hover:bg-white/25"
             >
-              Voir les publications
+              {t('feed.seePosts', 'See posts')}
             </button>
           </>
         )}
       </div>
     );
-  }, [current, index, reels.length, userLanguage, close, onLike, onComment, onShare, onBookmark, reelsQuery]);
+  }, [current, index, reels.length, userLanguage, close, onLike, onComment, onShare, onBookmark, reelsQuery, t]);
 
   return (
     <DashboardLayout title="Reels" hideSearch className="!max-w-none !px-0 !overflow-hidden !h-full">

@@ -40,7 +40,7 @@ dnspython==2.7.0
 
 # Détection de langue et analyse de texte
 langdetect==1.0.9
-nltk==3.9.1
+nltk==3.9.4
 textstat==0.7.13
 
 # Utilitaires système
@@ -89,7 +89,7 @@ diffusers==0.29.0
 resemble-perth==1.0.1
 omegaconf==2.3.0
 conformer==0.3.2
-spacy>=3.4.0
+spacy>=3.8.14
 einops
 soxr  # Requis par transformers/audio_utils pour chatterbox-tts
 # chatterbox-tts==0.1.6 (installé dans Dockerfile avec --no-deps)
@@ -146,7 +146,7 @@ scikit-learn>=1.3.0  # Requis pour clustering et nettoyage (DiarizationCleaner)
 
 # Logging et monitoring
 loguru==0.7.3
-prometheus-client==0.21.1
+prometheus-client==0.25.0
 
 # Tests
 pytest==8.3.4
