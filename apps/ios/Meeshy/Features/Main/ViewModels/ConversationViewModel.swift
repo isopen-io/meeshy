@@ -1971,7 +1971,7 @@ class ConversationViewModel: ObservableObject {
 
     /// Langue de composition : détectée depuis le contenu (on-device), repli sur la
     /// langue primaire de l'utilisateur puis "fr". Pure → testable sans authManager.
-    static func composeLanguage(for content: String, preferred: [String]) -> String {
+    nonisolated static func composeLanguage(for content: String, preferred: [String]) -> String {
         LanguageDetection.detectLanguageCode(for: content, fallback: preferred.first)
             ?? preferred.first ?? "fr"
     }
