@@ -1,5 +1,18 @@
 {
   "settings": {
+    "configModal": {
+      "title": "Ajustes y configuración",
+      "selectSection": "Seleccionar una sección",
+      "sectionAriaLabel": "Sección de ajustes",
+      "tabs": {
+        "user": "Perfil de usuario",
+        "language": "Idiomas y traducción",
+        "theme": "Apariencia",
+        "stats": "Estadísticas",
+        "notifications": "Notificaciones",
+        "privacy": "Privacidad"
+      }
+    },
     "title": "Configuración",
     "pageTitle": "Configuración para {username}",
     "subtitle": "Administre sus preferencias de cuenta, idioma y privacidad",
