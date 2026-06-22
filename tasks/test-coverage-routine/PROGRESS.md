@@ -64,7 +64,7 @@ A run targets **one (feature × app) cell**. Pick the highest-priority `☐` cel
 | P2 | **Calls** (WebRTC, call lifecycle, ICE restart) | ☑ sub: call-schemas.ts☑ CallService.ts☑ CallCleanupService.ts☑ routes/calls.ts☑ | ⊘ | ☑ sub: adaptive-degradation.ts☑(100%/96%) call-store.ts☑(100%/100%) use-call-quality.ts☑(100%/100%) use-video-call.ts☑(100%/97%) use-call-banner.ts☑(100%/100%) webrtc-service.ts☑(99.35%/98.80%) | ☐ | ⊘ | ⊘ |
 | P2 | **Rate limiting** (message/api/socket limits, Redis fallback) | ☑ sub: rate-limiter.ts (auth factories)☑ socket-rate-limiter.ts☑ message-limits.ts☑ middleware/rate-limit.ts☑ middleware/rate-limiter.ts☑ | ⊘ | ⊘ | ⊘ | ⊘ | ⊘ |
 | P2 | **Admin & moderation** | ◐ sub: services/admin/*☑ middleware/admin-user-auth☑ validation/admin-schemas☑ routes/admin/{analytics☑ anonymous-users☑ broadcasts☑ dashboard☑ index☑ invitations☑ messages☑ posts☑ reports☑ roles☑ system-rankings☑ users☑ agent-topics☑(95%lines/93.47%branches) languages☑(100%lines/96.15%branches) agent☑(100%lines/93.09%branches)} deferred:{content(⚠97%lines/76%branches — 2 failing tests, production bug in translations endpoint)} | ⊘ | ☐ | ⊘ | ⊘ | ⊘ |
-| P2 | **Theme/accent color** (ColorGeneration algorithm) | ⊘ | ⊘ | ☐ | ☐ | ☐ | ☐ |
+| P2 | **Theme/accent color** (ColorGeneration algorithm) | ⊘ | ⊘ | ☑ sub: use-resolved-theme.ts☑(100%/100%) tag-colors.ts☑(100%/100%) date-format.ts☑(100%/100%) | ☐ | ☐ | ☐ |
 | P2 | **Video/story export** (composition, export pipeline) | ⊘ | ⊘ | ☐ | ☐ | ☐ | ☐ |
 
 ---
@@ -154,7 +154,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
-| web | `pnpm --filter web test:coverage` | 42.42 | 34.51 | 2026-06-21 (post P2 Calls × web sub-slice 1; +tests for adaptive-degradation/call-store/use-call-quality/use-video-call/use-call-banner; stmts:41.66/branch:34.51/funcs:38.96/lines:42.42; threshold floor unchanged lines:42/branches:34/statements:41/functions:38 — integer floors same) |
+| web | `pnpm --filter web test:coverage` | 42.97 | 35.17 | 2026-06-22 (post P2 Theme/accent color × web; +1 test for use-resolved-theme dark→light transition; date-format+tag-colors already at 100%; stmts:42.21/branch:35.17/funcs:39.16/lines:42.97; threshold floor unchanged lines:42/branches:34/statements:41/functions:38 — new measurements already above floor) |
 | gateway | `pnpm --filter gateway test:coverage` | 68.44 (local) / ~64.4 (CI est.) | 62.46 (local) / ~58.5 (CI est.) | 2026-06-22 (post P2 Admin × gateway sub-slice 5: agent.ts 100%lines/93.09%branches ☑ — PR #772 squash-merged main@287ca0b9; local stmts=68.2%/branches=62.46%/funcs=68.46%/lines=68.44%; threshold floor ratcheted lines:62→63/branches:57→58/statements:62→63/functions:64; CI Node 24 gap ~4pp) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | ~39 | n/a | 2026-06-19 (post P1 Voice/audio × translator; +127 tests covering 6 modules; fail_under ratcheted 37→39; diarization GPU methods pragma'd) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
