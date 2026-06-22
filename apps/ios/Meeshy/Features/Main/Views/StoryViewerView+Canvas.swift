@@ -442,6 +442,15 @@ struct StoryComposerBarView: View {
             externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
             onPhotoLibrary: { showCommentPhotoPicker = true },
             onFilePicker: { showCommentFilePicker = true },
+            onShowAttachments: {
+                // Attachment carousel opening → dismiss the emoji panel so the
+                // two bottom surfaces never stack.
+                if showTextEmojiPicker {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showTextEmojiPicker = false
+                    }
+                }
+            },
             onRequestTextEmoji: {
                 isComposerEngaged = true
                 // Dismiss keyboard first, then show emoji panel

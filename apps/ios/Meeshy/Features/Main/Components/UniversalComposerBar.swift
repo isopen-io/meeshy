@@ -130,6 +130,13 @@ struct UniversalComposerBar: View {
     var onCamera: (() -> Void)? = nil
     var onFilePicker: (() -> Void)? = nil
 
+    /// Fired when the attachment carousel becomes visible. The keyboard, the
+    /// attachment carousel and any host-owned emoji panel are mutually
+    /// exclusive input surfaces — a host that shows an emoji panel below the
+    /// bar should dismiss it here so the carousel and the emoji panel never
+    /// stack on top of each other.
+    var onShowAttachments: (() -> Void)? = nil
+
     /// Called when user taps emoji icon in ladder — parent should show EmojiFullPickerSheet
     var onRequestTextEmoji: (() -> Void)? = nil
 

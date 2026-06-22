@@ -69,7 +69,16 @@ final class AttachmentPreparationServiceTests: XCTestCase {
     // MARK: - Fast preview (instant tray display)
 
     func test_downsampledPreview_returnsBoundedPreview_fromEncodedBytes() {
-        let image = Self.makeTestImage(size: CGSize(width: 4000, height: 3000))
+        // Force scale 1 so the source is exactly 1200×900 pixels (not multiplied
+        // by the host screen scale) — keeps the allocation small and the bound
+        // assertion deterministic.
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 1200, height: 900), format: format)
+        let image = renderer.image { ctx in
+            UIColor.systemIndigo.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 1200, height: 900))
+        }
         guard let data = image.jpegData(compressionQuality: 0.9) else {
             return XCTFail("Expected encodable test image")
         }
