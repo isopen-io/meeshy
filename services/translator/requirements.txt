@@ -25,7 +25,7 @@ datasets>=3.0.0
 # sentencepiece: version gérée par ESPnet (0.1.97 pour espnet 202412)
 huggingface_hub>=0.20.0
 safetensors>=0.4.0
-peft>=0.7.0
+peft>=0.19.1
 # PIN EXACT — chatterbox-tts 0.1.6 requiert transformers==5.12.1 (cf. uv.lock + pyproject.toml).
 # NE PAS élargir : transformers>=4.55 référence torch.float8_e8m0fnu (dtype MXFP4) absent de
 # torch 2.6.0 (épinglé dans Dockerfile) → AttributeError à l'import de chatterbox au build.
