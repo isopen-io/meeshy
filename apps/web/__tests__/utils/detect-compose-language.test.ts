@@ -1,6 +1,6 @@
-jest.mock('tinyld');
+jest.mock('tinyld/light');
 
-import { detectAll } from 'tinyld';
+import { detectAll } from 'tinyld/light';
 import { detectComposeLanguage } from '@/utils/language-detection';
 
 const mockDetectAll = jest.mocked(detectAll);
@@ -10,7 +10,7 @@ describe('detectComposeLanguage', () => {
     mockDetectAll.mockReset();
     // Default: delegate to real implementation via a passthrough
     mockDetectAll.mockImplementation(
-      jest.requireActual<typeof import('tinyld')>('tinyld').detectAll,
+      jest.requireActual<typeof import('tinyld/light')>('tinyld/light').detectAll,
     );
   });
 

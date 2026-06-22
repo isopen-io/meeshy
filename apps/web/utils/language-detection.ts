@@ -2,7 +2,7 @@
  * Utilitaires pour la détection et gestion des langues
  */
 
-import { detectAll } from 'tinyld';
+import { detectAll } from 'tinyld/light';
 import { SUPPORTED_LANGUAGES as SHARED_LANGUAGES } from '@meeshy/shared/utils/languages';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 

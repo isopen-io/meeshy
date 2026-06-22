@@ -71,7 +71,7 @@ describe('useMessaging — originalLanguage from content (C4)', () => {
 
     await act(async () => {
       await result.current.sendMessage(
-        'How are you doing today my friend?',
+        'How are you doing today? I hope everything is going well.',
         'fr', // caller passes profile language — content detection must override
       );
     });
