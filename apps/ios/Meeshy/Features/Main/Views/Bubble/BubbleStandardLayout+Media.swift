@@ -407,6 +407,9 @@ fileprivate struct BubbleGridCell: View {
                     onExpand: { fullscreenAttachment = attachment }
                 )
             }
+            .overlay(alignment: .bottom) {
+                MediaConsumptionProgressBar(attachmentId: attachment.id, accentHex: contactColor)
+            }
             overflowOverlay
             viewCountBadge
         }
@@ -918,6 +921,9 @@ struct BubbleCarouselView: View {
                 onDownload: onDownload,
                 onExpand: { fullscreenAttachment = attachment }
             )
+        }
+        .overlay(alignment: .bottom) {
+            MediaConsumptionProgressBar(attachmentId: attachment.id, accentHex: contactColor)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
