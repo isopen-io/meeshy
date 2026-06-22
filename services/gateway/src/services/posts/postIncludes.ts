@@ -114,6 +114,13 @@ export const commentsPreviewInclude = Prisma.validator<Prisma.Post$commentsArgs>
     replyCount: true,
     createdAt: true,
     author: { select: authorSelect },
+    // A comment's single media (image/video/audio + Prisme transcription/TTS).
+    // Without this the feed/reels comments sheet — which reads top-level
+    // comments ONLY from this post-embedded preview, never re-fetching them —
+    // loses every comment attachment on reload, and contacts receiving the
+    // post:updated broadcast see comments stripped of their media. Reuses the
+    // canonical commentMediaInclude so the preview decodes exactly like getComments.
+    media: commentMediaInclude,
   },
   orderBy: { likeCount: 'desc' },
   take: 3,

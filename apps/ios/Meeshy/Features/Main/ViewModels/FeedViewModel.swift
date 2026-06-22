@@ -327,7 +327,9 @@ class FeedViewModel: ObservableObject {
                             content: c.content, timestamp: c.createdAt,
                             likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                             parentId: c.parentId,
-                            originalLanguage: c.originalLanguage, translatedContent: translatedContent
+                            originalLanguage: c.originalLanguage, translatedContent: translatedContent,
+                            currentUserReactions: c.currentUserReactions,
+                            media: (c.media ?? []).map { $0.toFeedMedia() }
                         )
                     }
                 }.value
