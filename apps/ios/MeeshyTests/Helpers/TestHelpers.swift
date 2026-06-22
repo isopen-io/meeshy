@@ -10,13 +10,23 @@ import XCTest
 
 // MARK: - Async Test Helpers
 
+// `@nonobjc` on the non-generic helpers below is load-bearing, not cosmetic.
+// Swift 6.2.1's SILGen crashes (`emitNativeToForeignThunk` → segfault) when it
+// tries to synthesise an Objective-C bridging thunk for an `async`/closure
+// method declared in an extension of the `@objc` `XCTestCase` class. These
+// helpers are only ever called from Swift, so suppressing the (buggy) ObjC
+// thunk emission is both correct and the documented workaround. The generic
+// helpers in the other extensions are not `@objc`-representable, so they don't
+// need it.
 extension XCTestCase {
     /// Wait for async expectation with timeout
+    @nonobjc
     func waitForExpectation(timeout: TimeInterval = 5.0, handler: XCWaitCompletionHandler? = nil) {
         wait(for: [], timeout: timeout)
     }
 
     /// Wait for condition to be true
+    @nonobjc
     func waitForCondition(
         timeout: TimeInterval = 5.0,
         pollingInterval: TimeInterval = 0.1,
@@ -39,6 +49,7 @@ extension XCTestCase {
 
 extension XCTestCase {
     /// Execute test on main actor
+    @nonobjc
     @MainActor
     func runOnMainActor(_ block: @MainActor () async throws -> Void) async throws {
         try await block()
@@ -118,6 +129,7 @@ extension XCTestCase {
     /// scheduled task can deadlock against `wait(for:timeout:)` because both
     /// want the main runloop. `Task.detached` escapes the actor, runs on a
     /// background thread, and signals the expectation cleanly.
+    @nonobjc
     func measureAsync(
         timeout: TimeInterval = 60.0,
         options: XCTMeasureOptions = XCTMeasureOptions.default,

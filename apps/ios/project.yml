@@ -132,6 +132,14 @@ targets:
       - path: MeeshyTests
         excludes:
           - "**/*.md"
+          # XCUITest — instantiates XCUIApplication() and drives the running
+          # app. It cannot live in this hosted unit-test bundle: there is no
+          # UI-testing target (the project deliberately ships UI-flavoured
+          # coverage as integration XCTests, cf. StoryNotificationFlowTests),
+          # so `xcodebuild test -only-testing:MeeshyTests` aborts the whole
+          # suite at construction ("No target application path specified" →
+          # NSInternalInconsistencyException from -[XCUIApplication init]).
+          - "UI/BubbleExpandableTextUITests.swift"
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.tests
       CODE_SIGN_STYLE: Automatic

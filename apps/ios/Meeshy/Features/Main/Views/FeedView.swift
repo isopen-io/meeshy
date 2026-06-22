@@ -95,7 +95,7 @@ struct FeedView: View {
     // Impression tracking
     @State private var pendingImpressionIds = Set<String>()
     @State private var recordedImpressionIds = Set<String>()
-    @State private var impressionTimer: Timer?
+    @State private var impressionFlushTask: Task<Void, Never>?
 
     // Attachment states
     @State var pendingAttachments: [MessageAttachment] = []
@@ -1098,8 +1098,8 @@ struct FeedView: View {
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()
             viewModel.feedStore?.stopObserving()
-            impressionTimer?.invalidate()
-            impressionTimer = nil
+            impressionFlushTask?.cancel()
+            impressionFlushTask = nil
         }
         .sheet(isPresented: $showAudioComposer) {
             AudioPostComposerView { audioURL, mimeType, transcription in
@@ -1450,15 +1450,25 @@ struct FeedView: View {
     }
 
     private func scheduleImpressionFlush() {
-        impressionTimer?.invalidate()
-        let ids = pendingImpressionIds
-        impressionTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
-            let batch = Array(ids)
-            Task { @MainActor in
+        // Debounce via a cancellable Task, NOT Timer.scheduledTimer: a default-mode
+        // run-loop timer does not fire while the feed ScrollView is in tracking
+        // mode, and it was re-armed on every card `onAppear` — so feed-appearance
+        // impressions never flushed (impressionCount only ever moved on Detail
+        // opens, tracking postOpenCount 1:1). Task.sleep fires regardless of
+        // run-loop mode. Mirrors ProfileUserPostsList.scheduleImpressionFlush.
+        impressionFlushTask?.cancel()
+        impressionFlushTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled else { return }
+            let batch = Array(pendingImpressionIds)
+            guard !batch.isEmpty else { return }
+            pendingImpressionIds.subtract(batch)
+            do {
+                try await PostService.shared.recordImpressions(postIds: batch)
+                // Mark recorded ONLY on success so a failed flush leaves the ids
+                // eligible to re-enqueue when the card next appears.
                 recordedImpressionIds.formUnion(batch)
-                pendingImpressionIds.subtract(batch)
-                try? await PostService.shared.recordImpressions(postIds: batch)
-            }
+            } catch {}
         }
     }
 }
