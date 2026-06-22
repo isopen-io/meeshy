@@ -1,32 +1,37 @@
-# Plan de correction — Itération 60w (web)
+# Plan — Itération 60w (web)
 
-**Cible** : `apps/web/components/admin/AdminLayout.tsx`
-**Type** : bug de correctness (crash runtime) — sélecteur de thème admin
-**Branche** : `claude/practical-fermat-8e8nhk`
-**Base** : `main` HEAD post-iter-59w (`9857819`)
+## Base
+- `main` HEAD `684d33f` (post-merge #774→#794, iter-57w→59w).
+- Branche de travail : `claude/practical-fermat-r4vwgd` (repivotée après #775 fermée
+  — collision ReelPlayer absorbée par #774).
 
-## Problème
-
-Le menu de thème de l'en-tête admin appelle `setTheme(...)` (l.355/359/363) alors que `setTheme` n'est **ni importé ni défini** → `ReferenceError` au clic. Masqué au build par `next.config.ts` `typescript.ignoreBuildErrors: true`.
+## Objectif
+i18n + a11y de la **modale de configuration globale**
+`components/settings/config-modal.tsx` (lazy-loadée, live) — 9 chaînes FR figées
+(6 onglets visibles + titre + 2 surfaces a11y) en TOUTES langues. Surface
+**orthogonale** au cluster feed/reels/modales fortement contesté (recommandation
+explicite `branch-tracking.md` « Next iteration 60 »).
 
 ## Étapes
+1. [x] Resync branche sur `main` HEAD ; retirer les artefacts 57w superseded.
+2. [x] Bloc additif `settings.configModal` (9 clés, dont `tabs.*` ×6) ×4 locales.
+3. [x] `config-modal.tsx` → `useI18n('settings')` + 9 `t()` (fallbacks EN 2e arg).
+4. [x] Mettre à jour `__tests__/.../config-modal.test.tsx` (mock i18n + assertions EN).
+5. [x] Vérif : grep FR vide, parité 9 clés ×4, JSON valide ×4.
+6. [x] Analyse 60w + `branch-tracking.md`.
+7. [ ] Commit + push + PR ; merge dans `main` après CI vert ; supprimer la branche.
 
-1. [x] Confirmer que `setTheme` n'est ni importé ni fourni par un hook dans `AdminLayout.tsx`.
-2. [x] Identifier le setter canonique : `useAppActions().setTheme` (`stores/app-store.ts`, signature `'light'|'dark'|'auto'`).
-3. [x] Ajouter `useAppActions` à l'import `@/stores` existant.
-4. [x] Brancher `const { setTheme } = useAppActions();` dans le composant.
-5. [x] Vérifier l'absence d'impact locale (clés `layout.theme*` déjà présentes).
-6. [ ] Commit + push sur la branche assignée.
-7. [ ] PR vers `main`, attendre CI verte, merger.
-8. [ ] Mettre à jour `branch-tracking.md` (Current State + History) et supprimer la branche après merge.
+## Contraintes
+- Bloc dédié `configModal` (PAS réutiliser `settings.tabs.*` — libellés + ensemble
+  distincts). Diffs locale strictement additifs (round-trip JSON).
+- Fallbacks EN 2e arg sur les 9 `t()` (anti-flash, leçon 50w).
+- Aucune autre frontend (iOS/Android hors périmètre).
 
-## Critères de complétude
+## Leçon collision (à appliquer chaque run)
+`git fetch origin main` + `list_pull_requests` AVANT de coder ; surface
+orthogonale ; en cas de PR jumelle déjà mergée → fermer la sienne, repivoter.
 
-- `setTheme` résolu (import + binding) ; diff = 2 lignes, 1 fichier.
-- Aucun fichier locale modifié.
-- Pas de régression : pattern identique à `theme-settings.tsx`.
-
-## Suite (61w)
-
-- `config-modal.tsx` i18n (6 onglets + titre + 2 labels a11y) — surface orthogonale, déjà documentée.
-- `AdminLayout.tsx:351` `sr-only "Toggle theme"` → `layout.toggleTheme` ×4 (parité a11y, faible priorité).
+## Suite (61w+)
+`PhoneResetFlow.tsx:490` (sr-only indicatif), `AttachmentPreviewReply.tsx:205-206`
+(title/aria FR), `app/settings/loading.tsx` (server-side i18n), console.error FR,
+`next-themes` orphelin, épuration `settings/_archived/`.
