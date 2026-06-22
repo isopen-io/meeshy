@@ -678,6 +678,8 @@
       "tag": "Etiqueta",
       "call": "Llamar",
       "photo": "Foto",
+      "audio": "Audio",
+      "video": "Vídeo",
       "voiceMessage": "Mensaje de voz",
       "typing": "escribiendo…",
       "online": "En línea",
