@@ -96,7 +96,7 @@ dependencies = [
     "prometheus-client>=0.20.0",
 
     # HTTP client (pinned for Prisma compatibility)
-    "httpx>=0.24.0,<0.25.0",
+    "httpx>=0.24.0,<0.29.0",
     "httpcore>=0.17.0,<0.18.0",
 
     # HuggingFace transfer acceleration
