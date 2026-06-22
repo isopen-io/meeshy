@@ -1,0 +1,13 @@
+{
+  "deleted": "Historia eliminada",
+  "deleteError": "No se pudo eliminar la historia",
+  "replySent": "Respuesta enviada",
+  "loading": "Cargando historia…",
+  "unavailableTitle": "Historia no disponible",
+  "notAStoryTitle": "Este contenido no es una historia",
+  "goneTitle": "Esta historia ya no existe",
+  "unavailableBody": "Esta historia es privada o ha caducado.",
+  "notAStoryBody": "El enlace apunta a una publicación, no a una historia.",
+  "goneBody": "La historia que buscas puede haber caducado (las historias duran 24 h).",
+  "backToFeed": "Volver al feed"
+}

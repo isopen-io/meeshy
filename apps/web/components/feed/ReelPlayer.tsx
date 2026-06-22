@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Post } from '@meeshy/shared/types/post';
+import { useI18n } from '@/hooks/use-i18n';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import {
   X,
@@ -129,6 +130,7 @@ export function ReelPlayer({
   onShare,
   onBookmark,
 }: ReelPlayerProps) {
+  const { t } = useI18n('reel');
   const videoRef = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState(true);
   const [paused, setPaused] = useState(false);
@@ -208,10 +210,10 @@ export function ReelPlayer({
       className={`${
         embedded ? 'absolute inset-0' : 'fixed inset-0 z-50'
       } flex items-center justify-center bg-black select-none`}
-      aria-label={`Reel ${index + 1} sur ${total}`}
+      aria-label={t('player.position', { current: index + 1, total })}
       onWheel={onWheel}
     >
-      <h1 className="sr-only">Reel de {name}</h1>
+      <h1 className="sr-only">{t('player.byAuthor', { name })}</h1>
 
       {/* Media stage (9:16) */}
       <div className="relative h-full w-full max-w-[min(100vw,calc(100vh*9/16))]">
@@ -227,13 +229,13 @@ export function ReelPlayer({
               playsInline
               muted={muted}
               onClick={togglePlay}
-              aria-label={video.alt ?? `Reel de ${name}`}
+              aria-label={video.alt ?? t('player.byAuthor', { name })}
             />
             {paused && (
               <button
                 type="button"
                 onClick={togglePlay}
-                aria-label="Lecture"
+                aria-label={t('player.play', 'Play')}
                 className="absolute inset-0 flex items-center justify-center"
               >
                 <Play className="h-16 w-16 text-white/90 drop-shadow-lg" fill="currentColor" />
@@ -244,7 +246,7 @@ export function ReelPlayer({
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={image.fileUrl}
-            alt={image.alt ?? `Reel de ${name}`}
+            alt={image.alt ?? t('player.byAuthor', { name })}
             className="h-full w-full object-contain bg-black"
           />
         ) : (
@@ -258,7 +260,7 @@ export function ReelPlayer({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Fermer"
+            aria-label={t('player.close', 'Close')}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm"
           >
             <X className="h-5 w-5" />
@@ -269,7 +271,7 @@ export function ReelPlayer({
               type="button"
               onClick={goPrev}
               disabled={!hasPrev}
-              aria-label="Reel précédent"
+              aria-label={t('player.previous', 'Previous reel')}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm transition-opacity disabled:opacity-30"
             >
               <ChevronUp className="h-5 w-5" />
@@ -278,7 +280,7 @@ export function ReelPlayer({
               type="button"
               onClick={goNext}
               disabled={!hasNext}
-              aria-label="Reel suivant"
+              aria-label={t('player.next', 'Next reel')}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm transition-opacity disabled:opacity-30"
             >
               <ChevronDown className="h-5 w-5" />
@@ -288,7 +290,7 @@ export function ReelPlayer({
             <button
               type="button"
               onClick={toggleMute}
-              aria-label={muted ? 'Activer le son' : 'Couper le son'}
+              aria-label={muted ? t('player.unmute', 'Unmute') : t('player.mute', 'Mute')}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm"
             >
               {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
@@ -300,16 +302,16 @@ export function ReelPlayer({
 
         {/* Action rail */}
         <div className="absolute bottom-28 right-3 flex flex-col items-center gap-5">
-          <RailButton label="J’aime" count={reel.likeCount} active={isLiked} activeColor="#fb7185" onClick={onLike}>
+          <RailButton label={t('player.like', 'Like')} count={reel.likeCount} active={isLiked} activeColor="#fb7185" onClick={onLike}>
             <Heart className="h-6 w-6" fill={isLiked ? 'currentColor' : 'none'} />
           </RailButton>
-          <RailButton label="Commenter" count={reel.commentCount} onClick={onComment}>
+          <RailButton label={t('player.comment', 'Comment')} count={reel.commentCount} onClick={onComment}>
             <MessageCircle className="h-6 w-6" />
           </RailButton>
-          <RailButton label="Partager" onClick={onShare}>
+          <RailButton label={t('player.share', 'Share')} onClick={onShare}>
             <Share2 className="h-6 w-6" />
           </RailButton>
-          <RailButton label="Enregistrer" active={isBookmarked} activeColor="#fbbf24" onClick={onBookmark}>
+          <RailButton label={t('player.save', 'Save')} active={isBookmarked} activeColor="#fbbf24" onClick={onBookmark}>
             <Bookmark className="h-6 w-6" fill={isBookmarked ? 'currentColor' : 'none'} />
           </RailButton>
         </div>

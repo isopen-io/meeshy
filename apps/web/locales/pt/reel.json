@@ -8,5 +8,27 @@
   "unavailableBody": "Este reel é privado ou foi excluído.",
   "notAReelBody": "O link aponta para uma publicação, não para um reel.",
   "goneBody": "O reel que você procura não foi encontrado.",
-  "backToFeed": "Voltar ao feed"
+  "backToFeed": "Voltar ao feed",
+  "player": {
+    "position": "Reel {current} de {total}",
+    "byAuthor": "Reel de {name}",
+    "play": "Reproduzir",
+    "close": "Fechar",
+    "previous": "Reel anterior",
+    "next": "Próximo reel",
+    "mute": "Silenciar",
+    "unmute": "Ativar som",
+    "like": "Curtir",
+    "comment": "Comentar",
+    "share": "Compartilhar",
+    "save": "Salvar"
+  },
+  "feed": {
+    "loadingReels": "Carregando reels…",
+    "errorTitle": "Reels indisponíveis",
+    "retry": "Tentar novamente",
+    "emptyTitle": "Ainda não há reels",
+    "emptyBody": "Volte mais tarde ou explore as publicações da sua rede.",
+    "seePosts": "Ver publicações"
+  }
 }

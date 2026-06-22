@@ -58,7 +58,7 @@
 		6354817D4751DBCD1D41FA55 /* CallStarter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04C7F658F411CA89494B4204 /* CallStarter.swift */; };
 		1F26B618A56CEA57B8408E7B /* CallDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 658141E84AE3DB02533425BA /* CallDetailSheet.swift */; };
 		83BD51218A1F70484C0E2E41 /* CallsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778C4719074ED676630AE6B2 /* CallsTab.swift */; };
-		51B8DB24C49E4007DCE3460C /* ContactsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20FBA05C1AAA4EE765F12DA3 /* ContactsSection.swift */; };
+		51B8DB24C49E4007DCE3460C /* PeopleDiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20FBA05C1AAA4EE765F12DA3 /* PeopleDiscoveryView.swift */; };
 		154D81017A2D9E725E1BB2B0 /* KeypadTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */; };
 		2D3563D04A488B10C2B3D2CE /* KeypadViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB2A3B95A3287DB42D5FF468 /* KeypadViewModel.swift */; };
 		46B9CEA8F388C548AEED4A2E /* MockVoIPTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE78D3B42AA19F0490A676B0 /* MockVoIPTokenStore.swift */; };
@@ -354,6 +354,8 @@
 		E5F6A7B8C9D0E1F2A3B4C5D6 /* FeedViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A7B8C9D0E1F2A3B4C5D6E7 /* FeedViewModel.swift */; };
 		E73445377212602BE34F97F6 /* ConversationHelperViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B68A3F235224E0F01B3D8C1 /* ConversationHelperViews.swift */; };
 		E78951D32E58D4C0A1CF3A8F /* AffiliateCreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0239AD0031D90A2CF73F176E /* AffiliateCreateView.swift */; };
+		CL2L0001000100010001B001 /* ComposeLanguageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CL2L0001000100010001F001 /* ComposeLanguageTests.swift */; };
+		CLPR0001000100010001B001 /* ConversationLanguagePreferencesResolveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLPR0001000100010001F001 /* ConversationLanguagePreferencesResolveTests.swift */; };
 		E941B8BFDFFF2E342CA6DCCF /* ConversationViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12EC32EE90955ED041C92F06 /* ConversationViewModelTests.swift */; };
 		EA1633ABFFD1EF8C75888ADA /* ConversationCreator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDE7BECE4410F852255F0BFD /* ConversationCreator.swift */; };
 		EC1921BE268440D89FE21571 /* MessageRowEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BAF88A8D2D470CA7D1217A /* MessageRowEnvelope.swift */; };
@@ -639,6 +641,8 @@
 		0CA24A84F29125EC7C338F81 /* BubbleQuotedReplyAttachmentKindTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BubbleQuotedReplyAttachmentKindTests.swift; sourceTree = "<group>"; };
 		0DC6B1EFE559FE8634F4D330 /* ConversationOptionsViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationOptionsViewModel.swift; sourceTree = "<group>"; };
 		0F5FEBA083B51BF23F6F3C9E /* ConversationOptionsViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationOptionsViewModelTests.swift; sourceTree = "<group>"; };
+		CL2L0001000100010001F001 /* ComposeLanguageTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ComposeLanguageTests.swift; sourceTree = "<group>"; };
+		CLPR0001000100010001F001 /* ConversationLanguagePreferencesResolveTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationLanguagePreferencesResolveTests.swift; sourceTree = "<group>"; };
 		12EC32EE90955ED041C92F06 /* ConversationViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationViewModelTests.swift; sourceTree = "<group>"; };
 		13A020468B6C8367F8121928 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		13BCD5ADC318DEED40437A0F /* TaskTimeoutTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TaskTimeoutTests.swift; sourceTree = "<group>"; };
@@ -1002,7 +1006,7 @@
 		04C7F658F411CA89494B4204 /* CallStarter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallStarter.swift; sourceTree = "<group>"; };
 		658141E84AE3DB02533425BA /* CallDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDetailSheet.swift; sourceTree = "<group>"; };
 		778C4719074ED676630AE6B2 /* CallsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallsTab.swift; sourceTree = "<group>"; };
-		20FBA05C1AAA4EE765F12DA3 /* ContactsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsSection.swift; sourceTree = "<group>"; };
+		20FBA05C1AAA4EE765F12DA3 /* PeopleDiscoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeopleDiscoveryView.swift; sourceTree = "<group>"; };
 		B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeypadTab.swift; sourceTree = "<group>"; };
 		EB2A3B95A3287DB42D5FF468 /* KeypadViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeypadViewModel.swift; sourceTree = "<group>"; };
 		F7C8FDC10EBAC576B77E8347 /* MediaPostCell.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MediaPostCell.swift; sourceTree = "<group>"; };
@@ -1705,6 +1709,8 @@
 				B3E242276EB00910AF9B59F7 /* ConversationListViewModelTests.swift */,
 				4EBFCC5061B469FCAB2CE547 /* ConversationSocketHandlerTests.swift */,
 				12EC32EE90955ED041C92F06 /* ConversationViewModelTests.swift */,
+				CL2L0001000100010001F001 /* ComposeLanguageTests.swift */,
+				CLPR0001000100010001F001 /* ConversationLanguagePreferencesResolveTests.swift */,
 				D3AD91E4BFD44CDA82DEAD02 /* ConversationViewModelOtherUnreadTests.swift */,
 				CVAT0001000100010001F001 /* ConversationViewModelAudioTests.swift */,
 				CVOQ000F000F000F000F000 /* ConversationViewModelOfflineQueueTests.swift */,
@@ -1843,7 +1849,7 @@
 				04C7F658F411CA89494B4204 /* CallStarter.swift */,
 				658141E84AE3DB02533425BA /* CallDetailSheet.swift */,
 				778C4719074ED676630AE6B2 /* CallsTab.swift */,
-				20FBA05C1AAA4EE765F12DA3 /* ContactsSection.swift */,
+				20FBA05C1AAA4EE765F12DA3 /* PeopleDiscoveryView.swift */,
 				B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */,
 				EB2A3B95A3287DB42D5FF468 /* KeypadViewModel.swift */,
 				73E4ECF08EDFD91908B42081 /* ContactsListTab.swift */,
@@ -2769,7 +2775,7 @@
 				6354817D4751DBCD1D41FA55 /* CallStarter.swift in Sources */,
 				1F26B618A56CEA57B8408E7B /* CallDetailSheet.swift in Sources */,
 				83BD51218A1F70484C0E2E41 /* CallsTab.swift in Sources */,
-				51B8DB24C49E4007DCE3460C /* ContactsSection.swift in Sources */,
+				51B8DB24C49E4007DCE3460C /* PeopleDiscoveryView.swift in Sources */,
 				154D81017A2D9E725E1BB2B0 /* KeypadTab.swift in Sources */,
 				2D3563D04A488B10C2B3D2CE /* KeypadViewModel.swift in Sources */,
 				F7273BAD84FB8B7281518D59 /* ContactsListTab.swift in Sources */,
@@ -2886,6 +2892,8 @@
 				D14C3755B0EF1D3FCE57FF8B /* ConversationListViewModelTests.swift in Sources */,
 				ABEF9530C003C1159F8B9049 /* ConversationSocketHandlerTests.swift in Sources */,
 				E941B8BFDFFF2E342CA6DCCF /* ConversationViewModelTests.swift in Sources */,
+				CL2L0001000100010001B001 /* ComposeLanguageTests.swift in Sources */,
+				CLPR0001000100010001B001 /* ConversationLanguagePreferencesResolveTests.swift in Sources */,
 				FB41480E2ACB451CBEA4AE9B /* ConversationViewModelOtherUnreadTests.swift in Sources */,
 				031EA7F524ECB3B634B6CFAD /* FeedViewModelTests.swift in Sources */,
 				B1405EFA6179220F5EBF24B4 /* MeeshyTests/Unit/Views/PostDetailReachAndVisibilityTests.swift in Sources */,
@@ -3077,7 +3085,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1189;
+				CURRENT_PROJECT_VERSION = 1190;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -3185,7 +3193,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1189;
+				CURRENT_PROJECT_VERSION = 1190;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Dev";
@@ -3283,7 +3291,7 @@
 				CODE_SIGN_ENTITLEMENTS = Meeshy/Meeshy.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1189;
+				CURRENT_PROJECT_VERSION = 1190;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Meeshy;
@@ -3316,7 +3324,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1189;
+				CURRENT_PROJECT_VERSION = 1190;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -3354,7 +3362,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1189;
+				CURRENT_PROJECT_VERSION = 1190;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -3394,7 +3402,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1189;
+				CURRENT_PROJECT_VERSION = 1190;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
