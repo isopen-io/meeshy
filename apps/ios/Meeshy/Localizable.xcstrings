@@ -1,6 +1,41 @@
 {
   "sourceLanguage": "fr",
   "strings": {
+    "contacts.requests.received.intent": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Möchte sich mit dir verbinden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wants to connect with you"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quiere conectar contigo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Souhaite entrer en contact avec vous"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quer se conectar com você"
+          }
+        }
+      }
+    },
     "comment.action.copy": {
       "extractionState": "manual",
       "localizations": {
