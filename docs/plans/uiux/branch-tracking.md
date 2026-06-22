@@ -272,3 +272,5 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 63w | claude/practical-fermat-ep7mkb (cohérence tokens empty states dark/light) | #856 | ✅ |
 | 64w | claude/practical-fermat-ypjp47 (i18n + tokens tooltip profil vocal TranscriptionViewer) | — | ⏳ |
 | 64wb | claude/practical-fermat-y6vyvh (anti-pattern t()||fallback en-têtes catégories liste conv — CommunityCarousel + ConversationGroup) | #863 | ⏳ |
+| 63w | claude/practical-fermat-yly7ym (anti-pattern t()||fallback sidebar détails conv) | #849 | ⏳ |
+| 65w | claude/practical-fermat-s5hyhl (anti-pattern t()||fallback ConversationSettingsModal + 6 clés fr-only en/es/pt) | — | ⏳ |
