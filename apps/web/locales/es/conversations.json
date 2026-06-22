@@ -699,5 +699,22 @@
       "file": "Archivo",
       "document": "Documento"
     }
+  },
+  "bubbleStream": {
+    "messageSentSuccessfully": "Mensaje enviado correctamente",
+    "retryFailed": "Error al reenviar. Haz clic para restaurar el mensaje.",
+    "retryError": "Error al reenviar",
+    "messageRestored": "Mensaje restaurado en el redactor",
+    "messageDismissed": "Mensaje descartado",
+    "allMessagesDismissed": "Se descartaron todos los mensajes fallidos",
+    "messageSendFailed": "Error al enviar el mensaje",
+    "retries": "intento(s)",
+    "attachments": "archivo(s) adjunto(s)",
+    "emptyMessage": "Mensaje vacío",
+    "restoreMessage": "Restaurar",
+    "retrying": "Reenviando...",
+    "retryNow": "Reenviar",
+    "dismiss": "Descartar",
+    "dismissAll": "Descartar todo"
   }
 }
