@@ -44,20 +44,20 @@ export function EmailRecoveryStep({
         >
           <Sparkles className="w-8 h-8 text-white" />
         </motion.div>
-        <h3 className="text-xl font-bold">{t('magicLink.title') || 'Connexion par Magic Link'}</h3>
+        <h3 className="text-xl font-bold">{t('magicLink.title', 'Magic Link Login')}</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          {t('magicLink.description') || 'Recevez un lien de connexion instantané par email'}
+          {t('magicLink.description', "Enter your email address and we'll send you a secure login link")}
         </p>
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="recovery-email" className="text-sm font-medium">{t('magicLink.emailLabel') || 'Adresse email'}</label>
+        <label htmlFor="recovery-email" className="text-sm font-medium">{t('magicLink.emailLabel', 'Email Address')}</label>
         <Input
           id="recovery-email"
           type="email"
           value={email}
           onChange={(e) => onEmailChange(e.target.value)}
-          placeholder={t('magicLink.emailPlaceholder') || 'votre@email.com'}
+          placeholder={t('magicLink.emailPlaceholder', 'your.email@example.com')}
           disabled={isLoading}
           className="h-12 border-2 border-violet-200 dark:border-violet-800 focus:border-violet-500"
           autoComplete="email"
@@ -96,7 +96,7 @@ export function EmailRecoveryStep({
           ) : (
             <Sparkles className="w-4 h-4 mr-2" />
           )}
-          {t('magicLink.sendButton') || 'Envoyer le Magic Link'}
+          {t('magicLink.sendButton', 'Send Magic Link')}
         </Button>
       </div>
     </motion.div>
