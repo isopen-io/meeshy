@@ -354,7 +354,7 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
             currentVideoLoadTask?.cancel()
             videoLoadGeneration &+= 1
             // Pas de placeholder — le bitmap réel est instantané.
-            attachPlayer(url: immediateLocalURL, mode: mode, loop: media.loop)
+            attachPlayer(url: immediateLocalURL, mode: mode, loop: true)
             return
         }
 
@@ -374,7 +374,7 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         // arrière-plan et swap vers un fichier local s'il devient
         // disponible — c'est une optimisation, pas une condition
         // préalable à l'existence du player.
-        attachPlayer(url: remoteURL, mode: mode, loop: media.loop)
+        attachPlayer(url: remoteURL, mode: mode, loop: true)
 
         currentVideoLoadTask = Task { @MainActor [weak self] in
             // Garantit une URL file:// avant de toucher AVURLAsset — sinon
@@ -391,7 +391,7 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
             // différente — sinon le player déjà attaché continue de jouer
             // l'URL distante sans re-trigger un cold start.
             if localURL != remoteURL {
-                self.attachPlayer(url: localURL, mode: mode, loop: media.loop)
+                self.attachPlayer(url: localURL, mode: mode, loop: true)
             }
         }
     }

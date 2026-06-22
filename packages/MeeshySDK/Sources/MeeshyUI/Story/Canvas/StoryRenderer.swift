@@ -388,8 +388,14 @@ extension StoryRenderer {
             // dynamique reste géré in place sans recréer le layer. Avant cette
             // correction `mute: true` était hardcodé ici, ce qui silenciait
             // toutes les vidéos de fond quels que soient les réglages user.
+            // Story background videos ALWAYS loop for the slide's duration —
+            // a clip shorter than the slide must repeat, not freeze on its last
+            // frame while the progress ring keeps advancing (bug #2 / #6). The
+            // former `bgVideo.loop ?? true` was a dead no-op: `loop` became a
+            // non-optional `Bool` (default `false`), so `?? true` never applied
+            // and the background played exactly once then stopped (~1-2 s).
             return .video(postMediaId: routingKey,
-                          looping: bgVideo.loop ?? true,
+                          looping: true,
                           mute: false,
                           thumbHash: bgVideo.thumbHash)
         }
