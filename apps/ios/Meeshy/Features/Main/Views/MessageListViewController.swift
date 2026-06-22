@@ -604,7 +604,9 @@ final class MessageListViewController: UIViewController {
                         secondaryLangCode: languageSelection?.secondaryLangCode,
                         onSetActiveDisplayLanguage: setActiveDisplayLanguage,
                         onSetSecondaryLanguage: setSecondaryLanguage,
-                        onOpenProfile: openProfileHandler
+                        onOpenProfile: openProfileHandler,
+                        voiceConsentMissing: vm?.voiceConsentMissing ?? false,
+                        onTapConsentNotice: { [weak self] in self?.router.push(.settings) }
                     ))
                     .equatable()
                 }

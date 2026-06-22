@@ -127,6 +127,8 @@ struct ThemedMessageBubble: View {
     /// former `@EnvironmentObject Router` dependency, which made EVERY visible
     /// bubble re-render on EVERY Router publish (navigation, deep links).
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
+    var voiceConsentMissing: Bool = false
+    var onTapConsentNotice: (() -> Void)? = nil
 
     @State private var localActiveDisplayLangCode: String? = nil
     @State private var localSecondaryLangCode: String? = nil
@@ -291,7 +293,9 @@ struct ThemedMessageBubble: View {
             carouselIndex: $carouselIndex,
             revealedAttachmentIds: $revealedAttachmentIds,
             blurController: blurController,
-            ephemeralController: ephemeralController
+            ephemeralController: ephemeralController,
+            voiceConsentMissing: voiceConsentMissing,
+            onTapConsentNotice: onTapConsentNotice
         )
         .messageEffects(message.effects, hasPlayedAppearance: hasPlayedAppearance)
         .onAppear { hasPlayedAppearance = true }
@@ -393,7 +397,8 @@ extension ThemedMessageBubble: @MainActor Equatable {
         // Flag-strip selection — VM-owned inputs (lifted out of @State so the
         // Equatable gate SEES them: a flag tap changes these and must re-render)
         lhs.activeDisplayLangCode == rhs.activeDisplayLangCode &&
-        lhs.secondaryLangCode == rhs.secondaryLangCode
+        lhs.secondaryLangCode == rhs.secondaryLangCode &&
+        lhs.voiceConsentMissing == rhs.voiceConsentMissing
     }
 }
 

@@ -112,6 +112,8 @@ struct BubbleStandardLayout: View {
 
     @ObservedObject var blurController: BubbleBlurRevealController
     @ObservedObject var ephemeralController: BubbleEphemeralController
+    var voiceConsentMissing: Bool = false
+    var onTapConsentNotice: (() -> Void)? = nil
 
     // MARK: - Playback tracking
     //
@@ -1233,7 +1235,9 @@ struct BubbleStandardLayout: View {
                 onReplyTap: onReplyTap,
                 onStoryReplyTap: onStoryReplyTap,
                 onPlayAudio: onPlayAudio,
-                embedsCaptionInWidget: embedsCaption
+                embedsCaptionInWidget: embedsCaption,
+                voiceConsentMissing: voiceConsentMissing,
+                onTapConsentNotice: onTapConsentNotice
             )
             .equatable()
 
