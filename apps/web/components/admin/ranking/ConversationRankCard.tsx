@@ -61,7 +61,7 @@ export const ConversationRankCard = React.memo(({ item, criterion }: Conversatio
           </p>
           <div className="flex items-center space-x-2">
             <Badge variant="outline" className="text-xs border-yellow-400 text-yellow-700">
-              {getTypeLabel(item.metadata?.type)}
+              {getTypeLabel(item.metadata?.type, t)}
             </Badge>
             {item.metadata?.identifier && (
               <span className="text-sm text-gray-500 dark:text-gray-400">

@@ -77,6 +77,13 @@
       "position": "Posição {label}",
       "distributionNote": "Este gráfico mostra a distribuição de desempenho do top {count} classificado por posição.",
       "curveNote": "A curva descendente indica como os valores diminuem ao longo das posições."
+    },
+    "conversationType": {
+      "direct": "Direta",
+      "group": "Grupo",
+      "public": "Pública",
+      "broadcast": "Transmissão",
+      "unknown": "Desconhecido"
     }
   },
   "scanLog": {
