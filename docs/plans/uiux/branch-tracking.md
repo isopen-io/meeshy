@@ -185,3 +185,5 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 60wb | claude/practical-fermat-o2g4dt (anti-pattern `t()||fallback` auth) | #808 | ✅ |
 | 60wc | claude/practical-fermat-8e8nhk (fix crash `setTheme` non défini AdminLayout) | #805 | ⏳ |
 | 60wb | claude/practical-fermat-g86cy0 (anti-pattern `t() \|\| 'fb'` → `t(k,'En')` dialogues image) | — | ⏳ |
+| 60w (doublon) | claude/practical-fermat-x2ian5 (i18n config-modal — superseded by #806) | #813 | ❌ fermée |
+| 61w | claude/practical-fermat-x2ian5 (i18n hint dismiss lightbox texte+pptx escToClose) | — | ⏳ |
