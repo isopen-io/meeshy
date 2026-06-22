@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { Attachment } from '@meeshy/shared/types/attachment';
+import { useI18n } from '@/hooks/useI18n';
 import { Button } from '../ui/button';
 import {
   Dialog,
@@ -29,13 +30,14 @@ export const AttachmentDeleteDialog = React.memo(function AttachmentDeleteDialog
   onConfirm,
   onCancel,
 }: AttachmentDeleteDialogProps) {
+  const { t } = useI18n('attachments');
   return (
     <Dialog open={!!attachment} onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Confirmer la suppression</DialogTitle>
+          <DialogTitle>{t('contextMenu.confirmDeleteTitle', 'Confirm deletion')}</DialogTitle>
           <DialogDescription>
-            Êtes-vous sûr de vouloir supprimer ce fichier ? Cette action est irréversible.
+            {t('contextMenu.confirmDeleteDescription', 'Are you sure you want to delete this file?')}
           </DialogDescription>
         </DialogHeader>
         {attachment && (
@@ -44,7 +46,7 @@ export const AttachmentDeleteDialog = React.memo(function AttachmentDeleteDialog
               {attachment.originalName}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              Le fichier sera définitivement supprimé du serveur.
+              {t('contextMenu.confirmDeleteIrreversible', 'This action is irreversible. The file will be permanently deleted.')}
             </div>
           </div>
         )}
@@ -54,14 +56,14 @@ export const AttachmentDeleteDialog = React.memo(function AttachmentDeleteDialog
             onClick={onCancel}
             disabled={isDeleting}
           >
-            Annuler
+            {t('contextMenu.cancel', 'Cancel')}
           </Button>
           <Button
             variant="destructive"
             onClick={onConfirm}
             disabled={isDeleting}
           >
-            {isDeleting ? 'Suppression...' : 'Supprimer'}
+            {isDeleting ? t('contextMenu.deleting', 'Deleting...') : t('contextMenu.delete', 'Delete')}
           </Button>
         </DialogFooter>
       </DialogContent>
