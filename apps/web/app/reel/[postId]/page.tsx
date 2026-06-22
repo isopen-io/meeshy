@@ -15,6 +15,7 @@ import {
 } from '@/hooks/queries/use-post-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { useI18n } from '@/hooks/useI18n';
 import type { Post } from '@meeshy/shared/types/post';
 
 const LIKE_EMOJI = '❤️';
@@ -38,6 +39,7 @@ export default function ReelPage() {
   const postId = params?.postId;
   const userLanguage = usePreferredLanguage();
   const toastCtx = useToast();
+  const { t } = useI18n('reel');
 
   usePostSocketCacheSync();
 
@@ -107,11 +109,11 @@ export default function ReelPage() {
     try {
       await navigator.clipboard.writeText(`${window.location.origin}/reel/${current.id}`);
       shareMutation.mutate({ postId: current.id });
-      toastCtx.addToast('Lien copié !', 'success');
+      toastCtx.addToast(t('linkCopied', 'Link copied!'), 'success');
     } catch {
-      toastCtx.addToast('Impossible de copier le lien', 'error');
+      toastCtx.addToast(t('linkCopyError', "Couldn't copy the link"), 'error');
     }
-  }, [current, shareMutation, toastCtx]);
+  }, [current, shareMutation, toastCtx, t]);
 
   const onComment = useCallback(() => {
     if (current) router.push(`/feeds/post/${current.id}`);
@@ -145,25 +147,29 @@ export default function ReelPage() {
       {isLoading ? (
         <>
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/20 border-t-white" aria-hidden="true" />
-          <p className="sr-only">Chargement du reel…</p>
+          <p className="sr-only">{t('loading', 'Loading reel…')}</p>
         </>
       ) : (
         <>
           <h1 className="text-lg font-semibold">
-            {isError ? 'Reel indisponible' : seed && !seedIsReel ? 'Ce contenu n’est pas un reel' : 'Ce reel n’existe plus'}
+            {isError
+              ? t('unavailableTitle', 'Reel unavailable')
+              : seed && !seedIsReel
+                ? t('notAReelTitle', "This content isn't a reel")
+                : t('goneTitle', 'This reel no longer exists')}
           </h1>
           <p className="max-w-sm text-center text-sm text-white/70">
             {isError
-              ? 'Ce reel est privé ou a été supprimé.'
+              ? t('unavailableBody', 'This reel is private or has been deleted.')
               : seed && !seedIsReel
-                ? 'Le lien pointe vers une publication, pas vers un reel.'
-                : 'Le reel que vous cherchez est introuvable.'}
+                ? t('notAReelBody', 'The link points to a post, not a reel.')
+                : t('goneBody', "The reel you're looking for can't be found.")}
           </p>
           <button
             onClick={close}
             className="mt-2 rounded-full bg-white/15 px-6 py-2 text-sm font-medium hover:bg-white/25 transition-colors"
           >
-            Retour au fil
+            {t('backToFeed', 'Back to feed')}
           </button>
         </>
       )}

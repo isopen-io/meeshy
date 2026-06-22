@@ -1,0 +1,12 @@
+{
+  "linkCopied": "¡Enlace copiado!",
+  "linkCopyError": "No se pudo copiar el enlace",
+  "loading": "Cargando reel…",
+  "unavailableTitle": "Reel no disponible",
+  "notAReelTitle": "Este contenido no es un reel",
+  "goneTitle": "Este reel ya no existe",
+  "unavailableBody": "Este reel es privado o ha sido eliminado.",
+  "notAReelBody": "El enlace apunta a una publicación, no a un reel.",
+  "goneBody": "No se encuentra el reel que buscas.",
+  "backToFeed": "Volver al feed"
+}
