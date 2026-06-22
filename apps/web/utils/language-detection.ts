@@ -2,7 +2,7 @@
  * Utilitaires pour la détection et gestion des langues
  */
 
-import { detectAll } from 'tinyld';
+import { detectAll } from 'tinyld/light';
 import { SUPPORTED_LANGUAGES as SHARED_LANGUAGES } from '@meeshy/shared/utils/languages';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
@@ -219,12 +219,16 @@ const COMPOSE_MIN_ACCURACY = 0.5;
  * tinyld renvoie déjà de l'ISO 639-1 ; on normalise par sûreté.
  */
 export function detectComposeLanguage(text: string, fallback: string): string {
-  const safeFallback = normalizeLanguageCode(fallback) ?? fallback;
-  const cleaned = (text || '').replace(/https?:\/\/\S+/g, ' ');
-  const alpha = (cleaned.match(/\p{L}/gu) || []).length;
-  if (alpha < COMPOSE_MIN_ALPHA) return safeFallback;
-  const ranked = detectAll(cleaned);
-  const top = ranked && ranked[0];
-  if (!top || top.accuracy < COMPOSE_MIN_ACCURACY) return safeFallback;
-  return normalizeLanguageCode(top.lang) ?? safeFallback;
+  try {
+    const safeFallback = normalizeLanguageCode(fallback) ?? fallback;
+    const cleaned = (text || '').replace(/https?:\/\/\S+/g, ' ');
+    const alpha = (cleaned.match(/\p{L}/gu) || []).length;
+    if (alpha < COMPOSE_MIN_ALPHA) return safeFallback;
+    const ranked = detectAll(cleaned);
+    const top = ranked && ranked[0];
+    if (!top || top.accuracy < COMPOSE_MIN_ACCURACY) return safeFallback;
+    return normalizeLanguageCode(top.lang) ?? safeFallback;
+  } catch {
+    return normalizeLanguageCode(fallback) ?? fallback;
+  }
 }
