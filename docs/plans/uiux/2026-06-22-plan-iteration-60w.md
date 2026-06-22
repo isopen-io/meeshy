@@ -1,29 +1,37 @@
-# Plan — Itération 60w (web only)
+# Plan — Itération 60w (web)
 
-**Objectif** : i18n des 7 libellés d'accessibilité FR figés de
-`components/attachments/AttachmentPreviewReply.tsx` (surface chat live).
+## Base
+- `main` HEAD `684d33f` (post-merge #774→#794, iter-57w→59w).
+- Branche de travail : `claude/practical-fermat-r4vwgd` (repivotée après #775 fermée
+  — collision ReelPlayer absorbée par #774).
+
+## Objectif
+i18n + a11y de la **modale de configuration globale**
+`components/settings/config-modal.tsx` (lazy-loadée, live) — 9 chaînes FR figées
+(6 onglets visibles + titre + 2 surfaces a11y) en TOUTES langues. Surface
+**orthogonale** au cluster feed/reels/modales fortement contesté (recommandation
+explicite `branch-tracking.md` « Next iteration 60 »).
 
 ## Étapes
-1. ✅ Sync branche sur `main` HEAD (post-merge iter-59w #796).
-2. ✅ Revue anti-doublon : config-modal = code mort (faux positif) ; #802/#803 =
-   doublons focus-trap 59w → à fermer.
-3. ✅ `useI18n('attachments')` ajouté au composant.
-4. ✅ 7 substitutions `t()` (3 clés réutilisées, 4 neuves).
-5. ✅ 4 clés neuves `attachments.actions.{imagePreviewNamed,
-   openVideoFullscreenNamed,openPdfNamed,openTextFileNamed}` ×4 locales.
-6. ✅ Vérif grep FR = 0 + JSON valide ×4 + diff additif.
-7. ⏳ Commit + push branche `claude/practical-fermat-afplne`.
-8. ⏳ PR → CI vert → merge dans `main`.
-9. ⏳ Mettre à jour `branch-tracking.md` + supprimer la branche après merge.
+1. [x] Resync branche sur `main` HEAD ; retirer les artefacts 57w superseded.
+2. [x] Bloc additif `settings.configModal` (9 clés, dont `tabs.*` ×6) ×4 locales.
+3. [x] `config-modal.tsx` → `useI18n('settings')` + 9 `t()` (fallbacks EN 2e arg).
+4. [x] Mettre à jour `__tests__/.../config-modal.test.tsx` (mock i18n + assertions EN).
+5. [x] Vérif : grep FR vide, parité 9 clés ×4, JSON valide ×4.
+6. [x] Analyse 60w + `branch-tracking.md`.
+7. [ ] Commit + push + PR ; merge dans `main` après CI vert ; supprimer la branche.
 
-## Fichiers touchés
-- `apps/web/components/attachments/AttachmentPreviewReply.tsx`
-- `apps/web/locales/{en,fr,es,pt}/attachments.json`
-- `docs/analyses/uiux/2026-06-22-iteration-60w.md`
-- `docs/plans/uiux/2026-06-22-plan-iteration-60w.md`
-- `docs/plans/uiux/branch-tracking.md`
+## Contraintes
+- Bloc dédié `configModal` (PAS réutiliser `settings.tabs.*` — libellés + ensemble
+  distincts). Diffs locale strictement additifs (round-trip JSON).
+- Fallbacks EN 2e arg sur les 9 `t()` (anti-flash, leçon 50w).
+- Aucune autre frontend (iOS/Android hors périmètre).
 
-## Orthogonalité (anti-collision agents parallèles)
-Surface `attachments` non touchée par les PR ouvertes (#802/#803 = a11y modales ;
-dependabot = deps). Risque de conflit nul.
-</content>
+## Leçon collision (à appliquer chaque run)
+`git fetch origin main` + `list_pull_requests` AVANT de coder ; surface
+orthogonale ; en cas de PR jumelle déjà mergée → fermer la sienne, repivoter.
+
+## Suite (61w+)
+`PhoneResetFlow.tsx:490` (sr-only indicatif), `AttachmentPreviewReply.tsx:205-206`
+(title/aria FR), `app/settings/loading.tsx` (server-side i18n), console.error FR,
+`next-themes` orphelin, épuration `settings/_archived/`.
