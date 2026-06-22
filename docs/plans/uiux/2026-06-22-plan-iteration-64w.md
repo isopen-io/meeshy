@@ -1,37 +1,28 @@
-# Plan — Itération 64w (web only)
+# Plan d'itération 64w (web only)
 
-**Surface** : i18n + tokens de thème sur le tooltip de profil vocal (`TranscriptionViewer`).
-**Base** : `main` HEAD `a08fed7` (post iter-63w #856). Branche `claude/practical-fermat-ypjp47`.
-
-## Objectif
-Solder l'unique bloc hors charte de `components/audio/TranscriptionViewer.tsx` (déjà
-i18n partout ailleurs) : le `TooltipContent` de profil vocal par locuteur, qui
-contenait ~12 chaînes **FR figées** et 10 `text-gray-{400,500}` **non theme-aware**.
-Surface **orthogonale** aux clusters i18n/Badge/empty-state/feed/reels en vol.
+**Objectif** : éliminer l'anti-pattern `t('key') || 'fallback FR'` sur la page de
+connexion par lien magique (`app/auth/magic-link/page.tsx`) — surface d'entrée non
+authentifiée (deep-link email). Continuité du travail auth de 63w (forgot/reset).
 
 ## Étapes
-1. [x] Revue analyses/plans + sync `main` (iter-63w #856 mergé, base `a08fed7`).
-2. [x] Identifier la surface orthogonale (audit `gray-*`/FR hors empty-states ;
-   éviter audio « studio » dark-glass intentionnel).
-3. [x] `locales/{fr,en,es,pt}/audioEffects.json` : ajouter `transcription.voiceProfile.*`
-   (12 clés ×4 locales, parité stricte).
-4. [x] `TranscriptionViewer.tsx` : littéraux FR → `t('transcription.voiceProfile.*')`.
-5. [x] `TranscriptionViewer.tsx` : `text-gray-{400,500}` ×10 → `text-muted-foreground`.
-6. [x] Valider JSON (4× `JSON.parse`), parité clés (12/12/12/12), grep résiduel = 0.
-7. [x] `validate-i18n-structure.sh` : confirmer 0 régression (erreurs zh/conversations
-   pré-existantes, identiques avant/après).
-8. [x] Docs analyse + plan + `branch-tracking.md`.
-9. [ ] Commit, push, PR ; CI verte ; merge `main` ; supprimer la branche.
+1. ✅ Revue cohérence : confirmer aucun doublon d'analyse ; choisir une surface
+   **orthogonale** aux PR en vol (#849/#852/#853/#854/#855).
+2. ✅ Vérifier l'existence des 43 clés ×4 locales (script) → toutes présentes sauf
+   `featureGate.backToHome`.
+3. ✅ Ajouter `auth.featureGate.backToHome` aux 4 locales (en/fr/es/pt), insert ciblé
+   (pas de reformat JSON).
+4. ✅ Convertir `t('key') || 'FR'` → `t('key', 'English')` (44 occ.) ; supprimer le
+   `|| fb` mort des 2 cas paramétrés (`expiresIn`, `retriesRemaining`).
+5. ✅ Grep résiduel = 0 ; JSON valides.
+6. ⏳ Commit + push branche `claude/practical-fermat-w6ianf` ; PR ; CI ; merge `main`.
+7. ⏳ Mettre à jour `branch-tracking.md` (base + History + Next iteration = 65).
 
-## Non-objectifs (hors scope, documentés)
-- Panneaux d'effets audio sur **dark-glass fixe** (`AudioEffectTile`,
-  `AudioEffectsBadge`, `AudioEffectsTimelineView`, `AudioEffectsGraph`,
-  `AudioEffectsOverview`) — `gray-900`/`white`/`gray-400` = UI sombre **intentionnelle**
-  (décision design), NE PAS migrer.
-- Aucun changement de comportement, de dépendance, ni de logique d'analyse vocale.
-- Cluster `t()||fallback` (31 fichiers) — pris par agents parallèles.
+## Critères d'acceptation
+- 0 occurrence `t()||fallback` dans `app/auth/magic-link/page.tsx`.
+- Aucune clé brute ni secours FR affichable en toutes langues sur cette page.
+- 4 locales auth.json valides, parité stricte, `featureGate.backToHome` présente ×4.
+- CI vert (typecheck/build/tests).
 
-## Critères de succès
-- 0 chaîne FR figée et 0 `text-gray-*` dans `TranscriptionViewer.tsx`.
-- Parité stricte des 12 clés `voiceProfile` sur les 4 locales.
-- `validate-i18n-structure.sh` sans erreur **nouvelle** (audioEffects intact).
+## Risques
+- **Faible** : changement mécanique. Seul ajout de contenu = 1 clé ×4 (déjà vérifiée
+  absente). Signature `t()` exclusive params/fallback respectée (cas paramétrés gérés).
