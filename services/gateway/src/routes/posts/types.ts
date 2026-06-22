@@ -120,7 +120,7 @@ const StoryTextObjectSchema = z.object({
   startTime: z.number().min(0).max(86400).optional(),
   duration: z.number().min(0).max(86400).optional(),
   sourceLanguage: z.string().max(STORY_LANG_MAX).optional(),
-  translations: z.record(z.string().max(STORY_TEXT_MAX)).optional(),
+  translations: z.record(z.string(), z.string().max(STORY_TEXT_MAX)).optional(),
 }).passthrough();
 
 const StoryStickerObjectSchema = z.object({
@@ -266,7 +266,7 @@ export const WatchSampleSchema = z.object({
 });
 
 export const EngagementSessionSchema = z.object({
-  sessionId: z.string().uuid(),
+  sessionId: z.guid(),
   // Champ informatif côté client uniquement : la route IGNORE ce userId et
   // prend l'identité du token auth (anti-spoof). Optionnel pour refléter
   // qu'il n'est pas fiable côté serveur.

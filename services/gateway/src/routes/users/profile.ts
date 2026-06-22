@@ -245,11 +245,11 @@ export async function updateUserProfile(fastify: FastifyInstance) {
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
         const userId = authContext?.userId || 'unknown';
-        fastify.log.error(`[PROFILE_UPDATE] Validation error for user ${userId}: ${JSON.stringify(error.errors)}`);
+        fastify.log.error(`[PROFILE_UPDATE] Validation error for user ${userId}: ${JSON.stringify(error.issues)}`);
         return reply.status(400).send({
           success: false,
           error: 'Invalid data',
-          details: error.errors
+          details: error.issues
         });
       }
 
@@ -359,11 +359,11 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
 
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
-        fastify.log.error(`[AVATAR_UPDATE] Validation error: ${JSON.stringify(error.errors)}`);
+        fastify.log.error(`[AVATAR_UPDATE] Validation error: ${JSON.stringify(error.issues)}`);
         return reply.status(400).send({
           success: false,
           error: 'Invalid image format',
-          details: error.errors
+          details: error.issues
         });
       }
 
@@ -466,11 +466,11 @@ export async function updateUserBanner(fastify: FastifyInstance) {
 
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
-        fastify.log.error(`[BANNER_UPDATE] Validation error: ${JSON.stringify(error.errors)}`);
+        fastify.log.error(`[BANNER_UPDATE] Validation error: ${JSON.stringify(error.issues)}`);
         return reply.status(400).send({
           success: false,
           error: 'Invalid image format',
-          details: error.errors
+          details: error.issues
         });
       }
 
@@ -572,8 +572,8 @@ export async function updateUserPassword(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
-          error: error.errors[0]?.message || 'Invalid data',
-          details: error.errors
+          error: error.issues[0]?.message || 'Invalid data',
+          details: error.issues
         });
       }
 
@@ -744,8 +744,8 @@ export async function updateUsername(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           success: false,
-          error: error.errors[0]?.message || 'Invalid data',
-          details: error.errors
+          error: error.issues[0]?.message || 'Invalid data',
+          details: error.issues
         });
       }
 

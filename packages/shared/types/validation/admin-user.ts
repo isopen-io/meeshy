@@ -54,7 +54,7 @@ export const resetPasswordValidationSchema = z.object({
  * Fonction utilitaire pour formater les erreurs Zod
  */
 export function formatZodErrors(errors: z.ZodError) {
-  return errors.errors.map((err) => ({
+  return errors.issues.map((err) => ({
     path: err.path.join('.'),
     message: err.message
   }));

@@ -387,7 +387,7 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
           success: false,
           error: 'Invalid request data',
           errorCode: 'VALIDATION_ERROR',
-          details: error.errors
+          details: error.issues
         });
       }
 

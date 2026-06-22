@@ -122,19 +122,19 @@ export const attachmentTranscriptionSchema = z.object({
   // Audio-specific voice analysis (loose Record — the inner shape varies
   // with the diarisation backend; tightened in attachment-audio.ts when the
   // contract stabilises).
-  speakerAnalysis: z.record(z.unknown()).optional(),
+  speakerAnalysis: z.record(z.string(), z.unknown()).optional(),
   senderVoiceIdentified: z.boolean().optional(),
   senderSpeakerId: z.string().optional(),
-  voiceQualityAnalysis: z.record(z.unknown()).optional(),
+  voiceQualityAnalysis: z.record(z.string(), z.unknown()).optional(),
 
   // Document-specific
   pageCount: z.number().int().nonnegative().optional(),
-  documentLayout: z.record(z.unknown()).optional(),
+  documentLayout: z.record(z.string(), z.unknown()).optional(),
 
   // Image-specific
   imageDescription: z.string().optional(),
-  detectedObjects: z.array(z.record(z.unknown())).optional(),
-  ocrRegions: z.array(z.record(z.unknown())).optional(),
+  detectedObjects: z.array(z.record(z.string(), z.unknown())).optional(),
+  ocrRegions: z.array(z.record(z.string(), z.unknown())).optional(),
 });
 
 // ============================================================================
