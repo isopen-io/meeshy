@@ -201,7 +201,10 @@
       "title": "Ops! Algo deu errado",
       "description": "Ocorreu um erro inesperado. Por favor, tente novamente.",
       "details": "Detalhes do erro",
-      "reload": "Recarregar página"
+      "reload": "Recarregar página",
+      "featureError": "Algo deu errado em {feature}",
+      "featureUnavailable": "Esta seção não está disponível no momento.",
+      "retry": "Tentar novamente"
     },
     "download": "Baixar",
     "play": "Reproduzir",
