@@ -57,7 +57,10 @@ struct BubbleExpandableText: View, Equatable {
                 MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
                     .fixedSize(horizontal: false, vertical: true)
                     .tint(linkTint)
-                    .textSelection(.enabled)
+                    // Pas de `.textSelection(.enabled)` : le long-press doit ouvrir
+                    // le menu contextuel custom Meeshy (`ContextActionMenu`, qui
+                    // porte « Copier »), jamais le menu d'édition natif iOS
+                    // (liquid glass « Copier / Rechercher / Traduire »).
 
                 // Bouton texte « Voir plus » aligné en bas à droite (spec produit).
                 //
@@ -103,7 +106,9 @@ struct BubbleExpandableText: View, Equatable {
             MessageTextRenderer.render(content, fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
                 .fixedSize(horizontal: false, vertical: true)
                 .tint(linkTint)
-                .textSelection(.enabled)
+                // Pas de `.textSelection(.enabled)` : voir note ci-dessus — le
+                // long-press passe par le menu contextuel custom Meeshy, pas par
+                // le menu d'édition natif iOS.
         }
     }
 

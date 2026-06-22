@@ -122,8 +122,10 @@ extension ConversationView {
     /// Filter the master action list by message state. `Delete` only shown
     /// for own messages or admins; `Translate` only when the resolved
     /// translation differs from the user's preferred language.
-    /// Note: Copy is handled natively via `.textSelection(.enabled)` on the
-    /// message text — no duplicate action needed here.
+    /// `Copy` is offered here (not via the native iOS edit menu) so the
+    /// long-press surfaces ONLY Meeshy's custom context menu — text bubbles no
+    /// longer enable `.textSelection`, which suppressed the native liquid-glass
+    /// "Copy / Look Up / Translate" menu.
     func actionsForOverlay(message: Message) -> [ContextAction] {
         var actions: [ContextAction] = []
         actions.append(.reply())
@@ -132,6 +134,9 @@ extension ConversationView {
         if !(viewModel.messageTranslations[message.id]?.isEmpty ?? true)
             || !message.content.isEmpty {
             actions.append(.translate())
+        }
+        if !message.content.isEmpty {
+            actions.append(.copy())
         }
         if message.isMe || isCurrentUserAdminOrMod {
             actions.append(.delete())
