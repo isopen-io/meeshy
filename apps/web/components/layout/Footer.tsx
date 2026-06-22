@@ -13,7 +13,7 @@ import { useI18n } from '@/hooks/useI18n';
 export function Footer() {
   const { t } = useI18n('landing');
 
-  // English fallback (anti-flash) — native t(key, fallback) signature, not `|| 'fb'`
+  // Anti-flash fallbacks mirror the EN locale (use-i18n native t(key, fallback) signature)
   const tagline = t('footer.tagline', 'Meet without shyness');
   const copyright = t('footer.copyright', '© 2026 Meeshy');
   const aboutText = t('footer.links.about', 'About');
