@@ -233,7 +233,7 @@ class TestLanguageDetection:
                         TranslationMLService._instance = None
                         service = TranslationMLService(mock_settings)
 
-                        assert service._detect_language("Hello, how are you?") == 'en'
+                        assert service._detect_language("The weather is nice today") == 'en'
                         assert service._detect_language("Thank you very much") == 'en'
                         assert service._detect_language("Hi there") == 'en'
                         logger.info("Detection anglais OK")
@@ -282,8 +282,8 @@ class TestLanguageDetection:
                         logger.info("Detection allemand OK")
 
     @pytest.mark.asyncio
-    async def test_detect_default_english(self, mock_settings, reset_singleton):
-        """Test detection par defaut (anglais)"""
+    async def test_detect_default_language(self, mock_settings, reset_singleton):
+        """Test detection par defaut (DEFAULT_DETECT_LANGUAGE, jamais 'en' arbitraire)"""
         logger.info("Test 21.8: Detection par defaut")
 
         with patch.dict('sys.modules', {
@@ -294,13 +294,14 @@ class TestLanguageDetection:
                 with patch('services.translation_ml_service.get_settings', return_value=mock_settings):
                     with patch('services.translation_ml_service.TextSegmenter'):
                         from services.translation_ml_service import TranslationMLService
+                        from services.translation_ml.translator_engine import DEFAULT_DETECT_LANGUAGE
 
                         TranslationMLService._instance = None
                         service = TranslationMLService(mock_settings)
 
-                        # Unknown text should default to English
-                        assert service._detect_language("xyz abc 123") == 'en'
-                        assert service._detect_language("") == 'en'
+                        # Empty/no-feature text should return DEFAULT_DETECT_LANGUAGE, never hardcoded 'en'
+                        assert service._detect_language("123 456 789") == DEFAULT_DETECT_LANGUAGE
+                        assert service._detect_language("") == DEFAULT_DETECT_LANGUAGE
                         logger.info("Detection par defaut OK")
 
 

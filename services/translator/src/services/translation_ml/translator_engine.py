@@ -10,12 +10,23 @@ Responsabilités:
 
 import logging
 import asyncio
+import os
 import threading
 import re
 from typing import List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
+
+try:
+    from langdetect import detect_langs, DetectorFactory, LangDetectException
+    DetectorFactory.seed = 0  # déterministe
+    _LANGDETECT_OK = True
+except ImportError:
+    _LANGDETECT_OK = False
+
+DEFAULT_DETECT_LANGUAGE = os.getenv("TRANSLATOR_DEFAULT_DETECT_LANG", "fr")
+DETECT_MIN_CONFIDENCE = float(os.getenv("TRANSLATOR_DETECT_MIN_CONFIDENCE", "0.80"))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -188,29 +199,21 @@ class TranslatorEngine:
 
         logger.info("⚙️ TranslatorEngine initialisé")
 
-    def detect_language(self, text: str) -> str:
-        """
-        Détection de langue simple basée sur mots-clés
-
-        Args:
-            text: Texte à analyser
-
-        Returns:
-            Code langue détecté ('fr', 'en', 'es', 'de')
-        """
-        text_lower = text.lower()
-
-        # Mots caractéristiques par langue
-        if any(word in text_lower for word in ['bonjour', 'comment', 'vous', 'merci', 'salut']):
-            return 'fr'
-        elif any(word in text_lower for word in ['hello', 'how', 'you', 'thank', 'hi']):
-            return 'en'
-        elif any(word in text_lower for word in ['hola', 'como', 'estas', 'gracias']):
-            return 'es'
-        elif any(word in text_lower for word in ['guten', 'wie', 'geht', 'danke', 'hallo']):
-            return 'de'
-        else:
-            return 'en'  # Défaut
+    def detect_language(self, text: str, fallback: Optional[str] = None) -> str:
+        """Détecte la langue source. langdetect seuillé ; jamais de défaut 'en'
+        arbitraire — repli sur `fallback` puis `DEFAULT_DETECT_LANGUAGE`."""
+        default = fallback or DEFAULT_DETECT_LANGUAGE
+        cleaned = _URL_PATTERN.sub(" ", text or "").strip()
+        if not _LANGDETECT_OK or sum(c.isalpha() for c in cleaned) < 4:
+            return default
+        try:
+            ranked = detect_langs(cleaned)
+        except LangDetectException:
+            return default
+        top = ranked[0]
+        if top.prob < DETECT_MIN_CONFIDENCE:
+            return default
+        return top.lang.split("-")[0]  # zh-cn/zh-tw -> zh
 
     def _get_or_create_pipeline(
         self,
