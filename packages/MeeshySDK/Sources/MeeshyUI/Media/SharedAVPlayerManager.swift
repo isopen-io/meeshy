@@ -52,6 +52,10 @@ public final class SharedAVPlayerManager: ObservableObject {
     private var pipController: AVPictureInPictureController?
     private var pipDelegate: PipDelegate?
     private var watchStartTime: Date?
+    /// Last `currentTime` (s) at which an engagement heartbeat fired. Instance-scoped
+    /// (was a `var` captured inside the time-observer closure) so the observer block
+    /// can stay a plain `MainActor.assumeIsolated` call — no `Task` hop per tick.
+    private var lastHeartbeat: Double = 0
 
     private init() {}
 
@@ -241,6 +245,14 @@ public final class SharedAVPlayerManager: ObservableObject {
         let positionMs = Int(currentTime * 1000)
         let totalDurationMs = Int(duration * 1000)
 
+        // Persist the at-rest watch fraction (monotonic, kept after completion)
+        // so the bubble thumbnail can show a discreet progress bar at a glance.
+        if complete {
+            MediaConsumptionStore.shared.record(fraction: 1, complete: true, for: attId)
+        } else if duration > 0 {
+            MediaConsumptionStore.shared.record(fraction: currentTime / duration, complete: false, for: attId)
+        }
+
         Task {
             let body = AttachmentStatusBody(
                 action: "watched",
@@ -263,14 +275,27 @@ public final class SharedAVPlayerManager: ObservableObject {
         // entend le son revenir alors que l'icône mute reste activée.
         player.isMuted = isMuted
 
-        let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
-        var lastHeartbeat: Double = 0
+        // The active reel is on-screen: lift the offscreen preroll bitrate cap so
+        // ABR can pick the best rendition (thermal-aware — stays capped when hot).
+        player.currentItem?.preferredPeakBitRate = MediaThermalPolicy.preferredPeakBitRate(
+            isVisible: true, thermalState: ProcessInfo.processInfo.thermalState)
+
+        // Cadence backs off as the device heats up (SOTA, WWDC19 #422). The block
+        // runs via `MainActor.assumeIsolated` — NOT a `Task { @MainActor }` per tick:
+        // `queue: .main` already runs on the MainActor executor, so the old wrapper
+        // scheduled a needless continuation 5-10×/s. Mirrors the proven pattern in
+        // `StoryTimelineEngine`. `lastHeartbeat` is an instance property so the
+        // closure captures nothing mutable.
+        let interval = CMTime(
+            seconds: MediaThermalPolicy.timeObserverInterval(thermalState: ProcessInfo.processInfo.thermalState),
+            preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            Task { @MainActor [weak self] in
+            MainActor.assumeIsolated {
                 guard let self else { return }
-                self.currentTime = time.seconds.isNaN ? 0 : time.seconds
-                if self.isPlaying, self.currentTime - lastHeartbeat >= 10 {
-                    lastHeartbeat = self.currentTime
+                let seconds = time.seconds.isNaN ? 0 : time.seconds
+                self.currentTime = seconds
+                if self.isPlaying, seconds - self.lastHeartbeat >= 10 {
+                    self.lastHeartbeat = seconds
                     self.emitWatchSample()
                 }
             }
@@ -337,6 +362,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         playbackSpeed = .x1_0
         watchStartTime = nil
         watchClockStart = nil
+        lastHeartbeat = 0
         attachmentId = nil
         pipController = nil
         pipDelegate = nil

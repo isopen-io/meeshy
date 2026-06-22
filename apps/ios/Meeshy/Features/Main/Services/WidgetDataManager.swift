@@ -117,7 +117,7 @@ final class WidgetDataManager: NotificationWidgetSink {
         // un Task, le store array du widget reste synchrone ci-dessus.
         Task { [conversations] in
             let userCategoryNamesById = await Self.resolveUserCategoryNames()
-            await self.publishConversationSnapshots(conversations, categoryNamesById: userCategoryNamesById)
+            self.publishConversationSnapshots(conversations, categoryNamesById: userCategoryNamesById)
         }
     }
 

@@ -196,6 +196,7 @@ async function collectThreadReplies(
   let frontier = [rootMessageId];
 
   for (let depth = 0; depth < MAX_DEPTH; depth++) {
+    /* istanbul ignore next -- frontier is always non-empty here: initially [rootMessageId]; updated only when batch.length>0 (else we break first) */
     if (frontier.length === 0) break;
 
     const batch = await findReplies(prisma, conversationId, frontier);

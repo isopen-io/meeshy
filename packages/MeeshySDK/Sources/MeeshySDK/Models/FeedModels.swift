@@ -193,6 +193,9 @@ public struct RepostContent: Identifiable, Sendable {
     public let type: String?
     public let originalLanguage: String?
     public let audioUrl: String?
+    /// Mood emoji of the reposted STATUS (nil for non-status sources). Lets the
+    /// feed quote-block render the mood instead of an empty body.
+    public let moodEmoji: String?
     public let storyEffects: StoryEffects?
     public let media: [FeedMedia]
     public let translations: [String: PostTranslation]?
@@ -204,6 +207,7 @@ public struct RepostContent: Identifiable, Sendable {
                 authorUsername: String? = nil, authorAvatarURL: String? = nil,
                 content: String, timestamp: Date = Date(), likes: Int = 0, isQuote: Bool = false,
                 type: String? = nil, originalLanguage: String? = nil, audioUrl: String? = nil,
+                moodEmoji: String? = nil,
                 storyEffects: StoryEffects? = nil, media: [FeedMedia] = [],
                 translations: [String: PostTranslation]? = nil,
                 originalRepostOfId: String? = nil, visibility: String? = nil,
@@ -217,6 +221,7 @@ public struct RepostContent: Identifiable, Sendable {
         self.type = type
         self.originalLanguage = originalLanguage
         self.audioUrl = audioUrl
+        self.moodEmoji = moodEmoji
         self.storyEffects = storyEffects
         self.media = media
         self.translations = translations
@@ -229,7 +234,7 @@ public struct RepostContent: Identifiable, Sendable {
 extension RepostContent: Codable {
     enum CodingKeys: String, CodingKey {
         case id, author, authorId, authorUsername, authorAvatarURL, content, timestamp, likes, isQuote
-        case type, originalLanguage, audioUrl, storyEffects, media, translations
+        case type, originalLanguage, audioUrl, moodEmoji, storyEffects, media, translations
         case originalRepostOfId, visibility, expiresAt
     }
 
@@ -247,6 +252,7 @@ extension RepostContent: Codable {
         type = try c.decodeIfPresent(String.self, forKey: .type)
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
         audioUrl = try c.decodeIfPresent(String.self, forKey: .audioUrl)
+        moodEmoji = try c.decodeIfPresent(String.self, forKey: .moodEmoji)
         storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
         media = try c.decodeIfPresent([FeedMedia].self, forKey: .media) ?? []
         translations = try c.decodeIfPresent([String: PostTranslation].self, forKey: .translations)
@@ -270,12 +276,34 @@ extension RepostContent: Codable {
         try c.encodeIfPresent(type, forKey: .type)
         try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
         try c.encodeIfPresent(audioUrl, forKey: .audioUrl)
+        try c.encodeIfPresent(moodEmoji, forKey: .moodEmoji)
         try c.encodeIfPresent(storyEffects, forKey: .storyEffects)
         if !media.isEmpty { try c.encode(media, forKey: .media) }
         try c.encodeIfPresent(translations, forKey: .translations)
         try c.encodeIfPresent(originalRepostOfId, forKey: .originalRepostOfId)
         try c.encodeIfPresent(visibility, forKey: .visibility)
         try c.encodeIfPresent(expiresAt, forKey: .expiresAt)
+    }
+}
+
+// MARK: - Repost Reel Classification
+
+public extension RepostContent {
+    /// True when the reposted content is a reel (server-side `REEL` type is the
+    /// single source of truth, mirroring `FeedPost.isReel`). Lets the feed cell
+    /// render a rich reel preview instead of the empty text-only quote block.
+    var isReel: Bool {
+        (type ?? "").uppercased() == "REEL"
+    }
+
+    /// Media surfaced first when previewing a reposted reel: the first video,
+    /// else the first audio, else the first image. `nil` when the repost is not a
+    /// reel or carries no playable/visual media. Mirrors `FeedPost.primaryReelMedia`.
+    var primaryReelMedia: FeedMedia? {
+        guard isReel else { return nil }
+        if let video = media.first(where: { $0.type == .video }) { return video }
+        if let audio = media.first(where: { $0.type == .audio }) { return audio }
+        return media.first(where: { $0.type == .image })
     }
 }
 
@@ -300,6 +328,11 @@ public struct FeedComment: Identifiable, Sendable {
     /// Persisté dans le cache GRDB iOS via le Codable manuel ci-dessous —
     /// permet de restaurer l'état "liké par moi" au cold start sans API call.
     public var currentUserReactions: [String]?
+    /// Média unique attaché au commentaire (image/vidéo/audio). Réutilise `FeedMedia`
+    /// (même bridge `toMessageAttachment()` que les posts → mêmes viewers inline +
+    /// plein écran que les messages). Vide pour un commentaire texte. Le pipeline
+    /// audio enrichit la transcription/`translatedAudios` via `comment:media-updated`.
+    public var media: [FeedMedia]
 
     public var displayContent: String { translatedContent ?? content }
 
@@ -312,7 +345,7 @@ public struct FeedComment: Identifiable, Sendable {
                 content: String, timestamp: Date = Date(), likes: Int = 0, replies: Int = 0,
                 parentId: String? = nil, effectFlags: Int = 0,
                 originalLanguage: String? = nil, translatedContent: String? = nil,
-                currentUserReactions: [String]? = nil) {
+                currentUserReactions: [String]? = nil, media: [FeedMedia] = []) {
         self.id = id; self.author = author; self.authorId = authorId; self.authorUsername = authorUsername
         self.authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
         self.authorAvatarURL = authorAvatarURL; self.parentId = parentId
@@ -320,6 +353,7 @@ public struct FeedComment: Identifiable, Sendable {
         self.effectFlags = effectFlags
         self.originalLanguage = originalLanguage; self.translatedContent = translatedContent
         self.currentUserReactions = currentUserReactions
+        self.media = media
     }
 }
 
@@ -328,7 +362,7 @@ extension FeedComment: CacheIdentifiable {}
 extension FeedComment: Codable {
     enum CodingKeys: String, CodingKey {
         case id, author, authorId, authorUsername, authorAvatarURL, parentId, content, timestamp, likes, replies
-        case effectFlags, originalLanguage, translatedContent, currentUserReactions
+        case effectFlags, originalLanguage, translatedContent, currentUserReactions, media
     }
 
     public init(from decoder: Decoder) throws {
@@ -347,6 +381,7 @@ extension FeedComment: Codable {
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
         translatedContent = try c.decodeIfPresent(String.self, forKey: .translatedContent)
         currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
+        media = try c.decodeIfPresent([FeedMedia].self, forKey: .media) ?? []
         authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
     }
 
@@ -366,6 +401,9 @@ extension FeedComment: Codable {
         try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
         try c.encodeIfPresent(translatedContent, forKey: .translatedContent)
         try c.encodeIfPresent(currentUserReactions, forKey: .currentUserReactions)
+        if !media.isEmpty {
+            try c.encode(media, forKey: .media)
+        }
     }
 }
 
@@ -411,6 +449,11 @@ public struct FeedPost: Identifiable, Sendable {
     /// badge shows ("vues totales"). Derived server-side from PostEngagement
     /// sessions on the `reels`/`detail` surfaces. Runtime-only.
     public var postOpenCount: Int = 0
+    /// Server-issued impression count (`Post.impressionCount`) — total
+    /// exposures, NEVER deduplicated: each feed appearance AND each Detail
+    /// open counts. This is what the "Impressions" (chart) badge shows.
+    /// Runtime-only — set via `APIPost.toFeedPost`, not cached/Codable.
+    public var impressionCount: Int = 0
     /// Server-issued qualified-view count (`Post.qualifiedViewCount`) — total
     /// sessions reaching the 2.5s-OR-30% threshold. Runtime-only.
     public var qualifiedViewCount: Int = 0
@@ -423,6 +466,20 @@ public struct FeedPost: Identifiable, Sendable {
     public var originalLanguage: String?
     public var translations: [String: PostTranslation]?
     public var translatedContent: String?
+    /// `[rawURL: token]` outbound-link tracking map carried from
+    /// `APIPost.trackedLinkMap`. Empty when the post has no tracked links.
+    /// Runtime-only (set via `toFeedPost`, like the engagement counters) —
+    /// consumed by the post body renderer (`/l/<token>` rewrite) and the
+    /// embedded-video façade destination. Backward-compatible by construction.
+    public var trackedLinkMap: [String: String] = [:]
+
+    /// Story canvas payload (`StoryEffects`) when this post is a story. `nil`
+    /// for normal posts. Mirrors `RepostContent.storyEffects`. Carried on the
+    /// domain model (not just the API model) so the post-detail story canvas
+    /// survives the `CacheCoordinator.feed` round-trip.
+    public var storyEffects: StoryEffects? = nil
+    /// Legacy voice-note audio URL for story/status posts. `nil` for normal posts.
+    public var audioUrl: String? = nil
 
     public var hasMedia: Bool { !media.isEmpty }
     public var mediaUrl: String? { media.first?.url }
@@ -488,6 +545,7 @@ extension FeedPost: Codable {
         case id, author, authorId, authorUsername, authorAvatarURL, type, content, timestamp, likes, isLiked
         case comments, commentCount, repost, repostAuthor, isQuote, media
         case originalLanguage, translations, translatedContent
+        case storyEffects, audioUrl
     }
 
     public init(from decoder: Decoder) throws {
@@ -511,6 +569,8 @@ extension FeedPost: Codable {
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
         translations = try c.decodeIfPresent([String: PostTranslation].self, forKey: .translations)
         translatedContent = try c.decodeIfPresent(String.self, forKey: .translatedContent)
+        storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
+        audioUrl = try c.decodeIfPresent(String.self, forKey: .audioUrl)
         let stableId = authorId.isEmpty ? author : authorId
         authorColor = DynamicColorGenerator.colorForPost(authorId: stableId, type: type, originalLanguage: originalLanguage)
     }
@@ -536,6 +596,8 @@ extension FeedPost: Codable {
         try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
         try c.encodeIfPresent(translations, forKey: .translations)
         try c.encodeIfPresent(translatedContent, forKey: .translatedContent)
+        try c.encodeIfPresent(storyEffects, forKey: .storyEffects)
+        try c.encodeIfPresent(audioUrl, forKey: .audioUrl)
     }
 }
 
@@ -560,6 +622,10 @@ public extension FeedPost {
         (type ?? "").uppercased() == "REEL"
     }
 
+    /// True when the server marks this post as a story (`type == "STORY"`).
+    /// Mirrors `isReel`; used by `PostDetailView` to render the inline canvas.
+    var isStory: Bool { (type ?? "").uppercased() == "STORY" }
+
     /// Media surfaced first when the reel opens full-screen: the first video,
     /// else the first audio, else the first image. `nil` when the post is not a
     /// reel or carries no playable/visual media.
@@ -568,6 +634,25 @@ public extension FeedPost {
         if let video = media.first(where: { $0.type == .video }) { return video }
         if let audio = media.first(where: { $0.type == .audio }) { return audio }
         return media.first(where: { $0.type == .image })
+    }
+
+    /// Media to RENDER on a reel surface. A reel REPOST carries no media on the
+    /// outer post — the content lives in the reposted reel — so fall back to the
+    /// reposted reel's media. Without this, `ReelFeedCard` / the immersive viewer
+    /// render the empty outer post and a republished reel shows blank.
+    var reelDisplayMedia: [FeedMedia] {
+        if media.isEmpty, let repost, !repost.media.isEmpty { return repost.media }
+        return media
+    }
+
+    /// First playable/visual media for a reel surface (video > audio > image),
+    /// resolved from `reelDisplayMedia` so reel reposts surface the original
+    /// content instead of the empty outer post.
+    var primaryReelDisplayMedia: FeedMedia? {
+        let list = reelDisplayMedia
+        if let video = list.first(where: { $0.type == .video }) { return video }
+        if let audio = list.first(where: { $0.type == .audio }) { return audio }
+        return list.first(where: { $0.type == .image })
     }
 
     /// Filters a feed page down to the reels, preserving order. Seeds the reel
@@ -618,5 +703,26 @@ public enum ReelComposition {
     /// MIME-type convenience overload of `defaultType`.
     public static func defaultType(mimeTypes: [String], forcePlainPost: Bool = false) -> PostType {
         (!forcePlainPost && suggestsReel(mimeTypes: mimeTypes)) ? .reel : .post
+    }
+}
+
+// MARK: - StoryItem bridge
+
+public extension StoryItem {
+    /// Synthesize a `StoryItem` from a story `FeedPost` (post-detail inline
+    /// rendering). Mirrors the `RepostContent` bridge used by
+    /// `StoryReaderRepresentable.init(repost:)`. `FeedPost` has no `expiresAt`,
+    /// which is irrelevant to in-place playback.
+    init(feedPost: FeedPost) {
+        self.init(
+            id: feedPost.id,
+            content: feedPost.content,
+            media: feedPost.media,
+            storyEffects: feedPost.storyEffects,
+            createdAt: feedPost.timestamp,
+            expiresAt: nil,
+            audioUrl: feedPost.audioUrl,
+            isViewed: false
+        )
     }
 }

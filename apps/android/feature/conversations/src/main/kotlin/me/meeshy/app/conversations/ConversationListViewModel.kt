@@ -2,6 +2,7 @@ package me.meeshy.app.conversations
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,6 +15,7 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.ConversationFilters
+import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
@@ -44,6 +46,7 @@ data class ConversationListUiState(
 class ConversationListViewModel @Inject constructor(
     private val repository: ConversationRepository,
     private val messageSocketManager: MessageSocketManager,
+    private val workManager: WorkManager,
     socketManager: SocketManager,
     sessionRepository: SessionRepository,
 ) : ViewModel() {
@@ -114,6 +117,52 @@ class ConversationListViewModel @Inject constructor(
         _state.update {
             val next = if (active) it else it.copy(searchText = "")
             next.copy(isSearchActive = active).withVisible(rawConversations)
+        }
+    }
+
+    /** Toggles the pinned state of a conversation (swipe action / context menu). */
+    fun togglePin(id: String) {
+        val pinned = prefsOf(id)?.isPinned ?: false
+        runPrefMutation { repository.setPinnedOptimistic(id, !pinned) }
+    }
+
+    /** Toggles the muted state of a conversation. */
+    fun toggleMute(id: String) {
+        val muted = prefsOf(id)?.isMuted ?: false
+        runPrefMutation { repository.setMutedOptimistic(id, !muted) }
+    }
+
+    /** Toggles the archived state of a conversation. */
+    fun toggleArchive(id: String) {
+        val archived = prefsOf(id)?.isArchived ?: false
+        runPrefMutation { repository.setArchivedOptimistic(id, !archived) }
+    }
+
+    /** Marks a conversation read from the list (swipe action). */
+    fun markRead(id: String) {
+        runPrefMutation { repository.markReadOptimistic(id) }
+    }
+
+    private fun prefsOf(id: String) =
+        rawConversations.firstOrNull { it.id == id }?.preferences
+
+    /**
+     * Runs an optimistic preference mutation and schedules an outbox flush only
+     * when something was actually queued; a no-op mutation never wakes
+     * WorkManager. Errors are swallowed — the cache write already rolled back
+     * inside the repository transaction on failure.
+     */
+    private fun runPrefMutation(mutate: suspend () -> Boolean) {
+        viewModelScope.launch {
+            try {
+                if (mutate()) {
+                    workManager.enqueue(OutboxFlushWorker.buildRequest())
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(errorMessage = e.message) }
+            }
         }
     }
 

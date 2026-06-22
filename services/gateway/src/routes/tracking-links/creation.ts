@@ -191,7 +191,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({
           success: false,
           error: 'Données invalides',
-          details: error.errors
+          details: error.issues
         });
       }
       if (error instanceof Error && error.message === 'Token already exists') {
@@ -309,7 +309,9 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
                 targetType: { type: 'string' },
                 targetId: { type: ['string', 'null'] },
                 originalUrl: { type: ['string', 'null'] },
-                sharerId: { type: ['string', 'null'] },
+                // sharerId volontairement NON exposé ici (route publique) : ce
+                // serait une fuite d'attribution inutile au routage. Strippé par
+                // le response schema Fastify ; l'attribution reste via createdBy.
                 isActive: { type: 'boolean' },
                 expiresAt: { type: ['string', 'null'], format: 'date-time' }
               }

@@ -107,6 +107,8 @@ elif [ -f "Meeshy/Info.plist" ]; then
     INFO_PLIST="Meeshy/Info.plist"
 elif [ -f "ios-dynamic/Info.plist" ]; then
     INFO_PLIST="ios-dynamic/Info.plist"
+elif [ -f "apps/ios/Meeshy/Info.plist" ]; then
+    INFO_PLIST="apps/ios/Meeshy/Info.plist"
 else
     check_error "Info.plist non trouvé"
     INFO_PLIST=""
@@ -124,7 +126,7 @@ if [ -n "$INFO_PLIST" ]; then
     )
     
     for KEY in "${PRIVACY_KEYS[@]}"; do
-        if /usr/libexec/PlistBuddy -c "Print :$KEY" "$INFO_PLIST" &> /dev/null; then
+        if grep -q "<key>$KEY</key>" "$INFO_PLIST"; then
             check_success "Clé présente : $KEY"
         else
             check_error "Clé manquante : $KEY (OBLIGATOIRE pour CallKit/Caméra/Photos)"
@@ -132,7 +134,7 @@ if [ -n "$INFO_PLIST" ]; then
     done
     
     # Vérifier UIBackgroundModes
-    if /usr/libexec/PlistBuddy -c "Print :UIBackgroundModes" "$INFO_PLIST" &> /dev/null; then
+    if grep -q "<key>UIBackgroundModes</key>" "$INFO_PLIST"; then
         check_success "UIBackgroundModes présent"
     else
         check_warning "UIBackgroundModes manquant (nécessaire pour VoIP/Audio)"
@@ -150,8 +152,15 @@ echo "==============================="
 
 # Chercher fichier .entitlements
 ENTITLEMENTS=""
-if ls *.entitlements &> /dev/null; then
+if [ -f "Meeshy/Meeshy.entitlements" ]; then
+    ENTITLEMENTS="Meeshy/Meeshy.entitlements"
+elif [ -f "apps/ios/Meeshy/Meeshy.entitlements" ]; then
+    ENTITLEMENTS="apps/ios/Meeshy/Meeshy.entitlements"
+elif ls *.entitlements &> /dev/null; then
     ENTITLEMENTS=$(ls *.entitlements | head -n 1)
+fi
+
+if [ -n "$ENTITLEMENTS" ]; then
     check_success "Entitlements trouvé : $ENTITLEMENTS"
     
     # Vérifier les capabilities critiques
@@ -161,6 +170,10 @@ if ls *.entitlements &> /dev/null; then
         check_error "Push Notifications manquant dans entitlements"
     fi
     
+    if grep -q "com.apple.developer.usernotifications.communication" "$ENTITLEMENTS"; then
+        check_success "Communication Notifications configuré"
+    fi
+
     if grep -q "com.apple.developer.associated-domains" "$ENTITLEMENTS"; then
         check_success "Associated Domains configuré"
     else
@@ -187,6 +200,8 @@ elif [ -d "Meeshy/Assets.xcassets" ]; then
     ASSETS_PATH="Meeshy/Assets.xcassets"
 elif [ -d "ios-dynamic/Assets.xcassets" ]; then
     ASSETS_PATH="ios-dynamic/Assets.xcassets"
+elif [ -d "apps/ios/Meeshy/Assets.xcassets" ]; then
+    ASSETS_PATH="apps/ios/Meeshy/Assets.xcassets"
 fi
 
 if [ -n "$ASSETS_PATH" ]; then
@@ -199,6 +214,7 @@ if [ -n "$ASSETS_PATH" ]; then
         # Vérifier l'icône 1024x1024
         if [ -f "$ASSETS_PATH/AppIcon.appiconset/1024.png" ] || \
            [ -f "$ASSETS_PATH/AppIcon.appiconset/AppIcon-1024.png" ] || \
+   [ -f "$ASSETS_PATH/AppIcon.appiconset/Icon-Light-1024x1024.png" ] || \
            ls "$ASSETS_PATH/AppIcon.appiconset/"*1024* &> /dev/null; then
             check_success "Icône 1024x1024 présente"
         else
@@ -263,12 +279,16 @@ echo "================================="
 # Vérifier politique de confidentialité
 if [ -f "PRIVACY_POLICY.md" ]; then
     check_success "PRIVACY_POLICY.md présent"
+elif [ -f "apps/ios/PRIVACY_POLICY.md" ]; then
+    check_success "PRIVACY_POLICY.md présent"
 else
     check_error "PRIVACY_POLICY.md MANQUANT (doit être hébergé en ligne)"
 fi
 
 # Vérifier conditions d'utilisation
 if [ -f "TERMS_OF_SERVICE.md" ]; then
+    check_success "TERMS_OF_SERVICE.md présent"
+elif [ -f "apps/ios/TERMS_OF_SERVICE.md" ]; then
     check_success "TERMS_OF_SERVICE.md présent"
 else
     check_warning "TERMS_OF_SERVICE.md manquant (recommandé)"

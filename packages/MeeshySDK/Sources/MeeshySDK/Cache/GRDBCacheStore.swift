@@ -115,6 +115,19 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         }
     }
 
+    /// Reset the freshness clock for `key` to "now" WITHOUT refetching, so a
+    /// subsequent `load` returns `.fresh` and retention is extended on access.
+    /// Bumps L1 `loadedAt` and L2 `lastFetchedAt`. No-op when no entry exists.
+    public func touch(for key: Key) async {
+        let now = Date()
+        if var l1 = memoryCache[key] {
+            l1.loadedAt = now
+            memoryCache[key] = l1
+            touchKey(key)
+        }
+        bumpLastFetchedAtInL2(to: now, for: namespacedKey(key.description))
+    }
+
     public func update(for key: Key, mutate: @Sendable ([Value]) -> [Value]) async {
         if var l1 = memoryCache[key] {
             l1.items = mutate(l1.items)
@@ -487,6 +500,18 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
             }
         } catch {
             logger.error("Failed to invalidate all L2: \(error)")
+        }
+    }
+
+    private nonisolated func bumpLastFetchedAtInL2(to date: Date, for keyStr: String) {
+        do {
+            try db.write { db in
+                guard var meta = try DBCacheMetadata.filter(Column("key") == keyStr).fetchOne(db) else { return }
+                meta.lastFetchedAt = date
+                try meta.save(db)
+            }
+        } catch {
+            logger.error("Failed to touch L2 lastFetchedAt for key \(keyStr, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
     }
 

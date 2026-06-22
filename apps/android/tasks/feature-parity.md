@@ -147,6 +147,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       FAILED + tap-to-retry (EN/FR), WorkManager flush
 - [x] Message pagination (before-cursor, scroll-top trigger, history-safe cache prune)
 - [~] `:feature:feed` — cache-first feed (SWR), Prisme-resolved post content,
+      optimistic like toggle (`isLikedByMe`), image collage, like/comment/repost stats,
+      cursor-paginated infinite scroll (`PostRepository.loadMore` + `feedHasMore`,
+      `loadMoreIfNeeded` 5-from-tail trigger, footer spinner, dedupe-append, history-safe
+      freshness watermark — port of `FeedViewModel.loadMoreIfNeeded`)
+- [ ] Pending: Stories / Calls slices, feed new-posts banner + post detail, reactions UI polish
       optimistic like toggle (`isLikedByMe`), image collage, like/comment/repost stats
 - [~] `:feature:stories` — story **tray** end-to-end : `toStoryGroups` (sdk-core,
       port fidèle = filtre STORY, groupe par auteur, tri stories asc, tri groupes
@@ -161,6 +166,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       overlay, viewers sheet, SWR/Room backing du tray, prefetch média.
 - [ ] Pending: Stories composer + viewer richness, Calls slice, feed pagination +
       post detail, reactions UI polish
+- [ ] Pending: Stories / Calls slices, feed pagination + post detail
+- [x] Reactions UI: usage-ordered quick-strip (`EmojiQuickStrip`) + full categorised picker
+      (`EmojiFullPicker`) wired into chat long-press sheet
 
 ## Phase 6 — Integration & final audit
 - [ ] Navigation graph + deep links (`meeshy://`, `https://meeshy.me`)
@@ -208,9 +216,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       nom personnalisé / participants) ; barre de chips `LazyRow` + champ de
       recherche dans l'app bar ; 22 tests verts (11 modèle + 11 VM)
 - [ ] Communities carousel + category filter chips
-- [ ] Pinned / muted / locked / archived / favorited (emoji) states
-- [ ] Swipe actions (pin, mute, lock, archive, mark read/unread, block, hide)
-- [ ] Context menu (pin, mute, mark read, details, invite, favorite, move, lock, archive, block, delete)
+- [~] Pinned / muted / archived states done (optimistic toggle + row indicators
+      📌/🔕 + filter integration) ; locked / favorited (emoji) pending
+- [~] Swipe actions done (leading = pin/unpin, trailing = archive/unarchive ;
+      `SwipeToDismissBox` non-destructif qui snap-back, le résultat visible est
+      la re-dérivation du filtre) ; mute/lock/mark-unread/block/hide pending
+- [~] Context menu done (long-press → `DropdownMenu` : pin/unpin, mute/unmute,
+      mark-read si non lu, archive/unarchive) ; details/invite/favorite/move/
+      lock/block/delete pending
 - [ ] Hard-press conversation preview popover
 - [~] Conversation row: rich last-message preview done (labels type média
       📷/🎬/🎵/📎/📍 port iOS, caption prioritaire, préfixe expéditeur en groupe,
@@ -223,7 +236,13 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       prime sur le sync) → strip animée sous l'app bar (Hors ligne / Reconnexion… /
       Synchronisation…)
 - [ ] Conversation category create + expand/collapse; client-side tag aggregation for autocomplete
-- [ ] Create direct/group conversation via user search; add participants
+- [x] Create direct/group conversation via user search; add participants —
+      FAB sur la liste → `NewConversationScreen` : recherche debouncée (300 ms,
+      `UserRepository.searchUsers`), multi-sélection avec chips persistants
+      (survit aux changements de requête), règle pure `NewConversationLogic`
+      (1 sélection → direct sans titre ; ≥2 → groupe avec titre saisi) →
+      `ConversationRepository.create` → navigation vers le chat créé
+      (popUpTo conversations). 14 tests verts (6 logique + 8 VM)
 - [ ] Story tray + per-conversation story rings
 - [ ] In-app dashboard ("Tableau de bord"): unread count, recent conversations, link stats, quick actions
 
@@ -237,7 +256,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       E2EE disclaimer pending
 - [~] Pagination of older messages — before-cursor done (`MessageRepository.loadOlder`,
       windowed prune keeps paginated history, scroll-top trigger + spinner); around-anchor pending
-- [ ] Reactions: quick-strip (usage-ordered) + full picker; add/remove; reaction detail breakdown
+- [~] Reactions: quick-strip **usage-ordered** done (`EmojiUsageRanker.topEmojis` port of
+      `EmojiUsageTracker`, `EmojiUsageStore` SharedPrefs backing, strip re-ranks on send) +
+      full categorised picker done (`EmojiCatalog` 6 cats + `EmojiFullPicker` sheet) +
+      add/remove optimistic done ; reaction detail breakdown (who-reacted sheet) pending
 - [ ] Pin/unpin message; starred/bookmarked messages list with navigate-to-conversation
 - [~] Reply: long-press → Répondre, bannière composer (accent, annulable),
       replyToId optimiste + aperçu cité dans la bulle ; swipe / forward / jump pending
@@ -345,9 +367,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Accessibility for canvas elements (labels, custom delete/duplicate/reorder actions)
 
 ## F. Feed & Posts
-- [~] Social feed: cache-first SWR list + pull-to-refresh done (`PostRepository.feedStream`,
-      skeleton on cold cache, silent background revalidation) ; cursor-paginated
-      infinite scroll / new-posts banner pending
+- [~] Social feed: cache-first SWR list + pull-to-refresh + cursor-paginated infinite
+      scroll done (`PostRepository.feedStream`/`loadMore`/`feedHasMore`, skeleton on cold
+      cache, silent background revalidation, 5-from-tail prefetch + footer spinner,
+      dedupe-append, history pages do not bump the freshness watermark) ; new-posts banner
+      + realtime-head merge pending
 - [x] Post reactions (heart like) — **optimistic** toggle via `PostRepository.toggleLike`
       (flips `isLikedByMe` + count instantly, rolls back on failure). Fixes the prior
       bug where any post liked by *others* rendered as liked-by-me (`likeCount > 0`
@@ -362,7 +386,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [x] Feed card stats row: like (filled when own) + comment count + repost count,
       mood emoji on the author line, pure `FeedPostPresentation` builder (8 builder
       tests + 1 model Prisme test + 3 repository optimistic/rollback tests, all green)
-- [ ] Social feed: cursor-paginated post list, infinite scroll, new-posts banner
+- [~] Social feed: cursor-paginated post list + infinite scroll done (see above) ;
+      new-posts banner pending
 - [ ] Feed overlay shell with draggable floating buttons + radial menu ladder
 - [ ] Create post (text, photos/videos, camera, files, location, audio+transcription, visibility, language)
 - [ ] Unified post composer (Post / Status / Story tabs)
@@ -413,11 +438,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Community invite links: list, stats, detail, copy/share
 
 ## J. Contacts & Friends
-- [ ] Contacts hub: 4 tabs (Contacts / Requests / Discover / Blocked) with badges
+- [~] Contacts hub: 4 tabs (Contacts / Requests / Discover / Blocked) with badges —
+      `:feature:contacts` hub reachable from the conversations top bar (People icon),
+      4-tab `TabRow` with a live count badge on the **Requests** tab ; Contacts /
+      Discover / Blocked tabs remain placeholders pending their data slices
 - [ ] Contacts list (online/offline filters + counts, search, presence + mood-emoji)
 - [ ] Cache-first friends list with cross-screen reconciliation; online-first sorting
 - [ ] Friendship status resolution (friend / pending sent / pending received / blocked)
-- [ ] Send / accept / decline / cancel friend request — optimistic + offline-queued, idempotent
+- [~] Send / accept / decline / cancel friend request — **Requests tab** lists received +
+      sent requests (avatars tinted by deterministic `DynamicColorGenerator.colorForName`),
+      with optimistic accept / decline (`respond`) + cancel (`deleteRequest`), in-flight
+      guard (`pendingActionIds`) and snapshot rollback on failure (9 ViewModel tests, EN/FR/ES/PT) ;
+      send (compose-new) + offline-queue + idempotency pending
 - [ ] Invite by email; invite by SMS; import phone contacts
 - [ ] Discover suggestions (cache-first) + live user search with inline connect
 - [ ] Blocked-users list with confirm-to-unblock; optimistic unblock with rollback

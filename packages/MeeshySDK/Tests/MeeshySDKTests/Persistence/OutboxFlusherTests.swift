@@ -66,6 +66,38 @@ final class OutboxFlusherTests: XCTestCase {
             "flush() must report the earliest deferred retry so OutboxRetryScheduler can re-arm")
     }
 
+    func test_flush_sessionExpiry_doesNotConsumeRetryBudget_norExhaust() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let now = Date()
+        // Already failed 4× — one NORMAL failure away from `.exhausted`.
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "auth", kind: .sendReaction, conversationId: "c1",
+                clientMessageId: "cid_auth",
+                payload: Data(), status: .pending, attempts: 4, lastError: nil,
+                createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        let flusher = OutboxFlusher(pool: pool, dispatcher: MockOutboxDispatcher(authFailure: true))
+        await flusher.flush()
+
+        let after = try await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: "auth")!
+        }
+        // A transitory 401 must NOT exhaust the row nor burn the retry budget,
+        // otherwise a brief session expiry permanently drops queued user actions
+        // (the prod incident: a whole outbox `.exhausted` with auth(sessionExpired)).
+        XCTAssertEqual(after.status, .pending,
+            "Session expiry must leave the row pending (not exhausted)")
+        XCTAssertEqual(after.attempts, 4,
+            "Session expiry must NOT consume the retry budget")
+        XCTAssertGreaterThan(after.nextAttemptAt, now,
+            "Row must be deferred for a later retry once the session is refreshed")
+    }
+
     func test_flush_marksExhausted_after5Attempts() async throws {
         let pool = try makeFreshPool()
         try MessageDatabaseMigrations.runAll(on: pool)
@@ -259,15 +291,20 @@ final class OutboxFlusherTests: XCTestCase {
 actor MockOutboxDispatcher: OutboxDispatching {
     private var _processedIds: [String] = []
     let shouldFail: Bool
+    let authFailure: Bool
 
-    init(shouldFail: Bool = false) {
+    init(shouldFail: Bool = false, authFailure: Bool = false) {
         self.shouldFail = shouldFail
+        self.authFailure = authFailure
     }
 
     var processedIds: [String] { _processedIds }
 
     func dispatch(_ record: OutboxRecord) async throws {
         _processedIds.append(record.id)
+        if authFailure {
+            throw MeeshyError.auth(.sessionExpired)
+        }
         if shouldFail {
             throw NSError(domain: "test", code: -1)
         }

@@ -20,12 +20,12 @@ export interface PostComposerProps {
   className?: string;
 }
 
-const VISIBILITY_OPTIONS: { value: PostVisibility; label: string; icon: string }[] = [
-  { value: 'PUBLIC', label: 'Public', icon: '🌍' },
-  { value: 'FRIENDS', label: 'Friends', icon: '👥' },
-  { value: 'EXCEPT', label: 'Friends except...', icon: '🚫' },
-  { value: 'ONLY', label: 'Only...', icon: '🎯' },
-  { value: 'PRIVATE', label: 'Private', icon: '🔒' },
+const VISIBILITY_OPTIONS: { value: PostVisibility; labelKey: string; icon: string }[] = [
+  { value: 'PUBLIC', labelKey: 'postComposer.visibility.public', icon: '🌍' },
+  { value: 'FRIENDS', labelKey: 'postComposer.visibility.friends', icon: '👥' },
+  { value: 'EXCEPT', labelKey: 'postComposer.visibility.except', icon: '🚫' },
+  { value: 'ONLY', labelKey: 'postComposer.visibility.only', icon: '🎯' },
+  { value: 'PRIVATE', labelKey: 'postComposer.visibility.private', icon: '🔒' },
 ];
 
 function PostComposer({
@@ -101,17 +101,17 @@ function PostComposer({
                 'text-[var(--gp-text-primary)] placeholder:text-[var(--gp-text-muted)]',
                 disabled && 'opacity-50 cursor-not-allowed',
               )}
-              aria-label="Post content"
+              aria-label={t('postComposer.contentLabel')}
             />
 
             {isExpanded && (
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--gp-border)]">
                 <div className="flex items-center gap-2">
                   {/* Media buttons */}
-                  <button className="p-2 rounded-lg text-[var(--gp-text-muted)] hover:bg-[var(--gp-parchment)] transition-colors" aria-label="Add photo">
+                  <button className="p-2 rounded-lg text-[var(--gp-text-muted)] hover:bg-[var(--gp-parchment)] transition-colors" aria-label={t('postComposer.addPhoto')}>
                     📷
                   </button>
-                  <button className="p-2 rounded-lg text-[var(--gp-text-muted)] hover:bg-[var(--gp-parchment)] transition-colors" aria-label="Add video">
+                  <button className="p-2 rounded-lg text-[var(--gp-text-muted)] hover:bg-[var(--gp-parchment)] transition-colors" aria-label={t('postComposer.addVideo')}>
                     🎥
                   </button>
 
@@ -120,10 +120,10 @@ function PostComposer({
                     <button
                       onClick={() => setShowVisibilityPicker(!showVisibilityPicker)}
                       className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)] transition-colors"
-                      aria-label="Change visibility"
+                      aria-label={t('postComposer.changeVisibility')}
                     >
                       <span>{selectedVisibility.icon}</span>
-                      <span>{selectedVisibility.label}</span>
+                      <span>{t(selectedVisibility.labelKey)}</span>
                     </button>
 
                     {showVisibilityPicker && (
@@ -141,7 +141,7 @@ function PostComposer({
                             )}
                           >
                             <span>{opt.icon}</span>
-                            <span>{opt.label}</span>
+                            <span>{t(opt.labelKey)}</span>
                           </button>
                         ))}
                       </div>
@@ -165,7 +165,7 @@ function PostComposer({
                   onClick={handlePublish}
                   disabled={!isValid || disabled}
                 >
-                  Publish
+                  {t('publish')}
                 </Button>
               </div>
             )}

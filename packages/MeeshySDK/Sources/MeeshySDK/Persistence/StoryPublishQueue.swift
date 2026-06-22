@@ -31,10 +31,13 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
     public let createdAt: Date
     public var retryCount: Int
     public var lastError: String?
+    /// IDs d'utilisateurs ciblés (ONLY) ou exclus (EXCEPT). Optionnel pour
+    /// rester rétro-compatible avec les rows persistés avant ce champ.
+    public let visibilityUserIds: [String]?
 
     enum CodingKeys: String, CodingKey {
         case id, tempStoryId, visibility, slidesPayload, repostOfId
-        case mediaReferences, createdAt, retryCount, lastError
+        case mediaReferences, createdAt, retryCount, lastError, visibilityUserIds
     }
 
     public init(
@@ -42,7 +45,8 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         slidesPayload: Data,
         repostOfId: String? = nil,
         mediaReferences: [StoryMediaReference] = [],
-        tempStoryId: String? = nil
+        tempStoryId: String? = nil,
+        visibilityUserIds: [String]? = nil
     ) {
         let queueId = UUID().uuidString
         self.id = queueId
@@ -54,6 +58,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.createdAt = Date()
         self.retryCount = 0
         self.lastError = nil
+        self.visibilityUserIds = visibilityUserIds
     }
 
     public init(from decoder: Decoder) throws {
@@ -67,6 +72,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.createdAt = try container.decode(Date.self, forKey: .createdAt)
         self.retryCount = try container.decodeIfPresent(Int.self, forKey: .retryCount) ?? 0
         self.lastError = try container.decodeIfPresent(String.self, forKey: .lastError)
+        self.visibilityUserIds = try container.decodeIfPresent([String].self, forKey: .visibilityUserIds)
     }
 }
 

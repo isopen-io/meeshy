@@ -43,9 +43,9 @@ struct FeedView: View {
     // injected by `iPadRootView`'s environment.
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
-    @State private var showStoryViewer = false
-    @State private var selectedStoryUserId: String?
-    @State private var storyViewerSingleGroup = false
+    // Présentation unifiée du viewer de story (même coordinator que la story tray
+    // et que `ThemedFeedOverlay` côté iPhone). Injecté par `iPadRootView`.
+    @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @StateObject var viewModel = FeedViewModel()
     /// Élit le réel le plus centré dans le viewport et pilote sa lecture muette
     /// (source UNIQUE de "quel réel joue"). Call-aware via son init par défaut.
@@ -444,18 +444,31 @@ struct FeedView: View {
                 feedScrollView
             }
 
-            if sizeClass != .regular {
-                VStack(spacing: 0) {
-                    CollapsibleHeader(
-                        title: "Meeshy Feed",
-                        scrollOffset: headerScrollOffset,
-                        showBackButton: false,
-                        titleColor: theme.textPrimary,
-                        backArrowColor: MeeshyColors.indigo500,
-                        backgroundColor: theme.backgroundPrimary
-                    )
-                    Spacer()
-                }
+            // Header shown on iPhone AND iPad: the scroll content already
+            // reserves `CollapsibleHeaderMetrics.expandedHeight` of top padding,
+            // so on iPad it simply fills the space that was previously left empty.
+            VStack(spacing: 0) {
+                // Compact story trail integrated inside the header (accessory
+                // slot) — reveals as the full-size trail scrolls up under it.
+                CollapsibleHeader(
+                    title: "Meeshy Feed",
+                    scrollOffset: headerScrollOffset,
+                    showBackButton: false,
+                    titleColor: theme.textPrimary,
+                    backArrowColor: MeeshyColors.indigo500,
+                    backgroundColor: theme.backgroundPrimary,
+                    accessory: {
+                        AnyView(
+                            // Lancement unifié via StoryViewerCoordinator (cf.
+                            // PinnedStoryTrailBand.presentStory) — même chemin que la trail des chats.
+                            PinnedStoryTrailBand(
+                                viewModel: storyViewModel,
+                                scrollOffset: headerScrollOffset
+                            )
+                        )
+                    }
+                )
+                Spacer()
             }
 
             // Full-screen composer overlay
@@ -487,6 +500,7 @@ struct FeedView: View {
                     .font(.headline.weight(.bold))
                     .foregroundColor(.white)
             }
+            .accessibilityHidden(true)
 
             // Text input placeholder
             Button(action: {
@@ -516,6 +530,8 @@ struct FeedView: View {
                 )
             }
             .buttonStyle(PlainButtonStyle())
+            .accessibilityLabel(String(localized: "a11y.feed.compose.open", defaultValue: "Partager quelque chose", bundle: .main))
+            .accessibilityHint(String(localized: "a11y.feed.compose.open.hint", defaultValue: "Ouvre l'éditeur de publication", bundle: .main))
 
             // Add content button (+)
             Menu {
@@ -627,7 +643,11 @@ struct FeedView: View {
     // MARK: - Feed Post Card
     @ViewBuilder
     private func feedPostCardView(for post: FeedPost) -> some View {
-        if post.isReel {
+        // On iPad/Mac (regular width) the feed lives in a narrow column where a
+        // full-bleed reel card looks crude, so reels render as the standard
+        // compact card there (author header + bounded media + action bar) for
+        // parity with the iPhone feed. iPhone keeps the immersive full-frame card.
+        if post.isReel && sizeClass != .regular {
             reelFeedCardView(for: post)
         } else {
             standardFeedPostCardView(for: post)
@@ -745,9 +765,6 @@ struct FeedView: View {
             onSendComment: { postId, content, parentId in
                 Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
             },
-            onLikeComment: { postId, commentId in
-                Task { await viewModel.likeComment(postId: postId, commentId: commentId) }
-            },
             onSelectLanguage: { postId, language in
                 viewModel.setTranslationOverride(postId: postId, language: language)
             },
@@ -788,6 +805,15 @@ struct FeedView: View {
             moodLookup: { userId in
                 (emoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
                  tapHandler: statusViewModel.moodTapHandler(for: userId))
+            },
+            authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),
+            onViewAuthorStory: {
+                // Parité iPhone (`ThemedFeedOverlay`) : toucher l'avatar d'un auteur
+                // qui a une story ouvre SA story via le coordinator unique. Sans ce
+                // câblage, l'anneau de story et le tap étaient inertes sur iPad.
+                storyViewerCoordinator.present(
+                    StoryViewerRequest(id: post.authorId, startAtFirstUnviewed: true, singleGroup: true)
+                )
             }
         )
         .equatable()
@@ -834,12 +860,10 @@ struct FeedView: View {
                     Color.clear.frame(height: 0).id("feed-top")
 
                     // Story tray — same component used by the conversation list
-                    // and the iPhone feed so stories load identically here.
-                    StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
-                        selectedStoryUserId = userId
-                        storyViewerSingleGroup = false
-                        showStoryViewer = true
-                    })
+                    // and the iPhone feed so stories load identically here. Le tap
+                    // ouvre le viewer via StoryViewerCoordinator (chemin unique),
+                    // exactement comme la liste de conversations.
+                    StoryTrayView(viewModel: storyViewModel)
 
                     // Composer placeholder
                     composerPlaceholder
@@ -944,6 +968,8 @@ struct FeedView: View {
                         )
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel(String(format: String(localized: "a11y.feed.new_posts.label", defaultValue: "%d nouveaux posts", bundle: .main), viewModel.newPostsCount))
+                    .accessibilityHint(String(localized: "a11y.feed.new_posts.hint", defaultValue: "Remonte en haut du fil pour les voir", bundle: .main))
                     .padding(.top, 120)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .animation(.spring(response: 0.4, dampingFraction: 0.75), value: viewModel.newPostsCount)
@@ -1035,6 +1061,40 @@ struct FeedView: View {
                 postLikeDelta[event.postId, default: 0] -= 1
             }
         }
+        // Unification du like : le ❤️ arrive désormais comme `post:liked`/`post:unliked`
+        // (événement CANONIQUE absolu — le ViewModel pose `posts[i].likes = likeCount`).
+        // On réconcilie ici l'état OPTIMISTE local de la vue : le compteur absolu fait
+        // autorité → on purge le delta, et on confirme `isLiked` pour l'acteur. Source
+        // unique pour les 3 vues (feed, détail, reel). Le chemin `post:reaction-*` ci-
+        // dessus reste pour les emojis NON-❤️ (réactions riches).
+        .onReceive(SocialSocketManager.shared.postLiked.receive(on: DispatchQueue.main)) { event in
+            postLikeDelta[event.postId] = nil
+            if event.userId == AuthManager.shared.currentUser?.id {
+                postLikedIds.insert(event.postId)
+            }
+        }
+        .onReceive(SocialSocketManager.shared.postUnliked.receive(on: DispatchQueue.main)) { event in
+            postLikeDelta[event.postId] = nil
+            if event.userId == AuthManager.shared.currentUser?.id {
+                postLikedIds.remove(event.postId)
+            }
+        }
+        // Bookmark : même réconciliation canonique que le like. L'événement est
+        // PERSONNEL (emitToUser) → toujours pour l'utilisateur courant. Le
+        // ViewModel a posé le `bookmarkCount` absolu sur le post ; on purge ici
+        // le delta optimiste local pour que `bookmarkCount + delta` retombe sur
+        // le compteur autoritaire (sans reload). Si le compteur est absent
+        // (vieux gateway), on garde le delta (dégradation gracieuse).
+        .onReceive(SocialSocketManager.shared.postBookmarked.receive(on: DispatchQueue.main)) { payload in
+            if payload.bookmarkCount != nil {
+                postBookmarkDelta[payload.postId] = nil
+            }
+            if payload.bookmarked {
+                postBookmarkedIds.insert(payload.postId)
+            } else {
+                postBookmarkedIds.remove(payload.postId)
+            }
+        }
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()
             viewModel.feedStore?.stopObserving()
@@ -1049,26 +1109,10 @@ struct FeedView: View {
                 }
             }
         }
-        // Story viewer opened from the tray (mirror of the iPhone feed overlay).
-        // fullScreenCover creates a fresh environment, so re-inject the objects
-        // StoryViewerContainer / its inner SharePickerView read.
-        .fullScreenCover(isPresented: $showStoryViewer) {
-            StoryViewerContainer(
-                viewModel: storyViewModel,
-                userId: selectedStoryUserId,
-                isPresented: $showStoryViewer,
-                onReplyToStory: { replyContext in
-                    showStoryViewer = false
-                    router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
-                },
-                singleGroup: storyViewerSingleGroup,
-                startAtFirstUnviewed: true,
-                presentationSource: "iPadFeed"
-            )
-            .environmentObject(router)
-            .environmentObject(statusViewModel)
-            .environmentObject(conversationListViewModel)
-        }
+        // Story viewer présentation : unifiée via StoryViewerCoordinator au
+        // niveau root (`.fullScreenCover(item:)`). L'ancien cover local
+        // `(isPresented:)` + `selectedStoryUserId` séparé provoquait une capture
+        // périmée de l'uid (écran noir « story introuvable »). Supprimé.
         .sheet(isPresented: $showComposerLanguagePicker) {
             AudioLanguagePickerView(
                 selectedLocale: Binding(
@@ -1112,12 +1156,15 @@ struct FeedView: View {
                             .font(.subheadline.weight(.medium))
                             .foregroundColor(theme.textSecondary)
                     }
+                    .accessibilityLabel(String(localized: "a11y.feed.compose.cancel", defaultValue: "Annuler", bundle: .main))
+                    .accessibilityHint(String(localized: "a11y.feed.compose.cancel.hint", defaultValue: "Ferme l'éditeur sans publier", bundle: .main))
 
                     Spacer()
 
                     Text(String(localized: "Nouveau post", defaultValue: "Nouveau post"))
                         .font(.headline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
+                        .accessibilityAddTraits(.isHeader)
 
                     Spacer()
 
@@ -1135,6 +1182,15 @@ struct FeedView: View {
                         }
                     }
                     .disabled(!composerHasContent || isUploading)
+                    .accessibilityLabel(String(localized: "a11y.feed.compose.publish", defaultValue: "Publier", bundle: .main))
+                    .accessibilityHint(String(localized: "a11y.feed.compose.publish.hint", defaultValue: "Publie votre message dans le fil", bundle: .main))
+                    .accessibilityValue(
+                        isUploading
+                            ? String(localized: "a11y.feed.compose.publish.uploading", defaultValue: "Envoi en cours", bundle: .main)
+                            : (composerHasContent
+                                ? ""
+                                : String(localized: "a11y.feed.compose.publish.disabled", defaultValue: "Indisponible, ajoutez du contenu", bundle: .main))
+                    )
                 }
                 .padding(16)
                 .background(theme.backgroundSecondary)
@@ -1148,6 +1204,7 @@ struct FeedView: View {
                         context: .feedComposer,
                         avatarURL: AuthManager.shared.currentUser?.avatar
                     )
+                    .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(getUserDisplayName(AuthManager.shared.currentUser, fallback: String(localized: "feed.composer.me", defaultValue: "Moi", bundle: .main)))
@@ -1358,8 +1415,13 @@ struct FeedView: View {
         .sheet(item: $editingPost) { post in
             EditPostSheet(
                 originalContent: post.content,
-                onSave: { newContent in
-                    await viewModel.updatePost(post.id, content: newContent)
+                originalLanguage: post.originalLanguage,
+                originalType: post.type,
+                canBeReel: post.hasMedia,
+                media: post.media.map { EditablePostMedia($0) },
+                isRepost: post.repost != nil,
+                onSave: { draft in
+                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds)
                 },
                 onDismiss: { editingPost = nil }
             )

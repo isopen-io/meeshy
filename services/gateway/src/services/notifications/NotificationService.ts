@@ -23,6 +23,8 @@ import {
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { notificationString, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import type { Server as SocketIOServer } from 'socket.io';
@@ -266,7 +268,7 @@ type NotificationAttachmentSummary = {
  * Detailed label for a single attachment — used as the notification body base
  * when the message carries no text. Includes dimensions/duration/size.
  */
-function formatSingleAttachmentLabel(params: {
+export function formatSingleAttachmentLabelI18n(lang: string, params: {
   type: NotificationAttachmentType;
   filename?: string | null;
   fileSize?: number | null;
@@ -280,23 +282,26 @@ function formatSingleAttachmentLabel(params: {
   if (params.type === 'audio') {
     if (params.duration) details.push(formatDuration(params.duration));
     if (params.fileSize) details.push(formatFileSize(params.fileSize));
-    return details.length > 0 ? `🎵 Audio · ${details.join(' · ')}` : '🎵 Audio';
+    const word = notificationString(lang, 'attachment.audio');
+    return details.length > 0 ? `${word} · ${details.join(' · ')}` : word;
   }
 
   if (params.type === 'video') {
     if (params.duration) details.push(formatDuration(params.duration));
     if (params.fileSize) details.push(formatFileSize(params.fileSize));
-    return details.length > 0 ? `🎬 Vidéo · ${details.join(' · ')}` : '🎬 Vidéo';
+    const word = notificationString(lang, 'attachment.video');
+    return details.length > 0 ? `${word} · ${details.join(' · ')}` : word;
   }
 
   if (params.type === 'image') {
     if (params.width && params.height) details.push(`${params.width}×${params.height}`);
     if (params.fileSize) details.push(formatFileSize(params.fileSize));
-    return details.length > 0 ? `📷 Photo · ${details.join(' · ')}` : '📷 Photo';
+    const word = notificationString(lang, 'attachment.photo');
+    return details.length > 0 ? `${word} · ${details.join(' · ')}` : word;
   }
 
   const ext = extractExtension(params.filename);
-  const docLabel = ext ? formatDocumentLabel(ext) : '📎 Document';
+  const docLabel = ext ? formatDocumentLabel(ext) : notificationString(lang, 'attachment.document');
   return params.fileSize ? `${docLabel} · ${formatFileSize(params.fileSize)}` : docLabel;
 }
 
@@ -305,23 +310,23 @@ function formatSingleAttachmentLabel(params: {
  * label (📄 PDF, 📝 Word…) when the group is homogeneous, falls back to a
  * generic paperclip count otherwise.
  */
-function formatDocumentBadge(docs: ReadonlyArray<NotificationAttachmentSummary>): string {
+function formatDocumentBadge(lang: string, docs: ReadonlyArray<NotificationAttachmentSummary>): string {
   const labels = docs.map(doc => {
     const ext = extractExtension(doc.filename);
-    return ext ? formatDocumentLabel(ext) : '📎 Document';
+    return ext ? formatDocumentLabel(ext) : notificationString(lang, 'attachment.document');
   });
   const homogeneous = labels.every(label => label === labels[0]);
   if (homogeneous) {
     return docs.length > 1 ? `${labels[0]} · ${docs.length}` : labels[0];
   }
-  return `📎 ${docs.length} fichiers`;
+  return notificationString(lang, 'attachment.files', { count: docs.length });
 }
 
 /**
  * Per-type `+N` badges for the attachments beyond the first one (the first is
  * surfaced as inline rich media). Order: images, audios, videos, documents.
  */
-function buildAttachmentBadges(rest: ReadonlyArray<NotificationAttachmentSummary>): string {
+function buildAttachmentBadges(lang: string, rest: ReadonlyArray<NotificationAttachmentSummary>): string {
   const images = rest.filter(att => att.type === 'image');
   const audios = rest.filter(att => att.type === 'audio');
   const videos = rest.filter(att => att.type === 'video');
@@ -331,16 +336,16 @@ function buildAttachmentBadges(rest: ReadonlyArray<NotificationAttachmentSummary
   if (images.length > 0) segments.push(`+${images.length}📷`);
   if (audios.length > 0) segments.push(`+${audios.length}🎵`);
   if (videos.length > 0) segments.push(`+${videos.length}🎬`);
-  if (documents.length > 0) segments.push(formatDocumentBadge(documents));
+  if (documents.length > 0) segments.push(formatDocumentBadge(lang, documents));
   return segments.join(' ');
 }
 
 /**
  * Compose the message notification body: message text (or, when absent, a
  * detailed label for the first attachment) followed by per-type `+N` badges
- * for the remaining attachments.
+ * for the remaining attachments. Localized to the recipient's language.
  */
-function buildMessageNotificationBody(params: {
+export function buildMessageNotificationBodyI18n(lang: string, params: {
   messagePreview?: string;
   attachments?: ReadonlyArray<NotificationAttachmentSummary>;
   firstAttachmentFileSize?: number | null;
@@ -354,8 +359,8 @@ function buildMessageNotificationBody(params: {
   if (attachments.length === 0) return text;
 
   const [first, ...rest] = attachments;
-  const badges = buildAttachmentBadges(rest);
-  const base = text || formatSingleAttachmentLabel({
+  const badges = buildAttachmentBadges(lang, rest);
+  const base = text || formatSingleAttachmentLabelI18n(lang, {
     type: first.type,
     filename: first.filename,
     fileSize: params.firstAttachmentFileSize,
@@ -392,6 +397,42 @@ export class NotificationService {
     mentionsCleanup.unref?.();
     const reactionsCleanup = setInterval(() => this.cleanupOldReactions(), 120_000);
     reactionsCleanup.unref?.();
+  }
+
+  // ==============================================
+  // LANGUAGE RESOLUTION (i18n notifications)
+  // ==============================================
+
+  private readonly LANG_SELECT = {
+    systemLanguage: true,
+    regionalLanguage: true,
+    customDestinationLanguage: true,
+    deviceLocale: true,
+  } as const;
+
+  /** Langue de notification d'un destinataire (Prisme-first, fallback 'fr'). */
+  private async resolveRecipientLang(userId: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: this.LANG_SELECT,
+    });
+    if (!user) return 'fr';
+    return resolveUserLanguage(user, { deviceLocale: user.deviceLocale ?? undefined });
+  }
+
+  /** Variante batch : un seul findMany, retourne une Map userId → langue (fallback 'fr'). */
+  private async resolveRecipientLangs(userIds: readonly string[]): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    if (userIds.length === 0) return out;
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: [...new Set(userIds)] } },
+      select: { id: true, ...this.LANG_SELECT },
+    });
+    for (const u of users) {
+      out.set(u.id, resolveUserLanguage(u, { deviceLocale: u.deviceLocale ?? undefined }));
+    }
+    for (const id of userIds) if (!out.has(id)) out.set(id, 'fr');
+    return out;
   }
 
   // ==============================================
@@ -948,7 +989,9 @@ export class NotificationService {
       return null;
     }
 
-    const content = buildMessageNotificationBody({
+    const recipientLang = await this.resolveRecipientLang(params.recipientUserId);
+
+    const content = buildMessageNotificationBodyI18n(recipientLang, {
       messagePreview: params.messagePreview,
       attachments: params.attachments,
       firstAttachmentFileSize: params.firstAttachmentFileSize,
@@ -1143,6 +1186,7 @@ export class NotificationService {
 
     if (!reactor) return null;
 
+    const lang = await this.resolveRecipientLang(params.messageAuthorId);
     const messagePreview = message?.content
       ? message.content.length > 100
         ? message.content.substring(0, 100) + '…'
@@ -1153,7 +1197,7 @@ export class NotificationService {
       userId: params.messageAuthorId,
       type: 'message_reaction',
       priority: 'low',
-      content: params.reactionEmoji,
+      content: notificationString(lang, 'reaction.message', { emoji: params.reactionEmoji }),
 
       actor: {
         id: params.reactorUserId,
@@ -1216,12 +1260,13 @@ export class NotificationService {
     const reactorName = reactor.displayName?.trim()
       || reactor.username?.trim()
       || 'Quelqu’un';
-    const contextSuffix = params.postAuthorName
-      ? (params.isStory
-          ? ` sur la story de ${params.postAuthorName}`
-          : ` sur le post de ${params.postAuthorName}`)
-      : '';
-    const body = `${reactorName} a réagi ${params.reactionEmoji} à votre commentaire${contextSuffix}`;
+    const lang = await this.resolveRecipientLang(params.commentAuthorId);
+    const body = notificationString(lang, 'reaction.commentVerbose', {
+      actor: reactorName,
+      emoji: params.reactionEmoji,
+      author: params.postAuthorName,
+      isStory: params.isStory,
+    });
 
     // Subtitle (rendu sous le title côté iOS — banner riche) : un aperçu du
     // commentaire qui a reçu la réaction. Permet au destinataire de savoir
@@ -1245,6 +1290,9 @@ export class NotificationService {
         avatar: reactor.avatar,
       },
 
+      // postId/commentId vivent dans context (cible de navigation = contexte
+      // central de la notif). Ils sont désormais exposés par le schema de
+      // réponse (notificationContextSchema) — plus de strip côté REST.
       context: {
         postId: params.postId,
         commentId: params.commentId,
@@ -1405,27 +1453,13 @@ export class NotificationService {
     // restauré côté NSE après la donation d'intent), le body reste le contenu
     // du commentaire.
     const postType = params.postType ?? 'STORY';
-    const NOUN: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS', string> = {
-      STORY: 'story',
-      POST: 'publication',
-      MOOD: 'humeur',
-      STATUS: 'statut',
-    };
-    const noun = NOUN[postType];
-    const ARTICLE: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS', string> = {
-      STORY: 'une',
-      POST: 'une',
-      MOOD: 'une',
-      STATUS: 'un',
-    };
-    const article = ARTICLE[postType];
     const authorName = postAuthor?.displayName?.trim()
       || postAuthor?.username?.trim()
       || '';
-    const ownerSubtitle = `Votre ${noun}`;
-    const contextSubtitle = authorName
-      ? `${noun.charAt(0).toUpperCase()}${noun.slice(1)} de ${authorName}`
-      : `${noun.charAt(0).toUpperCase()}${noun.slice(1)}`;
+    const langs = await this.resolveRecipientLangs([authorId, ...previousCommenterIds, ...friendIds]);
+    const contextSubtitleFor = (lang: string): string => authorName
+      ? notificationString(lang, 'comment.subtitleFrom', { postType, author: authorName })
+      : notificationString(lang, 'comment.subtitleBare', { postType });
 
     const commonContext = { postId: params.postId, commentId: params.commentId };
     const commonMetadata = {
@@ -1449,13 +1483,14 @@ export class NotificationService {
     //    Pour un post non-story, l'auteur est déjà notifié via post_comment
     //    (route) — bucket sauté pour ne pas le notifier deux fois.
     if (authorId !== params.commenterId && postType === 'STORY') {
+      const aLang = langs.get(authorId) ?? 'fr';
       tasks.push(
         this.createNotification({
           userId: authorId,
           type: 'story_new_comment',
           priority: 'normal',
-          content: excerpt || `a commenté votre ${noun}`,
-          subtitle: ownerSubtitle,
+          content: excerpt || notificationString(aLang, 'comment.your', { postType }),
+          subtitle: notificationString(aLang, 'comment.subtitleOwner', { postType }),
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
@@ -1466,13 +1501,14 @@ export class NotificationService {
     // 2. Previous commenters (thread participants) — skip mentioned users
     for (const recipientId of previousCommenterIds) {
       if (excludeSet.has(recipientId)) continue;
+      const rLang = langs.get(recipientId) ?? 'fr';
       tasks.push(
         this.createNotification({
           userId: recipientId,
           type: 'story_thread_reply',
           priority: 'low',
-          content: excerpt || `a répondu dans ${article} ${noun}`,
-          subtitle: contextSubtitle,
+          content: excerpt || notificationString(rLang, 'comment.repliedIn', { postType }),
+          subtitle: contextSubtitleFor(rLang),
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
@@ -1483,13 +1519,14 @@ export class NotificationService {
     // 3. Friends of the story author — skip mentioned users
     for (const recipientId of friendIds) {
       if (excludeSet.has(recipientId)) continue;
+      const rLang = langs.get(recipientId) ?? 'fr';
       tasks.push(
         this.createNotification({
           userId: recipientId,
           type: 'friend_story_comment',
           priority: 'low',
-          content: excerpt || `a commenté ${article} ${noun}`,
-          subtitle: contextSubtitle,
+          content: excerpt || notificationString(rLang, 'comment.generic', { postType }),
+          subtitle: contextSubtitleFor(rLang),
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
@@ -1610,7 +1647,7 @@ export class NotificationService {
     const excerpt = params.postExcerpt
       ? this.truncateMessage(params.postExcerpt)
       : '';
-    const content = excerpt || 'vous a mentionné';
+    const langs = await this.resolveRecipientLangs(params.mentionedUserIds);
 
     const actorInfo = {
       id: params.posterId,
@@ -1637,7 +1674,7 @@ export class NotificationService {
           userId,
           type: 'user_mentioned',
           priority: 'high',
-          content,
+          content: excerpt || notificationString(langs.get(userId) ?? 'fr', 'mention'),
           actor: actorInfo,
           context: {
             postId: params.postId,
@@ -1717,23 +1754,20 @@ export class NotificationService {
     const excludeSet = new Set(params.excludeUserIds ?? []);
     const excerpt = params.excerpt ? this.truncateMessage(params.excerpt) : '';
 
-    const fallbackContent: Record<'friend_new_story' | 'friend_new_post' | 'friend_new_mood', string> = {
-      friend_new_story: 'a publié une nouvelle story',
-      friend_new_post: 'a publié un nouveau post',
-      friend_new_mood: 'a publié une nouvelle humeur',
+    // Content : le wording « a publié une nouvelle … » est localisé par
+    // destinataire ; le subtitle typé (« Nouvelle story » …) voyage en
+    // APN-natif (restauré par le NSE) — les deux dans la langue du destinataire.
+    const contentKeyByType: Record<'friend_new_story' | 'friend_new_post' | 'friend_new_mood', NotificationStringKey> = {
+      friend_new_story: 'friend.story',
+      friend_new_post: 'friend.post',
+      friend_new_mood: 'friend.mood',
     };
-    const content = excerpt || fallbackContent[notificationType];
+    const contentKey = contentKeyByType[notificationType];
 
-    // Subtitle typé : quand le body est l'extrait du contenu, le destinataire
-    // doit quand même savoir s'il s'agit d'une story, d'une publication ou
-    // d'une humeur — le type voyage en subtitle (APN-natif, restauré par le NSE).
-    const subtitleByContentType: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS', string> = {
-      STORY: 'Nouvelle story',
-      POST: 'Nouvelle publication',
-      MOOD: 'Nouvelle humeur',
-      STATUS: 'Nouveau statut',
-    };
-    const subtitle = subtitleByContentType[params.contentType];
+    const candidateFriendIds = friendRequests
+      .map(fr => (fr.senderId === params.authorId ? fr.receiverId : fr.senderId))
+      .filter(id => id !== params.authorId && !excludeSet.has(id));
+    const langs = await this.resolveRecipientLangs(candidateFriendIds);
 
     const actorInfo = {
       id: params.authorId,
@@ -1753,13 +1787,14 @@ export class NotificationService {
       if (seenIds.has(friendId)) continue;
       seenIds.add(friendId);
 
+      const fLang = langs.get(friendId) ?? 'fr';
       tasks.push(
         this.createNotification({
           userId: friendId,
           type: notificationType,
           priority: 'normal',
-          content,
-          subtitle,
+          content: excerpt || notificationString(fLang, contentKey),
+          subtitle: notificationString(fLang, 'friend.subtitleNew', { postType: params.contentType }),
           actor: actorInfo,
           context: { postId: params.postId },
           metadata: {
@@ -1805,13 +1840,13 @@ export class NotificationService {
     // L'extension iOS expose en plus l'avatar du caller via INSendMessageIntent
     // (missed_call est ajouté à communicationTypes côté extension dans la même PR).
     const callIcon = params.callType === 'video' ? '📹' : '📞';
-    const callLabel = params.callType === 'video' ? 'vidéo' : 'audio';
+    const lang = await this.resolveRecipientLang(params.recipientUserId);
 
     return this.createNotification({
       userId: params.recipientUserId,
       type: 'missed_call',
       priority: 'high',
-      content: `${callIcon} Appel ${callLabel} manqué`,
+      content: notificationString(lang, 'call.missed', { callIcon, callType: params.callType }),
 
       actor: {
         id: params.callerId,
@@ -1850,11 +1885,13 @@ export class NotificationService {
 
     if (!requester) return null;
 
+    const lang = await this.resolveRecipientLang(params.recipientUserId);
+
     return this.createNotification({
       userId: params.recipientUserId,
       type: 'friend_request',
       priority: 'normal',
-      content: 'Nouvelle demande de contact',
+      content: notificationString(lang, 'contact.request'),
 
       actor: {
         id: params.requesterId,
@@ -1889,11 +1926,13 @@ export class NotificationService {
 
     if (!accepter) return null;
 
+    const lang = await this.resolveRecipientLang(params.recipientUserId);
+
     return this.createNotification({
       userId: params.recipientUserId,
       type: 'friend_accepted',
       priority: 'normal',
-      content: 'Demande de contact acceptée',
+      content: notificationString(lang, 'contact.accepted'),
 
       actor: {
         id: params.accepterUserId,
@@ -2110,11 +2149,14 @@ export class NotificationService {
         ? 'status_reaction'
         : 'post_like';
 
+    const lang = await this.resolveRecipientLang(params.postAuthorId);
+    const reactPostType = params.postType === 'STORY' ? 'STORY' : params.postType === 'STATUS' ? 'STATUS' : 'POST';
+
     return this.createNotification({
       userId: params.postAuthorId,
       type,
       priority: 'normal',
-      content: `a réagi ${params.emoji} à votre ${params.postType === 'STORY' ? 'story' : params.postType === 'STATUS' ? 'statut' : 'publication'}`,
+      content: notificationString(lang, 'reaction.post', { emoji: params.emoji, postType: reactPostType }),
 
       actor: {
         id: params.actorId,
@@ -2223,12 +2265,7 @@ export class NotificationService {
     });
     if (!actor) return null;
 
-    const repostNoun: Record<'POST' | 'STORY' | 'MOOD' | 'STATUS', string> = {
-      POST: 'votre publication',
-      STORY: 'votre story',
-      MOOD: 'votre humeur',
-      STATUS: 'votre statut',
-    };
+    const lang = await this.resolveRecipientLang(params.postAuthorId);
     const trimmedPostPreview = params.postPreview?.trim() ?? '';
     const subtitle = trimmedPostPreview !== ''
       ? `« ${this.truncateMessage(trimmedPostPreview)} »`
@@ -2238,7 +2275,7 @@ export class NotificationService {
       userId: params.postAuthorId,
       type: 'post_repost',
       priority: 'normal',
-      content: `a partagé ${repostNoun[params.postType ?? 'POST']}`,
+      content: notificationString(lang, 'repost', { postType: params.postType ?? 'POST' }),
       ...(subtitle ? { subtitle } : {}),
 
       actor: {
@@ -2282,10 +2319,11 @@ export class NotificationService {
     if (!actor) return null;
 
     // Subtitle = le commentaire auquel on répond ; body = la réponse.
+    const lang = await this.resolveRecipientLang(params.commentAuthorId);
     const trimmedParent = params.parentCommentPreview?.trim() ?? '';
     const subtitle = trimmedParent !== ''
-      ? `En réponse à « ${this.truncateMessage(trimmedParent)} »`
-      : 'En réponse à votre commentaire';
+      ? notificationString(lang, 'comment.replyWithParent', { preview: this.truncateMessage(trimmedParent) })
+      : notificationString(lang, 'comment.reply');
 
     return this.createNotification({
       userId: params.commentAuthorId,
@@ -2335,6 +2373,7 @@ export class NotificationService {
     });
     if (!actor) return null;
 
+    const lang = await this.resolveRecipientLang(params.commentAuthorId);
     const trimmedPreview = params.commentPreview?.trim() ?? '';
     const subtitle = trimmedPreview !== ''
       ? `« ${this.truncateMessage(trimmedPreview)} »`
@@ -2344,7 +2383,7 @@ export class NotificationService {
       userId: params.commentAuthorId,
       type: 'comment_like',
       priority: 'low',
-      content: `a réagi ${params.emoji} à votre commentaire`,
+      content: notificationString(lang, 'reaction.comment', { emoji: params.emoji }),
       ...(subtitle ? { subtitle } : {}),
 
       actor: {
@@ -2402,9 +2441,10 @@ export class NotificationService {
       }
     }
 
+    const lang = await this.resolveRecipientLang(params.invitedUserId);
     const content = params.conversationType === 'direct'
-      ? `Nouvelle conversation avec ${actor.displayName}`
-      : `Invitation au groupe ${params.conversationTitle || 'sans nom'}`;
+      ? notificationString(lang, 'invitation.direct', { actor: actor.displayName })
+      : notificationString(lang, 'invitation.group', { title: params.conversationTitle || '' });
 
     return this.createNotification({
       userId: params.invitedUserId,
@@ -2437,11 +2477,15 @@ export class NotificationService {
       select: { title: true, type: true },
     });
 
+    const lang = await this.resolveRecipientLang(params.recipientUserId);
+
     return this.createNotification({
       userId: params.recipientUserId,
       type: 'added_to_conversation',
       priority: 'normal',
-      content: conversation?.type === 'direct' ? 'Nouveau contact' : `Ajouté au groupe ${conversation?.title || ''}`,
+      content: conversation?.type === 'direct'
+        ? notificationString(lang, 'group.newContact')
+        : notificationString(lang, 'group.added', { title: conversation?.title || '' }),
       actor: {
         id: params.addedByUserId,
         username: actor.username,
@@ -2744,6 +2788,7 @@ export class NotificationService {
       where: { id: params.recipientUserId },
       select: { systemLanguage: true }
     });
+    const lang = user?.systemLanguage ?? 'fr';
     const locale = user?.systemLanguage === 'en' ? 'en-US' : 'fr-FR';
 
     const bodyParts: string[] = [];
@@ -2755,7 +2800,7 @@ export class NotificationService {
     bodyParts.push(now.toLocaleString(locale, { timeZone: geo?.timezone || 'UTC', dateStyle: 'short', timeStyle: 'short' }));
     const content = bodyParts.join(' — ');
 
-    const title = locale.startsWith('en') ? 'New login detected' : 'Nouvelle connexion détectée';
+    const title = notificationString(lang, 'login.newDevice.title');
 
     return this.createNotification({
       userId: params.recipientUserId,
@@ -2936,10 +2981,49 @@ export class NotificationService {
       this.prisma.notification.count({ where }),
     ]);
 
+    const withFreshAvatars = await this.overlayLiveActorAvatars(notifications);
+
     return {
-      notifications: notifications.map((n) => this.formatNotification(n)),
+      notifications: withFreshAvatars.map((n) => this.formatNotification(n)),
       total,
     };
+  }
+
+  /**
+   * `Notification.actor` is a frozen JSON snapshot captured at creation time,
+   * so its `avatar` URL becomes a dead link as soon as the actor changes their
+   * avatar (old file deleted) — producing recurring 404s when `/notifications`
+   * renders. The avatar is a presentation asset, not historical content: it
+   * must always reflect the actor's current avatar. Re-resolve each distinct
+   * actor's avatar live from the User table in a single batched query, then
+   * overlay it onto each notification. Actors with no live record (e.g. a
+   * deleted account) keep their snapshot untouched.
+   */
+  private async overlayLiveActorAvatars(notifications: any[]): Promise<any[]> {
+    const actorIds = [
+      ...new Set(
+        notifications
+          .map((n) => n.actor?.id)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    ];
+    if (actorIds.length === 0) {
+      return notifications;
+    }
+
+    const liveUsers = await this.prisma.user.findMany({
+      where: { id: { in: actorIds } },
+      select: { id: true, avatar: true },
+    });
+    const liveAvatarById = new Map(liveUsers.map((u) => [u.id, u.avatar ?? null]));
+
+    return notifications.map((n) => {
+      const actorId = n.actor?.id;
+      if (!actorId || !liveAvatarById.has(actorId)) {
+        return n;
+      }
+      return { ...n, actor: { ...n.actor, avatar: liveAvatarById.get(actorId) ?? null } };
+    });
   }
 
   /**

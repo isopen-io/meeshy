@@ -120,7 +120,12 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
   },
 
   triggerStatusTick: () => {
-    set({ _lastStatusUpdate: Date.now() });
+    // _lastStatusUpdate sert de signal de re-render pour useUserStatusTick.
+    // Date.now() seul peut renvoyer la meme valeur que le mergeParticipants qui
+    // precede (meme milliseconde) : le selecteur Zustand ne voit alors aucun
+    // changement et le decay temporel n'est jamais recalcule. On garantit une
+    // valeur strictement croissante pour toujours declencher le re-render.
+    set(state => ({ _lastStatusUpdate: Math.max(Date.now(), state._lastStatusUpdate + 1) }));
   },
 
   getUserById: (userId: string) => {

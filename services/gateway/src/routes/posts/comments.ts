@@ -3,11 +3,27 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostCommentService } from '../../services/PostCommentService';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
+import { PostAudioService } from '../../services/posts/PostAudioService';
 import { CreateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams } from './types';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response';
 import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
+
+/**
+ * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
+ * socket d'un commentaire — miroir exact du hoist des messages / posts. Permet
+ * au destinataire de rendre le lien cliquable/tracé vers `/l/<token>` sans
+ * réécrire l'URL. No-op si le commentaire ne porte aucun lien tracé.
+ */
+function hoistCommentTrackingLinks<T extends Record<string, unknown>>(comment: T): T {
+  const metadata = comment?.metadata as Record<string, unknown> | null | undefined;
+  const tl = metadata?.trackingLinks;
+  if (Array.isArray(tl) && tl.length > 0) {
+    return { ...comment, trackingLinks: tl } as T;
+  }
+  return comment;
+}
 
 export function registerCommentRoutes(
   fastify: FastifyInstance,
@@ -113,6 +129,9 @@ export function registerCommentRoutes(
             parsed.data.parentId,
             parsed.data.effectFlags,
             parsed.data.originalLanguage,
+            // Un seul média par commentaire : on lie le premier id du tableau.
+            parsed.data.attachmentIds?.[0],
+            parsed.data.mobileTranscription,
           );
           if (!c) throw new Error('POST_NOT_FOUND');
           return c as CommentResult & { id: string };
@@ -139,7 +158,7 @@ export function registerCommentRoutes(
       if (socialEvents && post) {
         socialEvents.broadcastCommentAdded({
           postId,
-          comment,
+          comment: hoistCommentTrackingLinks(comment as unknown as Record<string, unknown>) as unknown as typeof comment,
           commentCount: post.commentCount,
         }, post.authorId).catch(() => {});
       }
@@ -238,6 +257,25 @@ export function registerCommentRoutes(
         }
       }
 
+      // Pipeline audio pour un média de commentaire audio (fire-and-forget).
+      // Réutilise PostAudioService : Whisper → NLLB → TTS pour les langues plateforme.
+      // Le routing ZMQ passe par `postId`/`postMediaId` (= commentMedia.id) ; à
+      // l'arrivée, PostAudioService désambiguïse via `PostMedia.commentId` et émet
+      // `comment:media-updated`. Pas de re-transcription si mobileTranscription fournie.
+      const linkedMedia = (comment as unknown as { media?: Array<{ id: string; mimeType?: string; fileUrl?: string }> }).media?.[0];
+      if (
+        linkedMedia
+        && linkedMedia.mimeType?.startsWith('audio/')
+        && !parsed.data.mobileTranscription
+      ) {
+        PostAudioService.shared.processPostAudio({
+          postId,
+          postMediaId: linkedMedia.id,
+          fileUrl: linkedMedia.fileUrl ?? '',
+          authorId: authContext.registeredUser.id,
+        }).catch((err) => fastify.log.error(`comment audio processing failed: ${err}`));
+      }
+
       const newCommentMentionedUsers = parsed.data.content
         ? await resolveMentionedUsers(prisma, [parsed.data.content])
         : [];
@@ -246,6 +284,9 @@ export function registerCommentRoutes(
     } catch (error) {
       if (error instanceof Error && error.message === 'PARENT_NOT_FOUND') {
         return sendNotFound(reply, 'Parent comment not found', { code: 'COMMENT_NOT_FOUND' });
+      }
+      if (error instanceof Error && error.message === 'MEDIA_NOT_AVAILABLE') {
+        return sendBadRequest(reply, 'Attached media not found or already linked', { code: 'MEDIA_NOT_AVAILABLE' });
       }
       fastify.log.error(`[POST /posts/:postId/comments] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });

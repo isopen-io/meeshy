@@ -474,6 +474,23 @@ final class StoryModelsExtensionsTests: XCTestCase {
         XCTAssertEqual(project.mediaObjects.first?.duration, 3.0)
     }
 
+    func test_addClipCommand_apply_video_preservesAspectRatio() throws {
+        var project = makeEmptyProject()
+        let cmd = AddClipCommand(
+            clipId: "v1", postMediaId: "pm-v1",
+            kind: .video, startTime: 0, duration: 3.0,
+            aspectRatio: 16.0 / 9.0
+        )
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.mediaObjects.first?.aspectRatio ?? 0, 16.0 / 9.0, accuracy: 0.0001)
+    }
+
+    func test_addClipCommand_decode_legacyWithoutAspectRatio_defaultsTo1() throws {
+        let json = #"{"id":"c1","timestamp":0,"clipId":"v1","postMediaId":"pm","kind":"video","startTime":0,"duration":1}"#
+        let decoded = try JSONDecoder().decode(AddClipCommand.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.aspectRatio, 1.0)
+    }
+
     func test_addClipCommand_apply_addsToCorrectCollection_audio() throws {
         var project = makeEmptyProject()
         let cmd = AddClipCommand(

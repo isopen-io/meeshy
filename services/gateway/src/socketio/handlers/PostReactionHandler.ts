@@ -30,6 +30,10 @@ import {
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
 import { canUserViewPost } from '../../services/posts/postVisibility.js';
+import { SocialEventsHandler } from './SocialEventsHandler';
+
+/** Emoji canonique du "like" — aligné REST (`interactions.ts`) + web (`HEART_EMOJI`). */
+const HEART_EMOJI = '❤️';
 
 const logger = enhancedLogger.child({ module: 'PostReactionHandler' });
 
@@ -49,6 +53,7 @@ export interface PostReactionHandlerDependencies {
   postReactionService: PostReactionService;
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
+  socialEvents: SocialEventsHandler;
 }
 
 export class PostReactionHandler {
@@ -58,6 +63,7 @@ export class PostReactionHandler {
   private postReactionService: PostReactionService;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
+  private socialEvents: SocialEventsHandler;
   private readonly logger = logger;
 
   constructor(deps: PostReactionHandlerDependencies) {
@@ -67,6 +73,52 @@ export class PostReactionHandler {
     this.postReactionService = deps.postReactionService;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
+    this.socialEvents = deps.socialEvents;
+  }
+
+  /**
+   * Émet l'événement de réaction UNIFIÉ.
+   *
+   * Pour le "like" (❤️) sur un POST/REEL, émet l'événement CANONIQUE ABSOLU
+   * `post:liked`/`post:unliked` (via `SocialEventsHandler`) vers les feed rooms
+   * des amis ET la post room — UN SEUL événement par like, reçu par les 3 surfaces
+   * (feed, détail, reel viewer) avec un payload absolu `{likeCount, reactionSummary}`.
+   * On NE ré-émet PAS `post:reaction-added/removed` pour le ❤️ (évite le double-
+   * comptage sur un client présent dans les deux rooms).
+   *
+   * Pour les autres emojis (ou stories/statuses), conserve l'événement par-emoji
+   * `post:reaction-added/removed` vers la post room (comportement historique).
+   */
+  private async broadcastReactionChange(
+    postId: string,
+    emoji: string,
+    action: 'add' | 'remove',
+    userId: string,
+    updateEvent: unknown
+  ): Promise<void> {
+    if (emoji === HEART_EMOJI) {
+      const post = await this.prisma.post.findUnique({
+        where: { id: postId },
+        select: { authorId: true, type: true, likeCount: true, reactionSummary: true },
+      });
+      if (post && post.authorId && (post.type === 'POST' || post.type === 'REEL')) {
+        const payload = {
+          postId,
+          userId,
+          emoji,
+          likeCount: post.likeCount,
+          reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
+        };
+        if (action === 'add') {
+          await this.socialEvents.broadcastPostLiked(payload, post.authorId);
+        } else {
+          await this.socialEvents.broadcastPostUnliked(payload, post.authorId);
+        }
+        return;
+      }
+    }
+    const event = action === 'add' ? SERVER_EVENTS.POST_REACTION_ADDED : SERVER_EVENTS.POST_REACTION_REMOVED;
+    this.io.to(ROOMS.post(postId)).emit(event, updateEvent);
   }
 
   /**
@@ -138,13 +190,18 @@ export class PostReactionHandler {
         userId
       );
 
+      // Contrat ACK == broadcast : on renvoie l'`updateEvent` (postId, userId,
+      // emoji, action, aggregation, timestamp) — le MÊME objet que le broadcast
+      // `post:reaction-added`. Le web ignore `data` (lit seulement success/error),
+      // l'iOS le décode en `SocketPostReactionUpdateEvent`. Renvoyer la `reaction`
+      // brute (sans action/aggregation) cassait le décodage iOS (malformedResponse).
       const successResponse: SocketIOResponse<unknown> = {
         success: true,
-        data: reaction,
+        data: updateEvent,
       };
       if (callback) callback(successResponse);
 
-      this.io.to(ROOMS.post(validated.postId)).emit(SERVER_EVENTS.POST_REACTION_ADDED, updateEvent);
+      await this.broadcastReactionChange(validated.postId, validated.emoji, 'add', userId, updateEvent);
 
       await this._createPostReactionNotification(
         validated.postId,
@@ -230,13 +287,15 @@ export class PostReactionHandler {
         userId
       );
 
+      // Contrat ACK == broadcast (voir handleAddReaction) : on renvoie l'`updateEvent`,
+      // identique au broadcast `post:reaction-removed`, au lieu d'un simple {message}.
       const successResponse: SocketIOResponse<unknown> = {
         success: true,
-        data: { message: 'Reaction removed successfully' },
+        data: updateEvent,
       };
       if (callback) callback(successResponse);
 
-      this.io.to(ROOMS.post(validated.postId)).emit(SERVER_EVENTS.POST_REACTION_REMOVED, updateEvent);
+      await this.broadcastReactionChange(validated.postId, validated.emoji, 'remove', userId, updateEvent);
     } catch (error: unknown) {
       this.logger.error('Failed to remove post reaction', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: SocketIOResponse<unknown> = {

@@ -69,9 +69,18 @@ docs/              → Architecture & feature documentation
 ```
 
 ### Build System
-- **Package Manager**: pnpm 9+ (primary), bun 1.1+ (optional)
+- **Package Manager**: **bun 1.3.14 (default locally — CI parity)**, pnpm 9+ (required: Turborepo runs on pnpm). The CI runs install/build/tests under bun by default (`PACKAGE_MANAGER` defaults to `bun`, `BUN_VERSION: '1.3.14'`). Run bun locally too — `node/jest` reports a higher, non-CI coverage number (gateway: ~67.5% node vs **62.9% bun**, identical on Node 22; the gap is bun-vs-node, NOT a Node version gap — all CI is Node 22).
 - **Orchestrator**: Turborepo with remote caching
 - **Workspaces**: `apps/*`, `services/*`, `packages/*`
+
+### Local Test Parity (bun)
+Reproduce CI coverage locally — the prerequisites below are what CI does automatically:
+```bash
+cd packages/shared && npx prisma generate --generator client  # else ~17 gateway suites fail (commentId/PostMediaSelect)
+cd packages/shared && bun run build                           # else SocialEventsHandler fails (CommentMediaUpdatedEventData missing from dist)
+cd services/gateway && bun run test:coverage                   # 249/249 suites green, lines ~62.9%
+```
+Keep bun current with `bun upgrade`; bump `BUN_VERSION` in `.github/workflows/{ci,docker}.yml` in lockstep so local and CI never diverge.
 
 ## Development Philosophy
 

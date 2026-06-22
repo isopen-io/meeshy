@@ -562,6 +562,18 @@ export class MessageHandler {
         }
       }
 
+      // Tracking des URLs brutes : hisser `metadata.trackingLinks` ([{url, token}])
+      // en top-level (miroir de `postReplyTo`) — `_buildMessagePayload` n'embarque
+      // pas `metadata`. Le destinataire rend le lien (texte + façade vidéo) vers
+      // `/l/<token>` (capture + redirection) en gardant l'URL/aperçu.
+      const rawMetadata = (message as never)['metadata'];
+      if (rawMetadata && typeof rawMetadata === 'object') {
+        const tl = (rawMetadata as Record<string, unknown>).trackingLinks;
+        if (Array.isArray(tl) && tl.length > 0) {
+          (messagePayload as Record<string, unknown>).trackingLinks = tl;
+        }
+      }
+
       const room = ROOMS.conversation(normalizedId);
 
       // Phase 4 §6.2 — split broadcast into two payloads :

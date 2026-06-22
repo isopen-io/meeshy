@@ -226,7 +226,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }
@@ -306,7 +306,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }
@@ -383,7 +383,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }
@@ -456,7 +456,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }
@@ -519,7 +519,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }
@@ -767,7 +767,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }
@@ -836,7 +836,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }
@@ -910,7 +910,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }
@@ -979,7 +979,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           success: false,
           error: 'Validation error',
           message: 'Invalid input data',
-          details: error.errors
+          details: error.issues
         });
         return;
       }
@@ -1109,6 +1109,385 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     } catch (error) {
       fastify.log.error({ err: error }, 'Error fetching user activity');
       sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user activity' });
+    }
+  });
+
+  /**
+   * GET /admin/users/:userId/conversations - List conversations a user participates in (admin view).
+   * Metadata only (no message content); the target user's membership (role/joinedAt) is flattened
+   * onto each conversation. Requires canViewUsers permission.
+   */
+  fastify.get<{
+    Params: { userId: string };
+    Querystring: { offset?: string; limit?: string; type?: string };
+  }>('/admin/users/:userId/conversations', {
+    preHandler: [fastify.authenticate, requireUserViewAccess]
+  }, async (request, reply) => {
+    try {
+      const { userId } = request.params;
+      const { offset = '0', limit, type } = request.query;
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
+
+      const userExists = await fastify.prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true }
+      });
+      if (!userExists) {
+        return sendNotFound(reply, 'Utilisateur non trouvé');
+      }
+
+      const where: any = {
+        participants: {
+          some: { userId, isActive: true }
+        }
+      };
+      if (type) {
+        where.type = type;
+      }
+
+      const [conversations, total] = await Promise.all([
+        fastify.prisma.conversation.findMany({
+          where,
+          select: {
+            id: true,
+            identifier: true,
+            title: true,
+            type: true,
+            avatar: true,
+            isActive: true,
+            memberCount: true,
+            communityId: true,
+            createdAt: true,
+            lastMessageAt: true,
+            participants: {
+              where: { isActive: true },
+              take: 6,
+              orderBy: { joinedAt: 'asc' },
+              select: {
+                id: true,
+                userId: true,
+                type: true,
+                displayName: true,
+                avatar: true,
+                role: true,
+                joinedAt: true,
+                isActive: true,
+                nickname: true,
+                user: { select: { id: true, username: true, displayName: true, avatar: true } }
+              }
+            }
+          },
+          orderBy: { lastMessageAt: 'desc' },
+          skip: offsetNum,
+          take: limitNum
+        }),
+        fastify.prisma.conversation.count({ where })
+      ]);
+
+      // Keep a small participant preview (direct → the other member, group → a
+      // first slice; the full group list is paged via the dedicated endpoint),
+      // and surface the target user's membership separately for convenience.
+      const data = conversations.map((conv) => {
+        const participants = (conv as { participants?: Array<{ userId?: string | null }> }).participants ?? [];
+        const membership = participants.find((p) => p.userId === userId) ?? null;
+        return { ...conv, participants, membership };
+      });
+
+      return sendPaginatedSuccess(reply, data, {
+        total,
+        offset: offsetNum,
+        limit: limitNum,
+        hasMore: offsetNum + conversations.length < total
+      });
+    } catch (error) {
+      fastify.log.error({ err: error }, 'Error fetching user conversations');
+      return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user conversations' });
+    }
+  });
+
+  /**
+   * GET /admin/users/:userId/media - List media produced by a user (admin view).
+   * Merges post media (post.authorId) and message attachments (uploadedBy),
+   * sorted by recency. Requires canViewUsers permission.
+   */
+  fastify.get<{
+    Params: { userId: string };
+    Querystring: { offset?: string; limit?: string };
+  }>('/admin/users/:userId/media', {
+    preHandler: [fastify.authenticate, requireUserViewAccess]
+  }, async (request, reply) => {
+    try {
+      const { userId } = request.params;
+      const { offset = '0', limit } = request.query;
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
+
+      const userExists = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+      if (!userExists) {
+        return sendNotFound(reply, 'Utilisateur non trouvé');
+      }
+
+      // The first (offset + limit) of the merged stream are guaranteed to be
+      // within the first (offset + limit) of each source, so taking that many
+      // from each is sufficient for a correct slice after merge.
+      const window = offsetNum + limitNum;
+      const postWhere = { post: { authorId: userId } };
+      const attWhere = { uploadedBy: userId };
+      const mediaSelect = {
+        id: true, originalName: true, mimeType: true, fileUrl: true, thumbnailUrl: true,
+        fileSize: true, width: true, height: true, duration: true, createdAt: true
+      } as const;
+
+      const [postMedia, attachments, postCount, attCount] = await Promise.all([
+        fastify.prisma.postMedia.findMany({
+          where: postWhere,
+          select: { ...mediaSelect, postId: true },
+          orderBy: { createdAt: 'desc' },
+          take: window
+        }),
+        fastify.prisma.messageAttachment.findMany({
+          where: attWhere,
+          select: { ...mediaSelect, messageId: true },
+          orderBy: { createdAt: 'desc' },
+          take: window
+        }),
+        fastify.prisma.postMedia.count({ where: postWhere }),
+        fastify.prisma.messageAttachment.count({ where: attWhere })
+      ]);
+
+      const toMedia = (m: Record<string, unknown>, source: 'post' | 'message', contextId: unknown) => ({
+        id: m.id,
+        originalName: m.originalName,
+        mimeType: m.mimeType,
+        fileUrl: m.fileUrl,
+        thumbnailUrl: m.thumbnailUrl,
+        fileSize: m.fileSize,
+        width: m.width,
+        height: m.height,
+        duration: m.duration,
+        createdAt: m.createdAt as string | Date,
+        source,
+        contextId
+      });
+
+      const merged = [
+        ...postMedia.map((m) => toMedia(m as Record<string, unknown>, 'post', (m as Record<string, unknown>).postId)),
+        ...attachments.map((m) => toMedia(m as Record<string, unknown>, 'message', (m as Record<string, unknown>).messageId))
+      ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      const pageSlice = merged.slice(offsetNum, offsetNum + limitNum);
+      const total = postCount + attCount;
+
+      return sendPaginatedSuccess(reply, pageSlice, {
+        total,
+        offset: offsetNum,
+        limit: limitNum,
+        hasMore: offsetNum + pageSlice.length < total
+      });
+    } catch (error) {
+      fastify.log.error({ err: error }, 'Error fetching user media');
+      return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user media' });
+    }
+  });
+
+  /**
+   * GET /admin/users/:userId/reports - Reports filed BY a user (reporterId).
+   * Requires canViewUsers permission.
+   */
+  fastify.get<{
+    Params: { userId: string };
+    Querystring: { offset?: string; limit?: string; status?: string };
+  }>('/admin/users/:userId/reports', {
+    preHandler: [fastify.authenticate, requireUserViewAccess]
+  }, async (request, reply) => {
+    try {
+      const { userId } = request.params;
+      const { offset = '0', limit, status } = request.query;
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
+
+      const userExists = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+      if (!userExists) {
+        return sendNotFound(reply, 'Utilisateur non trouvé');
+      }
+
+      const where: Record<string, unknown> = { reporterId: userId };
+      if (status) {
+        where.status = status;
+      }
+
+      const [reports, total] = await Promise.all([
+        fastify.prisma.report.findMany({
+          where,
+          select: {
+            id: true,
+            reportedType: true,
+            reportedEntityId: true,
+            reportType: true,
+            reason: true,
+            status: true,
+            actionTaken: true,
+            createdAt: true,
+            resolvedAt: true
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: offsetNum,
+          take: limitNum
+        }),
+        fastify.prisma.report.count({ where })
+      ]);
+
+      return sendPaginatedSuccess(reply, reports, {
+        total,
+        offset: offsetNum,
+        limit: limitNum,
+        hasMore: offsetNum + reports.length < total
+      });
+    } catch (error) {
+      fastify.log.error({ err: error }, 'Error fetching user reports');
+      return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user reports' });
+    }
+  });
+
+  /**
+   * GET /admin/users/:userId/reported-messages - Messages authored by the user
+   * that have been reported. Each item is a report joined with its message.
+   * Requires canViewUsers permission.
+   */
+  fastify.get<{
+    Params: { userId: string };
+    Querystring: { offset?: string; limit?: string };
+  }>('/admin/users/:userId/reported-messages', {
+    preHandler: [fastify.authenticate, requireUserViewAccess]
+  }, async (request, reply) => {
+    try {
+      const { userId } = request.params;
+      const { offset = '0', limit } = request.query;
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
+
+      const userExists = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+      if (!userExists) {
+        return sendNotFound(reply, 'Utilisateur non trouvé');
+      }
+
+      const emptyPage = () => sendPaginatedSuccess(reply, [], { total: 0, offset: offsetNum, limit: limitNum, hasMore: false });
+
+      const participants = await fastify.prisma.participant.findMany({
+        where: { userId, type: 'user' },
+        select: { id: true }
+      });
+      const participantIds = participants.map((p) => p.id);
+      if (participantIds.length === 0) return emptyPage();
+
+      // Message ids authored by the user (bounded by the user's own messages).
+      const userMessages = await fastify.prisma.message.findMany({
+        where: { senderId: { in: participantIds } },
+        select: { id: true }
+      });
+      const messageIds = userMessages.map((m) => m.id);
+      if (messageIds.length === 0) return emptyPage();
+
+      const reportWhere = { reportedType: 'message', reportedEntityId: { in: messageIds } };
+
+      const [reports, total] = await Promise.all([
+        fastify.prisma.report.findMany({
+          where: reportWhere,
+          select: {
+            id: true,
+            reportedEntityId: true,
+            reportType: true,
+            reason: true,
+            status: true,
+            reporterId: true,
+            reporterName: true,
+            createdAt: true,
+            resolvedAt: true
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: offsetNum,
+          take: limitNum
+        }),
+        fastify.prisma.report.count({ where: reportWhere })
+      ]);
+
+      const reportedMessageIds = [...new Set(reports.map((r) => r.reportedEntityId))];
+      const messages = reportedMessageIds.length > 0
+        ? await fastify.prisma.message.findMany({
+            where: { id: { in: reportedMessageIds } },
+            select: { id: true, content: true, conversationId: true, messageType: true, createdAt: true, deletedAt: true }
+          })
+        : [];
+      const messageMap = new Map(messages.map((m) => [m.id, m]));
+
+      const data = reports.map((r) => ({ ...r, message: messageMap.get(r.reportedEntityId) ?? null }));
+
+      return sendPaginatedSuccess(reply, data, {
+        total,
+        offset: offsetNum,
+        limit: limitNum,
+        hasMore: offsetNum + reports.length < total
+      });
+    } catch (error) {
+      fastify.log.error({ err: error }, 'Error fetching user reported messages');
+      return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user reported messages' });
+    }
+  });
+
+  /**
+   * GET /admin/conversations/:conversationId/participants - Paginated members of
+   * a conversation (for the group members modal in the admin user fiche).
+   * Requires canViewUsers permission.
+   */
+  fastify.get<{
+    Params: { conversationId: string };
+    Querystring: { offset?: string; limit?: string };
+  }>('/admin/conversations/:conversationId/participants', {
+    preHandler: [fastify.authenticate, requireUserViewAccess]
+  }, async (request, reply) => {
+    try {
+      const { conversationId } = request.params;
+      const { offset = '0', limit } = request.query;
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 30, maxLimit: 100 });
+
+      const conversation = await fastify.prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { id: true }
+      });
+      if (!conversation) {
+        return sendNotFound(reply, 'Conversation non trouvée');
+      }
+
+      const where = { conversationId };
+      const [participants, total] = await Promise.all([
+        fastify.prisma.participant.findMany({
+          where,
+          select: {
+            id: true,
+            userId: true,
+            type: true,
+            displayName: true,
+            avatar: true,
+            role: true,
+            isActive: true,
+            isOnline: true,
+            joinedAt: true,
+            nickname: true,
+            user: { select: { id: true, username: true, displayName: true, avatar: true } }
+          },
+          orderBy: { joinedAt: 'asc' },
+          skip: offsetNum,
+          take: limitNum
+        }),
+        fastify.prisma.participant.count({ where })
+      ]);
+
+      return sendPaginatedSuccess(reply, participants, {
+        total,
+        offset: offsetNum,
+        limit: limitNum,
+        hasMore: offsetNum + participants.length < total
+      });
+    } catch (error) {
+      fastify.log.error({ err: error }, 'Error fetching conversation participants');
+      return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch conversation participants' });
     }
   });
 }

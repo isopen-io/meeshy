@@ -132,22 +132,22 @@ export default function TrackingLinkDetailsPage() {
 
       if (errorMessage.includes('Non authentifié') || errorMessage.includes('401')) {
         // Rediriger vers la page de login avec retour vers cette page
-        toast.error(t('tracking.errors.authRequired') || 'Vous devez être connecté pour voir ces statistiques');
+        toast.error(t('tracking.errors.authRequired', 'You must be logged in to view these statistics'));
         setTimeout(() => {
           router.push(`/login?redirect=/links/tracked/${token}`);
         }, 1500);
         setError('auth_required');
       } else if (errorMessage.includes('403') || errorMessage.includes('Accès non autorisé')) {
         // L'utilisateur n'est pas le créateur du lien
-        toast.error(t('tracking.errors.unauthorized') || 'Vous n\'êtes pas autorisé à voir ces statistiques');
+        toast.error(t('tracking.errors.unauthorized', 'You are not authorized to view these statistics'));
         setError('unauthorized');
       } else if (errorMessage.includes('404') || errorMessage.includes('non trouvé')) {
         // Le lien n'existe pas
-        toast.error(t('tracking.errors.notFound') || 'Lien de tracking non trouvé');
+        toast.error(t('tracking.errors.notFound', 'Tracking link not found'));
         setError('not_found');
       } else {
         // Erreur générique
-        toast.error(t('tracking.errors.statsFailed') || 'Erreur lors du chargement des statistiques');
+        toast.error(t('tracking.errors.statsFailed', 'Error loading statistics'));
         setError('generic');
       }
     } finally {
@@ -182,21 +182,21 @@ export default function TrackingLinkDetailsPage() {
 
   if (!stats && error) {
     // Messages d'erreur personnalisés selon le type d'erreur
-    let errorTitle = t('tracking.details.linkNotFound') || 'Lien non trouvé';
-    let errorDescription = t('tracking.details.linkNotFoundDescription') || 'Ce lien de tracking n\'existe pas';
+    let errorTitle = t('tracking.details.linkNotFound', 'Link not found');
+    let errorDescription = t('tracking.details.linkNotFoundDescription', 'This tracking link does not exist or has been deleted');
     let errorIcon = <XCircle className="h-16 w-16 text-red-600 mb-4" />;
 
     if (error === 'auth_required') {
-      errorTitle = t('tracking.errors.authRequiredTitle') || 'Authentification requise';
-      errorDescription = t('tracking.errors.authRequiredDesc') || 'Vous devez être connecté pour voir les statistiques de ce lien. Redirection vers la page de connexion...';
+      errorTitle = t('tracking.errors.authRequiredTitle', 'Authentication required');
+      errorDescription = t('tracking.errors.authRequiredDesc', 'You must be logged in to view this link\'s statistics. Redirecting to the login page...');
       errorIcon = <Activity className="h-16 w-16 text-orange-600 mb-4" />;
     } else if (error === 'unauthorized') {
-      errorTitle = t('tracking.errors.unauthorizedTitle') || 'Accès refusé';
-      errorDescription = t('tracking.errors.unauthorizedDesc') || 'Vous n\'êtes pas autorisé à voir les statistiques de ce lien. Seul le créateur peut y accéder.';
+      errorTitle = t('tracking.errors.unauthorizedTitle', 'Access denied');
+      errorDescription = t('tracking.errors.unauthorizedDesc', 'You are not authorized to view this link\'s statistics. Only the creator can access them.');
       errorIcon = <XCircle className="h-16 w-16 text-red-600 mb-4" />;
     } else if (error === 'not_found') {
-      errorTitle = t('tracking.details.linkNotFound') || 'Lien non trouvé';
-      errorDescription = t('tracking.details.linkNotFoundDescription') || 'Ce lien de tracking n\'existe pas ou a été supprimé.';
+      errorTitle = t('tracking.details.linkNotFound', 'Link not found');
+      errorDescription = t('tracking.details.linkNotFoundDescription', 'This tracking link does not exist or has been deleted');
       errorIcon = <XCircle className="h-16 w-16 text-red-600 mb-4" />;
     }
 
@@ -211,7 +211,7 @@ export default function TrackingLinkDetailsPage() {
                 <p className="text-muted-foreground mb-6 text-center max-w-md">{errorDescription}</p>
                 <Button onClick={() => router.push('/links#tracked')} variant="default">
                   <ArrowLeft className="h-4 w-4 mr-2" />
-                  {t('tracking.details.backToLinks') || 'Retour aux liens'}
+                  {t('tracking.details.backToLinks', 'Back to links')}
                 </Button>
               </CardContent>
             </Card>
@@ -230,11 +230,11 @@ export default function TrackingLinkDetailsPage() {
             <Card className="border-2 bg-white dark:bg-gray-950">
               <CardContent className="flex flex-col items-center justify-center py-16">
                 <XCircle className="h-16 w-16 text-red-600 mb-4" />
-                <h3 className="text-2xl font-bold text-foreground mb-3">{t('tracking.details.linkNotFound') || 'Erreur'}</h3>
-                <p className="text-muted-foreground mb-6">Une erreur inattendue s&apos;est produite</p>
+                <h3 className="text-2xl font-bold text-foreground mb-3">{t('tracking.details.linkNotFound', 'Link not found')}</h3>
+                <p className="text-muted-foreground mb-6">{t('tracking.details.unexpectedError', 'An unexpected error occurred')}</p>
                 <Button onClick={() => router.push('/links#tracked')} variant="default">
                   <ArrowLeft className="h-4 w-4 mr-2" />
-                  {t('tracking.details.backToLinks') || 'Retour aux liens'}
+                  {t('tracking.details.backToLinks', 'Back to links')}
                 </Button>
               </CardContent>
             </Card>
@@ -750,8 +750,8 @@ export default function TrackingLinkDetailsPage() {
                           <div key={index} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded">
                             <span className="text-sm font-medium">{formatDate(item.date)}</span>
                             <div className="flex items-center gap-4">
-                              <span className="text-sm text-blue-600 font-bold">{item.clicks} clics</span>
-                              <span className="text-sm text-green-600 font-bold">{item.uniqueClicks} uniques</span>
+                              <span className="text-sm text-blue-600 font-bold">{t('tracking.details.clicksCount', { count: item.clicks })}</span>
+                              <span className="text-sm text-green-600 font-bold">{t('tracking.details.uniqueCount', { count: item.uniqueClicks })}</span>
                             </div>
                           </div>
                         ))}

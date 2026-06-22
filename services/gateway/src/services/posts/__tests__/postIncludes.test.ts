@@ -152,6 +152,7 @@ describe('posts/postIncludes — canonical shared selects', () => {
           'translations',
           'storyEffects',
           'audioUrl',
+          'moodEmoji',
           'originalRepostOfId',
           'author',
           'media',

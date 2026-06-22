@@ -43,6 +43,7 @@ const makePrismaMock = () => ({
   },
   user: {
     findUnique: jest.fn(),
+    findMany: jest.fn().mockResolvedValue([]),
   },
   conversation: {
     findUnique: jest.fn(),

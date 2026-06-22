@@ -435,6 +435,20 @@ final class MessageListViewController: UIViewController {
             // sees the bubble depend only on these primitive inputs (Equatable),
             // so VM @Published changes elsewhere don't re-render this cell.
             let vm = self.conversationViewModel
+            // Recipient denominator for the all-or-nothing delivery indicator:
+            // active conversation members EXCLUDING me. Prefer the gateway's
+            // authoritative per-message `recipientCount` (active participants
+            // minus the sender, computed server-side at fetch time); fall back to
+            // the local member count only when the server did not provide it
+            // (`0` — a socket-origin row or an older payload). Direct chats
+            // resolve to 1 (the stored status is trusted verbatim); groups require
+            // EVERY recipient before the bubble shows ✓✓ / indigo ✓✓.
+            let serverRecipients = message.recipientCount
+            let recipients = direct
+                ? 1
+                : (serverRecipients > 0
+                    ? serverRecipients
+                    : max(1, (vm?.currentConversation?.memberCount ?? 2) - 1))
             let translations = vm?.messageTranslations[message.id] ?? []
             let preferred = vm?.preferredTranslation(for: message.id)
             let transcription = vm?.messageTranscriptions[message.id]
@@ -547,6 +561,7 @@ final class MessageListViewController: UIViewController {
                     EquatableMessageBubble(bubble: ThemedMessageBubble(
                         message: message,
                         contactColor: accent,
+                        recipientCount: recipients,
                         isDirect: direct,
                         isDark: dark,
                         transcription: transcription,
@@ -589,7 +604,9 @@ final class MessageListViewController: UIViewController {
                         secondaryLangCode: languageSelection?.secondaryLangCode,
                         onSetActiveDisplayLanguage: setActiveDisplayLanguage,
                         onSetSecondaryLanguage: setSecondaryLanguage,
-                        onOpenProfile: openProfileHandler
+                        onOpenProfile: openProfileHandler,
+                        voiceConsentMissing: vm?.voiceConsentMissing ?? false,
+                        onTapConsentNotice: { [weak self] in self?.router.push(.settings) }
                     ))
                     .equatable()
                 }
@@ -786,6 +803,15 @@ final class MessageListViewController: UIViewController {
             .dropFirst()
             .sink { [weak self] _ in
                 // Preferred language revision change requires full reconfigure of all items
+                self?.applySnapshot(animated: false)
+            }
+            .store(in: &cancellables)
+
+        vm.$voiceConsentMissing
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] _ in
                 self?.applySnapshot(animated: false)
             }
             .store(in: &cancellables)

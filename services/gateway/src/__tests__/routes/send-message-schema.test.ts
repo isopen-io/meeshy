@@ -81,3 +81,25 @@ describe('SendMessageBodySchema — content vs attachment validation', () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe('SendMessageBodySchema — clientMessageId is optional', () => {
+  it('accepts a text message WITHOUT clientMessageId (non-sync clients, e.g. scripts)', () => {
+    const result = SendMessageBodySchema.safeParse({ content: 'hello' });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a media-only message WITHOUT clientMessageId', () => {
+    const result = SendMessageBodySchema.safeParse({ attachmentIds: [attachmentId] });
+    expect(result.success).toBe(true);
+  });
+
+  it('still accepts a valid clientMessageId when provided (sync clients)', () => {
+    const result = SendMessageBodySchema.safeParse({ content: 'hello', clientMessageId: cid });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a malformed clientMessageId when one IS provided', () => {
+    const result = SendMessageBodySchema.safeParse({ content: 'hello', clientMessageId: 'not-a-cid' });
+    expect(result.success).toBe(false);
+  });
+});

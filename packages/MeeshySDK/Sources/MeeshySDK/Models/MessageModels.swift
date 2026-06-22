@@ -1,5 +1,31 @@
 import Foundation
 
+// MARK: - Outbound Link Tracking
+
+/// A single raw-URL → tracking-token mapping attached to a message or post by
+/// the gateway. The client never rewrites the message content; instead it
+/// resolves `https://meeshy.me/l/<token>` as the tappable destination for the
+/// raw URL (capture + 302 redirect to the original page), keeping the displayed
+/// text and any video preview intact. Optional everywhere → older payloads
+/// without this field decode unchanged (rollout-safe).
+public struct TrackedLink: Codable, Sendable, Equatable {
+    public let url: String
+    public let token: String
+
+    public init(url: String, token: String) {
+        self.url = url
+        self.token = token
+    }
+}
+
+extension Sequence where Element == TrackedLink {
+    /// Collapses a list of `{ url, token }` mappings into a `[url: token]`
+    /// lookup. Last token wins on a duplicate URL (gateway sends one per URL).
+    public var trackedLinkMap: [String: String] {
+        reduce(into: [:]) { $0[$1.url] = $1.token }
+    }
+}
+
 // MARK: - API Message Models
 
 public struct APIMessageSenderUser: Decodable, Sendable {
@@ -88,6 +114,9 @@ public struct APIMessageAttachment: Decodable, Sendable {
     public let reactionSummary: [String: Int]?
     /// BUG2 A' — emojis posés par l'utilisateur courant sur cette pièce jointe.
     public let currentUserReactions: [String]?
+    /// Phase 2 — progression de consommation PERSONNELLE du current-user
+    /// (position + complétion), pour seeder le tint waveform / progress-bar.
+    public let currentUserConsumption: MeeshyMediaConsumption?
 
     // ── Audio / video ──
     public let duration: Int?
@@ -158,7 +187,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, messageId
         case fileName, originalName, mimeType, fileSize, fileUrl
-        case thumbnailUrl, thumbHash, width, height, imageVariants, reactionSummary, currentUserReactions
+        case thumbnailUrl, thumbHash, width, height, imageVariants, reactionSummary, currentUserReactions, currentUserConsumption
         case duration, bitrate, sampleRate, codec, channels, fps, videoCodec
         case pageCount, lineCount
         case latitude, longitude
@@ -198,6 +227,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
         self.imageVariants = try c.decodeIfPresent([MeeshyImageVariant].self, forKey: .imageVariants)
         self.reactionSummary = try c.decodeIfPresent([String: Int].self, forKey: .reactionSummary)
         self.currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
+        self.currentUserConsumption = try c.decodeIfPresent(MeeshyMediaConsumption.self, forKey: .currentUserConsumption)
         self.duration = try c.decodeIfPresent(Int.self, forKey: .duration)
         self.bitrate = try c.decodeIfPresent(Int.self, forKey: .bitrate)
         self.sampleRate = try c.decodeIfPresent(Int.self, forKey: .sampleRate)
@@ -376,12 +406,29 @@ public struct APIMessage: Sendable {
     public let readByAllAt: Date?
     public let deliveredCount: Int?
     public let readCount: Int?
+    /// Server's authoritative count of ACTIVE recipients for this message
+    /// (active conversation participants excluding the sender). Projected by the
+    /// gateway so the all-or-nothing delivery indicator uses the real
+    /// denominator instead of a possibly-stale client `memberCount`. `nil` when
+    /// the payload predates the field (e.g. socket `message:new`).
+    public let recipientCount: Int?
     public let effectFlags: UInt32?
     public let translations: [APITextTranslation]?
     public let mentionedUsers: [MentionedUser]?
     /// Structured per-type payload. For call-summary system messages this decodes
     /// into a `CallSummaryMetadata`; absent / non-call metadata yields `nil`.
     public let callSummary: CallSummaryMetadata?
+    /// Outbound-link tracking mappings minted by the gateway. Parsed from the
+    /// top-level `trackingLinks` (socket `message:new`) OR from
+    /// `metadata.trackingLinks` (REST). `nil` when the payload predates the
+    /// feature — the renderer then falls back to the raw URLs. Defaulted so the
+    /// memberwise initializer stays source-compatible with existing call sites.
+    public var trackingLinks: [TrackedLink]? = nil
+
+    /// `[rawURL: token]` lookup derived from `trackingLinks`. Empty when no
+    /// tracking data is present. Consumed by `MessageTextRenderer` (tappable
+    /// link rewrite) and `VideoEmbedContainer` (façade destination).
+    public var trackedLinkMap: [String: String] { (trackingLinks ?? []).trackedLinkMap }
 }
 
 extension APIMessage: Decodable {
@@ -393,11 +440,20 @@ extension APIMessage: Decodable {
         case isEncrypted, encryptionMode, createdAt, updatedAt
         case sender, attachments, replyTo, forwardedFrom, forwardedFromConversation
         case reactionSummary, reactionCount, currentUserReactions
-        case deliveredToAllAt, readByAllAt, deliveredCount, readCount
+        case deliveredToAllAt, readByAllAt, deliveredCount, readCount, recipientCount
         case effectFlags, translations, mentionedUsers
         case metadata
+        case trackingLinks
         // MongoDB fallback
         case _id
+    }
+
+    /// Minimal shape of the `metadata` JSON blob needed to extract
+    /// `trackingLinks` on REST payloads (socket payloads put it top-level).
+    /// Decoded with `try?` so a non-conforming metadata object never fails the
+    /// whole message decode.
+    private struct MessageMetadataEnvelope: Decodable {
+        let trackingLinks: [TrackedLink]?
     }
 
     public init(from decoder: Decoder) throws {
@@ -446,12 +502,22 @@ extension APIMessage: Decodable {
         readByAllAt = try c.decodeIfPresent(Date.self, forKey: .readByAllAt)
         deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount)
         readCount = try c.decodeIfPresent(Int.self, forKey: .readCount)
+        recipientCount = try c.decodeIfPresent(Int.self, forKey: .recipientCount)
         effectFlags = try c.decodeIfPresent(UInt32.self, forKey: .effectFlags)
         translations = try c.decodeIfPresent([APITextTranslation].self, forKey: .translations)
         mentionedUsers = try c.decodeIfPresent([MentionedUser].self, forKey: .mentionedUsers)
         // Tolerant: a present-but-non-call metadata object must not fail the
         // whole message decode, so swallow shape mismatches into nil.
         callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .metadata)
+        // Outbound-link tracking: prefer the top-level `trackingLinks` (socket
+        // `message:new`); otherwise read it from the `metadata` envelope (REST).
+        // Both decodes are tolerant so a malformed shape leaves the field nil
+        // (renderer falls back to raw URLs) without failing the message.
+        if let topLevel = try? c.decodeIfPresent([TrackedLink].self, forKey: .trackingLinks), !topLevel.isEmpty {
+            trackingLinks = topLevel
+        } else {
+            trackingLinks = (try? c.decodeIfPresent(MessageMetadataEnvelope.self, forKey: .metadata))??.trackingLinks
+        }
     }
 }
 
@@ -571,7 +637,12 @@ extension APIMessage {
                 thumbnailUrl: apiAtt.thumbnailUrl, thumbHash: apiAtt.thumbHash, duration: apiAtt.duration, uploadedBy: senderId,
                 latitude: apiAtt.latitude, longitude: apiAtt.longitude,
                 thumbnailColor: thumbnailColor,
-                imageVariants: apiAtt.imageVariants
+                imageVariants: apiAtt.imageVariants,
+                deliveredToAllAt: apiAtt.deliveredToAllAt, viewedByAllAt: apiAtt.viewedByAllAt,
+                downloadedByAllAt: apiAtt.downloadedByAllAt, listenedByAllAt: apiAtt.listenedByAllAt,
+                watchedByAllAt: apiAtt.watchedByAllAt, viewedCount: apiAtt.viewedCount,
+                downloadedCount: apiAtt.downloadedCount, consumedCount: apiAtt.consumedCount,
+                currentUserConsumption: apiAtt.currentUserConsumption
             )
         }
 
@@ -695,7 +766,9 @@ extension APIMessage {
                 || (currentUsername != nil && resolvedUsername?.lowercased() == currentUsername?.lowercased()),
             deliveredToAllAt: deliveredToAllAt, readByAllAt: readByAllAt,
             deliveredCount: deliveredCount ?? 0, readCount: readCount ?? 0,
-            callSummary: callSummary
+            recipientCount: recipientCount ?? 0,
+            callSummary: callSummary,
+            trackedLinkMap: trackedLinkMap
         )
     }
 }

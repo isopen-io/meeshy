@@ -353,6 +353,44 @@ final class StatusViewModelTests: XCTestCase {
         XCTAssertEqual(sut.statuses[0].content, "Updated content")
     }
 
+    // MARK: - reactToStatus() optimistic + statusReacted reception
+
+    func test_reactToStatus_optimisticallyIncrementsReactionSummary() async {
+        let entry = StatusEntry(id: "s1", userId: "u", username: "a", avatarColor: "FFFFFF", moodEmoji: "\u{1F389}")
+        sut.statuses = [entry]
+        mockStatusService.reactResult = .success(())
+
+        await sut.reactToStatus("s1", emoji: "\u{2764}")
+
+        XCTAssertEqual(sut.statuses[0].reactionSummary?["\u{2764}"], 1)
+    }
+
+    func test_reactToStatus_failure_rollsBackReactionSummary() async {
+        let entry = StatusEntry(id: "s1", userId: "u", username: "a", avatarColor: "FFFFFF",
+                                moodEmoji: "\u{1F389}", reactionSummary: ["\u{2764}": 2])
+        sut.statuses = [entry]
+        mockStatusService.reactResult = .failure(NSError(domain: "test", code: 1))
+
+        await sut.reactToStatus("s1", emoji: "\u{2764}")
+
+        // L'optimisme (3) est annule : on revient a l'etat anterieur (2).
+        XCTAssertEqual(sut.statuses[0].reactionSummary?["\u{2764}"], 2)
+    }
+
+    func test_socketStatusReacted_fromOtherUser_incrementsReactionSummary() async {
+        let entry = StatusEntry(id: "s1", userId: "u", username: "a", avatarColor: "FFFFFF", moodEmoji: "\u{1F389}")
+        sut.statuses = [entry]
+        sut.subscribeToSocketEvents()
+
+        let json = "{\"statusId\":\"s1\",\"userId\":\"other\",\"emoji\":\"\u{1F44D}\"}".data(using: .utf8)!
+        let payload = try! JSONDecoder().decode(SocketStatusReactedData.self, from: json)
+        mockSocket.statusReacted.send(payload)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.statuses[0].reactionSummary?["\u{1F44D}"], 1)
+    }
+
     // MARK: - loadMoreIfNeeded() Tests
 
     func test_loadMoreIfNeeded_triggersWhenNearEnd() async {

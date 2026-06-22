@@ -3,6 +3,7 @@ import AVFoundation
 import PhotosUI
 import SwiftUI
 import UIKit
+import ImageIO
 import MeeshySDK
 import MeeshyUI
 import os
@@ -323,13 +324,18 @@ final class AttachmentPreparationService {
                                  context: MediaContext) async {
         do {
             guard let data = try await item.loadTransferable(type: Data.self),
-                  let image = UIImage(data: data) else {
+                  let fullImage = UIImage(data: data) else {
                 prep.fail("Image illisible")
                 return
             }
-            prep.thumbnail = image
+            // Pose immédiatement un aperçu léger (downsampling ImageIO, faible
+            // empreinte mémoire) pour que l'image sélectionnée apparaisse
+            // « directement » dans la zone d'attachement. La décompression
+            // pleine résolution + le ThumbHash restent réservés au pipeline de
+            // traitement en arrière-plan ci-dessous.
+            prep.thumbnail = Self.downsampledPreview(from: data) ?? fullImage
             prep.stage = .compressing
-            await runImageDataPreparation(prep: prep, data: data, image: image, context: context)
+            await runImageDataPreparation(prep: prep, data: data, image: fullImage, context: context)
         } catch {
             log.error("picker image load failed: \(error.localizedDescription)")
             prep.fail("Échec du chargement de l'image")
@@ -382,5 +388,25 @@ final class AttachmentPreparationService {
 
     private static func fileSize(at url: URL) -> Int {
         (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+    }
+
+    /// Decode a downsampled, transform-corrected preview straight from encoded
+    /// bytes via ImageIO. 2-4× faster and far lighter than holding a full-res
+    /// `UIImage` just to fill a ~56pt tray tile (cf. SOTA image audit). Used to
+    /// surface the picked photo in the attachment zone the instant its bytes
+    /// land, before the heavier compression pipeline runs. Returns `nil` when
+    /// the bytes can't be decoded, so the caller falls back to the full image.
+    static func downsampledPreview(from data: Data, maxPixelSize: CGFloat = 1024) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: false
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        return UIImage(cgImage: cgImage)
     }
 }

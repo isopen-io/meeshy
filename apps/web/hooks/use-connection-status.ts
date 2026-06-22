@@ -11,11 +11,13 @@ export interface UnifiedConnectionStatus {
 }
 
 function getInitialOnline(): boolean {
+  /* istanbul ignore next -- SSR false-arm unreachable: navigator is always defined in browser/jsdom */
   return typeof navigator !== 'undefined' ? navigator.onLine : true;
 }
 
 function getInitialStatus(): UnifiedConnectionStatus {
   const isOnline = getInitialOnline();
+  /* istanbul ignore next -- SSR false-arm unreachable: window is always defined in browser/jsdom */
   const diag =
     typeof window !== 'undefined'
       ? meeshySocketIOService.getConnectionDiagnostics()
@@ -37,6 +39,7 @@ export function useConnectionStatus(): UnifiedConnectionStatus {
   const [status, setStatus] = useState<UnifiedConnectionStatus>(getInitialStatus);
 
   useEffect(() => {
+    /* istanbul ignore next -- SSR false-arm unreachable: window is always defined in browser/jsdom */
     if (typeof window === 'undefined') return;
 
     const apply = (

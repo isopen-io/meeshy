@@ -1,6 +1,7 @@
 'use client';
 
 import { HTMLAttributes, useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 
 export interface AudioPlayerProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onPlay' | 'onPause'> {
@@ -85,11 +86,13 @@ export function AudioPlayer({
   className,
   ...props
 }: AudioPlayerProps) {
+  const { t } = useI18n('common');
+
   // Safety check: return empty div if src is missing
   if (!src) {
     return (
       <div className="px-3 py-2 text-sm text-[var(--gp-text-muted)]">
-        Audio URL non disponible
+        {t('audioUnavailable')}
       </div>
     );
   }
@@ -275,7 +278,7 @@ export function AudioPlayer({
           'hover:scale-105 active:scale-95',
           isLoading && 'opacity-50 cursor-wait'
         )}
-        aria-label={isPlaying ? 'Pause' : 'Play'}
+        aria-label={isPlaying ? t('pause') : t('play')}
       >
         {isLoading ? (
           <div
@@ -300,7 +303,7 @@ export function AudioPlayer({
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
           role="slider"
-          aria-label="Audio progress"
+          aria-label={t('audioProgress')}
           aria-valuemin={0}
           aria-valuemax={duration}
           aria-valuenow={currentTime}

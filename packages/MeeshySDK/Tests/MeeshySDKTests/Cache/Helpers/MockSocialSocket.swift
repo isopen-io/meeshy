@@ -25,6 +25,7 @@ final class MockSocialSocket: SocialSocketProviding, @unchecked Sendable {
     let storyTranslationUpdated = PassthroughSubject<SocketStoryTranslationUpdatedData, Never>()
     let postTranslationUpdated = PassthroughSubject<SocketPostTranslationUpdatedData, Never>()
     let commentTranslationUpdated = PassthroughSubject<SocketCommentTranslationUpdatedData, Never>()
+    let commentMediaUpdated = PassthroughSubject<SocketCommentMediaUpdatedData, Never>()
     let storyUpdated = PassthroughSubject<SocketStoryUpdatedData, Never>()
     let storyDeleted = PassthroughSubject<SocketStoryDeletedData, Never>()
     let commentReactionAdded = PassthroughSubject<SocketCommentReactionUpdateEvent, Never>()
@@ -34,7 +35,7 @@ final class MockSocialSocket: SocialSocketProviding, @unchecked Sendable {
     let postReactionRemoved = PassthroughSubject<SocketPostReactionUpdateEvent, Never>()
     let postReactionSync = PassthroughSubject<SocketPostReactionSyncEvent, Never>()
     let conversationDeleted = PassthroughSubject<String, Never>()
-    let inAppNotification = PassthroughSubject<APINotification, Never>()
+    let didReconnect = PassthroughSubject<Void, Never>()
 
     var isConnected: Bool = false
     var connectionState: ConnectionState = .disconnected

@@ -97,11 +97,26 @@ public struct CreateCommentRequest: Encodable {
     public let content: String
     public let parentId: String?
     public let effectFlags: Int?
+    /// IDs des PostMedia déjà uploadés (uploadContext=comment) à attacher au
+    /// commentaire. Wire aligné sur le contrat message-with-attachments (tableau),
+    /// MAIS un commentaire ne porte QU'UN SEUL média : le gateway borne à 1.
+    /// Omis du payload quand vide (endpoint texte-seul inchangé).
+    public let attachmentIds: [String]?
+    /// Transcription Whisper produite côté mobile pour un média audio (skip
+    /// re-transcription serveur). Même structure que pour les posts.
+    public let mobileTranscription: MobileTranscriptionPayload?
+    public let originalLanguage: String?
 
-    public init(content: String, parentId: String? = nil, effectFlags: Int? = nil) {
+    public init(content: String, parentId: String? = nil, effectFlags: Int? = nil,
+                attachmentIds: [String]? = nil,
+                mobileTranscription: MobileTranscriptionPayload? = nil,
+                originalLanguage: String? = nil) {
         self.content = content
         self.parentId = parentId
         self.effectFlags = effectFlags
+        self.attachmentIds = (attachmentIds?.isEmpty == false) ? attachmentIds : nil
+        self.mobileTranscription = mobileTranscription
+        self.originalLanguage = originalLanguage
     }
 }
 
@@ -117,11 +132,22 @@ public struct UpdatePostRequest: Encodable, Sendable {
     public let visibility: String?
     public let visibilityUserIds: [String]?
     public let moodEmoji: String?
+    /// Source language. Changing it re-runs the Prisme translation pipeline.
+    public let originalLanguage: String?
+    /// Editable only between "POST" and "REEL" (gateway enforces the rest).
+    public let type: String?
+    /// Ids of attached media (PostMedia) to detach during the edit.
+    public let removeMediaIds: [String]?
 
-    public init(content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil, moodEmoji: String? = nil) {
+    public init(content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil,
+                moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil,
+                removeMediaIds: [String]? = nil) {
         self.content = content; self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds
         self.moodEmoji = moodEmoji
+        self.originalLanguage = originalLanguage
+        self.type = type
+        self.removeMediaIds = removeMediaIds
     }
 }
 
@@ -130,12 +156,14 @@ public struct CreateStoryRequest: Encodable {
     public let content: String?
     public let storyEffects: StoryEffects?
     public let visibility: String
+    public let visibilityUserIds: [String]?
     public let originalLanguage: String?
     public let mediaIds: [String]?
     public let repostOfId: String?
 
-    public init(content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil) {
+    public init(content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil) {
         self.content = content; self.storyEffects = storyEffects; self.visibility = visibility
+        self.visibilityUserIds = visibilityUserIds
         self.originalLanguage = originalLanguage; self.mediaIds = mediaIds
         self.repostOfId = repostOfId
     }

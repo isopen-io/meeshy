@@ -236,6 +236,9 @@ struct ConversationListHeaderOverlay: View {
     let onSettingsTap: (() -> Void)?
     let onNewConversation: (() -> Void)?
     @Binding var showShareLinkSheet: Bool
+    /// Compact story trail injected into the header's accessory slot (rendered
+    /// below the title/actions bar, inside the same header surface).
+    var accessory: (() -> AnyView)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -344,7 +347,8 @@ struct ConversationListHeaderOverlay: View {
                         .accessibilityLabel(String(localized: "conversation.list.settings", defaultValue: "Reglages", bundle: .main))
                     }
                 }
-            }
+            },
+            accessory: accessory
         )
     }
 }

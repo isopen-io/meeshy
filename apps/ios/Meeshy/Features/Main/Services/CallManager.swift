@@ -117,6 +117,10 @@ final class CallManager: ObservableObject {
     @Published private(set) var currentCallId: String?
     @Published private(set) var connectionQuality: PeerConnectionState = .new
     @Published var displayMode: CallDisplayMode = .fullScreen
+    /// Une fenêtre PiP SYSTÈME (AVPictureInPicture) est affichée. Orthogonal à
+    /// `displayMode` : tant qu'il est vrai, la `FloatingCallPillView` in-app est
+    /// masquée pour éviter le doublon visuel au retour au premier plan.
+    @Published private(set) var isSystemPiPActive: Bool = false
     @Published private(set) var activeAudioEffect: AudioEffectConfig?
     @Published private(set) var hasLocalVideoTrack = false
     @Published private(set) var hasRemoteVideoTrack = false
@@ -1163,15 +1167,102 @@ final class CallManager: ObservableObject {
             _ = userId  // Référencé pour cohérence avec l'API legacy emitCallEnd(callId:toUserId:)
         }
 
-        if let uuid = activeCallUUID {
-            let endAction = CXEndCallAction(call: uuid)
+        // H1 — rendre le teardown local atomique vis-à-vis de CallKit. On capture
+        // l'UUID, puis on exécute `endCallInternal` EN PREMIER pour que `callState`
+        // soit `.ended` AVANT de demander à CallKit de raccrocher. Le loop-back
+        // `CXEndCallAction` ré-entre dans `endCall()`, et son `guard callState.isActive`
+        // (en tête de méthode) rejette alors de façon fiable la ré-entrée — pas de
+        // double teardown. (`endCallInternal` nil-e `activeCallUUID`, d'où la capture
+        // locale ci-dessus.)
+        let endUUID = activeCallUUID
+        endCallInternal(reason: .local)
+        if let endUUID {
+            let endAction = CXEndCallAction(call: endUUID)
             callController.request(CXTransaction(action: endAction)) { error in
                 if let error { Logger.calls.error("CallKit end failed: \(error.localizedDescription)") }
             }
         }
-
-        endCallInternal(reason: .local)
         Logger.calls.info("Call ended by local: \(callId ?? "(pre-ACK)")")
+    }
+
+    // MARK: - System Picture-in-Picture
+
+    #if canImport(WebRTC)
+    private let pip: PiPCallProviding = PiPCallController.shared
+    #else
+    private let pip: PiPCallProviding = NoOpPiPController()
+    #endif
+    /// `true` entre un tap « revenir » (restore) et la fermeture effective du PiP,
+    /// pour distinguer ce chemin de la croix système (qui retombe sur la pilule).
+    private var pipRestoring = false
+    private weak var pipConfiguredTrack: AnyObject?
+    private weak var pipConfiguredSource: UIView?
+
+    /// Le PiP vidéo système peut s'activer : appel vidéo, track distant présent,
+    /// caméra distante allumée, sur un appareil compatible (≠ iOS-app-on-Mac).
+    var canActivateSystemPiP: Bool {
+        isVideoEnabled && hasRemoteVideoTrack && isRemoteVideoEnabled && pip.isPiPSupported
+    }
+
+    /// Configure le PiP système pour cet appel (appelé par la vue avec la
+    /// `sourceView` vidéo inline). No-op si l'appel n'est pas éligible.
+    func attachSystemPiP(sourceView: UIView) {
+        guard canActivateSystemPiP, let track = remoteVideoTrack else { return }
+        let trackObject = track as AnyObject
+        // Idempotence : `configure()` reconstruit le controller AVKit. Ne le refaire
+        // que si la sourceView ou le track distant a changé (ce dernier peut être
+        // recréé sur ICE restart / renégociation) — sinon chaque re-render SwiftUI
+        // casserait un PiP en cours.
+        guard pipConfiguredSource !== sourceView || pipConfiguredTrack !== trackObject else { return }
+        pipConfiguredSource = sourceView
+        pipConfiguredTrack = trackObject
+        pip.configure(
+            sourceView: sourceView, remoteTrack: trackObject, autoStart: true,
+            onStart: { [weak self] in self?.isSystemPiPActive = true },
+            onRestoreUI: { [weak self] in
+                self?.pipRestoring = true
+                self?.displayMode = .fullScreen
+            },
+            onStop: { [weak self] in
+                guard let self else { return }
+                self.isSystemPiPActive = false
+                // Appel terminé pendant le PiP : ne pas forcer .pip (laisser le
+                // panneau de fin d'appel en .fullScreen). detachSystemPiP a déjà
+                // remis les flags au repos dans ce cas.
+                guard self.callState.isActive else { self.pipRestoring = false; return }
+                if self.pipRestoring {
+                    self.pipRestoring = false   // restore : déjà repassé en .fullScreen
+                } else {
+                    self.displayMode = .pip     // croix système → la pilule reprend
+                }
+            }
+        )
+        // Aligne le framerate sur l'état thermique courant dès la config (le
+        // handler thermal ignore les changements hors-appel → évite un héritage
+        // périmé entre deux appels).
+        pip.setMaxFrameRate(pipFrameRate(for: ProcessInfo.processInfo.thermalState))
+    }
+
+    /// Démarre le PiP manuellement (bouton). No-op si impossible/déjà actif.
+    func startSystemPiP() { pip.start() }
+
+    /// Libère le PiP (fin d'appel / éligibilité perdue).
+    func detachSystemPiP() {
+        pip.tearDown()
+        isSystemPiPActive = false
+        pipRestoring = false
+        pipConfiguredTrack = nil
+        pipConfiguredSource = nil
+    }
+
+    /// Framerate cible du PiP selon l'état thermique (vignette petite → throttle
+    /// agressif sous stress). Partagé par la config et le handler thermal.
+    private func pipFrameRate(for state: ProcessInfo.ThermalState) -> Int {
+        switch state {
+        case .critical: return 8
+        case .serious: return 10
+        default: return 15
+        }
     }
 
     // MARK: - Media Controls
@@ -1873,6 +1964,7 @@ final class CallManager: ObservableObject {
         isRemoteVideoEnabled = true
         videoSurvivalController.reset()
         isVideoSuspended = false
+        detachSystemPiP()
         webRTCService.close()
         deactivateAudioSession()
         callState = .ended(reason: reason)
@@ -2081,46 +2173,43 @@ final class CallManager: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // ⚠️ Crash SIGTRAP (≤ build 1175) — ces `.sink` sont implicitement @MainActor
+        // (CallManager est @MainActor + SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor).
+        // Les livrer sur `DispatchQueue.global` faisait échouer l'assertion
+        // d'isolation Swift 6 (`dispatch_assert_queue` → EXC_BREAKPOINT) DÈS l'entrée
+        // de la closure, sur le thread de fond → l'app crashait à CHAQUE
+        // offer/answer/ICE candidate reçu pendant un appel (boucle crash → socket
+        // tombe → reconnexion → recrash = le « connecte puis coupe »). On livre sur
+        // la main queue : le wrapping SDP/ICE est trivial et `handle*` est déjà
+        // @MainActor (le `Task { @MainActor }` interne était donc redondant).
         socket.callSignalOfferReceived
-            .receive(on: DispatchQueue.global(qos: .userInitiated))
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let sdpString = event.signal.sdp else { return }
+                guard let self, let sdpString = event.signal.sdp else { return }
                 let sdp = SessionDescription(type: .offer, sdp: sdpString)
-                let callId = event.callId
-                let generation = event.signal.negotiationId ?? 0
-                Task { @MainActor [weak self] in
-                    self?.handleSignalOffer(callId: callId, sdp: sdp, generation: generation)
-                }
+                self.handleSignalOffer(callId: event.callId, sdp: sdp, generation: event.signal.negotiationId ?? 0)
             }
             .store(in: &cancellables)
 
         socket.callAnswerReceived
-            .receive(on: DispatchQueue.global(qos: .userInitiated))
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let sdpString = event.signal.sdp else { return }
+                guard let self, let sdpString = event.signal.sdp else { return }
                 let sdp = SessionDescription(type: .answer, sdp: sdpString)
-                let callId = event.callId
-                let generation = event.signal.negotiationId ?? 0
-                Task { @MainActor [weak self] in
-                    self?.handleRemoteAnswer(callId: callId, sdp: sdp, generation: generation)
-                }
+                self.handleRemoteAnswer(callId: event.callId, sdp: sdp, generation: event.signal.negotiationId ?? 0)
             }
             .store(in: &cancellables)
 
         socket.callICECandidateReceived
-            .receive(on: DispatchQueue.global(qos: .userInitiated))
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let candidateString = event.signal.candidate else { return }
+                guard let self, let candidateString = event.signal.candidate else { return }
                 let candidate = IceCandidate(
                     sdpMid: event.signal.sdpMid,
                     sdpMLineIndex: Int32(event.signal.sdpMLineIndex ?? 0),
                     candidate: candidateString
                 )
-                let callId = event.callId
-                let generation = event.signal.negotiationId ?? 0
-                Task { @MainActor [weak self] in
-                    self?.handleRemoteICECandidate(callId: callId, candidate: candidate, generation: generation)
-                }
+                self.handleRemoteICECandidate(callId: event.callId, candidate: candidate, generation: event.signal.negotiationId ?? 0)
             }
             .store(in: &cancellables)
 
@@ -2142,6 +2231,27 @@ final class CallManager: ObservableObject {
                 Logger.calls.info("call:missed received: callId=\(event.callId), caller=\(event.callerName ?? "?")")
                 if self.currentCallId == event.callId {
                     self.handleRemoteEnd(callId: event.callId, rawReason: "missed")
+                }
+            }
+            .store(in: &cancellables)
+
+        // Audit WS — `call:error` était décodé (MessageSocketManager.callError)
+        // mais n'avait AUCUN abonné : un rejet serveur d'opération d'appel émis
+        // hors de l'ACK `call:initiate` (ex. salle pleine, conversation fermée,
+        // permission) laissait l'écran d'appel figé sans feedback ni teardown. On
+        // surface le message et on termine l'appel si l'un est en cours/connexion.
+        socket.callError
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                let message = event.message
+                    ?? String(localized: "call.error.generic", defaultValue: "Erreur lors de l'appel", bundle: .main)
+                Logger.calls.error("call:error received: code=\(event.code ?? "?") message=\(message)")
+                FeedbackToastManager.shared.showError(message)
+                // Ne teardown que si un appel est réellement en vol (ringing →
+                // reconnecting). Une erreur hors-appel ne fait qu'afficher le toast.
+                if self.callState.isActive {
+                    self.endCallInternal(reason: .failed(message))
                 }
             }
             .store(in: &cancellables)
@@ -2372,15 +2482,53 @@ final class CallManager: ObservableObject {
         let fromUserId = AuthManager.shared.currentUser?.id ?? ""
         // §3.5 — the answer belongs to the offer's generation (the current
         // high-water mark, advanced when the offer was accepted).
+        let generation = negotiationId
+        let payload: [String: Any] = [
+            "sdp": sdp.sdp, "to": toUserId, "from": fromUserId, "negotiationId": generation
+        ]
+        // PERF-004 — first attempt awaited inline so CXAnswerCallAction.fulfill()
+        // is paired with a relayed answer in the common case.
         let acked = await MessageSocketManager.shared.emitCallSignalWithAck(
-            callId: callId,
-            type: "answer",
-            payload: ["sdp": sdp.sdp, "to": toUserId, "from": fromUserId, "negotiationId": negotiationId]
+            callId: callId, type: "answer", payload: payload
         )
-        if !acked {
-            Logger.calls.warning("SDP answer ACK timed out (3s) for call: \(callId) — proceeding optimistically")
+        if acked { return true }
+        // H3 — an un-ACK'd answer used to be dropped silently, leaving the peer
+        // stuck on "Connexion…" until the reliability watchdog fired. The offer
+        // already retries (`emitOfferWithRetry`); mirror it for the answer, but
+        // in the BACKGROUND so the CallKit fulfill window isn't blocked. The
+        // gateway dedupes the duplicate by `negotiationId` (§3.5), so a re-sent
+        // answer never causes glare.
+        Logger.calls.warning("[CALL-DIAG] answer ACK timed out (attempt 1) call=\(callId) — retrying in background")
+        Task { [weak self] in
+            await self?.emitAnswerRetry(callId: callId, payload: payload, generation: generation)
         }
-        return acked
+        return false
+    }
+
+    /// H3 — bounded exponential backoff for the SDP answer (attempts 2…4, the
+    /// first having run inline in `emitCallAnswer`). Stops early if the call
+    /// ended or a newer negotiation superseded this answer (epoch), so a stale
+    /// answer never lands on the peer after a renegotiation.
+    private func emitAnswerRetry(callId: String, payload: [String: Any], generation: Int) async {
+        var delayMs: UInt64 = 500
+        for attempt in 2...4 {
+            guard currentCallId == callId, generation >= negotiationId else {
+                Logger.calls.info("[CALL-DIAG] answer gen=\(generation) superseded/cancelled — stop retry")
+                return
+            }
+            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+            delayMs *= 2
+            guard currentCallId == callId, generation >= negotiationId else { return }
+            let acked = await MessageSocketManager.shared.emitCallSignalWithAck(
+                callId: callId, type: "answer", payload: payload
+            )
+            if acked {
+                Logger.calls.info("[CALL-DIAG] answer ACK'd on attempt \(attempt)")
+                return
+            }
+            Logger.calls.warning("[CALL-DIAG] answer ACK timed out (attempt \(attempt)/4) call=\(callId)")
+        }
+        Logger.calls.error("[CALL-DIAG] answer never ACK'd after 4 attempts — relying on gateway replay (§4.6)")
     }
 
     // Audit P3 — `toUserId` was accepted by the previous signature and
@@ -2409,6 +2557,9 @@ extension CallManager: ThermalStateMonitorDelegate {
     nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {
         Task { @MainActor [weak self] in
             guard let self, self.callState == .connected else { return }
+            // PiP : framerate thermal-aware (la vignette est petite → throttle
+            // agressif possible). Restauré à 15 fps dès le retour en nominal/fair.
+            self.pip.setMaxFrameRate(self.pipFrameRate(for: state))
             if state == .critical {
                 self.webRTCService.videoFilters.reset()
                 self.activeAudioEffect = nil
@@ -2554,7 +2705,17 @@ extension CallManager: WebRTCServiceDelegate {
 
     nonisolated func webRTCService(_ service: WebRTCService, didReceiveRemoteVideoTrack track: Any) {
         Task { @MainActor [weak self] in
-            self?.hasRemoteVideoTrack = true
+            guard let self else { return }
+            self.hasRemoteVideoTrack = true
+            // Robustesse — track distant recréé (ICE restart) : ré-attache le
+            // renderer PiP au nouveau track sans reconstruire le controller AVKit
+            // (no-op si le PiP n'est pas configuré). On relit `remoteVideoTrack`
+            // sur le MainActor (déjà à jour côté client) plutôt que de capturer
+            // le param non-Sendable `track` à travers la frontière d'isolation.
+            if let current = self.remoteVideoTrack {
+                self.pip.updateRemoteTrack(current as AnyObject)
+                if self.pipConfiguredTrack != nil { self.pipConfiguredTrack = current as AnyObject }
+            }
             Logger.calls.info("Remote video track received in CallManager")
         }
     }

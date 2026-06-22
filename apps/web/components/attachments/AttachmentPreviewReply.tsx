@@ -15,6 +15,7 @@ import dynamic from 'next/dynamic';
 import { FileImage, FileText, Music, Video, File, Maximize } from 'lucide-react';
 import { Attachment, getAttachmentType } from '@meeshy/shared/types/attachment';
 import { buildAttachmentsUrls } from '@/utils/attachment-url';
+import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { ImageLightbox } from './ImageLightbox';
 import { CompactAudioPlayer } from '../audio/SimpleAudioPlayer';
@@ -61,6 +62,7 @@ export const AttachmentPreviewReply = React.memo(function AttachmentPreviewReply
   className,
   isOwnMessage = false
 }: AttachmentPreviewReplyProps) {
+  const { t } = useI18n('attachments');
   // États pour les lightbox
   const [imageLiboxOpen, setImageLightboxOpen] = useState(false);
   const [imageLightboxIndex, setImageLightboxIndex] = useState(0);
@@ -139,7 +141,7 @@ export const AttachmentPreviewReply = React.memo(function AttachmentPreviewReply
       <div
         className={cn("flex flex-wrap items-center gap-2 mt-1.5", className)}
         role="list"
-        aria-label={`${attachments.length} pièce${attachments.length > 1 ? 's' : ''} jointe${attachments.length > 1 ? 's' : ''}`}
+        aria-label={t('upload.filesAttached', { count: attachments.length })}
       >
         {/* Images - Miniatures cliquables */}
         {images.map((attachment, index) => {
@@ -154,11 +156,11 @@ export const AttachmentPreviewReply = React.memo(function AttachmentPreviewReply
               onClick={handleImageClick(index)}
               role="button"
               tabIndex={0}
-              aria-label={`Ouvrir l'image ${attachment.originalName || attachment.fileName}`}
+              aria-label={t('actions.openImageNamed', { name: attachment.originalName || attachment.fileName })}
             >
               <NextImage
                 src={safeFileUrl}
-                alt={`Aperçu de l'image ${attachment.originalName || attachment.fileName}`}
+                alt={t('actions.imagePreviewNamed', { name: attachment.originalName || attachment.fileName })}
                 fill
                 sizes="60px"
                 className="object-cover"
@@ -202,8 +204,8 @@ export const AttachmentPreviewReply = React.memo(function AttachmentPreviewReply
                 setVideoLightboxOpen(true);
               }}
               className="w-10 h-10 rounded-full bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/30 dark:hover:bg-purple-800/40 flex items-center justify-center transition-colors flex-shrink-0"
-              title="Ouvrir en plein écran"
-              aria-label={`Ouvrir la vidéo ${attachment.originalName || attachment.fileName} en plein écran`}
+              title={t('gallery.fullscreen')}
+              aria-label={t('actions.openVideoFullscreenNamed', { name: attachment.originalName || attachment.fileName })}
             >
               <Maximize className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             </button>
@@ -223,7 +225,7 @@ export const AttachmentPreviewReply = React.memo(function AttachmentPreviewReply
             onClick={handlePdfClick(attachment)}
             role="button"
             tabIndex={0}
-            aria-label={`Ouvrir le PDF : ${attachment.fileName}`}
+            aria-label={t('actions.openPdfNamed', { name: attachment.fileName })}
           >
             <FileText className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
             <span className="text-sm font-medium truncate max-w-[150px]">
@@ -245,7 +247,7 @@ export const AttachmentPreviewReply = React.memo(function AttachmentPreviewReply
             onClick={handleTextClick(attachment)}
             role="button"
             tabIndex={0}
-            aria-label={`Ouvrir le fichier texte : ${attachment.fileName}`}
+            aria-label={t('actions.openTextFileNamed', { name: attachment.fileName })}
           >
             <FileText className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
             <span className="text-sm font-medium truncate max-w-[150px]">

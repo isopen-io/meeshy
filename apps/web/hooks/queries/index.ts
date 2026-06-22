@@ -11,13 +11,6 @@ export {
 // Conversation pagination wrapper (drop-in replacement)
 export { useConversationsPaginationRQ } from './use-conversations-pagination-rq';
 
-// Message queries
-export {
-  useMessagesQuery,
-  useInfiniteMessagesQuery,
-  useMessagesQueryHelpers,
-} from './use-messages-query';
-
 // Message wrapper (drop-in replacement for useConversationMessages)
 export { useConversationMessagesRQ } from './use-conversation-messages-rq';
 

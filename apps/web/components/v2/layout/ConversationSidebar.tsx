@@ -387,7 +387,7 @@ export function ConversationSidebar() {
   // Handle conversation selection
   const selectConversation = useCallback((id: string) => {
     handleSelectConversation(id);
-    router.push(`/v2/chats?id=${id}`);
+    router.push(`/conversations?id=${id}`);
     if (isMobile) {
       setShowRightPanel(true);
     }
@@ -416,7 +416,7 @@ export function ConversationSidebar() {
       {/* Header */}
       <div className="p-4 border-b border-[var(--gp-border)] transition-colors duration-300">
         <div className="flex items-center justify-between mb-4">
-          <Link href="/v2/landing" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2">
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm"
               style={{ background: `linear-gradient(135deg, ${theme.colors.terracotta}, ${theme.colors.deepTeal})` }}
@@ -432,7 +432,7 @@ export function ConversationSidebar() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
             </Button>
-            <Link href="/v2/settings">
+            <Link href="/settings">
               <Button variant="ghost" size="sm">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -549,8 +549,8 @@ export function ConversationSidebar() {
       {/* Bottom Navigation */}
       <div className="p-2 border-t border-[var(--gp-border)] flex justify-around">
         <NavItem
-          href="/v2/chats"
-          isActive={isNavActive('/v2/chats')}
+          href="/conversations"
+          isActive={isNavActive('/conversations')}
           icon={
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -559,8 +559,8 @@ export function ConversationSidebar() {
           badge={filterCounts.non_lue}
         />
         <NavItem
-          href="/v2/feeds"
-          isActive={isNavActive('/v2/feeds')}
+          href="/feed/posts"
+          isActive={isNavActive('/feed') || isNavActive('/feeds')}
           icon={
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
@@ -568,8 +568,8 @@ export function ConversationSidebar() {
           }
         />
         <NavItem
-          href="/v2/communities"
-          isActive={isNavActive('/v2/communities')}
+          href="/communities"
+          isActive={isNavActive('/communities')}
           icon={
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -577,8 +577,8 @@ export function ConversationSidebar() {
           }
         />
         <NavItem
-          href="/v2/me"
-          isActive={isNavActive('/v2/me') || isNavActive('/v2/settings') || isNavActive('/v2/contacts') || isNavActive('/v2/notifications') || isNavActive('/v2/links')}
+          href="/me"
+          isActive={isNavActive('/me') || isNavActive('/settings') || isNavActive('/contacts') || isNavActive('/notifications') || isNavActive('/links')}
           icon={
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />

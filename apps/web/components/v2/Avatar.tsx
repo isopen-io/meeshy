@@ -1,8 +1,9 @@
 'use client';
 
-import { forwardRef } from 'react';
+import { forwardRef, useEffect, useState } from 'react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
+import { buildAttachmentUrl } from '@/utils/attachment-url';
 
 export interface AvatarProps {
   src?: string | null;
@@ -33,16 +34,29 @@ const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
     const px = pixelSizeMap[size];
     const initial = name.charAt(0).toUpperCase();
 
+    // Attachment avatars arrive as relative paths (`/api/v1/attachments/file/…`).
+    // Resolve them to the gateway origin so next/image fetches from the API host
+    // instead of the frontend origin (which does not serve `/api`). `data:` URLs
+    // and already-absolute URLs pass through unchanged.
+    const resolvedSrc = src && !src.startsWith('data:') ? buildAttachmentUrl(src) : src;
+
+    // A missing/deleted avatar file must degrade to the initials placeholder, not
+    // a broken image (next/image surfaces a 404 upstream as a console 400). Reset
+    // the error flag whenever the resolved source changes (list recycling).
+    const [errored, setErrored] = useState(false);
+    useEffect(() => setErrored(false), [resolvedSrc]);
+
     return (
       <div ref={ref} className={cn('relative inline-flex flex-shrink-0', className)}>
-        {src ? (
+        {resolvedSrc && !errored ? (
           <Image
-            src={src}
+            src={resolvedSrc}
             alt={name}
             width={px}
             height={px}
             className={cn(s.container, 'rounded-full object-cover')}
-            unoptimized={src.startsWith('data:')}
+            unoptimized={resolvedSrc.startsWith('data:')}
+            onError={() => setErrored(true)}
           />
         ) : (
           <div

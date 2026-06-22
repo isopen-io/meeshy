@@ -274,9 +274,14 @@ private struct AudioFullscreenPage: View {
             UserProfileSheet(
                 user: user,
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                postsContent: { uid in AnyView(ProfileUserPostsList(
+                    userId: uid,
+                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
+                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
+                )) }
             )
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
         }
     }
@@ -613,6 +618,7 @@ private struct AudioFullscreenPage: View {
             currentTime: player.currentTime,
             accentColor: currentLangColorHex,
             isPlaying: player.isPlaying,
+            progress: player.progress,
             onSeek: { time in
                 player.seekToTime(time)
             }

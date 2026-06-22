@@ -288,7 +288,8 @@ public struct NotificationListView: View {
                     }
                 }
                 .coordinateSpace(name: "scroll")
-                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }
+                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }   // iOS 16–17
+                .trackScrollContentOffset { scrollOffset = -$0 }                            // iOS 18+ (preference path is dead there)
                 .refreshable {
                     await viewModel.loadInitial()
                 }

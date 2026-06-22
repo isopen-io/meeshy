@@ -81,6 +81,17 @@ export const mediaInclude = Prisma.validator<Prisma.Post$mediaArgs>()({
 });
 
 /**
+ * Comment media include — the single media a comment may carry. Reuses
+ * `mediaSelect` (same PostMedia shape, same Prisme fields) so a comment's
+ * media is decoded identically to a post's media on every client.
+ * A comment never holds more than one media, but the relation stays ordered.
+ */
+export const commentMediaInclude = Prisma.validator<Prisma.PostComment$mediaArgs>()({
+  select: mediaSelect,
+  orderBy: { order: 'asc' },
+});
+
+/**
  * Top-3 comments preview shape attached to every Post response.
  *
  * The `OR isSet:false` clause is REQUIRED — MongoDB documents that were
@@ -125,6 +136,7 @@ export const repostOfInclude = Prisma.validator<Prisma.Post$repostOfArgs>()({
     translations: true,
     storyEffects: true,
     audioUrl: true,
+    moodEmoji: true,
     originalRepostOfId: true,
     author: { select: authorSelect },
     media: mediaInclude,

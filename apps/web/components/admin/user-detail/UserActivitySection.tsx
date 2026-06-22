@@ -288,7 +288,7 @@ function ContactCard({ request, direction }: { request: ContactRequest; directio
       <div className="flex items-center gap-2">
         <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-medium">
           {person.avatar ? (
-            <img src={person.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+            <img src={person.avatar} alt="" loading="lazy" decoding="async" className="w-8 h-8 rounded-full object-cover" />
           ) : (
             (person.displayName || person.username).charAt(0).toUpperCase()
           )}

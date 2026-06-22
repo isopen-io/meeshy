@@ -73,10 +73,15 @@ export const SendMessageBodySchema = z.object({
       `Le message ne peut pas dépasser ${MESSAGE_LIMITS.MAX_MESSAGE_LENGTH} caractères`,
     )
     .optional(),
-  // Phase 4 §6.2 — mandatory `cid_<uuid v4 lowercase>` idempotency key.
+  // Phase 4 §6.2 — `cid_<uuid v4 lowercase>` idempotency key. OPTIONAL:
+  // only clients needing sync/dedup (app, web) send it. Scripts and
+  // integrations may omit it; the message is then simply not deduped
+  // (MessageProcessor persists clientMessageId as null). When provided it
+  // must still be well-formed.
   clientMessageId: z
     .string()
-    .regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format (expected cid_<uuid v4 lowercase>)'),
+    .regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format (expected cid_<uuid v4 lowercase>)')
+    .optional(),
   originalLanguage: CommonSchemas.language.optional(),
   messageType: CommonSchemas.messageType.optional(),
   replyToId: z.string().optional(),
@@ -85,7 +90,7 @@ export const SendMessageBodySchema = z.object({
   forwardedFromConversationId: z.string().optional(),
   encryptedContent: z.string().optional(),
   encryptionMode: z.enum(['e2ee', 'server', 'hybrid']).optional(),
-  encryptionMetadata: z.record(z.unknown())
+  encryptionMetadata: z.record(z.string(), z.unknown())
     .refine(
       (m) => { try { return JSON.stringify(m).length <= 8 * 1024; } catch { return false; } },
       { message: 'encryptionMetadata exceeds 8KB serialized' }
@@ -115,7 +120,19 @@ const logger = enhancedLogger.child({ module: 'messages' });
  * Nettoie les attachments pour l'API en transformant les valeurs invalides
  * Fixe spécifiquement voiceSimilarityScore: false -> null pour compatibilité schéma
  */
-function cleanAttachmentsForApi(attachments: any[], languageFilter?: readonly string[], currentParticipantId?: string): any[] {
+type CurrentUserConsumption = {
+  lastPlayPositionMs: number | null;
+  listenedComplete: boolean;
+  lastWatchPositionMs: number | null;
+  watchedComplete: boolean;
+};
+
+function cleanAttachmentsForApi(
+  attachments: any[],
+  languageFilter?: readonly string[],
+  currentParticipantId?: string,
+  consumptionMap?: Map<string, CurrentUserConsumption>
+): any[] {
   if (!attachments || !Array.isArray(attachments)) {
     return attachments;
   }
@@ -139,6 +156,12 @@ function cleanAttachmentsForApi(attachments: any[], languageFilter?: readonly st
     cleaned.reactionSummary = __reactions.reactionSummary;
     cleaned.currentUserReactions = __reactions.currentUserReactions;
     delete cleaned.reactions;
+
+    // Phase 2 — progression de consommation PERSONNELLE (sync cross-device) :
+    // position/complétion du participant courant, pour seeder le tint waveform
+    // (audio) et la progress-bar (vidéo) dès l'ouverture. `null` = jamais
+    // consommé par ce participant. Miroir de currentUserReactions.
+    cleaned.currentUserConsumption = consumptionMap?.get(att.id) ?? null;
 
     // Nettoyer la transcription
     if (cleaned.transcription && cleaned.transcription.segments) {
@@ -215,6 +238,27 @@ export function buildAfterWatermarkClause(after?: string): { createdAt: { gt: Da
   const d = new Date(after);
   if (isNaN(d.getTime())) return null;
   return { createdAt: { gt: d } };
+}
+
+/**
+ * Active-recipient denominator for a message's all-or-nothing delivery
+ * indicator: the count of active participants EXCLUDING the message's sender.
+ * Mirrors `MessageReadStatusService.totalMembers`. Returned to clients per
+ * message so the sender's ✓✓ / read tier lights up only once EVERY recipient
+ * has received / read it, using the server's authoritative count instead of a
+ * possibly-stale local member count.
+ *
+ * @param activeParticipantIds set of `Participant.id` for active members
+ * @param senderParticipantId  the message's raw `senderId` (a `Participant.id`)
+ */
+export function computeRecipientCount(
+  activeParticipantIds: Set<string>,
+  senderParticipantId: string
+): number {
+  return Math.max(
+    0,
+    activeParticipantIds.size - (activeParticipantIds.has(senderParticipantId) ? 1 : 0)
+  );
 }
 
 /**
@@ -802,6 +846,37 @@ export function registerMessagesRoutes(
       }
       timings.userReactions = performance.now() - t0;
 
+      // Phase 2 — progression de consommation média du participant courant
+      // (sync cross-device). Une seule requête bornée à la page, scopée au
+      // participant : on n'élargit pas les `select` partagés (cf.
+      // attachmentIncludes) ni les broadcasts socket.
+      const consumptionMap = new Map<string, CurrentUserConsumption>();
+      if (currentParticipantId && messages.length > 0) {
+        const attachmentIds: string[] = (messages as any[]).flatMap(m =>
+          Array.isArray(m.attachments) ? m.attachments.map((a: any) => a.id) : []
+        );
+        if (attachmentIds.length > 0) {
+          const consumptionRows = await prisma.attachmentStatusEntry.findMany({
+            where: { attachmentId: { in: attachmentIds }, participantId: currentParticipantId },
+            select: {
+              attachmentId: true,
+              lastPlayPositionMs: true,
+              listenedComplete: true,
+              lastWatchPositionMs: true,
+              watchedComplete: true,
+            },
+          });
+          for (const row of consumptionRows) {
+            consumptionMap.set(row.attachmentId, {
+              lastPlayPositionMs: row.lastPlayPositionMs ?? null,
+              listenedComplete: row.listenedComplete ?? false,
+              lastWatchPositionMs: row.lastWatchPositionMs ?? null,
+              watchedComplete: row.watchedComplete ?? false,
+            });
+          }
+        }
+      }
+
       // Déterminer la langue préférée de l'utilisateur
       const userPreferredLanguage = userPrefs
         ? resolveUserLanguage(userPrefs)
@@ -873,7 +948,7 @@ export function registerMessagesRoutes(
       // Enrichir les messages avec les vrais statuts de lecture depuis les cursors
       // Les champs dénormalisés (deliveredCount, readCount) ne sont jamais mis à jour en DB
       // On les calcule dynamiquement ici depuis ConversationReadCursor
-      const readStatusMap = new Map<string, { deliveredCount: number; readCount: number }>();
+      const readStatusMap = new Map<string, { deliveredCount: number; readCount: number; recipientCount: number }>();
       if (messages.length > 0 && authRequest.authContext?.userId) {
         try {
           const [activeParticipants, cursors] = await Promise.all([
@@ -897,7 +972,12 @@ export function registerMessagesRoutes(
               if (cursor.lastDeliveredAt && cursor.lastDeliveredAt >= msg.createdAt) deliveredCount++;
               if (cursor.lastReadAt && cursor.lastReadAt >= msg.createdAt) readCount++;
             }
-            readStatusMap.set(msg.id, { deliveredCount, readCount });
+            // Authoritative all-or-nothing denominator: active participants
+            // EXCLUDING this message's sender. Lets the client render the group
+            // ✓✓ / read tier from the real recipient count instead of a stale
+            // local memberCount.
+            const recipientCount = computeRecipientCount(activeIds, msg.senderId);
+            readStatusMap.set(msg.id, { deliveredCount, readCount, recipientCount });
           }
         } catch (err) {
           logger.warn('[CONVERSATIONS] Failed to compute read statuses:', err);
@@ -959,6 +1039,10 @@ export function registerMessagesRoutes(
           readByAllAt: message.readByAllAt,
           deliveredCount: readStatusMap.get(message.id)?.deliveredCount ?? message.deliveredCount ?? 0,
           readCount: readStatusMap.get(message.id)?.readCount ?? message.readCount ?? 0,
+          // Server-authoritative active-recipient denominator (participants
+          // excluding the sender). `0` when not computed (no auth context) — the
+          // client then falls back to its local member count.
+          recipientCount: readStatusMap.get(message.id)?.recipientCount ?? 0,
 
           // Réactions (dénormalisées - toujours incluses)
           reactionSummary: message.reactionSummary,
@@ -988,7 +1072,7 @@ export function registerMessagesRoutes(
             isOnline: message.sender.user?.isOnline ?? message.sender.isOnline ?? null,
             lastActiveAt: message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null,
           } : null,
-          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId),
+          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, consumptionMap),
           _count: message._count
         };
 
@@ -1347,12 +1431,11 @@ export function registerMessagesRoutes(
       },
       body: {
         type: 'object',
-        required: ['clientMessageId'],
         properties: {
           content: { type: 'string', description: 'Message content' },
           clientMessageId: {
             type: 'string',
-            description: 'Phase 4 idempotency key, format cid_<uuid v4 lowercase>',
+            description: 'Optional Phase 4 idempotency key, format cid_<uuid v4 lowercase>. Only clients needing dedup/sync send it.',
             pattern: '^cid_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
           },
           originalLanguage: { type: 'string', description: 'Language code (e.g., fr, en)', default: 'fr' },

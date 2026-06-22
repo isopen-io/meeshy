@@ -111,7 +111,7 @@ interface StoryViewerProps {
 // Constants
 // ============================================================================
 
-const DEFAULT_STORY_DURATION_MS = 5000;
+const DEFAULT_STORY_DURATION_MS = 6000;
 
 const FILTER_MAP: Record<string, string> = {
   vintage: 'sepia(0.5) saturate(1.3)',
@@ -780,6 +780,7 @@ function StoryViewer({
                         translations={story.translations}
                         userLanguage={userLanguage}
                         variant="inline"
+                        showContent={false}
                       />
                     </div>
                   )}

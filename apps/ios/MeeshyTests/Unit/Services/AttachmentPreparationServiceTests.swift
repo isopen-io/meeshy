@@ -66,6 +66,37 @@ final class AttachmentPreparationServiceTests: XCTestCase {
         try? FileManager.default.removeItem(at: prepared.fileURL)
     }
 
+    // MARK: - Fast preview (instant tray display)
+
+    func test_downsampledPreview_returnsBoundedPreview_fromEncodedBytes() {
+        // Force scale 1 so the source is exactly 1200×900 pixels (not multiplied
+        // by the host screen scale) — keeps the allocation small and the bound
+        // assertion deterministic.
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 1200, height: 900), format: format)
+        let image = renderer.image { ctx in
+            UIColor.systemIndigo.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 1200, height: 900))
+        }
+        guard let data = image.jpegData(compressionQuality: 0.9) else {
+            return XCTFail("Expected encodable test image")
+        }
+
+        let preview = AttachmentPreparationService.downsampledPreview(from: data, maxPixelSize: 512)
+
+        let scale = preview?.scale ?? 1
+        let longestSidePx = max((preview?.size.width ?? 0), (preview?.size.height ?? 0)) * scale
+        XCTAssertNotNil(preview)
+        XCTAssertLessThanOrEqual(longestSidePx, 512)
+        XCTAssertGreaterThan(longestSidePx, 0)
+    }
+
+    func test_downsampledPreview_returnsNil_forNonImageBytes() {
+        let garbage = Data([0x00, 0x01, 0x02, 0x03])
+        XCTAssertNil(AttachmentPreparationService.downsampledPreview(from: garbage))
+    }
+
     // MARK: - PreparingAttachment contract
 
     func test_awaitCompletion_resumesAfterFailure() async {

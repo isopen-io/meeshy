@@ -97,13 +97,16 @@ public struct CategoryPickerView: View {
         }
     }
 
-    // TODO: Category creation not yet implemented — PreferenceService.createCategory does not exist.
-    // The UI clears the field and reloads, but no category is persisted server-side.
     private func createCategory() async {
         let name = newCategoryName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
-        newCategoryName = ""
-        isCreating = false
-        await loadCategories()
+        do {
+            _ = try await PreferenceService.shared.createCategory(name: name)
+            newCategoryName = ""
+            isCreating = false
+            await loadCategories()
+        } catch {
+            Logger.network.error("[CategoryPickerView] Failed to create category: \(error.localizedDescription)")
+        }
     }
 }

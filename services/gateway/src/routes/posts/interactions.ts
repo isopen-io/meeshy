@@ -195,8 +195,15 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
-      await postService.bookmarkPost(postId, authContext.registeredUser.id);
-      return sendSuccess(reply, { bookmarked: true });
+      const result = await postService.bookmarkPost(postId, authContext.registeredUser.id);
+      // Sync temps réel (perso) : le feed et le reel viewer réhydratent
+      // `isBookmarkedByMe` + le `bookmarkCount` absolu → le favori et son
+      // compteur survivent à la fermeture/réouverture, sans reload.
+      fastify.socialEvents?.broadcastPostBookmarked(
+        { postId, bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 },
+        authContext.registeredUser.id,
+      );
+      return sendSuccess(reply, { bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 });
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/bookmark] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -214,8 +221,12 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
-      await postService.unbookmarkPost(postId, authContext.registeredUser.id);
-      return sendSuccess(reply, { bookmarked: false });
+      const result = await postService.unbookmarkPost(postId, authContext.registeredUser.id);
+      fastify.socialEvents?.broadcastPostBookmarked(
+        { postId, bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 },
+        authContext.registeredUser.id,
+      );
+      return sendSuccess(reply, { bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 });
     } catch (error) {
       fastify.log.error(`[DELETE /posts/:postId/bookmark] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -269,6 +280,32 @@ export function registerInteractionRoutes(
     }
   });
 
+  // POST /posts/:postId/anonymous-view — compte une ouverture ANONYME (sans compte).
+  // v1 "comptage bête" : public, dédup faible par X-Session-Token (chaîne opaque).
+  // Les clients INSCRITS (JWT présent) sont comptés via le parcours engagement →
+  // no-op ici pour éviter le double-comptage. Voir spec 2026-06-17 (§ Sécurité).
+  // Pas de preValidation auth : on lit le header directement, sans tenter de
+  // résoudre un Participant (un token navigateur n'en est pas un → éviterait un 401).
+  fastify.post('/posts/:postId/anonymous-view', {
+    config: { rateLimit: createPostRouteRateLimitConfig('view') },
+  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
+    try {
+      if (request.headers.authorization) {
+        return sendSuccess(reply, { counted: false }); // client inscrit → parcours engagement
+      }
+      const sessionKey = request.headers['x-session-token'] as string | undefined;
+      if (!sessionKey || sessionKey.length === 0 || sessionKey.length > 128) {
+        return sendBadRequest(reply, 'Missing or invalid session key', { code: 'VALIDATION_ERROR' });
+      }
+      const { postId } = request.params;
+      const counted = await postService.recordAnonymousOpen(postId, sessionKey);
+      return sendSuccess(reply, { counted });
+    } catch (error) {
+      fastify.log.error(`[POST /posts/:postId/anonymous-view] Error: ${error}`);
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
+    }
+  });
+
   // POST /posts/:postId/impression — Track a feed impression
   fastify.post('/posts/:postId/impression', {
     schema: {
@@ -276,7 +313,7 @@ export function registerInteractionRoutes(
       body: {
         type: 'object',
         properties: {
-          source: { type: 'string', enum: ['feed', 'profile', 'search', 'shared_link', 'notification'] }
+          source: { type: 'string', enum: ['feed', 'profile', 'search', 'shared_link', 'notification', 'detail'] }
         }
       }
     },
@@ -295,9 +332,20 @@ export function registerInteractionRoutes(
         data: { postId, userId: authContext.registeredUser.id, source }
       });
 
+      // Ouvrir le Détail d'un post (`source: 'detail'`) est à la fois une
+      // impression ET une vue (totale, jamais dédupliquée) comptée IMMÉDIATEMENT
+      // — chaque ouverture compte, sans seuil ni gating engagement. Les autres
+      // sources (apparition feed, etc.) ne comptent qu'une impression.
+      // Note : `postOpenCount` n'est PLUS alimenté par l'engagement sur la surface
+      // `detail` (cf. engagementAggregateIncrements) pour éviter le double comptage.
+      const counters: Record<string, { increment: number }> = { impressionCount: { increment: 1 } };
+      if (source === 'detail') {
+        counters.postOpenCount = { increment: 1 };
+      }
+
       await prisma.post.update({
         where: { id: postId },
-        data: { impressionCount: { increment: 1 } }
+        data: counters
       });
 
       return sendSuccess(reply, { recorded: true });
@@ -315,7 +363,7 @@ export function registerInteractionRoutes(
         required: ['postIds'],
         properties: {
           postIds: { type: 'array', items: { type: 'string' } },
-          source: { type: 'string', enum: ['feed', 'profile', 'search', 'shared_link', 'notification'] }
+          source: { type: 'string', enum: ['feed', 'profile', 'search', 'shared_link', 'notification', 'detail'] }
         }
       }
     },

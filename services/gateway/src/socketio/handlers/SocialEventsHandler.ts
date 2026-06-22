@@ -8,12 +8,14 @@ import type { Server as SocketIOServer, Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { getCommunityCoMemberIds } from '../../services/posts/communityVisibility';
 import type {
   Post,
   PostComment,
   PostLikedEventData,
   PostUnlikedEventData,
   PostRepostedEventData,
+  PostBookmarkedEventData,
   StoryViewedEventData,
   StoryReactedEventData,
   StoryUnreactedEventData,
@@ -24,6 +26,7 @@ import type {
   CommentLikedEventData,
   PostTranslationUpdatedEventData,
   CommentTranslationUpdatedEventData,
+  CommentMediaUpdatedEventData,
 } from '@meeshy/shared/types/post';
 
 // enhancedLogger (Pino) sort en prod ; le `logger` Winston de server.ts est
@@ -135,6 +138,10 @@ export class SocialEventsHandler {
     visibility: string,
     visibilityUserIds: string[] = []
   ): Promise<string[]> {
+    if (visibility === 'COMMUNITY') {
+      return getCommunityCoMemberIds(this.prisma, authorId);
+    }
+
     const friendIds = await this.getFriendIds(authorId);
 
     switch (visibility) {
@@ -177,16 +184,33 @@ export class SocialEventsHandler {
   async broadcastPostLiked(data: PostLikedEventData, postAuthorId: string): Promise<void> {
     const friendIds = await this.getFriendIds(postAuthorId);
     this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.POST_LIKED, data);
+    // Atteindre AUSSI les viewers de la post room (détail de post + reel viewer) :
+    // ils rejoignent `ROOMS.post` mais ne sont PAS dans les feed rooms des amis de
+    // l'auteur. Payload ABSOLU (likeCount + reactionSummary) → idempotent même si un
+    // socket est dans les deux rooms (la feed room ET la post room). Modèle identique
+    // à `broadcastStoryReacted`.
+    this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.POST_LIKED, data);
   }
 
   async broadcastPostUnliked(data: PostUnlikedEventData, postAuthorId: string): Promise<void> {
     const friendIds = await this.getFriendIds(postAuthorId);
     this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.POST_UNLIKED, data);
+    this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.POST_UNLIKED, data);
   }
 
   async broadcastPostReposted(data: PostRepostedEventData, authorId: string): Promise<void> {
     const friendIds = await this.getFriendIds(authorId);
     this.emitToFriends(friendIds, authorId, SERVER_EVENTS.POST_REPOSTED, data);
+  }
+
+  /**
+   * Broadcast d'un toggle de favori — PERSONNEL : le favori n'intéresse que
+   * l'utilisateur qui l'a posé. On émet donc uniquement vers SA feed room (toutes
+   * ses sessions/vues : feed + reel viewer). Permet de garder `isBookmarkedByMe`
+   * synchronisé en direct et de le réhydrater à la réouverture du viewer.
+   */
+  broadcastPostBookmarked(data: PostBookmarkedEventData, userId: string): void {
+    this.emitToUser(userId, SERVER_EVENTS.POST_BOOKMARKED, data);
   }
 
   // ==============================================
@@ -308,6 +332,16 @@ export class SocialEventsHandler {
   async broadcastCommentTranslationUpdated(data: CommentTranslationUpdatedEventData, postAuthorId: string): Promise<void> {
     const friendIds = await this.getFriendIds(postAuthorId);
     this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, data);
+  }
+
+  /**
+   * Diffuse `comment:media-updated` (transcription/traductions audio d'un média de
+   * commentaire prêtes) à la même audience que `comment:translation-updated` :
+   * l'auteur du post et ses amis.
+   */
+  async broadcastCommentMediaUpdated(data: CommentMediaUpdatedEventData, postAuthorId: string): Promise<void> {
+    const friendIds = await this.getFriendIds(postAuthorId);
+    this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.COMMENT_MEDIA_UPDATED, data);
   }
 
   // ==============================================

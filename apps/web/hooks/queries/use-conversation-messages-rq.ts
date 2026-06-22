@@ -155,6 +155,16 @@ export function useConversationMessagesRQ(
       return undefined;
     },
     enabled: enabled && !!conversationId,
+    // Socket.IO est la source de vérité pour la liste de messages ouverte.
+    // Un refetch au focus/reconnexion REMPLACE les pages du cache infini par
+    // les pages serveur ; si un message reçu via socket vient d'être ajouté au
+    // cache mais que la lecture REST ne le renvoie pas encore (lag de réplica
+    // MongoDB / read-after-write), il est effacé de l'écran — le message
+    // "apparaît puis disparaît" et ne revient qu'au rechargement (F5).
+    // On désactive donc ces refetch destructeurs pour CETTE requête : le
+    // socket maintient déjà la liste à jour (cf. handleNewMessage).
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     select: (data) => ({
       pages: data.pages,
       pageParams: data.pageParams,

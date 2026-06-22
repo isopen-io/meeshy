@@ -34,9 +34,9 @@ public protocol TrackedLinkResolving: Sendable {
 
 public final class TrackedLinkService: TrackedLinkResolving, @unchecked Sendable {
     public static let shared = TrackedLinkService()
-    private let api: APIClient
+    private let api: APIClientProviding
 
-    public init(api: APIClient = .shared) { self.api = api }
+    public init(api: APIClientProviding = APIClient.shared) { self.api = api }
 
     public func resolve(token: String) async throws -> ResolvedTrackedLink {
         let response: APIResponse<ResolvedTrackedLink> = try await api.request(

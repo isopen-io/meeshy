@@ -56,8 +56,11 @@ struct FloatingCallPillView: View {
     private let pillHeight: CGFloat = 64
 
     var body: some View {
-        if callManager.displayMode == .pip && callManager.callState.isActive {
+        if callManager.displayMode == .pip && callManager.callState.isActive && !callManager.isSystemPiPActive {
             pillContent
+                // Pilule verre + contrôles blancs : on épingle le verre en
+                // sombre pour rester lisible quel que soit le mode système.
+                .environment(\.colorScheme, .dark)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .animation(.spring(response: 0.5, dampingFraction: 0.75), value: callManager.displayMode)
                 .zIndex(999)
@@ -143,8 +146,8 @@ struct FloatingCallPillView: View {
 
     private var userInfoSection: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(callManager.remoteUsername ?? String(localized: "call.pill.unknown", defaultValue: "Unknown"))
-                .font(.subheadline.weight(.semibold))
+            Text(callManager.remoteUsername ?? String(localized: "call.pill.unknown", defaultValue: "Inconnu", bundle: .main))
+                .font(.subheadline.weight(.medium))
                 .foregroundColor(.white)
                 .lineLimit(1)
 

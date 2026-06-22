@@ -309,7 +309,8 @@
         "clicksByHour": "Cliques por hora",
         "unknown": "Desconhecido",
         "direct": "Direto",
-        "copy": "Copiar"
+        "copy": "Copiar",
+        "unexpectedError": "Ocorreu um erro inesperado"
       },
       "actions": {
         "viewStats": "Ver estatísticas",
@@ -360,7 +361,14 @@
         "deactivateFailed": "Erro ao desativar link",
         "deleteFailed": "Erro ao excluir link",
         "urlRequired": "Digite uma URL",
-        "invalidUrl": "Digite uma URL válida"
+        "invalidUrl": "Digite uma URL válida",
+        "authRequired": "Você precisa estar conectado para ver estas estatísticas",
+        "unauthorized": "Você não tem autorização para ver estas estatísticas",
+        "notFound": "Link de rastreamento não encontrado",
+        "authRequiredTitle": "Autenticação necessária",
+        "authRequiredDesc": "Você precisa estar conectado para ver as estatísticas deste link. Redirecionando para a página de login...",
+        "unauthorizedTitle": "Acesso negado",
+        "unauthorizedDesc": "Você não tem autorização para ver as estatísticas deste link. Apenas o criador pode acessá-las."
       }
     },
     "v2": {

@@ -18,6 +18,7 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
     var messageTranslatedAudiosByAttachment: [String: [MessageTranslatedAudio]] = [:]
     var activeLiveLocations: [ActiveLiveLocation] = []
     var isConversationClosed: Bool = false
+    var isViewportAtBottom: Bool = true
 
     private var _messageIdIndex: [String: Int]?
 
@@ -101,16 +102,21 @@ final class ConversationSocketHandlerTests: XCTestCase {
     // MARK: - Factory
 
     private func makeSUT(
-        messageSocket: MockMessageSocket = MockMessageSocket()
+        messageSocket: MockMessageSocket = MockMessageSocket(),
+        isApplicationActive: Bool = true
     ) -> (
         sut: ConversationSocketHandler,
         delegate: MockConversationSocketDelegate,
         socket: MockMessageSocket
     ) {
+        // The XCTest host never reaches `.active`, so the production foreground
+        // probe would block the read-receipt gate. Inject a known value; tests
+        // exercising the gate flip it explicitly.
         let sut = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: currentUserId,
-            messageSocket: messageSocket
+            messageSocket: messageSocket,
+            isApplicationActive: { isApplicationActive }
         )
         let delegate = MockConversationSocketDelegate()
         sut.delegate = delegate
@@ -224,6 +230,53 @@ final class ConversationSocketHandlerTests: XCTestCase {
             delegate.markAsReadCallCount, 1,
             "Inbound message in an active conversation must auto-trigger markAsRead so the sender's checkmark turns purple"
         )
+    }
+
+    // MARK: - messageReceived: Read-receipt PRECISION gate
+    //
+    // Being subscribed to the socket is not proof the user is reading. A read
+    // receipt may only be emitted when the app is foregrounded AND the viewport
+    // is at the bottom (the new message is visible). Otherwise the receipt would
+    // be FALSE — the sender's check would turn indigo "read" although nobody read
+    // anything. The positive control (active + at-bottom ⇒ markAsRead fires) is
+    // `test_messageReceived_fromOtherUser_appendsToDelegate` above.
+
+    func test_messageReceived_backgrounded_doesNotMarkAsRead() async throws {
+        let (sut, delegate, socket) = makeSUT(isApplicationActive: false)
+        _ = sut
+
+        let apiMsg = makeAPIMessage(id: "bg_msg", senderId: otherUserId, content: "Ping")
+        socket.simulateMessage(apiMsg)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(
+            delegate.markAsReadCallCount, 0,
+            "A message arriving while the app is backgrounded must NOT emit a read receipt"
+        )
+        XCTAssertEqual(
+            delegate.lastUnreadMessage?.id, "bg_msg",
+            "The unread anchor is still set — only the receipt is gated, not the UI signal"
+        )
+    }
+
+    func test_messageReceived_scrolledAway_doesNotMarkAsRead() async throws {
+        let (sut, delegate, socket) = makeSUT(isApplicationActive: true)
+        _ = sut
+        // User is reading history near the top — the new message lands
+        // off-screen at the bottom.
+        delegate.isViewportAtBottom = false
+
+        let apiMsg = makeAPIMessage(id: "up_msg", senderId: otherUserId, content: "Ping")
+        socket.simulateMessage(apiMsg)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(
+            delegate.markAsReadCallCount, 0,
+            "A message landing off-screen while scrolled up must NOT emit a read receipt"
+        )
+        XCTAssertEqual(delegate.lastUnreadMessage?.id, "up_msg")
     }
 
     // MARK: - messageReceived: From Self (no new append)
@@ -724,9 +777,12 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let after2 = try await db.read { db in
             try MessageRecord.fetchOne(db, key: "msg2")
         }
-        // .read event transitions both rows; readAt is set.
+        // .read event (all recipients) transitions both rows; readAt + the
+        // unambiguous "read by all" marker the display resolver trusts are set.
         XCTAssertNotNil(after1?.readAt, "msg1 must transition to read state via bufferBatchDelivery")
         XCTAssertNotNil(after2?.readAt, "msg2 must transition to read state via bufferBatchDelivery")
+        XCTAssertNotNil(after1?.readByAllAt, "msg1 must be stamped read-by-all for the resolver")
+        XCTAssertNotNil(after2?.readByAllAt, "msg2 must be stamped read-by-all for the resolver")
     }
 
     func test_readStatusUpdated_deliveredStatus_updatesCorrectly() async throws {
@@ -740,6 +796,45 @@ final class ConversationSocketHandlerTests: XCTestCase {
         try await actor.insertOptimistic(record)
         await actor.start()
 
+        // ALL recipients received (2/2) → delivered-to-all fires.
+        let event: ReadStatusUpdateEvent = JSONStub.decode("""
+        {
+            "conversationId":"\(conversationId)",
+            "participantId":"participant-other",
+            "userId":"\(otherUserId)",
+            "type":"received",
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "summary":{"totalMembers":2,"deliveredCount":2,"readCount":0}
+        }
+        """)
+        socket.readStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 600_000_000)
+
+        let after = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: "msg1")
+        }
+        // .delivered event (all recipients) transitions the row to .delivered
+        // state, sets deliveredAt + the "delivered to all" marker.
+        XCTAssertNotNil(after?.deliveredAt, "msg1 must transition to delivered via bufferBatchDelivery")
+        XCTAssertNotNil(after?.deliveredToAllAt, "msg1 must be stamped delivered-to-all for the resolver")
+    }
+
+    /// WhatsApp-style all-or-nothing: a PARTIAL group delivery (1 of 2 members)
+    /// must NOT advance the sender's checkmark — showing ✓✓ "delivered" while
+    /// only one of several recipients has received would misrepresent reality.
+    func test_readStatusUpdated_partialGroupDelivery_doesNotTransition() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+        _ = delegate
+
+        var record = makeSeedRecord(localId: "msg1", senderId: currentUserId, content: "Hello")
+        record.state = .sent
+        try await actor.insertOptimistic(record)
+        await actor.start()
+
+        // Only 1 of 2 recipients received → not delivered-to-all.
         let event: ReadStatusUpdateEvent = JSONStub.decode("""
         {
             "conversationId":"\(conversationId)",
@@ -757,8 +852,51 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let after = try await db.read { db in
             try MessageRecord.fetchOne(db, key: "msg1")
         }
-        // .delivered event transitions the row to .delivered state and sets deliveredAt.
-        XCTAssertNotNil(after?.deliveredAt, "msg1 must transition to delivered via bufferBatchDelivery")
+        XCTAssertNil(after?.deliveredAt,
+            "a partial group delivery (1/2) must NOT mark the message delivered-to-all")
+        XCTAssertEqual(after?.state, .sent,
+            "the row must stay at .sent until EVERY recipient has received it")
+    }
+
+    /// Soundness (never over-claim): a message I sent AFTER the peer's read
+    /// moment must NOT be marked read by a batch read event, even when the
+    /// summary says read-by-all (that "all" refers to the older latest message).
+    /// Mirrors the cache-path frontier guard.
+    func test_readStatusUpdated_messageAfterFrontier_staysUnread() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+        _ = delegate
+
+        // Message created NOW (2026), well after the event's read frontier (2020).
+        var record = makeSeedRecord(localId: "msg1", senderId: currentUserId, content: "after")
+        record.state = .sent
+        record.createdAt = Date()
+        try await actor.insertOptimistic(record)
+        await actor.start()
+
+        let event: ReadStatusUpdateEvent = JSONStub.decode("""
+        {
+            "conversationId":"\(conversationId)",
+            "participantId":"participant-other",
+            "userId":"\(otherUserId)",
+            "type":"read",
+            "updatedAt":"2020-01-01T00:00:00.000Z",
+            "summary":{"totalMembers":2,"deliveredCount":2,"readCount":2}
+        }
+        """)
+        socket.readStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 600_000_000)
+
+        let after = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: "msg1")
+        }
+        XCTAssertNil(after?.readAt,
+            "a message sent AFTER the read frontier must NOT be marked read")
+        XCTAssertNil(after?.readByAllAt,
+            "and must NOT be stamped read-by-all")
+        XCTAssertEqual(after?.state, .sent)
     }
 
     func test_readStatusUpdated_fromSelf_ignored() async throws {
@@ -957,7 +1095,8 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let sut = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: currentUserId,
-            messageSocket: socket
+            messageSocket: socket,
+            isApplicationActive: { true }
         )
         let delegate = MockConversationSocketDelegate()
         sut.delegate = delegate

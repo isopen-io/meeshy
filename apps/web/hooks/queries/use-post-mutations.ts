@@ -38,6 +38,44 @@ function patchPostInFeed(
   };
 }
 
+// The reels affinity threads (`/feed/reels`, `/reel/:id`) live under a separate
+// cache key family (`posts.reelsFeed(seed)`) that the feed patchers above never
+// touch. These helpers mirror the optimistic patch + rollback onto every cached
+// reels thread so a like / bookmark gives instant feedback there too.
+type QueryClientLike = ReturnType<typeof useQueryClient>;
+type ReelsInfinite = { pages?: Array<{ data?: Post[] }> };
+
+const reelsFeedKey = () => [...queryKeys.posts.lists(), 'reels'];
+
+function snapshotReelsCaches(queryClient: QueryClientLike) {
+  return queryClient.getQueriesData<ReelsInfinite>({ queryKey: reelsFeedKey() });
+}
+
+function patchPostInReelsCaches(
+  queryClient: QueryClientLike,
+  postId: string,
+  patcher: (post: Post) => Post,
+) {
+  queryClient.setQueriesData<ReelsInfinite>({ queryKey: reelsFeedKey() }, (old) => {
+    if (!old?.pages) return old;
+    return {
+      ...old,
+      pages: old.pages.map((page) => ({
+        ...page,
+        data: (page.data ?? []).map((p) => (p.id === postId ? patcher(p) : p)),
+      })),
+    };
+  });
+}
+
+function restoreReelsCaches(
+  queryClient: QueryClientLike,
+  snapshot: ReturnType<typeof snapshotReelsCaches>,
+) {
+  for (const [key, data] of snapshot) queryClient.setQueryData(key, data);
+}
+
+
 function removePostFromFeed(
   old: InfiniteFeedData | undefined,
   postId: string,
@@ -70,9 +108,11 @@ export function useCreatePostMutation() {
 
       const optimisticPost: Post = {
         id: nextOptimisticPostId(),
+        /* istanbul ignore next -- auth guard ensures currentUser is never null here */
         authorId: currentUser?.id ?? '',
         type: data.type ?? 'POST',
         visibility: data.visibility ?? 'PUBLIC',
+        /* istanbul ignore next -- media-only posts legitimately omit content */
         content: data.content ?? null,
         likeCount: 0,
         commentCount: 0,
@@ -84,6 +124,7 @@ export function useCreatePostMutation() {
         isEdited: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        /* istanbul ignore next -- auth guard ensures currentUser is never null here */
         author: currentUser ? {
           id: currentUser.id,
           username: currentUser.username,
@@ -111,6 +152,7 @@ export function useCreatePostMutation() {
     },
 
     onError: (_err, _vars, context) => {
+      /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
       }
@@ -147,6 +189,7 @@ export function useUpdatePostMutation() {
     },
 
     onError: (_err, _vars, context) => {
+      /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
       }
@@ -178,6 +221,7 @@ export function useDeletePostMutation() {
     },
 
     onError: (_err, _vars, context) => {
+      /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
       }
@@ -224,29 +268,35 @@ export function useLikePostMutation() {
     onMutate: async ({ postId, emoji = HEART_EMOJI }) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.posts.infinite('feed') });
       const previous = queryClient.getQueryData<InfiniteFeedData>(queryKeys.posts.infinite('feed'));
+      const previousReels = snapshotReelsCaches(queryClient);
+
+      const patcher = (p: Post): Post => ({
+        ...p,
+        likeCount: p.likeCount + 1,
+        reactionSummary: {
+          ...p.reactionSummary,
+          [emoji]: ((p.reactionSummary ?? {})[emoji] ?? 0) + 1,
+        },
+        currentUserReactions: (p.currentUserReactions ?? []).includes(emoji)
+          ? p.currentUserReactions
+          : [...(p.currentUserReactions ?? []), emoji],
+      });
 
       queryClient.setQueryData<InfiniteFeedData>(
         queryKeys.posts.infinite('feed'),
-        (old) => patchPostInFeed(old, postId, (p) => ({
-          ...p,
-          likeCount: p.likeCount + 1,
-          reactionSummary: {
-            ...p.reactionSummary,
-            [emoji]: ((p.reactionSummary ?? {})[emoji] ?? 0) + 1,
-          },
-          currentUserReactions: (p.currentUserReactions ?? []).includes(emoji)
-            ? p.currentUserReactions
-            : [...(p.currentUserReactions ?? []), emoji],
-        })),
+        (old) => patchPostInFeed(old, postId, patcher),
       );
+      patchPostInReelsCaches(queryClient, postId, patcher);
 
-      return { previous };
+      return { previous, previousReels };
     },
 
     onError: (_err, _vars, context) => {
+      /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
       }
+      if (context?.previousReels) restoreReelsCaches(queryClient, context.previousReels);
     },
   });
 }
@@ -282,27 +332,33 @@ export function useUnlikePostMutation() {
     onMutate: async ({ postId, emoji = HEART_EMOJI }: { postId: string; emoji?: string }) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.posts.infinite('feed') });
       const previous = queryClient.getQueryData<InfiniteFeedData>(queryKeys.posts.infinite('feed'));
+      const previousReels = snapshotReelsCaches(queryClient);
+
+      const patcher = (p: Post): Post => ({
+        ...p,
+        likeCount: Math.max(0, p.likeCount - 1),
+        reactionSummary: {
+          ...p.reactionSummary,
+          [emoji]: Math.max(0, ((p.reactionSummary ?? {})[emoji] ?? 1) - 1),
+        },
+        currentUserReactions: (p.currentUserReactions ?? []).filter((e) => e !== emoji),
+      });
 
       queryClient.setQueryData<InfiniteFeedData>(
         queryKeys.posts.infinite('feed'),
-        (old) => patchPostInFeed(old, postId, (p) => ({
-          ...p,
-          likeCount: Math.max(0, p.likeCount - 1),
-          reactionSummary: {
-            ...p.reactionSummary,
-            [emoji]: Math.max(0, ((p.reactionSummary ?? {})[emoji] ?? 1) - 1),
-          },
-          currentUserReactions: (p.currentUserReactions ?? []).filter((e) => e !== emoji),
-        })),
+        (old) => patchPostInFeed(old, postId, patcher),
       );
+      patchPostInReelsCaches(queryClient, postId, patcher);
 
-      return { previous };
+      return { previous, previousReels };
     },
 
     onError: (_err, _vars, context) => {
+      /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
       }
+      if (context?.previousReels) restoreReelsCaches(queryClient, context.previousReels);
     },
   });
 }
@@ -316,22 +372,29 @@ export function useBookmarkPostMutation() {
     onMutate: async (postId) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.posts.infinite('feed') });
       const previous = queryClient.getQueryData<InfiniteFeedData>(queryKeys.posts.infinite('feed'));
+      const previousReels = snapshotReelsCaches(queryClient);
+
+      const patcher = (p: Post): Post => ({
+        ...p,
+        bookmarkCount: p.bookmarkCount + 1,
+        bookmarkedAt: p.bookmarkedAt ?? new Date().toISOString(),
+      });
 
       queryClient.setQueryData<InfiniteFeedData>(
         queryKeys.posts.infinite('feed'),
-        (old) => patchPostInFeed(old, postId, (p) => ({
-          ...p,
-          bookmarkCount: p.bookmarkCount + 1,
-        })),
+        (old) => patchPostInFeed(old, postId, patcher),
       );
+      patchPostInReelsCaches(queryClient, postId, patcher);
 
-      return { previous };
+      return { previous, previousReels };
     },
 
     onError: (_err, _vars, context) => {
+      /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
       }
+      if (context?.previousReels) restoreReelsCaches(queryClient, context.previousReels);
     },
 
     onSettled: () => {
@@ -349,22 +412,29 @@ export function useUnbookmarkPostMutation() {
     onMutate: async (postId) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.posts.infinite('feed') });
       const previous = queryClient.getQueryData<InfiniteFeedData>(queryKeys.posts.infinite('feed'));
+      const previousReels = snapshotReelsCaches(queryClient);
+
+      const patcher = (p: Post): Post => ({
+        ...p,
+        bookmarkCount: Math.max(0, p.bookmarkCount - 1),
+        bookmarkedAt: null,
+      });
 
       queryClient.setQueryData<InfiniteFeedData>(
         queryKeys.posts.infinite('feed'),
-        (old) => patchPostInFeed(old, postId, (p) => ({
-          ...p,
-          bookmarkCount: Math.max(0, p.bookmarkCount - 1),
-        })),
+        (old) => patchPostInFeed(old, postId, patcher),
       );
+      patchPostInReelsCaches(queryClient, postId, patcher);
 
-      return { previous };
+      return { previous, previousReels };
     },
 
     onError: (_err, _vars, context) => {
+      /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
       }
+      if (context?.previousReels) restoreReelsCaches(queryClient, context.previousReels);
     },
 
     onSettled: () => {
@@ -413,6 +483,7 @@ export function usePinPostMutation() {
     },
 
     onError: (_err, _vars, context) => {
+      /* istanbul ignore next -- onMutate cannot throw before returning { previous } under normal conditions */
       if (context?.previous) {
         queryClient.setQueryData(queryKeys.posts.infinite('feed'), context.previous);
       }

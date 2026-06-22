@@ -31,21 +31,28 @@ jest.mock('../../services/posts/PostAudioService', () => ({
 // ---------------------------------------------------------------------------
 
 function createMockPrisma() {
-  return {
+  const prisma: any = {
     post: {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      count: jest.fn(),
     },
     postComment: {
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
     },
+    commentReaction: {
+      upsert: jest.fn(),
+      deleteMany: jest.fn(),
+      groupBy: jest.fn(),
+    },
     postBookmark: {
       upsert: jest.fn(),
       delete: jest.fn(),
+      findFirst: jest.fn(),
     },
     postView: {
       findUnique: jest.fn(),
@@ -58,6 +65,7 @@ function createMockPrisma() {
       updateMany: jest.fn(),
       findFirst: jest.fn(),
       update: jest.fn(),
+      deleteMany: jest.fn(),
     },
     participant: {
       findMany: jest.fn(),
@@ -68,7 +76,11 @@ function createMockPrisma() {
     friendRequest: {
       findMany: jest.fn(),
     },
-  } as any;
+  };
+  prisma.$transaction = jest.fn(async (arg: any) =>
+    typeof arg === 'function' ? arg(prisma) : Promise.all(arg),
+  );
+  return prisma;
 }
 
 function makePost(overrides: Record<string, unknown> = {}) {
@@ -806,6 +818,81 @@ describe('PostService', () => {
       );
     });
 
+    it('snapshots moodEmoji, content and audio when reposting a STATUS as STATUS', async () => {
+      // A STATUS is ephemeral (1h). A repost that merely referenced it would
+      // render empty once the source expires. The repost must carry its own
+      // copy of the mood + text + voice so it survives the original's TTL.
+      const original = makePost({
+        id: 'status-1',
+        type: PostType.STATUS,
+        visibility: 'PUBLIC',
+        moodEmoji: '🔥',
+        content: 'feeling great',
+        originalLanguage: 'en',
+        audioUrl: '/api/v1/attachments/file/mood.mp3',
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockResolvedValue(makePost({ id: 'status-repost' }));
+      prisma.post.update.mockResolvedValue(original);
+
+      const duplicateSpy = jest.spyOn(mediaService, 'duplicateMedia')
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-mood.mp3', filePath: 'snap/new-mood.mp3', fileName: 'new-mood.mp3', fileSize: 1000, mimeType: 'audio/mpeg' });
+
+      await service.repostPost('status-1', 'user-reposter', { targetType: PostType.STATUS });
+
+      expect(duplicateSpy).toHaveBeenCalledWith('/api/v1/attachments/file/mood.mp3');
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: PostType.STATUS,
+            moodEmoji: '🔥',
+            content: 'feeling great',
+            originalLanguage: 'en',
+            audioUrl: '/api/v1/attachments/file/new-mood.mp3',
+            repostOfId: 'status-1',
+          }),
+        })
+      );
+    });
+
+    it('duplicates media + storyEffects when reposting a STORY as STORY', async () => {
+      const original = makePost({
+        id: 'story-2',
+        type: PostType.STORY,
+        visibility: 'PUBLIC',
+        media: [
+          { id: 'm1', fileUrl: '/api/v1/attachments/file/s1.jpg', mimeType: 'image/jpeg', filePath: 'p/s1.jpg', fileName: 's1.jpg', originalName: 's1.jpg', fileSize: 1000 },
+        ],
+        storyEffects: { canvas: 'fx' },
+        audioUrl: '/api/v1/attachments/file/bg.mp3',
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockResolvedValue(makePost({ id: 'story-repost' }));
+      prisma.post.update.mockResolvedValue(original);
+
+      const duplicateSpy = jest.spyOn(mediaService, 'duplicateMedia')
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-s1.jpg', filePath: 'snap/new-s1.jpg', fileName: 'new-s1.jpg', fileSize: 1000, mimeType: 'image/jpeg' })
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-bg.mp3', filePath: 'snap/new-bg.mp3', fileName: 'new-bg.mp3', fileSize: 500, mimeType: 'audio/mpeg' });
+
+      await service.repostPost('story-2', 'user-reposter', { targetType: PostType.STORY });
+
+      expect(duplicateSpy).toHaveBeenCalledWith('/api/v1/attachments/file/s1.jpg');
+      expect(duplicateSpy).toHaveBeenCalledWith('/api/v1/attachments/file/bg.mp3');
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: PostType.STORY,
+            storyEffects: { canvas: 'fx' },
+            audioUrl: '/api/v1/attachments/file/new-bg.mp3',
+            repostOfId: 'story-2',
+            media: { create: expect.arrayContaining([
+              expect.objectContaining({ fileUrl: '/api/v1/attachments/file/new-s1.jpg' }),
+            ]) },
+          }),
+        })
+      );
+    });
+
     it('returns null when original is deleted', async () => {
       prisma.post.findFirst.mockResolvedValue(null);
       const result = await service.repostPost('deleted-1', 'user-reposter');
@@ -959,6 +1046,64 @@ describe('PostService', () => {
       expect((result as any).currentUserReactions).toEqual([]);
       expect(prisma.postReaction.findMany).not.toHaveBeenCalled();
     });
+
+    // Bookmark / repost personal-state enrichment — mirrors PostFeedService so
+    // the post detail hydrates the SAME isBookmarkedByMe / isRepostedByMe as the
+    // feed and reel viewer. Without these, the detail always showed "non
+    // bookmarked" / "non reposted" even when the post was saved/reposted.
+
+    it('returns isBookmarkedByMe: true when the viewer has bookmarked the post', async () => {
+      const post = makePost();
+      prisma.post.findFirst.mockResolvedValue(post);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue([]);
+      prisma.postBookmark.findFirst.mockResolvedValue({ postId: 'post-1' });
+      prisma.post.count.mockResolvedValue(0);
+
+      const result = await service.getPostById('post-1', 'user-1');
+
+      expect((result as any).isBookmarkedByMe).toBe(true);
+      expect((result as any).isRepostedByMe).toBe(false);
+    });
+
+    it('returns isBookmarkedByMe: false when the viewer has not bookmarked the post', async () => {
+      const post = makePost();
+      prisma.post.findFirst.mockResolvedValue(post);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue([]);
+      prisma.postBookmark.findFirst.mockResolvedValue(null);
+      prisma.post.count.mockResolvedValue(0);
+
+      const result = await service.getPostById('post-1', 'user-1');
+
+      expect((result as any).isBookmarkedByMe).toBe(false);
+    });
+
+    it('returns isRepostedByMe: true when the viewer has reposted the post', async () => {
+      const post = makePost();
+      prisma.post.findFirst.mockResolvedValue(post);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue([]);
+      prisma.postBookmark.findFirst.mockResolvedValue(null);
+      prisma.post.count.mockResolvedValue(1);
+
+      const result = await service.getPostById('post-1', 'user-1');
+
+      expect((result as any).isRepostedByMe).toBe(true);
+    });
+
+    it('returns bookmark/repost flags false for anonymous read without querying them', async () => {
+      const post = makePost();
+      prisma.post.findFirst.mockResolvedValue(post);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      const result = await service.getPostById('post-1', undefined);
+
+      expect((result as any).isBookmarkedByMe).toBe(false);
+      expect((result as any).isRepostedByMe).toBe(false);
+      expect(prisma.postBookmark.findFirst).not.toHaveBeenCalled();
+      expect(prisma.post.count).not.toHaveBeenCalled();
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -996,6 +1141,120 @@ describe('PostService', () => {
         }),
       );
       expect(result).toEqual(deletedPost);
+    });
+  });
+
+  describe('updatePost', () => {
+    it('returns null when the post does not exist', async () => {
+      prisma.post.findFirst.mockResolvedValue(null);
+      const result = await service.updatePost('missing', 'user-1', { content: 'x' });
+      expect(result).toBeNull();
+    });
+
+    it('throws FORBIDDEN when the user is not the author', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'other', media: [] }));
+      await expect(service.updatePost('post-1', 'user-1', { content: 'x' })).rejects.toThrow('FORBIDDEN');
+      expect(prisma.post.update).not.toHaveBeenCalled();
+    });
+
+    it('switches a POST to a REEL when it carries media', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [{ id: 'm1' }] }));
+      prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
+
+      await service.updatePost('post-1', 'user-1', { type: PostType.REEL });
+
+      expect(prisma.post.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ type: PostType.REEL }) }),
+      );
+    });
+
+    it('removes only media that belongs to the post (ignores foreign ids)', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [{ id: 'm1' }, { id: 'm2' }] }));
+      prisma.post.update.mockResolvedValue(makePost());
+
+      await service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1', 'foreign-media'] });
+
+      expect(prisma.postMedia.deleteMany).toHaveBeenCalledWith({
+        where: { id: { in: ['m1'] }, postId: 'post-1' },
+      });
+      expect(prisma.post.update).toHaveBeenCalled();
+    });
+
+    it('does not delete media when removeMediaIds is omitted', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [{ id: 'm1' }] }));
+      prisma.post.update.mockResolvedValue(makePost());
+
+      await service.updatePost('post-1', 'user-1', { content: 'x' });
+
+      expect(prisma.postMedia.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects removing the last media of a REEL (422) and deletes nothing', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1' }] }));
+
+      await expect(service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1'] }))
+        .rejects.toMatchObject({ statusCode: 422 });
+      expect(prisma.postMedia.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.post.update).not.toHaveBeenCalled();
+    });
+
+    it('allows removing media from a REEL that keeps at least one', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1' }, { id: 'm2' }] }));
+      prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
+
+      await service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1'] });
+
+      expect(prisma.postMedia.deleteMany).toHaveBeenCalledWith({
+        where: { id: { in: ['m1'] }, postId: 'post-1' },
+      });
+    });
+
+    it('rejects switching to REEL without media (422)', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [] }));
+      await expect(service.updatePost('post-1', 'user-1', { type: PostType.REEL }))
+        .rejects.toMatchObject({ statusCode: 422 });
+      expect(prisma.post.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a STORY -> POST type change (422)', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [{ id: 'm1' }] }));
+      await expect(service.updatePost('post-1', 'user-1', { type: PostType.POST }))
+        .rejects.toMatchObject({ statusCode: 422 });
+    });
+
+    it('rejects a type change on a repost (422)', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', repostOfId: 'orig-1', media: [{ id: 'm1' }] }));
+      await expect(service.updatePost('post-1', 'user-1', { type: PostType.REEL }))
+        .rejects.toMatchObject({ statusCode: 422 });
+    });
+
+    it('does not write type when it is unchanged', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [] }));
+      prisma.post.update.mockResolvedValue(makePost());
+      await service.updatePost('post-1', 'user-1', { type: PostType.POST });
+      expect(prisma.post.update.mock.calls[0][0].data.type).toBeUndefined();
+    });
+
+    it('updates originalLanguage and clears stale translations on language change', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', originalLanguage: 'en', content: 'hello', media: [] }));
+      prisma.post.update.mockResolvedValue(makePost());
+
+      await service.updatePost('post-1', 'user-1', { originalLanguage: 'fr' });
+
+      expect(prisma.post.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ originalLanguage: 'fr', translations: {} }),
+        }),
+      );
+    });
+
+    it('does not touch originalLanguage/translations when language is unchanged', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', originalLanguage: 'en', media: [] }));
+      prisma.post.update.mockResolvedValue(makePost());
+      await service.updatePost('post-1', 'user-1', { originalLanguage: 'en', content: 'updated' });
+      const call = prisma.post.update.mock.calls[0][0];
+      expect(call.data.originalLanguage).toBeUndefined();
+      expect(call.data.translations).toBeUndefined();
     });
   });
 });
@@ -1051,7 +1310,8 @@ describe('PostCommentService', () => {
           data: { commentCount: { increment: 1 } },
         }),
       );
-      expect(result).toEqual(createdComment);
+      // `media: []` — addComment now returns the (possibly empty) comment media.
+      expect(result).toEqual({ ...createdComment, media: [] });
     });
 
     it('throws PARENT_NOT_FOUND when parentId does not exist', async () => {
@@ -1095,7 +1355,7 @@ describe('PostCommentService', () => {
           data: { replyCount: { increment: 1 } },
         }),
       );
-      expect(result).toEqual(reply);
+      expect(result).toEqual({ ...reply, media: [] });
     });
   });
 
@@ -1193,55 +1453,48 @@ describe('PostCommentService', () => {
       expect(result).toBeNull();
     });
 
-    it('increments likeCount and updates reactionSummary', async () => {
-      const comment = makeComment({ reactionSummary: {} });
-      prisma.postComment.findFirst.mockResolvedValue(comment);
-
-      const updatedComment = makeComment({ likeCount: 4, reactionSummary: { '❤️': 1 } });
+    it('upserts the reaction row (idempotent) and syncs likeCount = reactionCount = count(table)', async () => {
+      prisma.postComment.findFirst.mockResolvedValue(makeComment());
+      prisma.commentReaction.upsert.mockResolvedValue({});
+      // Après l'upsert, la table contient 4 ❤️ → likeCount/reactionCount = 4.
+      prisma.commentReaction.groupBy.mockResolvedValue([{ emoji: '❤️', _count: { emoji: 4 } }]);
+      const updatedComment = makeComment({ likeCount: 4, reactionCount: 4, reactionSummary: { '❤️': 4 } });
       prisma.postComment.update.mockResolvedValue(updatedComment);
 
       const result = await service.likeComment('comment-1', 'user-1');
 
+      // Idempotent : un seul like par (commentId,userId,emoji) via la contrainte unique.
+      expect(prisma.commentReaction.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { comment_user_reaction_unique: { commentId: 'comment-1', userId: 'user-1', emoji: '❤️' } },
+          create: { commentId: 'comment-1', userId: 'user-1', emoji: '❤️' },
+          update: {},
+        }),
+      );
+      // Compteurs AUTORITAIRES depuis la table (pas d'increment aveugle).
       expect(prisma.postComment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'comment-1' },
-          data: {
-            likeCount: { increment: 1 },
-            reactionSummary: { '❤️': 1 },
-          },
+          data: { likeCount: 4, reactionCount: 4, reactionSummary: { '❤️': 4 } },
         }),
       );
       expect(result).toEqual(updatedComment);
     });
 
-    it('increments existing emoji count in summary', async () => {
-      const comment = makeComment({ reactionSummary: { '❤️': 3 } });
-      prisma.postComment.findFirst.mockResolvedValue(comment);
-      prisma.postComment.update.mockResolvedValue(makeComment());
-
-      await service.likeComment('comment-1', 'user-1', '❤️');
-
-      expect(prisma.postComment.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            reactionSummary: { '❤️': 4 },
-          }),
-        }),
-      );
-    });
-
-    it('adds a new emoji key to the summary', async () => {
-      const comment = makeComment({ reactionSummary: { '❤️': 2 } });
-      prisma.postComment.findFirst.mockResolvedValue(comment);
+    it('rebuilds reactionSummary per emoji from the table', async () => {
+      prisma.postComment.findFirst.mockResolvedValue(makeComment());
+      prisma.commentReaction.upsert.mockResolvedValue({});
+      prisma.commentReaction.groupBy.mockResolvedValue([
+        { emoji: '❤️', _count: { emoji: 2 } },
+        { emoji: '🔥', _count: { emoji: 1 } },
+      ]);
       prisma.postComment.update.mockResolvedValue(makeComment());
 
       await service.likeComment('comment-1', 'user-1', '🔥');
 
       expect(prisma.postComment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            reactionSummary: { '❤️': 2, '🔥': 1 },
-          }),
+          data: { likeCount: 3, reactionCount: 3, reactionSummary: { '❤️': 2, '🔥': 1 } },
         }),
       );
     });
@@ -1259,71 +1512,38 @@ describe('PostCommentService', () => {
       expect(result).toBeNull();
     });
 
-    it('decrements likeCount and updates reactionSummary', async () => {
-      const comment = makeComment({ reactionSummary: { '❤️': 2 } });
-      prisma.postComment.findFirst.mockResolvedValue(comment);
-
-      const updatedComment = makeComment({ likeCount: 2, reactionSummary: { '❤️': 1 } });
+    it('deletes the reaction row and syncs counters from the table', async () => {
+      prisma.postComment.findFirst.mockResolvedValue(makeComment());
+      prisma.commentReaction.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.commentReaction.groupBy.mockResolvedValue([{ emoji: '❤️', _count: { emoji: 1 } }]);
+      const updatedComment = makeComment({ likeCount: 1, reactionCount: 1, reactionSummary: { '❤️': 1 } });
       prisma.postComment.update.mockResolvedValue(updatedComment);
 
       const result = await service.unlikeComment('comment-1', 'user-1', '❤️');
 
+      expect(prisma.commentReaction.deleteMany).toHaveBeenCalledWith({
+        where: { commentId: 'comment-1', userId: 'user-1', emoji: '❤️' },
+      });
       expect(prisma.postComment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'comment-1' },
-          data: {
-            likeCount: { decrement: 1 },
-            reactionSummary: { '❤️': 1 },
-          },
+          data: { likeCount: 1, reactionCount: 1, reactionSummary: { '❤️': 1 } },
         }),
       );
       expect(result).toEqual(updatedComment);
     });
 
-    it('removes the emoji key from summary when count reaches zero', async () => {
-      const comment = makeComment({ reactionSummary: { '❤️': 1, '🔥': 3 } });
-      prisma.postComment.findFirst.mockResolvedValue(comment);
+    it('drops the emoji key (and zeroes counters) when the table is empty', async () => {
+      prisma.postComment.findFirst.mockResolvedValue(makeComment());
+      prisma.commentReaction.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.commentReaction.groupBy.mockResolvedValue([]);
       prisma.postComment.update.mockResolvedValue(makeComment());
 
       await service.unlikeComment('comment-1', 'user-1', '❤️');
 
       expect(prisma.postComment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            reactionSummary: { '🔥': 3 },
-          }),
-        }),
-      );
-    });
-
-    it('handles unliking an emoji that has no entries in summary', async () => {
-      const comment = makeComment({ reactionSummary: { '🔥': 2 } });
-      prisma.postComment.findFirst.mockResolvedValue(comment);
-      prisma.postComment.update.mockResolvedValue(makeComment());
-
-      await service.unlikeComment('comment-1', 'user-1', '❤️');
-
-      expect(prisma.postComment.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            reactionSummary: { '🔥': 2 },
-          }),
-        }),
-      );
-    });
-
-    it('handles null reactionSummary gracefully', async () => {
-      const comment = makeComment({ reactionSummary: null });
-      prisma.postComment.findFirst.mockResolvedValue(comment);
-      prisma.postComment.update.mockResolvedValue(makeComment());
-
-      await service.unlikeComment('comment-1', 'user-1', '❤️');
-
-      expect(prisma.postComment.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            reactionSummary: {},
-          }),
+          data: { likeCount: 0, reactionCount: 0, reactionSummary: {} },
         }),
       );
     });

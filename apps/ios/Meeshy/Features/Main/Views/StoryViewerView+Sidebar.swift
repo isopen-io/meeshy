@@ -107,7 +107,9 @@ struct StoryActionSidebarView: View {
                     label: storyReactionCount > 0 ? "\(storyReactionCount)" : "React",
                     isActive: showEmojiStrip || storyCurrentUserHasReacted,
                     activeColor: MeeshyColors.indigo500,
-                    activeGlow: MeeshyColors.indigo500
+                    activeGlow: MeeshyColors.indigo500,
+                    accentOutline: storyCurrentUserHasReacted ? "heart" : nil,
+                    accentOutlineColor: Color(hex: currentGroup?.avatarColor ?? "FF2D55")
                 ) {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         showEmojiStrip.toggle()
@@ -159,6 +161,7 @@ struct StoryActionSidebarView: View {
                 ) {
                     HapticFeedback.light()
                     guard let story = currentStory, let group = currentGroup else { return }
+                    EngagementTracker.shared.recordAction(.commented, surface: .storyViewer)
                     let preview = story.content?.prefix(80).description ?? "Story"
                     let thumbUrl = story.media.first?.thumbnailUrl ?? story.media.first?.url
                     onReplyToStory?(.story(
@@ -185,25 +188,50 @@ struct StoryActionSidebarView: View {
                 HapticFeedback.light()
                 pauseTimer()
                 if let story = currentStory, let group = currentGroup {
+                    EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
                     sharedContentWrapper = SharedContentWrapper(content: .story(item: story, authorName: group.username))
                 }
             }
 
-            // 4. Reshare (republish to own story) — hidden for own stories.
-            // Visibility-gated on `currentStory?.isPublic` (B.2 helper) so we never
-            // expose Partager for non-public visibility (FRIENDS / PRIVATE).
+            // 4. Reshare (republier la story) — non-auteur + story publique.
+            // Réintroduit 2026-06-18 après finalisation du flux serveur : route
+            // via le snapshot de repost (`PostService.repost` targetType .story).
+            // Le gateway duplique le média + l'audio source et copie storyEffects
+            // dans une STORY fraîche, self-contenue, liée via repostOfId. Remplace
+            // l'ancien chemin composer qui produisait une story VIDE (il forçait
+            // repostOfId: nil et ne dupliquait jamais le média source).
             if !isOwnStory, currentStory?.isPublic == true {
                 StoryActionButton(
                     icon: "arrow.2.squarepath",
                     label: storyRepostCount > 0 ? "\(storyRepostCount)" : "Partager"
                 ) {
+                    guard let story = currentStory else { return }
                     HapticFeedback.light()
-                    pauseTimer()
-                    if let story = currentStory, let group = currentGroup {
-                        repostStoryComposerSource = RepostStorySourceWrapper(
-                            story: story,
-                            authorHandle: group.username
-                        )
+                    Task {
+                        do {
+                            _ = try await PostService.shared.repost(
+                                postId: story.id,
+                                targetType: .story,
+                                content: nil,
+                                isQuote: false
+                            )
+                            await MainActor.run {
+                                HapticFeedback.success()
+                                FeedbackToastManager.shared.show("Story republiée")
+                            }
+                        } catch APIError.serverError(404, _) {
+                            await MainActor.run {
+                                FeedbackToastManager.shared.showError("La story n'est plus disponible")
+                            }
+                        } catch APIError.serverError(403, _) {
+                            await MainActor.run {
+                                FeedbackToastManager.shared.showError("Cette story ne peut pas être repartagée")
+                            }
+                        } catch {
+                            await MainActor.run {
+                                FeedbackToastManager.shared.showError("Échec de la republication")
+                            }
+                        }
                     }
                 }
             } else if isOwnStory {
@@ -697,9 +725,16 @@ struct StoryHeaderView: View {
             .accessibilityHint(String(localized: "story.viewer.a11y.close.hint", defaultValue: "Ferme le lecteur de stories", bundle: .main))
         }
         .sheet(item: $selectedProfileUser) { user in
-            UserProfileSheet(user: user)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            UserProfileSheet(
+                user: user,
+                postsContent: { uid in AnyView(ProfileUserPostsList(
+                    userId: uid,
+                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
+                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
+                )) }
+            )
+            .presentationDetents([.large, .medium])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showReportSheet) {
             ReportMessageSheet(accentColor: currentGroup?.avatarColor ?? "FF2D55") { type, reason in

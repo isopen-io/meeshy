@@ -29,25 +29,25 @@ export function PasswordRequirementsChecklist({
     return [
       {
         id: 'minLength',
-        label: t('resetPassword.requirements.minLength') || 'At least 8 characters',
+        label: t('resetPassword.requirements.minLength', 'At least 8 characters'),
         test: (pwd: string) => pwd.length >= 8,
         met: password.length >= 8,
       },
       {
         id: 'uppercase',
-        label: t('resetPassword.requirements.uppercase') || 'One uppercase letter',
+        label: t('resetPassword.requirements.uppercase', 'One uppercase letter'),
         test: (pwd: string) => /[A-Z]/.test(pwd),
         met: /[A-Z]/.test(password),
       },
       {
         id: 'lowercase',
-        label: t('resetPassword.requirements.lowercase') || 'One lowercase letter',
+        label: t('resetPassword.requirements.lowercase', 'One lowercase letter'),
         test: (pwd: string) => /[a-z]/.test(pwd),
         met: /[a-z]/.test(password),
       },
       {
         id: 'number',
-        label: t('resetPassword.requirements.number') || 'One number',
+        label: t('resetPassword.requirements.number', 'One number'),
         test: (pwd: string) => /[0-9]/.test(pwd),
         met: /[0-9]/.test(password),
       },
@@ -58,9 +58,9 @@ export function PasswordRequirementsChecklist({
   const hasSpecialChar = useMemo(() => /[^a-zA-Z0-9]/.test(password), [password]);
   const specialCharMessage = useMemo(() => {
     if (hasSpecialChar) {
-      return t('resetPassword.requirements.specialMet') || '🎉 Mot de passe béton avec ce caractère spécial !';
+      return t('resetPassword.requirements.specialMet', '🎉 Awesome! Rock-solid password with that special character!');
     }
-    return t('resetPassword.requirements.special') || '💡 Un caractère spécial pour un mot de passe béton ?';
+    return t('resetPassword.requirements.special', '💡 Add a special character for rock-solid security?');
   }, [hasSpecialChar, t]);
 
   const allRequirementsMet = useMemo(() => {
@@ -80,10 +80,10 @@ export function PasswordRequirementsChecklist({
     <div className={cn('space-y-3', className)}>
       <div>
         <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-          {t('resetPassword.requirements.title') || 'Password must contain'}:
+          {t('resetPassword.requirements.title', 'Password must contain')}:
         </p>
         <p className="text-xs text-gray-500 dark:text-gray-400 italic mt-1">
-          {t('resetPassword.requirements.creativeTip') || 'Sois créatif, pour ne pas pleurer le piratage demain !'}
+          {t('resetPassword.requirements.creativeTip', "Be creative, so you don't cry about hacking tomorrow!")}
         </p>
       </div>
 
@@ -139,8 +139,7 @@ export function PasswordRequirementsChecklist({
         <div className="flex items-center gap-2 p-3 mt-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
           <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
           <p className="text-sm font-medium text-green-700 dark:text-green-300">
-            {t('resetPassword.requirements.allMet') ||
-              'All requirements met! Your password is secure.'}
+            {t('resetPassword.requirements.allMet', 'All requirements met! Your password is secure.')}
           </p>
         </div>
       )}

@@ -54,6 +54,7 @@ final class StatusBubbleController: ObservableObject {
     func requestReply() {
         guard let entry = currentEntry else { return }
         currentEntry = nil
+        EngagementTracker.shared.recordAction(.commented, surface: .statusBubble)
         Task { await EngagementTracker.shared.end(surface: .statusBubble) }
         // On ne répond pas à son propre mood.
         guard entry.userId != AuthManager.shared.currentUser?.id else { return }

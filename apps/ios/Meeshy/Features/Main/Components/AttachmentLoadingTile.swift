@@ -74,13 +74,17 @@ struct AttachmentLoadingTile: View {
     @ViewBuilder
     private var background: some View {
         if let thumb = prep.thumbnail {
+            // Once the preview lands, keep the photo bright so it reads as
+            // already present in the tray — the heavy compression / hashing
+            // happens quietly behind a discreet corner spinner, not behind a
+            // heavy dimming veil.
             Image(uiImage: thumb)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
                 .frame(width: size, height: size)
                 .clipped()
                 .overlay(
-                    Color.black.opacity(prep.stage == .ready ? 0 : 0.35)
+                    Color.black.opacity(prep.stage == .ready ? 0 : 0.12)
                 )
         } else {
             Color(hex: prep.accentColor)
@@ -90,17 +94,32 @@ struct AttachmentLoadingTile: View {
 
     @ViewBuilder
     private var loadingOverlay: some View {
-        VStack(spacing: 3) {
+        if prep.thumbnail != nil {
+            // Image already visible — show only a small corner spinner so the
+            // tile keeps reading as the selected photo, processing in the
+            // background.
             ProgressView()
                 .progressViewStyle(.circular)
                 .tint(.white)
-                .scaleEffect(0.75)
-            Text(stageLabel)
-                .font(.system(size: 8, weight: .semibold))
-                .foregroundColor(.white.opacity(0.9))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .padding(.horizontal, 4)
+                .scaleEffect(0.7)
+                .padding(5)
+                .background(Circle().fill(Color.black.opacity(0.4)))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .padding(4)
+        } else {
+            // No preview yet (bytes still loading) — full placeholder + label.
+            VStack(spacing: 3) {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .tint(.white)
+                    .scaleEffect(0.75)
+                Text(stageLabel)
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(.horizontal, 4)
+            }
         }
     }
 

@@ -237,6 +237,13 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     public let profileCompletionRate: Int?
     public let signalIdentityKeyPublic: String?
 
+    // Voice profile (from GET /users/:id). Optional — rollout-safe: older
+    // responses omit these fields, which decode to `nil` via synthesized Codable.
+    public let voicePublic: Bool?
+    public let voiceSampleUrl: String?
+    public let voiceSampleDurationMs: Int?
+    public let voiceQuality: Double?
+
     public init(
         id: String, username: String, email: String? = nil,
         firstName: String? = nil, lastName: String? = nil,
@@ -256,7 +263,11 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         timezone: String? = nil,
         registrationCountry: String? = nil,
         profileCompletionRate: Int? = nil,
-        signalIdentityKeyPublic: String? = nil
+        signalIdentityKeyPublic: String? = nil,
+        voicePublic: Bool? = nil,
+        voiceSampleUrl: String? = nil,
+        voiceSampleDurationMs: Int? = nil,
+        voiceQuality: Double? = nil
     ) {
         self.id = id
         self.username = username
@@ -291,6 +302,10 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.registrationCountry = registrationCountry
         self.profileCompletionRate = profileCompletionRate
         self.signalIdentityKeyPublic = signalIdentityKeyPublic
+        self.voicePublic = voicePublic
+        self.voiceSampleUrl = voiceSampleUrl
+        self.voiceSampleDurationMs = voiceSampleDurationMs
+        self.voiceQuality = voiceQuality
     }
 
     /// Returns a new MeeshyUser with the specified profile fields replaced.
@@ -329,7 +344,11 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             timezone: timezone,
             registrationCountry: registrationCountry,
             profileCompletionRate: profileCompletionRate,
-            signalIdentityKeyPublic: signalIdentityKeyPublic
+            signalIdentityKeyPublic: signalIdentityKeyPublic,
+            voicePublic: voicePublic,
+            voiceSampleUrl: voiceSampleUrl,
+            voiceSampleDurationMs: voiceSampleDurationMs,
+            voiceQuality: voiceQuality
         )
     }
 

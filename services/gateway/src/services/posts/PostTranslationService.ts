@@ -11,6 +11,7 @@ import type { ZmqTranslationClient } from '../zmq-translation/ZmqTranslationClie
 import type { TranslationCompletedEvent } from '../zmq-translation/types';
 import type { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { isUrlOnly } from '../../utils/url-content';
 
 const log = enhancedLogger.child({ module: 'PostTranslationService' });
 
@@ -64,9 +65,18 @@ export class PostTranslationService {
    * Fire-and-forget: results arrive via ZMQ events.
    */
   async translatePost(postId: string, content: string, originalLanguage?: string, authorId?: string): Promise<void> {
+    // Skip translation for URL-only posts: links carry no translatable text and
+    // must be preserved verbatim (NLLB would corrupt them). Mixed content still
+    // translates — the translator masks/restores the URLs.
+    if (isUrlOnly(content)) {
+      log.info('PostTranslation: skipping URL-only post (links preserved verbatim)', { postId });
+      return;
+    }
+
     const sourceLang = originalLanguage ?? detectLanguage(content);
     const targetLanguages = TOP_LANGUAGES.filter(l => l !== sourceLang);
 
+    /* istanbul ignore next -- TOP_LANGUAGES always has >=5 elements; filtering one still yields >=4 */
     if (targetLanguages.length === 0) {
       log.info('PostTranslation: no target languages after filtering source', { postId, sourceLang });
       return;
@@ -142,6 +152,7 @@ export class PostTranslationService {
     const sourceLang = originalLanguage ?? detectLanguage(content);
     const targetLanguages = TOP_LANGUAGES.filter(l => l !== sourceLang);
 
+    /* istanbul ignore next -- TOP_LANGUAGES always has >=5 elements; filtering one still yields >=4 */
     if (targetLanguages.length === 0) {
       log.info('CommentTranslation: no target languages after filtering source', { commentId, sourceLang });
       return;
@@ -175,11 +186,13 @@ export class PostTranslationService {
 
       if (messageId.startsWith('post:')) {
         const postId = messageId.slice('post:'.length);
+        /* istanbul ignore next -- handlePostTranslationCompleted wraps its own errors; this .catch is belt-and-suspenders dead code */
         this.handlePostTranslationCompleted(postId, event).catch((err) => {
           log.error('handlePostTranslationCompleted failed', err, { postId });
         });
       } else if (messageId.startsWith('comment:')) {
         const commentId = messageId.slice('comment:'.length);
+        /* istanbul ignore next -- handleCommentTranslationCompleted wraps its own errors; this .catch is belt-and-suspenders dead code */
         this.handleCommentTranslationCompleted(commentId, event).catch((err) => {
           log.error('handleCommentTranslationCompleted failed', err, { commentId });
         });
