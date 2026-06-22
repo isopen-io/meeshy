@@ -11,7 +11,18 @@ struct PostDetailView: View {
     var showComments: Bool = false
 
     @StateObject private var viewModel = PostDetailViewModel()
+    /// Autocomplétion @mention pour le composer de commentaire — contexte `.post`,
+    /// donc le backend suggère l'auteur du post, les personnes ayant commenté, puis
+    /// les contacts (parité avec `FeedCommentsSheet`).
+    @StateObject private var mentionController: MentionComposerController
     private var theme: ThemeManager { ThemeManager.shared }
+
+    init(postId: String, initialPost: FeedPost? = nil, showComments: Bool = false) {
+        self.postId = postId
+        self.initialPost = initialPost
+        self.showComments = showComments
+        _mentionController = StateObject(wrappedValue: MentionComposerController(context: .post(id: postId)))
+    }
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var router: Router
@@ -26,6 +37,13 @@ struct PostDetailView: View {
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false
+    /// Texte du composer, lié au `UniversalComposerBar`. Permet de préremplir une
+    /// @mention quand on répond à une réponse (niveau 2) — l'auteur ciblé est
+    /// notifié via `user_mentioned` même si la réponse est reparentée à la racine.
+    @State private var composerText: String = ""
+    /// @mention auto-injectée par `beginReply` (réponse à une réponse) — suivie
+    /// pour la retirer proprement si on change de cible sans envoyer.
+    @State private var prefilledMention: String? = nil
     // Comment attachments + real voice capture (parity with feed/reels composer).
     @State private var commentAttachments: [ComposerAttachment] = []
     @State private var showCommentPhotoPicker: Bool = false
@@ -380,13 +398,16 @@ struct PostDetailView: View {
                 likeDelta: viewModel.commentLikeDelta,
                 heartInFlightIds: viewModel.commentHeartInFlightIds,
                 onReply: { target in
-                    viewModel.replyingTo = target
+                    beginReply(to: target)
                 },
                 onToggleThread: {
                     Task { await viewModel.toggleThread(comment.id, postId: postId) }
                 },
                 onLikeComment: { commentId in
                     Task { await viewModel.toggleCommentLike(commentId, postId: postId) }
+                },
+                onDeleteComment: { target in
+                    Task { await viewModel.deleteComment(target) }
                 },
                 moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                 storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
@@ -492,7 +513,19 @@ struct PostDetailView: View {
                 Spacer()
             }
 
-            composer
+            VStack(spacing: 0) {
+                if mentionController.activeQuery != nil {
+                    MentionSuggestionPanel(
+                        controller: mentionController,
+                        accentColor: accentColor,
+                        currentText: composerText,
+                        onSelect: { updated in composerText = updated }
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                composer
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: mentionController.activeQuery != nil)
         }
         .background(theme.backgroundGradient.ignoresSafeArea())
         .navigationBarHidden(true)
@@ -549,6 +582,10 @@ struct PostDetailView: View {
             //   comptées IMMÉDIATEMENT, avant tout tracking d'engagement (durée de lecture).
             try? await PostService.shared.viewPost(postId: postId, duration: nil)
             await viewModel.registerDetailOpen(postId)
+            // Reprend le brouillon de commentaire laissé sur ce post (cache-first).
+            if composerText.isEmpty, let draft = CommentDraftStore.shared.load(postId: postId) {
+                composerText = draft
+            }
         }
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: postId)
@@ -1758,7 +1795,12 @@ struct PostDetailView: View {
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
             onSendMessage: { text, attachments, _ in submitComment(text: text, attachments: attachments) },
+            textBinding: $composerText,
             replyBanner: replyBannerView,
+            onTextChange: { text in
+                mentionController.handleQuery(in: text)
+                CommentDraftStore.shared.save(postId: postId, text: text)
+            },
             customAttachmentsPreview: commentAttachments.isEmpty
                 ? nil
                 : AnyView(CommentAttachmentsTray(attachments: commentAttachments) { id in
@@ -1802,6 +1844,30 @@ struct PostDetailView: View {
         }
     }
 
+    // MARK: - Reply targeting
+
+    /// Amorce une réponse. Répondre à une réponse (niveau 2) reste plat au niveau
+    /// 2 (cf. `sendReply` : parentId = racine) ; on préremplit une @mention vers
+    /// l'auteur ciblé pour qu'il soit notifié (`user_mentioned`) malgré le
+    /// reparentage à la racine.
+    private func beginReply(to target: FeedComment) {
+        viewModel.replyingTo = target
+        composerFocusTrigger = true
+        // Retire la @mention auto-injectée d'une cible précédente avant d'en poser
+        // une nouvelle (évite accumulation / mauvais auteur notifié).
+        if let old = prefilledMention, composerText.hasPrefix(old) {
+            composerText = String(composerText.dropFirst(old.count))
+        }
+        prefilledMention = nil
+        guard target.parentId != nil,
+              let username = target.authorUsername, !username.isEmpty else { return }
+        let mention = "@\(username) "
+        if !composerText.hasPrefix(mention) {
+            composerText = mention + composerText
+        }
+        prefilledMention = mention
+    }
+
     // MARK: - Comment send + voice (parity with feed/reels composer)
 
     private func submitComment(text: String, attachments: [ComposerAttachment]) {
@@ -1813,7 +1879,8 @@ struct PostDetailView: View {
         let blur = commentBlurEnabled
         commentEffects = .none
         commentBlurEnabled = false
-        let parentId = viewModel.replyingTo?.id
+        // Réponse plate à 2 niveaux (cf. sendReply) : reparente à la racine.
+        let parentId = viewModel.replyingTo?.parentId ?? viewModel.replyingTo?.id
         let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
         let effectFlags = flags > 0 ? Int(flags) : nil
         Task {

@@ -1,6 +1,76 @@
 {
   "sourceLanguage" : "fr",
   "strings" : {
+    "profile.connection.context.received" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ möchte sich mit dir verbinden. Akzeptiere, um Nachrichten auszutauschen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ wants to connect with you. Accept to exchange messages."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ quiere conectar contigo. Acepta para intercambiar mensajes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ souhaite entrer en contact avec vous. Acceptez pour échanger des messages."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ quer se conectar com você. Aceite para trocar mensagens."
+          }
+        }
+      }
+    },
+    "profile.connection.context.sent" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du hast %@ eine Verbindungsanfrage gesendet. Warten auf Antwort."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You sent a connection request to %@. Waiting for their reply."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviaste una solicitud de conexión a %@. Esperando su respuesta."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous avez envoyé une demande de connexion à %@. En attente de sa réponse."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você enviou um pedido de conexão para %@. Aguardando a resposta."
+          }
+        }
+      }
+    },
     "userIdentity.translation.available" : {
       "extractionState" : "manual",
       "localizations" : {

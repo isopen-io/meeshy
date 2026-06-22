@@ -128,6 +128,13 @@ struct FriendRequestListView: View {
                         .font(.footnote)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(2)
+                } else {
+                    // Sans message personnalisé, expliciter l'intention pour que la
+                    // ligne se suffise à elle-même (parité avec le sheet profil).
+                    Text(String(localized: "contacts.requests.received.intent", defaultValue: "Souhaite entrer en contact avec vous", bundle: .main))
+                        .font(.footnote)
+                        .foregroundColor(theme.textSecondary)
+                        .lineLimit(2)
                 }
 
                 Text(relativeTime(from: request.createdAt))

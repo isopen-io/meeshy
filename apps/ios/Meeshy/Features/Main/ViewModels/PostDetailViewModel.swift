@@ -154,15 +154,24 @@ class PostDetailViewModel: ObservableObject {
         case .fresh(let cached, _):
             if comments.isEmpty { comments = cached }
             seedCommentLikes(from: cached)
+            schedulePreloadReplyPreviews(postId: postId)
             return
         case .stale(let cached, _):
             if comments.isEmpty { comments = cached }
             seedCommentLikes(from: cached)
             await fetchCommentsFromNetwork(postId, cacheKey: cacheKey)
+            schedulePreloadReplyPreviews(postId: postId)
         case .expired, .empty:
             isLoadingComments = comments.isEmpty
             await fetchCommentsFromNetwork(postId, cacheKey: cacheKey)
+            schedulePreloadReplyPreviews(postId: postId)
         }
+    }
+
+    /// Lance le préchargement des aperçus de réponses SANS bloquer `loadComments`
+    /// (sinon le chargement des commentaires sérialisait jusqu'à 5 appels REST).
+    private func schedulePreloadReplyPreviews(postId: String) {
+        Task { [weak self] in await self?.preloadReplyPreviews(postId: postId) }
     }
 
     func loadMoreComments(_ postId: String) async {
@@ -186,6 +195,7 @@ class PostDetailViewModel: ObservableObject {
                     )
                     return FeedComment(
                         id: c.id, author: c.author.name, authorId: c.author.id,
+                        authorUsername: c.author.username,
                         authorAvatarURL: c.author.avatar,
                         content: c.content, timestamp: c.createdAt,
                         likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
@@ -254,6 +264,7 @@ class PostDetailViewModel: ObservableObject {
                     )
                     return FeedComment(
                         id: c.id, author: c.author.name, authorId: c.author.id,
+                        authorUsername: c.author.username,
                         authorAvatarURL: c.author.avatar,
                         content: c.content, timestamp: c.createdAt,
                         likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
@@ -266,8 +277,34 @@ class PostDetailViewModel: ObservableObject {
             }.value
             repliesMap[commentId] = replies
             seedCommentLikes(from: replies)
+            // Persiste les réponses sous "replies-{commentId}" pour hydrater
+            // l'aperçu (2 premières) instantanément à la ré-ouverture du post
+            // (cache-first, miroir de `FeedCommentsSheet`).
+            try? await CacheCoordinator.shared.comments.save(replies, for: "replies-\(commentId)")
         } catch {
             expandedThreads.remove(commentId)
+        }
+    }
+
+    /// Précharge l'aperçu des réponses (les 2 premières s'affichent sans tap)
+    /// des premiers commentaires racine qui en ont — cache-first puis réseau,
+    /// en miroir de `FeedCommentsSheet`. Sans ça, les sous-commentaires
+    /// restaient masqués dans le détail de post jusqu'au tap « Voir ».
+    func preloadReplyPreviews(postId: String) async {
+        let withReplies = topLevelComments.filter { $0.replies > 0 }.prefix(5)
+        for comment in withReplies {
+            guard repliesMap[comment.id] == nil else { continue }
+            let cached = await CacheCoordinator.shared.comments.load(for: "replies-\(comment.id)")
+            if case .fresh(let replies, _) = cached {
+                repliesMap[comment.id] = replies
+                seedCommentLikes(from: replies)
+                continue
+            } else if case .stale(let replies, _) = cached {
+                repliesMap[comment.id] = replies
+                seedCommentLikes(from: replies)
+                continue
+            }
+            await loadReplies(postId: postId, commentId: comment.id)
         }
     }
 
@@ -458,6 +495,7 @@ class PostDetailViewModel: ObservableObject {
             id: cmid,
             author: currentUser?.displayName ?? currentUser?.username ?? "",
             authorId: currentUser?.id ?? "",
+            authorUsername: currentUser?.username,
             authorAvatarURL: currentUser?.avatar,
             content: content,
             timestamp: Date(),
@@ -495,12 +533,16 @@ class PostDetailViewModel: ObservableObject {
 
     func sendReply(_ content: String, effectFlags: Int? = nil) async {
         guard let post, let parent = replyingTo else { return }
-        let parentId = parent.id
+        // Réponse plate à 2 niveaux : répondre à une réponse rattache au MÊME
+        // parent racine pour rester au niveau 2 ; l'auteur ciblé est notifié via
+        // la @mention préremplie (cf. `PostDetailView.beginReply`).
+        let parentId = parent.parentId ?? parent.id
         replyingTo = nil
         do {
             let apiComment = try await postService.addComment(postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags)
             let reply = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
+                authorUsername: apiComment.author.username,
                 authorAvatarURL: apiComment.author.avatar,
                 content: apiComment.content, timestamp: apiComment.createdAt,
                 likes: 0, replies: 0,
@@ -549,6 +591,7 @@ class PostDetailViewModel: ObservableObject {
             id: tempId,
             author: me?.displayName ?? me?.username ?? "",
             authorId: me?.id ?? "",
+            authorUsername: me?.username,
             authorAvatarURL: me?.avatar,
             content: content, timestamp: Date(),
             likes: 0, replies: 0, parentId: parentId,
@@ -578,6 +621,7 @@ class PostDetailViewModel: ObservableObject {
             )
             let server = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
+                authorUsername: apiComment.author.username,
                 authorAvatarURL: apiComment.author.avatar,
                 content: apiComment.content, timestamp: apiComment.createdAt,
                 likes: 0, replies: 0, parentId: parentId,
@@ -601,6 +645,52 @@ class PostDetailViewModel: ObservableObject {
             if let parentId { repliesMap[parentId] = snapshotReplies }
             self.post?.commentCount = snapshotCount
             FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Error sending comment", bundle: .main))
+        }
+    }
+
+    // MARK: - Comment Deletion
+
+    /// Supprime un commentaire (auteur uniquement — le gating se fait côté vue
+    /// via `CommentRowView`). Retrait optimiste immédiat (racine + réponses, ou
+    /// réponse avec décrément du parent), puis appel API, rollback du snapshot
+    /// si l'API échoue. Miroir du flux optimiste de `submitCommentWithMedia`.
+    func deleteComment(_ comment: FeedComment) async {
+        guard let post else { return }
+        let snapshotComments = comments
+        let snapshotReplies = repliesMap
+        let snapshotExpanded = expandedThreads
+        let snapshotCount = post.commentCount
+
+        if let parentId = comment.parentId {
+            if var existing = repliesMap[parentId] {
+                existing.removeAll { $0.id == comment.id }
+                repliesMap[parentId] = existing
+                // Met à jour l'aperçu en cache pour ne pas réafficher la réponse
+                // supprimée à la ré-ouverture du post.
+                try? await CacheCoordinator.shared.comments.save(existing, for: "replies-\(parentId)")
+            }
+            if let idx = comments.firstIndex(where: { $0.id == parentId }), comments[idx].replies > 0 {
+                comments[idx].replies -= 1
+            }
+            self.post?.commentCount = max(0, snapshotCount - 1)
+        } else {
+            comments.removeAll { $0.id == comment.id }
+            repliesMap[comment.id] = nil
+            expandedThreads.remove(comment.id)
+            // Suppression d'un commentaire racine → cascade serveur de ses réponses.
+            self.post?.commentCount = max(0, snapshotCount - 1 - comment.replies)
+        }
+
+        do {
+            try await postService.deleteComment(postId: post.id, commentId: comment.id)
+            try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main))
+        } catch {
+            comments = snapshotComments
+            repliesMap = snapshotReplies
+            expandedThreads = snapshotExpanded
+            self.post?.commentCount = snapshotCount
+            FeedbackToastManager.shared.showError(String(localized: "feed.comments.delete_error", defaultValue: "Impossible de supprimer le commentaire", bundle: .main))
         }
     }
 
@@ -631,6 +721,7 @@ class PostDetailViewModel: ObservableObject {
                 let comment = FeedComment(
                     id: data.comment.id, author: data.comment.author.name,
                     authorId: data.comment.author.id,
+                    authorUsername: data.comment.author.username,
                     authorAvatarURL: data.comment.author.avatar,
                     content: data.comment.content, timestamp: data.comment.createdAt,
                     likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
@@ -676,6 +767,35 @@ class PostDetailViewModel: ObservableObject {
                 } else if let idx = self.comments.firstIndex(where: { $0.id == commentId }) {
                     self.comments[idx].media = media
                 }
+            }
+            .store(in: &socketCancellables)
+
+        // Suppression de commentaire en temps réel : retire la ligne sur TOUS les
+        // clients et resynchronise le compteur sur la valeur autoritative du serveur
+        // (heale toute dérive de l'arithmétique optimiste locale). Sans ce sink, un
+        // commentaire supprimé ailleurs persistait et le total dérivait sans se
+        // corriger. Idempotent avec le retrait optimiste du client qui supprime.
+        socialSocket.commentDeleted
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] data in
+                guard let self else { return }
+                let id = data.commentId
+                self.comments.removeAll { $0.id == id }
+                self.repliesMap[id] = nil
+                self.expandedThreads.remove(id)
+                // Réponse supprimée : retire-la de son fil + décrémente le compteur
+                // de réponses de son parent racine.
+                for (key, var replies) in self.repliesMap {
+                    if let idx = replies.firstIndex(where: { $0.id == id }) {
+                        replies.remove(at: idx)
+                        self.repliesMap[key] = replies
+                        if let pIdx = self.comments.firstIndex(where: { $0.id == key }), self.comments[pIdx].replies > 0 {
+                            self.comments[pIdx].replies -= 1
+                        }
+                    }
+                }
+                self.post?.commentCount = data.commentCount
             }
             .store(in: &socketCancellables)
 

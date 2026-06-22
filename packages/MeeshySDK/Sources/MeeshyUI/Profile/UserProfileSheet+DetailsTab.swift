@@ -76,6 +76,8 @@ extension UserProfileSheet {
     @ViewBuilder
     var actionButtons: some View {
         VStack(spacing: 10) {
+            connectionContextBanner
+
             switch connectionStatus {
             case .none:
                 profileActionButton(
@@ -149,6 +151,54 @@ extension UserProfileSheet {
                 action: { showReportSheet = true }
             )
         }
+    }
+
+    /// Explanatory context shown above the connection action buttons so the
+    /// accept/decline (or cancel/resend) actions are self-explanatory even when
+    /// the originating notification is gone — answers "connexion de quoi ?".
+    @ViewBuilder
+    var connectionContextBanner: some View {
+        let name = displayUser.resolvedDisplayName
+        switch connectionStatus {
+        case .pendingReceived:
+            connectionContextRow(
+                icon: "person.crop.circle.badge.questionmark.fill",
+                text: String(
+                    localized: "profile.connection.context.received",
+                    defaultValue: "\(name) souhaite entrer en contact avec vous. Acceptez pour échanger des messages.",
+                    bundle: .module
+                )
+            )
+        case .pendingSent:
+            connectionContextRow(
+                icon: "paperplane.circle.fill",
+                text: String(
+                    localized: "profile.connection.context.sent",
+                    defaultValue: "Vous avez envoyé une demande de connexion à \(name). En attente de sa réponse.",
+                    bundle: .module
+                )
+            )
+        case .none, .connected:
+            EmptyView()
+        }
+    }
+
+    private func connectionContextRow(icon: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Color(hex: resolvedAccent))
+            Text(text)
+                .font(.system(size: 13))
+                .foregroundColor(theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(theme.surface(tint: resolvedAccent, intensity: 0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
     }
 
     func profileActionButton(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {

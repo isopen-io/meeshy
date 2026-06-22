@@ -564,6 +564,7 @@
 		THSM0001000100010001B001 /* ThermalStateMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = THSM0001000100010001F001 /* ThermalStateMonitorTests.swift */; };
 		TL6001A001A001A001A00001 /* TrackingLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TL6002A002A002A002A00002 /* TrackingLinksView.swift */; };
 		TM2800000000002F28 /* FeedbackToastManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = TM2800000000001F28 /* FeedbackToastManager.swift */; };
+		CDFT00000000002F28 /* CommentDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDFT00000000001F28 /* CommentDraftStore.swift */; };
 		TNAV0001000100010001001 /* TabNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TNAV0001000100010001000 /* TabNavigationTests.swift */; };
 		TOSV002A002A002A002A0002 /* TermsOfServiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */; };
 		TSSU00200000000001F00 /* FeedbackToastSurfacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = TSSU00100000000001F00 /* FeedbackToastSurfacing.swift */; };
@@ -1191,6 +1192,7 @@
 		THSM0001000100010001F001 /* ThermalStateMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThermalStateMonitorTests.swift; sourceTree = "<group>"; };
 		TL6002A002A002A002A00002 /* TrackingLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingLinksView.swift; sourceTree = "<group>"; };
 		TM2800000000001F28 /* FeedbackToastManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackToastManager.swift; sourceTree = "<group>"; };
+		CDFT00000000001F28 /* CommentDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentDraftStore.swift; sourceTree = "<group>"; };
 		TNAV0001000100010001000 /* TabNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabNavigationTests.swift; sourceTree = "<group>"; };
 		TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TermsOfServiceView.swift; sourceTree = "<group>"; };
 		TSSU00100000000001F00 /* FeedbackToastSurfacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackToastSurfacing.swift; sourceTree = "<group>"; };
@@ -1630,6 +1632,7 @@
 				PQ7000000000001FPQ /* PendingStatusQueue.swift */,
 				CC2400000000001F24 /* ConversationLockManager.swift */,
 				TM2800000000001F28 /* FeedbackToastManager.swift */,
+				CDFT00000000001F28 /* CommentDraftStore.swift */,
 				SPS2800000000001F28 /* StoryPublishService.swift */,
 				SVES000000000001F28 /* StoryVideoExportService.swift */,
 				CM3600000000001F36 /* CallManager.swift */,
@@ -2684,6 +2687,7 @@
 				PP2600000000002F26 /* AddParticipantSheet.swift in Sources */,
 				ML2700000000002F27 /* MagicLinkView.swift in Sources */,
 				TM2800000000002F28 /* FeedbackToastManager.swift in Sources */,
+				CDFT00000000002F28 /* CommentDraftStore.swift in Sources */,
 				SPS2800000000002F28 /* StoryPublishService.swift in Sources */,
 				SVES000000000002F28 /* StoryVideoExportService.swift in Sources */,
 				SESH000000000002F28 /* StoryExportShareSheet.swift in Sources */,
