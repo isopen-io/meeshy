@@ -12,6 +12,10 @@ final class RequestsViewModel: ObservableObject {
     @Published var sentHasMore = true
 
     private let friendService: FriendServiceProviding
+    /// Injected so tests can drive the accept/reject outbox path (enqueue
+    /// success/failure + terminal outcome) deterministically, mirroring the
+    /// pattern used by FeedViewModel / StatusViewModel / EditProfileViewModel.
+    private let offlineQueue: OfflineQueueing
     private var receivedOffset = 0
     private var sentOffset = 0
     private let pageSize = 30
@@ -25,8 +29,12 @@ final class RequestsViewModel: ObservableObject {
     private let receivedKey = FriendshipCache.PersistenceKeys.receivedRequests
     private let sentKey = FriendshipCache.PersistenceKeys.sentRequests
 
-    init(friendService: FriendServiceProviding = FriendService.shared) {
+    init(
+        friendService: FriendServiceProviding = FriendService.shared,
+        offlineQueue: OfflineQueueing = OfflineQueue.shared
+    ) {
         self.friendService = friendService
+        self.offlineQueue = offlineQueue
     }
 
     deinit {
@@ -168,7 +176,7 @@ final class RequestsViewModel: ObservableObject {
             action: .accept
         )
         do {
-            try await OfflineQueue.shared.enqueue(.respondFriendRequest, payload: payload)
+            try await offlineQueue.enqueue(.respondFriendRequest, payload: payload, conversationId: nil)
             FeedbackToastManager.shared.showSuccess("Connexion acceptee")
         } catch {
             receivedRequests = snapshot
@@ -206,7 +214,7 @@ final class RequestsViewModel: ObservableObject {
             action: .reject
         )
         do {
-            try await OfflineQueue.shared.enqueue(.respondFriendRequest, payload: payload)
+            try await offlineQueue.enqueue(.respondFriendRequest, payload: payload, conversationId: nil)
             FeedbackToastManager.shared.showSuccess("Demande refusee")
         } catch {
             receivedRequests = snapshot
@@ -229,8 +237,9 @@ final class RequestsViewModel: ObservableObject {
         rollback: @escaping @MainActor () -> Void,
         toast: String
     ) {
+        let offlineQueue = self.offlineQueue
         Task { @MainActor in
-            let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
+            let stream = await offlineQueue.outcomeStream(for: cmid)
             for await event in stream {
                 if case .exhausted = event {
                     rollback()
