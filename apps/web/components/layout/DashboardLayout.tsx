@@ -137,12 +137,19 @@ export function DashboardLayout({
     return null;
   }
 
+  // `!h-full` / `!h-auto` are HEIGHT SIGNALS consumed by the conditional above to
+  // pick the root height class. They must NOT leak onto the root element itself:
+  // `!h-full` resolves to `height:100% !important`, which overrides the chosen
+  // `h-screen` (100vh, no !important) and collapses the root to its auto-height
+  // parent (the reels tab rendered at 65px — every full-height page broke this way).
+  const rootClassName = className.replace(/!h-(full|auto)\b/g, '').replace(/\s+/g, ' ').trim();
+
   return (
     <div className={`${
       className.includes('!h-full') ? 'h-screen overflow-hidden' :
       className.includes('!h-auto') ? 'min-h-0' :
       'min-h-screen'
-    } bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-950 dark:to-gray-900 flex flex-col ${className}`}>
+    } bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-950 dark:to-gray-900 flex flex-col ${rootClassName}`}>
       {/* Header fixe - masqué sur mobile si demandé */}
       {!(isMobile && hideHeaderOnMobile) && (
         <header className="sticky flex-shrink-0 top-0 left-0 right-0 z-[50] bg-white dark:bg-gray-900 shadow-sm dark:shadow-gray-900/50 border-b dark:border-gray-800">

@@ -146,6 +146,34 @@ export function postToStoryItem(
 }
 
 // ============================================================================
+// Author group -> StoryItem (one tray bubble per author)
+// ============================================================================
+
+/// Collapse an author's stories into a single tray bubble. The bubble is keyed
+/// by `authorId` (the group id used to scope the viewer), shows the first
+/// story's thumbnail, and is considered unviewed when ANY story in the group is
+/// still unviewed. `group` is assumed non-empty (callers map over the grouped
+/// values produced by `groupStoriesByAuthor`).
+export function groupToStoryItem(
+  group: Post[],
+  currentUserId: string,
+  viewedIds: Set<string>
+): StoryItem {
+  const [first] = group;
+  const author = first.author;
+  return {
+    id: first.authorId,
+    author: {
+      name: author?.displayName ?? author?.username ?? 'Unknown',
+      avatar: author?.avatar ?? undefined,
+    },
+    thumbnailUrl: first.media?.[0]?.thumbnailUrl ?? first.media?.[0]?.fileUrl ?? undefined,
+    hasUnviewed: group.some((post) => !viewedIds.has(post.id)),
+    isOwn: first.authorId === currentUserId,
+  };
+}
+
+// ============================================================================
 // Post -> StoryData (for StoryViewer)
 // ============================================================================
 

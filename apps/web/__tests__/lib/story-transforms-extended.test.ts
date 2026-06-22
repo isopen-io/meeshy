@@ -2,7 +2,7 @@
  * Extended tests for story-transforms.ts covering branches not covered by story-transforms.test.ts
  */
 
-import { postToStoryItem, postToStoryData, groupStoriesByAuthor, timeRemaining } from '@/lib/story-transforms';
+import { postToStoryItem, postToStoryData, groupStoriesByAuthor, groupToStoryItem, timeRemaining } from '@/lib/story-transforms';
 import type { Post } from '@meeshy/shared/types/post';
 
 function createPost(overrides: Partial<Post> = {}): Post {
@@ -554,6 +554,68 @@ describe('groupStoriesByAuthor - extended', () => {
     ];
     const result = groupStoriesByAuthor(posts);
     expect(result.size).toBe(2);
+  });
+});
+
+// =============================================================================
+// groupToStoryItem - one tray bubble per author
+// =============================================================================
+
+describe('groupToStoryItem', () => {
+  it('uses the authorId as the group bubble id', () => {
+    const group = [
+      createPost({ id: 'p1', authorId: 'a1' }),
+      createPost({ id: 'p2', authorId: 'a1' }),
+    ];
+    const result = groupToStoryItem(group, 'me', new Set());
+    expect(result.id).toBe('a1');
+  });
+
+  it('marks the bubble as own when the author is the current user', () => {
+    const group = [createPost({ id: 'p1', authorId: 'me' })];
+    const result = groupToStoryItem(group, 'me', new Set());
+    expect(result.isOwn).toBe(true);
+  });
+
+  it('hasUnviewed is true when at least one story in the group is unviewed', () => {
+    const group = [
+      createPost({ id: 'p1', authorId: 'a1' }),
+      createPost({ id: 'p2', authorId: 'a1' }),
+    ];
+    const result = groupToStoryItem(group, 'me', new Set(['p1']));
+    expect(result.hasUnviewed).toBe(true);
+  });
+
+  it('hasUnviewed is false only when every story in the group is viewed', () => {
+    const group = [
+      createPost({ id: 'p1', authorId: 'a1' }),
+      createPost({ id: 'p2', authorId: 'a1' }),
+    ];
+    const result = groupToStoryItem(group, 'me', new Set(['p1', 'p2']));
+    expect(result.hasUnviewed).toBe(false);
+  });
+
+  it('uses the first story media as the bubble thumbnail', () => {
+    const group = [
+      createPost({
+        id: 'p1',
+        authorId: 'a1',
+        media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'https://first.jpg', thumbnailUrl: null, order: 0 }],
+      }),
+      createPost({
+        id: 'p2',
+        authorId: 'a1',
+        media: [{ id: 'm2', mimeType: 'image/jpeg', fileUrl: 'https://second.jpg', thumbnailUrl: null, order: 0 }],
+      }),
+    ];
+    const result = groupToStoryItem(group, 'me', new Set());
+    expect(result.thumbnailUrl).toBe('https://first.jpg');
+  });
+
+  it('falls back to "Unknown" author name when author is undefined', () => {
+    const group = [createPost({ id: 'p1', authorId: 'a1', author: undefined })];
+    const result = groupToStoryItem(group, 'me', new Set());
+    expect(result.author.name).toBe('Unknown');
   });
 });
 

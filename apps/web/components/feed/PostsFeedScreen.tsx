@@ -16,7 +16,7 @@ import { Skeleton } from '@/components/v2/Skeleton';
 // Stories
 import { useStoriesFeedQuery, useCreateStoryMutation, useDeleteStoryMutation, useRecordStoryViewMutation } from '@/hooks/social/use-stories';
 import { useStoriesRealtime } from '@/hooks/social/use-stories-realtime';
-import { postToStoryItem, postToStoryData } from '@/lib/story-transforms';
+import { postToStoryData, groupStoriesByAuthor, groupToStoryItem } from '@/lib/story-transforms';
 import { useStoryPreferences } from '@/stores/user-preferences-store';
 
 // Posts (real API integration — same hooks as v2)
@@ -220,25 +220,39 @@ export function PostsFeedScreen() {
 
   const [storyViewerOpen, setStoryViewerOpen] = useState(false);
   const [storyViewerIndex, setStoryViewerIndex] = useState(0);
+  const [activeStoryAuthorId, setActiveStoryAuthorId] = useState<string | null>(null);
   const [storyComposerOpen, setStoryComposerOpen] = useState(false);
   const viewedStoryIdsRef = useRef(new Set<string>());
 
-  const storyItems = useMemo(
-    () => (stories ?? []).map((s) => postToStoryItem(s, currentUserId, viewedStoryIdsRef.current)),
-    [stories, currentUserId],
+  // One tray bubble per author: collapse each author's stories into a single
+  // group, preserving first-appearance order.
+  const storyGroups = useMemo(
+    () => Array.from(groupStoriesByAuthor(stories ?? []).values()),
+    [stories],
   );
 
-  const storyDataList = useMemo(() => (stories ?? []).map(postToStoryData), [stories]);
+  const storyItems = useMemo(
+    () => storyGroups.map((group) => groupToStoryItem(group, currentUserId, viewedStoryIdsRef.current)),
+    [storyGroups, currentUserId],
+  );
+
+  // The viewer is scoped to the tapped author's stories only.
+  const activeStoryData = useMemo(() => {
+    if (!activeStoryAuthorId) return [];
+    const group = storyGroups.find((g) => g[0]?.authorId === activeStoryAuthorId);
+    return group ? group.map(postToStoryData) : [];
+  }, [activeStoryAuthorId, storyGroups]);
 
   const handleStoryPress = useCallback(
-    (storyId: string) => {
-      const idx = storyDataList.findIndex((s) => s.id === storyId);
-      if (idx >= 0) {
-        setStoryViewerIndex(idx);
-        setStoryViewerOpen(true);
-      }
+    (groupId: string) => {
+      const group = storyGroups.find((g) => g[0]?.authorId === groupId);
+      if (!group || group.length === 0) return;
+      const firstUnviewed = group.findIndex((p) => !viewedStoryIdsRef.current.has(p.id));
+      setActiveStoryAuthorId(groupId);
+      setStoryViewerIndex(firstUnviewed >= 0 ? firstUnviewed : 0);
+      setStoryViewerOpen(true);
     },
-    [storyDataList],
+    [storyGroups],
   );
 
   const handleStoryPublish = useCallback(
@@ -285,7 +299,10 @@ export function PostsFeedScreen() {
     [deleteStoryMutation, showToast, t],
   );
 
-  const handleStoryViewerClose = useCallback(() => setStoryViewerOpen(false), []);
+  const handleStoryViewerClose = useCallback(() => {
+    setStoryViewerOpen(false);
+    setActiveStoryAuthorId(null);
+  }, []);
   const handleStoryComposerClose = useCallback(() => setStoryComposerOpen(false), []);
 
   const createCommentMutation = useCreateCommentMutation();
@@ -697,9 +714,9 @@ export function PostsFeedScreen() {
       </div>
 
       {/* Story Viewer */}
-      {storyViewerOpen && storyDataList.length > 0 && (
+      {storyViewerOpen && activeStoryData.length > 0 && (
         <StoryViewer
-          stories={storyDataList}
+          stories={activeStoryData}
           initialIndex={storyViewerIndex}
           userLanguage={userLanguage}
           currentUserId={currentUserId}
