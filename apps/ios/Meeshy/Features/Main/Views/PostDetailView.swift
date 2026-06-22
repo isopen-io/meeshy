@@ -1797,15 +1797,15 @@ struct PostDetailView: View {
             onSendMessage: { text, attachments, _ in submitComment(text: text, attachments: attachments) },
             textBinding: $composerText,
             replyBanner: replyBannerView,
-            onTextChange: { text in
-                mentionController.handleQuery(in: text)
-                CommentDraftStore.shared.save(postId: postId, text: text)
-            },
             customAttachmentsPreview: commentAttachments.isEmpty
                 ? nil
                 : AnyView(CommentAttachmentsTray(attachments: commentAttachments) { id in
                     commentAttachments.removeAll { $0.id == id }
                   }),
+            onTextChange: { text in
+                mentionController.handleQuery(in: text)
+                CommentDraftStore.shared.save(postId: postId, text: text)
+            },
             onStartRecording: { startCommentRecording() },
             onStopRecordingToAttachment: { stopCommentRecordingToAttachment() },
             onSendRecording: { stopAndSendCommentRecording() },
