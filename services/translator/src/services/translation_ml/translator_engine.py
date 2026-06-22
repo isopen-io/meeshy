@@ -26,7 +26,10 @@ except ImportError:
     _LANGDETECT_OK = False
 
 DEFAULT_DETECT_LANGUAGE = os.getenv("TRANSLATOR_DEFAULT_DETECT_LANG", "fr")
-DETECT_MIN_CONFIDENCE = float(os.getenv("TRANSLATOR_DETECT_MIN_CONFIDENCE", "0.80"))
+try:
+    DETECT_MIN_CONFIDENCE = float(os.getenv("TRANSLATOR_DETECT_MIN_CONFIDENCE", "0.80"))
+except ValueError:
+    DETECT_MIN_CONFIDENCE = 0.80
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -202,7 +205,7 @@ class TranslatorEngine:
     def detect_language(self, text: str, fallback: Optional[str] = None) -> str:
         """Détecte la langue source. langdetect seuillé ; jamais de défaut 'en'
         arbitraire — repli sur `fallback` puis `DEFAULT_DETECT_LANGUAGE`."""
-        default = fallback or DEFAULT_DETECT_LANGUAGE
+        default = fallback if fallback is not None else DEFAULT_DETECT_LANGUAGE
         cleaned = _URL_PATTERN.sub(" ", text or "").strip()
         if not _LANGDETECT_OK or sum(c.isalpha() for c in cleaned) < 4:
             return default

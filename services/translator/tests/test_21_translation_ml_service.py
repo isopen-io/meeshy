@@ -26,6 +26,8 @@ from dataclasses import dataclass
 # Ajouter le repertoire src au path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
+from services.translation_ml.translator_engine import DEFAULT_DETECT_LANGUAGE
+
 # Configuration du logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -294,7 +296,6 @@ class TestLanguageDetection:
                 with patch('services.translation_ml_service.get_settings', return_value=mock_settings):
                     with patch('services.translation_ml_service.TextSegmenter'):
                         from services.translation_ml_service import TranslationMLService
-                        from services.translation_ml.translator_engine import DEFAULT_DETECT_LANGUAGE
 
                         TranslationMLService._instance = None
                         service = TranslationMLService(mock_settings)
