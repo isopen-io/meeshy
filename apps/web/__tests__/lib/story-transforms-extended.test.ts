@@ -2,7 +2,7 @@
  * Extended tests for story-transforms.ts covering branches not covered by story-transforms.test.ts
  */
 
-import { postToStoryItem, postToStoryData, groupStoriesByAuthor, groupToStoryItem, timeRemaining } from '@/lib/story-transforms';
+import { postToStoryItem, postToStoryData, groupStoriesByAuthor, groupToStoryItem, computeStoryDurationMs, timeRemaining } from '@/lib/story-transforms';
 import type { Post } from '@meeshy/shared/types/post';
 
 function createPost(overrides: Partial<Post> = {}): Post {
@@ -234,22 +234,32 @@ describe('postToStoryData - storyEffects', () => {
     expect(result.storyEffects?.stickers).toBeUndefined();
   });
 
-  it('parses slideDuration from effects', () => {
+  it('ignores the legacy slideDuration field and uses the content-derived timeline duration', () => {
     const post = createPost({ storyEffects: { slideDuration: 10 } });
     const result = postToStoryData(post);
-    expect(result.storyEffects?.slideDurationMs).toBe(10000);
+    // No media, no text → 6s static default (NOT the arbitrary legacy 10s).
+    expect(result.storyEffects?.slideDurationMs).toBe(6000);
   });
 
-  it('ignores non-positive slideDuration', () => {
-    const post = createPost({ storyEffects: { slideDuration: 0 } });
+  it('honors an author-pinned timelineDuration over content', () => {
+    const post = createPost({
+      storyEffects: {
+        timelineDuration: 3,
+        mediaObjects: [{ id: 'm1', postMediaId: 'p1', mediaType: 'video', isBackground: true, x: 0, y: 0, duration: 14 }],
+      },
+    });
     const result = postToStoryData(post);
-    expect(result.storyEffects?.slideDurationMs).toBeUndefined();
+    expect(result.storyEffects?.slideDurationMs).toBe(3000);
   });
 
-  it('ignores negative slideDuration', () => {
-    const post = createPost({ storyEffects: { slideDuration: -5 } });
+  it('uses a background video full natural duration', () => {
+    const post = createPost({
+      storyEffects: {
+        mediaObjects: [{ id: 'm1', postMediaId: 'p1', mediaType: 'video', isBackground: true, x: 0, y: 0, duration: 13.5 }],
+      },
+    });
     const result = postToStoryData(post);
-    expect(result.storyEffects?.slideDurationMs).toBeUndefined();
+    expect(result.storyEffects?.slideDurationMs).toBe(13500);
   });
 });
 
@@ -616,6 +626,65 @@ describe('groupToStoryItem', () => {
     const group = [createPost({ id: 'p1', authorId: 'a1', author: undefined })];
     const result = groupToStoryItem(group, 'me', new Set());
     expect(result.author.name).toBe('Unknown');
+  });
+});
+
+// =============================================================================
+// computeStoryDurationMs - timeline-aware story duration (ported from iOS)
+// =============================================================================
+
+describe('computeStoryDurationMs', () => {
+  it('defaults to 6s for an empty / undefined timeline', () => {
+    expect(computeStoryDurationMs(undefined)).toBe(6000);
+    expect(computeStoryDurationMs({})).toBe(6000);
+  });
+
+  it('uses a background video natural duration when ≥ 6s', () => {
+    expect(
+      computeStoryDurationMs({ mediaObjects: [{ mediaType: 'video', isBackground: true, duration: 13.97 }] }),
+    ).toBe(13970);
+  });
+
+  it('loops a short background clip up to the next full repetition past 6s', () => {
+    // 4s clip → ceil(6/4)=2 repetitions → 8s.
+    expect(
+      computeStoryDurationMs({ mediaObjects: [{ mediaType: 'video', isBackground: true, duration: 4 }] }),
+    ).toBe(8000);
+  });
+
+  it('grants extra reading time for long text (>30 words)', () => {
+    const text = Array.from({ length: 42 }, (_, i) => `w${i}`).join(' '); // 42 words
+    // 6 + (42-30)/6 = 6 + 2 = 8s.
+    expect(computeStoryDurationMs({ textObjects: [{ text }] })).toBe(8000);
+  });
+
+  it('keeps 6s for short text', () => {
+    expect(computeStoryDurationMs({ textObjects: [{ text: 'Bravo à vous' }] })).toBe(6000);
+  });
+
+  it('author pin (timelineDuration) wins over a longer video', () => {
+    expect(
+      computeStoryDurationMs({
+        timelineDuration: 4,
+        mediaObjects: [{ mediaType: 'video', isBackground: true, duration: 20 }],
+      }),
+    ).toBe(4000);
+  });
+
+  it('covers a foreground (non-background) video natural duration', () => {
+    expect(
+      computeStoryDurationMs({ mediaObjects: [{ mediaType: 'video', isBackground: false, duration: 12 }] }),
+    ).toBe(12000);
+  });
+
+  it('takes the max of a long background video and its reading time', () => {
+    // 10s video + short text → max(10, 6) = 10s.
+    expect(
+      computeStoryDurationMs({
+        mediaObjects: [{ mediaType: 'video', isBackground: true, duration: 10 }],
+        textObjects: [{ text: 'court' }],
+      }),
+    ).toBe(10000);
   });
 });
 
