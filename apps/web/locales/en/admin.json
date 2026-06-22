@@ -77,6 +77,13 @@
       "position": "Position {label}",
       "distributionNote": "This chart shows the performance distribution of the top {count} ranked by position.",
       "curveNote": "The descending curve shows how values decrease across positions."
+    },
+    "conversationType": {
+      "direct": "Direct",
+      "group": "Group",
+      "public": "Public",
+      "broadcast": "Broadcast",
+      "unknown": "Unknown"
     }
   },
   "scanLog": {
