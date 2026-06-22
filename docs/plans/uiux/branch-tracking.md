@@ -152,4 +152,6 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 58w (doublon) | claude/practical-fermat-sgqj60 (a11y modales — superseded by #792) | #793 | ❌ fermée |
 | 59w | claude/practical-fermat-sgqj60 (focus-trap ConversationDrawer + AgentTopicEditModal) | #796 | ✅ |
 | 57w (closed) | claude/practical-fermat-r4vwgd (i18n ReelPlayer — DOUBLON de #774) | #775 | ❌ fermée |
-| 60w | claude/practical-fermat-r4vwgd (i18n/a11y config-modal) | ⏳ | ⏳ |
+| 60w | claude/practical-fermat-r4vwgd (i18n/a11y config-modal) | #806 | ✅ |
+| 60w (doublon) | claude/practical-fermat-x2ian5 (i18n config-modal — superseded by #806) | #813 | ❌ fermée |
+| 61w | claude/practical-fermat-x2ian5 (i18n hint dismiss lightbox texte+pptx escToClose) | — | ⏳ |
