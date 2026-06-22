@@ -1,6 +1,7 @@
 'use client';
 
 import { HTMLAttributes, forwardRef } from 'react';
+import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { getLanguageColor } from './theme';
 
@@ -21,10 +22,10 @@ export interface ReplyPreviewProps extends Omit<HTMLAttributes<HTMLDivElement>, 
   className?: string;
 }
 
-const CONTENT_TYPE_LABELS: Record<Exclude<ContentType, 'text'>, string> = {
-  image: '📷 Photo',
-  audio: '🎤 Audio',
-  video: '🎬 Vidéo',
+const CONTENT_TYPE_META: Record<Exclude<ContentType, 'text'>, { emoji: string; key: string }> = {
+  image: { emoji: '📷', key: 'replyPreview.image' },
+  audio: { emoji: '🎤', key: 'replyPreview.audio' },
+  video: { emoji: '🎬', key: 'replyPreview.video' },
 };
 
 const ReplyPreview = forwardRef<HTMLDivElement, ReplyPreviewProps>(
@@ -40,8 +41,12 @@ const ReplyPreview = forwardRef<HTMLDivElement, ReplyPreviewProps>(
     },
     ref
   ) => {
+    const { t } = useI18n('common');
     const accentColor = getLanguageColor(languageCode);
-    const displayContent = contentType === 'text' ? content : CONTENT_TYPE_LABELS[contentType];
+    const displayContent =
+      contentType === 'text'
+        ? content
+        : `${CONTENT_TYPE_META[contentType].emoji} ${t(CONTENT_TYPE_META[contentType].key)}`;
 
     return (
       <div

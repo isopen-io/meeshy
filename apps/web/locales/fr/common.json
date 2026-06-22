@@ -262,6 +262,26 @@
       "friends": "Amis",
       "private": "Privé"
     },
+    "postComposer": {
+      "contentLabel": "Contenu du post",
+      "addPhoto": "Ajouter une photo",
+      "addVideo": "Ajouter une vidéo",
+      "changeVisibility": "Changer la visibilité",
+      "visibility": {
+        "public": "Public",
+        "friends": "Amis",
+        "except": "Amis sauf...",
+        "only": "Seulement...",
+        "private": "Privé"
+      }
+    },
+    "replyPreview": {
+      "image": "Photo",
+      "audio": "Audio",
+      "video": "Vidéo"
+    },
+    "audioUnavailable": "URL audio non disponible",
+    "audioProgress": "Progression audio",
     "statusComposer": {
       "title": "Quel est ton mood ?",
       "placeholder": "Qu'est-ce que tu fais ?",
