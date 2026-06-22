@@ -148,7 +148,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [x] Message pagination (before-cursor, scroll-top trigger, history-safe cache prune)
 - [~] `:feature:feed` — cache-first feed (SWR), Prisme-resolved post content,
       optimistic like toggle (`isLikedByMe`), image collage, like/comment/repost stats
-- [ ] Pending: Stories / Calls slices, feed pagination + post detail, reactions UI polish
+- [ ] Pending: Stories / Calls slices, feed pagination + post detail
+- [x] Reactions UI: usage-ordered quick-strip (`EmojiQuickStrip`) + full categorised picker
+      (`EmojiFullPicker`) wired into chat long-press sheet
 
 ## Phase 6 — Integration & final audit
 - [ ] Navigation graph + deep links (`meeshy://`, `https://meeshy.me`)
@@ -225,7 +227,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       E2EE disclaimer pending
 - [~] Pagination of older messages — before-cursor done (`MessageRepository.loadOlder`,
       windowed prune keeps paginated history, scroll-top trigger + spinner); around-anchor pending
-- [ ] Reactions: quick-strip (usage-ordered) + full picker; add/remove; reaction detail breakdown
+- [~] Reactions: quick-strip **usage-ordered** done (`EmojiUsageRanker.topEmojis` port of
+      `EmojiUsageTracker`, `EmojiUsageStore` SharedPrefs backing, strip re-ranks on send) +
+      full categorised picker done (`EmojiCatalog` 6 cats + `EmojiFullPicker` sheet) +
+      add/remove optimistic done ; reaction detail breakdown (who-reacted sheet) pending
 - [ ] Pin/unpin message; starred/bookmarked messages list with navigate-to-conversation
 - [~] Reply: long-press → Répondre, bannière composer (accent, annulable),
       replyToId optimiste + aperçu cité dans la bulle ; swipe / forward / jump pending
