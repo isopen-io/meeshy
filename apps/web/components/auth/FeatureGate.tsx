@@ -67,24 +67,23 @@ export function FeatureGate({
                 <AlertCircle className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
               </div>
               <CardTitle className="text-2xl">
-                {t('featureGate.title') || 'Feature Temporarily Unavailable'}
+                {t('featureGate.title', 'Feature Temporarily Unavailable')}
               </CardTitle>
               <CardDescription className="text-base">
                 {feature === 'passwordReset' && (
-                  t('featureGate.passwordResetDisabled') ||
-                  'Password reset is temporarily unavailable. Please contact support if you need assistance accessing your account.'
+                  t('featureGate.passwordResetDisabled', 'Password reset is temporarily unavailable. Please contact support if you need assistance accessing your account.')
                 )}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
                 <p className="font-medium">
-                  {t('featureGate.alternativeOptions') || 'Alternative Options:'}
+                  {t('featureGate.alternativeOptions', 'Alternative Options:')}
                 </p>
                 <ul className="list-disc list-inside space-y-1 ml-2">
-                  <li>{t('featureGate.contactSupport') || 'Contact our support team'}</li>
-                  <li>{t('featureGate.tryAgainLater') || 'Try again later'}</li>
-                  <li>{t('featureGate.checkAnnouncements') || 'Check our announcements for updates'}</li>
+                  <li>{t('featureGate.contactSupport', 'Contact our support team')}</li>
+                  <li>{t('featureGate.tryAgainLater', 'Try again later')}</li>
+                  <li>{t('featureGate.checkAnnouncements', 'Check our announcements for updates')}</li>
                 </ul>
               </div>
 
@@ -95,7 +94,7 @@ export function FeatureGate({
                   variant="outline"
                 >
                   <ArrowLeft className="h-4 w-4 mr-2" />
-                  {t('featureGate.backToHome') || 'Back to Home'}
+                  {t('featureGate.backToHome', 'Back to Home')}
                 </Button>
               </div>
             </CardContent>
@@ -110,7 +109,7 @@ export function FeatureGate({
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="text-gray-600 dark:text-gray-400">
-            {t('common.redirecting') || 'Redirecting...'}
+            {t('common.redirecting', 'Redirecting...')}
           </p>
         </div>
       </div>

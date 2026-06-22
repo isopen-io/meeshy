@@ -39,10 +39,10 @@ export function PasswordStrengthMeter({ password, className }: PasswordStrengthM
   // Translation keys for strength levels
   const getTranslatedLabel = (label: string): string => {
     const labelMap: { [key: string]: string } = {
-      'Weak': t('resetPassword.strength.weak') || 'Weak',
-      'Fair': t('resetPassword.strength.fair') || 'Fair',
-      'Strong': t('resetPassword.strength.strong') || 'Strong',
-      'Very Strong': t('resetPassword.strength.veryStrong') || 'Very Strong',
+      'Weak': t('resetPassword.strength.weak', 'Weak'),
+      'Fair': t('resetPassword.strength.fair', 'Fair'),
+      'Strong': t('resetPassword.strength.strong', 'Strong'),
+      'Very Strong': t('resetPassword.strength.veryStrong', 'Very Strong'),
     };
     return labelMap[label] || label;
   };
@@ -55,7 +55,7 @@ export function PasswordStrengthMeter({ password, className }: PasswordStrengthM
     <div className={cn('space-y-2', className)}>
       <div className="flex items-center justify-between text-sm">
         <span className="text-gray-600 dark:text-gray-400">
-          {t('resetPassword.strength.title') || 'Password Strength'}:
+          {t('resetPassword.strength.title', 'Password Strength')}:
         </span>
         <span
           className={cn(
