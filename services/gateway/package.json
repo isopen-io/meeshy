@@ -53,7 +53,7 @@
     "ioredis": "^5.10.1",
     "isomorphic-dompurify": "^2.36.0",
     "jsonwebtoken": "^9.0.3",
-    "libphonenumber-js": "^1.12.42",
+    "libphonenumber-js": "^1.13.7",
     "music-metadata": "7.14.0",
     "nice-grpc": "^2.1.16",
     "pdf-parse": "^2.4.5",

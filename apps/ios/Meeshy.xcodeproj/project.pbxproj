@@ -58,7 +58,7 @@
 		6354817D4751DBCD1D41FA55 /* CallStarter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04C7F658F411CA89494B4204 /* CallStarter.swift */; };
 		1F26B618A56CEA57B8408E7B /* CallDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 658141E84AE3DB02533425BA /* CallDetailSheet.swift */; };
 		83BD51218A1F70484C0E2E41 /* CallsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778C4719074ED676630AE6B2 /* CallsTab.swift */; };
-		51B8DB24C49E4007DCE3460C /* ContactsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20FBA05C1AAA4EE765F12DA3 /* ContactsSection.swift */; };
+		51B8DB24C49E4007DCE3460C /* PeopleDiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20FBA05C1AAA4EE765F12DA3 /* PeopleDiscoveryView.swift */; };
 		154D81017A2D9E725E1BB2B0 /* KeypadTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */; };
 		2D3563D04A488B10C2B3D2CE /* KeypadViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB2A3B95A3287DB42D5FF468 /* KeypadViewModel.swift */; };
 		46B9CEA8F388C548AEED4A2E /* MockVoIPTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE78D3B42AA19F0490A676B0 /* MockVoIPTokenStore.swift */; };
@@ -1006,7 +1006,7 @@
 		04C7F658F411CA89494B4204 /* CallStarter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallStarter.swift; sourceTree = "<group>"; };
 		658141E84AE3DB02533425BA /* CallDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDetailSheet.swift; sourceTree = "<group>"; };
 		778C4719074ED676630AE6B2 /* CallsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallsTab.swift; sourceTree = "<group>"; };
-		20FBA05C1AAA4EE765F12DA3 /* ContactsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsSection.swift; sourceTree = "<group>"; };
+		20FBA05C1AAA4EE765F12DA3 /* PeopleDiscoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeopleDiscoveryView.swift; sourceTree = "<group>"; };
 		B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeypadTab.swift; sourceTree = "<group>"; };
 		EB2A3B95A3287DB42D5FF468 /* KeypadViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeypadViewModel.swift; sourceTree = "<group>"; };
 		F7C8FDC10EBAC576B77E8347 /* MediaPostCell.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MediaPostCell.swift; sourceTree = "<group>"; };
@@ -1849,7 +1849,7 @@
 				04C7F658F411CA89494B4204 /* CallStarter.swift */,
 				658141E84AE3DB02533425BA /* CallDetailSheet.swift */,
 				778C4719074ED676630AE6B2 /* CallsTab.swift */,
-				20FBA05C1AAA4EE765F12DA3 /* ContactsSection.swift */,
+				20FBA05C1AAA4EE765F12DA3 /* PeopleDiscoveryView.swift */,
 				B438FCCC84EAEB6CA52DE75D /* KeypadTab.swift */,
 				EB2A3B95A3287DB42D5FF468 /* KeypadViewModel.swift */,
 				73E4ECF08EDFD91908B42081 /* ContactsListTab.swift */,
@@ -2775,7 +2775,7 @@
 				6354817D4751DBCD1D41FA55 /* CallStarter.swift in Sources */,
 				1F26B618A56CEA57B8408E7B /* CallDetailSheet.swift in Sources */,
 				83BD51218A1F70484C0E2E41 /* CallsTab.swift in Sources */,
-				51B8DB24C49E4007DCE3460C /* ContactsSection.swift in Sources */,
+				51B8DB24C49E4007DCE3460C /* PeopleDiscoveryView.swift in Sources */,
 				154D81017A2D9E725E1BB2B0 /* KeypadTab.swift in Sources */,
 				2D3563D04A488B10C2B3D2CE /* KeypadViewModel.swift in Sources */,
 				F7273BAD84FB8B7281518D59 /* ContactsListTab.swift in Sources */,

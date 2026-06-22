@@ -6,7 +6,7 @@ import MeeshyUI
 
 /// Top-level tabs of the People hub. The three primary surfaces of the
 /// redesigned contact view: the call journal, the dial pad, and the contact
-/// directory (which itself nests the `ContactsTab` sub-tabs).
+/// directory (an annuaire filtered by `ContactFilter`).
 enum PeopleTab: String, CaseIterable, Hashable {
     case calls = "Appels"
     case keypad = "Clavier"
@@ -21,15 +21,18 @@ enum PeopleTab: String, CaseIterable, Hashable {
     }
 }
 
-enum ContactsTab: String, CaseIterable, Hashable {
-    case contacts = "Contacts"
+/// Sub-tabs of the **Découverte d'utilisateurs Meeshy** view (`PeopleDiscoveryView`).
+///
+/// Moved out of the contact directory so the Contacts tab stays an exploitable
+/// annuaire. Reachable from the floating menu ladder and from deep links
+/// (`Route.peopleDiscovery(DiscoveryTab)`).
+enum DiscoveryTab: String, CaseIterable, Hashable {
     case requests = "Demandes"
     case discover = "Decouvrir"
     case blocked = "Bloques"
 
     var icon: String {
         switch self {
-        case .contacts: return "person.2.fill"
         case .requests: return "person.badge.plus"
         case .discover: return "magnifyingglass"
         case .blocked: return "hand.raised.fill"
