@@ -1703,3 +1703,26 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - CI status: pushed `e21a03a0` to branch; CI re-run in progress (expected: Test web ✅, Test shared ⚠ pre-existing zod v4 red on main — not gated)
 - Next action: await CI green on PR #874 → squash-merge to main → next slice P2 Video/story export × web
 - Commit: e21a03a0 (branch claude/coverage/p2-theme-web)
+
+## 2026-06-22T14:30Z — PR #874 merged + P2 Admin × web (new slice)
+
+### PR #874 merge
+- Verified: Test shared ❌ confirmed as pre-existing Zod v4 issue (preferences.test.ts:362, `expected true to be undefined` — `.partial()` retains `.default(true)` in Zod v4). Non-blocking for web iterations (documented in `b8c55fb1`).
+- All other checks ✅: Test web, Test agent, Test gateway, Prisma, Voice API Tests, Audio Pipeline Tests, TTS/STT Integration, Quality (bun), Security.
+- Squash-merged PR #874 → main @ `58f95b0d`.
+
+### P2 Admin × web slice
+- Targeted: `hooks/admin/use-admin-settings.ts`, `hooks/admin/use-settings-save.ts`, `hooks/admin/use-settings-validation.ts`, `services/admin.service.ts`
+- Result: ☑ 100%/100%/100%/100% on all 4 files (stmts/branches/funcs/lines)
+- Tests added: 109 behavioral tests across 4 new test files
+- Bug found and fixed: `use-settings-validation.ts` had TDZ (Temporal Dead Zone) bug — `validateSetting` const was declared after the `useMemo` callback that called it, causing `ReferenceError: Cannot access 'validateSetting' before initialization` on first render with non-empty settings map. Fixed by hoisting `validateSetting` to module level (it's a pure function with no hook state dependency). Tests confirmed the bug and the fix.
+- Production files changed: `hooks/admin/use-settings-validation.ts` (TDZ fix only — behavior identical, no logic change)
+- Test files created:
+  - `__tests__/hooks/admin/use-admin-settings.test.ts` (14 tests)
+  - `__tests__/hooks/admin/use-settings-save.test.ts` (12 tests — fake timers, error injection via console.log mock)
+  - `__tests__/hooks/admin/use-settings-validation.test.ts` (25 tests — all type variants, URL validation, unimplemented skip)
+  - `__tests__/services/admin.service.test.ts` (58 tests — all 17 methods, happy + error paths)
+- Full web suite: 342/342 suites green, 8464 tests pass, 0 regressions
+- Reviewer: pending (PR to be opened)
+- Commit: `f3848d05` on `claude/coverage/p2-admin-web`
+- Next action: push branch, open PR, await CI, merge
