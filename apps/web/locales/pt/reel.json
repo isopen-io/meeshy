@@ -22,5 +22,14 @@
     "comment": "Comentar",
     "share": "Compartilhar",
     "save": "Salvar"
+  },
+  "feed": {
+    "title": "Reels",
+    "loading": "Carregando reels…",
+    "errorTitle": "Reels indisponíveis",
+    "retry": "Tentar novamente",
+    "emptyTitle": "Nenhum reel ainda",
+    "emptyBody": "Volte mais tarde ou explore as publicações da sua rede.",
+    "viewPosts": "Ver publicações"
   }
 }
