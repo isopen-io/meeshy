@@ -14,6 +14,11 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE (mis à jour 64w)** — le tableau ci-dessous a divergé (lignes Current State dupliquées par des agents parallèles résolvant des conflits par ajout ; cf. § History pour la source fiable, append-only).
+> - **Dernière itération web mergée : `64w` → PR #857 ✅** (main HEAD `a8b3eae`).
+> - **Base de départ 65w : `main` HEAD** (toujours resync sur `main` avant de commencer).
+> - **Différé prioritaire 65w+ : classe `t()||fallback`** (~220 occ / ~36 fichiers restants — admin, settings, layout, video-calls/audio-effects, conversations divers, hooks recovery) par lots **bornés et orthogonaux** aux PR en vol. Vérifier les PR ouvertes avant de choisir une surface.
+
 | Field | Value |
 |-------|-------|
 | Last completed iteration (iOS) | **51i** (iOS only : adoption Liquid Glass iOS 26 sur le menu d'actions long-press + fidélité fallback `AdaptiveGlass` + épuration code mort. (1) **SDK `AdaptiveGlass`** — `adaptiveGlassRegularFallback(tint:)` empile désormais la teinte AU-DESSUS de `.ultraThinMaterial` (le flou EST le glass ; un verre sans flou n'est pas du verre) ; API publique inchangée (smoke test vert) ; bénéficie tous les appels teintés dont le toggle micro actif de `CallView`. (2) **`ContextActionMenu`** — trio `.ultraThinMaterial` + dégradé accent + strokeBorder dégradé → un seul `.adaptiveGlass(in: Capsule(), tint: accent.opacity(0.18))` : capsule Liquid Glass natif teinté marque sur iOS 26, material teinté + liseré avant ; 2 ombres d'élévation conservées ; cohérent avec `FloatingCallPillView`/`CallView`. (3) **`OverlayMenu.swift` supprimé** (code mort jamais instancié ; FR durs + `.white` figés + boutons no-op) + 4 refs `project.pbxproj` retirées. `MessageContextOverlay` & `ContextActionButton` re-vérifiés conformes (gestes dismiss/swipe-down, a11y modal, Dynamic Type) — ne pas re-flagger.) |
@@ -274,3 +279,4 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 64wb | claude/practical-fermat-y6vyvh (anti-pattern t()||fallback en-têtes catégories liste conv — CommunityCarousel + ConversationGroup) | #863 | ⏳ |
 | 63w | claude/practical-fermat-yly7ym (anti-pattern t()||fallback sidebar détails conv) | #849 | ⏳ |
 | 65w | claude/practical-fermat-s5hyhl (anti-pattern t()||fallback ConversationSettingsModal + 6 clés fr-only en/es/pt) | — | ⏳ |
+| 64w | claude/practical-fermat-gq4cjc (i18n bannières failed-message/system-status + selectors ; 24 clés ×4 locales) | #857 | ✅ |
