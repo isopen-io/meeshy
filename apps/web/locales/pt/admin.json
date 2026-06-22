@@ -303,6 +303,7 @@
       "cooldownHint": "Tempo antes de poder re-selecionar este topic na mesma conversa.",
       "fieldActive": "Ativo (usado pelo estrategista)",
       "cancel": "Cancelar",
+      "closeAriaLabel": "Fechar",
       "saving": "Salvando...",
       "save": "Salvar",
       "errorSlugFormat": "Slug deve ser kebab_case (a-z, 0-9, _, -)",

@@ -303,6 +303,7 @@
       "cooldownHint": "Delay before re-selecting this topic for the same conversation.",
       "fieldActive": "Active (used by strategist)",
       "cancel": "Cancel",
+      "closeAriaLabel": "Close",
       "saving": "Saving...",
       "save": "Save",
       "errorSlugFormat": "Slug must be kebab_case (a-z, 0-9, _, -)",

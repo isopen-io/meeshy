@@ -78,12 +78,18 @@ fichier** — donc **zéro nouvelle syntaxe Tailwind** :
   `gp-*`. **Arbitrage requis** (`theme.colors.*` vs tokens `gp-*` comme source de
   vérité des sémantiques success/warning) avant de toucher — ne pas changer la
   teinte à l'aveugle. **NE PAS re-flagger sans trancher cet arbitrage.**
-- `AgentTopicEditModal.tsx` (admin) : modale hand-rolled sans dismiss-Escape ni
+- ~~`AgentTopicEditModal.tsx` (admin) : modale hand-rolled sans dismiss-Escape ni
   dismiss-backdrop, bouton de fermeture icon-only sans `aria-label` (`t` déjà
-  dispo). Geste/a11y, bounded — candidat 57w+.
-- `ConversationDrawer.tsx` (v2, user-facing) : backdrop-dismiss + `aria-label`
+  dispo). Geste/a11y, bounded — candidat 57w+.~~ → **SOLDÉ en 58w** (handler
+  Escape avec garde `!saving` ; `role="dialog"`/`aria-modal`/`aria-label` sur
+  l'overlay ; `aria-label` clé i18n `closeAriaLabel` ×4 sur le bouton X.
+  Backdrop-dismiss **volontairement NON ajouté** — formulaire à saisie, risque
+  de perte de données. NE PLUS re-flagger.)
+- ~~`ConversationDrawer.tsx` (v2, user-facing) : backdrop-dismiss + `aria-label`
   présents mais **pas de handler Escape** ni `role="dialog"`/`aria-modal`. Geste/
-  a11y, bounded — candidat 57w+.
+  a11y, bounded — candidat 57w+.~~ → **SOLDÉ en 58w** (handler Escape calqué sur
+  `v2/Dialog` keyé sur `isOpen` ; `role="dialog"`/`aria-modal`/`aria-hidden={!isOpen}`
+  + `aria-label` réutilisant `conversations.drawer.title`. NE PLUS re-flagger.)
 
 ## Faux positifs vérifiés (NE PLUS re-flagger)
 - `UserConversationsSection.tsx:141-144` : la modale a **déjà** backdrop

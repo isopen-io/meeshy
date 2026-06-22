@@ -303,6 +303,7 @@
       "cooldownHint": "Délai avant de pouvoir re-piocher ce topic sur la même conversation.",
       "fieldActive": "Actif (pris en compte par le strategist)",
       "cancel": "Annuler",
+      "closeAriaLabel": "Fermer",
       "saving": "Sauvegarde…",
       "save": "Sauvegarder",
       "errorSlugFormat": "Slug doit être kebab_case (a-z, 0-9, _, -)",

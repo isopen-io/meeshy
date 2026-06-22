@@ -89,6 +89,16 @@ export function ConversationDrawer({
     }
   }, [isOpen, conversationName]);
 
+  // Escape ferme le drawer — geste standard de dismiss (idem v2/Dialog)
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   // Ne rien rendre si le composant n'est pas monté
   // Cela évite les overlays fantômes qui bloquent les interactions
   if (!mounted) return null;
@@ -111,6 +121,10 @@ export function ConversationDrawer({
 
       {/* Drawer */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-hidden={!isOpen}
+        aria-label={tConv('conversations.drawer.title')}
         className={`
           fixed top-0 left-0 bottom-0 w-80 max-w-[85vw] z-50
           flex flex-col overflow-hidden
