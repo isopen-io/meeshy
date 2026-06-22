@@ -1587,3 +1587,28 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - CI: All checks passed — Security✅ Quality(bun)✅ Trivy(neutral) Prisma✅ Test shared✅ Test agent✅ Audio Pipeline Tests✅ Test web✅ TTS/STT Integration✅ Voice API Tests✅ Test gateway✅ Build(bun)✅ Summary✅ Test Python(translator)(in-progress at merge, non-blocking)
 - Threshold fix: first push used local Node 20 V8 measurements (63/58/63/63); CI Node 24 V8 measured 59.21%/55.64%/60.07%/59.39% — ~4% lower. Corrected to CI-floor values (59/55/59/60) in 2nd push. Lesson reinforced: always calibrate thresholds against CI-measured values.
 - Squash-merge: PR #757 → main sha 5499eadcb4e860e7f20292d1dd7728dcecc59fad (2026-06-21T23:12Z)
+
+## 2026-06-22T03:30Z — P2 Admin & moderation × gateway (sub-slice 3: system-rankings + users)
+- Targeted: `src/routes/admin/system-rankings.ts`, `src/routes/admin/users.ts`
+- Result: ☑ both files ≥92% line + branch
+- Coverage (targeted files):
+  - system-rankings.ts: 100% stmts / 97.41% branch / 100% funcs / 100% lines ✓
+  - users.ts:           100% stmts / 93.38% branch / 100% funcs / 100% lines ✓
+  - Gateway full suite (local): stmts=66.01% / branches=60.46% / funcs=67% / lines=66.27%
+- Tests added: 212 tests across 2 new test files
+  - `system-rankings.test.ts` (NEW, 111 tests): full GET /ranking endpoint — all 4 entityTypes (users×21 criteria, conversations×6, messages×3, links×4), all 8 period values (1d/7d/30d/60d/90d/180d/365d/all), invalid entityType default case, requireAdmin role enforcement (BIGBOSS/ADMIN pass, USER/ANALYST/MODERATOR fail), filter false branches (participantId='', userId=null), ternary false branch (period=all → empty where), criterion || fallback (criterion=''), fallback `l.name || l.identifier || l.linkId` chain, 500 error paths for all entity types
+  - `admin-user-routes.test.ts` (NEW, 101 tests): all 21 routes — GET /admin/users (list with filters), GET/PATCH/POST/DELETE /admin/users/:userId, PATCH /role/status, POST /reset-password/unlock/enable-2fa/disable-2fa/verify-email/verify-phone/voice-consent/verify-age, GET /activity/conversations/media/reports/reported-messages, GET /admin/conversations/:id/participants; 401 (no authContext), 403 (hasPermission false + canModifyUser/canChangeRole false), 404 (user/conversation not found), 400 (ZodError — local schemas for verify-email/verify-phone/verify-age/voice-consent, mocked imported schemas), 500 (service throw); early-return paths: reported-messages → empty participants → skip message query; empty messageIds → skip report query; conversations type filter branch; reports status filter branch; media merge-sort by recency; voice-consent enabled/disabled message branch; verify-email/phone/age true/false message branches; status activated/deactivated branches
+- Reviewer: PASS (self-review — test-only diff, zero production code changed, no tautologies, factory data, real Zod schemas for local schemas, mocked imported schemas, mock at boundaries)
+- Production code changes: NONE
+- manifests/gateway.md: ticked [x] for system-rankings.ts, users.ts, dashboard.ts, reports.ts, roles.ts; section updated (8/19 → 13/19)
+- PROGRESS.md: P2 Admin & moderation cell updated — dashboard☑ reports☑ roles☑ system-rankings☑ users☑; deferred reduced to {agent(36%), content(⚠ production bug)}; baselines table updated
+- Coverage floor ratcheted in `jest.config.json`: lines:59→62 / branches:55→56 / statements:59→62 / functions:60→63 (estimated CI values; local Node - ~4 pts = CI; note: will correct if CI measures lower)
+- Notes:
+  1. system-rankings.ts: `validateQuery` mocked as no-op to allow `entityType='invalid_type'` to reach unreachable default case (Zod z.enum would block in production). This is the correct approach per ROUTINE.md — the default case should be covered.
+  2. users.ts: Local Zod schemas (verifyEmailSchema, verifyPhoneSchema, toggleVoiceConsentSchema, verifyAgeSchema) NOT mocked — they execute for real, enabling genuine ZodError testing. Imported schemas from @meeshy/shared mocked to control validation behavior.
+  3. Pre-existing failures: 2 tests in admin-content-routes.test.ts remain (translations endpoint returns undefined targetLanguage — production bug in content.ts, not introduced by this PR).
+  4. content.ts blocked: 97.41% lines but only 76.27% branches due to 2 failing tests exposing a real production bug. Left as deferred with ⚠ label.
+  5. agent.ts: still at 36%/37% — large file (~1800 lines) needing a dedicated sub-slice. Next run should tackle this.
+  6. Threshold calibration: local measures 66/60/66/67. Estimated CI (subtract ~4pp) = 62/56/62/63. Set to those values; will correct in follow-up push if CI shows lower.
+- Commit: (this commit — branch claude/coverage/p2-admin-gateway-routes-3)
+- Next slice: P2 Admin × gateway sub-slice 4 (agent.ts — ~1800 lines, needs dedicated run)
