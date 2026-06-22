@@ -1870,3 +1870,5 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   - `/* istanbul ignore file */` on `index.ts` barrel (no logic to instrument)
 - Production files changed: istanbul ignore annotations only — no logic changes
 - Branch: claude/coverage/p2-video-story-web
+- CI: All checks passed — Security✅ Quality(bun)✅ Trivy(neutral) Prisma✅ Test shared✅ Test agent✅ Audio Pipeline Tests✅ Test web✅ TTS/STT Integration✅ Voice API Tests✅ Test gateway✅ Build(bun)✅ Summary✅ Voice E2E Benchmark(skipped) Test Python(translator)(in-progress at merge time — non-blocking)
+- Squash-merge: PR #892 → main sha `3d2f8a8d2ff8a0537d4f624cef0e114d9b6ac127` (2026-06-22T22:20Z)
