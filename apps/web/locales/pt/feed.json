@@ -1,0 +1,58 @@
+{
+  "title": "Feed",
+  "srHeading": "Feed de notícias — publicações, reels e stories",
+  "tabs": {
+    "label": "Tipo de feed",
+    "posts": "Publicações",
+    "reels": "Reels"
+  },
+  "sections": {
+    "stories": "Stories públicos",
+    "storiesHeading": "Stories",
+    "moods": "Humores",
+    "compose": "Criar uma publicação",
+    "posts": "Publicações"
+  },
+  "recordAudio": "Gravar uma publicação de áudio",
+  "updating": "Atualizando…",
+  "updatingSr": "Atualizando o feed…",
+  "errorLoad": "Não foi possível carregar o feed.",
+  "retry": "Tentar novamente",
+  "newPost": "{count} nova publicação",
+  "newPosts": "{count} novas publicações",
+  "empty": "Ainda não há publicações. Seja o primeiro a compartilhar algo!",
+  "loadingMore": "Carregando mais publicações",
+  "unknownAuthor": "Desconhecido",
+  "time": {
+    "now": "Agora mesmo",
+    "minutes": "Há {count}min",
+    "hours": "Há {count}h",
+    "days": "Há {count}d"
+  },
+  "toast": {
+    "error": "Erro",
+    "storyPublished": "Story publicado!",
+    "storyVisible": "Seu story está visível para seus amigos.",
+    "storyVisibleMedia": "Seu story está visível para seus amigos ({count} mídia).",
+    "storyPublishError": "Não foi possível publicar o story.",
+    "storyDeleted": "Story excluído",
+    "storyDeleteError": "Não foi possível excluir o story.",
+    "replySent": "Resposta enviada",
+    "published": "Publicado!",
+    "postShared": "Sua publicação foi compartilhada.",
+    "postPublishError": "Não foi possível publicar a publicação.",
+    "linkCopied": "Link copiado!",
+    "linkCopyError": "Não foi possível copiar o link.",
+    "postDeleted": "Publicação excluída",
+    "postEdited": "Publicação editada",
+    "reposted": "Republicado!",
+    "quoted": "Citado!",
+    "audioPublished": "Publicação de áudio publicada!",
+    "publishError": "Não foi possível publicar.",
+    "uploadError": "Erro de upload",
+    "audioUploadError": "Não foi possível enviar o áudio.",
+    "statusTitle": "Status",
+    "statusSelected": "Status {id} selecionado",
+    "moodPublished": "Humor publicado!"
+  }
+}
