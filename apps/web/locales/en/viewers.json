@@ -19,7 +19,8 @@
     "downloadFile": "Download file",
     "delete": "Delete this presentation",
     "fullscreen": "Open fullscreen",
-    "download": "Download"
+    "download": "Download",
+    "escToClose": "Press Escape to close"
   },
   "markdown": {
     "loadError": "Unable to load file",
@@ -45,6 +46,7 @@
     "download": "Download",
     "copied": "Copied to clipboard",
     "copyError": "Unable to copy",
-    "loadError": "Unable to load file"
+    "loadError": "Unable to load file",
+    "escToClose": "Press Escape to close"
   }
 }
