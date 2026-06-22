@@ -89,7 +89,7 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-3 min-w-0">
                   {selectedConversation.avatar ? (
-                    <img src={selectedConversation.avatar} alt="" className="h-10 w-10 rounded-full object-cover shrink-0" />
+                    <img src={selectedConversation.avatar} alt="" loading="lazy" decoding="async" className="h-10 w-10 rounded-full object-cover shrink-0" />
                   ) : (
                     <div className="p-2 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 shrink-0">
                       {getIcon(selectedConversation.type)}

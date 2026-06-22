@@ -64,32 +64,33 @@ function EditProfileModal({
 }) {
   const [name, setName] = useState(profile.name);
   const [bio, setBio] = useState(profile.bio || '');
+  const { t } = useI18n('settings');
 
   return (
     <Dialog open={isOpen} onClose={onClose}>
       <DialogBody>
-        <h2 className="text-xl font-bold mb-6 text-[var(--gp-text-primary)]">Modifier le profil</h2>
+        <h2 className="text-xl font-bold mb-6 text-[var(--gp-text-primary)]">{t('v2me.editProfile', 'Edit profile')}</h2>
         <div className="space-y-4">
           <div>
-            <Label className="mb-2">Nom</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Votre nom" />
+            <Label className="mb-2">{t('v2me.nameLabel', 'Name')}</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('v2me.namePlaceholder', 'Your name')} />
           </div>
           <div>
-            <Label className="mb-2">Bio</Label>
-            <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Parlez-nous de vous..." rows={3} />
+            <Label className="mb-2">{t('v2me.bioLabel', 'Bio')}</Label>
+            <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder={t('v2me.bioPlaceholder', 'Tell us about yourself...')} rows={3} />
           </div>
         </div>
       </DialogBody>
       <DialogFooter>
         <Button variant="outline" className="flex-1" onClick={onClose} disabled={isSaving}>
-          Annuler
+          {t('v2me.cancel', 'Cancel')}
         </Button>
         <Button
           className="flex-1"
           onClick={() => onSave({ displayName: name, bio })}
           disabled={isSaving || !name.trim()}
         >
-          {isSaving ? 'Enregistrement...' : 'Enregistrer'}
+          {isSaving ? t('v2me.saving', 'Saving...') : t('v2me.save', 'Save')}
         </Button>
       </DialogFooter>
     </Dialog>
@@ -107,20 +108,22 @@ function LogoutConfirmModal({
   onConfirm: () => void;
   isLoggingOut: boolean;
 }) {
+  const { t } = useI18n('settings');
+
   return (
     <Dialog open={isOpen} onClose={onClose} className="max-w-sm">
       <DialogBody>
-        <h2 className="text-xl font-bold mb-2 text-[var(--gp-text-primary)]">Se déconnecter ?</h2>
+        <h2 className="text-xl font-bold mb-2 text-[var(--gp-text-primary)]">{t('v2me.logoutTitle', 'Log out?')}</h2>
         <p className="text-[var(--gp-text-secondary)]">
-          Êtes-vous sûr de vouloir vous déconnecter de votre compte ?
+          {t('v2me.logoutConfirmMessage', 'Are you sure you want to log out of your account?')}
         </p>
       </DialogBody>
       <DialogFooter>
         <Button variant="outline" className="flex-1" onClick={onClose} disabled={isLoggingOut}>
-          Annuler
+          {t('v2me.cancel', 'Cancel')}
         </Button>
         <Button variant="destructive" className="flex-1" onClick={onConfirm} disabled={isLoggingOut}>
-          {isLoggingOut ? 'Déconnexion...' : 'Se déconnecter'}
+          {isLoggingOut ? t('v2me.loggingOut', 'Logging out...') : t('v2me.logout', 'Log out')}
         </Button>
       </DialogFooter>
     </Dialog>
@@ -152,9 +155,10 @@ function QuickLink({ href, icon: Icon, label, tint }: { href: string; icon: Reac
 // inline component would remount its subtree, dropping modal input focus).
 
 function ProfileShell({ children }: { children: React.ReactNode }) {
+  const { t } = useI18n('settings');
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-950 dark:to-gray-900 flex flex-col">
-      <DashboardLayout title="Mon profil" hideSearch className="!bg-none !bg-transparent !h-auto !max-w-none !px-0">
+      <DashboardLayout title={t('v2me.myProfile', 'My profile')} hideSearch className="!bg-none !bg-transparent !h-auto !max-w-none !px-0">
         <div className="w-full max-w-3xl mx-auto px-4 md:px-8 py-8 space-y-8">{children}</div>
       </DashboardLayout>
       <div className="w-screen relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] mt-16">
@@ -217,9 +221,9 @@ export default function ProfilePage() {
       <ProfileShell>
         <Card className="border-2">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <p className="text-rose-600 dark:text-rose-400 mb-4">{error || 'Profil non trouvé'}</p>
+            <p className="text-rose-600 dark:text-rose-400 mb-4">{error || t('v2me.profileNotFound', 'Profile not found')}</p>
             <Button variant="outline" onClick={() => router.push('/conversations')}>
-              Retour aux conversations
+              {t('v2me.backToConversations', 'Back to conversations')}
             </Button>
           </CardContent>
         </Card>
@@ -274,23 +278,23 @@ export default function ProfilePage() {
 
       {/* Stats */}
       {stats && (
-        <section aria-label="Statistiques" className="grid grid-cols-3 gap-4">
+        <section aria-label={t('v2me.statsLabel', 'Statistics')} className="grid grid-cols-3 gap-4">
           <Card className="border-2">
             <CardContent className="p-4 text-center">
               <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{formatNumber(stats.conversationsCount)}</p>
-              <p className="text-sm text-muted-foreground">Conversations</p>
+              <p className="text-sm text-muted-foreground">{t('v2me.conversations', 'Conversations')}</p>
             </CardContent>
           </Card>
           <Card className="border-2">
             <CardContent className="p-4 text-center">
               <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatNumber(stats.messagesCount)}</p>
-              <p className="text-sm text-muted-foreground">Messages</p>
+              <p className="text-sm text-muted-foreground">{t('v2me.messages', 'Messages')}</p>
             </CardContent>
           </Card>
           <Card className="border-2">
             <CardContent className="p-4 text-center">
               <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{formatNumber(stats.contactsCount)}</p>
-              <p className="text-sm text-muted-foreground">Contacts</p>
+              <p className="text-sm text-muted-foreground">{t('v2me.contacts', 'Contacts')}</p>
             </CardContent>
           </Card>
         </section>
@@ -298,17 +302,17 @@ export default function ProfilePage() {
 
       {/* Languages */}
       {profile.languages.length > 0 && (
-        <section aria-label={isCurrentUser ? 'Mes langues' : 'Langues'}>
+        <section aria-label={isCurrentUser ? t('v2me.myLanguages', 'My languages') : t('v2me.languages', 'Languages')}>
           <Card className="border-2">
             <CardContent className="p-4">
-              <h2 className="font-semibold mb-3 text-foreground">{isCurrentUser ? 'Mes langues' : 'Langues'}</h2>
+              <h2 className="font-semibold mb-3 text-foreground">{isCurrentUser ? t('v2me.myLanguages', 'My languages') : t('v2me.languages', 'Languages')}</h2>
               <div className="flex flex-wrap gap-3">
                 {profile.languages.map((lang) => (
                   <div key={lang.code} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-900">
                     <LanguageOrb code={lang.code} size="sm" pulse={false} className="w-6 h-6 text-sm" />
                     <span className="text-sm font-medium text-foreground">{lang.name}</span>
                     <Badge variant={lang.level === 'native' ? 'default' : 'secondary'}>
-                      {lang.level === 'native' ? 'Natif' : lang.level === 'fluent' ? 'Courant' : 'Apprentissage'}
+                      {lang.level === 'native' ? t('v2me.levelNative', 'Native') : lang.level === 'fluent' ? t('v2me.levelFluent', 'Fluent') : t('v2me.levelLearning', 'Learning')}
                     </Badge>
                   </div>
                 ))}
@@ -320,25 +324,25 @@ export default function ProfilePage() {
 
       {/* Owner actions */}
       {isCurrentUser ? (
-        <section aria-label="Raccourcis" className="space-y-3">
-          <QuickLink href="/links" icon={Link2} label="Mes liens de partage" tint="bg-blue-500/15 text-blue-600 dark:text-blue-400" />
-          <QuickLink href="/contacts" icon={Users} label="Mes contacts" tint="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" />
-          <QuickLink href="/notifications" icon={Bell} label="Notifications" tint="bg-indigo-500/15 text-indigo-600 dark:text-indigo-400" />
-          <QuickLink href="/settings" icon={Settings} label={t('title') || 'Paramètres'} tint="bg-gray-500/15 text-gray-600 dark:text-gray-400" />
+        <section aria-label={t('v2me.shortcuts', 'Shortcuts')} className="space-y-3">
+          <QuickLink href="/links" icon={Link2} label={t('v2me.myShareLinks', 'My share links')} tint="bg-blue-500/15 text-blue-600 dark:text-blue-400" />
+          <QuickLink href="/contacts" icon={Users} label={t('v2me.myContacts', 'My contacts')} tint="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" />
+          <QuickLink href="/notifications" icon={Bell} label={t('v2me.notifications', 'Notifications')} tint="bg-indigo-500/15 text-indigo-600 dark:text-indigo-400" />
+          <QuickLink href="/settings" icon={Settings} label={t('title', 'Settings')} tint="bg-gray-500/15 text-gray-600 dark:text-gray-400" />
           <Button
             variant="outline"
             className="w-full text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30"
             onClick={() => setIsLogoutModalOpen(true)}
           >
             <LogOut className="w-4 h-4 mr-2" />
-            Se déconnecter
+            {t('v2me.logout', 'Log out')}
           </Button>
         </section>
       ) : (
         <Link href={`/conversations?user=${profile.id}`} className="block">
           <Button className="w-full">
             <MessageSquare className="w-4 h-4 mr-2" />
-            Envoyer un message
+            {t('v2me.sendMessage', 'Send a message')}
           </Button>
         </Link>
       )}
