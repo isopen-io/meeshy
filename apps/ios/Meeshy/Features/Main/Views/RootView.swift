@@ -155,8 +155,11 @@ struct RootView: View {
                     case .profile:
                         ProfileView()
                             .navigationBarHidden(true)
-                    case .contacts(let initialTab):
-                        ContactsHubView(initialTab: initialTab)
+                    case .contacts:
+                        ContactsHubView()
+                            .navigationBarHidden(true)
+                    case .peopleDiscovery(let initialTab):
+                        PeopleDiscoveryView(initialTab: initialTab)
                             .navigationBarHidden(true)
                     case .communityList:
                         CommunityListView(
@@ -1530,7 +1533,8 @@ struct RootView: View {
             let menuItems: [(icon: String, color: String, label: String, action: () -> Void)] = [
                 ("link.badge.plus", "F8B500", String(localized: "root.menu.links", defaultValue: "Mes liens"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.links) }),
                 ("bell.fill", "FF6B6B", String(localized: "root.menu.notifications", defaultValue: "Notifications"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.notifications) }),
-                ("person.2.fill", "6366F1", String(localized: "root.menu.contacts", defaultValue: "Contacts"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.contacts()) }),
+                ("person.2.fill", "6366F1", String(localized: "root.menu.contacts", defaultValue: "Contacts"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.contacts) }),
+                ("sparkle.magnifyingglass", "8B5CF6", String(localized: "root.menu.discover", defaultValue: "Découvrir"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.peopleDiscovery()) }),
                 ("person.3.fill", "2ECC71", String(localized: "root.menu.communities", defaultValue: "Communautés"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) }),
                 ("gearshape.fill", "64748B", String(localized: "root.menu.settings", defaultValue: "Réglages"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.settings) })
             ]
@@ -1542,10 +1546,12 @@ struct RootView: View {
 
                 let itemY = menuStartY + yOffset
 
-                // Special handling for notifications badge
+                // Special handling for notifications & pending-request badges
                 Group {
                     if item.icon == "bell.fill" {
                         ThemedActionButton(icon: item.icon, color: item.color, badge: notificationManager.unreadCount, action: item.action)
+                    } else if item.icon == "sparkle.magnifyingglass" {
+                        ThemedActionButton(icon: item.icon, color: item.color, badge: FriendshipCache.shared.pendingReceivedCount, action: item.action)
                     } else {
                         ThemedActionButton(icon: item.icon, color: item.color, action: item.action)
                     }
