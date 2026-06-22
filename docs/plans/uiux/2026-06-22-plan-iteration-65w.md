@@ -1,50 +1,31 @@
-# Plan — Itération 65w (web)
+# Plan — Itération 65w (web) — Épuration composants police orphelins
 
 ## Objectif
-Solder l'anti-pattern buggé **`t('key') || 'fallback'`** sur la modale de réglages de
-conversation `components/conversations/ConversationSettingsModal.tsx` (surface
-orthogonale aux 6 PR 64w en vol) ET corriger le **vrai bug i18n** des 6 clés
-`fr`-only affichées en clé brute aux non-francophones.
-
-## Base
-- `main` HEAD `be9a663` (post-merge #853, iter-63wb sur `main`).
-- Branche assignée : `claude/practical-fermat-s5hyhl` (resync sur `main`).
-
-## Numérotation
-**65w** — le slot 64w est saturé (#854/#857/#858/#859/#860). `branch-tracking.md`
-(édité par #857) réserve explicitement « 65w+ » pour les fichiers restants de
-l'anti-pattern.
-
-## Périmètre (bounded, 1 composant)
-- 30 occ. `t(k) || 'FR'` → `t(k, 'English')`.
-- 24 clés déjà présentes ×4 → 0 ajout (dead-code + flash).
-- 6 clés `fr`-only → ajoutées en en/es/pt (vrai bug : clé brute affichée).
+Supprimer le cluster de composants de police orphelins (dead code) hérité de la
+suppression de `settings/_archived/` (63w). Surface **non-i18n orthogonale** à la
+forte contention `t()||fallback` en vol.
 
 ## Étapes
-1. [x] Resync branche assignée sur `main` HEAD.
-2. [x] Mesurer (30 occ. / 1 fichier ; namespace `conversations`).
-3. [x] Vérifier l'existence des clés ×4 → 24 OK, 6 `fr`-only.
-4. [x] `t(k) || 'FR'` → `t(k, 'En')` (secours = valeur EN exacte du locale).
-5. [x] Ajouter les 6 clés manquantes en/es/pt (`fr` intact) ; parité ×4 ; JSON valide.
-6. [x] Ajouter les 6 clés au mock du test (cohérence).
-7. [x] Vérifier 0 anti-pattern restant dans le fichier.
-8. [ ] Commit + push branche `claude/practical-fermat-s5hyhl`.
-9. [ ] PR → CI verte → merge dans `main`.
-10. [ ] MAJ minimale `branch-tracking.md` (note SOLDÉ + History 65w).
-11. [ ] Supprimer la branche après merge ; repartir de `main` HEAD pour 66w.
-
-## Changements
-- `components/conversations/ConversationSettingsModal.tsx` (30 occ.).
-- `locales/{en,es,pt}/conversations.json` (+6 clés chacun).
-- `__tests__/components/conversations/ConversationSettingsModal.test.tsx` (+6 mock).
-- Docs 65w (analyse + plan) + note `branch-tracking.md`.
+1. [x] Vérifier l'orphelinat repo-wide de `FontSelector` et `FontPreview` (grep tous types de fichiers).
+2. [x] Confirmer que `lib/fonts.ts` reste live (`app/layout.tsx`) → NE PAS supprimer.
+3. [x] `git rm components/settings/font-selector.tsx`
+4. [x] `git rm components/settings/font-preview.tsx`
+5. [x] `git rm __tests__/components/settings/font-selector.test.tsx`
+6. [x] Retirer `export { FontSelector } from './font-selector';` de `components/settings/index.ts`
+7. [x] Retirer `FontSelector,` de l'agrégat `components/index.ts`
+8. [x] Re-grep : 0 référence restante.
+9. [x] Rédiger analyse `docs/analyses/uiux/2026-06-22-iteration-65w.md`
+10. [x] Mettre à jour `branch-tracking.md` (Current State + History + base).
+11. [ ] Commit + push sur `claude/practical-fermat-x6oum1`.
+12. [ ] Ouvrir PR, attendre CI verte.
+13. [ ] Merger dans `main`, supprimer la branche.
 
 ## Risque
-Faible : transformation mécanique vérifiée ; 24 clés présentes (correctif pur
-anti-flash) ; 6 clés ajoutées en parité ×4 (corrige un bug visible). Test = mock
-1-arg insensible au 2ᵉ arg.
+Très faible : suppression pure de code orphelin, zéro consommateur vérifié.
+Seul signal manquant en local : typecheck complet (install workspace incomplet).
+CI authoritative.
 
-## Suite (66w+)
-- ~190 occ. / ~34 fichiers restants de l'anti-pattern → lots bornés orthogonaux.
-- Nettoyage documentaire dédié de `branch-tracking.md` (blocs pointeurs + History
-  dupliqués) — toujours différé.
+## Continuité (66w)
+Candidat épuration suivant : `hooks/use-font-preference.ts` (orphelin post-65w,
+testé unitairement) — confirmer puis supprimer hook + test + barrel `hooks/index.ts`.
+NE PAS toucher `lib/fonts.ts` (live).
