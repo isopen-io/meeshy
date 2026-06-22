@@ -5,6 +5,7 @@ import { X, Loader2 } from 'lucide-react';
 import { agentAdminService, type TopicCatalogItem, type TopicInput } from '@/services/agent-admin.service';
 import { AgentTopicRegexTester } from './AgentTopicRegexTester';
 import { useI18n } from '@/hooks/use-i18n';
+import { useFocusTrap } from '@/hooks/use-focus-trap';
 
 interface Props {
   topic: TopicCatalogItem | null;
@@ -53,6 +54,8 @@ export function AgentTopicEditModal({ topic, onClose, onSaved }: Props) {
   );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Trap keyboard focus within the modal (aria-modal) while it is mounted.
+  const dialogRef = useFocusTrap<HTMLDivElement>(true);
 
   // Standard dismiss gesture: close on Escape (but never interrupt an in-flight save).
   useEffect(() => {
@@ -98,6 +101,8 @@ export function AgentTopicEditModal({ topic, onClose, onSaved }: Props) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="agent-topic-edit-modal-title"

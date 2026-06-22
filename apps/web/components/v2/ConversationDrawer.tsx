@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useI18n } from '@/hooks/use-i18n';
+import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { Input } from './Input';
 import { TagInput, TagItem } from './TagInput';
 import { Label } from './Label';
@@ -78,6 +79,8 @@ export function ConversationDrawer({
   const { t: tConv } = useI18n('conversations');
   const [localName, setLocalName] = useState(conversationName);
   const [mounted, setMounted] = useState(false);
+  // Keep keyboard focus within the open drawer (aria-modal) and restore it on close.
+  const dialogRef = useFocusTrap<HTMLDivElement>(isOpen);
 
   useEffect(() => {
     if (isOpen) {
@@ -121,6 +124,8 @@ export function ConversationDrawer({
 
       {/* Drawer */}
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="conversation-drawer-title"
