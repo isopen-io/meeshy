@@ -602,7 +602,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
 
     public let conversationId: String
     let conversationName: String
-    let accentColor: String
+    public let accentColor: String
     public let currentUserRole: MemberRole
 
     private let originalTitle: String
