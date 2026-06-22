@@ -81,6 +81,27 @@ jobs:
           SIM_ID=$(xcrun simctl create "iPhone16Pro-iOS182-CI" "iPhone 16 Pro" "com.apple.CoreSimulator.SimRuntime.iOS-18-2")
           echo "sim_id=$SIM_ID" >> "$GITHUB_OUTPUT"
 
+      # Pre-resolve the SPM graph with retries. Firebase/grpc ship binary-target
+      # zips fetched from dl.google.com, which intermittently fail mid-download
+      # on the runner ("The network connection was lost." → exit 74) and took the
+      # whole job down before a single test compiled. Resolving up front (into the
+      # same default DerivedData the test step reuses) lets us retry the transient
+      # network failure instead of losing the run; a real resolution error still
+      # fails after the attempts are exhausted.
+      - name: Resolve SPM packages (retry on transient network)
+        run: |
+          for attempt in 1 2 3 4; do
+            if xcodebuild -resolvePackageDependencies \
+                 -project apps/ios/Meeshy.xcodeproj -scheme Meeshy; then
+              echo "SPM resolve OK (attempt $attempt)"
+              exit 0
+            fi
+            echo "::warning::SPM resolve attempt $attempt failed (transient network?), retrying in $((attempt * 15))s"
+            sleep $((attempt * 15))
+          done
+          echo "::error::SPM resolve failed after 4 attempts"
+          exit 1
+
       - name: Run iOS tests
         run: |
           rm -rf TestResults.xcresult
