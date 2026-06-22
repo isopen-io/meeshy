@@ -78,5 +78,13 @@
     "cancel": "Cancel",
     "deleting": "Deleting...",
     "delete": "Delete"
+  },
+  "preview": {
+    "attachmentCount": "{count} attachment",
+    "attachmentCountPlural": "{count} attachments",
+    "imageAlt": "Image preview {name}",
+    "openVideoFullscreen": "Open video {name} fullscreen",
+    "openPdf": "Open PDF: {name}",
+    "openTextFile": "Open text file: {name}"
   }
 }

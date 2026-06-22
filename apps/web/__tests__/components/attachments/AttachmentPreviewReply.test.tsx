@@ -9,6 +9,30 @@ import '@testing-library/jest-dom';
 import { AttachmentPreviewReply } from '@/components/attachments/AttachmentPreviewReply';
 import type { Attachment } from '@meeshy/shared/types/attachment';
 
+// Mock i18n with deterministic French strings + param substitution
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: (_namespace?: string) => ({
+    t: (key: string, params?: Record<string, unknown>) => {
+      const fr: Record<string, string> = {
+        'preview.attachmentCount': '{count} pièce jointe',
+        'preview.attachmentCountPlural': '{count} pièces jointes',
+        'preview.imageAlt': "Aperçu de l'image {name}",
+        'preview.openVideoFullscreen': 'Ouvrir la vidéo {name} en plein écran',
+        'preview.openPdf': 'Ouvrir le PDF : {name}',
+        'preview.openTextFile': 'Ouvrir le fichier texte : {name}',
+        'actions.openImageNamed': "Ouvrir l'image {name}",
+        'gallery.fullscreen': 'Ouvrir en plein écran',
+      };
+      let value = fr[key] ?? key;
+      if (params && typeof params === 'object') {
+        value = value.replace(/\{(\w+)\}/g, (_m, k) => String(params[k] ?? ''));
+      }
+      return value;
+    },
+    isLoading: false,
+  }),
+}));
+
 // Mock next/image to render a plain <img> element (avoids URL transformation)
 jest.mock('next/image', () => ({
   __esModule: true,

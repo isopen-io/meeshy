@@ -78,5 +78,13 @@
     "cancel": "Cancelar",
     "deleting": "Eliminando...",
     "delete": "Eliminar"
+  },
+  "preview": {
+    "attachmentCount": "{count} archivo adjunto",
+    "attachmentCountPlural": "{count} archivos adjuntos",
+    "imageAlt": "Vista previa de la imagen {name}",
+    "openVideoFullscreen": "Abrir el video {name} en pantalla completa",
+    "openPdf": "Abrir el PDF: {name}",
+    "openTextFile": "Abrir el archivo de texto: {name}"
   }
 }
