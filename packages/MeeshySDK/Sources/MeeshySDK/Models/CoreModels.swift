@@ -952,6 +952,30 @@ public struct MeeshyImageVariant: Codable, Sendable, Hashable {
     }
 }
 
+/// The current user's OWN playback progress for a media attachment, surfaced
+/// per-request by the gateway (mirror of `currentUserReactions`). Lets a client
+/// seed the in-bubble waveform tint (audio) / progress bar (video) on load,
+/// synced across devices. `nil` = the current user never consumed this media.
+/// @see CurrentUserAttachmentConsumption in packages/shared/types/attachment.ts
+public struct MeeshyMediaConsumption: Codable, Sendable, Equatable {
+    public var lastPlayPositionMs: Int?
+    public var listenedComplete: Bool
+    public var lastWatchPositionMs: Int?
+    public var watchedComplete: Bool
+
+    public init(
+        lastPlayPositionMs: Int? = nil,
+        listenedComplete: Bool = false,
+        lastWatchPositionMs: Int? = nil,
+        watchedComplete: Bool = false
+    ) {
+        self.lastPlayPositionMs = lastPlayPositionMs
+        self.listenedComplete = listenedComplete
+        self.lastWatchPositionMs = lastWatchPositionMs
+        self.watchedComplete = watchedComplete
+    }
+}
+
 public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public let id: String
     public var messageId: String?
@@ -1021,6 +1045,11 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public var downloadedCount: Int?
     public var consumedCount: Int?
 
+    // ===== CURRENT-USER CONSUMPTION (per-request, cross-device sync) =====
+    /// The current user's own playback progress (position + completion).
+    /// Optional so old cached `attachmentsJson` blobs decode to nil.
+    public var currentUserConsumption: MeeshyMediaConsumption?
+
     /// Lightweight Codable transcription embedded in attachmentsJson.
     public struct EmbeddedTranscription: Codable, Sendable {
         public var text: String
@@ -1084,7 +1113,8 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
                 deliveredToAllAt: Date? = nil, viewedByAllAt: Date? = nil,
                 downloadedByAllAt: Date? = nil, listenedByAllAt: Date? = nil,
                 watchedByAllAt: Date? = nil, viewedCount: Int? = nil,
-                downloadedCount: Int? = nil, consumedCount: Int? = nil) {
+                downloadedCount: Int? = nil, consumedCount: Int? = nil,
+                currentUserConsumption: MeeshyMediaConsumption? = nil) {
         self.id = id; self.messageId = messageId; self.fileName = fileName; self.originalName = originalName
         self.mimeType = mimeType; self.fileSize = fileSize; self.filePath = filePath; self.fileUrl = fileUrl
         self.title = title; self.alt = alt; self.caption = caption
@@ -1109,6 +1139,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
         self.viewedCount = viewedCount
         self.downloadedCount = downloadedCount
         self.consumedCount = consumedCount
+        self.currentUserConsumption = currentUserConsumption
     }
 
     public static func image(color: String = "4ECDC4") -> MeeshyMessageAttachment {
