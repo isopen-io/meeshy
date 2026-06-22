@@ -112,6 +112,8 @@ struct BubbleStandardLayout: View {
 
     @ObservedObject var blurController: BubbleBlurRevealController
     @ObservedObject var ephemeralController: BubbleEphemeralController
+    var voiceConsentMissing: Bool = false
+    var onTapConsentNotice: (() -> Void)? = nil
 
     // MARK: - Playback tracking
     //
@@ -350,15 +352,15 @@ struct BubbleStandardLayout: View {
     private var replyAccessibilityLabel: String? {
         guard let reply = content.reply?.reference else { return nil }
         let author: String = reply.isMe
-            ? String(localized: "a11y.bubble.replyTo.you", defaultValue: "vous-m\u{00EA}me", bundle: .main)
+            ? String(localized: "a11y.bubble.replyTo.you", bundle: .main)
             : (reply.authorName.isEmpty
-                ? String(localized: "a11y.bubble.replyTo.unknown", defaultValue: "un message", bundle: .main)
+                ? String(localized: "a11y.bubble.replyTo.unknown", bundle: .main)
                 : reply.authorName)
         let excerpt = reply.previewText.trimmingCharacters(in: .whitespacesAndNewlines)
         if excerpt.isEmpty {
-            return String(format: String(localized: "a11y.bubble.replyTo", defaultValue: "En r\u{00E9}ponse \u{00E0} %@", bundle: .main), author)
+            return String(format: String(localized: "a11y.bubble.replyTo", bundle: .main), author)
         }
-        return String(format: String(localized: "a11y.bubble.replyTo.excerpt", defaultValue: "En r\u{00E9}ponse \u{00E0} %@\u{00A0}: %@", bundle: .main), author, excerpt)
+        return String(format: String(localized: "a11y.bubble.replyTo.excerpt", bundle: .main), author, excerpt)
     }
 
     private var messageAccessibilityLabel: String {
@@ -366,7 +368,7 @@ struct BubbleStandardLayout: View {
         if !content.isMe, let senderName = content.senderName {
             parts.append(senderName)
         } else if !content.isMe {
-            parts.append("Inconnu")
+            parts.append(String(localized: "a11y.message.unknown_sender", bundle: .main))
         }
         if let replyLabel = replyAccessibilityLabel {
             parts.append(replyLabel)
@@ -377,29 +379,42 @@ struct BubbleStandardLayout: View {
         if !visualAttachments.isEmpty {
             let imageCount = visualAttachments.filter { $0.type == .image }.count
             let videoCount = visualAttachments.filter { $0.type == .video }.count
-            if imageCount > 0 { parts.append(imageCount == 1 ? "une image" : "\(imageCount) images") }
-            if videoCount > 0 { parts.append(videoCount == 1 ? "une video" : "\(videoCount) videos") }
+            if imageCount > 0 {
+                parts.append(String(format: String(localized: "a11y.message.images", bundle: .main), imageCount))
+            }
+            if videoCount > 0 {
+                parts.append(String(format: String(localized: "a11y.message.videos", bundle: .main), videoCount))
+            }
         }
         if !audioAttachments.isEmpty {
-            parts.append(audioAttachments.count == 1 ? "un audio" : "\(audioAttachments.count) audios")
+            parts.append(String(format: String(localized: "a11y.message.audios", bundle: .main), audioAttachments.count))
         }
         if !nonMediaAttachments.isEmpty {
             for att in nonMediaAttachments {
-                if att.type == .location { parts.append("position partagee") }
-                else { parts.append("fichier \(att.originalName)") }
+                if att.type == .location {
+                    parts.append(String(localized: "a11y.message.location", bundle: .main))
+                } else {
+                    parts.append(String(format: String(localized: "a11y.message.file", bundle: .main), att.originalName))
+                }
             }
         }
         parts.append(content.meta.timeString)
         if content.isMe {
             parts.append(deliveryStatusAccessibilityLabel)
         }
-        if content.editedAt != nil { parts.append("modifie") }
-        if content.isPinned { parts.append("epingle") }
-        if message.expiresAt != nil { parts.append("ephemere") }
+        if content.editedAt != nil {
+            parts.append(String(localized: "a11y.message.edited", bundle: .main))
+        }
+        if content.isPinned {
+            parts.append(String(localized: "a11y.message.pinned", bundle: .main))
+        }
+        if message.expiresAt != nil {
+            parts.append(String(localized: "a11y.message.ephemeral", bundle: .main))
+        }
         let summaries = content.reactions
         if !summaries.isEmpty {
             let reactionText = summaries.map { "\($0.emoji) \($0.count)" }.joined(separator: ", ")
-            parts.append("reactions: \(reactionText)")
+            parts.append(String(format: String(localized: "a11y.message.reactions", bundle: .main), reactionText))
         }
         return parts.joined(separator: ", ")
     }
@@ -718,7 +733,10 @@ struct BubbleStandardLayout: View {
                     },
                     onShowTranslationDetail: onShowTranslationDetail,
                     onRequestTranslation: onRequestTranslation,
-                    onPlayAudio: onPlayAudio
+                    onPlayAudio: onPlayAudio,
+                    parentIsMe: content.isMe,
+                    voiceConsentMissing: voiceConsentMissing,
+                    onTapConsentNotice: onTapConsentNotice
                 )
             } else {
                 ForEach(audioAttachments) { attachment in
@@ -884,7 +902,10 @@ struct BubbleStandardLayout: View {
                 // Inline OpenGraph preview for the first URL in the
                 // effective (possibly translated) content. Self-loading.
                 // URL précalculée dans BubbleContent (plus de NSDataDetector ici).
-                if let url = content.text?.firstLinkURL {
+                if let video = content.text?.embeddedVideo {
+                    VideoEmbedContainer(video: video, accent: Color(hex: contactColor), trackedURL: content.text?.embedTrackedURL)
+                        .padding(.top, 4)
+                } else if let url = content.text?.firstLinkURL {
                     LinkPreviewCard(
                         urlString: url,
                         accentColor: contactColor,
@@ -1071,7 +1092,8 @@ struct BubbleStandardLayout: View {
             mentionDisplayNames: mentionDisplayNames,
             highlightTerm: highlightSearchTerm,
             mentionTint: mentionTint,
-            linkTint: linkTint
+            linkTint: linkTint,
+            trackedLinks: content.text?.trackedLinks ?? [:]
         )
     }
 
@@ -1087,7 +1109,8 @@ struct BubbleStandardLayout: View {
                 textPrimary: theme.textPrimary,
                 mentionDisplayNames: mentionDisplayNames,
                 mentionTint: mentionTint,
-                linkTint: linkTint
+                linkTint: linkTint,
+                trackedLinks: content.text?.trackedLinks ?? [:]
             )
         }
     }
@@ -1215,7 +1238,9 @@ struct BubbleStandardLayout: View {
                 onReplyTap: onReplyTap,
                 onStoryReplyTap: onStoryReplyTap,
                 onPlayAudio: onPlayAudio,
-                embedsCaptionInWidget: embedsCaption
+                embedsCaptionInWidget: embedsCaption,
+                voiceConsentMissing: voiceConsentMissing,
+                onTapConsentNotice: onTapConsentNotice
             )
             .equatable()
 

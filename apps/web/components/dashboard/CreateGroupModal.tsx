@@ -191,6 +191,13 @@ export function CreateGroupModal({
                         key={user.id}
                         role="button"
                         tabIndex={0}
+                        aria-pressed={isSelected}
+                        aria-label={t(
+                          isSelected
+                            ? 'createGroupModal.deselectMember'
+                            : 'createGroupModal.selectMember',
+                          { name: user.displayName || user.username }
+                        )}
                         className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600/50 ${
                           isSelected
                             ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'

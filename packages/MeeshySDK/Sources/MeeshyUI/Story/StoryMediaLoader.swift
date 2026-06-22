@@ -16,8 +16,9 @@ public final class StoryMediaLoader {
     private init() {
         // React to system memory pressure — drop the thumbnail cache and tear
         // down all prerolled players. Without this, a sustained tour through
-        // many stories accumulated up to 6 prerolled `AVQueuePlayer` instances
-        // plus 100 thumbnails (~30 MB) until the next manual `clear*` call.
+        // many stories accumulated up to `maxCachedPlayers` prerolled
+        // `AVQueuePlayer` instances plus 100 thumbnails (~30 MB) until the next
+        // manual `clear*` call.
         NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
             object: nil,
@@ -115,9 +116,13 @@ public final class StoryMediaLoader {
     /// Must run on MainActor since AVPlayer is not thread-safe.
     /// Waits for .readyToPlay status before calling preroll (required by AVPlayer).
     public func preloadVideoPlayer(url: URL) async -> AVPlayer {
+        let thermalState = ProcessInfo.processInfo.thermalState
         let item = AVPlayerItem(url: url)
-        item.preferredForwardBufferDuration = 2.0
-        item.preferredPeakBitRate = 1_500_000 // 1.5 Mbps — fast start, good quality
+        // SOTA buffer/bitrate, thermal-aware (WWDC19 #422). Offscreen preroll is
+        // always bitrate-capped; the cap tightens — and the decoded-ahead window
+        // shrinks — once the device heats up. Forward buffer was 2.0s (now ~1s).
+        item.preferredForwardBufferDuration = MediaThermalPolicy.forwardBufferDuration(thermalState: thermalState)
+        item.preferredPeakBitRate = MediaThermalPolicy.preferredPeakBitRate(isVisible: false, thermalState: thermalState)
         let player = AVQueuePlayer(playerItem: item)
         player.automaticallyWaitsToMinimizeStalling = false
 
@@ -169,7 +174,9 @@ public final class StoryMediaLoader {
     private var playerCache: [String: AVPlayer] = [:]
     /// Insertion order for FIFO eviction (Dictionary has no guaranteed order).
     private var playerCacheOrder: [String] = []
-    private let maxCachedPlayers = 6
+    /// SOTA short-video pool size: previous / current / next. Was 6 — six prerolled
+    /// `AVQueuePlayer`s each holding decoded frames was a major CPU/GPU/thermal load.
+    private let maxCachedPlayers = 3
 
     /// Preroll and cache a player for later retrieval via `cachedPlayer(for:)`.
     public func preloadAndCachePlayer(url: URL) async {

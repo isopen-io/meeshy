@@ -50,7 +50,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
               variant === 'ghost',
 
             // Destructive
-            'bg-[#C1292E] text-white hover:opacity-90 active:opacity-80 shadow-[var(--gp-shadow-md)] focus-visible:ring-[#C1292E]':
+            'bg-[var(--gp-error)] text-white hover:opacity-90 active:opacity-80 shadow-[var(--gp-shadow-md)] focus-visible:ring-[var(--gp-error)]':
               variant === 'destructive',
           },
 

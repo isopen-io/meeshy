@@ -37,6 +37,7 @@ function createMockPrisma() {
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      count: jest.fn(),
     },
     postComment: {
       findFirst: jest.fn(),
@@ -51,6 +52,7 @@ function createMockPrisma() {
     postBookmark: {
       upsert: jest.fn(),
       delete: jest.fn(),
+      findFirst: jest.fn(),
     },
     postView: {
       findUnique: jest.fn(),
@@ -816,6 +818,81 @@ describe('PostService', () => {
       );
     });
 
+    it('snapshots moodEmoji, content and audio when reposting a STATUS as STATUS', async () => {
+      // A STATUS is ephemeral (1h). A repost that merely referenced it would
+      // render empty once the source expires. The repost must carry its own
+      // copy of the mood + text + voice so it survives the original's TTL.
+      const original = makePost({
+        id: 'status-1',
+        type: PostType.STATUS,
+        visibility: 'PUBLIC',
+        moodEmoji: '🔥',
+        content: 'feeling great',
+        originalLanguage: 'en',
+        audioUrl: '/api/v1/attachments/file/mood.mp3',
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockResolvedValue(makePost({ id: 'status-repost' }));
+      prisma.post.update.mockResolvedValue(original);
+
+      const duplicateSpy = jest.spyOn(mediaService, 'duplicateMedia')
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-mood.mp3', filePath: 'snap/new-mood.mp3', fileName: 'new-mood.mp3', fileSize: 1000, mimeType: 'audio/mpeg' });
+
+      await service.repostPost('status-1', 'user-reposter', { targetType: PostType.STATUS });
+
+      expect(duplicateSpy).toHaveBeenCalledWith('/api/v1/attachments/file/mood.mp3');
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: PostType.STATUS,
+            moodEmoji: '🔥',
+            content: 'feeling great',
+            originalLanguage: 'en',
+            audioUrl: '/api/v1/attachments/file/new-mood.mp3',
+            repostOfId: 'status-1',
+          }),
+        })
+      );
+    });
+
+    it('duplicates media + storyEffects when reposting a STORY as STORY', async () => {
+      const original = makePost({
+        id: 'story-2',
+        type: PostType.STORY,
+        visibility: 'PUBLIC',
+        media: [
+          { id: 'm1', fileUrl: '/api/v1/attachments/file/s1.jpg', mimeType: 'image/jpeg', filePath: 'p/s1.jpg', fileName: 's1.jpg', originalName: 's1.jpg', fileSize: 1000 },
+        ],
+        storyEffects: { canvas: 'fx' },
+        audioUrl: '/api/v1/attachments/file/bg.mp3',
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockResolvedValue(makePost({ id: 'story-repost' }));
+      prisma.post.update.mockResolvedValue(original);
+
+      const duplicateSpy = jest.spyOn(mediaService, 'duplicateMedia')
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-s1.jpg', filePath: 'snap/new-s1.jpg', fileName: 'new-s1.jpg', fileSize: 1000, mimeType: 'image/jpeg' })
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-bg.mp3', filePath: 'snap/new-bg.mp3', fileName: 'new-bg.mp3', fileSize: 500, mimeType: 'audio/mpeg' });
+
+      await service.repostPost('story-2', 'user-reposter', { targetType: PostType.STORY });
+
+      expect(duplicateSpy).toHaveBeenCalledWith('/api/v1/attachments/file/s1.jpg');
+      expect(duplicateSpy).toHaveBeenCalledWith('/api/v1/attachments/file/bg.mp3');
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: PostType.STORY,
+            storyEffects: { canvas: 'fx' },
+            audioUrl: '/api/v1/attachments/file/new-bg.mp3',
+            repostOfId: 'story-2',
+            media: { create: expect.arrayContaining([
+              expect.objectContaining({ fileUrl: '/api/v1/attachments/file/new-s1.jpg' }),
+            ]) },
+          }),
+        })
+      );
+    });
+
     it('returns null when original is deleted', async () => {
       prisma.post.findFirst.mockResolvedValue(null);
       const result = await service.repostPost('deleted-1', 'user-reposter');
@@ -968,6 +1045,64 @@ describe('PostService', () => {
 
       expect((result as any).currentUserReactions).toEqual([]);
       expect(prisma.postReaction.findMany).not.toHaveBeenCalled();
+    });
+
+    // Bookmark / repost personal-state enrichment — mirrors PostFeedService so
+    // the post detail hydrates the SAME isBookmarkedByMe / isRepostedByMe as the
+    // feed and reel viewer. Without these, the detail always showed "non
+    // bookmarked" / "non reposted" even when the post was saved/reposted.
+
+    it('returns isBookmarkedByMe: true when the viewer has bookmarked the post', async () => {
+      const post = makePost();
+      prisma.post.findFirst.mockResolvedValue(post);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue([]);
+      prisma.postBookmark.findFirst.mockResolvedValue({ postId: 'post-1' });
+      prisma.post.count.mockResolvedValue(0);
+
+      const result = await service.getPostById('post-1', 'user-1');
+
+      expect((result as any).isBookmarkedByMe).toBe(true);
+      expect((result as any).isRepostedByMe).toBe(false);
+    });
+
+    it('returns isBookmarkedByMe: false when the viewer has not bookmarked the post', async () => {
+      const post = makePost();
+      prisma.post.findFirst.mockResolvedValue(post);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue([]);
+      prisma.postBookmark.findFirst.mockResolvedValue(null);
+      prisma.post.count.mockResolvedValue(0);
+
+      const result = await service.getPostById('post-1', 'user-1');
+
+      expect((result as any).isBookmarkedByMe).toBe(false);
+    });
+
+    it('returns isRepostedByMe: true when the viewer has reposted the post', async () => {
+      const post = makePost();
+      prisma.post.findFirst.mockResolvedValue(post);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue([]);
+      prisma.postBookmark.findFirst.mockResolvedValue(null);
+      prisma.post.count.mockResolvedValue(1);
+
+      const result = await service.getPostById('post-1', 'user-1');
+
+      expect((result as any).isRepostedByMe).toBe(true);
+    });
+
+    it('returns bookmark/repost flags false for anonymous read without querying them', async () => {
+      const post = makePost();
+      prisma.post.findFirst.mockResolvedValue(post);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      const result = await service.getPostById('post-1', undefined);
+
+      expect((result as any).isBookmarkedByMe).toBe(false);
+      expect((result as any).isRepostedByMe).toBe(false);
+      expect(prisma.postBookmark.findFirst).not.toHaveBeenCalled();
+      expect(prisma.post.count).not.toHaveBeenCalled();
     });
   });
 
@@ -1175,7 +1310,8 @@ describe('PostCommentService', () => {
           data: { commentCount: { increment: 1 } },
         }),
       );
-      expect(result).toEqual(createdComment);
+      // `media: []` — addComment now returns the (possibly empty) comment media.
+      expect(result).toEqual({ ...createdComment, media: [] });
     });
 
     it('throws PARENT_NOT_FOUND when parentId does not exist', async () => {
@@ -1219,7 +1355,7 @@ describe('PostCommentService', () => {
           data: { replyCount: { increment: 1 } },
         }),
       );
-      expect(result).toEqual(reply);
+      expect(result).toEqual({ ...reply, media: [] });
     });
   });
 

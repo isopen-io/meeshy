@@ -191,7 +191,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({
           success: false,
           error: 'Données invalides',
-          details: error.errors
+          details: error.issues
         });
       }
       if (error instanceof Error && error.message === 'Token already exists') {

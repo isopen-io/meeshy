@@ -43,7 +43,9 @@ type PrismaOpts = {
   reports?: AnyRecord[];
   reportsCount?: number;
   participants?: AnyRecord[];
+  participantsCount?: number;
   messages?: AnyRecord[];
+  conversationExists?: boolean;
 };
 
 function createMockPrisma(opts: PrismaOpts) {
@@ -54,6 +56,7 @@ function createMockPrisma(opts: PrismaOpts) {
     conversation: {
       findMany: jest.fn(async () => opts.conversations ?? []),
       count: jest.fn(async () => opts.total ?? (opts.conversations?.length ?? 0)),
+      findUnique: jest.fn(async () => (opts.conversationExists === false ? null : { id: 'conv-1' })),
     },
     postMedia: {
       findMany: jest.fn(async () => opts.postMedia ?? []),
@@ -69,6 +72,7 @@ function createMockPrisma(opts: PrismaOpts) {
     },
     participant: {
       findMany: jest.fn(async () => opts.participants ?? []),
+      count: jest.fn(async () => opts.participantsCount ?? (opts.participants?.length ?? 0)),
     },
     message: {
       findMany: jest.fn(async () => opts.messages ?? []),
@@ -136,7 +140,10 @@ describe('GET /admin/users/:userId/conversations', () => {
           communityId: null,
           createdAt: new Date('2026-01-01').toISOString(),
           lastMessageAt: new Date('2026-06-01').toISOString(),
-          participants: [{ role: 'moderator', joinedAt: new Date('2026-01-02').toISOString(), isActive: true, nickname: null }],
+          participants: [
+            { id: 'pt-target', userId: TARGET_ID, type: 'user', displayName: 'Target', avatar: null, role: 'moderator', joinedAt: new Date('2026-01-02').toISOString(), isActive: true, nickname: null, user: { id: TARGET_ID, username: 'target', displayName: 'Target', avatar: null } },
+            { id: 'pt-other', userId: 'other-user', type: 'user', displayName: 'Other', avatar: null, role: 'member', joinedAt: new Date('2026-01-03').toISOString(), isActive: true, nickname: null, user: { id: 'other-user', username: 'other', displayName: 'Other', avatar: null } },
+          ],
         },
       ],
       total: 7,
@@ -152,14 +159,56 @@ describe('GET /admin/users/:userId/conversations', () => {
     const body = res.json();
     expect(body.success).toBe(true);
     expect(body.data).toHaveLength(1);
-    expect(body.data[0].membership).toEqual({
-      role: 'moderator',
-      joinedAt: expect.any(String),
-      isActive: true,
-      nickname: null,
-    });
-    expect(body.data[0].participants).toBeUndefined();
+    expect(body.data[0].membership).toMatchObject({ userId: TARGET_ID, role: 'moderator' });
+    // participants are now surfaced (preview for direct display / group modal)
+    expect(body.data[0].participants).toHaveLength(2);
     expect(body.pagination).toMatchObject({ total: 7, offset: 0, limit: 20, hasMore: true });
+    await app.close();
+  });
+});
+
+describe('GET /admin/conversations/:conversationId/participants', () => {
+  it('returns 404 when the conversation does not exist', async () => {
+    const app = await buildApp(createMockPrisma({ conversationExists: false }), 'ADMIN');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/conversations/conv-1/participants',
+      headers: { authorization: 'Bearer x' },
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('returns the paginated members of a conversation', async () => {
+    const prisma = createMockPrisma({
+      participants: [
+        { id: 'pt1', userId: 'u1', type: 'user', displayName: 'Alice', avatar: null, role: 'admin', isActive: true, isOnline: false, joinedAt: new Date('2026-01-01').toISOString(), nickname: null, user: { id: 'u1', username: 'alice', displayName: 'Alice', avatar: null } },
+      ],
+      participantsCount: 12,
+    });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/conversations/conv-1/participants?offset=0&limit=30',
+      headers: { authorization: 'Bearer x' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toMatchObject({ id: 'pt1', role: 'admin' });
+    expect(body.pagination).toMatchObject({ total: 12, hasMore: true });
+    await app.close();
+  });
+
+  it('returns 403 for a role without canViewUsers (USER)', async () => {
+    const app = await buildApp(createMockPrisma({}), 'USER');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/conversations/conv-1/participants',
+      headers: { authorization: 'Bearer x' },
+    });
+    expect(res.statusCode).toBe(403);
     await app.close();
   });
 });

@@ -195,7 +195,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({
           success: false,
           error: 'Invalid request data',
-          details: error.errors.map(e => ({ field: e.path.join('.'), message: e.message }))
+          details: error.issues.map(e => ({ field: e.path.join('.'), message: e.message }))
         });
       }
 
@@ -315,7 +315,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({
           success: false,
           error: 'Invalid request data',
-          details: error.errors.map(e => ({ field: e.path.join('.'), message: e.message }))
+          details: error.issues.map(e => ({ field: e.path.join('.'), message: e.message }))
         });
       }
 
@@ -550,7 +550,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({
           success: false,
           error: 'validation_error',
-          details: error.errors.map(e => ({ field: e.path.join('.'), message: e.message }))
+          details: error.issues.map(e => ({ field: e.path.join('.'), message: e.message }))
         });
       }
       fastify.log.error({ err: error }, '[PhonePasswordReset] Error in phone lookup');
@@ -636,7 +636,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({
           success: false,
           error: 'validation_error',
-          details: error.errors.map(e => ({ field: e.path.join('.'), message: e.message }))
+          details: error.issues.map(e => ({ field: e.path.join('.'), message: e.message }))
         });
       }
       fastify.log.error({ err: error }, '[PhonePasswordReset] Error in identity verification');
@@ -716,7 +716,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({
           success: false,
           error: 'validation_error',
-          details: error.errors.map(e => ({ field: e.path.join('.'), message: e.message }))
+          details: error.issues.map(e => ({ field: e.path.join('.'), message: e.message }))
         });
       }
       fastify.log.error({ err: error }, '[PhonePasswordReset] Error in code verification');
@@ -781,7 +781,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({
           success: false,
           error: 'validation_error',
-          details: error.errors.map(e => ({ field: e.path.join('.'), message: e.message }))
+          details: error.issues.map(e => ({ field: e.path.join('.'), message: e.message }))
         });
       }
       fastify.log.error({ err: error }, '[PhonePasswordReset] Error in code resend');

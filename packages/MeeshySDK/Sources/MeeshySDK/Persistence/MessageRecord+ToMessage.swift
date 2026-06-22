@@ -154,6 +154,7 @@ extension MessageRecord {
             readByAllAt: readByAllAt,
             deliveredCount: deliveredCount,
             readCount: readCount,
+            recipientCount: recipientCount,
             cachedTimeString: cachedTimeString,
             callSummary: uiCallSummary
         )

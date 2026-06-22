@@ -26,14 +26,15 @@ struct CacheCoordinatorReelFeedCache: ReelFeedCacheReading {
 }
 
 /// Drives the immersive reel pager: holds the ordered list of reel posts,
-/// the cursor for chronological pagination, the currently-visible reel, and the
+/// the cursor for the affinity thread, the currently-visible reel, and the
 /// optimistic like / bookmark state.
 ///
-/// Reels are derived from the same `/posts/feed` contract as the feed (no
-/// dedicated endpoint): the view model pages through the feed and keeps only
-/// the posts `FeedPost.isReel` classifies as reels. When the server later sorts
-/// the feed by attention/watch-time, the reel pager benefits automatically — the
-/// pagination contract is unchanged.
+/// The pager opens instantly from whatever reels the feed already loaded
+/// (cache-first seed), then pages the **affinity discovery thread** via
+/// `getReels(seedReelId:)` — the dedicated `/posts/feed/reels` endpoint that
+/// ranks reels by affinity to the entry reel (`seedReelId`), excludes the
+/// viewer's own reels, and carries `isBookmarkedByMe`. A fresh launch (no entry
+/// reel) pages the seedless « Pour toi » thread.
 @MainActor
 final class ReelsViewModel: ObservableObject {
     @Published private(set) var reels: [FeedPost] = []
@@ -55,15 +56,26 @@ final class ReelsViewModel: ObservableObject {
     @Published private(set) var bookmarkedIds: Set<String> = []
 
     private var likeDelta: [String: Int] = [:]
+    /// Optimistic bookmark-count bump per post id — same role as `likeDelta`.
+    /// Purged when the canonical absolute count arrives on `post:bookmarked`.
+    private var bookmarkDelta: [String: Int] = [:]
     /// Optimistic comment-count bump per post id (applied on top of the server
     /// count) so the reel's comment counter rises the instant a comment is sent.
     @Published private var commentDelta: [String: Int] = [:]
     private var heartInFlight: Set<String> = []
     private var bookmarkInFlight: Set<String> = []
+    /// Reels whose impression (reach) has already been recorded this session —
+    /// one impression per reel per session, mirroring the main feed's
+    /// `recordedImpressionIds`. The reel's TOTAL view (`postOpenCount`) is
+    /// counted separately by the engagement pipeline (full-screen dwell).
+    private var impressionRecordedIds: Set<String> = []
 
     private var nextCursor: String?
     private var hasMore = true
     private var isFetching = false
+    /// Le réel d'entrée (réel touché dans le feed) qui sème le thread d'affinité.
+    /// `nil` pour un lancement « fresh » (long-press) → thread « Pour toi ».
+    private var seedReelId: String?
     private var coldStartTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
     private let service: PostServiceProviding
@@ -80,6 +92,7 @@ final class ReelsViewModel: ObservableObject {
         self.service = service
         self.cache = cache
         subscribeToLikeEvents()
+        subscribeToBookmarkEvents()
     }
 
     /// S'abonne à l'événement CANONIQUE absolu `post:liked`/`post:unliked` (le ❤️
@@ -106,6 +119,33 @@ final class ReelsViewModel: ObservableObject {
         if liked { likedIds.insert(postId) } else { likedIds.remove(postId) }
     }
 
+    /// S'abonne à `post:bookmarked`. Le favori est PERSONNEL : le gateway n'émet
+    /// l'événement que vers la feed room de l'utilisateur (`emitToUser`), donc tout
+    /// événement reçu est notre propre action (depuis n'importe quelle session/vue).
+    /// On réconcilie l'état local — idempotent avec l'optimistic update du toggle —
+    /// ET le flag sur le modèle, pour que la persistance survive à la fermeture/réouverture.
+    private func subscribeToBookmarkEvents() {
+        SocialSocketManager.shared.postBookmarked
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.applyServerBookmark($0.postId, bookmarked: $0.bookmarked, bookmarkCount: $0.bookmarkCount) }
+            .store(in: &cancellables)
+    }
+
+    /// Canonical reconciliation mirroring `applyServerLike` : the absolute
+    /// `bookmarkCount` (when provided by the gateway) makes authority, so we set
+    /// the model count and purge the optimistic delta. The icon is confirmed via
+    /// `bookmarkedIds`. A nil count (older gateway) only reconciles the icon.
+    private func applyServerBookmark(_ postId: String, bookmarked: Bool, bookmarkCount: Int?) {
+        if bookmarked { bookmarkedIds.insert(postId) } else { bookmarkedIds.remove(postId) }
+        if let index = reels.firstIndex(where: { $0.id == postId }) {
+            reels[index].isBookmarkedByMe = bookmarked
+            if let count = bookmarkCount {
+                reels[index].bookmarkCount = count
+                bookmarkDelta[postId] = nil
+            }
+        }
+    }
+
     /// À appeler quand le viewer se ferme : quitte la post room du réel actif.
     func leaveActivePostRoom() {
         if let id = currentId { SocialSocketManager.shared.leavePostRoom(postId: id) }
@@ -127,6 +167,8 @@ final class ReelsViewModel: ObservableObject {
     /// instantly (cache-first), then cold-starts only when the seed is empty
     /// (long-press launch with no feed context).
     func seed(posts: [FeedPost], startId: String?) {
+        // The entry reel seeds the affinity thread for all subsequent paging.
+        seedReelId = startId
         let seeded = FeedPost.reels(from: posts)
         if !seeded.isEmpty {
             apply(reels: seeded, startId: startId)
@@ -180,7 +222,10 @@ final class ReelsViewModel: ObservableObject {
         }
         do {
             let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-            let response = try await service.getFeed(cursor: reset ? nil : nextCursor, limit: 20)
+            // Thread d'affinité dédié (exclut le seed + les réels du viewer, porte
+            // `isBookmarkedByMe`). `FeedPost.reels` reste un garde-fou : la réponse
+            // est déjà `type: REEL`, on filtre par sécurité.
+            let response = try await service.getReels(seedReelId: seedReelId, cursor: reset ? nil : nextCursor, limit: 20)
             let mapped = response.data.map { $0.toFeedPost(preferredLanguages: preferred) }
             let newReels = FeedPost.reels(from: mapped)
             if reset {
@@ -217,6 +262,12 @@ final class ReelsViewModel: ObservableObject {
 
     func likeCount(_ post: FeedPost) -> Int {
         max(0, post.likes + (likeDelta[post.id] ?? 0))
+    }
+
+    /// Bookmark count including the optimistic delta from a just-toggled bookmark
+    /// (reconciled to the absolute server count on `post:bookmarked`).
+    func bookmarkCount(_ post: FeedPost) -> Int {
+        max(0, post.bookmarkCount + (bookmarkDelta[post.id] ?? 0))
     }
 
     /// Comment count including the optimistic bump from a just-sent comment.
@@ -294,27 +345,61 @@ final class ReelsViewModel: ObservableObject {
         guard !bookmarkInFlight.contains(id) else { return }
         bookmarkInFlight.insert(id)
         let wasBookmarked = bookmarkedIds.contains(id)
-        if wasBookmarked { bookmarkedIds.remove(id) } else { bookmarkedIds.insert(id) }
-        if !wasBookmarked { EngagementTracker.shared.recordAction(.bookmarked, surface: .reels) }
+        if wasBookmarked {
+            bookmarkedIds.remove(id)
+            bookmarkDelta[id] = (bookmarkDelta[id] ?? 0) - 1
+        } else {
+            bookmarkedIds.insert(id)
+            bookmarkDelta[id] = (bookmarkDelta[id] ?? 0) + 1
+            EngagementTracker.shared.recordAction(.bookmarked, surface: .reels)
+        }
         HapticFeedback.light()
         Task {
             do {
                 if wasBookmarked { try await service.removeBookmark(postId: id) }
                 else { try await service.bookmark(postId: id) }
             } catch {
-                if wasBookmarked { bookmarkedIds.insert(id) } else { bookmarkedIds.remove(id) }
+                // Rollback both the icon and the optimistic count.
+                if wasBookmarked {
+                    bookmarkedIds.insert(id)
+                    bookmarkDelta[id] = (bookmarkDelta[id] ?? 0) + 1
+                } else {
+                    bookmarkedIds.remove(id)
+                    bookmarkDelta[id] = (bookmarkDelta[id] ?? 0) - 1
+                }
             }
             bookmarkInFlight.remove(id)
         }
     }
 
-    func share(_ post: FeedPost) {
+    /// Records a share on `post` and mints a **deduplicated** tracking link —
+    /// aligned with the feed's `sharePost(_:generateLink:)`. Returns the absolute
+    /// `meeshy.me/l/<token>` short URL so the caller can present the system share
+    /// sheet, or `nil` on failure (the caller falls back to the raw post URL).
+    ///
+    /// Replaces the old plain `share(postId:)` path, which incremented the server
+    /// `shareCount` on EVERY tap with no dedup — re-taps inflated the counter even
+    /// though nothing new was shared (a reel showed 23 shares for 4 unique views).
+    /// The `generateLink: true` path upserts one link per (post, sharer): the
+    /// counter rises at most once per sharer, exactly like the feed.
+    func shareLink(for post: FeedPost) async -> String? {
         EngagementTracker.shared.recordAction(.shared, surface: .reels)
-        HapticFeedback.light()
-        Task { try? await service.share(postId: post.id) }
+        do {
+            let result = try await service.share(postId: post.id, platform: "system", generateLink: true)
+            return result.shortUrl
+        } catch {
+            return nil
+        }
     }
 
     func recordView(_ id: String) {
+        // Unique view (viewCount, deduped server-side) — saved, not displayed.
         Task { try? await service.viewPost(postId: id, duration: nil) }
+        // Impression (reach) — the reel appeared on screen. Once per reel per
+        // session. `source: "feed"` bumps impressionCount only (the reel's total
+        // view comes from the engagement pipeline, not from this appearance).
+        if impressionRecordedIds.insert(id).inserted {
+            Task { try? await service.recordImpression(postId: id, source: "feed") }
+        }
     }
 }

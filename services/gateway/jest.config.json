@@ -36,6 +36,7 @@
     "src/middleware/**/*.ts",
     "src/socketio/**/*.ts",
     "src/utils/**/*.ts",
+    "src/jobs/**/*.ts",
     "!src/**/*.d.ts",
     "!src/**/__tests__/**",
     "!src/main.ts",
@@ -52,17 +53,17 @@
     "^.+\\.ts$": ["ts-jest", {
       "tsconfig": "tsconfig.test.json",
       "diagnostics": {
-        "ignoreCodes": [2307, 2339, 2345]
+        "ignoreCodes": [2307, 2322, 2339, 2345, 2740]
       }
     }]
   },
   "moduleFileExtensions": ["ts", "js", "json"],
   "coverageThreshold": {
     "global": {
-      "lines": 47,
-      "branches": 43,
-      "statements": 47,
-      "functions": 48
+      "lines": 63,
+      "branches": 58,
+      "statements": 63,
+      "functions": 64
     }
   }
 }

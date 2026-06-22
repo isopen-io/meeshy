@@ -77,6 +77,13 @@
       "position": "Position {label}",
       "distributionNote": "Ce graphique montre la distribution des performances du top {count} classé par rang.",
       "curveNote": "La courbe descendante indique comment les valeurs diminuent à travers les positions."
+    },
+    "conversationType": {
+      "direct": "Directe",
+      "group": "Groupe",
+      "public": "Publique",
+      "broadcast": "Diffusion",
+      "unknown": "Inconnu"
     }
   },
   "scanLog": {
@@ -295,6 +302,7 @@
       "fieldCooldown": "Cooldown (minutes)",
       "cooldownHint": "Délai avant de pouvoir re-piocher ce topic sur la même conversation.",
       "fieldActive": "Actif (pris en compte par le strategist)",
+      "close": "Fermer",
       "cancel": "Annuler",
       "saving": "Sauvegarde…",
       "save": "Sauvegarder",
@@ -347,6 +355,46 @@
       "added": "Ajouté",
       "noResults": "Aucun utilisateur trouvé",
       "minChars": "Entrez au moins 2 caractères"
+    },
+    "conversationsTab": {
+      "deleteConfirm": "Supprimer cette configuration agent ?",
+      "title": "Configurations Agent",
+      "count": "{count} conversations configurées",
+      "searchPlaceholder": "Rechercher...",
+      "configure": "Configurer",
+      "empty": "Aucune conversation configurée pour l'agent",
+      "viewMessages": "Voir les messages agent",
+      "triggerScheduler": "Planificateur de triggers",
+      "columns": {
+        "conversation": "Conversation",
+        "status": "Statut",
+        "triggers": "Triggers",
+        "controlled": "Contrôlés",
+        "messages": "Messages",
+        "confidence": "Confiance",
+        "lastResponse": "Dernière rép.",
+        "actions": "Actions"
+      }
+    },
+    "conversationPicker": {
+      "searchPlaceholder": "Rechercher par titre, ID ou identifiant...",
+      "searching": "Recherche dans les salons...",
+      "untitled": "Sans titre",
+      "noResults": "Aucune conversation trouvée pour « {term} »",
+      "minChars": "Entrez au moins 2 caractères pour rechercher"
+    },
+    "rolesSection": {
+      "empty": "Aucun rôle observé pour cette conversation",
+      "origin": {
+        "observed": "Observé",
+        "archetype": "Archétype",
+        "hybrid": "Hybride"
+      },
+      "locked": "Verrouillé",
+      "unlock": "Déverrouiller",
+      "messagesAnalyzed": "{count} msg analysés",
+      "confidence": "Confiance",
+      "assignArchetype": "Assigner un archétype..."
     }
   },
   "agentLive": {
@@ -1710,6 +1758,8 @@
     "systemActive": "Actif"
   },
   "usersDetail": {
+    "viewMembers": "Voir les membres",
+    "membersModalTitle": "Membres",
     "mediaTitle": "Médias",
     "loadingMedia": "Chargement des médias...",
     "noMedia": "Aucun média",

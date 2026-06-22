@@ -42,6 +42,13 @@ struct CallView: View {
 
     var body: some View {
         ZStack {
+            // PiP système — ancre invisible plein écran : `sourceView` d'où la
+            // fenêtre PiP émerge. `attachSystemPiP` se gate sur canActivateSystemPiP
+            // (no-op hors appel vidéo), donc inoffensive ici en permanence.
+            PiPSourceAnchor()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
+
             // Background: full-screen LOCAL self-preview ONLY while waiting to
             // connect (ringing/offering/connecting) — the user sees themselves
             // before the peer's video arrives. Once `.connected`/`.reconnecting`,
@@ -148,6 +155,12 @@ struct CallView: View {
         }
         .ignoresSafeArea()
         .statusBarHidden(true)
+        // L'écran d'appel est blanc-sur-fond-sombre fixe (cf. callBackground).
+        // On épingle aussi le colorScheme en .dark pour que le verre et les
+        // matériaux (.ultraThinMaterial, glassEffect) rendent leur variante
+        // sombre : sinon ils virent au clair en mode Light et les contrôles/
+        // textes blancs deviennent illisibles (white-on-white).
+        .environment(\.colorScheme, .dark)
         .onAppear {
             startPulseAnimation()
         }
@@ -210,7 +223,7 @@ struct CallView: View {
 
             // Name
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
-                .font(.system(.title, design: .rounded).weight(.bold))
+                .font(.system(.title, design: .rounded).weight(.semibold))
                 .foregroundColor(.white)
                 .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
                 .padding(.bottom, 8)
@@ -248,7 +261,7 @@ struct CallView: View {
                 .padding(.bottom, 24)
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
-                .font(.system(.title, design: .rounded).weight(.bold))
+                .font(.system(.title, design: .rounded).weight(.semibold))
                 .foregroundColor(.white)
                 .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
                 .padding(.bottom, 8)
@@ -392,7 +405,7 @@ struct CallView: View {
                 .padding(.bottom, 8)
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
-                .font(.system(.title, design: .rounded).weight(.bold))
+                .font(.system(.title, design: .rounded).weight(.semibold))
                 .foregroundColor(theme.textPrimary)
 
             // Duration + audit P2-iOS-10 connection quality indicator
@@ -785,7 +798,7 @@ struct CallView: View {
                 .opacity(0.6)
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
-                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .font(.system(size: 24, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary.opacity(0.7))
 
             Text(endReasonText(reason))
@@ -814,6 +827,21 @@ struct CallView: View {
     /// row when it fits the width, and only falls back to a horizontal scroll on
     /// narrow widths / large Dynamic Type — so the camera-flip and other controls
     /// are evenly centred rather than left-anchored in a scroll view.
+    /// Ancre invisible servant de `sourceView` au PiP système (le rect d'où la
+    /// fenêtre flottante émerge). Enregistrée auprès de `CallManager` à chaque
+    /// apparition/mise à jour ; `attachSystemPiP` est idempotent + auto-gated.
+    private struct PiPSourceAnchor: UIViewRepresentable {
+        func makeUIView(context: Context) -> UIView {
+            let view = UIView()
+            view.backgroundColor = .clear
+            view.isUserInteractionEnabled = false
+            return view
+        }
+        func updateUIView(_ uiView: UIView, context: Context) {
+            CallManager.shared.attachSystemPiP(sourceView: uiView)
+        }
+    }
+
     private var controlBar: some View {
         // Adjacent glass circles must share a container (glass can't sample
         // glass). `AdaptiveGlassContainer` (SDK Compatibility) is a GlassEffect-
@@ -893,6 +921,23 @@ struct CallView: View {
                     : (callManager.isVideoEnabled ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main) : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main))
             ) {
                 callManager.toggleVideo()
+            }
+
+            // PiP système — réduire en fenêtre vidéo flottante. Visible seulement
+            // si éligible (appel vidéo + track distant + caméra distante allumée +
+            // appareil compatible). En audio, le « réduire » reste le chevron →
+            // pilule in-app, pas une fenêtre vidéo.
+            if callManager.canActivateSystemPiP {
+                callControlButton(
+                    icon: "pip.enter",
+                    color: .white,
+                    bgColor: .white,
+                    isActive: callManager.isSystemPiPActive,
+                    caption: String(localized: "call.control.pip.caption", defaultValue: "PiP", bundle: .main),
+                    label: String(localized: "call.control.pip", defaultValue: "Réduire en Picture-in-Picture", bundle: .main)
+                ) {
+                    callManager.startSystemPiP()
+                }
             }
 
             // End call
@@ -1085,7 +1130,7 @@ struct CallView: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: "phone.down.fill")
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.system(size: 24, weight: .medium))
                     .foregroundColor(.white)
                     .endCallGlass(diameter: 56)
 

@@ -649,6 +649,14 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public var readByAllAt: Date?
     public var deliveredCount: Int = 0
     public var readCount: Int = 0
+    /// Authoritative denominator for the all-or-nothing delivery indicator: the
+    /// server's count of ACTIVE recipients (conversation participants excluding
+    /// this message's sender), projected per message by the gateway. `0` means
+    /// the server did not provide it (older payload, socket `message:new`, or an
+    /// optimistic local row) — the display then falls back to `memberCount − 1`.
+    /// Using the server value removes the client's dependency on a possibly
+    /// stale local membership count.
+    public var recipientCount: Int = 0
 
     // Pre-computed "HH:mm" string set at ingestion time — avoids DateFormatter in bubble body
     public var cachedTimeString: String?
@@ -657,6 +665,13 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// (`messageSource == .system`). Drives the rich, actionable call bubble.
     /// `nil` for ordinary messages.
     public var callSummary: CallSummaryMetadata?
+
+    /// `[rawURL: token]` outbound-link tracking map carried from the gateway
+    /// (`APIMessage.trackedLinkMap`). Empty when the message has no tracked
+    /// links. Consumed by the bubble renderer (tappable `/l/<token>` rewrite)
+    /// and the embedded-video façade destination. Backward-compatible: cached
+    /// rows predating the field decode to `[:]`.
+    public var trackedLinkMap: [String: String] = [:]
 
     public enum DeliveryStatus: String, Codable, Sendable {
         case sending    // optimistic, not yet sent
@@ -713,9 +728,10 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 senderName: String? = nil, senderUsername: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil, senderUserId: String? = nil,
                 deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false,
                 deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
-                deliveredCount: Int = 0, readCount: Int = 0,
+                deliveredCount: Int = 0, readCount: Int = 0, recipientCount: Int = 0,
                 cachedTimeString: String? = nil,
-                callSummary: CallSummaryMetadata? = nil) {
+                callSummary: CallSummaryMetadata? = nil,
+                trackedLinkMap: [String: String] = [:]) {
         self.id = id; self.clientMessageId = clientMessageId
         self.conversationId = conversationId; self.senderId = senderId
         self.content = content
@@ -733,8 +749,10 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.deliveryStatus = deliveryStatus; self.isMe = isMe
         self.deliveredToAllAt = deliveredToAllAt; self.readByAllAt = readByAllAt
         self.deliveredCount = deliveredCount; self.readCount = readCount
+        self.recipientCount = recipientCount
         self.cachedTimeString = cachedTimeString
         self.callSummary = callSummary
+        self.trackedLinkMap = trackedLinkMap
         self.effects = effects
     }
 
@@ -748,9 +766,10 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case replyTo, forwardedFrom
         case senderName, senderUsername, senderColor, senderAvatarURL, senderUserId
         case deliveryStatus, isMe
-        case deliveredToAllAt, readByAllAt, deliveredCount, readCount
+        case deliveredToAllAt, readByAllAt, deliveredCount, readCount, recipientCount
         case cachedTimeString
         case callSummary
+        case trackedLinkMap
         // Legacy keys for migration from old cached data
         case isViewOnce, isBlurred
     }
@@ -797,10 +816,13 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         readByAllAt = try c.decodeIfPresent(Date.self, forKey: .readByAllAt)
         deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount) ?? 0
         readCount = try c.decodeIfPresent(Int.self, forKey: .readCount) ?? 0
+        recipientCount = try c.decodeIfPresent(Int.self, forKey: .recipientCount) ?? 0
         cachedTimeString = try c.decodeIfPresent(String.self, forKey: .cachedTimeString)
         // Tolerant: a malformed / future-shape call-summary blob must not fail
         // the whole cached-message decode (mirrors the APIMessage path).
         callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .callSummary)
+        // Backward-compatible: rows cached before this field decode to `[:]`.
+        trackedLinkMap = try c.decodeIfPresent([String: String].self, forKey: .trackedLinkMap) ?? [:]
         // Legacy migration: merge old isViewOnce/isBlurred bools into effects
         if let legacyViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce), legacyViewOnce {
             effects.flags.insert(.viewOnce)
@@ -852,8 +874,12 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encodeIfPresent(readByAllAt, forKey: .readByAllAt)
         try c.encode(deliveredCount, forKey: .deliveredCount)
         try c.encode(readCount, forKey: .readCount)
+        try c.encode(recipientCount, forKey: .recipientCount)
         try c.encodeIfPresent(cachedTimeString, forKey: .cachedTimeString)
         try c.encodeIfPresent(callSummary, forKey: .callSummary)
+        if !trackedLinkMap.isEmpty {
+            try c.encode(trackedLinkMap, forKey: .trackedLinkMap)
+        }
     }
 
     public var text: String { content }
@@ -926,6 +952,30 @@ public struct MeeshyImageVariant: Codable, Sendable, Hashable {
     }
 }
 
+/// The current user's OWN playback progress for a media attachment, surfaced
+/// per-request by the gateway (mirror of `currentUserReactions`). Lets a client
+/// seed the in-bubble waveform tint (audio) / progress bar (video) on load,
+/// synced across devices. `nil` = the current user never consumed this media.
+/// @see CurrentUserAttachmentConsumption in packages/shared/types/attachment.ts
+public struct MeeshyMediaConsumption: Codable, Sendable, Equatable {
+    public var lastPlayPositionMs: Int?
+    public var listenedComplete: Bool
+    public var lastWatchPositionMs: Int?
+    public var watchedComplete: Bool
+
+    public init(
+        lastPlayPositionMs: Int? = nil,
+        listenedComplete: Bool = false,
+        lastWatchPositionMs: Int? = nil,
+        watchedComplete: Bool = false
+    ) {
+        self.lastPlayPositionMs = lastPlayPositionMs
+        self.listenedComplete = listenedComplete
+        self.lastWatchPositionMs = lastWatchPositionMs
+        self.watchedComplete = watchedComplete
+    }
+}
+
 public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public let id: String
     public var messageId: String?
@@ -978,6 +1028,27 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     // these fields instantly without waiting for a REST round-trip.
     public var transcription: EmbeddedTranscription?
     public var audioTranslations: [String: EmbeddedAudioTranslation]?
+
+    // ===== CONSUMPTION AGGREGATES (all-or-nothing) =====
+    // Server-computed denormalized state surfaced in the message-info sheet:
+    // who has viewed / downloaded / listened / watched this attachment. The
+    // `…ByAllAt` markers are stamped by the gateway only once EVERY active
+    // recipient has completed that action (WhatsApp-style). Optional so old
+    // cached `attachmentsJson` blobs (written before these shipped) decode to
+    // nil. Vit dans attachmentsJson (Codable synthétisé), pas de colonne GRDB.
+    public var deliveredToAllAt: Date?
+    public var viewedByAllAt: Date?
+    public var downloadedByAllAt: Date?
+    public var listenedByAllAt: Date?
+    public var watchedByAllAt: Date?
+    public var viewedCount: Int?
+    public var downloadedCount: Int?
+    public var consumedCount: Int?
+
+    // ===== CURRENT-USER CONSUMPTION (per-request, cross-device sync) =====
+    /// The current user's own playback progress (position + completion).
+    /// Optional so old cached `attachmentsJson` blobs decode to nil.
+    public var currentUserConsumption: MeeshyMediaConsumption?
 
     /// Lightweight Codable transcription embedded in attachmentsJson.
     public struct EmbeddedTranscription: Codable, Sendable {
@@ -1038,7 +1109,12 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
                 audioTranslations: [String: EmbeddedAudioTranslation]? = nil,
                 imageVariants: [MeeshyImageVariant]? = nil,
                 reactionSummary: [String: Int]? = nil,
-                currentUserReactions: [String]? = nil) {
+                currentUserReactions: [String]? = nil,
+                deliveredToAllAt: Date? = nil, viewedByAllAt: Date? = nil,
+                downloadedByAllAt: Date? = nil, listenedByAllAt: Date? = nil,
+                watchedByAllAt: Date? = nil, viewedCount: Int? = nil,
+                downloadedCount: Int? = nil, consumedCount: Int? = nil,
+                currentUserConsumption: MeeshyMediaConsumption? = nil) {
         self.id = id; self.messageId = messageId; self.fileName = fileName; self.originalName = originalName
         self.mimeType = mimeType; self.fileSize = fileSize; self.filePath = filePath; self.fileUrl = fileUrl
         self.title = title; self.alt = alt; self.caption = caption
@@ -1055,6 +1131,15 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
         self.imageVariants = imageVariants
         self.reactionSummary = reactionSummary
         self.currentUserReactions = currentUserReactions
+        self.deliveredToAllAt = deliveredToAllAt
+        self.viewedByAllAt = viewedByAllAt
+        self.downloadedByAllAt = downloadedByAllAt
+        self.listenedByAllAt = listenedByAllAt
+        self.watchedByAllAt = watchedByAllAt
+        self.viewedCount = viewedCount
+        self.downloadedCount = downloadedCount
+        self.consumedCount = consumedCount
+        self.currentUserConsumption = currentUserConsumption
     }
 
     public static func image(color: String = "4ECDC4") -> MeeshyMessageAttachment {

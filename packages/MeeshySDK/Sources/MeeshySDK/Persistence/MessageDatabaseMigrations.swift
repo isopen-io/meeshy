@@ -264,5 +264,16 @@ public enum MessageDatabaseMigrations {
                 t.add(column: "callSummaryJson", .blob)
             }
         }
+
+        // Server's authoritative active-recipient denominator for the
+        // all-or-nothing delivery indicator (active participants excluding the
+        // sender). NOT NULL DEFAULT 0 keeps existing rows valid and matches
+        // `MessageRecord.recipientCount` (0 = server did not provide it → the
+        // display falls back to `memberCount − 1`).
+        migrator.registerMigration("messages_recipient_count") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "recipientCount", .integer).notNull().defaults(to: 0)
+            }
+        }
     }
 }

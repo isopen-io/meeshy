@@ -6,6 +6,7 @@ import MeeshySDK
 public enum AvatarContext: Sendable {
     // Stories
     case storyTray              // 88pt (doubled 2026-05-27 — story trail = primary CTA)
+    case storyTrayCompact       // 44pt (pinned mini-trail revealed in the collapsed header)
     case storyViewer            // 44pt
 
     // Feed
@@ -42,7 +43,7 @@ public enum AvatarContext: Sendable {
     public var size: CGFloat {
         switch self {
         case .storyTray: return 88  // doubled 2026-05-27 (user request — trail = primary CTA)
-        case .storyViewer, .conversationHeaderCollapsed,
+        case .storyTrayCompact, .storyViewer, .conversationHeaderCollapsed,
              .conversationHeaderExpanded, .postAuthor, .userListItem, .notification:
             return 44
         case .conversationList: return 52
@@ -106,7 +107,7 @@ public enum AvatarContext: Sendable {
     /// reconnaissable comme story non lue) sans animation GPU continue.
     public var animatesStoryRing: Bool {
         switch self {
-        case .storyTray, .storyViewer, .feedComposer, .postAuthor,
+        case .storyTray, .storyTrayCompact, .storyViewer, .feedComposer, .postAuthor,
              .profileBanner, .profileSheet, .profileEdit,
              .conversationHeaderExpanded:
             return true
@@ -119,7 +120,7 @@ public enum AvatarContext: Sendable {
     /// pendant le scroll.
     public var animatesMoodBadge: Bool {
         switch self {
-        case .storyTray, .feedComposer, .postAuthor,
+        case .storyTray, .storyTrayCompact, .feedComposer, .postAuthor,
              .profileBanner, .profileSheet,
              .conversationHeaderExpanded, .conversationHeaderCollapsed:
             return true
@@ -152,6 +153,9 @@ public enum AvatarContext: Sendable {
     public var ringWidth: CGFloat {
         switch self {
         case .storyTray: return 0.7
+        // Compact pinned trail (44pt) — keep the thin story aesthetic but a
+        // touch crisper so the ring stays readable at half the trail size.
+        case .storyTrayCompact: return 1.5
         default: return size <= 32 ? 1.5 : 2.5
         }
     }
@@ -252,7 +256,6 @@ public struct MeeshyAvatar: View {
         self.initials = Self.makeInitials(from: name)
     }
 
-    @State private var ringRotation: Double = 0
     @State private var tapScale: CGFloat = 1.0
     @State private var moodScale: CGFloat = 1.0
     private let isDark: Bool
@@ -339,18 +342,6 @@ public struct MeeshyAvatar: View {
             }
         }
         .scaleEffect(tapScale)
-        .onAppear {
-            if effectiveStoryState == .unread && context.animatesStoryRing {
-                withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
-                    ringRotation = 360
-                }
-            }
-        }
-        .onDisappear {
-            withTransaction(Transaction(animation: nil)) {
-                ringRotation = 0
-            }
-        }
 
         let tappable = Group {
             if hasTapHandler {
@@ -377,7 +368,11 @@ public struct MeeshyAvatar: View {
                         }
                     }
                 }
-        } else { tappable }
+                .accessibilityLabel(name)
+        } else {
+            tappable
+                .accessibilityLabel(name)
+        }
     }
 
     // MARK: - Avatar Body
@@ -409,23 +404,11 @@ public struct MeeshyAvatar: View {
     private var storyRing: some View {
         switch effectiveStoryState {
         case .unread:
-            // Intentional multi-colour ring: the unread-story affordance is a
-            // universally recognised pattern (Instagram-style). It is content
-            // chrome, not brand chrome — kept off the Indigo scale on purpose.
+            // Unread-story affordance: solid brand-primary ring at double the
+            // resting width (product decision 2026-06-21). Replaces the former
+            // Instagram-style multi-colour rotating gradient.
             Circle()
-                .stroke(
-                    AngularGradient(
-                        gradient: Gradient(colors: [
-                            Color(hex: "FF2E63"), Color(hex: "FF6B6B"), Color(hex: "F27121"),
-                            Color(hex: "E94057"), Color(hex: "A855F7"), Color(hex: "08D9D6"),
-                            Color(hex: "FF2E63")
-                        ]),
-                        center: .center,
-                        startAngle: .degrees(ringRotation),
-                        endAngle: .degrees(ringRotation + 360)
-                    ),
-                    lineWidth: context.ringWidth
-                )
+                .stroke(MeeshyColors.brandPrimary, lineWidth: context.ringWidth * 2)
                 .frame(width: context.ringSize, height: context.ringSize)
         case .read:
             Circle()

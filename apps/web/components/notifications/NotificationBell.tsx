@@ -3,10 +3,10 @@
 import React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Bell } from 'lucide-react';
 import { useI18n } from '@/hooks/use-i18n';
 import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
+import { UnreadBadge } from './UnreadBadge';
 
 interface NotificationBellProps {
   className?: string;
@@ -29,15 +29,7 @@ export function NotificationBell({
   const bellContent = (
     <>
       <Bell className="h-4 w-4" aria-hidden="true" />
-      {showBadge && unreadCount > 0 && (
-        <Badge
-          variant="destructive"
-          className="absolute -top-1 -right-1 h-5 w-5 p-0 text-xs flex items-center justify-center"
-          aria-hidden="true"
-        >
-          {unreadCount > 9 ? '9+' : unreadCount}
-        </Badge>
-      )}
+      {showBadge && <UnreadBadge count={unreadCount} />}
     </>
   );
 

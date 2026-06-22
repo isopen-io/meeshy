@@ -176,6 +176,15 @@ public actor OutboxFlusher {
         }) ?? false
     }
 
+    /// `MeeshyError.auth(...)` (typically a 401 mapped to `.sessionExpired`) is a
+    /// transitory auth failure, NOT a permanent dispatch error. It must not consume
+    /// the retry budget — otherwise a brief session expiry permanently exhausts every
+    /// queued row before the app gets a chance to refresh the token.
+    private static func isSessionExpiry(_ error: Error) -> Bool {
+        if case MeeshyError.auth = error { return true }
+        return false
+    }
+
     private func processRecord(_ record: OutboxRecord) async {
         // S1 — claim atomically; skip dispatch if another flusher beat us to it.
         guard await claimPending(record) else { return }
@@ -197,6 +206,25 @@ public actor OutboxFlusher {
             cleanupLocalFiles(for: current)
             onOutcome?(.applied(cmid: current.clientMessageId))
         } catch {
+            // 401 / session-expiry is TRANSITORY — the app's auth flow refreshes the
+            // token (AuthManager.checkExistingSession on resume/reconnect). Treating it
+            // like a normal failure burns the retry budget and PERMANENTLY exhausts
+            // queued user actions (messages, reactions, read receipts) on a brief
+            // expiry — observed in prod: a whole outbox marked `.exhausted` with
+            // `auth(sessionExpired)`. Defer WITHOUT consuming the budget so the row
+            // survives until re-auth, then flushes on the next scheduled attempt.
+            if Self.isSessionExpiry(error) {
+                current.lastError = String(describing: error)
+                current.status = .pending
+                current.updatedAt = Date()
+                current.nextAttemptAt = Date().addingTimeInterval(maxBackoff)
+                let deferredSnapshot = current
+                try? await pool.write { db in
+                    try deferredSnapshot.update(db)
+                }
+                return
+            }
+
             current.attempts += 1
             current.lastError = String(describing: error)
             current.updatedAt = Date()

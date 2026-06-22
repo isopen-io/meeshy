@@ -224,35 +224,42 @@ private struct HeaderCallButtonsView: View {
         .accessibilityLabel(String(localized: "call.header.return", defaultValue: "Appel en cours, toucher pour revenir", bundle: .main))
     }
 
+    /// Bouton d'appel unique : un `Menu` qui laisse choisir vocal ou vidéo via un
+    /// menu contextuel (au lieu de deux boutons séparés). Le glyphe adopte le verre
+    /// adaptatif (Liquid Glass iOS 26, repli `.ultraThinMaterial` en deçà) teinté à
+    /// la couleur d'accent de la conversation.
     private var startCallButtons: some View {
-        HStack(spacing: 4) {
+        Menu {
             Button {
                 CallManager.shared.startCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: false)
             } label: {
-                callGlyph("phone.fill")
+                Label(String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main), systemImage: "phone.fill")
             }
-            .accessibilityLabel(String(localized: "call.start.audio", defaultValue: "Appel audio", bundle: .main))
-
             Button {
                 CallManager.shared.startCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: true)
             } label: {
-                callGlyph("video.fill")
+                Label(String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main), systemImage: "video.fill")
             }
-            .accessibilityLabel(String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main))
+        } label: {
+            callGlyph("phone.fill")
+                .meeshyTapTarget()
         }
+        .accessibilityLabel(String(localized: "call.start.menu", defaultValue: "Appeler", bundle: .main))
+        .accessibilityHint(String(localized: "call.start.menu.hint", defaultValue: "Choisir un appel vocal ou vidéo", bundle: .main))
     }
 
     private func callGlyph(_ systemName: String) -> some View {
         Image(systemName: systemName)
-            .font(.system(size: 12, weight: .semibold))
+            .font(MeeshyFont.relative(12, weight: .semibold))
             .foregroundStyle(
                 LinearGradient(
                     colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 )
             )
-            .frame(width: 28, height: 28)
-            .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
+            .frame(width: 30, height: 30)
+            .meeshyTapTarget()
+            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.4), interactive: true)
     }
 }
 

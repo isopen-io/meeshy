@@ -16,6 +16,8 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let messageReceived = PassthroughSubject<APIMessage, Never>()
     let messageEdited = PassthroughSubject<APIMessage, Never>()
     let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
+    let messagePinned = PassthroughSubject<MessagePinnedEvent, Never>()
+    let messageUnpinned = PassthroughSubject<MessageUnpinnedEvent, Never>()
     let reactionAdded = PassthroughSubject<ReactionUpdateEvent, Never>()
     let reactionRemoved = PassthroughSubject<ReactionUpdateEvent, Never>()
     let attachmentReactionAdded = PassthroughSubject<AttachmentReactionUpdateEvent, Never>()

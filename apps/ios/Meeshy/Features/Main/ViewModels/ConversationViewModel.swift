@@ -323,6 +323,27 @@ class ConversationViewModel: ObservableObject {
     /// When true, the effects picker sheet is presented
     @Published var showEffectsPicker: Bool = false
 
+    /// True when the current user has not yet granted voice-cloning consent.
+    /// Drives the in-bubble `AudioConsentNotice` nudge on outgoing audio
+    /// messages. Set asynchronously after `start()` via a one-shot
+    /// `VoiceProfileService` call; default is `false` so a network error
+    /// never shows a false positive.
+    @Published var voiceConsentMissing: Bool = false
+
+    /// Pure, testable: maps a `hasConsent` fetch to "missing", fail-safe to false.
+    nonisolated static func resolveVoiceConsentMissing(_ fetchHasConsent: () async throws -> Bool) async -> Bool {
+        do { return try await !fetchHasConsent() } catch { return false }
+    }
+
+    private func loadVoiceConsentStatus() {
+        Task { [weak self] in
+            let missing = await Self.resolveVoiceConsentMissing {
+                try await VoiceProfileService.shared.getConsentStatus().hasConsent
+            }
+            await MainActor.run { self?.voiceConsentMissing = missing }
+        }
+    }
+
     // MARK: - Audio Continuous Playback (Phase 4)
 
     /// Attachments already played to completion. Excluded from the auto-built
@@ -980,6 +1001,7 @@ class ConversationViewModel: ObservableObject {
         subscribeToAudioCoordinatorFinishedEvents()
         mirrorMessagesIntoStateStore()
         hydrateCurrentConversationFromCache()
+        loadVoiceConsentStatus()
         // Cross-conversation unread aggregator powers the back-button pill.
         // `setCurrentlyOpenConversation(conversationId)` (called above) makes the
         // sync engine EXCLUDE this conversation from `totalConversationsUnread`,
@@ -1303,6 +1325,46 @@ class ConversationViewModel: ObservableObject {
     /// clock for a full minute on a single hung cellular attempt.
     static let sendRESTTimeoutSeconds: Double = 12
 
+    /// Phase 2 — seeds the local `MediaConsumptionStore` from the server-synced
+    /// per-user consumption surfaced on freshly loaded attachments, so the
+    /// in-bubble waveform tint (audio) / progress bar (video) reflect progress
+    /// made on other devices the moment the conversation opens. The store merges
+    /// with MAX semantics, so a further-along LOCAL position is never regressed
+    /// by a staler server value (and vice-versa). App-side orchestration: it
+    /// derives the playback fraction from the attachment duration and decides
+    /// when to seed — the store itself stays an opaque building block.
+    private func seedMediaConsumption(from messages: [Message]) {
+        for message in messages {
+            for attachment in message.attachments {
+                guard let consumption = attachment.currentUserConsumption else { continue }
+                let durationMs = attachment.duration ?? 0
+                let positionMs: Int?
+                let complete: Bool
+                switch attachment.type {
+                case .audio:
+                    positionMs = consumption.lastPlayPositionMs
+                    complete = consumption.listenedComplete
+                case .video:
+                    positionMs = consumption.lastWatchPositionMs
+                    complete = consumption.watchedComplete
+                default:
+                    continue
+                }
+                // Nothing to seed without either completion or a measurable position.
+                guard complete || (positionMs != nil && durationMs > 0) else { continue }
+                // `record` floors `complete` to fraction 1, so 0 here is safe
+                // when only completion is known (no position/duration).
+                let fraction: Double
+                if durationMs > 0, let pos = positionMs {
+                    fraction = Double(pos) / Double(durationMs)
+                } else {
+                    fraction = 0
+                }
+                MediaConsumptionStore.shared.record(fraction: fraction, complete: complete, for: attachment.id)
+            }
+        }
+    }
+
     func loadMessages() async {
         guard !isLoadingInitial else { return }
         isLoadingInitial = true
@@ -1491,6 +1553,10 @@ class ConversationViewModel: ObservableObject {
             // Keep legacy CacheCoordinator in sync so other parts of the app
             // (ConversationList preview, unread badge) that still read from it remain correct.
             let freshMessages = await processAPIMessages(response.data)
+            // Phase 2 — seed the local consumption store from the server-synced
+            // per-user progress so the waveform tint / video progress bar reflect
+            // cross-device consumption at a glance (MAX-merged with local).
+            seedMediaConsumption(from: freshMessages)
             scheduleTranscriptionRetry(for: response.data)
             let snapshot = freshMessages
             await CacheCoordinator.shared.messages.mergeUpdate(for: conversationId) { cached in
@@ -1925,11 +1991,12 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Send Message
 
-    /// Send-time fallback for `originalLanguage` when the composer supplies
-    /// none. Forced to French — the keyboard layout must never drive content
-    /// language (Prisme Linguistique). The composer itself starts in `fr` and
-    /// `TextAnalyzer` re-detects from the typed text.
-    private func defaultComposeLanguage() -> String { "fr" }
+    /// Langue de composition : détectée depuis le contenu (on-device), repli sur la
+    /// langue primaire de l'utilisateur puis "fr". Pure → testable sans authManager.
+    nonisolated static func composeLanguage(for content: String, preferred: [String]) -> String {
+        LanguageDetection.detectLanguageCode(for: content, fallback: preferred.first)
+            ?? preferred.first ?? "fr"
+    }
 
     /// Stable identity of a logical message, used to dedup an accidental
     /// double-tap. Two taps producing the same key within
@@ -2347,7 +2414,7 @@ class ConversationViewModel: ObservableObject {
 
             let body = SendMessageRequest(
                 content: finalContent,
-                originalLanguage: originalLanguage ?? defaultComposeLanguage(),
+                originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                 replyToId: replyToId,
                 storyReplyToId: storyReplyToId,
                 forwardedFromId: forwardedFromId,
@@ -2389,7 +2456,7 @@ class ConversationViewModel: ObservableObject {
                     attachmentIds: [],
                     replyToId: replyToId,
                     storyReplyToId: storyReplyToId,
-                    originalLanguage: originalLanguage ?? defaultComposeLanguage(),
+                    originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                     isEncrypted: false,
                     clientMessageId: tempId
                 ) {
@@ -2659,7 +2726,7 @@ class ConversationViewModel: ObservableObject {
             replyToId: replyToId
         )
         let replyToJson = resolvedReplyRef.flatMap { try? JSONEncoder().encode($0) }
-        let resolvedOriginalLanguage = originalLanguage ?? defaultComposeLanguage()
+        let resolvedOriginalLanguage = originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages)
         let record = MessageRecord(
             localId: tempId, serverId: nil,
             conversationId: conversationId, senderId: currentUserId,
@@ -3944,6 +4011,12 @@ class ConversationViewModel: ObservableObject {
 // MARK: - ConversationSocketDelegate Conformance
 
 extension ConversationViewModel: ConversationSocketDelegate {
+    /// Read-receipt precision gate input: the scroll controller pushes the
+    /// near-bottom flag here via `onNearBottomChanged`, so the socket handler can
+    /// refuse to auto-mark-read a message that landed off-screen while the user
+    /// was reading history.
+    var isViewportAtBottom: Bool { isCurrentlyNearBottom }
+
     func handleParticipantRoleUpdated(participantId: String, newRole: String) {
         Logger.socket.info("Participant \(participantId) role changed to \(newRole)")
         _topActiveMembers = nil

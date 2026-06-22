@@ -76,6 +76,26 @@ export interface CursorPaginatedResponse<T> {
   };
 }
 
+export interface ReelFeedFilters {
+  readonly cursor?: string;
+  readonly limit?: number;
+  /** Seed reel id — anchors the affinity thread when a reel is opened from the feed. */
+  readonly seed?: string;
+}
+
+// The reels feed mirrors the gateway `sendSuccess()` envelope: the cursor lives
+// at the top-level `pagination`, not under `meta` (matches `/posts/feed/reels`).
+export interface ReelsFeedResponse {
+  readonly success: boolean;
+  readonly data: Post[];
+  readonly pagination?: {
+    readonly limit: number;
+    readonly hasMore: boolean;
+    readonly nextCursor: string | null;
+  };
+  readonly meta?: { readonly mentionedUsers?: readonly unknown[] };
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -104,6 +124,16 @@ export const postsService = {
 
   async getFeed(filters: FeedFilters = {}): Promise<CursorPaginatedResponse<Post>> {
     const response = await apiService.get<CursorPaginatedResponse<Post>>(`/posts/feed${buildQuery(filters)}`);
+    return unwrap(response);
+  },
+
+  async getReelsFeed(filters: ReelFeedFilters = {}): Promise<ReelsFeedResponse> {
+    const params = new URLSearchParams();
+    if (filters.cursor) params.set('cursor', filters.cursor);
+    if (filters.limit) params.set('limit', String(filters.limit));
+    if (filters.seed) params.set('seed', filters.seed);
+    const qs = params.toString();
+    const response = await apiService.get<ReelsFeedResponse>(`/posts/feed/reels${qs ? `?${qs}` : ''}`);
     return unwrap(response);
   },
 

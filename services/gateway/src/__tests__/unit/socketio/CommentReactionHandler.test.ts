@@ -243,9 +243,11 @@ describe('CommentReactionHandler', () => {
         sampleUpdateEvent
       );
 
+      // Contrat ACK == broadcast : l'ACK porte le MÊME `updateEvent` que le broadcast
+      // `comment:reaction-added` (et non plus la `reaction` brute) — c'est ce que l'iOS décode.
       expect(callback).toHaveBeenCalledWith({
         success: true,
-        data: sampleReactionData,
+        data: sampleUpdateEvent,
       });
     });
 
@@ -434,9 +436,11 @@ describe('CommentReactionHandler', () => {
         expect.objectContaining({ action: 'remove' })
       );
 
+      // Contrat ACK == broadcast : l'ACK porte le MÊME `updateEvent` (action:'remove')
+      // que le broadcast `comment:reaction-removed`, et non plus un simple {message}.
       expect(callback).toHaveBeenCalledWith({
         success: true,
-        data: { message: 'Reaction removed successfully' },
+        data: { ...sampleUpdateEvent, action: 'remove' },
       });
     });
 

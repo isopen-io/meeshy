@@ -16,4 +16,13 @@
     <string name="bubble_file_size_mb">%1$s MB</string>
     <string name="image_viewer_close">Cerrar</string>
     <string name="bubble_hidden_images">%1$d imágenes más</string>
+    <string name="emoji_picker_title">Reacciones</string>
+    <string name="emoji_picker_expand">Más emojis</string>
+    <string name="emoji_react_with">Reaccionar con %1$s</string>
+    <string name="emoji_category_reactions">Reacciones</string>
+    <string name="emoji_category_faces">Caras</string>
+    <string name="emoji_category_gestures">Gestos</string>
+    <string name="emoji_category_hearts">Corazones</string>
+    <string name="emoji_category_animals">Animales</string>
+    <string name="emoji_category_objects">Objetos</string>
 </resources>

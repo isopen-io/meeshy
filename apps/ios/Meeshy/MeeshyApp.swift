@@ -104,7 +104,7 @@ struct MeeshyApp: App {
                 .overlay(alignment: .top) {
                     if let toast = toastManager.currentToast {
                         FeedbackToastView(toast: toast)
-                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .transition(.feedbackToastReveal)
                             .padding(.top, MeeshySpacing.xxl)
                             .onTapGesture {
                                 if let action = toastManager.onTapAction {
@@ -116,7 +116,7 @@ struct MeeshyApp: App {
                             .zIndex(999)
                     }
                 }
-                .animation(MeeshyAnimation.springDefault, value: toastManager.currentToast)
+                .meeshyAnimation(MeeshyAnimation.springBouncy, value: toastManager.currentToast)
                 .sheet(isPresented: $showCrashSheet) {
                     CrashReportSheet(reports: crashReportsToShow)
                 }
@@ -794,14 +794,6 @@ struct SplashScreen: View {
 
     private var isDark: Bool { theme.mode.isDark }
 
-    private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-    }
-
-    private var buildNumber: String {
-        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-    }
-
     var body: some View {
         ZStack {
             // Animated gradient background
@@ -855,7 +847,7 @@ struct SplashScreen: View {
 
                 // App Name
                 Text("Meeshy")
-                    .font(.system(size: 46, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(46, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
@@ -871,8 +863,8 @@ struct SplashScreen: View {
                     .padding(.bottom, 8)
 
                 // Tagline
-                Text(String(localized: "Break the language barrier", defaultValue: "Break the language barrier"))
-                    .font(.system(size: 16, weight: .medium))
+                Text(String(localized: "splash.tagline", bundle: .main))
+                    .font(MeeshyFont.relative(16, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .frame(height: 40)
                     .opacity(showSubtitle ? 1 : 0)
@@ -880,32 +872,10 @@ struct SplashScreen: View {
 
                 Spacer()
 
-                // Footer : version + signature + brand logo
-                VStack(spacing: 6) {
-                    Text("Meeshy \(appVersion) · \(buildNumber)")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundColor(theme.textMuted.opacity(0.7))
-
-                    Text(String(localized: "splash.madeWithLove", defaultValue: "Made with ❤️ by Services CEO", bundle: .main))
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundColor(theme.textMuted.opacity(0.7))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-
-                    Image("AppIconFooter")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 21, height: 21)
-                        .foregroundColor(MeeshyColors.error)
-                        .opacity(0.9)
-                        .padding(.top, 2)
-                        .accessibilityHidden(true)
-                }
-                .opacity(showSubtitle ? 1 : 0)
-                .padding(.bottom, 24)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(Text("Meeshy version \(appVersion), build \(buildNumber). Made with love by Services CEO."))
+                // Footer : version + signature + brand logo (shared — see BrandSignature)
+                BrandSignature()
+                    .opacity(showSubtitle ? 1 : 0)
+                    .padding(.bottom, 24)
             }
         }
         .onAppear {

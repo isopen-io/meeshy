@@ -1,9 +1,20 @@
 import type { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
-import { authorSelect, NOT_DELETED } from './posts/postIncludes';
+import type { MobileTranscription } from '../routes/posts/types';
+import { authorSelect, commentMediaInclude, NOT_DELETED } from './posts/postIncludes';
+import { TrackingLinkService } from './TrackingLinkService';
 
 export class PostCommentService {
-  constructor(private readonly prisma: PrismaClient) {}
+  private readonly trackingLinkService: TrackingLinkService;
+
+  constructor(
+    private readonly prisma: PrismaClient,
+    // Source UNIQUE du mapping `metadata.trackingLinks` partagée avec
+    // messages/posts/stories. Injectable pour les tests ; défaut = même prisma.
+    trackingLinkService?: TrackingLinkService,
+  ) {
+    this.trackingLinkService = trackingLinkService ?? new TrackingLinkService(prisma);
+  }
 
   async addComment(
     postId: string,
@@ -12,6 +23,12 @@ export class PostCommentService {
     parentId?: string,
     effectFlags?: number,
     originalLanguage?: string,
+    /// PostMedia déjà uploadé (pending) à rattacher au commentaire via `commentId`.
+    /// Un commentaire ne porte QU'UN SEUL média.
+    mediaId?: string,
+    /// Transcription Whisper mobile pour un média audio — persistée sur le PostMedia
+    /// (évite la re-transcription serveur, même mécanisme que les posts).
+    mobileTranscription?: MobileTranscription,
   ) {
     // Verify post exists
     const post = await this.prisma.post.findFirst({
@@ -25,6 +42,17 @@ export class PostCommentService {
         where: { id: parentId, postId, deletedAt: NOT_DELETED },
       });
       if (!parent) throw new Error('PARENT_NOT_FOUND');
+    }
+
+    // Verify the pending media belongs to no post/comment yet (anti-hijack) before linking.
+    if (mediaId) {
+      const media = await this.prisma.postMedia.findUnique({
+        where: { id: mediaId },
+        select: { id: true, postId: true, commentId: true },
+      });
+      if (!media || media.postId || media.commentId) {
+        throw new Error('MEDIA_NOT_AVAILABLE');
+      }
     }
 
     const comment = await this.prisma.postComment.create({
@@ -46,9 +74,29 @@ export class PostCommentService {
         effectFlags: true,
         parentId: true,
         createdAt: true,
+        metadata: true,
         author: { select: authorSelect },
       },
     });
+
+    // Lier le média pending au commentaire + persister la transcription mobile éventuelle.
+    if (mediaId) {
+      await this.prisma.postMedia.update({
+        where: { id: mediaId },
+        data: {
+          commentId: comment.id,
+          ...(mobileTranscription
+            ? {
+                transcription: {
+                  ...mobileTranscription,
+                  segments: mobileTranscription.segments ?? [],
+                  source: 'mobile',
+                } as Prisma.InputJsonValue,
+              }
+            : {}),
+        },
+      });
+    }
 
     // Increment counters
     await this.prisma.post.update({
@@ -63,7 +111,41 @@ export class PostCommentService {
       });
     }
 
-    return comment;
+    // Le média lié est renvoyé top-level (`media: [PostMedia]`) — même forme que les
+    // posts, décodé identiquement par les clients (viewers inline + plein écran).
+    const media = mediaId
+      ? await this.prisma.postMedia.findMany({
+          where: { commentId: comment.id },
+          ...commentMediaInclude,
+        })
+      : [];
+
+    // Tracking des URLs brutes du commentaire : même mécanisme que les messages
+    // et les posts — mapping `url → token` rangé dans `metadata.trackingLinks`
+    // SANS réécrire le contenu (aperçu vidéo + URL lisible préservés). Le client
+    // rend le lien vers `/l/<token>`. JAMAIS bloquant : le helper avale ses
+    // erreurs (→ []) et l'écriture metadata est gardée.
+    if (content) {
+      try {
+        const trackingLinks = await this.trackingLinkService.collectContentTrackingLinks({
+          content,
+          createdBy: authorId,
+        });
+        if (trackingLinks.length > 0) {
+          const existingMetadata = (comment.metadata as Record<string, unknown> | null) ?? {};
+          const metadata = { ...existingMetadata, trackingLinks } as Prisma.InputJsonValue;
+          await this.prisma.postComment.update({
+            where: { id: comment.id },
+            data: { metadata },
+          });
+          return { ...comment, metadata, media };
+        }
+      } catch {
+        // non-bloquant : un échec de tracking ne doit pas casser le commentaire
+      }
+    }
+
+    return { ...comment, media };
   }
 
   async getComments(postId: string, cursor?: string, limit: number = 20, currentUserId?: string) {
@@ -103,7 +185,9 @@ export class PostCommentService {
         effectFlags: true,
         parentId: true,
         createdAt: true,
+        metadata: true,
         author: { select: authorSelect },
+        media: commentMediaInclude,
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
@@ -161,7 +245,9 @@ export class PostCommentService {
         effectFlags: true,
         parentId: true,
         createdAt: true,
+        metadata: true,
         author: { select: authorSelect },
+        media: commentMediaInclude,
       },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: limit + 1,

@@ -53,6 +53,17 @@ jobs:
       - name: Select Xcode 26.1.1 (Swift 6.2)
         run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer
 
+      # XcodeGen owns project generation (see commit dropping hand-edited
+      # pbxproj entries). The committed Meeshy.xcodeproj/project.pbxproj is a
+      # generated artifact and can lag behind newly-added sources; regenerate
+      # it from project.yml so every file on disk is compiled (otherwise a new
+      # file like a Bubble subview fails with "cannot find … in scope").
+      - name: Generate Xcode project (XcodeGen)
+        run: |
+          brew install xcodegen
+          cd apps/ios
+          xcodegen generate
+
       - name: Provision iOS 18.2 simulator
         id: sim
         run: |

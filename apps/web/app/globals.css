@@ -57,36 +57,36 @@
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
 
-    /* V2 Global Pulse Design System - Light Mode */
-    --gp-warm-canvas: #FFF8F3;
-    --gp-deep-ink: #16161A;
-    --gp-parchment: #F5EDE3;
-    --gp-charcoal: #2B2D42;
-    --gp-background: #FFF8F3;
+    /* Meeshy Design System - Light Mode (palette v1 indigo/slate) */
+    --gp-warm-canvas: #F8FAFC;
+    --gp-deep-ink: #0F172A;
+    --gp-parchment: #F1F5F9;
+    --gp-charcoal: #1E293B;
+    --gp-background: #F8FAFC;
     --gp-surface: #FFFFFF;
     --gp-surface-elevated: #FFFFFF;
-    --gp-border: #E5E5E5;
-    --gp-border-subtle: #F0F0F0;
-    --gp-terracotta: #E76F51;
-    --gp-terracotta-light: #F4A261;
-    --gp-deep-teal: #264653;
-    --gp-gold-accent: #E9C46A;
-    --gp-asian-ruby: #C1292E;
-    --gp-saffron: #F4A261;
-    --gp-jade-green: #2A9D8F;
-    --gp-royal-indigo: #5E60CE;
-    --gp-sakura-pink: #F28482;
-    --gp-text-primary: #2B2D42;
-    --gp-text-secondary: #6B7280;
-    --gp-text-muted: #9CA3AF;
+    --gp-border: #E2E8F0;
+    --gp-border-subtle: #F1F5F9;
+    --gp-terracotta: #4F46E5;
+    --gp-terracotta-light: #818CF8;
+    --gp-deep-teal: #4338CA;
+    --gp-gold-accent: #F59E0B;
+    --gp-asian-ruby: #E11D48;
+    --gp-saffron: #F59E0B;
+    --gp-jade-green: #10B981;
+    --gp-royal-indigo: #6366F1;
+    --gp-sakura-pink: #EC4899;
+    --gp-text-primary: #0F172A;
+    --gp-text-secondary: #475569;
+    --gp-text-muted: #94A3B8;
     --gp-text-inverse: #FFFFFF;
-    --gp-success: #2A9D8F;
-    --gp-warning: #F4A261;
-    --gp-error: #E76F51;
-    --gp-info: #5E60CE;
-    --gp-hover: rgba(0, 0, 0, 0.04);
-    --gp-active: rgba(0, 0, 0, 0.08);
-    --gp-focus: rgba(231, 111, 81, 0.3);
+    --gp-success: #10B981;
+    --gp-warning: #F59E0B;
+    --gp-error: #EF4444;
+    --gp-info: #4F46E5;
+    --gp-hover: rgba(15, 23, 42, 0.04);
+    --gp-active: rgba(15, 23, 42, 0.08);
+    --gp-focus: rgba(79, 70, 229, 0.3);
     --gp-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
     --gp-shadow-md: 0 4px 20px rgba(0, 0, 0, 0.08);
     --gp-shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.12);
@@ -94,36 +94,36 @@
   }
 
   .dark {
-    /* V2 Global Pulse Design System - Dark Mode */
-    --gp-warm-canvas: #0D0D0F;
-    --gp-deep-ink: #FAFAFA;
-    --gp-parchment: #1A1A1E;
-    --gp-charcoal: #E5E5E7;
-    --gp-background: #0D0D0F;
-    --gp-surface: #1A1A1E;
-    --gp-surface-elevated: #242428;
-    --gp-border: #2E2E32;
-    --gp-border-subtle: #232327;
-    --gp-terracotta: #F08A70;
-    --gp-terracotta-light: #F5B080;
-    --gp-deep-teal: #3A8A9A;
-    --gp-gold-accent: #F0D080;
-    --gp-asian-ruby: #E54B50;
-    --gp-saffron: #F5B080;
-    --gp-jade-green: #40C4B0;
-    --gp-royal-indigo: #8082E8;
-    --gp-sakura-pink: #F5A09E;
-    --gp-text-primary: #F5F5F5;
-    --gp-text-secondary: #A0A0A8;
-    --gp-text-muted: #707078;
-    --gp-text-inverse: #16161A;
-    --gp-success: #40C4B0;
-    --gp-warning: #F5B080;
-    --gp-error: #F08A70;
-    --gp-info: #8082E8;
+    /* Meeshy Design System - Dark Mode (palette v1 indigo/slate) */
+    --gp-warm-canvas: #0F172A;
+    --gp-deep-ink: #F8FAFC;
+    --gp-parchment: #1E293B;
+    --gp-charcoal: #E2E8F0;
+    --gp-background: #0F172A;
+    --gp-surface: #1E293B;
+    --gp-surface-elevated: #334155;
+    --gp-border: #334155;
+    --gp-border-subtle: #1E293B;
+    --gp-terracotta: #818CF8;
+    --gp-terracotta-light: #A5B4FC;
+    --gp-deep-teal: #6366F1;
+    --gp-gold-accent: #FBBF24;
+    --gp-asian-ruby: #FB7185;
+    --gp-saffron: #FBBF24;
+    --gp-jade-green: #34D399;
+    --gp-royal-indigo: #A5B4FC;
+    --gp-sakura-pink: #F472B6;
+    --gp-text-primary: #F1F5F9;
+    --gp-text-secondary: #94A3B8;
+    --gp-text-muted: #64748B;
+    --gp-text-inverse: #0F172A;
+    --gp-success: #34D399;
+    --gp-warning: #FBBF24;
+    --gp-error: #F87171;
+    --gp-info: #818CF8;
     --gp-hover: rgba(255, 255, 255, 0.06);
     --gp-active: rgba(255, 255, 255, 0.12);
-    --gp-focus: rgba(240, 138, 112, 0.4);
+    --gp-focus: rgba(129, 140, 248, 0.4);
     --gp-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
     --gp-shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
     --gp-shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.5);
@@ -610,6 +610,11 @@
 .conversation-preview-item {
   content-visibility: auto;
   contain-intrinsic-size: 0 72px;
+}
+
+.notification-item {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 84px;
 }
 
 /**

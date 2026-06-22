@@ -131,14 +131,19 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             loadedVideoURLs: media.loadedVideoURLs,
             loadedAudioURLs: media.loadedAudioURLs,
             originalLanguage: nil,
-            visibility: item.visibility
+            visibility: item.visibility,
+            visibilityUserIds: item.visibilityUserIds ?? []
         )
 
         let ids = try await runStoryUpload(
             upload,
             onProgress: { _ in },
             onPhase: { _ in },
-            onPublishedSlide: { _ in }
+            // Réconcilie le tray : retire le placeholder optimiste hors-ligne et
+            // insère la vraie story serveur dès qu'une slide est publiée.
+            onPublishedSlide: { [weak self] published in
+                self?.reconcilePublishedQueueSlide(tempStoryId: item.tempStoryId, published: published)
+            }
         )
 
         cleanupUploadTempFiles(upload)
@@ -214,6 +219,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let loadedAudioURLs: [String: URL]
         let originalLanguage: String?
         let visibility: String
+        let visibilityUserIds: [String]
         /// IDs of slide-Posts already created server-side. Tracked so that:
         /// (a) `retryUpload()` skips them (otherwise a partial-failure retry creates
         ///     duplicate slides — what was previously committed plus the same again),
@@ -263,6 +269,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     }
 
     private func fetchStoriesFromNetwork() async {
+        // Capture les stories optimistes hors-ligne AVANT l'overwrite serveur :
+        // le payload `getStories` ne contient pas les stories non encore publiées,
+        // donc sans ré-injection elles disparaîtraient du tray de l'auteur après
+        // un refetch (alors qu'elles sont toujours en attente dans la queue).
+        let pendingBeforeFetch = currentPendingStoryItems()
+
         do {
             let response = try await storyService.list(cursor: nil, limit: 50)
 
@@ -282,6 +294,23 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 }
 
                 storyGroups = groups
+
+                // Ré-injecte les stories optimistes hors-ligne encore en attente
+                // (le serveur ne les renvoie pas). Dédupliqué par id : si le
+                // serveur a déjà la version publiée, elle a un autre id et la
+                // réconciliation a déjà retiré le pending — pas de doublon.
+                if !pendingBeforeFetch.isEmpty, let user = AuthManager.shared.currentUser {
+                    let authorName = user.displayName ?? user.username
+                    for item in pendingBeforeFetch {
+                        insertOrAppendStoryItem(
+                            item,
+                            authorId: user.id,
+                            authorName: authorName,
+                            authorAvatar: user.avatar
+                        )
+                    }
+                }
+
                 // Tri unifié (ma story d'abord > non-vues > récence), identique au
                 // chemin socket. `toStoryGroups()` est appelé sans `currentUserId`
                 // ici, donc sans ce re-tri la story « Moi » n'arrivait pas en tête
@@ -309,43 +338,79 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     // MARK: - Background Prefetch (triggered on story load)
 
+    /// URLs média déjà préchargées dans cette session — garde de déduplication.
+    ///
+    /// `prefetchAllStoryMedia` est rappelé à CHAQUE `loadStories` (y compris sur
+    /// cache hit `.fresh`/`.stale`) ET à chaque refetch SWR. Sans ce garde, ouvrir
+    /// le tray relance des dizaines de tâches `data(for:)` qui re-sondent le disque
+    /// pour des médias déjà en cache à chaque ouverture — du travail redondant qui
+    /// alimente le lag ressenti à l'ouverture des stories. Une fois une URL servie
+    /// depuis le cache, on ne la re-prefetch plus de la session (les URLs média sont
+    /// content-addressed donc immuables ; le viewer garde son chemin de charge à la
+    /// demande si jamais le disque a évincé l'asset entre-temps).
+    private var prefetchedMediaURLs: Set<String> = []
+
     /// Prefetch all media for all story groups in the background.
-    /// Downloads images to disk cache and prerolls video players for the first 3 groups.
+    /// Downloads images to disk cache and prerolls video players for the first groups.
     /// First slide of each group is prefetched at high priority for instant display.
     private func prefetchAllStoryMedia(_ groups: [StoryGroup]) {
-        // High priority: prefetch first unviewed slide of each group (what the user taps first)
-        let groupsToPreload = Array(groups.prefix(5))
-        Task(priority: .userInitiated) {
+        // Élargi de 5 → 8 groupes : sur un tray dense, précharger plus de bulles
+        // rend les premières ouvertures instantanées sans exploser la mémoire (on
+        // ne preroll l'AVPlayer que pour la première slide de chaque groupe).
+        let groupsToPreload = Array(groups.prefix(8))
+
+        // High priority: première slide non vue de chaque groupe (ce que l'utilisateur tape en premier).
+        Task(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
             let imageCache = await CacheCoordinator.shared.images
             await withTaskGroup(of: Void.self) { taskGroup in
                 for group in groupsToPreload {
                     guard let targetStory = group.stories.first(where: { !$0.isViewed }) ?? group.stories.first else { continue }
+                    // Réclame (et marque) les URLs non encore préchargées sur le MainActor
+                    // AVANT de dispatcher le child task (qui n'est pas isolé MainActor).
+                    let urls = self.claimUnprefetchedURLs(for: targetStory)
+                    guard !urls.isEmpty else { continue }
                     taskGroup.addTask {
-                        await Self.prefetchStoryMedia(targetStory, imageCache: imageCache, prerollPlayer: true)
+                        await Self.prefetchStoryMediaURLs(urls, in: targetStory, imageCache: imageCache, prerollPlayer: true)
                     }
                 }
             }
         }
 
-        // Utility priority: prefetch images/video data (disk cache) for up to 3 upcoming slides per group.
-        // DO NOT preroll AVPlayer here; let `StoryReaderPrefetcher` handle N+1 JIT warming to save memory.
-        Task(priority: .utility) {
+        // Utility priority: jusqu'à n+2 slides à venir par groupe (fenêtre élargie
+        // de 3 → 4 pour couvrir confortablement n+1 ET n+2 avant ouverture).
+        // DO NOT preroll AVPlayer here; let `StoryReaderPrefetcher` handle JIT warming to save memory.
+        Task(priority: .utility) { [weak self] in
+            guard let self else { return }
             let imageCache = await CacheCoordinator.shared.images
             for group in groupsToPreload {
                 guard !Task.isCancelled else { return }
                 let firstUnviewedIndex = group.stories.firstIndex(where: { !$0.isViewed }) ?? 0
-                let slidesToPrefetch = Array(group.stories.dropFirst(firstUnviewedIndex + 1).prefix(3))
-                
+                let slidesToPrefetch = Array(group.stories.dropFirst(firstUnviewedIndex + 1).prefix(4))
+
                 for story in slidesToPrefetch {
                     guard !Task.isCancelled else { return }
-                    await Self.prefetchStoryMedia(story, imageCache: imageCache, prerollPlayer: false)
+                    let urls = self.claimUnprefetchedURLs(for: story)
+                    guard !urls.isEmpty else { continue }
+                    await Self.prefetchStoryMediaURLs(urls, in: story, imageCache: imageCache, prerollPlayer: false)
                 }
             }
         }
     }
 
-    /// Prefetch all media URLs for a single story into disk + memory cache.
-    private static func prefetchStoryMedia(_ story: StoryItem, imageCache: DiskCacheStore, prerollPlayer: Bool) async {
+    /// Calcule les URLs média d'une story, retire celles déjà préchargées dans la
+    /// session, marque les nouvelles comme réclamées et les retourne. `@MainActor`
+    /// (mutation de `prefetchedMediaURLs`) — appelé depuis les boucles de prefetch.
+    private func claimUnprefetchedURLs(for story: StoryItem) -> [String] {
+        let all = Self.mediaURLStrings(for: story)
+        let fresh = all.filter { !prefetchedMediaURLs.contains($0) }
+        prefetchedMediaURLs.formUnion(fresh)
+        return fresh
+    }
+
+    /// Extraction pure des URLs média d'une story (background + foreground + audio),
+    /// dédupliquées. Pure et testable, sans effet de bord.
+    static func mediaURLStrings(for story: StoryItem) -> [String] {
         var urls: [String] = story.media.compactMap(\.url)
 
         if let mediaObjs = story.storyEffects?.mediaObjects {
@@ -370,14 +435,23 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             }
         }
 
-        for urlString in Set(urls) {
+        return Array(Set(urls))
+    }
+
+    /// Prefetch les URLs (déjà filtrées) d'une story dans les stores disque + mémoire.
+    private static func prefetchStoryMediaURLs(_ urls: [String], in story: StoryItem, imageCache: DiskCacheStore, prerollPlayer: Bool) async {
+        for urlString in urls {
             let mediaType = story.media.first(where: { $0.url == urlString })?.type
 
-            if mediaType == .video || mediaType == .audio {
-                _ = try? await imageCache.data(for: urlString)
+            if mediaType == .video {
+                // Peupler le store `video` (celui que le canvas relit), pas
+                // `images` — sinon cache-miss + re-download au moment de jouer.
+                _ = try? await CacheCoordinator.shared.video.data(for: urlString)
                 if prerollPlayer, let url = URL(string: urlString) {
                     await StoryMediaLoader.shared.preloadAndCachePlayer(url: url)
                 }
+            } else if mediaType == .audio {
+                _ = try? await CacheCoordinator.shared.audio.data(for: urlString)
             } else {
                 _ = await imageCache.image(for: urlString)
             }
@@ -486,6 +560,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 content: content,
                 storyEffects: effects,
                 visibility: visibility,
+                visibilityUserIds: nil,
                 originalLanguage: originalLanguage,
                 mediaIds: uploadResult.map { [$0.id] },
                 repostOfId: nil
@@ -580,6 +655,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             content: content,
             storyEffects: updatedEffects,
             visibility: visibility,
+            visibilityUserIds: nil,
             originalLanguage: originalLanguage,
             mediaIds: allMediaIds.isEmpty ? nil : allMediaIds,
             repostOfId: nil
@@ -600,7 +676,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
-        visibility: String = "PUBLIC"
+        visibility: String = "PUBLIC",
+        visibilityUserIds: [String] = []
     ) {
         guard activeUpload == nil else { return }
 
@@ -617,7 +694,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     loadedImages: loadedImages,
                     loadedVideoURLs: loadedVideoURLs,
                     loadedAudioURLs: loadedAudioURLs,
-                    visibility: visibility
+                    visibility: visibility,
+                    visibilityUserIds: visibilityUserIds
                 )
             }
             showStoryComposer = false
@@ -642,7 +720,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             loadedVideoURLs: loadedVideoURLs,
             loadedAudioURLs: loadedAudioURLs,
             originalLanguage: originalLanguage,
-            visibility: visibility
+            visibility: visibility,
+            visibilityUserIds: visibilityUserIds
         )
         activeUpload = upload
         showStoryComposer = false
@@ -670,7 +749,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedImages: [String: UIImage],
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL],
-        visibility: String
+        visibility: String,
+        visibilityUserIds: [String]
     ) async {
         // 1. Re-key slide backgrounds.
         let bgImages = Dictionary(
@@ -739,17 +819,131 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             slidesPayload: payload,
             repostOfId: nil,
             mediaReferences: mediaReferences,
-            tempStoryId: tempStoryId
+            tempStoryId: tempStoryId,
+            visibilityUserIds: visibilityUserIds
         )
         _ = await StoryPublishQueue.shared.enqueue(item)
 
-        // 5. User feedback. The PendingStoryBanner mounted in RootView
+        // 5. Visibilité optimiste hors-ligne : l'auteur DOIT voir ses propres
+        //    stories immédiatement, même sans réseau et même après un cold start.
+        //    On insère un StoryItem local par slide (id `pending_<uuid>#<idx>`),
+        //    avec un cover composite rendu localement (texte + dessin + média),
+        //    exactement comme le cover du chemin online. Réconcilié au succès de
+        //    publication (`reconcilePublishedQueueSlide`) qui retire le pending.
+        insertOptimisticOfflineStories(
+            slides: slides,
+            slideImages: slideImages,
+            loadedImages: loadedImages,
+            tempStoryId: tempStoryId,
+            visibility: visibility
+        )
+
+        // 6. User feedback. The PendingStoryBanner mounted in RootView
         //    reflects the new pending count via StoryPublishService.
         HapticFeedback.success()
         FeedbackToastManager.shared.showSuccess(String(
             localized: "story.publish.queue.enqueued",
             defaultValue: "Story enregistrée — publication au retour en ligne"
         ))
+    }
+
+    // MARK: - Optimistic offline stories (visibilité auteur hors-ligne)
+
+    /// Préfixe d'id des stories optimistes (non encore publiées). Permet de les
+    /// repérer pour la réconciliation et pour les préserver à travers un refetch
+    /// réseau (`fetchStoriesFromNetwork`).
+    static let pendingStoryIdPrefix = "pending_"
+
+    /// Construit l'id optimiste d'une slide à partir de l'id de queue + index.
+    /// Stable et déterministe : la réconciliation retire tout id ayant ce
+    /// `tempStoryId` comme préfixe.
+    static func optimisticStoryId(tempStoryId: String, slideIndex: Int) -> String {
+        "\(tempStoryId)#\(slideIndex)"
+    }
+
+    /// Insère les slides en stories optimistes locales sous le groupe de l'auteur
+    /// (utilisateur courant), avec un cover composite rendu et caché localement.
+    /// Idempotent par id (dédup dans `insertOrAppendStoryItem`).
+    func insertOptimisticOfflineStories(
+        slides: [StorySlide],
+        slideImages: [String: UIImage],
+        loadedImages: [String: UIImage],
+        tempStoryId: String,
+        visibility: String
+    ) {
+        guard let user = AuthManager.shared.currentUser else { return }
+        let authorName = user.displayName ?? user.username
+
+        for (idx, slide) in slides.enumerated() {
+            let pendingId = Self.optimisticStoryId(tempStoryId: tempStoryId, slideIndex: idx)
+
+            // Cover composite local (même rendu que le chemin online) → cache
+            // thumbnails. Le tray résout ce cover en priorité pour l'auteur.
+            if let cover = StorySlideRenderer.renderComposite(
+                slide: slide,
+                bgImage: slideImages[slide.id],
+                loadedImages: loadedImages,
+                size: StoryCoverThumbnail.renderSize
+            ), let jpeg = cover.jpegData(compressionQuality: 0.85) {
+                Task {
+                    await CacheCoordinator.shared.thumbnails.store(
+                        jpeg, for: StoryCoverThumbnail.cacheKey(storyId: pendingId)
+                    )
+                }
+            }
+
+            let item = StoryItem(
+                id: pendingId,
+                content: slide.content,
+                media: [],
+                storyEffects: slide.effects,
+                createdAt: Date(),
+                visibility: visibility,
+                isViewed: true
+            )
+            insertOrAppendStoryItem(
+                item,
+                authorId: user.id,
+                authorName: authorName,
+                authorAvatar: user.avatar
+            )
+        }
+    }
+
+    /// Retire toutes les stories optimistes d'un `tempStoryId` (ids préfixés
+    /// `tempStoryId#`). Idempotent. Supprime le groupe s'il devient vide.
+    /// Persiste le cache pour que le cold-start ne ressuscite pas le pending.
+    func removeOptimisticStories(tempStoryId: String) {
+        let pendingPrefix = "\(tempStoryId)#"
+        var changed = false
+        for i in storyGroups.indices.reversed() {
+            let filtered = storyGroups[i].stories.filter { !$0.id.hasPrefix(pendingPrefix) }
+            guard filtered.count != storyGroups[i].stories.count else { continue }
+            changed = true
+            if filtered.isEmpty {
+                storyGroups.remove(at: i)
+            } else {
+                storyGroups[i] = storyGroups[i].with(stories: filtered)
+            }
+        }
+        if changed { persistStoryCache() }
+    }
+
+    /// Réconcilie une slide publiée par la queue : retire les placeholders
+    /// optimistes du `tempStoryId` (au premier appel) puis insère la vraie story
+    /// serveur. Appelé depuis `executeQueuedPublish` via `onPublishedSlide`.
+    private func reconcilePublishedQueueSlide(tempStoryId: String, published: PublishedSlide) {
+        removeOptimisticStories(tempStoryId: tempStoryId)
+        insertOrAppendStoryItem(published.item, forAuthor: published.post.author)
+    }
+
+    /// Snapshot des stories optimistes actuellement affichées (tous groupes).
+    /// Utilisé par `fetchStoriesFromNetwork` pour les ré-injecter après un
+    /// overwrite serveur (sinon elles disparaîtraient du tray de l'auteur).
+    private func currentPendingStoryItems() -> [StoryItem] {
+        storyGroups.flatMap { group in
+            group.stories.filter { $0.id.hasPrefix(Self.pendingStoryIdPrefix) }
+        }
     }
 
     private func launchUploadTask() {
@@ -860,10 +1054,17 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
                 try compressed.data.write(to: tempURL)
                 defer { try? FileManager.default.removeItem(at: tempURL) }
-                uploadResult = try await uploader.uploadFile(
+                let result = try await uploader.uploadFile(
                     fileURL: tempURL, mimeType: compressed.mimeType,
                     token: token, uploadContext: "story", thumbHash: thumbHash
                 )
+                uploadResult = result
+                // Pre-populate the image cache under the server URL so that when
+                // reconcilePublishedQueueSlide swaps in the real StoryItem the viewer
+                // gets a cache hit — no re-download of content the author just uploaded.
+                // adoptImage moves tempURL into the cache store; the deferred removeItem
+                // silently no-ops since the file is already gone from tempURL.
+                await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)
                 onProgress(baseProgress + 0.30 * slideShare)
             } else {
                 onProgress(baseProgress + 0.30 * slideShare)
@@ -882,6 +1083,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                             fileURL: videoURL, mimeType: "video/mp4",
                             token: token, uploadContext: "story"
                         )
+                        // Seed the video cache under the server URL — metadata-only
+                        // reconciliation: viewer gets a cache hit, never re-downloads.
+                        await CacheCoordinator.shared.video.seed(copyingLocalFile: videoURL, for: result.fileUrl)
                         mediaObjects[i].postMediaId = result.id
                         mediaObjects[i].mediaURL = result.fileUrl
                         foregroundMediaIds.append(result.id)
@@ -896,6 +1100,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                             fileURL: tempURL, mimeType: compressed.mimeType,
                             token: token, uploadContext: "story", thumbHash: fgThumbHash
                         )
+                        // Seed the image cache under the server URL — metadata-only
+                        // reconciliation: viewer gets a cache hit, never re-downloads.
+                        await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)
                         mediaObjects[i].postMediaId = result.id
                         mediaObjects[i].mediaURL = result.fileUrl
                         foregroundMediaIds.append(result.id)
@@ -924,6 +1131,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                         fileURL: audioURL, mimeType: "audio/mp4",
                         token: token, uploadContext: "story"
                     )
+                    // Seed the audio cache under the server URL — metadata-only
+                    // reconciliation: viewer gets a cache hit, never re-downloads.
+                    await CacheCoordinator.shared.audio.seed(copyingLocalFile: audioURL, for: result.fileUrl)
                     audioObjects[i].postMediaId = result.id
                     foregroundMediaIds.append(result.id)
                     os.Logger.storyAudio.info(
@@ -954,6 +1164,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 content: slide.content,
                 storyEffects: updatedEffects,
                 visibility: upload.visibility,
+                visibilityUserIds: upload.visibilityUserIds,
                 originalLanguage: upload.originalLanguage,
                 mediaIds: allMediaIds.isEmpty ? nil : allMediaIds,
                 repostOfId: nil
@@ -1437,7 +1648,21 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     }
 
     private func insertOrAppendStoryItem(_ item: StoryItem, forAuthor author: APIAuthor) {
-        if let idx = storyGroups.firstIndex(where: { $0.id == author.id }) {
+        insertOrAppendStoryItem(
+            item,
+            authorId: author.id,
+            authorName: author.name,
+            authorAvatar: author.avatar
+        )
+    }
+
+    /// Variante à champs primitifs : `APIAuthor` n'expose pas d'init public
+    /// (memberwise interne au SDK), donc le chemin optimiste hors-ligne — qui
+    /// construit l'auteur depuis `AuthManager.currentUser` — ne peut pas passer
+    /// par la surcharge `APIAuthor`. Le corps est identique (insertion dédupliquée
+    /// par id, création du groupe si absent).
+    private func insertOrAppendStoryItem(_ item: StoryItem, authorId: String, authorName: String, authorAvatar: String?) {
+        if let idx = storyGroups.firstIndex(where: { $0.id == authorId }) {
             var updated = storyGroups[idx].stories
             // Déduplication par id : un insert optimiste suivi de l'écho serveur /
             // socket (ou d'un 2e chemin de publish) ne doit JAMAIS produire deux
@@ -1451,10 +1676,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             storyGroups[idx] = storyGroups[idx].with(stories: updated)
         } else {
             storyGroups.insert(StoryGroup(
-                id: author.id,
-                username: author.name,
-                avatarColor: DynamicColorGenerator.colorForName(author.name),
-                avatarURL: author.avatar,
+                id: authorId,
+                username: authorName,
+                avatarColor: DynamicColorGenerator.colorForName(authorName),
+                avatarURL: authorAvatar,
                 stories: [item]
             ), at: 0)
         }

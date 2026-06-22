@@ -52,7 +52,7 @@ struct CallWaitingBannerView: View {
                         onReject()
                     }) {
                         Text(String(localized: "call.waiting.reject", defaultValue: "Refuser", bundle: .main))
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline.weight(.medium))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
@@ -64,8 +64,8 @@ struct CallWaitingBannerView: View {
                         dismiss()
                         onEndAndAnswer()
                     }) {
-                        Text(String(localized: "call.waiting.answer", defaultValue: "Repondre", bundle: .main))
-                            .font(.subheadline.weight(.semibold))
+                        Text(String(localized: "call.waiting.answer", defaultValue: "Répondre", bundle: .main))
+                            .font(.subheadline.weight(.medium))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
@@ -91,6 +91,10 @@ struct CallWaitingBannerView: View {
                 autoDismissTask?.cancel()
                 autoDismissTask = nil
             }
+            // Bannière blanc-sur-verre : on épingle le verre en sombre pour
+            // rester lisible en mode Light (sinon .ultraThinMaterial vire au
+            // clair et le texte blanc devient illisible).
+            .environment(\.colorScheme, .dark)
         }
     }
 

@@ -918,6 +918,19 @@ class FeedViewModel: ObservableObject {
         guard socketCancellables.isEmpty else { return }
         socialSocket.connect()
 
+        // --- didReconnect → backfill du feed ---
+        // Apres un flap reseau, le gateway a oublie nos rooms et des posts ont pu
+        // etre crees pendant la coupure. Un refresh (forceRefresh) recharge la tete
+        // du feed ; mergePreservingRealtimeHead conserve les posts inseres en temps
+        // reel. Miroir de ConversationSyncEngine sur messageSocket.didReconnect.
+        socialSocket.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                guard let self else { return }
+                Task { await self.loadFeed(forceRefresh: true) }
+            }
+            .store(in: &socketCancellables)
+
         // --- post:created ---
         socialSocket.postCreated
             .receive(on: DispatchQueue.main)
@@ -999,10 +1012,23 @@ class FeedViewModel: ObservableObject {
             .store(in: &socketCancellables)
 
         // --- post:bookmarked ---
+        // Le favori est PERSONNEL : le gateway n'émet `post:bookmarked` que vers la
+        // feed room du viewer (toutes ses sessions/vues, dont le reel viewer). On
+        // réconcilie `isBookmarkedByMe` sur le post → le re-seed du reel viewer
+        // depuis `FeedViewModel.posts` porte le bon état (favori persistant).
         socialSocket.postBookmarked
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.debouncedCacheSave()
+            .sink { [weak self] payload in
+                guard let self else { return }
+                if let index = self.posts.firstIndex(where: { $0.id == payload.postId }) {
+                    self.posts[index].isBookmarkedByMe = payload.bookmarked
+                    // Absolute count (when the gateway provides it) is authoritative
+                    // → the feed reconciles the displayed count live, no reload.
+                    if let count = payload.bookmarkCount {
+                        self.posts[index].bookmarkCount = count
+                    }
+                }
+                self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
 
@@ -1168,8 +1194,12 @@ class FeedViewModel: ObservableObject {
                 }
             }
 
-            // Video preroll: separate from main group — non-blocking, fire-and-forget
-            if let firstVideo = slice.flatMap(\.media).first(where: { $0.type == .video }),
+            // Video preroll: separate from main group — non-blocking, fire-and-forget.
+            // Suspended while the device is critically hot (SOTA thermal back-off,
+            // WWDC19 #422) so fast scrolling stops spawning new decode sessions until
+            // it cools down.
+            if MediaThermalPolicy.shouldPrefetchVideo(thermalState: ProcessInfo.processInfo.thermalState),
+               let firstVideo = slice.flatMap(\.media).first(where: { $0.type == .video }),
                let url = firstVideo.url, let resolved = MeeshyConfig.resolveMediaURL(url) {
                 Task(priority: .utility) {
                     await StoryMediaLoader.shared.preloadAndCachePlayer(url: resolved)

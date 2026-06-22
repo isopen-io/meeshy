@@ -291,7 +291,7 @@ struct ReelFeedCard: View, Equatable {
             }
             if isAuthor {
                 if displayUsername?.isEmpty == false { metaDot }
-                metricInline(icon: "chart.bar.fill", count: post.viewCount,
+                metricInline(icon: "chart.bar.fill", count: post.impressionCount,
                              a11yLabel: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
                 metaDot
                 metricInline(icon: "eye.fill", count: post.postOpenCount,

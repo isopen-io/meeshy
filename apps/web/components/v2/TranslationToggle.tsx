@@ -18,6 +18,13 @@ export interface TranslationToggleProps {
   translations?: TranslationItem[];
   userLanguage?: string;
   variant?: 'inline' | 'block';
+  /**
+   * Inline variant only. When true (default) the resolved content is rendered
+   * above the language chip — comments and statuses rely on the toggle to
+   * display their text. Set false for callers that render the content
+   * themselves and want the toggle as a bare language indicator (StoryViewer).
+   */
+  showContent?: boolean;
   className?: string;
 }
 
@@ -41,6 +48,7 @@ function TranslationToggle({
   translations = [],
   userLanguage,
   variant = 'inline',
+  showContent = true,
   className,
 }: TranslationToggleProps) {
   const { t: tComponents } = useI18n('components');
@@ -148,8 +156,13 @@ function TranslationToggle({
 
   // variant === 'inline'
   return (
-    <div className={cn('inline-flex flex-col', className)} ref={menuRef}>
-      <div className="relative inline-flex">
+    <div className={cn(showContent ? 'flex flex-col gap-1' : 'inline-flex flex-col', className)} ref={menuRef}>
+      {showContent && (
+        <p className="text-sm text-[var(--gp-text-primary)] whitespace-pre-wrap break-words">
+          {displayedVersion.content}
+        </p>
+      )}
+      <div className="relative inline-flex self-start">
         <button
           onClick={() => otherVersions.length > 0 && setShowMenu(!showMenu)}
           className={cn(

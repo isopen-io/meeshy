@@ -37,6 +37,7 @@ import me.meeshy.sdk.model.ReadStatusUpdatedEvent
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.reaction.InMemoryEmojiUsageStore
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -89,6 +90,7 @@ class ChatViewModelTest {
         val reactions: ReactionRepository,
         val conversations: ConversationRepository,
         val socket: MessageSocketManager,
+        val emojiUsage: InMemoryEmojiUsageStore,
     )
 
     private fun viewModel(
@@ -116,12 +118,14 @@ class ChatViewModelTest {
         val workManager = mockk<WorkManager>(relaxed = true)
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
         val socket = socketManager()
+        val emojiUsage = InMemoryEmojiUsageStore()
         return Harness(
             ChatViewModel(
                 repo,
                 conversations,
                 session,
                 reactions,
+                emojiUsage,
                 socket,
                 workManager,
                 MeeshyConfig(),
@@ -132,6 +136,7 @@ class ChatViewModelTest {
             reactions,
             conversations,
             socket,
+            emojiUsage,
         )
     }
 
@@ -356,6 +361,57 @@ class ChatViewModelTest {
         coVerify { h.repo.toggleReactionOptimistic("m2", "🔥", isAdding = true) }
         assertThat(h.vm.state.value.ownReactions["m2"]).containsExactly("🔥")
         coVerify { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun quick_reactions_start_as_the_default_strip() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.quickReactions)
+            .containsExactly("❤️", "😂", "🔥", "👏", "😮", "😢", "🥰", "👍").inOrder()
+    }
+
+    @Test
+    fun adding_a_reaction_records_usage_and_floats_it_to_the_strip_front() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.toggleReactionOptimistic(any(), any(), any()) } returns true
+        advanceUntilIdle()
+
+        h.vm.toggleReaction("m2", "😢")
+        advanceUntilIdle()
+
+        assertThat(h.emojiUsage.usage.value["😢"]).isEqualTo(1)
+        assertThat(h.vm.state.value.quickReactions.first()).isEqualTo("😢")
+    }
+
+    @Test
+    fun removing_a_reaction_does_not_record_usage() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        coEvery { h.repo.toggleReactionOptimistic(any(), any(), any()) } returns true
+        advanceUntilIdle()
+
+        h.vm.toggleReaction("m2", "🔥") // add → records once
+        advanceUntilIdle()
+        h.vm.toggleReaction("m2", "🔥") // remove → no record
+        advanceUntilIdle()
+
+        assertThat(h.emojiUsage.usage.value["🔥"]).isEqualTo(1)
+    }
+
+    @Test
+    fun opening_the_emoji_picker_targets_the_message_and_closes_the_action_sheet() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onMessageLongPress("m2")
+        h.vm.openEmojiPicker("m2")
+
+        assertThat(h.vm.state.value.emojiPickerMessageId).isEqualTo("m2")
+        assertThat(h.vm.state.value.actionMessageId).isNull()
+
+        h.vm.dismissEmojiPicker()
+        assertThat(h.vm.state.value.emojiPickerMessageId).isNull()
     }
 
     @Test

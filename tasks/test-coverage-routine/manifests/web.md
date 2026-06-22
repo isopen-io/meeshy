@@ -556,7 +556,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/components/conversations/header/TypingIndicator.tsx`
 - [ ] `apps/web/components/conversations/header/index.ts`
 - [~] `apps/web/components/conversations/header/types.ts`
-- [ ] `apps/web/components/conversations/header/use-call-banner.ts`
+- [x] `apps/web/components/conversations/header/use-call-banner.ts`
 - [ ] `apps/web/components/conversations/header/use-encryption-info.ts`
 - [ ] `apps/web/components/conversations/header/use-header-actions.ts`
 - [~] `apps/web/components/conversations/header/use-header-preferences.ts`
@@ -938,10 +938,10 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/hooks/use-audio-translation.ts`
 - [~] `apps/web/hooks/use-auth-guard.ts`
 - [~] `apps/web/hooks/use-auth.ts`
-- [~] `apps/web/hooks/use-auto-retry-failed-messages.ts`
+- [x] `apps/web/hooks/use-auto-retry-failed-messages.ts`
 - [~] `apps/web/hooks/use-bot-protection.ts`
-- [~] `apps/web/hooks/use-call-duration.ts`
-- [ ] `apps/web/hooks/use-call-quality.ts`
+- [x] `apps/web/hooks/use-call-duration.ts`
+- [x] `apps/web/hooks/use-call-quality.ts`
 - [x] `apps/web/hooks/use-connection-status.ts`
 - [ ] `apps/web/hooks/use-contacts-actions.ts`
 - [ ] `apps/web/hooks/use-contacts-data.ts`
@@ -979,11 +979,11 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/web/hooks/use-message-reactions.ts`
 - [~] `apps/web/hooks/use-message-translations.ts`
 - [ ] `apps/web/hooks/use-message-view-state.tsx`
-- [~] `apps/web/hooks/use-messaging.ts`
+- [x] `apps/web/hooks/use-messaging.ts`
 - [~] `apps/web/hooks/use-network-status.ts`
 - [ ] `apps/web/hooks/use-participant-management.ts`
 - [ ] `apps/web/hooks/use-phone-validation.ts`
-- [~] `apps/web/hooks/use-post-translation.ts`
+- [x] `apps/web/hooks/use-post-translation.ts`
 - [ ] `apps/web/hooks/use-preferences.ts`
 - [ ] `apps/web/hooks/use-prefetch-on-hover.ts`
 - [ ] `apps/web/hooks/use-prefetch.ts`
@@ -999,14 +999,14 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/hooks/use-registration-submit.ts`
 - [ ] `apps/web/hooks/use-registration-validation.ts`
 - [ ] `apps/web/hooks/use-registration-wizard.ts`
-- [~] `apps/web/hooks/use-resolved-theme.ts`
+- [x] `apps/web/hooks/use-resolved-theme.ts`
 - [ ] `apps/web/hooks/use-single-tap.ts`
 - [x] `apps/web/hooks/use-socketio-messaging.ts`
 - [ ] `apps/web/hooks/use-stream-messages.ts`
 - [ ] `apps/web/hooks/use-stream-socket.ts`
 - [ ] `apps/web/hooks/use-stream-translation.ts`
 - [ ] `apps/web/hooks/use-stream-ui.ts`
-- [ ] `apps/web/hooks/use-tab-notification.ts`
+- [x] `apps/web/hooks/use-tab-notification.ts`
 - [ ] `apps/web/hooks/use-translation-performance.ts`
 - [ ] `apps/web/hooks/use-unsaved-changes-warning.ts`
 - [ ] `apps/web/hooks/use-user-search.ts`
@@ -1055,7 +1055,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/hooks/conversations/index.ts`
 - [~] `apps/web/hooks/conversations/use-participants.ts`
 - [~] `apps/web/hooks/conversations/use-translation-state.ts`
-- [~] `apps/web/hooks/conversations/use-video-call.ts`
+- [x] `apps/web/hooks/conversations/use-video-call.ts`
 - [~] `apps/web/hooks/conversations/useComposerDrafts.ts`
 - [~] `apps/web/hooks/conversations/useConversationSelection.ts`
 - [~] `apps/web/hooks/conversations/useConversationTyping.ts`
@@ -1078,27 +1078,27 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/web/hooks/queries/use-conversation-preferences-query.ts`
 - [~] `apps/web/hooks/queries/use-conversations-pagination-rq.ts`
 - [~] `apps/web/hooks/queries/use-conversations-query.ts`
-- [~] `apps/web/hooks/queries/use-feed-query.ts`
-- [ ] `apps/web/hooks/queries/use-feed-variants.ts`
+- [x] `apps/web/hooks/queries/use-feed-query.ts`
+- [x] `apps/web/hooks/queries/use-feed-variants.ts`
 - [ ] `apps/web/hooks/queries/use-message-status-details.ts`
 - [~] `apps/web/hooks/queries/use-messages-query.ts`
 - [ ] `apps/web/hooks/queries/use-notifications-manager-rq.tsx`
 - [~] `apps/web/hooks/queries/use-notifications-query.ts`
-- [~] `apps/web/hooks/queries/use-post-mutations.ts`
+- [x] `apps/web/hooks/queries/use-post-mutations.ts`
 - [~] `apps/web/hooks/queries/use-post-query.ts`
-- [~] `apps/web/hooks/queries/use-post-socket-cache-sync.ts`
+- [x] `apps/web/hooks/queries/use-post-socket-cache-sync.ts`
 - [ ] `apps/web/hooks/queries/use-preferences-queries.ts`
-- [~] `apps/web/hooks/queries/use-reactions-query.ts`
+- [x] `apps/web/hooks/queries/use-reactions-query.ts`
 - [~] `apps/web/hooks/queries/use-send-message-mutation.ts`
 - [~] `apps/web/hooks/queries/use-socket-cache-sync.ts`
 - [~] `apps/web/hooks/queries/use-users-query.ts`
 
 ## hooks/social  (0/4 have a test)
 
-- [ ] `apps/web/hooks/social/use-feed-realtime.ts`
+- [x] `apps/web/hooks/social/use-feed-realtime.ts`
 - [ ] `apps/web/hooks/social/use-social-socket.ts`
-- [ ] `apps/web/hooks/social/use-stories-realtime.ts`
-- [ ] `apps/web/hooks/social/use-stories.ts`
+- [x] `apps/web/hooks/social/use-stories-realtime.ts`
+- [x] `apps/web/hooks/social/use-stories.ts`
 
 ## hooks/v2  (4/14 have a test)
 
@@ -1112,7 +1112,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/web/hooks/v2/use-friend-requests-v2.ts`
 - [ ] `apps/web/hooks/v2/use-login-v2.ts`
 - [ ] `apps/web/hooks/v2/use-messages-v2.ts`
-- [ ] `apps/web/hooks/v2/use-notifications-v2.ts`
+- [x] `apps/web/hooks/v2/use-notifications-v2.ts`
 - [~] `apps/web/hooks/v2/use-profile-v2.ts`
 - [ ] `apps/web/hooks/v2/use-settings-v2.ts`
 - [ ] `apps/web/hooks/v2/use-signup-v2.ts`
@@ -1141,7 +1141,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/lib/server-cache.ts`
 - [ ] `apps/web/lib/settings-sync.ts`
 - [~] `apps/web/lib/share-utils.ts`
-- [~] `apps/web/lib/story-transforms.ts`
+- [x] `apps/web/lib/story-transforms.ts`
 - [~] `apps/web/lib/ui-imports.ts`
 - [~] `apps/web/lib/user-status.ts`
 - [~] `apps/web/lib/utils.ts`
@@ -1151,7 +1151,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## lib/calls  (1/1 have a test)
 
-- [~] `apps/web/lib/calls/adaptive-degradation.ts`
+- [x] `apps/web/lib/calls/adaptive-degradation.ts`
 
 ## lib/constants  (1/1 have a test)
 
@@ -1230,7 +1230,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/services/dashboard.service.ts`
 - [ ] `apps/web/services/groups.service.ts`
 - [ ] `apps/web/services/index.ts`
-- [ ] `apps/web/services/link-conversation.service.ts`
+- [x] `apps/web/services/link-conversation.service.ts`
 - [ ] `apps/web/services/magic-link.service.ts`
 - [ ] `apps/web/services/markdown-parser-v2.2-optimized.ts`
 - [ ] `apps/web/services/markdown.ts`
@@ -1239,7 +1239,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/services/mentions.service.ts`
 - [ ] `apps/web/services/message-translation.service.ts`
 - [ ] `apps/web/services/message.service.ts`
-- [~] `apps/web/services/messages.service.ts`
+- [x] `apps/web/services/messages.service.ts`
 - [ ] `apps/web/services/monitoring.service.ts`
 - [x] `apps/web/services/notification-socketio.singleton.ts`
 - [~] `apps/web/services/notification.service.ts`
@@ -1247,27 +1247,27 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/web/services/permissions.service.ts`
 - [ ] `apps/web/services/phone-password-reset.service.ts`
 - [ ] `apps/web/services/phone-transfer.service.ts`
-- [~] `apps/web/services/posts.service.ts`
+- [x] `apps/web/services/posts.service.ts`
 - [ ] `apps/web/services/push-token.service.ts`
 - [ ] `apps/web/services/report.service.ts`
-- [ ] `apps/web/services/story.service.ts`
+- [x] `apps/web/services/story.service.ts`
 - [ ] `apps/web/services/tracking-links.ts`
 - [~] `apps/web/services/translation.service.ts`
 - [ ] `apps/web/services/tusUploadService.ts`
 - [ ] `apps/web/services/two-factor.service.ts`
 - [ ] `apps/web/services/user-preferences.service.ts`
 - [~] `apps/web/services/users.service.ts`
-- [~] `apps/web/services/webrtc-service.ts`
+- [x] `apps/web/services/webrtc-service.ts`
 - [ ] `apps/web/services/websocket.service.ts`
 
 ## services/conversations  (3/7 have a test)
 
-- [ ] `apps/web/services/conversations/crud.service.ts`
+- [x] `apps/web/services/conversations/crud.service.ts`
 - [ ] `apps/web/services/conversations/index.ts`
-- [ ] `apps/web/services/conversations/links.service.ts`
+- [x] `apps/web/services/conversations/links.service.ts`
 - [~] `apps/web/services/conversations/messages.service.ts`
 - [~] `apps/web/services/conversations/participants.service.ts`
-- [ ] `apps/web/services/conversations/transformers.service.ts`
+- [x] `apps/web/services/conversations/transformers.service.ts`
 - [~] `apps/web/services/conversations/types.ts`
 
 ## services/markdown  (2/16 have a test)
@@ -1306,7 +1306,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/web/stores/app-store.ts`
 - [~] `apps/web/stores/auth-form-store.ts`
 - [~] `apps/web/stores/auth-store.ts`
-- [~] `apps/web/stores/call-store.ts`
+- [x] `apps/web/stores/call-store.ts`
 - [~] `apps/web/stores/conversation-preferences-store.ts`
 - [~] `apps/web/stores/conversation-ui-store.ts`
 - [~] `apps/web/stores/failed-messages-store.ts`
@@ -1347,7 +1347,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/utils/console-override.ts`
 - [~] `apps/web/utils/conversation-id-utils.ts`
 - [~] `apps/web/utils/custom-toast.tsx`
-- [~] `apps/web/utils/date-format.ts`
+- [x] `apps/web/utils/date-format.ts`
 - [~] `apps/web/utils/debounce.ts`
 - [~] `apps/web/utils/error-context-collector.ts`
 - [ ] `apps/web/utils/fcm-manager.ts`
@@ -1365,8 +1365,8 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/utils/mention-display.ts`
 - [~] `apps/web/utils/messaging-utils.ts`
 - [~] `apps/web/utils/notification-helpers.ts`
-- [ ] `apps/web/utils/notification-sound.ts`
-- [ ] `apps/web/utils/notification-translations.ts`
+- [x] `apps/web/utils/notification-sound.ts`
+- [x] `apps/web/utils/notification-translations.ts`
 - [ ] `apps/web/utils/optimistic-message.ts`
 - [ ] `apps/web/utils/participant-helpers.ts`
 - [~] `apps/web/utils/participant-mapper.ts`
@@ -1381,7 +1381,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/web/utils/service-worker-registration.ts`
 - [ ] `apps/web/utils/service-worker.ts`
 - [~] `apps/web/utils/socket-validator.ts`
-- [~] `apps/web/utils/tag-colors.ts`
+- [x] `apps/web/utils/tag-colors.ts`
 - [~] `apps/web/utils/token-utils.ts`
 - [ ] `apps/web/utils/translation-adapter.ts`
 - [ ] `apps/web/utils/translation-cleaner.ts`

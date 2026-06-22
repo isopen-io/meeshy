@@ -64,6 +64,18 @@ struct BubbleContent: Equatable {
         /// `NSDataDetector` sous-jacent est désormais partagé (static) côté
         /// `LinkPreviewFetcher`, donc plus d'instanciation par cellule au scroll.
         let firstLinkURL: String?
+        /// Vidéo embeddable (YouTube) résolue depuis `firstLinkURL`, précalculée
+        /// une fois par le builder. Non-nil → la bulle affiche un player façade
+        /// (`VideoEmbedContainer`) au lieu de l'aperçu OpenGraph (`LinkPreviewCard`).
+        let embeddedVideo: EmbeddedVideo?
+        /// `[rawURL: token]` outbound-link tracking map for this message
+        /// (`Message.trackedLinkMap`). Passed into every `MessageTextRenderer.render`
+        /// call so raw URLs become tappable `/l/<token>` links. Empty → no rewrite.
+        let trackedLinks: [String: String]
+        /// Tracked destination for the embedded video façade, derived ONCE by the
+        /// builder from `firstLinkURL` → `trackedLinks[firstLinkURL]` →
+        /// `https://meeshy.me/l/<token>`. `nil` → façade opens the canonical watchURL.
+        let embedTrackedURL: URL?
     }
 
     struct Translation: Equatable {

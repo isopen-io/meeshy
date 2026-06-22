@@ -723,6 +723,7 @@ export const messageSchema = {
     // Delivery Status
     deliveredCount: { type: 'number', description: 'Number of recipients who received the message' },
     readCount: { type: 'number', description: 'Number of recipients who read the message' },
+    recipientCount: { type: 'number', description: 'Number of active recipients (participants excluding the sender) — all-or-nothing denominator' },
     deliveredToAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Delivered to all timestamp' },
     readByAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Read by all timestamp' },
 
@@ -1804,7 +1805,9 @@ export const notificationContextSchema = {
     originalMessageId: { type: 'string', nullable: true, description: 'Original message ID (for replies)' },
     callSessionId: { type: 'string', nullable: true, description: 'Related call session ID' },
     friendRequestId: { type: 'string', nullable: true, description: 'Related friend request ID' },
-    reactionId: { type: 'string', nullable: true, description: 'Related reaction ID' }
+    reactionId: { type: 'string', nullable: true, description: 'Related reaction ID' },
+    postId: { type: 'string', nullable: true, description: 'Related post/story/mood ID (navigation target)' },
+    commentId: { type: 'string', nullable: true, description: 'Related comment ID (navigation anchor)' }
   }
 } as const;
 
@@ -3234,7 +3237,8 @@ export const updateUserRequestSchema = {
     regionalLanguage: { type: 'string', minLength: 2, maxLength: 5, description: 'Regional language code' },
     customDestinationLanguage: { type: 'string', maxLength: 5, nullable: true, description: 'Custom destination language (empty string allowed)' },
     autoTranslateEnabled: { type: 'boolean', description: 'Enable auto-translation' },
-    timezone: { type: 'string', description: 'User timezone (IANA format)' }
+    timezone: { type: 'string', description: 'User timezone (IANA format)' },
+    voicePublic: { type: 'boolean', description: 'Expose the cloned voice sample on the public profile' }
   }
 } as const;
 

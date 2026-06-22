@@ -130,6 +130,25 @@ final class StatusServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.endpoint, "/posts")
     }
 
+    func testCreateForwardsAudioUrlAndRepostOfIdForRepublish() async throws {
+        // Republishing a voice mood must carry the source audio (else the voice
+        // is lost) AND link the source via repostOfId (so attribution resolves
+        // from repostOf.author and the source's TTL no longer matters).
+        let post = makeAPIPost()
+        let response = APIResponse<APIPost>(success: true, data: post, error: nil)
+        mock.stub("/posts", result: response)
+
+        _ = try await service.create(
+            moodEmoji: "fire",
+            content: "republished mood",
+            audioUrl: "/api/v1/attachments/file/voice.mp3",
+            repostOfId: "source-status-1"
+        )
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["audioUrl"] as? String, "/api/v1/attachments/file/voice.mp3")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["repostOfId"] as? String, "source-status-1")
+    }
+
     // MARK: - delete
 
     func testDeleteCallsDeleteOnPostEndpoint() async throws {

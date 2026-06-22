@@ -55,6 +55,7 @@ export class UserAuditService {
     };
 
     // Also log to console in development
+    /* istanbul ignore next */
     if (process.env.NODE_ENV === 'development') {
     }
 

@@ -40,6 +40,10 @@ struct FeedPostCard: View {
     var onSelectLanguage: ((String, String) -> Void)? = nil // (postId, language)
     var onTapPost: ((FeedPost) -> Void)? = nil
     var onTapRepost: ((String) -> Void)? = nil
+    /// Fired when the user taps "voir plus" to expand the truncated text. Lets a
+    /// host (e.g. the profile posts list) count a post view on expansion. The
+    /// inline expansion happens regardless; this is an additional side-effect.
+    var onSeeMore: (() -> Void)? = nil
     var onDelete: ((String) -> Void)? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
@@ -204,6 +208,24 @@ struct FeedPostCard: View {
         HapticFeedback.light()
     }
 
+    /// Vidéo embeddable (YouTube) détectée dans le contenu affiché. Dérivée (non stockée) :
+    /// le gate `.equatable()` (compare `post.content`) ne ré-évalue le body que si le contenu
+    /// change, donc le NSDataDetector ne tourne pas à chaque re-render parent.
+    private var embeddedVideo: EmbeddedVideo? {
+        EmbeddableVideoResolver.resolve(in: effectiveContent)
+    }
+
+    /// Teinte des liens cliquables dans le corps du post.
+    private var postLinkTint: Color { Color(hex: accentColor) }
+
+    /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
+    /// première URL du contenu via `post.trackedLinkMap`. `nil` → watchURL.
+    private var embedTrackedURL: URL? {
+        guard let raw = LinkPreviewFetcher.firstURL(in: effectiveContent),
+              let token = post.trackedLinkMap[raw] else { return nil }
+        return URL(string: "https://meeshy.me/l/\(token)")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Main content
@@ -213,13 +235,15 @@ struct FeedPostCard: View {
                     // Author header
                     authorHeader
 
-                    // Post content — tap text opens detail, "voir plus/moins" toggles expansion
+                    // Post content — tap text opens detail, "voir plus/moins" toggles expansion.
+                    // Le corps passe par `MessageTextRenderer` pour rendre les URLs
+                    // cliquables + trackées (`/l/<token>`) tout en gardant `onTapPost`
+                    // sur le texte non-lien (priorité au lien = défaut SwiftUI).
                     let truncation = truncatedContent
                     if isTextExpanded {
-                        Text(effectiveContent)
-                            .font(.subheadline)
-                            .foregroundColor(theme.textPrimary)
+                        MessageTextRenderer.render(effectiveContent, color: theme.textPrimary, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
                             .lineLimit(nil)
+                            .tint(postLinkTint)
                             .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
                             .accessibilityAction { onTapPost?(post) }
 
@@ -234,10 +258,9 @@ struct FeedPostCard: View {
                             .accessibilityAddTraits(.isButton)
                             .accessibilityHint(String(localized: "a11y.feed.post.see_less.hint", defaultValue: "Réduit le texte", bundle: .main))
                     } else {
-                        Text(truncation.text + (truncation.isTruncated ? "..." : ""))
-                            .font(.subheadline)
-                            .foregroundColor(theme.textPrimary)
+                        MessageTextRenderer.render(truncation.text + (truncation.isTruncated ? "..." : ""), color: theme.textPrimary, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
                             .lineLimit(nil)
+                            .tint(postLinkTint)
                             .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
                             .accessibilityAction { onTapPost?(post) }
 
@@ -245,11 +268,21 @@ struct FeedPostCard: View {
                             Text(String(localized: "feed.post.see_more", defaultValue: "voir plus", bundle: .main))
                                 .font(.subheadline.weight(.medium))
                                 .foregroundColor(theme.textMuted)
-                                .onTapGesture {
-                                    withAnimation(.easeInOut(duration: 0.25)) {
-                                        isTextExpanded = true
-                                    }
-                                }
+                                // Cible de touche 44pt (HIG) sans gonfler le texte visuellement.
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
+                                .textSelection(.disabled)
+                                .highPriorityGesture(
+                                    TapGesture()
+                                        .onEnded {
+                                            HapticFeedback.light()
+                                            withAnimation(.easeInOut(duration: 0.25)) {
+                                                isTextExpanded = true
+                                            }
+                                            onSeeMore?()
+                                        }
+                                )
+                                .accessibilityIdentifier("feed.post.see_more")
                                 .accessibilityAddTraits(.isButton)
                                 .accessibilityHint(String(localized: "a11y.feed.post.see_more.hint", defaultValue: "Affiche le texte complet", bundle: .main))
                         }
@@ -296,6 +329,13 @@ struct FeedPostCard: View {
                 .contentShape(Rectangle())
                 .onTapGesture {
                     onTapPost?(post)
+                }
+
+                // Embed vidéo (YouTube) détecté dans le contenu : player façade
+                // (vignette → lecture inline), hors du geste d'ouverture du post.
+                if let embeddedVideo {
+                    VideoEmbedContainer(video: embeddedVideo, accent: Color(hex: accentColor), trackedURL: embedTrackedURL)
+                        .padding(.top, 8)
                 }
 
                 // Repost-of-STORY: render the embedded story canvas (muted, autoplay).
@@ -384,9 +424,17 @@ struct FeedPostCard: View {
                 storyRingState: isPostAuthor ? authorStoryRing : nil,
                 onViewStory: isPostAuthor ? onViewAuthorStory.map { handler in
                     { selectedProfileUser = nil; handler() }
-                } : nil
+                } : nil,
+                postsContent: { uid in
+                    AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { tapped in
+                        selectedProfileUser = nil
+                        onTapPost?(tapped)
+                    }, onOpenReel: { reel, reels in
+                        ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil }
+                    }))
+                }
             )
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $showFullscreenGallery) {
@@ -504,7 +552,7 @@ struct FeedPostCard: View {
                         Text("·").font(.caption).foregroundColor(theme.textMuted)
                         HStack(spacing: 3) {
                             Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
-                            Text(Self.compactCount(post.viewCount)).font(.caption2.weight(.medium))
+                            Text(Self.compactCount(post.impressionCount)).font(.caption2.weight(.medium))
                             Text("·").font(.caption2)
                             Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
                             Text(Self.compactCount(post.postOpenCount)).font(.caption2.weight(.medium))
@@ -512,7 +560,7 @@ struct FeedPostCard: View {
                         .foregroundColor(theme.textMuted)
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
-                        .accessibilityValue("\(post.viewCount) · \(post.postOpenCount)")
+                        .accessibilityValue("\(post.impressionCount) · \(post.postOpenCount)")
                     }
                 }
             }
@@ -611,11 +659,19 @@ struct FeedPostCard: View {
                         .foregroundColor(theme.textMuted)
                 }
 
-                // Original content
-                Text(repost.content)
-                    .font(.footnote)
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(4)
+                // Original content — préfixé du mood emoji pour un STATUS
+                // reposté (sinon un mood republié n'afficherait qu'un corps vide).
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    if let mood = repost.moodEmoji, !mood.isEmpty {
+                        Text(mood)
+                            .font(.body)
+                            .accessibilityHidden(true)
+                    }
+                    Text(repost.content)
+                        .font(.footnote)
+                        .foregroundColor(theme.textSecondary)
+                        .lineLimit(4)
+                }
 
                 // Original stats
                 HStack(spacing: 12) {

@@ -23,6 +23,7 @@ export const PPTXLightbox: React.FC<PPTXLightboxProps> = ({
   onClose
 }) => {
   const { t } = useI18n('common');
+  const { t: tViewers } = useI18n('viewers');
   // Keyboard navigation
   useEffect(() => {
     if (!isOpen) return;
@@ -126,7 +127,7 @@ export const PPTXLightbox: React.FC<PPTXLightboxProps> = ({
 
         {/* Instructions (desktop only) */}
         <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 text-white/60 text-xs text-center">
-          <p>Appuyez sur Échap pour fermer</p>
+          <p>{tViewers('pptx.escToClose')}</p>
         </div>
       </motion.div>
     </AnimatePresence>,

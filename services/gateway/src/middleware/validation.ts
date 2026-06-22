@@ -39,7 +39,7 @@ export function createValidationMiddleware(schema: z.ZodType<any>) {
     } catch (error) {
       if (error instanceof ZodError) {
         // Format Zod errors into user-friendly messages
-        const errors = error.errors.map((err) => ({
+        const errors = error.issues.map((err) => ({
           field: err.path.join('.'),
           message: err.message,
           code: err.code
@@ -87,7 +87,7 @@ export function validateSocketEvent<T>(
     return { success: true, data: parsed };
   } catch (error) {
     if (error instanceof ZodError) {
-      const details = error.errors.map((err) => ({
+      const details = error.issues.map((err) => ({
         field: err.path.join('.'),
         message: err.message,
         code: err.code
@@ -95,7 +95,7 @@ export function validateSocketEvent<T>(
 
       return {
         success: false,
-        error: `Validation failed: ${error.errors[0]?.message || 'Invalid data'}`,
+        error: `Validation failed: ${error.issues[0]?.message || 'Invalid data'}`,
         details
       };
     }

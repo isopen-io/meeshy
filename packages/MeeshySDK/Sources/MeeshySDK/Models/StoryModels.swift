@@ -1763,10 +1763,15 @@ extension Array where Element == APIPost {
 extension APIPost {
     public func toStatusEntry() -> StatusEntry? {
         guard (type ?? "").uppercased() == "STATUS", let emoji = moodEmoji else { return nil }
+        // Attribution "via @X" : un status republié pointe la source via
+        // `repostOf` (single source of truth — pas de colonne `viaUsername`
+        // dédiée côté gateway). On dérive donc l'attribution de l'auteur du
+        // repost quand le champ direct est absent.
+        let via = viaUsername ?? repostOf?.author.username
         return StatusEntry(id: id, userId: author.id, username: author.name,
                            avatarColor: DynamicColorGenerator.colorForName(author.name),
                            moodEmoji: emoji, content: content, audioUrl: audioUrl, createdAt: createdAt,
-                           expiresAt: expiresAt, viaUsername: viaUsername)
+                           expiresAt: expiresAt, viaUsername: via)
     }
 }
 
@@ -2062,6 +2067,12 @@ public struct AddClipCommand: EditCommand {
     public let startTime: Float
     public let duration: Float
     public let content: String?
+    /// Width / height ratio of the source asset, captured by the caller when
+    /// the clip is added (image / video). Frozen into the resulting
+    /// `StoryMediaObject` so the canvas can letterbox correctly without
+    /// re-resolving the asset. Defaults to `1.0` for callers that don't yet
+    /// know the dimensions (and for legacy drafts decoded without this field).
+    public let aspectRatio: Double
 
     public init(id: String = UUID().uuidString,
                 timestamp: Date = Date(),
@@ -2070,7 +2081,8 @@ public struct AddClipCommand: EditCommand {
                 kind: TimelineClipKind,
                 startTime: Float,
                 duration: Float,
-                content: String? = nil) {
+                content: String? = nil,
+                aspectRatio: Double = 1.0) {
         self.id = id
         self.timestamp = timestamp
         self.clipId = clipId
@@ -2079,6 +2091,26 @@ public struct AddClipCommand: EditCommand {
         self.startTime = startTime
         self.duration = duration
         self.content = content
+        self.aspectRatio = aspectRatio
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, timestamp, clipId, postMediaId, kind, startTime, duration, content, aspectRatio
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        timestamp = try c.decode(Date.self, forKey: .timestamp)
+        clipId = try c.decode(String.self, forKey: .clipId)
+        postMediaId = try c.decode(String.self, forKey: .postMediaId)
+        kind = try c.decode(TimelineClipKind.self, forKey: .kind)
+        startTime = try c.decode(Float.self, forKey: .startTime)
+        duration = try c.decode(Float.self, forKey: .duration)
+        content = try c.decodeIfPresent(String.self, forKey: .content)
+        // REQUIRED conceptually but falls back to 1.0 for legacy drafts
+        // persisted before this field existed (mirrors StoryMediaObject).
+        aspectRatio = try c.decodeIfPresent(Double.self, forKey: .aspectRatio) ?? 1.0
     }
 
     public func apply(to project: inout TimelineProject) throws {
@@ -2088,7 +2120,7 @@ public struct AddClipCommand: EditCommand {
             project.mediaObjects.append(
                 StoryMediaObject(id: clipId, postMediaId: postMediaId,
                                  mediaType: mediaType, placement: "media",
-                                 aspectRatio: 1.0, // TODO Phase 2/3: compute real aspectRatio from asset
+                                 aspectRatio: aspectRatio,
                                  startTime: Double(startTime), duration: Double(duration))
             )
         case .audio:

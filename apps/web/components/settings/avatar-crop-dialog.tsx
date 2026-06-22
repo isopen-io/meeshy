@@ -115,7 +115,7 @@ export function AvatarCropDialog({
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">
-            {t('profile.cropAvatar.cropAvatarTitle') || 'Recadrer votre photo de profil'}
+            {t('profile.cropAvatar.cropAvatarTitle', 'Crop your profile photo')}
           </DialogTitle>
         </DialogHeader>
 
@@ -137,7 +137,7 @@ export function AvatarCropDialog({
                 containerStyle: {
                   width: '100%',
                   height: '100%',
-                  backgroundColor: '#f3f4f6',
+                  backgroundColor: 'var(--gp-background)',
                 },
               }}
             />
@@ -148,7 +148,7 @@ export function AvatarCropDialog({
             <div className="flex items-center justify-between">
               <Label className="flex items-center gap-2 text-sm font-medium">
                 <ZoomIn className="h-4 w-4" />
-                {t('profile.cropAvatar.zoom') || 'Zoom'}
+                {t('profile.cropAvatar.zoom', 'Zoom')}
               </Label>
               <span className="text-sm text-gray-500">{Math.round(zoom * 100)}%</span>
             </div>
@@ -167,7 +167,7 @@ export function AvatarCropDialog({
             <div className="flex items-center justify-between">
               <Label className="flex items-center gap-2 text-sm font-medium">
                 <RotateCw className="h-4 w-4" />
-                {t('profile.cropAvatar.rotation') || 'Rotation'}
+                {t('profile.cropAvatar.rotation', 'Rotation')}
               </Label>
               <span className="text-sm text-gray-500">{rotation}°</span>
             </div>
@@ -184,8 +184,8 @@ export function AvatarCropDialog({
           {/* Instructions */}
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
             <p className="text-sm text-blue-800 dark:text-blue-200">
-              {t('profile.cropAvatar.cropInstructions') || 
-                'Utilisez la souris pour déplacer l\'image, les curseurs pour zoomer et tourner. L\'image sera recadrée en carré.'}
+              {t('profile.cropAvatar.cropInstructions',
+                'Use your mouse to move the image, sliders to zoom and rotate. The image will be cropped to a square.')}
             </p>
           </div>
         </div>
@@ -196,14 +196,14 @@ export function AvatarCropDialog({
             onClick={handleReset}
             disabled={isProcessing || isUploading}
           >
-            {t('profile.cropAvatar.reset') || 'Réinitialiser'}
+            {t('profile.cropAvatar.reset', 'Reset')}
           </Button>
           <Button
             variant="outline"
             onClick={onClose}
             disabled={isProcessing || isUploading}
           >
-            {t('profile.cropAvatar.cancel') || 'Annuler'}
+            {t('profile.cropAvatar.cancel', 'Cancel')}
           </Button>
           <Button
             onClick={() => {
@@ -217,10 +217,10 @@ export function AvatarCropDialog({
               <Loader2 className={`mr-2 h-4 w-4 ${reducedMotion ? '' : 'animate-spin'}`} />
             )}
             {isUploading
-              ? (t('profile.cropAvatar.uploading') || 'Téléchargement...')
+              ? t('profile.cropAvatar.uploading', 'Uploading...')
               : isProcessing
-                ? (t('profile.cropAvatar.processing') || 'Traitement...')
-                : (t('profile.cropAvatar.saveAvatar') || 'Enregistrer')}
+                ? t('profile.cropAvatar.processing', 'Processing...')
+                : t('profile.cropAvatar.saveAvatar', 'Save')}
           </Button>
         </DialogFooter>
       </DialogContent>

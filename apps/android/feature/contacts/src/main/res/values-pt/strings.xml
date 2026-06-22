@@ -7,4 +7,10 @@
     <string name="contacts_tab_discover">Descobrir</string>
     <string name="contacts_tab_blocked">Bloqueados</string>
     <string name="contacts_coming_soon">Em breve</string>
+    <string name="contacts_requests_received">Recebidas</string>
+    <string name="contacts_requests_sent">Enviadas</string>
+    <string name="contacts_requests_empty">Nenhuma solicitação pendente</string>
+    <string name="contacts_request_accept">Aceitar</string>
+    <string name="contacts_request_decline">Recusar</string>
+    <string name="contacts_request_cancel">Cancelar</string>
 </resources>

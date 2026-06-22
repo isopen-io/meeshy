@@ -114,7 +114,9 @@ export async function languagesRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
+      /* istanbul ignore next -- unreachable: validateQuery/Zod provides default */
       const period = query.period || '30d';
+      /* istanbul ignore next -- unreachable: validateQuery/Zod provides default */
       const limit = parseInt(query.limit) || 10;
 
       // Calculer la date de début
@@ -131,6 +133,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
         case '90d':
           startDate.setDate(startDate.getDate() - 90);
           break;
+        /* istanbul ignore next -- unreachable: Zod enum exhausts all valid period values */
         default:
           startDate.setDate(startDate.getDate() - 30);
       }
@@ -281,6 +284,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
+      /* istanbul ignore next -- unreachable: validateQuery/Zod provides default */
       const period = query.period || '7d';
       const language = query.language; // Langue spécifique (optionnel)
 
@@ -294,6 +298,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
         case '30d':
           days = 30;
           break;
+        /* istanbul ignore next -- unreachable: Zod enum exhausts all valid period values */
         default:
           days = 7;
       }
@@ -344,6 +349,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
+      /* istanbul ignore next -- unreachable: validateQuery/Zod provides default */
       const limit = parseInt(query.limit) || 10;
 
       // Précision par paire de langues — agrégé côté MongoDB

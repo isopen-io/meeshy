@@ -147,12 +147,24 @@ describe('PostService.recordEngagementBatch — agrégation dénormalisée (INSE
     expect(lastUpdateData()).toMatchObject({ postOpenCount: { increment: 1 } });
   });
 
-  it('increments postOpenCount on a NEW detail-surface session (page Detail counts too)', async () => {
+  it('does NOT increment postOpenCount on a detail-surface session (Detail counts its open immediately via /impression?source=detail)', async () => {
     await service.recordEngagementBatch(
       [mkSession({ surface: 'detail', dwellMs: 1000 })],
       'u1',
     );
-    expect(lastUpdateData()).toMatchObject({ postOpenCount: { increment: 1 } });
+    // dwell < 2.5s → no qualified view either → no counters touched at all.
+    const data = lastUpdateData() ?? {};
+    expect(data).not.toHaveProperty('postOpenCount');
+  });
+
+  it('still increments qualifiedViewCount on a qualifying detail-surface session (dwell tracking preserved)', async () => {
+    await service.recordEngagementBatch(
+      [mkSession({ surface: 'detail', dwellMs: 4000 })],
+      'u1',
+    );
+    const data = lastUpdateData() ?? {};
+    expect(data).toMatchObject({ qualifiedViewCount: { increment: 1 } });
+    expect(data).not.toHaveProperty('postOpenCount');
   });
 
   it('does NOT increment postOpenCount on an ephemeral surface (story/status)', async () => {
