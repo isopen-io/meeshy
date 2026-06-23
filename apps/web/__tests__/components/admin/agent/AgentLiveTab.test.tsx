@@ -647,4 +647,121 @@ describe('AgentLiveTab', () => {
       expect(confEl.className).toContain('yellow');
     });
   });
+
+  it('search input onChange updates search state', async () => {
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({ success: true, data: [] });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByTestId('input').length).toBeGreaterThan(0));
+    const searchInputs = screen.getAllByTestId('input');
+    fireEvent.change(searchInputs[0], { target: { value: 'filter text' } });
+    expect((searchInputs[0] as HTMLInputElement).value).toBe('filter text');
+  });
+
+  it('shows no green dot for items with enabled=false', async () => {
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({
+      success: true,
+      data: [makeRecentActivity({
+        conversationId: 'conv-off',
+        conversation: { id: 'conv-off', title: 'Off Conv', type: 'direct' },
+        enabled: false,
+      })],
+    });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('Off Conv').length).toBeGreaterThan(0));
+    expect(document.querySelectorAll('.bg-green-500').length).toBe(0);
+  });
+
+  it('shows truncated conversationId when conversation is null', async () => {
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({
+      success: true,
+      data: [makeRecentActivity({ conversationId: 'conv-abc123def456', conversation: null as unknown as RecentConversationActivity['conversation'] })],
+    });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('conv-abc12...').length).toBeGreaterThan(0));
+  });
+
+  it('shows no type badge when conversation type is null', async () => {
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({
+      success: true,
+      data: [makeRecentActivity({
+        conversationId: 'conv-nt',
+        conversation: { id: 'conv-nt', title: 'No Type Conv', type: null as unknown as string },
+      })],
+    });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('No Type Conv').length).toBeGreaterThan(0));
+    expect(screen.queryAllByTestId('badge').length).toBe(0);
+  });
+
+  it('shows raw type when TYPE_LABELS has no matching key', async () => {
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({
+      success: true,
+      data: [makeRecentActivity({
+        conversationId: 'conv-uk',
+        conversation: { id: 'conv-uk', title: 'Unknown Type Conv', type: 'mystery_type' },
+      })],
+    });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('Unknown Type Conv').length).toBeGreaterThan(0));
+    expect(screen.getAllByText('mystery_type').length).toBeGreaterThan(0);
+  });
+
+  it('keeps empty list when getRecentActivity returns success=false', async () => {
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({ success: false });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('agent.overview.noRecentActivity').length).toBeGreaterThan(0));
+  });
+
+  it('sets empty list when getRecentActivity returns non-array data', async () => {
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({ success: true, data: { not: 'array' } });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('agent.overview.noRecentActivity').length).toBeGreaterThan(0));
+  });
+
+  it('SummaryCard with summaryRecord with empty currentTopics shows no topics block', async () => {
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({
+      success: true,
+      data: [makeRecentActivity({ conversationId: 'conv-abc123def456', conversation: { id: 'conv-abc123def456', title: 'Chat One', type: 'direct' } })],
+    });
+    (agentAdminService.getLiveState as jest.Mock).mockResolvedValue({
+      success: true,
+      data: makeLiveState({
+        summaryRecord: { summary: 'A summary', currentTopics: [], overallTone: 'formal', messageCount: 5 },
+      }),
+    });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('Chat One').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByText('Chat One')[0]);
+    await waitFor(() => expect(screen.getByText('A summary')).toBeInTheDocument());
+    expect(screen.queryByText('agentLive.topics')).not.toBeInTheDocument();
+  });
+
+  it('MetricsCard analytics without lastResponseAt does not show timestamp', async () => {
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({
+      success: true,
+      data: [makeRecentActivity({ conversationId: 'conv-abc123def456', conversation: { id: 'conv-abc123def456', title: 'Chat One', type: 'direct' } })],
+    });
+    (agentAdminService.getLiveState as jest.Mock).mockResolvedValue({
+      success: true,
+      data: makeLiveState({
+        analytics: { messagesSent: 10, totalWordsSent: 200, avgConfidence: 0.8, lastResponseAt: null, conversationsActive: 1 },
+      }),
+    });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('Chat One').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByText('Chat One')[0]);
+    await waitFor(() => expect(screen.getByText('10')).toBeInTheDocument());
+    // Only the Schedule section header Clock is present; no second clock from analytics lastResponseAt
+    expect(screen.queryAllByTestId('clock-icon')).toHaveLength(1);
+  });
+
+  it('formatTimeAgo shows never key for null lastResponseAt', async () => {
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({
+      success: true,
+      data: [makeRecentActivity({ conversationId: 'conv-never', conversation: { id: 'conv-never', title: 'Never Conv', type: 'direct' }, lastResponseAt: null as unknown as string })],
+    });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('Never Conv').length).toBeGreaterThan(0));
+    expect(screen.getAllByText('agent.overview.timeAgo.never').length).toBeGreaterThanOrEqual(1);
+  });
 });

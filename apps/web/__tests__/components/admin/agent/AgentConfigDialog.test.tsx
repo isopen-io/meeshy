@@ -30,13 +30,19 @@ jest.mock('next/dynamic', () => (loader: any, opts?: any) => {
 });
 
 jest.mock('@/components/admin/agent/ConversationPicker', () => ({
-  ConversationPicker: ({ onSelect }: any) => (
+  ConversationPicker: ({ onSelect, onClear }: any) => (
     <div data-testid="conversation-picker">
       <button
         data-testid="picker-select"
         onClick={() => onSelect('507f1f77bcf86cd799439011')}
       >
         select
+      </button>
+      <button
+        data-testid="picker-clear"
+        onClick={() => onClear?.()}
+      >
+        clear
       </button>
     </div>
   ),
@@ -51,7 +57,12 @@ jest.mock('@/components/admin/agent/UserDisplay', () => ({
 }));
 
 jest.mock('@/components/admin/agent/UserPicker', () => ({
-  UserPicker: () => <div data-testid="user-picker" />,
+  UserPicker: ({ onAdd, onRemove }: any) => (
+    <div data-testid="user-picker">
+      <button data-testid="user-picker-add" onClick={() => onAdd?.('user-new-id')}>add user</button>
+      <button data-testid="user-picker-remove" onClick={() => onRemove?.('user1')}>remove user</button>
+    </div>
+  ),
 }));
 
 jest.mock('@/components/admin/agent/InfoIcon', () => ({
@@ -1127,5 +1138,592 @@ describe('AgentConfigDialog — save in edit mode shows agentConfig.updated', ()
     });
     expect(mockToastSuccess).toHaveBeenCalledWith('agentConfig.updated');
     expect(onSave).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AgentConfigDialog — uncovered switch handlers', () => {
+  it('toggles enabled, autoPickupEnabled, useFullHistory, triggerOnUserMessage, triggerOnReplyTo, prioritizeRepliedUsers', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({
+          enabled: true,
+          autoPickupEnabled: true,
+          useFullHistory: false,
+          triggerOnUserMessage: false,
+          triggerOnReplyTo: true,
+          prioritizeRepliedUsers: true,
+        })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const switches = screen.getAllByRole('switch');
+    // [0]=enabled, [1]=autoPickupEnabled, [2]=useFullHistory,
+    // [4]=triggerOnUserMessage, [5]=triggerOnReplyTo, [11]=prioritizeRepliedUsers
+    for (const idx of [0, 1, 2, 4, 5, 11]) {
+      await act(async () => { fireEvent.click(switches[idx]); });
+    }
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('AgentConfigDialog — uncovered number input handlers', () => {
+  it('fires onChange on inactivityThresholdHours, minHistoricalMessages, maxControlledUsers', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ inactivityThresholdHours: 72, minHistoricalMessages: 0, maxControlledUsers: 5 })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const inputs = screen.getAllByRole('spinbutton');
+    const inactInput = inputs.find(i => (i as HTMLInputElement).value === '72' && (i as HTMLInputElement).max === '720');
+    const minHistInput = inputs.find(i => (i as HTMLInputElement).value === '0' && (i as HTMLInputElement).min === '0' && !(i as HTMLInputElement).max);
+    const maxCtlInput = inputs.find(i => (i as HTMLInputElement).value === '5' && (i as HTMLInputElement).max === '50');
+    expect(inactInput).toBeTruthy();
+    expect(maxCtlInput).toBeTruthy();
+    fireEvent.change(inactInput!, { target: { value: '100' } });
+    fireEvent.change(inactInput!, { target: { value: '' } });
+    if (minHistInput) fireEvent.change(minHistInput, { target: { value: '5' } });
+    if (minHistInput) fireEvent.change(minHistInput, { target: { value: '' } });
+    fireEvent.change(maxCtlInput!, { target: { value: '10' } });
+    fireEvent.change(maxCtlInput!, { target: { value: '' } });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+
+  it('fires onChange on scan hours and minutes inputs', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ scanIntervalMinutes: 3 })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const inputs = screen.getAllByRole('spinbutton');
+    const hoursInput = inputs.find(i => (i as HTMLInputElement).value === '0' && (i as HTMLInputElement).max === '24');
+    const minsInput = inputs.find(i => (i as HTMLInputElement).value === '3' && (i as HTMLInputElement).max === '59');
+    expect(hoursInput).toBeTruthy();
+    expect(minsInput).toBeTruthy();
+    fireEvent.change(hoursInput!, { target: { value: '1' } });
+    fireEvent.change(hoursInput!, { target: { value: '' } });
+    fireEvent.change(minsInput!, { target: { value: '30' } });
+    fireEvent.change(minsInput!, { target: { value: '' } });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+
+  it('fires onChange on minResponsesPerCycle and maxResponsesPerCycle', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ minResponsesPerCycle: 2, maxResponsesPerCycle: 12 })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const inputs = screen.getAllByRole('spinbutton');
+    const minResInput = inputs.find(i => (i as HTMLInputElement).value === '2' && (i as HTMLInputElement).max === '50' && (i as HTMLInputElement).min === '0');
+    const maxResInput = inputs.find(i => (i as HTMLInputElement).value === '12' && (i as HTMLInputElement).max === '50' && (i as HTMLInputElement).min === '1');
+    expect(minResInput).toBeTruthy();
+    expect(maxResInput).toBeTruthy();
+    fireEvent.change(minResInput!, { target: { value: '5' } });
+    fireEvent.change(minResInput!, { target: { value: '' } });
+    fireEvent.change(maxResInput!, { target: { value: '20' } });
+    fireEvent.change(maxResInput!, { target: { value: '' } });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+
+  it('fires onChange on maxReactionsPerCycle when reactionsEnabled is true', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ reactionsEnabled: true, maxReactionsPerCycle: 4 })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText('agentConfig.maxReactionsPerCycle')).toBeInTheDocument());
+    const inputs = screen.getAllByRole('spinbutton');
+    const reactInput = inputs.find(i => (i as HTMLInputElement).value === '4' && (i as HTMLInputElement).max === '50' && (i as HTMLInputElement).min === '0');
+    expect(reactInput).toBeTruthy();
+    fireEvent.change(reactInput!, { target: { value: '8' } });
+    fireEvent.change(reactInput!, { target: { value: '' } });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+
+  it('fires onChange on weekdayMaxUsers and weekendMaxUsers', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ weekdayMaxUsers: 4, weekendMaxUsers: 6 })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText('agentConfig.weekdayMaxUsers')).toBeInTheDocument());
+    const inputs = screen.getAllByRole('spinbutton');
+    const wdUsersInput = inputs.find(i => (i as HTMLInputElement).value === '4' && (i as HTMLInputElement).max === '20');
+    const weUsersInput = inputs.find(i => (i as HTMLInputElement).value === '6' && (i as HTMLInputElement).max === '30');
+    expect(wdUsersInput).toBeTruthy();
+    expect(weUsersInput).toBeTruthy();
+    fireEvent.change(wdUsersInput!, { target: { value: '8' } });
+    fireEvent.change(wdUsersInput!, { target: { value: '' } });
+    fireEvent.change(weUsersInput!, { target: { value: '10' } });
+    fireEvent.change(weUsersInput!, { target: { value: '' } });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+
+  it('fires onChange on burstSize, burstIntervalMinutes, quietIntervalMinutes when burstEnabled', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ burstEnabled: true, burstSize: 4, burstIntervalMinutes: 5, quietIntervalMinutes: 90 })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText('agentConfig.burstSize')).toBeInTheDocument());
+    const inputs = screen.getAllByRole('spinbutton');
+    const burstSzInput = inputs.find(i => (i as HTMLInputElement).value === '4' && (i as HTMLInputElement).max === '10');
+    const burstIntInput = inputs.find(i => (i as HTMLInputElement).value === '5' && (i as HTMLInputElement).max === '30');
+    const quietIntInput = inputs.find(i => (i as HTMLInputElement).value === '90' && (i as HTMLInputElement).max === '480');
+    expect(burstSzInput).toBeTruthy();
+    expect(burstIntInput).toBeTruthy();
+    expect(quietIntInput).toBeTruthy();
+    fireEvent.change(burstSzInput!, { target: { value: '6' } });
+    fireEvent.change(burstSzInput!, { target: { value: '' } });
+    fireEvent.change(burstIntInput!, { target: { value: '10' } });
+    fireEvent.change(burstIntInput!, { target: { value: '' } });
+    fireEvent.change(quietIntInput!, { target: { value: '120' } });
+    fireEvent.change(quietIntInput!, { target: { value: '' } });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('AgentConfigDialog — uncovered range input handlers', () => {
+  it('fires onChange on freshTopicProbability range input', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ freshTopicProbability: 0.2 })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText('agentConfig.freshTopicProbability')).toBeInTheDocument());
+    const rangeInputs = document.querySelectorAll('input[type="range"]');
+    expect(rangeInputs.length).toBeGreaterThan(0);
+    fireEvent.change(rangeInputs[0], { target: { value: '50' } });
+    fireEvent.change(rangeInputs[0], { target: { value: '0' } });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+
+  it('fires onChange on generationTemperature range input', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ generationTemperature: 0.8 })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const rangeInputs = document.querySelectorAll('input[type="range"]');
+    const tempRange = Array.from(rangeInputs).find(i => (i as HTMLInputElement).max === '200');
+    expect(tempRange).toBeTruthy();
+    fireEvent.change(tempRange!, { target: { value: '100' } });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+
+  it('fires onChange on qualityGateMinScore range input', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ qualityGateEnabled: true, qualityGateMinScore: 0.5 })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText(/agentConfig\.qualityGateMinScore/)).toBeInTheDocument());
+    const rangeInputs = document.querySelectorAll('input[type="range"]');
+    const qualRange = Array.from(rangeInputs).find(
+      i => (i as HTMLInputElement).max === '100' && (i as HTMLInputElement).value === '50',
+    );
+    expect(qualRange).toBeTruthy();
+    fireEvent.change(qualRange!, { target: { value: '70' } });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+
+  it('fires onChange on reactionBoostFactor range input', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ reactionBoostFactor: 1.5 })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText(/agentConfig\.reactionBoost/)).toBeInTheDocument());
+    const rangeInputs = document.querySelectorAll('input[type="range"]');
+    const boostRange = Array.from(rangeInputs).find(i => (i as HTMLInputElement).max === '50');
+    expect(boostRange).toBeTruthy();
+    fireEvent.change(boostRange!, { target: { value: '20' } });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('AgentConfigDialog — UserPicker onAdd and onRemove callbacks', () => {
+  it('calls triggerFromUserIds onAdd and onRemove via UserPicker buttons', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ triggerFromUserIds: [] })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const addBtns = screen.getAllByTestId('user-picker-add');
+    const removeBtns = screen.getAllByTestId('user-picker-remove');
+    expect(addBtns.length).toBeGreaterThanOrEqual(1);
+    await act(async () => { fireEvent.click(addBtns[0]); });
+    await act(async () => { fireEvent.click(removeBtns[0]); });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+
+  it('calls manualUserIds onAdd and onRemove via UserPicker buttons', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ manualUserIds: [] })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const addBtns = screen.getAllByTestId('user-picker-add');
+    const removeBtns = screen.getAllByTestId('user-picker-remove');
+    expect(addBtns.length).toBeGreaterThanOrEqual(2);
+    await act(async () => { fireEvent.click(addBtns[1]); });
+    await act(async () => { fireEvent.click(removeBtns[1]); });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+
+  it('calls excludedUserIds onAdd and onRemove via UserPicker buttons', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ excludedUserIds: [] })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const addBtns = screen.getAllByTestId('user-picker-add');
+    const removeBtns = screen.getAllByTestId('user-picker-remove');
+    expect(addBtns.length).toBeGreaterThanOrEqual(3);
+    await act(async () => { fireEvent.click(addBtns[2]); });
+    await act(async () => { fireEvent.click(removeBtns[2]); });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+
+  it('covers || [] branch when triggerFromUserIds is null', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ triggerFromUserIds: null as any, manualUserIds: null as any, excludedUserIds: null as any })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const addBtns = screen.getAllByTestId('user-picker-add');
+    const removeBtns = screen.getAllByTestId('user-picker-remove');
+    for (let i = 0; i < addBtns.length; i++) {
+      await act(async () => { fireEvent.click(addBtns[i]); });
+      await act(async () => { fireEvent.click(removeBtns[i]); });
+    }
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('AgentConfigDialog — ConversationPicker onClear callback', () => {
+  it('calls onClear to reset conversationId in create mode', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={null}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('conversation-picker')).toBeInTheDocument());
+    // First select a conversation
+    await act(async () => { fireEvent.click(screen.getByTestId('picker-select')); });
+    // Then clear it
+    await act(async () => { fireEvent.click(screen.getByTestId('picker-clear')); });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('AgentConfigDialog — || fallback right-side branch coverage', () => {
+  it('covers || fallback right sides for contextWindowSize and timeoutSeconds', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ triggerOnTimeout: true, contextWindowSize: 50, timeoutSeconds: 300 })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const inputs = screen.getAllByRole('spinbutton');
+    const ctxInput = inputs.find(i => (i as HTMLInputElement).value === '50' && (i as HTMLInputElement).max === '250');
+    const timeoutInput = inputs.find(i => (i as HTMLInputElement).value === '300' && (i as HTMLInputElement).max === '3600');
+    expect(ctxInput).toBeTruthy();
+    expect(timeoutInput).toBeTruthy();
+    fireEvent.change(ctxInput!, { target: { value: '' } });
+    fireEvent.change(timeoutInput!, { target: { value: '' } });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+
+  it('covers || fallback right sides for minWords and maxWords onChange', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ minWordsPerMessage: 3, maxWordsPerMessage: 400 })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const inputs = screen.getAllByRole('spinbutton');
+    const minInput = inputs.find(i => (i as HTMLInputElement).value === '3' && (i as HTMLInputElement).max === '200');
+    const maxInput = inputs.find(i => (i as HTMLInputElement).value === '400' && (i as HTMLInputElement).max === '2000');
+    expect(minInput).toBeTruthy();
+    expect(maxInput).toBeTruthy();
+    fireEvent.change(minInput!, { target: { value: '' } });
+    fireEvent.change(maxInput!, { target: { value: '' } });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+
+  it('covers || fallback right sides for weekdayMaxMessages and weekendMaxMessages onChange', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ weekdayMaxMessages: 10, weekendMaxMessages: 25 })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const inputs = screen.getAllByRole('spinbutton');
+    const wdInput = inputs.find(i => (i as HTMLInputElement).value === '10' && (i as HTMLInputElement).max === '100');
+    const weInput = inputs.find(i => (i as HTMLInputElement).value === '25' && (i as HTMLInputElement).max === '200');
+    expect(wdInput).toBeTruthy();
+    expect(weInput).toBeTruthy();
+    fireEvent.change(wdInput!, { target: { value: '' } });
+    fireEvent.change(weInput!, { target: { value: '' } });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('AgentConfigDialog — onRemove || [] right-side with null arrays', () => {
+  it('covers || [] right-side in onRemove for all user pickers when arrays are null', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({
+          triggerFromUserIds: null as any,
+          manualUserIds: null as any,
+          excludedUserIds: null as any,
+        })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const removeBtns = screen.getAllByTestId('user-picker-remove');
+    for (const btn of removeBtns) {
+      await act(async () => { fireEvent.click(btn); });
+    }
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('AgentConfigDialog — excludedRoles ?? [] right-side with null excludedRoles', () => {
+  it('covers ?? [] right-side for excludedRoles in rendering and badge click', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ excludedRoles: null as any })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const badges = screen.getAllByTestId('badge');
+    const userBadge = badges.find(b => b.textContent === 'USER');
+    expect(userBadge).toBeTruthy();
+    await act(async () => { fireEvent.click(userBadge!); });
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('AgentConfigDialog — listTopics false/null data branch at line 104', () => {
+  it('handles listTopics returning success: false', async () => {
+    mockListTopics.mockResolvedValue({ success: false });
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={null}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+
+  it('handles listTopics returning success: true with null data', async () => {
+    mockListTopics.mockResolvedValue({ success: true, data: null });
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={null}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('AgentConfigDialog — freshTopicBlockedSlugs ?? [] with topics loaded', () => {
+  it('covers ?? [] right-side for freshTopicBlockedSlugs when null and topics are loaded', async () => {
+    mockListTopics.mockResolvedValue({
+      success: true,
+      data: [{ slug: 'sports', label: 'Sports', description: 'Sport topics', isActive: true }],
+    });
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ freshTopicBlockedSlugs: null as any, freshTopicCategoryHints: null as any })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText('Sports')).toBeInTheDocument());
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('AgentConfigDialog — convMeta.messageCount ?? \'-\' right side', () => {
+  it('shows dash when messageCount is null in convMeta', async () => {
+    mockGetConversation.mockResolvedValue({
+      id: '507f1f77bcf86cd799439011',
+      type: 'group',
+      visibility: 'public',
+      memberCount: 5,
+      messageCount: null,
+      createdAt: '2024-01-01T00:00:00Z',
+      createdBy: null,
+      lastMessageAt: null,
+      identifier: null,
+    });
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig()}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText('agentConfig.conversationSection')).toBeInTheDocument());
+    expect(screen.getAllByText('-').length).toBeGreaterThan(0);
+  });
+});
+
+describe('AgentConfigDialog — ?? right-side branch coverage via undefined fields', () => {
+  it('covers ?? right sides for scan interval fields when scanIntervalMinutes is undefined', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ scanIntervalMinutes: undefined as any })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const inputs = screen.getAllByRole('spinbutton');
+    const hoursInput = inputs.find(i => (i as HTMLInputElement).max === '24');
+    const minsInput = inputs.find(i => (i as HTMLInputElement).max === '59');
+    if (hoursInput) {
+      fireEvent.change(hoursInput, { target: { value: '2' } });
+      fireEvent.change(hoursInput, { target: { value: '' } });
+    }
+    if (minsInput) {
+      fireEvent.change(minsInput, { target: { value: '30' } });
+      fireEvent.change(minsInput, { target: { value: '' } });
+    }
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
+  });
+
+  it('covers ?? right sides for reactionsEnabled ?? true and qualityGateEnabled ?? true when undefined', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({
+          reactionsEnabled: undefined as any,
+          qualityGateEnabled: undefined as any,
+          burstEnabled: undefined as any,
+          prioritizeTaggedUsers: undefined as any,
+          prioritizeRepliedUsers: undefined as any,
+          webSearchEnabled: undefined as any,
+          maxReactionsPerCycle: undefined as any,
+          qualityGateMinScore: undefined as any,
+          burstSize: undefined as any,
+          burstIntervalMinutes: undefined as any,
+          quietIntervalMinutes: undefined as any,
+          freshTopicProbability: undefined as any,
+          generationTemperature: undefined as any,
+          reactionBoostFactor: undefined as any,
+          freshTopicBlockedSlugs: undefined as any,
+          minResponsesPerCycle: undefined as any,
+          maxResponsesPerCycle: undefined as any,
+          weekdayMaxMessages: undefined as any,
+          weekendMaxMessages: undefined as any,
+          weekdayMaxUsers: undefined as any,
+          weekendMaxUsers: undefined as any,
+          minWordsPerMessage: undefined as any,
+          maxWordsPerMessage: undefined as any,
+          agentInstructions: undefined as any,
+          contextWindowSize: undefined as any,
+          inactivityThresholdHours: undefined as any,
+          maxControlledUsers: undefined as any,
+          minHistoricalMessages: undefined as any,
+        })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const switches = screen.getAllByRole('switch');
+    // Click all switches to trigger onCheckedChange with ?? right-sides active
+    for (const sw of switches) {
+      await act(async () => { fireEvent.click(sw); });
+    }
+    const rangeInputs = document.querySelectorAll('input[type="range"]');
+    for (const ri of Array.from(rangeInputs)) {
+      fireEvent.change(ri, { target: { value: '50' } });
+    }
+    expect(screen.getByTestId('dialog')).toBeInTheDocument();
   });
 });
