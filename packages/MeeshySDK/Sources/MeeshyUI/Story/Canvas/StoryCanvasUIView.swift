@@ -457,6 +457,25 @@ public final class StoryCanvasUIView: UIView {
     /// does not fire while a foreground clip is still a black rectangle (T6).
     private var foregroundVideoStatusObservers: [NSKeyValueObservation] = []
 
+    /// Failsafe timeout for the foreground-video readiness gate. The background
+    /// already owns a 2 s failsafe (`pendingVideoReadinessTask`) so a stuck
+    /// background can never freeze the slide — but the foreground gate had
+    /// none, so a foreground clip whose `AVPlayerItem.status` hangs on
+    /// `.unknown` (slow / stalled network, never reaching `.readyToPlay` NOR
+    /// `.failed`) held `contentReadyFired` false forever → the looping
+    /// background video was never activated and the playhead stayed frozen
+    /// ("le fond vidéo ne démarre jamais / se fige quand il y a une vidéo
+    /// foreground", user 2026-06-23). Armed once by `observePendingForegroundVideos`,
+    /// cancelled in `teardownReadinessObservers`.
+    private var foregroundVideoReadinessFailsafe: Task<Void, Never>?
+
+    /// Set by `foregroundVideoReadinessFailsafe` when the foreground gate has
+    /// waited past its window. Lets `fireContentReadyIfNeeded()` proceed even
+    /// though a foreground clip is still `.unknown` — the clip remains a
+    /// timeline component that appears once its bytes land. Reset on every
+    /// `scheduleContentReadyEvaluation` (new slide / rebuild).
+    private var foregroundReadinessTimedOut: Bool = false
+
     // MARK: - Display link
 
     /// Drives `currentTime` advance during `.play` mode (preferred 60 Hz, range 60–120).
@@ -1621,6 +1640,7 @@ public final class StoryCanvasUIView: UIView {
     private func scheduleContentReadyEvaluation(for kind: StoryBackgroundLayer.Kind) {
         contentReadyFired = false
         backgroundContentReady = false
+        foregroundReadinessTimedOut = false
         teardownReadinessObservers()
 
         // Explicit `_` placeholders on the comma-combined cases — Swift 6.2
@@ -1816,14 +1836,29 @@ public final class StoryCanvasUIView: UIView {
             storyMediaLog.debug("contentReady held: background not settled")
             return
         }
-        // T6 — the background may be settled, but if a foreground video clip
-        // is still preparing the slide is a black rectangle. Hold the signal
+        // T6 — the background may be settled, but if a foreground video clip is
+        // still preparing the slide could be a black rectangle. Hold the signal
         // (and the progress timer) until at least one foreground video is
         // `.readyToPlay`; the KVO tokens re-trigger this method when it lands.
-        guard foregroundVideosReady() else {
-            storyMediaLog.debug("contentReady held: foreground video(s) not ready")
-            observePendingForegroundVideos()
-            return
+        //
+        // CRITICAL — this gate applies ONLY when the background is NOT itself
+        // visual media. With a background video/image the canvas is already
+        // FILLED (the background fills it via resizeAspectFill), so there is no
+        // black rectangle to hide: a slow / stalled foreground clip must NEVER
+        // hold back the looping background video. Gating it here meant a
+        // foreground clip on a slow network froze the background video — it
+        // never started, never looped, and the playhead stayed frozen ("le fond
+        // vidéo doit jouer en boucle même avec des vidéos en foreground", user
+        // 2026-06-23). The foreground video is a timeline component: it appears
+        // once its bytes land, like every other foreground element. The
+        // `foregroundReadinessTimedOut` failsafe covers the remaining
+        // colour/gradient-background case so it can never hang forever either.
+        if !backgroundLayer.kind.isVisualMedia {
+            guard foregroundVideosReady() || foregroundReadinessTimedOut else {
+                storyMediaLog.debug("contentReady held: foreground video(s) not ready")
+                observePendingForegroundVideos()
+                return
+            }
         }
         storyMediaLog.debug("contentReady FIRED mode=\(String(describing: self.mode), privacy: .public) pendingActivation=\(self.pendingBackgroundActivation, privacy: .public)")
         contentReadyFired = true
@@ -1931,6 +1966,19 @@ public final class StoryCanvasUIView: UIView {
             }
             foregroundVideoStatusObservers.append(token)
         }
+        // Arm the failsafe ONCE — a foreground clip stuck on `.unknown` (its
+        // KVO never fires `.readyToPlay` nor `.failed`) would otherwise hold
+        // `contentReadyFired` false forever. Mirrors the background's 2 s
+        // `pendingVideoReadinessTask`. Guarded on `== nil` so the repeated
+        // gate re-entries during loading don't restart the timer.
+        guard foregroundVideoReadinessFailsafe == nil else { return }
+        foregroundVideoReadinessFailsafe = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            if Task.isCancelled { return }
+            guard let self, !self.contentReadyFired else { return }
+            self.foregroundReadinessTimedOut = true
+            self.fireContentReadyIfNeeded()
+        }
     }
 
     private func teardownReadinessObservers() {
@@ -1945,6 +1993,8 @@ public final class StoryCanvasUIView: UIView {
         thumbHashPlaceholderRef = nil
         foregroundVideoStatusObservers.forEach { $0.invalidate() }
         foregroundVideoStatusObservers = []
+        foregroundVideoReadinessFailsafe?.cancel()
+        foregroundVideoReadinessFailsafe = nil
     }
 
     /// Test-only seam : forces the readiness signal as if the background
@@ -1957,6 +2007,18 @@ public final class StoryCanvasUIView: UIView {
         guard !contentReadyFired else { return }
         contentReadyFired = true
         onContentReady?()
+    }
+
+    /// Test-only seam : drives the REAL `fireContentReadyIfNeeded()` path with
+    /// the background marked settled, so the foreground-video gating decision
+    /// (skipped when the background is itself visual media) can be asserted
+    /// deterministically without staging a real `AVPlayer` first-frame
+    /// transition. Returns whether `onContentReady` fired as a result.
+    @discardableResult
+    public func _markBackgroundReadyForTesting() -> Bool {
+        backgroundContentReady = true
+        fireContentReadyIfNeeded()
+        return contentReadyFired
     }
 
     /// Test-only seam : read-only access to the reader audio engine so the
