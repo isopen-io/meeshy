@@ -788,12 +788,15 @@ extension APINotification {
         return nil
     }
 
-    private static let isoFractional: ISO8601DateFormatter = {
+    // `nonisolated(unsafe)` : ISO8601DateFormatter est thread-safe pour le
+    // parsing une fois configuré ; ces statics sont partagés depuis un struct
+    // Sendable nonisolated (même pattern que les CIContext/NSCache du SDK).
+    private nonisolated(unsafe) static let isoFractional: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
     }()
-    private static let isoPlain: ISO8601DateFormatter = {
+    private nonisolated(unsafe) static let isoPlain: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
         return f
