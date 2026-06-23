@@ -1959,3 +1959,26 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   3. 93.91% branch: uncovered branches include LOG_AUDIO_DIAG sub-expressions (only fire under `process.env.LOG_AUDIO_DIAG='true'` + specific message shapes), V8 sub-expression ternary artifacts in optional-chain expressions, and one dead-code defensive branch. All safely above 92% floor.
   4. Pre-existing gateway failures: 0 new failures introduced (26 pre-existing suite failures on production bugs unchanged).
 - Commit: (see branch claude/amazing-darwin-ol5i29)
+
+## 2026-06-23T16:30Z — P1 Voice/audio × shared/SDK
+- Targeted: `packages/shared/types/attachment-audio.ts`, `types/audio-transcription.ts`, `types/audio-effects-timeline.ts`, `types/attachment-transcription.ts`, `types/translated-audio.ts`
+- Result: ☑ done — P1 Voice/audio × shared/SDK cell flipped ☐→☑
+- Coverage (per-file, vitest v8):
+  - attachment-audio.ts: **98.29% lines / 97.14% branches** ✓ (1 istanbul ignore: dead-code guard after getAvailableLanguages filter)
+  - audio-transcription.ts: **100% lines / 100% branches** ✓
+  - audio-effects-timeline.ts: **100% lines / 100% branches** ✓
+  - attachment-transcription.ts: **100% lines / 100% branches** ✓
+  - translated-audio.ts: **100% lines / 100% branches** ✓
+  - shared global: 99.68% lines / 96.74% branches / 93.1% funcs — all thresholds met (functions ratcheted 91→93)
+- Tests added: 102 tests across 5 new files:
+  - `__tests__/types/attachment-audio.test.ts` (36 tests) — hasTranslation, getTranslation, getAvailableLanguages, softDeleteTranslation, upsertTranslation, toSocketIOTranslation/s, alias checks, runtime-undefined edge cases, fake-timer deterministic timestamps
+  - `__tests__/types/audio-transcription.test.ts` (20 tests) — getQualityLevel (4 ranges, boundaries), isVoiceModelUsable (all condition combos), getRecommendedMinDuration, needsMoreSamples (boundary 29999/30000ms), getVoiceModelStatus (null/full model, all quality levels)
+  - `__tests__/types/audio-effects-timeline.test.ts` (28 tests) — isValidAudioEffectsTimeline (null/primitive/malformed/valid), createEmptyTimeline, reconstructEffectsStateAt (empty/activate/deactivate/update/ignored-update/beyond-target), calculateEffectsStats (empty/single/open/multiple/paramChanges/overlapping)
+  - `__tests__/types/attachment-transcription.test.ts` (16 tests) — 8 type guards × (true + 3×false) matrix
+  - `__tests__/types/translated-audio.test.ts` (5 tests) — toTranslatedAudioData field mapping, null→undefined voiceModelId
+- Reviewer: PASS (rounds: 1) — istanbul ignore accepted; minor factory hygiene note (non-blocker)
+- Notes:
+  1. Istanbul ignore on `toSocketIOTranslations` line 348: `getAvailableLanguages` pre-filters undefined values, making the inner null-check structurally unreachable. Reviewer confirmed legitimate.
+  2. `vi.setSystemTime()` used without explicit `vi.useFakeTimers()` — Vitest activates fake timers implicitly; `vi.useRealTimers()` tears down after each test. No contamination observed.
+  3. MeeshySDK (Swift) portion of P1 Voice/audio × shared/SDK is ⊘ on Linux (no Xcode/macOS). Only TypeScript packages/shared files covered.
+- Commit: (see below after push)
