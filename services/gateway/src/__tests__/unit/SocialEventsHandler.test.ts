@@ -18,7 +18,7 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
-import type { Post, PostLikedEventData, PostUnlikedEventData, PostRepostedEventData, StoryViewedEventData, StoryReactedEventData, StoryUnreactedEventData, StatusReactedEventData, StatusUnreactedEventData, CommentAddedEventData, CommentDeletedEventData, CommentLikedEventData } from '@meeshy/shared/types/post';
+import type { Post, PostLikedEventData, PostUnlikedEventData, PostRepostedEventData, StoryViewedEventData, StoryReactedEventData, StoryUnreactedEventData, StatusReactedEventData, StatusUnreactedEventData, CommentAddedEventData, CommentDeletedEventData, CommentLikedEventData, CommentTranslationUpdatedEventData, CommentMediaUpdatedEventData } from '@meeshy/shared/types/post';
 
 // ===== MOCKS =====
 
@@ -395,31 +395,68 @@ describe('SocialEventsHandler', () => {
   // ==============================================
 
   describe('broadcastCommentAdded', () => {
-    it('should emit COMMENT_ADDED to friends and author', async () => {
-      const data: CommentAddedEventData = {
-        postId: 'post-1',
-        comment: {
-          id: 'comment-1',
-          content: 'Nice post!',
-          likeCount: 0,
-          replyCount: 0,
-          createdAt: new Date().toISOString(),
-        },
-        commentCount: 1,
-      };
+    const makeData = (postId = 'post-1'): CommentAddedEventData => ({
+      postId,
+      comment: {
+        id: 'comment-1',
+        content: 'Nice post!',
+        likeCount: 0,
+        replyCount: 0,
+        createdAt: new Date().toISOString(),
+      },
+      commentCount: 1,
+    });
+
+    it('should emit COMMENT_ADDED to the friend feeds, the author feed AND the post room', async () => {
+      const data = makeData();
 
       await handler.broadcastCommentAdded(data, AUTHOR_ID);
 
-      expect(mockIO.to).toHaveBeenCalledTimes(3);
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(FRIEND_1));
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
+      // Single chained emit on the UNION of rooms (Socket.IO dedupes a socket
+      // present in several rooms → exactly-once delivery).
+      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(
+        expect.arrayContaining([
+          ROOMS.feed(FRIEND_1),
+          ROOMS.feed(FRIEND_2),
+          ROOMS.feed(AUTHOR_ID),
+          ROOMS.post('post-1'),
+        ])
+      );
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.COMMENT_ADDED, data);
+    });
+
+    it('should reach the post room so a detail/reel viewer who is NOT the author\'s friend sees the comment live', async () => {
+      const data = makeData('post-77');
+
+      await handler.broadcastCommentAdded(data, AUTHOR_ID);
+
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toContain(ROOMS.post('post-77'));
+    });
+
+    it('should deliver EXACTLY ONCE (single emit) so non-idempotent comment inserts never double-apply', async () => {
+      const data = makeData();
+
+      await handler.broadcastCommentAdded(data, AUTHOR_ID);
+
+      expect(mockIO.emit).toHaveBeenCalledTimes(1);
+    });
+
+    it('should still reach the author feed AND the post room when the friends lookup fails', async () => {
+      mockPrisma.friendRequest.findMany.mockRejectedValue(new Error('Database connection lost'));
+      const data = makeData('post-err');
+
+      await handler.broadcastCommentAdded(data, AUTHOR_ID);
+
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(expect.arrayContaining([ROOMS.feed(AUTHOR_ID), ROOMS.post('post-err')]));
     });
   });
 
   describe('broadcastCommentDeleted', () => {
-    it('should emit COMMENT_DELETED to friends and author', async () => {
+    it('should emit COMMENT_DELETED to the friend feeds, the author feed AND the post room', async () => {
       const data: CommentDeletedEventData = {
         postId: 'post-1',
         commentId: 'comment-1',
@@ -428,8 +465,25 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastCommentDeleted(data, AUTHOR_ID);
 
-      expect(mockIO.to).toHaveBeenCalledTimes(3);
+      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(
+        expect.arrayContaining([
+          ROOMS.feed(FRIEND_1),
+          ROOMS.feed(FRIEND_2),
+          ROOMS.feed(AUTHOR_ID),
+          ROOMS.post('post-1'),
+        ])
+      );
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.COMMENT_DELETED, data);
+    });
+
+    it('should deliver EXACTLY ONCE so the optimistic removal never double-corrects', async () => {
+      const data: CommentDeletedEventData = { postId: 'post-1', commentId: 'comment-1', commentCount: 0 };
+
+      await handler.broadcastCommentDeleted(data, AUTHOR_ID);
+
+      expect(mockIO.emit).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -464,6 +518,45 @@ describe('SocialEventsHandler', () => {
 
       expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_1));
       expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
+    });
+  });
+
+  // ==============================================
+  // COMMENT TRANSLATION / MEDIA BROADCASTS — must reach the post room too
+  // ==============================================
+
+  describe('broadcastCommentTranslationUpdated', () => {
+    it('should emit COMMENT_TRANSLATION_UPDATED to the friend/author feeds AND the post room', async () => {
+      const data: CommentTranslationUpdatedEventData = {
+        postId: 'post-1',
+        commentId: 'comment-1',
+        language: 'fr',
+        translation: { text: 'Bonjour', translationModel: 'nllb', createdAt: new Date().toISOString() },
+      };
+
+      await handler.broadcastCommentTranslationUpdated(data, AUTHOR_ID);
+
+      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(expect.arrayContaining([ROOMS.feed(AUTHOR_ID), ROOMS.post('post-1')]));
+      expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, data);
+    });
+  });
+
+  describe('broadcastCommentMediaUpdated', () => {
+    it('should emit COMMENT_MEDIA_UPDATED to the friend/author feeds AND the post room', async () => {
+      const data: CommentMediaUpdatedEventData = {
+        postId: 'post-1',
+        commentId: 'comment-1',
+        comment: { id: 'comment-1', content: 'hi', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() },
+      };
+
+      await handler.broadcastCommentMediaUpdated(data, AUTHOR_ID);
+
+      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(expect.arrayContaining([ROOMS.feed(AUTHOR_ID), ROOMS.post('post-1')]));
+      expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, data);
     });
   });
 
