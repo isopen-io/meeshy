@@ -145,12 +145,14 @@ export function registerCoreRoutes(
       }
 
       // Fan-out to friends: user_mentioned takes priority (dedup via excludeUserIds)
-      const postTypeForNotif = ((post as any).type ?? parsed.data.type ?? 'POST') as 'STORY' | 'POST' | 'MOOD' | 'STATUS';
+      const postTypeForNotif = ((post as any).type ?? parsed.data.type ?? 'POST') as 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
       notificationService.createFriendContentNotificationsBatch({
         postId: (post as any).id as string,
         authorId: authContext.registeredUser.id,
         contentType: postTypeForNotif,
         excerpt: postContent?.slice(0, 100),
+        postCreatedAt: (post as any).createdAt ?? undefined,
+        postExpiresAt: (post as any).expiresAt ?? undefined,
         excludeUserIds: mentionedUserIdsForDedup,
       }).catch((err: unknown) => {
         fastify.log.error(`[POST /posts] friend content notification fan-out failed: ${err}`);

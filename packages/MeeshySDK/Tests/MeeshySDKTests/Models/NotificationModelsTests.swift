@@ -329,4 +329,125 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertEqual(MeeshyNotificationType.friendNewMood.systemIcon, "face.smiling.fill")
         XCTAssertEqual(MeeshyNotificationType.friendNewMood.accentHex, "6366F1")
     }
+
+    // MARK: - Rich context: body, entity context & lifecycle
+
+    private func decodeNotification(_ json: String) throws -> APINotification {
+        try JSONDecoder().decode(APINotification.self, from: json.data(using: .utf8)!)
+    }
+
+    func test_postComment_formattedBody_isCommentText() throws {
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"post_comment","content":"Trop belle cette photo !",
+         "actor":{"id":"a","username":"marie","displayName":"Marie"},
+         "context":{"postId":"p1"},
+         "metadata":{"commentPreview":"Trop belle cette photo !","postType":"STORY","postPreview":"Coucher de soleil"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedBody, "Trop belle cette photo !")
+        XCTAssertEqual(n.formattedContext, "Story · « Coucher de soleil »")
+    }
+
+    func test_commentReply_formattedContext_referencesParentComment() throws {
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"comment_reply","content":"Carrément d'accord",
+         "actor":{"id":"a","username":"jo"},
+         "context":{"postId":"p1"},
+         "metadata":{"commentPreview":"Carrément d'accord","parentCommentPreview":"Le meilleur épisode"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedBody, "Carrément d'accord")
+        XCTAssertEqual(n.formattedContext, "En réponse à « Le meilleur épisode »")
+    }
+
+    func test_reaction_formattedBody_showsReactedEntityPreview() throws {
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"story_reaction","content":"a réagi 😍 à votre story",
+         "actor":{"id":"a","username":"lea"},
+         "context":{"postId":"p1"},
+         "metadata":{"emoji":"😍","postType":"STORY","postPreview":"Ma rando du dimanche"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedBody, "Ma rando du dimanche")
+        XCTAssertEqual(n.formattedContext, "Story · « Ma rando du dimanche »")
+    }
+
+    func test_friendNewStory_REEL_kindLabelIsReel() throws {
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"friend_new_post","content":"Regarde ça",
+         "actor":{"id":"a","username":"sam"},
+         "context":{"postId":"p1"},
+         "metadata":{"contentType":"REEL","excerpt":"Regarde ça"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedBody, "Regarde ça")
+        XCTAssertEqual(n.socialKindLabel, "Réel")
+    }
+
+    func test_friendNewStory_mediaOnly_usesMediaSummary() throws {
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"friend_new_story","content":"a publié une nouvelle story",
+         "actor":{"id":"a","username":"sam"},
+         "context":{"postId":"p1"},
+         "metadata":{"contentType":"STORY","mediaType":"image"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedBody, "📷 Photo")
+        XCTAssertEqual(n.socialKindLabel, "Story")
+    }
+
+    func test_expiredStory_context_marksExpiredAndShowsPublication() throws {
+        // Story published well in the past with an expiry already elapsed.
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"friend_new_story","content":"a publié une nouvelle story",
+         "actor":{"id":"a","username":"sam"},
+         "context":{"postId":"p1","postCreatedAt":"2020-01-01T10:00:00.000Z","postExpiresAt":"2020-01-02T10:00:00.000Z"},
+         "metadata":{"contentType":"STORY","mediaType":"image"},
+         "state":{"isRead":false,"createdAt":"2020-01-01T10:00:00.000Z"}}
+        """)
+        XCTAssertTrue(n.isLinkedContentExpired)
+        let context = try XCTUnwrap(n.formattedContext)
+        XCTAssertTrue(context.contains("Story"))
+        XCTAssertTrue(context.contains("expirée"), "expired story must be flagged: \(context)")
+    }
+
+    func test_storyComment_onExpiredStory_contextFlagsExpiry() throws {
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"story_new_comment","content":"Magnifique",
+         "actor":{"id":"a","username":"ines"},
+         "context":{"postId":"p1","postExpiresAt":"2020-01-02T10:00:00.000Z"},
+         "metadata":{"commentPreview":"Magnifique","postType":"STORY"},
+         "state":{"isRead":false,"createdAt":"2020-01-01T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedBody, "Magnifique")
+        let context = try XCTUnwrap(n.formattedContext)
+        XCTAssertTrue(context.contains("expirée"), "expired story comment must flag expiry: \(context)")
+    }
+
+    func test_nonExpiredStory_context_doesNotFlagExpiry() throws {
+        let future = ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600))
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"story_reaction","content":"a réagi",
+         "actor":{"id":"a","username":"ines"},
+         "context":{"postId":"p1","postExpiresAt":"\(future)"},
+         "metadata":{"emoji":"👍","postType":"STORY","postPreview":"Soleil"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertFalse(n.isLinkedContentExpired)
+        XCTAssertEqual(n.formattedContext, "Story · « Soleil »")
+    }
+
+    func test_message_attachmentDetails_decoded() throws {
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"new_message","content":"🎵 Audio · 0:34",
+         "actor":{"id":"a","username":"tom"},
+         "context":{"conversationId":"c1","messageId":"m1"},
+         "metadata":{"messagePreview":"🎵 Audio","attachments":{"count":1,"firstType":"audio","firstFilename":"vocal.m4a","firstDurationMs":34000,"firstFileSize":1200000}},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.metadata?.attachments?.firstType, "audio")
+        XCTAssertEqual(n.metadata?.attachments?.firstDurationMs, 34000)
+        XCTAssertEqual(n.metadata?.attachments?.firstFileSize, 1200000)
+        XCTAssertEqual(n.formattedBody, "🎵 Audio · 0:34")
+    }
 }

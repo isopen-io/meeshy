@@ -217,6 +217,14 @@ export interface NotificationContext {
   readonly firstAttachmentMimeType?: string;
   /** Durée en millisecondes du 1er attachment audio/video. */
   readonly firstAttachmentDurationMs?: number;
+  /** Date de publication ISO de l'entité sociale liée (post/story/réel/mood).
+   *  Permet au client d'afficher « publié il y a 2 j » même quand le contenu
+   *  n'est plus accessible (story expirée). @see schema.prisma Post.createdAt */
+  readonly postCreatedAt?: string;
+  /** Date d'expiration ISO de l'entité sociale liée (story/status éphémère).
+   *  Le client affiche « expirée » et explique ainsi la perte d'accès.
+   *  @see schema.prisma Post.expiresAt */
+  readonly postExpiresAt?: string;
 }
 
 /**
@@ -259,6 +267,14 @@ export interface MessageNotificationMetadata extends BaseNotificationMetadata {
     readonly count: number;
     readonly firstType: 'image' | 'video' | 'audio' | 'document' | 'text' | 'code';
     readonly firstFilename: string;
+    /** Durée en ms du 1er attachment audio/vidéo (détail média affiché côté client). */
+    readonly firstDurationMs?: number;
+    /** Taille en octets du 1er attachment (détail média affiché côté client). */
+    readonly firstFileSize?: number;
+    /** Largeur en px du 1er attachment image/vidéo. */
+    readonly firstWidth?: number;
+    /** Hauteur en px du 1er attachment image/vidéo. */
+    readonly firstHeight?: number;
   };
   readonly action: 'view_message';
 }
@@ -340,9 +356,17 @@ export interface SystemNotificationMetadata extends BaseNotificationMetadata {
 export interface PostLikeNotificationMetadata extends BaseNotificationMetadata {
   readonly postId: string;
   readonly emoji: string;
-  readonly postType?: 'POST' | 'STORY' | 'STATUS';
+  readonly postType?: SocialPostType;
+  /** Aperçu de l'entité réagie (≤ ~80 chars) pour identifier QUEL contenu. */
+  readonly postPreview?: string;
   readonly action: 'view_post';
 }
+
+/**
+ * Type de contenu social — pilote le wording et l'icône côté client.
+ * REEL = vidéo verticale courte (distincte de POST/STORY/MOOD/STATUS).
+ */
+export type SocialPostType = 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
 
 /**
  * Metadata pour post_comment / comment_reply
@@ -351,6 +375,12 @@ export interface PostCommentNotificationMetadata extends BaseNotificationMetadat
   readonly postId: string;
   readonly commentId?: string;
   readonly commentPreview: string;
+  /** Type du post commenté — distingue story/réel/mood/post côté client. */
+  readonly postType?: SocialPostType;
+  /** Aperçu du post commenté pour identifier LE contenu visé. */
+  readonly postPreview?: string;
+  /** Aperçu du commentaire parent (réponse à un commentaire). */
+  readonly parentCommentPreview?: string;
   readonly action: 'view_post';
 }
 
@@ -360,6 +390,10 @@ export interface PostCommentNotificationMetadata extends BaseNotificationMetadat
 export interface PostRepostNotificationMetadata extends BaseNotificationMetadata {
   readonly originalPostId: string;
   readonly repostId: string;
+  /** Type du contenu partagé — distingue story/réel/mood/post côté client. */
+  readonly postType?: SocialPostType;
+  /** Aperçu du contenu partagé pour identifier CE qui a été repris. */
+  readonly postPreview?: string;
   readonly action: 'view_post';
 }
 
@@ -370,6 +404,8 @@ export interface CommentLikeNotificationMetadata extends BaseNotificationMetadat
   readonly postId: string;
   readonly commentId: string;
   readonly emoji: string;
+  /** Aperçu du commentaire réagi pour identifier QUEL commentaire. */
+  readonly commentPreview?: string;
   readonly action: 'view_post';
 }
 
@@ -378,8 +414,11 @@ export interface CommentLikeNotificationMetadata extends BaseNotificationMetadat
  */
 export interface FriendContentNotificationMetadata extends BaseNotificationMetadata {
   readonly postId: string;
-  readonly contentType: 'STORY' | 'POST' | 'MOOD' | 'STATUS';
+  readonly contentType: SocialPostType;
   readonly excerpt?: string;
+  /** Nature du média principal — permet d'afficher « 📷 Photo » / « 🎥 Vidéo »
+   *  quand le contenu n'a pas de texte. */
+  readonly mediaType?: 'image' | 'video' | 'audio' | 'text';
   readonly action: 'view_post';
 }
 

@@ -1040,6 +1040,12 @@ export class NotificationService {
             count: params.attachmentCount,
             firstType: params.firstAttachmentType || 'document',
             firstFilename: params.firstAttachmentFilename || 'file',
+            ...(params.firstAttachmentDuration != null
+              ? { firstDurationMs: Math.round(params.firstAttachmentDuration * 1000) }
+              : {}),
+            ...(params.firstAttachmentFileSize != null ? { firstFileSize: params.firstAttachmentFileSize } : {}),
+            ...(params.firstAttachmentWidth != null ? { firstWidth: params.firstAttachmentWidth } : {}),
+            ...(params.firstAttachmentHeight != null ? { firstHeight: params.firstAttachmentHeight } : {}),
           },
         }),
       } as any,
@@ -1414,7 +1420,11 @@ export class NotificationService {
      * bucket 1 est sauté pour éviter la double notification.
      * Défaut STORY (compat avec les appels existants).
      */
-    postType?: 'STORY' | 'POST' | 'MOOD' | 'STATUS';
+    postType?: 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
+    /** Date de publication ISO du contenu commenté (contexte expiry côté client). */
+    postCreatedAt?: string | Date;
+    /** Date d'expiration ISO du contenu commenté (story/status éphémère). */
+    postExpiresAt?: string | Date;
     /**
      * User IDs to exclude from fan-out buckets (story_thread_reply, friend_story_comment).
      * Use to pass mentionedUserIds so users who received user_mentioned don't also get
@@ -1453,20 +1463,30 @@ export class NotificationService {
     // restauré côté NSE après la donation d'intent), le body reste le contenu
     // du commentaire.
     const postType = params.postType ?? 'STORY';
+    // REEL est une variante de post : le catalogue i18n serveur le rend comme
+    // « publication », mais on conserve REEL dans la metadata pour que le client
+    // affiche le libellé/icône « Réel » distinct.
+    const i18nPostType = postType === 'REEL' ? 'POST' : postType;
     const authorName = postAuthor?.displayName?.trim()
       || postAuthor?.username?.trim()
       || '';
     const langs = await this.resolveRecipientLangs([authorId, ...previousCommenterIds, ...friendIds]);
     const contextSubtitleFor = (lang: string): string => authorName
-      ? notificationString(lang, 'comment.subtitleFrom', { postType, author: authorName })
-      : notificationString(lang, 'comment.subtitleBare', { postType });
+      ? notificationString(lang, 'comment.subtitleFrom', { postType: i18nPostType, author: authorName })
+      : notificationString(lang, 'comment.subtitleBare', { postType: i18nPostType });
 
-    const commonContext = { postId: params.postId, commentId: params.commentId };
+    const commonContext = {
+      postId: params.postId,
+      commentId: params.commentId,
+      ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
+      ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
+    };
     const commonMetadata = {
       action: 'view_post' as const,
       postId: params.postId,
       commentId: params.commentId,
       commentPreview: excerpt,
+      postType,
     };
     const actorInfo = {
       id: params.commenterId,
@@ -1489,8 +1509,8 @@ export class NotificationService {
           userId: authorId,
           type: 'story_new_comment',
           priority: 'normal',
-          content: excerpt || notificationString(aLang, 'comment.your', { postType }),
-          subtitle: notificationString(aLang, 'comment.subtitleOwner', { postType }),
+          content: excerpt || notificationString(aLang, 'comment.your', { postType: i18nPostType }),
+          subtitle: notificationString(aLang, 'comment.subtitleOwner', { postType: i18nPostType }),
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
@@ -1507,7 +1527,7 @@ export class NotificationService {
           userId: recipientId,
           type: 'story_thread_reply',
           priority: 'low',
-          content: excerpt || notificationString(rLang, 'comment.repliedIn', { postType }),
+          content: excerpt || notificationString(rLang, 'comment.repliedIn', { postType: i18nPostType }),
           subtitle: contextSubtitleFor(rLang),
           actor: actorInfo,
           context: commonContext,
@@ -1525,7 +1545,7 @@ export class NotificationService {
           userId: recipientId,
           type: 'friend_story_comment',
           priority: 'low',
-          content: excerpt || notificationString(rLang, 'comment.generic', { postType }),
+          content: excerpt || notificationString(rLang, 'comment.generic', { postType: i18nPostType }),
           subtitle: contextSubtitleFor(rLang),
           actor: actorInfo,
           context: commonContext,
@@ -1718,19 +1738,28 @@ export class NotificationService {
   async createFriendContentNotificationsBatch(params: {
     postId: string;
     authorId: string;
-    contentType: 'STORY' | 'POST' | 'MOOD' | 'STATUS';
+    contentType: 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
     excerpt?: string;
+    /** Date de publication ISO du contenu (contexte « publié il y a … » côté client). */
+    postCreatedAt?: string | Date;
+    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
+    postExpiresAt?: string | Date;
+    /** Nature du média principal — affiché quand le contenu n'a pas de texte. */
+    mediaType?: 'image' | 'video' | 'audio' | 'text';
     /**
      * User IDs to exclude from fan-out.
      * Pass mentionedUserIds so a friend who is also @mentioned only gets user_mentioned.
      */
     excludeUserIds?: string[];
   }): Promise<void> {
-    const typeMap: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS', 'friend_new_story' | 'friend_new_post' | 'friend_new_mood'> = {
+    // REEL est une variante de post : même type de notification (friend_new_post),
+    // mais le contentType REEL est conservé dans la metadata pour l'affichage client.
+    const typeMap: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL', 'friend_new_story' | 'friend_new_post' | 'friend_new_mood'> = {
       STORY: 'friend_new_story',
       POST: 'friend_new_post',
       MOOD: 'friend_new_mood',
       STATUS: 'friend_new_mood',
+      REEL: 'friend_new_post',
     };
     const notificationType = typeMap[params.contentType];
 
@@ -1794,14 +1823,21 @@ export class NotificationService {
           type: notificationType,
           priority: 'normal',
           content: excerpt || notificationString(fLang, contentKey),
-          subtitle: notificationString(fLang, 'friend.subtitleNew', { postType: params.contentType }),
+          subtitle: notificationString(fLang, 'friend.subtitleNew', {
+            postType: params.contentType === 'REEL' ? 'POST' : params.contentType,
+          }),
           actor: actorInfo,
-          context: { postId: params.postId },
+          context: {
+            postId: params.postId,
+            ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
+            ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
+          },
           metadata: {
             action: 'view_post',
             postId: params.postId,
             contentType: params.contentType,
             excerpt,
+            ...(params.mediaType ? { mediaType: params.mediaType } : {}),
           } as any,
         })
       );
@@ -2126,7 +2162,13 @@ export class NotificationService {
     postId: string;
     postAuthorId: string;
     emoji: string;
-    postType?: 'POST' | 'STORY' | 'STATUS';
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
+    /** Aperçu du contenu réagi (≤ ~80 chars) — identifie QUELLE entité. */
+    postPreview?: string;
+    /** Date de publication ISO du contenu réagi (contexte expiry côté client). */
+    postCreatedAt?: string | Date;
+    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
+    postExpiresAt?: string | Date;
   }): Promise<Notification | null> {
     // Don't notify yourself
     if (params.actorId === params.postAuthorId) return null;
@@ -2167,6 +2209,8 @@ export class NotificationService {
 
       context: {
         postId: params.postId,
+        ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
+        ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
       },
 
       metadata: {
@@ -2174,6 +2218,9 @@ export class NotificationService {
         postId: params.postId,
         emoji: params.emoji,
         postType: params.postType || 'POST',
+        ...(params.postPreview?.trim()
+          ? { postPreview: this.truncateMessage(params.postPreview.trim()) }
+          : {}),
       },
     });
   }
@@ -2189,7 +2236,7 @@ export class NotificationService {
     commentId: string;
     commentPreview: string;
     /** Type du post commenté — pilote le wording du subtitle. Défaut POST. */
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS';
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
     /** Extrait du post commenté (≤ ~80 chars) pour identifier LE post visé. */
     postPreview?: string;
   }): Promise<Notification | null> {
@@ -2204,11 +2251,12 @@ export class NotificationService {
     // Subtitle = la cible du commentaire (« Votre humeur : « … » ») ; body =
     // le texte du commentaire. Le destinataire sait QUOI a été commenté sans
     // ouvrir l'app.
-    const ownerLabel: Record<'POST' | 'STORY' | 'MOOD' | 'STATUS', string> = {
+    const ownerLabel: Record<'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL', string> = {
       POST: 'Votre publication',
       STORY: 'Votre story',
       MOOD: 'Votre humeur',
       STATUS: 'Votre statut',
+      REEL: 'Votre réel',
     };
     const label = ownerLabel[params.postType ?? 'POST'];
     const trimmedPostPreview = params.postPreview?.trim() ?? '';
@@ -2239,6 +2287,10 @@ export class NotificationService {
         postId: params.postId,
         commentId: params.commentId,
         commentPreview: this.truncateMessage(params.commentPreview),
+        postType: params.postType ?? 'POST',
+        ...(trimmedPostPreview !== ''
+          ? { postPreview: this.truncateMessage(trimmedPostPreview) }
+          : {}),
       },
     });
   }
@@ -2253,9 +2305,13 @@ export class NotificationService {
     postAuthorId: string;
     repostId: string;
     /** Type du post partagé — pilote le wording. Défaut POST. */
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS';
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
     /** Extrait du post partagé pour identifier LE contenu repris. */
     postPreview?: string;
+    /** Date de publication ISO du contenu partagé (contexte expiry côté client). */
+    postCreatedAt?: string | Date;
+    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
+    postExpiresAt?: string | Date;
   }): Promise<Notification | null> {
     if (params.actorId === params.postAuthorId) return null;
 
@@ -2275,7 +2331,9 @@ export class NotificationService {
       userId: params.postAuthorId,
       type: 'post_repost',
       priority: 'normal',
-      content: notificationString(lang, 'repost', { postType: params.postType ?? 'POST' }),
+      content: notificationString(lang, 'repost', {
+        postType: params.postType === 'REEL' ? 'POST' : (params.postType ?? 'POST'),
+      }),
       ...(subtitle ? { subtitle } : {}),
 
       actor: {
@@ -2287,12 +2345,18 @@ export class NotificationService {
 
       context: {
         postId: params.originalPostId,
+        ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
+        ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
       },
 
       metadata: {
         action: 'view_post',
         originalPostId: params.originalPostId,
         repostId: params.repostId,
+        postType: params.postType ?? 'POST',
+        ...(trimmedPostPreview !== ''
+          ? { postPreview: this.truncateMessage(trimmedPostPreview) }
+          : {}),
       },
     });
   }
@@ -2348,6 +2412,9 @@ export class NotificationService {
         postId: params.postId,
         commentId: params.commentId,
         commentPreview: this.truncateMessage(params.replyPreview),
+        ...(trimmedParent !== ''
+          ? { parentCommentPreview: this.truncateMessage(trimmedParent) }
+          : {}),
       },
     });
   }
@@ -2402,6 +2469,9 @@ export class NotificationService {
         postId: params.postId,
         commentId: params.commentId,
         emoji: params.emoji,
+        ...(trimmedPreview !== ''
+          ? { commentPreview: this.truncateMessage(trimmedPreview) }
+          : {}),
       },
     });
   }

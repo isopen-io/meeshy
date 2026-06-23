@@ -218,6 +218,44 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       expect(payload.content).toBe('a partagé votre publication');
       expect(payload.subtitle).toBeUndefined();
     });
+
+    it('persiste postExpiresAt/postCreatedAt en contexte (story partagée expirée)', async () => {
+      const createdAt = new Date('2026-06-20T10:00:00.000Z');
+      const expiresAt = new Date('2026-06-21T10:00:00.000Z');
+      await service.createPostRepostNotification({
+        actorId: ACTOR_ID,
+        originalPostId: POST_ID,
+        postAuthorId: RECIPIENT_ID,
+        repostId: 'cccccccccccccccccccccccc',
+        postType: 'STORY',
+        postCreatedAt: createdAt,
+        postExpiresAt: expiresAt,
+      });
+
+      const ctx = prisma.notification.create.mock.calls[0][0].data.context;
+      expect(ctx.postCreatedAt).toBe(createdAt.toISOString());
+      expect(ctx.postExpiresAt).toBe(expiresAt.toISOString());
+    });
+  });
+
+  describe('createPostLikeNotification — contexte expiry', () => {
+    it('persiste postExpiresAt pour une réaction sur une story expirée', async () => {
+      const expiresAt = new Date('2026-06-21T10:00:00.000Z');
+      await service.createPostLikeNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        postAuthorId: RECIPIENT_ID,
+        emoji: '😍',
+        postType: 'STORY',
+        postPreview: 'Coucher de soleil',
+        postExpiresAt: expiresAt,
+      });
+
+      const ctx = prisma.notification.create.mock.calls[0][0].data.context;
+      expect(ctx.postExpiresAt).toBe(expiresAt.toISOString());
+      const meta = prisma.notification.create.mock.calls[0][0].data.metadata;
+      expect(meta.postPreview).toBe('Coucher de soleil');
+    });
   });
 
   describe('createFriendContentNotificationsBatch — subtitle typé', () => {

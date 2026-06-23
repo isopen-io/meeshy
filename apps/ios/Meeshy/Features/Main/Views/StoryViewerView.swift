@@ -841,6 +841,12 @@ struct StoryViewerView: View {
         let group = groups[currentGroupIndex]
         guard !group.stories.isEmpty else { return }
 
+        // The author may revisit their OWN expired stories to review engagement
+        // (reactions / comments). Don't skip or auto-close their own ring — an
+        // expiry banner in the comments overlay marks the state instead
+        // (spec 2026-06-23: comments/reactions on expired stories stay visible).
+        if group.id == AuthManager.shared.currentUser?.id { return }
+
         var idx = currentStoryIndex
         while idx < group.stories.count, group.stories[idx].isExpired(at: now) {
             idx += 1
@@ -997,6 +1003,7 @@ struct StoryViewerView: View {
             storyCommentLoadingReplies: storyCommentLoadingReplies,
             isLoadingComments: isLoadingComments,
             userLang: AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr",
+            isStoryExpired: currentStory?.isExpired() ?? false,
             showCommentsOverlay: $showCommentsOverlay,
             replyingToStoryComment: $replyingToStoryComment,
             keyboard: keyboard,
