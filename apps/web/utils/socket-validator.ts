@@ -77,7 +77,7 @@ const NotificationEventSchema = z.object({
   ).optional(),
   senderId: z.string().optional(),
   senderUsername: z.string().max(50).optional(),
-  senderAvatar: z.string().url().optional().nullable(),
+  senderAvatar: z.url().optional().nullable(),
   messagePreview: z.string().max(500).optional(),
   context: NotificationContextSchema,
   data: z.record(z.string(), z.unknown()).optional(),
@@ -86,7 +86,7 @@ const NotificationEventSchema = z.object({
     fileName: z.string(),
     mimeType: z.string(),
     fileSize: z.number(),
-    fileUrl: z.string().url()
+    fileUrl: z.url()
   })).optional()
 });
 

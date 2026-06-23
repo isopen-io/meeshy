@@ -26,7 +26,7 @@ import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shar
 // Zod schemas for request validation
 // Note: captchaToken is now optional as we use built-in bot protection instead
 const forgotPasswordSchema = z.object({
-  email: z.string().email('Invalid email address').max(255),
+  email: z.email('Invalid email address').max(255),
   captchaToken: z.string().optional(), // No longer required - using rate limiting + honeypot
   deviceFingerprint: z.string().optional()
 });
@@ -51,7 +51,7 @@ const phoneLookupSchema = z.object({
 const phoneVerifyIdentitySchema = z.object({
   tokenId: z.string().min(1, 'Token ID is required'),
   fullUsername: z.string().min(2, 'Username is required').max(30),
-  fullEmail: z.string().email('Valid email is required').max(255)
+  fullEmail: z.email('Valid email is required').max(255)
 });
 
 const phoneVerifyCodeSchema = z.object({

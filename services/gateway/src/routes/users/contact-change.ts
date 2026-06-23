@@ -17,7 +17,7 @@ const logger = enhancedLogger.child({ module: 'contact-change' });
  * Schema pour le changement d'email
  */
 const changeEmailSchema = z.object({
-  newEmail: z.string().email('Email invalide')
+  newEmail: z.email('Email invalide')
 }).strict();
 
 /**

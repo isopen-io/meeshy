@@ -180,7 +180,7 @@ export const CreatePostSchema = z.object({
   storyEffects: StoryEffectsSchema.optional(),
   // Status/mood-specific
   moodEmoji: z.string().max(10).optional(),
-  audioUrl: z.string().url().optional(),
+  audioUrl: z.url().optional(),
   audioDuration: z.number().int().positive().optional(),
   // Original language override (ISO 639-1, e.g. "fr", "en")
   originalLanguage: z.string().min(2).max(5).optional(),

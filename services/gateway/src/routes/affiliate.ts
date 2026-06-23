@@ -21,7 +21,7 @@ const logger = enhancedLogger.child({ module: 'AffiliateRoutes' });
 const createAffiliateTokenSchema = z.object({
   name: z.string().min(1).max(100),
   maxUses: z.number().int().positive().optional(),
-  expiresAt: z.string().datetime().optional(),
+  expiresAt: z.iso.datetime().optional(),
 });
 
 const affiliateLinkSchema = z.object({

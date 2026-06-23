@@ -150,7 +150,7 @@ export const attachmentTranslationSchema = z.object({
    *  of every persisted document. */
   transcription: z.string(),
   path: z.string().optional(),
-  url: z.string().url().optional(),
+  url: z.url().optional(),
 
   // Audio/video specifics
   durationMs: z.number().nonnegative().optional(),
@@ -168,10 +168,10 @@ export const attachmentTranslationSchema = z.object({
   // Metadata. Accept either a `Date` (server-side, freshly constructed)
   // or an ISO string (wire format). Persistence emits ISO; in-memory
   // construction uses Date. Both must round-trip through validation.
-  createdAt: z.union([z.string().datetime({ offset: true }), z.date()]),
-  updatedAt: z.union([z.string().datetime({ offset: true }), z.date()]).optional(),
+  createdAt: z.union([z.iso.datetime({ offset: true }), z.date()]),
+  updatedAt: z.union([z.iso.datetime({ offset: true }), z.date()]).optional(),
   deletedAt: z
-    .union([z.string().datetime({ offset: true }), z.date()])
+    .union([z.iso.datetime({ offset: true }), z.date()])
     .nullable()
     .optional(),
 });
