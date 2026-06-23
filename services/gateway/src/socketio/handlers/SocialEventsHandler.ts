@@ -306,14 +306,38 @@ export class SocialEventsHandler {
   // COMMENT BROADCASTS
   // ==============================================
 
+  /**
+   * Rooms devant recevoir un événement de commentaire : les feed rooms de
+   * l'auteur du post et de ses amis (fil d'actualité) ET la post room
+   * (`ROOMS.post`) où se trouvent les viewers du détail / reel viewer qui ne
+   * sont PAS amis de l'auteur (post PUBLIC, co-membre de communauté, ou le
+   * commentateur lui-même). Sans la post room, un viewer ouvrant le détail d'un
+   * post qui ne suit pas l'auteur ne voyait JAMAIS les nouveaux commentaires en
+   * temps réel — il fallait recharger. Miroir de `broadcastPostLiked` /
+   * `broadcastStoryReacted` qui atteignent déjà la post room.
+   *
+   * Émission UNIQUE sur l'union des rooms : Socket.IO dédoublonne les sockets
+   * présents dans plusieurs rooms (un viewer ami est dans SA feed room ET dans la
+   * post room), donc l'événement est livré EXACTEMENT une fois. C'est requis
+   * pour les commentaires : l'insertion d'un commentaire et l'incrément du
+   * compteur de réponses côté client ne sont PAS idempotents en cas de double
+   * livraison (contrairement au payload absolu de `post:liked`).
+   */
+  private commentBroadcastRooms(friendIds: string[], postAuthorId: string, postId: string): string[] {
+    const feedRooms = [...friendIds, postAuthorId].map((id) => ROOMS.feed(id));
+    return [...feedRooms, ROOMS.post(postId)];
+  }
+
   async broadcastCommentAdded(data: CommentAddedEventData, postAuthorId: string): Promise<void> {
     const friendIds = await this.getFriendIds(postAuthorId);
-    this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.COMMENT_ADDED, data);
+    const rooms = this.commentBroadcastRooms(friendIds, postAuthorId, data.postId);
+    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_ADDED, data);
   }
 
   async broadcastCommentDeleted(data: CommentDeletedEventData, postAuthorId: string): Promise<void> {
     const friendIds = await this.getFriendIds(postAuthorId);
-    this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.COMMENT_DELETED, data);
+    const rooms = this.commentBroadcastRooms(friendIds, postAuthorId, data.postId);
+    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_DELETED, data);
   }
 
   broadcastCommentLiked(data: CommentLikedEventData, commentAuthorId: string): void {
@@ -331,7 +355,8 @@ export class SocialEventsHandler {
 
   async broadcastCommentTranslationUpdated(data: CommentTranslationUpdatedEventData, postAuthorId: string): Promise<void> {
     const friendIds = await this.getFriendIds(postAuthorId);
-    this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, data);
+    const rooms = this.commentBroadcastRooms(friendIds, postAuthorId, data.postId);
+    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, data);
   }
 
   /**
@@ -341,7 +366,8 @@ export class SocialEventsHandler {
    */
   async broadcastCommentMediaUpdated(data: CommentMediaUpdatedEventData, postAuthorId: string): Promise<void> {
     const friendIds = await this.getFriendIds(postAuthorId);
-    this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.COMMENT_MEDIA_UPDATED, data);
+    const rooms = this.commentBroadcastRooms(friendIds, postAuthorId, data.postId);
+    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, data);
   }
 
   // ==============================================

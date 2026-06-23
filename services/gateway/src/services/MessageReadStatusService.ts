@@ -669,6 +669,21 @@ export class MessageReadStatusService {
         participants.map(p => [p.id, p])
       );
 
+      // Précision absolue : les dates FIGÉES par message (write-once) priment
+      // sur la dérivation curseur — exactement comme `getMessageStatusDetails`.
+      // Le curseur `lastDeliveredAt`/`lastReadAt` ré-avance à chaque ouverture
+      // de conversation : l'utiliser ici afficherait la DERNIÈRE visite du
+      // participant, pas le moment où il a réellement reçu / lu CE message
+      // (incohérence de gestion de statut). Le fallback curseur ne sert que
+      // pour les messages franchis AVANT l'introduction du gel (legacy).
+      const frozenEntries = await this.prisma.messageStatusEntry.findMany({
+        where: { messageId },
+        select: { participantId: true, deliveredAt: true, receivedAt: true, readAt: true },
+      });
+      const frozenByParticipant = new Map(
+        frozenEntries.map(e => [e.participantId, e])
+      );
+
       const receivedBy: Array<{
         participantId: string;
         displayName: string;
@@ -678,30 +693,56 @@ export class MessageReadStatusService {
       const readBy: Array<{ participantId: string; displayName: string; avatarURL: string | null; readAt: Date }> =
         [];
 
-      for (const cursor of cursors) {
-        const participant = participantById.get(cursor.participantId);
-        if (!participant) continue; // orphan cursor — participant deleted/banned/inactive
+      const cursorByParticipant = new Map(cursors.map(c => [c.participantId, c]));
+
+      // Énumère l'UNION des participants ayant un curseur ET de ceux ayant une
+      // entrée figée (`MessageStatusEntry`) pour CE message. `cleanupObsoleteCursors`
+      // peut supprimer un curseur (son `lastReadMessageId` pointe vers un message
+      // effacé) alors que le reçu figé write-once de CE message-ci survit : énumérer
+      // par les seuls curseurs ferait disparaître silencieusement ce reçu. Le sender
+      // est exclu (les curseurs le filtrent déjà ; le gel ne crée jamais d'entrée
+      // pour l'auteur de son propre message).
+      const evaluatedParticipantIds = new Set<string>();
+      for (const c of cursors) evaluatedParticipantIds.add(c.participantId);
+      for (const e of frozenEntries) {
+        if (e.participantId !== message.senderId) evaluatedParticipantIds.add(e.participantId);
+      }
+
+      for (const participantId of evaluatedParticipantIds) {
+        const participant = participantById.get(participantId);
+        if (!participant) continue; // orphan/inactive — participant deleted/banned/inactive
 
         const avatarURL = participant.avatar ?? participant.user?.avatar ?? null;
 
-        if (
-          cursor.lastDeliveredAt &&
-          cursor.lastDeliveredAt >= message.createdAt
-        ) {
+        const cursor = cursorByParticipant.get(participantId);
+        const cursorDelivered =
+          cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= message.createdAt
+            ? cursor.lastDeliveredAt
+            : null;
+        const cursorRead =
+          cursor?.lastReadAt && cursor.lastReadAt >= message.createdAt
+            ? cursor.lastReadAt
+            : null;
+
+        const frozen = frozenByParticipant.get(participantId);
+        const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
+        const readAt = frozen?.readAt ?? cursorRead;
+
+        if (receivedAt) {
           receivedBy.push({
-            participantId: cursor.participantId,
+            participantId,
             displayName: participant.displayName,
             avatarURL,
-            receivedAt: cursor.lastDeliveredAt,
+            receivedAt,
           });
         }
 
-        if (cursor.lastReadAt && cursor.lastReadAt >= message.createdAt) {
+        if (readAt) {
           readBy.push({
-            participantId: cursor.participantId,
+            participantId,
             displayName: participant.displayName,
             avatarURL,
-            readAt: cursor.lastReadAt,
+            readAt,
           });
         }
       }
@@ -915,20 +956,6 @@ export class MessageReadStatusService {
         },
       });
 
-      const participants = cursors.length
-        ? await this.prisma.participant.findMany({
-            where: {
-              id: { in: cursors.map(c => c.participantId) },
-              isActive: true,
-            },
-            select: { id: true, displayName: true, avatar: true },
-          })
-        : [];
-
-      const participantById = new Map(
-        participants.map(p => [p.id, p])
-      );
-
       // Précision absolue : les dates figées par message (write-once) priment
       // sur la dérivation curseur. Le fallback curseur ne sert que pour les
       // messages lus AVANT l'introduction du gel (legacy, sans entrée).
@@ -945,6 +972,32 @@ export class MessageReadStatusService {
       const frozenByParticipant = new Map(
         frozenEntries.map(e => [e.participantId, e])
       );
+      const cursorByParticipant = new Map(cursors.map(c => [c.participantId, c]));
+
+      // UNION des participants ayant un curseur ET de ceux ayant un reçu figé
+      // survivant (cf. getMessageReadStatus) : un curseur supprimé par
+      // `cleanupObsoleteCursors` ne doit pas effacer un reçu de livraison/lecture
+      // figé. Les rows participant sont résolues sur l'union — pas seulement sur
+      // les ids de curseurs — sinon l'info d'affichage (displayName/avatar) du
+      // participant figé-seul manquerait.
+      const evaluatedParticipantIds = Array.from(new Set([
+        ...cursors.map(c => c.participantId),
+        ...frozenEntries.map(e => e.participantId),
+      ]));
+
+      const participants = evaluatedParticipantIds.length
+        ? await this.prisma.participant.findMany({
+            where: {
+              id: { in: evaluatedParticipantIds },
+              isActive: true,
+            },
+            select: { id: true, displayName: true, avatar: true },
+          })
+        : [];
+
+      const participantById = new Map(
+        participants.map(p => [p.id, p])
+      );
 
       let results: Array<{
         participantId: string;
@@ -956,20 +1009,21 @@ export class MessageReadStatusService {
         readDevice?: string | null;
       }> = [];
 
-      for (const cursor of cursors) {
-        const participant = participantById.get(cursor.participantId);
+      for (const participantId of evaluatedParticipantIds) {
+        const participant = participantById.get(participantId);
         if (!participant) continue; // orphan or inactive
 
+        const cursor = cursorByParticipant.get(participantId);
         const cursorDelivered =
-          cursor.lastDeliveredAt && cursor.lastDeliveredAt >= message.createdAt
+          cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= message.createdAt
             ? cursor.lastDeliveredAt
             : null;
         const cursorRead =
-          cursor.lastReadAt && cursor.lastReadAt >= message.createdAt
+          cursor?.lastReadAt && cursor.lastReadAt >= message.createdAt
             ? cursor.lastReadAt
             : null;
 
-        const frozen = frozenByParticipant.get(cursor.participantId);
+        const frozen = frozenByParticipant.get(participantId);
         const deliveredAt = frozen?.deliveredAt ?? cursorDelivered;
         const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
         const readAt = frozen?.readAt ?? cursorRead;
@@ -980,7 +1034,7 @@ export class MessageReadStatusService {
         if (filter === "unread" && readAt) continue;
 
         results.push({
-          participantId: cursor.participantId,
+          participantId,
           displayName: participant.displayName,
           avatar: participant.avatar,
           deliveredAt,
