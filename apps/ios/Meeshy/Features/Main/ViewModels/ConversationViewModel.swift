@@ -2958,6 +2958,12 @@ class ConversationViewModel: ObservableObject {
         }
         messages[mIdx].attachments[aIdx].reactionSummary = summary.isEmpty ? nil : summary
         messages[mIdx].attachments[aIdx].currentUserReactions = mine.isEmpty ? nil : mine
+        // Persist the optimistic attachment-reaction through GRDB so it survives
+        // a cold reload of the conversation — parité avec les réactions
+        // message-level (appendReaction/removeReaction). Sans ce write-through la
+        // pill optimiste vit uniquement en mémoire et disparaît dès que la conv
+        // est rechargée (avant que le serveur ne re-broadcast le delta).
+        persistAttachmentReactions(messageId: messageId, attachments: messages[mIdx].attachments)
     }
 
     /// Applique un delta serveur : remplace le reactionSummary (comptes
@@ -2968,6 +2974,21 @@ class ConversationViewModel: ObservableObject {
         guard let mIdx = messages.firstIndex(where: { $0.attachments.contains { $0.id == attachmentId } }),
               let aIdx = messages[mIdx].attachments.firstIndex(where: { $0.id == attachmentId }) else { return }
         messages[mIdx].attachments[aIdx].reactionSummary = reactionSummary.isEmpty ? nil : reactionSummary
+        // Le delta serveur est lui aussi persisté pour que le compte autoritaire
+        // soit servi tel quel au prochain cold-load (sans attendre un refetch REST).
+        persistAttachmentReactions(messageId: messages[mIdx].id, attachments: messages[mIdx].attachments)
+    }
+
+    /// Write-through des réactions par-image vers GRDB. Encode l'array
+    /// d'attachments complet (les réactions sont des champs Codable de
+    /// `MeeshyMessageAttachment`) et le passe à `updateAttachmentsJson`. Fire-and-forget
+    /// (miroir du chemin `appendReaction`/`deleteAttachment`) : un échec d'écriture
+    /// retombe sur la source de vérité serveur au prochain refetch.
+    private func persistAttachmentReactions(messageId: String, attachments: [MeeshyMessageAttachment]) {
+        let json = try? JSONEncoder().encode(attachments)
+        Task { [weak self] in
+            try? await self?.messagePersistence.updateAttachmentsJson(localId: messageId, attachmentsJson: json)
+        }
     }
 
     // MARK: - Fetch Reaction Details
@@ -3015,6 +3036,10 @@ class ConversationViewModel: ObservableObject {
         case .everyone:
             // Optimistic: mark as deleted locally + blank content
             try? await messagePersistence.markDeleted(localId: messageId, deletedAt: Date())
+            // Drop the starred snapshot so the Starred Messages list doesn't keep
+            // surfacing a message that was deleted for everyone. Keyed by the
+            // server id (StarredMessageSnapshot.id is the canonical message id).
+            StarredMessagesStore.shared.remove(messageId: serverId(for: messageId))
             // Offline: route the delete through the durable outbox (flushed on
             // reconnect, T10) instead of losing it. `clientMessageId` is the
             // message's local id so deleting a still-unsent offline message

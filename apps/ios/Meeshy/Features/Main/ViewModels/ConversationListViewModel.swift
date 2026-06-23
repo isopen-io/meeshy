@@ -731,6 +731,15 @@ class ConversationListViewModel: ObservableObject {
                 if let isAnnouncement = event.isAnnouncementChannel {
                     self.conversations[index].isAnnouncementChannel = isAnnouncement
                 }
+                if let writeRole = event.defaultWriteRole {
+                    self.conversations[index].defaultWriteRole = writeRole
+                }
+                if let slowMode = event.slowModeSeconds {
+                    self.conversations[index].slowModeSeconds = slowMode
+                }
+                if let autoTranslate = event.autoTranslateEnabled {
+                    self.conversations[index].autoTranslateEnabled = autoTranslate
+                }
 
                 // Bump the row to the top when the gateway tells us a new
                 // message advanced lastMessageAt. We compare strictly
