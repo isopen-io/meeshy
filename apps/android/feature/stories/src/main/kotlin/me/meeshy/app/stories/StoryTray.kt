@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -174,6 +177,12 @@ private fun StoryRingItem(
                 }
             }
         }
+        StoryCountDotsRow(
+            dots = StoryCountDots.from(ring.storyCount, ring.unviewedCount),
+            accentHex = ring.accentHex,
+            unviewedCount = ring.unviewedCount,
+            storyCount = ring.storyCount,
+        )
         StoryLabel(label)
     }
 }
@@ -230,6 +239,54 @@ private fun StoryRingFrame(
         content = content,
     )
 }
+
+/**
+ * Segmented unviewed-count dots under a story ring. Active (unseen) dots use the
+ * ring's accent; seen dots fade to a muted token — a precise "how many new" read
+ * that surpasses iOS's group-level all-or-nothing dimming. Single-story rings
+ * render an empty slot of the same height so every tray item — and its label —
+ * stays vertically aligned (no off-by-a-row jitter across the carousel).
+ */
+@Composable
+private fun StoryCountDotsRow(
+    dots: StoryCountDots?,
+    accentHex: String,
+    unviewedCount: Int,
+    storyCount: Int,
+) {
+    val activeColor = hexColor(accentHex)
+    val inactiveColor = MeeshyTheme.tokens.textSecondary.copy(alpha = 0.35f)
+    val description = stringResource(R.string.stories_count_dots, unviewedCount, storyCount)
+    Row(
+        modifier = Modifier
+            .padding(top = 3.dp)
+            .height(DOT_SIZE)
+            .semantics { if (dots != null) contentDescription = description },
+        horizontalArrangement = Arrangement.spacedBy(DOT_SPACING),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (dots == null) return@Row
+        repeat(dots.dotCount) { index ->
+            Box(
+                modifier = Modifier
+                    .size(DOT_SIZE)
+                    .clip(CircleShape)
+                    .background(if (dots.isActive(index)) activeColor else inactiveColor),
+            )
+        }
+        if (dots.hasOverflow) {
+            Text(
+                text = "+",
+                style = MaterialTheme.typography.labelSmall,
+                color = inactiveColor,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+private val DOT_SIZE = 4.dp
+private val DOT_SPACING = 3.dp
 
 @Composable
 private fun StoryLabel(label: String) {

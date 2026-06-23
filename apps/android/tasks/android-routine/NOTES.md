@@ -140,3 +140,8 @@ Append-only log of gotchas and decisions that save time next run.
   null-check the local. Bit us in `StoryCommentsSheet` (compile error).
 - Reaction `mine` still seeded empty on load — needs server `currentUserReactions`
   exposed by the stories API to pre-fill the user's own emojis.
+- **`data class` with a non-public primary constructor** triggers a Kotlin 2.1
+  copy-visibility warning (the generated `copy()` will change visibility). When a
+  value object is only meant to be built through a factory (e.g. `StoryCountDots`),
+  prefer a plain `class` (no `copy()` needed) over `data class internal constructor`.
+  `@Immutable` already gives Compose stability without value equality here.

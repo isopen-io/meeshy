@@ -17,7 +17,8 @@ the realtime `comment:added` socket event.
 Ordered by value within the Stories area:
 1. `story-composer` — publish flow (text/media) via the outbox/WorkManager chain.
 2. `story-media-prefetch` — warm the next slide's media before it shows.
-3. `story-tray-count-dots` — segmented unviewed-count dots on the tray rings.
+
+(`story-tray-count-dots` ✅ shipped 2026-06-23 — see run log.)
 
 After these, advance to the **Calls** area (`feature-parity.md` §"Calls").
 
@@ -31,6 +32,47 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-23 — slice `story-tray-count-dots` ✅
+- **Branch:** `claude/apps/android/story-tray-count-dots`
+- **What:** the **segmented unviewed-count dots** under each multi-story tray ring —
+  parity with iOS `storyCountDots`, surpassing it: where iOS dims every dot
+  uniformly on a group-level `hasUnviewed` flag, Android resolves the *precise*
+  number of unseen stories and activates only the trailing unviewed dots, so the
+  indicator reads as "how many new" at a glance.
+- **Added (production):**
+  - `feature:stories` — pure `StoryCountDots` (`from(storyCount, unviewedCount)`:
+    `null` for ≤1 story; dot count capped at `MAX_DOTS=5` with `hasOverflow` flag;
+    `isActive(index)` marks the trailing `unviewedCount` dots active, clamped to
+    `[0, dotCount]`, inert for out-of-range indices).
+  - `StoryRing.unviewedCount` (computed in `StoryTrayBuilder` from
+    `stories.count { !it.isViewed }`) — the per-story `isViewed` data iOS's tray
+    ring doesn't surface.
+  - `StoryTray` — `StoryCountDotsRow` composable: accent-tinted active dots, muted
+    `textSecondary@35%` inactive dots, trailing "+" on overflow, hidden+weightless
+    for single-story rings; an accessibility `contentDescription`
+    (`stories_count_dots` "N new of M stories", en/fr/es/pt).
+- **Tests (+13):**
+  - `StoryCountDotsTest` (pure) +12 — empty→null; single→null; all-viewed inactive;
+    all-unviewed active; partial→trailing active; exactly-5 no overflow; >5 caps+overflow;
+    overflow keeps trailing-active; unviewed clamped to all-active; negative→none;
+    unviewed > count never over-activates; `isActive` inert out-of-range.
+  - `StoryTrayBuilderTest` +1 — `unviewedCount` counts only unseen stories (mixed
+    viewed/unviewed group); existing "ring carries unviewed state" tightened to assert
+    `unviewedCount`.
+- **Edge cases covered:** 0/1-story (no dots); all-viewed vs all-unviewed; partial
+  view (trailing activation); exactly-cap (5) vs overflow (>5); defensive clamps
+  (negative unviewed, unviewed > count); out-of-range `isActive`.
+- **Verify:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 2m44s**
+  (full `assembleDebug` + all module JVM unit tests; 836 tasks). Targeted
+  `:feature:stories:testDebugUnitTest` green.
+- **Reviewer:** PASS — scope `apps/android` only; behavioural tests through the
+  public API, no tautologies; SDK purity (the "how many dots / which active / when
+  hidden" presentation rule is a pure unit in `:feature:stories`, not the SDK);
+  single source of truth (accent via `accentHex`/`hexColor`, muted token via
+  `MeeshyTheme.tokens`); Instant-App (no new I/O — derived from the already-cached
+  tray); colour/UX coherence (accent-coherent dots, weightless when irrelevant);
+  no dead end. Surpasses iOS (precise per-count activation vs group-level dimming).
 
 ### 2026-06-23 — slice `story-comments-overlay` ✅
 - **Branch:** `claude/apps/android/story-comments-overlay`
