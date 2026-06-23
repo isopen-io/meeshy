@@ -6,7 +6,7 @@ export type UserRole = UserRoleEnum;
 
 // Schemas de validation
 export const updateUserRoleSchema = z.object({
-  role: z.nativeEnum(UserRoleEnum)
+  role: z.enum(UserRoleEnum)
 });
 
 export const updateUserStatusSchema = z.object({

@@ -107,7 +107,7 @@ const llmConfigSchema = z.object({
   provider: z.enum(['openai', 'anthropic']).optional(),
   model: z.string().min(1).optional(),
   apiKeyEncrypted: z.string().min(1).optional(),
-  baseUrl: z.string().url().nullable().optional(),
+  baseUrl: z.url().nullable().optional(),
   maxTokens: z.number().int().min(64).max(16384).optional(),
   temperature: z.number().min(0).max(2).optional(),
   dailyBudgetUsd: z.number().min(0).optional(),

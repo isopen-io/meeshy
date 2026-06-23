@@ -23,7 +23,7 @@ import {
 
 // Schémas de validation locaux pour les endpoints admin
 const verifyEmailSchema = z.object({
-  email: z.string().email().optional(),
+  email: z.email().optional(),
   verified: z.boolean(),
   reason: z.string().optional()
 });

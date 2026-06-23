@@ -16,8 +16,8 @@ const joinAnonymousSchema = z.object({
   firstName: z.string().min(1, 'Le prenom est requis').max(50),
   lastName: z.string().min(1, 'Le nom est requis').max(50),
   username: z.string().optional(),
-  email: z.string().email().optional().or(z.literal('')),
-  birthday: z.string().datetime().optional().or(z.literal('')),
+  email: z.email().optional().or(z.literal('')),
+  birthday: z.iso.datetime().optional().or(z.literal('')),
   language: z.string().default('fr'),
   deviceFingerprint: z.string().optional()
 });

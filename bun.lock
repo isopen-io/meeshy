@@ -93,7 +93,7 @@
         "use-debounce": "^10.1.1",
         "web-vitals": "^5.2.0",
         "workbox-window": "^7.4.0",
-        "zod": "^4.4.2",
+        "zod": "^4.4.3",
         "zustand": "^5.0.12",
       },
       "devDependencies": {
@@ -4155,8 +4155,6 @@
     "@meeshy/shared/@signalapp/libsignal-client": ["@signalapp/libsignal-client@0.58.3", "", { "dependencies": { "node-gyp-build": "4.8.4", "type-fest": "4.41.0", "uuid": "8.3.2" } }, "sha512-eKdy5cwGmrBRHqHp6S6ho+pOKOO2YKECUb2KWuVY/QsuOhU+F2K51z/Y6EAIC27LxgxZyzUdcB18VDBp6Wp6iw=="],
 
     "@meeshy/shared/@types/node": ["@types/node@26.0.0", "", { "dependencies": { "undici-types": "~8.3.0" } }, "sha512-vf2YFi1iY9lHGwNJMs01biZFbKJkrZR1T6/MlzjhJLPdntOHLhTrDSnSVcdtvjihi4VQNlrFRIxLsDBlQpAipA=="],
-
-    "@meeshy/web/zod": ["zod@4.4.2", "", {}, "sha512-IynmDyxsEsb9RKzO3J9+4SxXnl2FTFSzNBaKKaMV6tsSk0rw9gYw9gs+JFCq/qk2LCZ78KDwyj+Z289TijSkUw=="],
 
     "@next/eslint-plugin-next/fast-glob": ["fast-glob@3.3.1", "", { "dependencies": { "@nodelib/fs.stat": "2.0.5", "@nodelib/fs.walk": "1.2.8", "glob-parent": "5.1.2", "merge2": "1.4.1", "micromatch": "4.0.8" } }, "sha512-kNFPyjhh5cKjrUltxs+wFx+ZkbRaxxmZ+X0ZU31SOsxCEtP9VPgtq2teZw1DebupL5GmDaNQ6yKMMVcM41iqDg=="],
 

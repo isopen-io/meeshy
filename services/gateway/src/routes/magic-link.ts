@@ -11,7 +11,7 @@ const logger = enhancedLogger.child({ module: 'MagicLinkRoutes' });
 
 // Validation schemas
 const requestMagicLinkSchema = z.object({
-  email: z.string().email('Invalid email address').max(255),
+  email: z.email('Invalid email address').max(255),
   rememberDevice: z.boolean().optional().default(false) // Stored server-side for security
 });
 

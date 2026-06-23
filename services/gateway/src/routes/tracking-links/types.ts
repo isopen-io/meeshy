@@ -21,14 +21,14 @@ export function enrichTrackingLink(link: TrackingLink, request?: FastifyRequest)
  * Schémas de validation Zod
  */
 export const createTrackingLinkSchema = z.object({
-  originalUrl: z.string().url('URL invalide'),
+  originalUrl: z.url('URL invalide'),
   name: z.string().max(32).optional(),
   campaign: z.string().max(100).optional(),
   source: z.string().max(100).optional(),
   medium: z.string().max(100).optional(),
   conversationId: z.string().optional(),
   messageId: z.string().optional(),
-  expiresAt: z.string().datetime().optional(),
+  expiresAt: z.iso.datetime().optional(),
   customToken: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,48}[a-zA-Z0-9]$/, 'Le token doit contenir 2-50 caractères alphanumériques et ne peut pas commencer ou finir par un tiret').optional()
 });
 
@@ -67,8 +67,8 @@ export const recordClickSchema = z.object({
 });
 
 export const getStatsSchema = z.object({
-  startDate: z.string().datetime().optional(),
-  endDate: z.string().datetime().optional()
+  startDate: z.iso.datetime().optional(),
+  endDate: z.iso.datetime().optional()
 });
 
 /**

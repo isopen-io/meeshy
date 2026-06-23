@@ -78,8 +78,7 @@ export const UpdateMessageBodySchema = z.object({
 export const MessageStatusBodySchema = z.object({
   status: z.enum(['read', 'delivered']),
 
-  timestamp: z
-    .string()
+  timestamp: z.iso
     .datetime()
     .optional()
 }).strict();
