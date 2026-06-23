@@ -114,6 +114,11 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
 
     public func makeUIView(context: Context) -> StoryCanvasUIView {
         let view = StoryCanvasUIView(slide: slide, mode: .edit)
+        // Live preview : sur le canvas d'édition les vidéos (fond + foreground)
+        // jouent et bouclent — la dernière vidéo posée tourne en boucle jusqu'à
+        // la suivante. Le prefetcher hors-écran, lui aussi en `.edit`, ne lève
+        // jamais ce drapeau et reste silencieux.
+        view.playsVideoInEditMode = true
         view.onItemModified = { modified in
             DispatchQueue.main.async { self.slide = modified }
         }

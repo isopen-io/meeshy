@@ -63,6 +63,20 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
 
     private nonisolated(unsafe) var loopObserver: NSObjectProtocol?
 
+    /// Levé par le canvas composer (`StoryCanvasUIView.playsVideoInEditMode`)
+    /// pour que les vidéos foreground JOUENT et bouclent en mode `.edit` (live
+    /// preview de l'éditeur). Hors composer (prefetcher hors-écran, défaut),
+    /// reste `false` → en `.edit` la vidéo se cale sur sa frame 0 sans jouer,
+    /// comme avant. En `.play` (reader/preview) ce drapeau est ignoré : la
+    /// lecture y est toujours active et joue une seule fois.
+    @MainActor
+    public var playsInEditMode: Bool = false {
+        didSet {
+            guard oldValue != playsInEditMode, playsInEditMode else { return }
+            avPlayer?.play()
+        }
+    }
+
     /// Image loader used by `configureImage`. Defaults to a shim that calls
     /// `CacheCoordinator.shared.images.image(for:)`. Override in tests via
     /// `_setImageLoaderForTesting(_:)` to inject a deterministic stub.
@@ -465,9 +479,11 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         // entre les deux — auquel cas il joue sous catégorie `.ambient`, donc
         // silencieux en simulator silent mode et sur device avec le switch
         // physique. Forcer la catégorie ici est idempotent et coûte ~0 ms.
-        if mode == .play, AVAudioSession.sharedInstance().category != .playback {
+        if (mode == .play || playsInEditMode), AVAudioSession.sharedInstance().category != .playback {
             // Pose la session de lecture via la source UNIQUE (call-aware) : idempotent,
-            // no-op pendant un appel (micro de l'appel préservé).
+            // no-op pendant un appel (micro de l'appel préservé). Couvre aussi le
+            // composer live preview (`.edit` + `playsInEditMode`) → audio des
+            // vidéos qui bouclent dans l'éditeur.
             MediaSessionCoordinator.shared.activatePlaybackSync(options: [.mixWithOthers, .duckOthers])
         }
 
@@ -476,6 +492,9 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
             player.play()
         case .edit:
             player.seek(to: .zero)
+            // Composer live preview : la vidéo joue (et boucle, cf. `loop`
+            // ci-dessous) tant que `playsInEditMode` est levé par le canvas.
+            if playsInEditMode { player.play() }
         }
 
         // Retire l'éventuel observer de fin précédent (changement d'item /

@@ -118,6 +118,13 @@ final class StoryMediaLayer_ForegroundResolverTests: XCTestCase {
                        "A foreground video in .play must play once (no loop)")
     }
 
+    /// The edit-mode playback opt-in defaults OFF on a bare layer — only the
+    /// composer canvas flips it. Guards against an off-screen prefetcher (also
+    /// `.edit`) starting playback.
+    func test_playsInEditMode_defaultsFalse() {
+        XCTAssertFalse(StoryMediaLayer().playsInEditMode)
+    }
+
     /// Composer (`.edit`) — the foreground video loops for the live preview,
     /// like the background. `actionAtItemEnd == .none` marks the loop path.
     func test_configure_foregroundVideoEditMode_loops() {
