@@ -515,7 +515,17 @@ export function buildNotificationContextLine(
   }
 
   const publishedAt = formatContentPublishedAt(notification.context?.postCreatedAt, t, locale);
-  return publishedAt ? `${subtitle} · ${publishedAt}` : subtitle;
+
+  // Marqueur d'expiration (parité iOS) : une story/statut éphémère dont la date
+  // d'expiration est dépassée affiche « · expirée » → l'utilisateur comprend la
+  // perte d'accès au contenu lié.
+  const expiresAt = notification.context?.postExpiresAt;
+  const expired = typeof expiresAt === 'string' && !Number.isNaN(Date.parse(expiresAt))
+    && Date.parse(expiresAt) <= Date.now();
+
+  return [subtitle, publishedAt || null, expired ? t('context.expired') : null]
+    .filter((part): part is string => typeof part === 'string' && part.length > 0)
+    .join(' · ');
 }
 
 /**

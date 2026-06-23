@@ -326,6 +326,9 @@
       "reconnecting": "Reconectando...",
       "disconnected": "Desconectado"
     },
-    "dismiss": "Descartar"
+    "dismiss": "Descartar",
+    "context": {
+      "expired": "expirada"
+    }
   }
 }

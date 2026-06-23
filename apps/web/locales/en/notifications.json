@@ -329,6 +329,9 @@
       "reconnecting": "Reconnecting...",
       "disconnected": "Disconnected"
     },
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "context": {
+      "expired": "expired"
+    }
   }
 }

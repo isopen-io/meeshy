@@ -656,5 +656,18 @@ describe('notification-helpers - Structure Groupée V2', () => {
       const n = mk({ subtitle: 'Votre story', context: { postCreatedAt: sixMinAgo } });
       expect(buildNotificationContextLine(n, t)).toBe('Votre story · il y a 6 min');
     });
+
+    it('marque « expirée » quand le contenu lié est expiré (parité iOS)', () => {
+      const past = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const te = (key: string) => (key === 'context.expired' ? 'expirée' : key);
+      const n = mk({ subtitle: 'Story', context: { postExpiresAt: past } });
+      expect(buildNotificationContextLine(n, te)).toBe('Story · expirée');
+    });
+
+    it('n’ajoute pas le marqueur quand le contenu n’est pas expiré', () => {
+      const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      const n = mk({ subtitle: 'Story', context: { postExpiresAt: future } });
+      expect(buildNotificationContextLine(n, t)).toBe('Story');
+    });
   });
 });

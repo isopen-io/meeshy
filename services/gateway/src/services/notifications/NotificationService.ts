@@ -2295,6 +2295,10 @@ export class NotificationService {
     postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
     /** Extrait du post commenté (≤ ~80 chars) pour identifier LE post visé. */
     postPreview?: string;
+    /** Date de publication ISO du post (le client en dérive « du JJ/MM/AAAA HH:MM »). */
+    postCreatedAt?: string | Date;
+    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
+    postExpiresAt?: string | Date;
   }): Promise<Notification | null> {
     if (params.actorId === params.postAuthorId) return null;
 
@@ -2331,6 +2335,8 @@ export class NotificationService {
 
       context: {
         postId: params.postId,
+        ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
+        ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
       },
 
       metadata: {

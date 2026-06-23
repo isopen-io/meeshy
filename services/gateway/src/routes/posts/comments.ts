@@ -202,6 +202,8 @@ export function registerCommentRoutes(
             commentPreview: parsed.data.content,
             postType: post.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
             postPreview: post.content?.slice(0, 80),
+            postCreatedAt: post.createdAt ?? undefined,
+            postExpiresAt: post.expiresAt ?? undefined,
           }).catch(() => {});
         }
       }

@@ -95,6 +95,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
 
   describe('createPostCommentNotification', () => {
     it('met la cible typée + extrait du post en subtitle, le commentaire en body', async () => {
+      const createdAt = new Date('2026-06-23T09:00:00.000Z');
       await service.createPostCommentNotification({
         actorId: ACTOR_ID,
         postId: POST_ID,
@@ -103,6 +104,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
         commentPreview: 'Trop drôle !',
         postType: 'STATUS',
         postPreview: 'Journée de ouf au bureau',
+        postCreatedAt: createdAt,
       });
 
       const payload = payloadOfType(mockIO, 'post_comment');
@@ -110,6 +112,8 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       expect(payload.title).toBe('Bob Commentateur');
       expect(payload.subtitle).toBe('Votre statut : « Journée de ouf au bureau »');
       expect(payload.content).toBe('Trop drôle !');
+      // postCreatedAt voyage en contexte → le client en dérive « du JJ/MM/AAAA HH:MM ».
+      expect(payload.context.postCreatedAt).toBe(createdAt.toISOString());
     });
 
     it('retombe sur le label typé seul quand le post n\'a pas de texte', async () => {
