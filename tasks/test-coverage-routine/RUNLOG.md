@@ -1936,3 +1936,26 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Branch: claude/coverage/p2-admin-web-9
 - CI: ✅ all green (Security, Quality, Test web, Test gateway, Test shared, Test agent, Test Python, Build, Audio Pipeline, Voice API, TTS/STT, Prisma)
 - Squash-merge: ✅ merged to main @ b9ae0749 (PR #903)
+
+## 2026-06-23T12:30Z — P0 Messaging core × gateway (messages.ts ≥92% line+branch)
+- Targeted: `services/gateway/src/routes/conversations/messages.ts` (2495 lines, 10 HTTP routes)
+- Result: ☑ done — messages.ts ≥92% line+branch; P0 Messaging core × gateway cell flipped ◐→☑ (all sub-files complete: MessageHandler.ts☑ messages.ts☑)
+- Coverage (final per-file run):
+  - messages.ts: 99.69% stmts / **93.91% branches** / 100% funcs / 100% lines ✓ (target ≥92% both)
+  - Gateway global: 65.04% lines / 61.72% branches (threshold ratcheted: lines 63→65, branches 58→61, stmts 63→65, funcs 64→65)
+- Tests added: 167 tests in `src/__tests__/unit/routes/messages-routes.test.ts` (NEW, 2776 lines)
+  - Pure functions: buildAfterWatermarkClause (cursor/direction/timestamp branches), computeRecipientCount (group vs direct, dedup)
+  - SendMessageBodySchema validation: empty rejection, encryptedContent bypass, attachmentIds bypass, forwardedFromId bypass, max-length rejection
+  - GET /conversations/:id/messages: unauthenticated, no participant, ETag hit/miss, share-link (allowViewHistory true/false), around mode (historyStartDate branch), speakers undefined, voiceSimilarityScore non-number→null, forwardedFrom+forwardedFromConversation, replyTo (include_replies false/true), storyReplyToId (post found/not found), currentParticipantId false branch, consumptionMap populated, LOG_AUDIO_DIAG branches, readStatus branches, sender.user null chain, hasLanguageFilter false, replyTo.originalLanguage fallback, replyTo sender null, forwardedFrom sender null, forwardedFromConversation not in map, MessagingService singleton cached
+  - POST /conversations/:id/messages: bad body, no participant, success, isEncrypted=true (encryptedPayload branch), error.undefined fallback
+  - PUT/DELETE message (edit/delete), PUT/DELETE pin (with/without socketIOHandler)
+  - GET /conversations/:id/pinned-messages: sender=null, sender.user=null chain
+  - POST consume: maxViewOnceCount=null, viewOnceCount=null (viewParticipant null)
+  - GET search: no participant, cursor not found, translation string match, sender=null
+- Reviewer: PASS (rounds: 1)
+- Notes:
+  1. TS-errors blocker (3 prior runs): fixed via `ignoreCodes: [2307, 2322, 2339, 2345, 2740]` in jest.config.json (already merged in prior phases); messages.ts is now fully importable by the test harness.
+  2. `encryptionMode: 'SIGNAL'` → `encryptionMode: 'e2ee'` fix: the Zod schema uses `z.enum(['e2ee', 'server', 'hybrid'])` — 'SIGNAL' failed validation silently, causing handler to exit before calling handleMessage.
+  3. 93.91% branch: uncovered branches include LOG_AUDIO_DIAG sub-expressions (only fire under `process.env.LOG_AUDIO_DIAG='true'` + specific message shapes), V8 sub-expression ternary artifacts in optional-chain expressions, and one dead-code defensive branch. All safely above 92% floor.
+  4. Pre-existing gateway failures: 0 new failures introduced (26 pre-existing suite failures on production bugs unchanged).
+- Commit: (see branch claude/amazing-darwin-ol5i29)
