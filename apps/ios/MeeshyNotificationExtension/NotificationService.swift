@@ -40,6 +40,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         applyThreading(to: bestAttemptContent)
         updateSharedUnreadCount(from: bestAttemptContent.userInfo)
         prefetchMessageData(from: bestAttemptContent.userInfo)
+        prefetchSocialData(from: bestAttemptContent.userInfo)
         prePersistMessage(from: bestAttemptContent.userInfo)
         postDeliveryReceipt(from: bestAttemptContent.userInfo)
 
@@ -306,6 +307,29 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             conversationId: conversationId,
             messageId: messageId
         ) { _ in }
+    }
+
+    /// Social notification types whose deep link opens the post detail. For these
+    /// we prefetch the post (+ inline comments) so a cold-start tap never lands on
+    /// an empty screen while the network request is in flight.
+    private static let socialPostTypes: Set<String> = [
+        "post_like", "post_comment", "post_repost",
+        "story_reaction", "status_reaction",
+        "comment_like", "comment_reply", "comment_reaction",
+        "story_new_comment", "story_thread_reply", "friend_story_comment",
+        "friend_new_story", "friend_new_post", "friend_new_mood",
+    ]
+
+    /// Fire-and-forget prefetch of the post referenced by a SOCIAL notification.
+    /// Mirrors `prefetchMessageData`: the post JSON is written to the App Group so
+    /// the main app merges it into the feed cache on open / foreground resume.
+    private func prefetchSocialData(from userInfo: [AnyHashable: Any]) {
+        guard let type = userInfo["type"] as? String,
+              Self.socialPostTypes.contains(type),
+              let postId = userInfo["postId"] as? String,
+              !postId.isEmpty else { return }
+
+        NSEDataSync.syncPost(postId: postId) { _ in }
     }
 
     // MARK: - GRDB Pre-persist

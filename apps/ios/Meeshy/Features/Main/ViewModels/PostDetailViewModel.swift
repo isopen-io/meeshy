@@ -95,6 +95,11 @@ class PostDetailViewModel: ObservableObject {
     }
 
     func loadPost(_ postId: String) async {
+        // Drain any post the NSE prefetched for a tapped social notification into
+        // the feed cache BEFORE reading it, so a cold-start open renders from
+        // local data instead of a blank state (mirror of
+        // `ConversationViewModel.loadMessages` draining NSEPendingMessageConsumer).
+        await NSEPendingPostConsumer.shared.consumeAll()
         let cacheResult = await CacheCoordinator.shared.feed.load(for: postId)
         switch cacheResult {
         case .fresh(let cached, _):

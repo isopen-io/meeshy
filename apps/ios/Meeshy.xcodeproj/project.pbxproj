@@ -481,6 +481,7 @@
 		NSEDC002 /* NSEDecryptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = NSEDC001 /* NSEDecryptor.swift */; };
 		NSEDS002 /* NSEDataSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = NSEDS001 /* NSEDataSync.swift */; };
 		NSEPC002 /* NSEPendingMessageConsumer.swift in Sources */ = {isa = PBXBuildFile; fileRef = NSEPC001 /* NSEPendingMessageConsumer.swift */; };
+		NSEPP002 /* NSEPendingPostConsumer.swift in Sources */ = {isa = PBXBuildFile; fileRef = NSEPP001 /* NSEPendingPostConsumer.swift */; };
 		NTFY0001000100010001001 /* NotificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = NTFY0001000100010001000 /* NotificationTests.swift */; };
 		NTIF002A002A002A002A0002 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NTIF001A001A001A001A0001 /* NotificationSettingsView.swift */; };
 		OAA0000000000002F01 /* OptimisticAttachmentAdopter.swift in Sources */ = {isa = PBXBuildFile; fileRef = OAA0000000000001F01 /* OptimisticAttachmentAdopter.swift */; };
@@ -1111,6 +1112,7 @@
 		NSEDC001 /* NSEDecryptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEDecryptor.swift; sourceTree = "<group>"; };
 		NSEDS001 /* NSEDataSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEDataSync.swift; sourceTree = "<group>"; };
 		NSEPC001 /* NSEPendingMessageConsumer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEPendingMessageConsumer.swift; sourceTree = "<group>"; };
+		NSEPP001 /* NSEPendingPostConsumer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEPendingPostConsumer.swift; sourceTree = "<group>"; };
 		NTFY0001000100010001000 /* NotificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationTests.swift; sourceTree = "<group>"; };
 		NTIF001A001A001A001A0001 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
 		OAA0000000000001F01 /* OptimisticAttachmentAdopter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimisticAttachmentAdopter.swift; sourceTree = "<group>"; };
@@ -1675,6 +1677,7 @@
 				ENGDSP0001000100010001REF /* EngagementDispatcher.swift */,
 				ENGMOD0001000100010001REF /* TrackEngagementModifier.swift */,
 				NSEPC001 /* NSEPendingMessageConsumer.swift */,
+				NSEPP001 /* NSEPendingPostConsumer.swift */,
 				5498C9E6830102135B61B0CC /* CrashlyticsReporter.swift */,
 				ANA00100010001000100F001 /* AnalyticsManager.swift */,
 				LANG0010010010010010001 /* LanguageProviding.swift */,
@@ -2818,6 +2821,7 @@
 				ENGDSP0001000100010001BLD /* EngagementDispatcher.swift in Sources */,
 				ENGMOD0001000100010001BLD /* TrackEngagementModifier.swift in Sources */,
 				NSEPC002 /* NSEPendingMessageConsumer.swift in Sources */,
+				NSEPP002 /* NSEPendingPostConsumer.swift in Sources */,
 				3030AF23EF81FAEF5970931A /* CrashlyticsReporter.swift in Sources */,
 				7E4ACB96705AA96ECDF87640 /* DependencyContainer.swift in Sources */,
 				IDSC0001000100010001BLD1 /* ImageDownsamplingConfig.swift in Sources */,
