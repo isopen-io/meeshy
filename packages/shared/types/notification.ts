@@ -475,7 +475,12 @@ export type NotificationMetadata =
 /**
  * Notification - Structure groupée logiquement
  *
- * IMPORTANT: Pas de champ `title` - construit dynamiquement côté frontend via i18n
+ * `title` / `subtitle` sont calculés CÔTÉ SERVEUR (langue résolue du
+ * destinataire, conscients de l'entité) via `buildNotificationDisplay`
+ * (@see utils/notification-strings.ts) puis PERSISTÉS — source unique pour push,
+ * liste in-app (iOS/iPadOS/macOS) et web. `null` quand le type n'est pas géré
+ * par le builder : le client applique alors son rendu de repli. Le client
+ * n'ajoute que la décoration dépendante de l'appareil (date locale).
  */
 export interface Notification {
   // === CORE - Identité ===
@@ -485,6 +490,10 @@ export interface Notification {
   readonly priority: NotificationPriority;
 
   // === CONTENT - Ce qui est affiché ===
+  /** Titre « acteur + action » localisé, conscient de l'entité (ou null → repli client). */
+  readonly title?: string | null;
+  /** Base de sous-titre localisée, SANS date (le client append la date locale), ou null. */
+  readonly subtitle?: string | null;
   readonly content: string; // Message preview ou contenu principal
 
   // === ACTOR - Qui a déclenché (optionnel) ===

@@ -1914,6 +1914,8 @@ export const notificationSchema = {
     },
 
     // === CONTENT ===
+    title: { type: 'string', nullable: true, description: 'Localized, entity-aware "actor + action" headline (server-built single source; null → client fallback)' },
+    subtitle: { type: 'string', nullable: true, description: 'Localized subtitle base WITHOUT date (client appends the device-local date)' },
     content: { type: 'string', description: 'Notification content (preview or main text)' },
 
     // === ACTOR - Qui a déclenché ===

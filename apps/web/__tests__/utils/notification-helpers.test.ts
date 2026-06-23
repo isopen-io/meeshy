@@ -6,6 +6,8 @@
 import {
   buildNotificationTitle,
   buildNotificationContent,
+  buildNotificationContextLine,
+  formatContentPublishedAt,
   getNotificationIcon,
   getNotificationLink,
   requiresUserAction,
@@ -547,6 +549,112 @@ describe('notification-helpers - Structure Groupée V2', () => {
     });
     it('comment_reply → conserve le commentaire en corps', () => {
       expect(buildNotificationContent(mk(NotificationTypeEnum.COMMENT_REPLY, '😂 exactement'), tt)).toBe('😂 exactement');
+    });
+  });
+
+  describe('buildNotificationTitle - préférence titre serveur', () => {
+    const tt = (key: string, params?: Record<string, string>) =>
+      params && params.sender ? `${key}|${params.sender}` : key;
+    const mk = (overrides: Partial<Notification> = {}): Notification => ({
+      id: 'n', userId: 'u', type: NotificationTypeEnum.COMMENT_REPLY, priority: 'normal', content: '',
+      actor: { id: 'a', username: 'belva', displayName: 'Belva Tano', avatar: null },
+      context: {}, metadata: {},
+      state: { isRead: false, readAt: null, createdAt: new Date() },
+      delivery: { emailSent: false, pushSent: false },
+      ...overrides,
+    });
+
+    it('retourne le titre serveur tel quel quand présent (source unique)', () => {
+      const n = mk({ title: 'Belva Tano a répondu à votre commentaire' });
+      expect(buildNotificationTitle(n, tt)).toBe('Belva Tano a répondu à votre commentaire');
+    });
+
+    it('ignore un titre serveur vide/espaces et applique le repli i18n', () => {
+      expect(buildNotificationTitle(mk({ title: '   ' }), tt)).toBe('titles.commentReply|Belva Tano');
+    });
+
+    it('applique le repli i18n quand le titre serveur est null', () => {
+      expect(buildNotificationTitle(mk({ title: null }), tt)).toBe('titles.commentReply|Belva Tano');
+    });
+
+    it('applique le repli i18n quand le champ title est absent', () => {
+      expect(buildNotificationTitle(mk(), tt)).toBe('titles.commentReply|Belva Tano');
+    });
+  });
+
+  describe('formatContentPublishedAt', () => {
+    const t = (key: string, params?: Record<string, string>) => {
+      const map: Record<string, string> = {
+        'timeAgo.now': "à l'instant",
+        'timeAgo.minute': 'il y a {count} min',
+        'timeAgo.hour': 'il y a {count}h',
+        'timeAgo.yesterdayAt': 'hier {time}',
+      };
+      let out = map[key] ?? key;
+      if (params) for (const [k, v] of Object.entries(params)) out = out.replace(`{${k}}`, v);
+      return out;
+    };
+
+    it('retourne chaîne vide pour valeur absente ou invalide', () => {
+      expect(formatContentPublishedAt(null, t)).toBe('');
+      expect(formatContentPublishedAt(undefined, t)).toBe('');
+      expect(formatContentPublishedAt('not-a-date', t)).toBe('');
+    });
+
+    it('utilise « à l\'instant » sous une minute', () => {
+      const justNow = new Date(Date.now() - 10 * 1000).toISOString();
+      expect(formatContentPublishedAt(justNow, t)).toBe("à l'instant");
+    });
+
+    it('utilise le format relatif minutes', () => {
+      const sixMinAgo = new Date(Date.now() - 6 * 60 * 1000).toISOString();
+      expect(formatContentPublishedAt(sixMinAgo, t)).toBe('il y a 6 min');
+    });
+
+    it('utilise « hier {time} » pour la veille', () => {
+      const now = new Date();
+      const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 14, 30);
+      expect(formatContentPublishedAt(yesterday.toISOString(), t, 'fr').startsWith('hier ')).toBe(true);
+    });
+
+    it('utilise une date+heure absolue au-delà', () => {
+      const old = new Date('2020-01-15T09:05:00Z').toISOString();
+      expect(formatContentPublishedAt(old, t, 'fr')).toMatch(/\d{2}\/\d{2}\/\d{4}/);
+    });
+  });
+
+  describe('buildNotificationContextLine', () => {
+    const t = (key: string, params?: Record<string, string>) => {
+      const map: Record<string, string> = { 'timeAgo.minute': 'il y a {count} min' };
+      let out = map[key] ?? key;
+      if (params) for (const [k, v] of Object.entries(params)) out = out.replace(`{${k}}`, v);
+      return out;
+    };
+    const mk = (overrides: Partial<Notification> = {}): Notification => ({
+      id: 'n', userId: 'u', type: NotificationTypeEnum.STORY_REACTION, priority: 'normal', content: '',
+      actor: { id: 'a', username: 'bob', displayName: 'Bob', avatar: null },
+      context: {}, metadata: {},
+      state: { isRead: false, readAt: null, createdAt: new Date() },
+      delivery: { emailSent: false, pushSent: false },
+      ...overrides,
+    });
+
+    it('retourne null pour un type non social', () => {
+      expect(buildNotificationContextLine(mk({ type: NotificationTypeEnum.NEW_MESSAGE, subtitle: 'x' }), t)).toBeNull();
+    });
+
+    it('retourne null quand subtitle est absent', () => {
+      expect(buildNotificationContextLine(mk(), t)).toBeNull();
+    });
+
+    it('retourne le subtitle seul sans postCreatedAt', () => {
+      expect(buildNotificationContextLine(mk({ subtitle: 'Votre story' }), t)).toBe('Votre story');
+    });
+
+    it('décore le subtitle avec la date locale de publication', () => {
+      const sixMinAgo = new Date(Date.now() - 6 * 60 * 1000).toISOString();
+      const n = mk({ subtitle: 'Votre story', context: { postCreatedAt: sixMinAgo } });
+      expect(buildNotificationContextLine(n, t)).toBe('Votre story · il y a 6 min');
     });
   });
 });

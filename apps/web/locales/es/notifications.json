@@ -112,7 +112,8 @@
       "now": "ahora mismo",
       "minute": "hace {count} min",
       "hour": "hace {count}h",
-      "day": "hace {count}d"
+      "day": "hace {count}d",
+      "yesterdayAt": "ayer {time}"
     },
     "actions": {
       "accept": "Aceptar",

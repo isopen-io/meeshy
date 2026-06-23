@@ -24,7 +24,7 @@ import {
 } from '@meeshy/shared/types/preferences';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
-import { notificationString, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
+import { notificationString, buildNotificationDisplay, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import type { Server as SocketIOServer } from 'socket.io';
@@ -580,6 +580,12 @@ export class NotificationService {
     metadata: NotificationMetadata;
     expiresAt?: Date;
     collapseId?: string;
+    /**
+     * Langue résolue du destinataire (Prisme-first). Fournie par les méthodes
+     * `create*` qui la résolvent déjà ; sinon résolue ici. Pilote le calcul
+     * localisé du `title`/`subtitle` persistés (source unique multi-plateforme).
+     */
+    lang?: string;
   }): Promise<Notification | null> {
     try {
       // SECURITY: Validate notification type
@@ -619,11 +625,34 @@ export class NotificationService {
       } : undefined;
       const sanitizedMetadata = SecuritySanitizer.sanitizeJSON(params.metadata);
 
+      // Titre/sous-titre localisés, conscients de l'entité — calculés UNE fois
+      // côté serveur (langue du destinataire) puis persistés. Source unique pour
+      // la liste in-app (iOS/iPadOS/macOS) et le web ; corrige les libellés
+      // imprécis/non localisés historiquement reconstruits côté client.
+      const displayLang = params.lang ?? await this.resolveRecipientLang(params.userId);
+      const meta = (params.metadata ?? {}) as Record<string, unknown>;
+      const display = buildNotificationDisplay(displayLang, {
+        type: params.type,
+        actorName: sanitizedActor?.displayName ?? params.actor?.username ?? null,
+        postType: typeof meta.postType === 'string' ? meta.postType : null,
+        emoji: (typeof meta.reactionEmoji === 'string' ? meta.reactionEmoji
+          : typeof meta.emoji === 'string' ? meta.emoji : null),
+        parentCommentPreview: (typeof meta.parentCommentPreview === 'string' ? meta.parentCommentPreview : null),
+      });
+      // Sous-titre persisté : l'override explicite riche d'une méthode `create*`
+      // (ex. « Votre publication : « aperçu » ») prime, sinon la base localisée
+      // du builder. SANS date — le client append la date locale.
+      const persistedSubtitle = (params.subtitle && params.subtitle.trim() !== '')
+        ? params.subtitle.trim().slice(0, 160)
+        : (display.subtitle ?? null);
+
       const notification = await this.prisma.notification.create({
         data: {
           userId: params.userId,
           type: params.type,
           priority: params.priority,
+          title: display.title,
+          subtitle: persistedSubtitle,
           content: sanitizedContent,
 
           // Relation optionnelle avec Message
@@ -884,6 +913,8 @@ export class NotificationService {
       userId: raw.userId,
       type: raw.type as NotificationType,
       priority: raw.priority as NotificationPriority,
+      title: raw.title ?? null,
+      subtitle: raw.subtitle ?? null,
       content: raw.content,
 
       actor: (raw.actor || undefined) as NotificationActor | undefined,
@@ -1006,6 +1037,7 @@ export class NotificationService {
       priority: 'normal',
       content,
       collapseId: `msg-${params.messageId}`,
+      lang: recipientLang,
 
       actor: {
         id: params.senderId,
@@ -1288,6 +1320,7 @@ export class NotificationService {
       priority: 'low',
       content: body,
       subtitle,
+      lang,
 
       actor: {
         id: params.reactorUserId,
@@ -1307,6 +1340,9 @@ export class NotificationService {
       metadata: {
         action: 'view_post',
         reactionEmoji: params.reactionEmoji,
+        // Entité portant le commentaire → le client affiche « Story »/« Publication »
+        // (et non un libellé générique) quand aucun aperçu de commentaire n'est dispo.
+        postType: params.isStory ? 'STORY' : 'POST',
       },
     });
   }
@@ -1514,6 +1550,7 @@ export class NotificationService {
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
+          lang: aLang,
         })
       );
     }
@@ -1532,6 +1569,7 @@ export class NotificationService {
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
+          lang: rLang,
         })
       );
     }
@@ -1550,6 +1588,7 @@ export class NotificationService {
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
+          lang: rLang,
         })
       );
     }
@@ -1591,6 +1630,7 @@ export class NotificationService {
     const content = params.commentExcerpt
       ? this.truncateMessage(params.commentExcerpt)
       : '';
+    const langs = await this.resolveRecipientLangs(params.mentionedUserIds);
 
     const actorInfo = {
       id: params.commenterId,
@@ -1619,6 +1659,7 @@ export class NotificationService {
           priority: 'high',
           content,
           actor: actorInfo,
+          lang: langs.get(userId) ?? 'fr',
           context: {
             postId: params.postId,
             commentId: params.commentId,
@@ -1696,6 +1737,7 @@ export class NotificationService {
           priority: 'high',
           content: excerpt || notificationString(langs.get(userId) ?? 'fr', 'mention'),
           actor: actorInfo,
+          lang: langs.get(userId) ?? 'fr',
           context: {
             postId: params.postId,
           },
@@ -1827,6 +1869,7 @@ export class NotificationService {
             postType: params.contentType === 'REEL' ? 'POST' : params.contentType,
           }),
           actor: actorInfo,
+          lang: fLang,
           context: {
             postId: params.postId,
             ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
@@ -2199,6 +2242,7 @@ export class NotificationService {
       type,
       priority: 'normal',
       content: notificationString(lang, 'reaction.post', { emoji: params.emoji, postType: reactPostType }),
+      lang,
 
       actor: {
         id: params.actorId,
@@ -2250,15 +2294,9 @@ export class NotificationService {
 
     // Subtitle = la cible du commentaire (« Votre humeur : « … » ») ; body =
     // le texte du commentaire. Le destinataire sait QUOI a été commenté sans
-    // ouvrir l'app.
-    const ownerLabel: Record<'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL', string> = {
-      POST: 'Votre publication',
-      STORY: 'Votre story',
-      MOOD: 'Votre humeur',
-      STATUS: 'Votre statut',
-      REEL: 'Votre réel',
-    };
-    const label = ownerLabel[params.postType ?? 'POST'];
+    // ouvrir l'app. Libellé localisé (Prisme-first) — plus de français codé en dur.
+    const lang = await this.resolveRecipientLang(params.postAuthorId);
+    const label = notificationString(lang, 'comment.subtitleOwner', { postType: params.postType ?? 'POST' });
     const trimmedPostPreview = params.postPreview?.trim() ?? '';
     const subtitle = trimmedPostPreview !== ''
       ? `${label} : « ${this.truncateMessage(trimmedPostPreview)} »`
@@ -2270,6 +2308,7 @@ export class NotificationService {
       priority: 'normal',
       content: this.truncateMessage(params.commentPreview),
       subtitle,
+      lang,
 
       actor: {
         id: params.actorId,
@@ -2335,6 +2374,7 @@ export class NotificationService {
         postType: params.postType === 'REEL' ? 'POST' : (params.postType ?? 'POST'),
       }),
       ...(subtitle ? { subtitle } : {}),
+      lang,
 
       actor: {
         id: params.actorId,
@@ -2373,6 +2413,12 @@ export class NotificationService {
     replyPreview: string;
     /** Extrait du commentaire parent — identifie À QUOI on répond. */
     parentCommentPreview?: string;
+    /** Type du contenu portant le commentaire — précise « sur votre story/réel ». Défaut POST. */
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
+    /** Date de publication ISO du contenu (le client en dérive « du JJ/MM/AAAA HH:MM »). */
+    postCreatedAt?: string | Date;
+    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
+    postExpiresAt?: string | Date;
   }): Promise<Notification | null> {
     if (params.actorId === params.commentAuthorId) return null;
 
@@ -2382,12 +2428,14 @@ export class NotificationService {
     });
     if (!actor) return null;
 
-    // Subtitle = le commentaire auquel on répond ; body = la réponse.
+    // Le titre « X a répondu à votre commentaire » est calculé par le builder
+    // (source unique localisée). Le subtitle précise l'ENTITÉ portant le
+    // commentaire (« Story », « Réel »…) — pas « publication » générique ; le
+    // client y append la date locale (« · 23/06/2026 14:30 ») depuis postCreatedAt.
     const lang = await this.resolveRecipientLang(params.commentAuthorId);
     const trimmedParent = params.parentCommentPreview?.trim() ?? '';
-    const subtitle = trimmedParent !== ''
-      ? notificationString(lang, 'comment.replyWithParent', { preview: this.truncateMessage(trimmedParent) })
-      : notificationString(lang, 'comment.reply');
+    // POST_NOUN_CAP gère REEL distinctement (« Réel ») → pas de mapping vers POST.
+    const subtitle = notificationString(lang, 'comment.subtitleBare', { postType: params.postType ?? 'POST' });
 
     return this.createNotification({
       userId: params.commentAuthorId,
@@ -2395,6 +2443,7 @@ export class NotificationService {
       priority: 'normal',
       content: this.truncateMessage(params.replyPreview),
       subtitle,
+      lang,
 
       actor: {
         id: params.actorId,
@@ -2405,6 +2454,8 @@ export class NotificationService {
 
       context: {
         postId: params.postId,
+        ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
+        ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
       },
 
       metadata: {
@@ -2412,6 +2463,7 @@ export class NotificationService {
         postId: params.postId,
         commentId: params.commentId,
         commentPreview: this.truncateMessage(params.replyPreview),
+        postType: params.postType ?? 'POST',
         ...(trimmedParent !== ''
           ? { parentCommentPreview: this.truncateMessage(trimmedParent) }
           : {}),
@@ -2452,6 +2504,7 @@ export class NotificationService {
       priority: 'low',
       content: notificationString(lang, 'reaction.comment', { emoji: params.emoji }),
       ...(subtitle ? { subtitle } : {}),
+      lang,
 
       actor: {
         id: params.actorId,

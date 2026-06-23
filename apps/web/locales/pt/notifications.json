@@ -112,7 +112,8 @@
       "now": "agora mesmo",
       "minute": "há {count} min",
       "hour": "há {count}h",
-      "day": "há {count}d"
+      "day": "há {count}d",
+      "yesterdayAt": "ontem {time}"
     },
     "actions": {
       "accept": "Aceitar",

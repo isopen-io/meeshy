@@ -119,6 +119,7 @@ export function NotificationDropdown({ className = '' }: NotificationDropdownPro
                   onClick={handleNotificationClick}
                   formatTimeAgo={formatTimeAgo}
                   t={t}
+                  locale={locale}
                   compact
                   index={index}
                 />

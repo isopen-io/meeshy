@@ -138,8 +138,13 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
     });
   });
 
+  const createdDataOfType = (type: string): any | undefined =>
+    prisma.notification.create.mock.calls
+      .map((c: any[]) => c[0]?.data)
+      .find((d: any) => d?.type === type);
+
   describe('createCommentReplyNotification', () => {
-    it('met le commentaire parent en subtitle (« En réponse à « … » »)', async () => {
+    it('persiste le titre « a répondu à votre commentaire » + sous-titre typé sur l\'entité (story)', async () => {
       await service.createCommentReplyNotification({
         actorId: ACTOR_ID,
         postId: POST_ID,
@@ -147,14 +152,20 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
         commentId: COMMENT_ID,
         replyPreview: 'Complètement d\'accord',
         parentCommentPreview: 'Le meilleur resto de la ville',
+        postType: 'STORY',
       });
 
-      const payload = payloadOfType(mockIO, 'comment_reply');
-      expect(payload.subtitle).toBe('En réponse à « Le meilleur resto de la ville »');
-      expect(payload.content).toBe('Complètement d\'accord');
+      // Titre persisté (source unique liste/web) : corrige le bug « a commenté
+      // votre publication » pour une réponse à un commentaire.
+      const created = createdDataOfType('comment_reply');
+      expect(created.title).toBe('Bob Commentateur a répondu à votre commentaire');
+      // Sous-titre = l'ENTITÉ portant le commentaire (« Story »), le client y
+      // append la date locale. Le body reste la réponse.
+      expect(created.subtitle).toBe('Story');
+      expect(payloadOfType(mockIO, 'comment_reply').content).toBe('Complètement d\'accord');
     });
 
-    it('retombe sur un libellé générique précis sans extrait parent', async () => {
+    it('replie sur « Publication » quand le type de contenu n\'est pas précisé', async () => {
       await service.createCommentReplyNotification({
         actorId: ACTOR_ID,
         postId: POST_ID,
@@ -163,7 +174,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
         replyPreview: 'Oui !',
       });
 
-      expect(payloadOfType(mockIO, 'comment_reply').subtitle).toBe('En réponse à votre commentaire');
+      expect(createdDataOfType('comment_reply').subtitle).toBe('Publication');
     });
   });
 
