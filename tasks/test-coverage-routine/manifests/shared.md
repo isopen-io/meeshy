@@ -43,11 +43,11 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `packages/shared/types/anonymous.ts`
 - [ ] `packages/shared/types/api-responses.ts`
 - [~] `packages/shared/types/api-schemas.ts`
-- [ ] `packages/shared/types/attachment-audio.ts`
-- [ ] `packages/shared/types/attachment-transcription.ts`
+- [x] `packages/shared/types/attachment-audio.ts`
+- [x] `packages/shared/types/attachment-transcription.ts`
 - [ ] `packages/shared/types/attachment.ts`
-- [ ] `packages/shared/types/audio-effects-timeline.ts`
-- [ ] `packages/shared/types/audio-transcription.ts`
+- [x] `packages/shared/types/audio-effects-timeline.ts`
+- [x] `packages/shared/types/audio-transcription.ts`
 - [ ] `packages/shared/types/community.ts`
 - [x] `packages/shared/types/conversation.ts`
 - [x] `packages/shared/types/delivery-queue.ts`
@@ -75,7 +75,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `packages/shared/types/socketio-events.ts`
 - [x] `packages/shared/types/status-types.ts`
 - [ ] `packages/shared/types/tracking-link.ts`
-- [ ] `packages/shared/types/translated-audio.ts`
+- [x] `packages/shared/types/translated-audio.ts`
 - [ ] `packages/shared/types/user-preferences.ts`
 - [ ] `packages/shared/types/user.ts`
 - [~] `packages/shared/types/validation.ts`
