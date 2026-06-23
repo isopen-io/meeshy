@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -45,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import coil.imageLoader
+import coil.request.ImageRequest
 import me.meeshy.feature.stories.R
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -72,6 +75,14 @@ fun StoryViewerScreen(
     var showComments by remember { mutableStateOf(false) }
 
     val progress = remember { Animatable(0f) }
+
+    val context = LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(state.prefetchUrls) {
+        val loader = context.imageLoader
+        state.prefetchUrls.forEach { url ->
+            loader.enqueue(ImageRequest.Builder(context).data(url).build())
+        }
+    }
 
     androidx.compose.runtime.LaunchedEffect(state.isDismissed) {
         if (state.isDismissed) onClose()
