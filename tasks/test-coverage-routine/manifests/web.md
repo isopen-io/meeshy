@@ -252,28 +252,28 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `apps/web/components/admin/ConfirmDialog.tsx`
 - [x] `apps/web/components/admin/TableSkeleton.tsx`
 - [x] `apps/web/components/admin/agent/AgentArchetypesTab.tsx`
-- [ ] `apps/web/components/admin/agent/AgentConfigDialog.tsx`
-- [ ] `apps/web/components/admin/agent/AgentConversationsTab.tsx`
-- [ ] `apps/web/components/admin/agent/AgentGlobalConfigTab.tsx`
+- [x] `apps/web/components/admin/agent/AgentConfigDialog.tsx`
+- [x] `apps/web/components/admin/agent/AgentConversationsTab.tsx`
+- [x] `apps/web/components/admin/agent/AgentGlobalConfigTab.tsx`
 - [x] `apps/web/components/admin/agent/AgentHistoryTab.tsx`
-- [ ] `apps/web/components/admin/agent/AgentLiveTab.tsx`
-- [ ] `apps/web/components/admin/agent/AgentLlmTab.tsx`
+- [x] `apps/web/components/admin/agent/AgentLiveTab.tsx`
+- [x] `apps/web/components/admin/agent/AgentLlmTab.tsx`
 - [x] `apps/web/components/admin/agent/AgentMessagesModal.tsx`
-- [ ] `apps/web/components/admin/agent/AgentOverviewTab.tsx`
+- [x] `apps/web/components/admin/agent/AgentOverviewTab.tsx`
 - [x] `apps/web/components/admin/agent/AgentRolesSection.tsx`
-- [ ] `apps/web/components/admin/agent/AgentScheduleTimeline.tsx`
-- [ ] `apps/web/components/admin/agent/AgentTopicEditModal.tsx`
+- [x] `apps/web/components/admin/agent/AgentScheduleTimeline.tsx`
+- [x] `apps/web/components/admin/agent/AgentTopicEditModal.tsx`
 - [x] `apps/web/components/admin/agent/AgentTopicRegexTester.tsx`
 - [x] `apps/web/components/admin/agent/AgentTopicsTab.tsx`
-- [ ] `apps/web/components/admin/agent/ConversationPicker.tsx`
+- [x] `apps/web/components/admin/agent/ConversationPicker.tsx`
 - [x] `apps/web/components/admin/agent/DeliveryQueueItemCard.tsx`
 - [x] `apps/web/components/admin/agent/DeliveryQueuePanel.tsx`
 - [x] `apps/web/components/admin/agent/InfoIcon.tsx`
-- [ ] `apps/web/components/admin/agent/ScanControlPanel.tsx`
+- [x] `apps/web/components/admin/agent/ScanControlPanel.tsx`
 - [x] `apps/web/components/admin/agent/ScanHistoryChart.tsx`
 - [x] `apps/web/components/admin/agent/ScanLogDetail.tsx`
 - [x] `apps/web/components/admin/agent/ScanLogTable.tsx`
-- [ ] `apps/web/components/admin/agent/TriggerSchedulingModal.tsx`
+- [x] `apps/web/components/admin/agent/TriggerSchedulingModal.tsx`
 - [x] `apps/web/components/admin/agent/UserDisplay.tsx`
 - [x] `apps/web/components/admin/agent/UserPicker.tsx`
 - [x] `apps/web/components/admin/agent/config-form-merge.ts`
