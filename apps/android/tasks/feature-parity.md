@@ -167,7 +167,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (port du pattern `ConversationCacheSource`) + `StoryRepository.storiesStream`
       → tray genuinely cache-first (peint depuis Room au démarrage chaud, skeleton
       cold-only sur cache `Empty`/`Syncing` sans données) via la pure `StoryTrayReducer`.
-      Pending : count-dots, composer/publish, reactions/comments overlay, prefetch média.
+      **Comments overlay** : `StoryComment` (domaine + mapper Prisme) + `StoryRepository
+      .comments` + pure `StoryCommentsReducer` (merge serveur dedupe/oldest-first +
+      posting optimiste → ACK swap → Failed/retry + `received` socket dedupe) +
+      `StoryCommentsViewModel` (Instant-App + optimiste + realtime `comment:added`) +
+      `StoryCommentsSheet` (input accent, pending dimmé, tap-to-retry) câblé au viewer.
+      Pending : count-dots, composer/publish, reactions UI polish, prefetch média.
 - [ ] Pending: Stories composer + viewer richness, Calls slice, feed pagination +
       post detail, reactions UI polish
 - [ ] Pending: Stories / Calls slices, feed pagination + post detail

@@ -69,6 +69,14 @@ class StoryRepository @Inject constructor(
     suspend fun comment(storyId: String, content: String): NetworkResult<ApiPostComment> =
         apiCall { storyApi.comment(storyId, CreateCommentRequest(content)) }
 
+    /** Fetches the comments under a story (oldest-first ordering is the overlay's job). */
+    suspend fun comments(
+        storyId: String,
+        cursor: String? = null,
+        limit: Int = 50,
+    ): NetworkResult<List<ApiPostComment>> =
+        apiCall { storyApi.comments(storyId, cursor, limit) }
+
     suspend fun repost(storyId: String): NetworkResult<Unit> =
         apiCall { storyApi.repost(storyId, RepostPostRequest()) }
 

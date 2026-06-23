@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Comment
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,6 +69,7 @@ fun StoryViewerScreen(
     val accent = remember(slide?.accentHex) { slide?.accentHex ?: "1A1A2E" }
 
     var showViewers by remember { mutableStateOf(false) }
+    var showComments by remember { mutableStateOf(false) }
 
     val progress = remember { Animatable(0f) }
 
@@ -75,8 +77,14 @@ fun StoryViewerScreen(
         if (state.isDismissed) onClose()
     }
 
-    androidx.compose.runtime.LaunchedEffect(state.groupIndex, state.index, state.slides.size, showViewers) {
-        if (state.slides.isEmpty() || state.isDismissed || showViewers) return@LaunchedEffect
+    androidx.compose.runtime.LaunchedEffect(
+        state.groupIndex,
+        state.index,
+        state.slides.size,
+        showViewers,
+        showComments,
+    ) {
+        if (state.slides.isEmpty() || state.isDismissed || showViewers || showComments) return@LaunchedEffect
         viewModel.markCurrentViewed()
         progress.snapTo(0f)
         progress.animateTo(1f, tween(durationMillis = SLIDE_DURATION_MS, easing = LinearEasing))
@@ -195,6 +203,15 @@ fun StoryViewerScreen(
                             .padding(horizontal = MeeshySpacing.sm, vertical = 2.dp),
                     )
                 }
+                if (state.currentStoryId != null) {
+                    IconButton(onClick = { showComments = true }) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.Comment,
+                            contentDescription = stringResource(R.string.stories_comments_open),
+                            tint = MeeshyPalette.White,
+                        )
+                    }
+                }
                 IconButton(onClick = onClose) {
                     Icon(
                         Icons.Filled.Close,
@@ -233,6 +250,15 @@ fun StoryViewerScreen(
             storyId = viewersStoryId,
             accentHex = accent,
             onDismiss = { showViewers = false },
+        )
+    }
+
+    val commentsStoryId = state.currentStoryId
+    if (showComments && commentsStoryId != null) {
+        StoryCommentsSheet(
+            storyId = commentsStoryId,
+            accentHex = accent,
+            onDismiss = { showComments = false },
         )
     }
 }

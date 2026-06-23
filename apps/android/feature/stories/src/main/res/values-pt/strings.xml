@@ -15,4 +15,14 @@
     <string name="stories_viewers_loading">A carregar visualizações…</string>
     <string name="stories_viewers_error">Não foi possível carregar as visualizações</string>
     <string name="stories_viewer_open_viewers">Ver quem viu esta story</string>
+    <string name="stories_comments_title">Comentários</string>
+    <string name="stories_comments_count">%1$d comentários</string>
+    <string name="stories_comments_empty_title">Ainda sem comentários</string>
+    <string name="stories_comments_empty_subtitle">Sê o primeiro a comentar.</string>
+    <string name="stories_comments_loading">A carregar comentários…</string>
+    <string name="stories_comments_error">Não foi possível carregar os comentários</string>
+    <string name="stories_comments_input_hint">Adicionar um comentário…</string>
+    <string name="stories_comments_send">Enviar</string>
+    <string name="stories_comments_open">Comentários</string>
+    <string name="stories_comments_failed">Falhou — toca para tentar de novo</string>
 </resources>

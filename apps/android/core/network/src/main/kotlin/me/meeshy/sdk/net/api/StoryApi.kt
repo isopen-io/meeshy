@@ -42,6 +42,13 @@ interface StoryApi {
         @Body body: StoryLikeRequest,
     ): ApiResponse<Unit>
 
+    @GET("posts/{id}/comments")
+    suspend fun comments(
+        @Path("id") storyId: String,
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int? = null,
+    ): ApiResponse<List<ApiPostComment>>
+
     @POST("posts/{id}/comments")
     suspend fun comment(
         @Path("id") storyId: String,
