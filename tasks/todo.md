@@ -39,5 +39,30 @@ Le backend envoie déjà beaucoup de contexte ; l'UI le jette.
 - [ ] Distinguer story/réel/mood/post dans les libellés.
 - [ ] Tests SDK (decoding + formattedBody/formattedContext).
 
+### Stories (demande de suivi) — FAIT ✅
+- [x] Story expirée : l'auteur n'est plus auto-skippé sur SON ring → il peut
+      revoir sa story et ses commentaires (StoryViewerView.skipExpiredStoriesIfNeeded).
+- [x] Bannière « Story expirée — les commentaires restent visibles » dans
+      StoryCommentsOverlayView.
+- [x] L'auteur voit toujours le bouton commentaire sur SA story (`|| isOwnStory`).
+- [x] Répondre à un commentaire ouvre l'universal composer bar (composerFocusTrigger).
+
 ## Review
-(à compléter)
+- Backend (gateway + shared) : typecheck clean, 260 tests notif/social/posts verts.
+  REEL distinct ; postCreatedAt/postExpiresAt persistés pour friend content,
+  story comments, réactions (post_like/story/status) et reposts ; previews
+  (comment/post/parent) + mediaType + attachment media details persistés en
+  metadata/context (donc servis par REST → visibles dans la liste).
+- iOS (MeeshySDK) : formattedBody couvre tous les types ; formattedContext calcule
+  toujours la ligne entité + cycle de vie (« Story · il y a 2 j · expirée ») pour
+  les types sociaux (le subtitle push n'est qu'un repli pour les autres types) ;
+  réutilise RelativeTimeFormatter (SDK core, localisé) ; +9 tests SDK modèle.
+- Story UI : 3 changements chirurgicaux (skip-guard auteur, bouton commentaire
+  auteur, focus composer sur reply) + bannière expiry.
+- LIMITE : pas de toolchain Swift dans cet environnement remote → build/tests iOS
+  (`./apps/ios/meeshy.sh test`) NON exécutés ici. Changements ciblés, conformes
+  aux patterns existants ; à valider par un build iOS local/CI.
+- Revue de code (high effort, 3 agents finders + vérif) : 2 vrais bugs corrigés
+  (subtitle masquait l'expiry ; réactions/reposts ne persistaient pas l'expiry),
+  duplication RelativeTimeFormatter supprimée. Findings « régression vs fallback »
+  réfutés (contextualMessage était déjà du code mort non rendu).
