@@ -5,18 +5,19 @@
 `Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → **Stories (in progress)** → Calls → rest`
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
-quick-reaction strip + swipe gestures + realtime reaction socket deltas shipped
-earlier loops; this loop ships the **who-viewed sheet** (author-only viewers
-list): `StoryRepository.viewers()`, a pure ordering rule, a cold-skeleton SWR
-ViewModel and a `ModalBottomSheet` reachable from a "Views" button in the viewer.
+quick-reaction strip + swipe gestures + realtime reaction socket deltas +
+who-viewed sheet shipped earlier loops; this loop gives the **tray a Room-backed
+SWR backing** so it is genuinely cache-first (paints from Room on a warm start,
+cold skeleton only on an `Empty`/dataless-`Syncing` cache) — `StoryEntity`/
+`StoryDao` (DB v5), `StoryCacheSource`, `StoryRepository.storiesStream`, and the
+pure `StoryTrayReducer`.
 
 ## Next slice (pick one for the next run)
 
 Ordered by value within the Stories area:
-1. `story-tray-swr` — Room/SWR backing for the tray so it is genuinely
-   cache-first (skeleton only on cold empty), per Instant-App principles.
-2. `story-composer` — publish flow (text/media) via the outbox/WorkManager chain.
-3. `story-comments-overlay` — live-chat comments panel + optimistic posting.
+1. `story-composer` — publish flow (text/media) via the outbox/WorkManager chain.
+2. `story-comments-overlay` — live-chat comments panel + optimistic posting.
+3. `story-media-prefetch` — warm the next slide's media before it shows.
 
 Note: server-side `currentUserReactions` seeding of `mine` on load, the
 app-wide `SocialSocketManager.attach()` lifecycle wiring (no caller yet — affects
@@ -28,6 +29,60 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-23 — slice `story-tray-swr` ✅
+- **Branch:** `claude/apps/android/story-tray-swr`
+- **What:** gave the story tray a **Room-backed stale-while-revalidate** backing,
+  porting the proven `ConversationCacheSource` pattern so the tray is genuinely
+  cache-first (Instant-App): on a warm start it paints from Room before any
+  network call (survives process death — surpassing the in-memory Feed cache),
+  and the cold skeleton shows ONLY on a truly empty / still-dataless cache.
+- **Added (production):**
+  - `core:database` — `StoryEntity` (`id`/`payload`/`createdAt`/`cachedAt`) +
+    `StoryDao` (`observeAll` ordered `createdAt DESC`, `upsertAll`, `deleteNotIn`,
+    `clear`); registered in `MeeshyDatabase` (**version 4 → 5**, destructive
+    migration is already configured) + `DatabaseModule.providesStoryDao`.
+  - `sdk-core` — `StoryCacheSource` (internal `SwrCacheSource<List<ApiPost>>`,
+    mirror of `ConversationCacheSource`: cold `null` vs synced-empty list, persist
+    in a single `withTransaction`, `sync_meta` key `"stories"`); `CachePolicy.Stories`
+    (fresh 1 min / keep 24 h — matches the story lifetime); `StoryRepository`
+    gains `database`/`storyDao`/`syncMetaDao` deps + `storiesStream(policy,
+    onSyncError)` + `refresh()`.
+  - `feature:stories` — pure `StoryTrayReducer` (`stories()` keeps the stale list
+    on a valueless `Syncing`; `flags()` = the cold-skeleton/sync discipline);
+    `StoriesViewModel` rewired to consume `storiesStream` (was a one-shot
+    `list()`), exposes `isSyncing`/`showSkeleton` + `refresh()`; `StoryTray`
+    renders a `StoryTraySkeleton` row only on `showSkeleton` over an empty tray.
+- **Tests (+22):**
+  - `StoryDaoTest` (new, Robolectric) +5 — `createdAt DESC` order, cold-empty,
+    upsert-replace by PK, `deleteNotIn`, `clear`.
+  - `StoryRepositoryTest` (rewritten to Robolectric + in-memory DB) +5 — cold
+    `Empty` first emission, refresh persists rows + `sync_meta`, refresh prunes
+    absent rows, refresh serves `Fresh` after sync, refresh throws
+    `StorySyncException` with the API message (kept the 3 `viewers()` tests).
+  - `StoryTrayReducerTest` (new, pure) +11 — every `stories()` arm (Fresh/Stale/
+    Syncing-value/Syncing-null-fallback/Empty) and every `flags()` arm
+    (Fresh/Stale/Syncing-null±data/Syncing-value/Empty).
+  - `StoriesViewModelTest` (new) +6 — cold `Empty` → skeleton; `Fresh` builds
+    tray + clears skeleton; own story → self ring; `Stale` keeps tray + syncing;
+    `Syncing(null)` → skeleton; background sync error clears the cold skeleton.
+- **Edge cases covered:** cold vs warm cache; synced-empty (real empty list) vs
+  cold-null; stale-kept list on a valueless `Syncing`; background revalidation
+  failure → skeleton cleared (no infinite spinner); row pruning across syncs;
+  own vs foreign author placement; expired-story filtering exercised via the
+  builder (live `Instant.now()` fixtures).
+- **Verify:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 2m32s**
+  (full `assembleDebug` + all module JVM unit tests; 836 tasks). Targeted:
+  `:core:database`, `:sdk-core`, `:feature:stories` testDebugUnitTest all green.
+- **Reviewer:** PASS — scope `apps/android` only; behavioural tests through the
+  public API, no tautologies; SDK purity (Room entity/DAO + `StoryCacheSource` +
+  `storiesStream` are building blocks in `core:database`/`sdk-core`; the
+  "keep-stale / when-skeleton" product rule lives in `:feature:stories`'s
+  `StoryTrayReducer`); single source of truth (one Room DB; reused
+  `cacheFirstFlow`/`SwrCacheSource`/`CachePolicy`; tray colours via the existing
+  `StoryTrayBuilder`/`DynamicColorGenerator`); Instant-App (cold-only skeleton,
+  warm paint from cache, silent background SWR); UDF + immutable `UiState`, pure
+  reducer; no dead end (skeleton → tray, dismiss/refresh coherent).
 
 ### 2026-06-23 — slice `story-viewers-sheet` ✅
 - **Branch:** `claude/apps/android/story-viewers-sheet`

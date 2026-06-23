@@ -10,6 +10,7 @@ import dagger.hilt.components.SingletonComponent
 import me.meeshy.core.database.dao.ConversationDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
+import me.meeshy.core.database.dao.StoryDao
 import me.meeshy.core.database.dao.SyncMetaDao
 import javax.inject.Singleton
 
@@ -39,6 +40,10 @@ internal object DatabaseModule {
     @Provides
     fun providesMessageDao(database: MeeshyDatabase): MessageDao =
         database.messageDao()
+
+    @Provides
+    fun providesStoryDao(database: MeeshyDatabase): StoryDao =
+        database.storyDao()
 
     private const val DATABASE_NAME = "meeshy.db"
 }

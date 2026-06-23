@@ -43,6 +43,13 @@ data class CachePolicy(
             keepForMillis = 6 * 60 * 60_000L,
         )
 
+        // Stories live ~24h and their unviewed/expiry state shifts quickly, so the
+        // tray is fresh only briefly and kept for the story lifetime.
+        val Stories = CachePolicy(
+            freshForMillis = 60_000L,
+            keepForMillis = 24 * 60 * 60_000L,
+        )
+
         val Notifications = CachePolicy(
             freshForMillis = 60_000L,
             keepForMillis = 24 * 60 * 60_000L,

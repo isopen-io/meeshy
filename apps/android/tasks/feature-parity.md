@@ -88,8 +88,9 @@ file-by-file audit — every one of the 673 iOS files was read in full.
 - [x] Repositories: `AuthRepository`, `ConversationRepository`, `MessageRepository`
 - [x] **SWR engine**: `CacheResult` (4-state incl. `Syncing`) + `CachePolicy` +
       `cacheFirstFlow {}` + `SwrCacheSource` — TDD, 5 tests green
-- [x] **SWR backing**: Room DB + `sync_meta` + `ConversationCacheSource` —
-      conversation list is genuinely cache-first (skeleton only on cold `Empty`)
+- [x] **SWR backing**: Room DB + `sync_meta` + `ConversationCacheSource` /
+      `StoryCacheSource` — conversation list **and** stories tray are genuinely
+      cache-first (skeleton only on cold `Empty`)
 - [x] **Outbox model**: `outbox` table + DAO, lanes, `OutboxCoalescer`
       (send+delete / edit-merge / reaction-toggle), device-scoped `cmid`/`cid`
 - [x] **Outbox runtime**: `OutboxRepository` (enqueue+coalesce, boot recovery,
@@ -162,8 +163,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       **viewer minimal** `StoryViewerScreen` (barres de progression segmentées,
       tap-avance/recule/ferme, auto-advance 5s, texte Prisme, média de fond, mark
       viewed) câblé via route `story/{userId}` (+ deep link `meeshy://story/...`).
-      19 tests verts. Pending : count-dots, composer/publish, reactions/comments
-      overlay, viewers sheet, SWR/Room backing du tray, prefetch média.
+      **Tray SWR/Room backing** : `StoryEntity`/`StoryDao` (DB v5) + `StoryCacheSource`
+      (port du pattern `ConversationCacheSource`) + `StoryRepository.storiesStream`
+      → tray genuinely cache-first (peint depuis Room au démarrage chaud, skeleton
+      cold-only sur cache `Empty`/`Syncing` sans données) via la pure `StoryTrayReducer`.
+      Pending : count-dots, composer/publish, reactions/comments overlay, prefetch média.
 - [ ] Pending: Stories composer + viewer richness, Calls slice, feed pagination +
       post detail, reactions UI polish
 - [ ] Pending: Stories / Calls slices, feed pagination + post detail
@@ -321,8 +325,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 
 ## E. Stories
 - [~] Story tray carousel : carrousel d'anneaux + bouton « ma story » (badge +) +
-      ring non-vu (dégradé accent) / vu (gris) done ; count dots, progression
-      d'upload + retry/cancel pending (`:feature:stories` `StoryTray`)
+      ring non-vu (dégradé accent) / vu (gris) done ; **cache-first SWR/Room backing**
+      (`StoryEntity`/`StoryDao` v5 + `StoryCacheSource` + `storiesStream`, skeleton
+      cold-only) done ; count dots, progression d'upload + retry/cancel pending
+      (`:feature:stories` `StoryTray`)
 - [ ] Multi-slide composer (≤10 slides; add/remove/duplicate/reorder; slide mini-preview strip)
 - [ ] 9:16 canvas with pinch-zoom + drag-pan; FAB + bottom-band toolbar (Contenu/Effets)
 - [ ] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,
