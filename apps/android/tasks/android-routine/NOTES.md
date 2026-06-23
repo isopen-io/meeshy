@@ -157,3 +157,25 @@ Append-only log of gotchas and decisions that save time next run.
   value object is only meant to be built through a factory (e.g. `StoryCountDots`),
   prefer a plain `class` (no `copy()` needed) over `data class internal constructor`.
   `@Immutable` already gives Compose stability without value equality here.
+
+## 2026-06-23 — step-0 open PR may be SUPERSEDED, not just mergeable
+- An open Android PR (#877, conversation swipe pin/mute/archive) from a *parallel*
+  session was far behind `main` (ancient merge-base → a raw merge conflicted in
+  hundreds of unrelated translator/gateway/tasks files). Before forcing a merge,
+  **check whether `main` already implements the feature** — `git grep` for the
+  PR's key symbols on `origin/main`. Here `main` already had a *more complete*
+  version (togglePin/Mute/Archive + outbox `UPDATE_CONVERSATION_PREFS` + swipe UI
+  + mark-read + row badges), so the right move was to **close the PR as
+  superseded**, not merge it. Cherry-picking the PR's single commit onto fresh
+  `main` was the right probe — the `strings.xml` conflict (`conversations_action_*`
+  already present on HEAD vs the PR's `swipe_*`) was the tell.
+- Lesson: "merge the open iteration PR first" assumes the PR's work isn't already
+  on `main`. Verify with a symbol grep on `origin/main` before resolving conflicts.
+
+## 2026-06-23 — auto-advance media gate
+- The story viewer's auto-advance is gated on media readiness via a pure
+  `StoryAutoAdvanceGate`. Readiness is fed from `AsyncImage` `onSuccess`/`onError`
+  (BOTH — a failed load must resolve too, else the viewer hangs forever on a dead
+  URL). The VM's `onImageResolved` re-emits only when the resolved URL is the
+  *current* slide's image, so off-screen prefetch resolutions don't churn state.
+  `resolvedImageUrls` persists across slides so back-navigation never re-waits.

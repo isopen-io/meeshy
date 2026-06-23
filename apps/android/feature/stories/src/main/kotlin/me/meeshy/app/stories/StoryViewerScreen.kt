@@ -92,12 +92,17 @@ fun StoryViewerScreen(
         state.groupIndex,
         state.index,
         state.slides.size,
+        state.canAutoAdvance,
         showViewers,
         showComments,
     ) {
         if (state.slides.isEmpty() || state.isDismissed || showViewers || showComments) return@LaunchedEffect
         viewModel.markCurrentViewed()
         progress.snapTo(0f)
+        // Gate: hold the countdown at empty until the current slide's media has
+        // painted (text-only slides are ready at once). When the gate flips the
+        // effect re-runs and the timer starts.
+        if (!state.canAutoAdvance) return@LaunchedEffect
         progress.animateTo(1f, tween(durationMillis = SLIDE_DURATION_MS, easing = LinearEasing))
         viewModel.advance()
     }
@@ -141,10 +146,14 @@ fun StoryViewerScreen(
             },
     ) {
         if (slide?.imageUrl != null) {
+            val imageUrl = slide.imageUrl
             AsyncImage(
-                model = slide.imageUrl,
+                model = imageUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                // Resolved (loaded or failed) → the countdown gate may open.
+                onSuccess = { viewModel.onImageResolved(imageUrl) },
+                onError = { viewModel.onImageResolved(imageUrl) },
                 modifier = Modifier.fillMaxSize(),
             )
         } else if (slide != null) {
