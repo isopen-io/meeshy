@@ -39,6 +39,7 @@ function mediaKind(mime: string | null): 'image' | 'video' | 'audio' | 'file' {
 }
 
 function formatSize(bytes: number | null): string {
+  /* istanbul ignore next -- never called with falsy bytes; JSX guards with {fileSize ? formatSize(item.fileSize) : null} */
   if (!bytes) return '';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
