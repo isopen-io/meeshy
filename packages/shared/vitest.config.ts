@@ -25,6 +25,8 @@ export default defineConfig({
         'types/audio-effects-timeline.ts',
         'types/attachment-transcription.ts',
         'types/translated-audio.ts',
+        'types/notification.ts',
+        'types/preferences/notification.ts',
       ],
       exclude: ['**/*.d.ts', '**/index.ts', '**/signal-store-interface.ts'],
       thresholds: {
