@@ -12,6 +12,8 @@ import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentLikedData
 import me.meeshy.sdk.model.SocketStoryCreatedData
 import me.meeshy.sdk.model.SocketStoryViewedData
+import me.meeshy.sdk.model.SocketStoryReactedData
+import me.meeshy.sdk.model.SocketStoryUnreactedData
 import org.json.JSONObject
 import timber.log.Timber
 import javax.inject.Inject
@@ -34,6 +36,8 @@ class SocialSocketManager @Inject constructor(
     private val _commentLiked = buf<SocketCommentLikedData>()
     private val _storyCreated = buf<SocketStoryCreatedData>()
     private val _storyViewed = buf<SocketStoryViewedData>()
+    private val _storyReacted = buf<SocketStoryReactedData>()
+    private val _storyUnreacted = buf<SocketStoryUnreactedData>()
 
     val postCreated: SharedFlow<SocketPostCreatedData> = _postCreated.asSharedFlow()
     val postLiked: SharedFlow<SocketPostLikedData> = _postLiked.asSharedFlow()
@@ -43,6 +47,8 @@ class SocialSocketManager @Inject constructor(
     val commentLiked: SharedFlow<SocketCommentLikedData> = _commentLiked.asSharedFlow()
     val storyCreated: SharedFlow<SocketStoryCreatedData> = _storyCreated.asSharedFlow()
     val storyViewed: SharedFlow<SocketStoryViewedData> = _storyViewed.asSharedFlow()
+    val storyReacted: SharedFlow<SocketStoryReactedData> = _storyReacted.asSharedFlow()
+    val storyUnreacted: SharedFlow<SocketStoryUnreactedData> = _storyUnreacted.asSharedFlow()
 
     fun attach() {
         listen("post:created", _postCreated)
@@ -53,6 +59,8 @@ class SocialSocketManager @Inject constructor(
         listen("comment:liked", _commentLiked)
         listen("story:created", _storyCreated)
         listen("story:viewed", _storyViewed)
+        listen("story:reacted", _storyReacted)
+        listen("story:unreacted", _storyUnreacted)
     }
 
     private inline fun <reified T> listen(event: String, flow: MutableSharedFlow<T>) {

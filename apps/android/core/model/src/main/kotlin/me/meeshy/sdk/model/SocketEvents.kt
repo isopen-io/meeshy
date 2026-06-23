@@ -194,3 +194,17 @@ data class SocketStoryViewedData(
     val viewerId: String,
     val viewedAt: String? = null,
 )
+
+@Serializable
+data class SocketStoryReactedData(
+    val storyId: String,
+    val userId: String,
+    val emoji: String,
+)
+
+@Serializable
+data class SocketStoryUnreactedData(
+    val storyId: String,
+    val userId: String,
+    val emoji: String,
+)

@@ -192,6 +192,7 @@ fun StoryViewerScreen(
             ReactionStrip(
                 emojis = state.quickReactions,
                 myReactions = state.myReactions,
+                reactionCount = state.reactionCount,
                 onReact = viewModel::react,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -219,6 +220,7 @@ fun StoryViewerScreen(
 private fun ReactionStrip(
     emojis: List<String>,
     myReactions: Set<String>,
+    reactionCount: Int,
     onReact: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -230,6 +232,14 @@ private fun ReactionStrip(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (reactionCount > 0) {
+            Text(
+                text = reactionCount.toString(),
+                style = MaterialTheme.typography.labelLarge,
+                color = MeeshyPalette.White,
+                modifier = Modifier.padding(end = MeeshySpacing.xs),
+            )
+        }
         emojis.forEach { emoji ->
             val selected = emoji in myReactions
             Box(

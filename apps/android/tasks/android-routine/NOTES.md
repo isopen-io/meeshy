@@ -61,11 +61,35 @@ Append-only log of gotchas and decisions that save time next run.
   in **separate `pointerInput`** blocks on the same Box — Compose routes taps vs
   drags to the right detector; do not try to merge them.
 
+## Decisions (cont.)
+- **Realtime story-reaction deltas = SocialSocketManager flow → VM `applyDelta`.**
+  `SocialSocketManager` only decodes `story:reacted`/`story:unreacted` (payload
+  `{storyId,userId,emoji}`, identical across shared TS, iOS, Android) into
+  `SharedFlow`s — pure transport. The product rule ("which slide, fold +1/-1,
+  is-own, ignore unknown ids, don't double-count my optimistic bump") lives in
+  `StoryViewerViewModel.onReactionDelta`, which seeds a non-current slide's base
+  count from `playback.groups`, calls the pure `StoryReactionState.applyDelta`,
+  and re-emits **only on an actual change** (`next == current` → skip). Own echo
+  of an already-counted emoji is inert because `applyDelta` returns `this`.
+- **Testing socket managers on the JVM needs Robolectric** — `org.json.JSONObject`
+  is an android.jar stub that throws "not mocked" under plain unit tests. Mock
+  `SocketManager`, capture the `on(event, cb)` handlers into a map, `attach()`,
+  then invoke the captured handler with a real `JSONObject`; assert via Turbine
+  `flow.test {}`. `@RunWith(RobolectricTestRunner::class)`.
+- VM SharedFlow collectors started in `init` are live under
+  `UnconfinedTestDispatcher`; emit on the test-owned `MutableSharedFlow`
+  (extraBufferCapacity) and read `vm.state.value` synchronously — same pattern as
+  the existing intent-driven tests.
+
 ## Open follow-ups (cross-slice)
 - Wire **Kover** with a 90% per-module verification rule.
 - Add a dedicated **Android CI workflow** (touches `.github/` → separate run).
-- Story viewer richness: **swipe gestures done** (horizontal = group jump,
-  vertical = dismiss), **reactions strip done**; remaining: comments overlay,
-  viewers sheet, media prefetch, SWR/Room backing, cross-dissolve transitions.
-- `story:reacted`/`story:unreacted` socket wiring into `applyDelta` is the next
-  reaction slice; needs server `currentUserReactions` to seed `mine` on load.
+- **`SocialSocketManager.attach()` has no caller yet** — none of its social flows
+  (storyCreated/Viewed/Reacted/Unreacted, post*, comment*) actually receive events
+  in-app until attach is wired to the socket lifecycle. Affects ALL social events,
+  touches `:app` → its own slice.
+- Story viewer richness: **swipe gestures done**, **reactions strip done**,
+  **realtime reaction socket-delta done**; remaining: comments overlay, viewers
+  sheet, media prefetch, SWR/Room backing, cross-dissolve transitions.
+- Reaction `mine` still seeded empty on load — needs server `currentUserReactions`
+  exposed by the stories API to pre-fill the user's own emojis.

@@ -9,6 +9,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -17,9 +18,12 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.SocketStoryReactedData
+import me.meeshy.sdk.model.SocketStoryUnreactedData
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.StoryRepository
 import org.junit.After
 import org.junit.Before
@@ -39,6 +43,12 @@ class StoryViewerViewModelTest {
 
     private val storyRepository: StoryRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
+    private val reactedFlow = MutableSharedFlow<SocketStoryReactedData>(extraBufferCapacity = 8)
+    private val unreactedFlow = MutableSharedFlow<SocketStoryUnreactedData>(extraBufferCapacity = 8)
+    private val socialSocket: SocialSocketManager = mockk(relaxed = true) {
+        every { storyReacted } returns reactedFlow
+        every { storyUnreacted } returns unreactedFlow
+    }
     private val config = MeeshyConfig()
 
     private val now = Instant.parse("2026-06-17T12:00:00Z").toEpochMilli()
@@ -69,7 +79,7 @@ class StoryViewerViewModelTest {
         coEvery { storyRepository.markViewed(any()) } returns NetworkResult.Success(Unit)
         coEvery { storyRepository.react(any(), any()) } returns NetworkResult.Success(Unit)
         val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to startUserId))
-        return StoryViewerViewModel(storyRepository, session, config, handle)
+        return StoryViewerViewModel(storyRepository, session, socialSocket, config, handle)
     }
 
     // Group "a"'s latest story is the newest overall so it sorts first; "b" follows.
@@ -243,13 +253,81 @@ class StoryViewerViewModelTest {
     }
 
     @Test
+    fun `another user's realtime reaction bumps the current slide's count live`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(storyPost("a1", "a", hoursAgo = 1, reactionSummary = mapOf("❤️" to 2))),
+        )
+        assertThat(vm.state.value.reactionCount).isEqualTo(2)
+
+        reactedFlow.emit(SocketStoryReactedData(storyId = "a1", userId = "stranger", emoji = "🔥"))
+
+        assertThat(vm.state.value.reactionCount).isEqualTo(3)
+        assertThat(vm.state.value.myReactions).isEmpty()
+    }
+
+    @Test
+    fun `another user's realtime unreaction decrements the current slide's count`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(storyPost("a1", "a", hoursAgo = 1, reactionSummary = mapOf("❤️" to 2))),
+        )
+
+        unreactedFlow.emit(SocketStoryUnreactedData(storyId = "a1", userId = "stranger", emoji = "❤️"))
+
+        assertThat(vm.state.value.reactionCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `the user's own reaction echo does not double-count the optimistic bump`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(storyPost("a1", "a", hoursAgo = 1, reactionSummary = mapOf("❤️" to 2))),
+        )
+        every { session.currentUserId } returns "me" // delta reads this lazily at echo time
+        vm.react("🔥") // optimistic → 3, mine = {🔥}
+        assertThat(vm.state.value.reactionCount).isEqualTo(3)
+
+        reactedFlow.emit(SocketStoryReactedData(storyId = "a1", userId = "me", emoji = "🔥"))
+
+        assertThat(vm.state.value.reactionCount).isEqualTo(3)
+        assertThat(vm.state.value.myReactions).containsExactly("🔥")
+    }
+
+    @Test
+    fun `a realtime reaction for a non-current slide is applied and shown after navigating`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+
+        reactedFlow.emit(SocketStoryReactedData(storyId = "b2", userId = "stranger", emoji = "🔥"))
+        // current slide (b1) is untouched
+        assertThat(vm.state.value.reactionCount).isEqualTo(0)
+
+        vm.advance() // → b2
+        assertThat(vm.state.value.current?.id).isEqualTo("b2")
+        assertThat(vm.state.value.reactionCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `a realtime reaction for an unknown story is ignored`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(storyPost("a1", "a", hoursAgo = 1, reactionSummary = mapOf("❤️" to 2))),
+        )
+
+        reactedFlow.emit(SocketStoryReactedData(storyId = "ghost", userId = "stranger", emoji = "🔥"))
+
+        assertThat(vm.state.value.reactionCount).isEqualTo(2)
+    }
+
+    @Test
     fun `a failed load stops loading without dismissing`() = runTest {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         every { session.currentUserId } returns null
         coEvery { storyRepository.list(any(), any()) } returns
             NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "boom"))
         val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to "a"))
-        val vm = StoryViewerViewModel(storyRepository, session, config, handle)
+        val vm = StoryViewerViewModel(storyRepository, session, socialSocket, config, handle)
 
         assertThat(vm.state.value.isLoading).isFalse()
         assertThat(vm.state.value.isDismissed).isFalse()

@@ -5,24 +5,70 @@
 `Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → **Stories (in progress)** → Calls → rest`
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
-quick-reaction strip shipped earlier loops; this loop wires the **swipe
-gestures** (horizontal = group jump, vertical = dismiss) into the viewer.
+quick-reaction strip + swipe gestures shipped earlier loops; this loop wires the
+**realtime reaction socket deltas** (`story:reacted`/`story:unreacted`) into the
+open viewer so other users' reactions update the live count.
 
 ## Next slice (pick one for the next run)
 
 Ordered by value within the Stories area:
-1. `story-reaction-socket-delta` — wire `story:reacted`/`story:unreacted` realtime
-   events into `StoryReactionState.applyDelta` (reducer already supports it) so other
-   users' reactions update the open viewer live; seed `mine` from server
-   `currentUserReactions` once the API exposes it.
-2. `story-tray-swr` — Room/SWR backing for the tray so it is genuinely
+1. `story-tray-swr` — Room/SWR backing for the tray so it is genuinely
    cache-first (skeleton only on cold empty), per Instant-App principles.
-3. `story-composer` — publish flow (text/media) via the outbox/WorkManager chain.
+2. `story-composer` — publish flow (text/media) via the outbox/WorkManager chain.
+3. `story-viewers-sheet` — who-viewed list (uses `story:viewed` flow already on
+   `SocialSocketManager`).
+
+Note: server-side `currentUserReactions` seeding of `mine` on load, and the
+app-wide `SocialSocketManager.attach()` lifecycle wiring (no caller yet — affects
+ALL social events, touches `:app`), remain tracked follow-ups.
 
 After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-23 — slice `story-reaction-socket-delta` ✅
+- **Branch:** `claude/apps/android/story-reaction-socket-delta`
+- **What:** wired the realtime `story:reacted` / `story:unreacted` Socket.IO events
+  into the open story viewer so other users' reactions move the live count. The
+  pure `StoryReactionState.applyDelta` reducer (shipped earlier) already encoded
+  the reconciliation; this slice connects the socket → reducer → UI loop.
+- **Added (production):**
+  - `SocketStoryReactedData` / `SocketStoryUnreactedData` (`core:model`,
+    `{storyId, userId, emoji}` — parity with `packages/shared/types/post.ts`
+    `StoryReactedEventData`/`StoryUnreactedEventData` and iOS `SocketStoryReactedData`).
+  - `SocialSocketManager` — `storyReacted` / `storyUnreacted` `SharedFlow`s +
+    `listen("story:reacted"/"story:unreacted")` in `attach()`, mirroring the
+    existing `storyCreated`/`storyViewed` wiring.
+  - `StoryViewerViewModel` — injects `SocialSocketManager`, collects both flows in
+    `init`, and folds each into `reactionStates` via `onReactionDelta(storyId,
+    emoji, delta, actorId)`: `+1`/`-1`, `isOwn = actorId == currentUserId`,
+    seeding a non-current slide's base count from `playback.groups`, **ignoring**
+    unknown story ids and re-emitting only on an actual change. The user's own
+    socket echo of an emoji already counted optimistically is a no-op (reducer
+    returns `this`), so the optimistic bump from `react()` is never double-counted.
+  - `StoryViewerScreen.ReactionStrip` — live total-count badge (renders
+    `state.reactionCount` when `>0`) so a *foreign* reaction (count-only change)
+    is visible, closing the loop (no dead end).
+- **Tests:**
+  - `StoryViewerViewModelTest` +5: foreign reacted bumps live; foreign unreacted
+    decrements; own echo doesn't double-count after optimistic `react`; a
+    non-current slide's delta is stored and shown after navigating to it; unknown
+    story id ignored. (Existing 15 stories VM tests still green.)
+  - `SocialSocketManagerTest` (new, Robolectric for real `org.json`) +3: reacted
+    decode+emit, unreacted decode+emit, malformed payload ignored (no emit).
+- **Edge cases covered:** non-current slide, unknown story id (inert), own-echo
+  de-dup vs optimistic, decrement path, malformed payload (decode failure → no
+  emit), no redundant emit when state unchanged.
+- **Verify:** `:feature:stories:testDebugUnitTest` + `:sdk-core:testDebugUnitTest`
+  green; full `./apps/android/meeshy.sh check` (assembleDebug + all module unit
+  tests) → BUILD SUCCESSFUL.
+- **Reviewer:** PASS — scope `apps/android` only; behavioural tests, no
+  tautologies; SDK purity (the "when to fold a delta / which slide" product rule
+  lives in `:feature:stories`; the manager only decodes+forwards); single source
+  of truth for the payload shape (mirrors shared TS + iOS); UDF + immutable
+  `UiState`, pure reducer; accent-coherent strip; no dead end (count badge surfaces
+  foreign deltas).
 
 ### 2026-06-22 — slice `story-viewer-swipe-gestures` ✅
 - **Branch:** `claude/apps/android/story-viewer-swipe-gestures`

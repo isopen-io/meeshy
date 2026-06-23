@@ -370,8 +370,13 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `mine` set = iOS `currentUserReactions`); `StoryViewerViewModel.react()` does an
       **optimistic** bump with rollback-on-failure (better than iOS fire-and-forget),
       per-slide state; `ReactionStrip` quick-emoji row (`EmojiCatalog.defaultQuickReactions`)
-      in `StoryViewerScreen`. Pending: full categorised picker, big floating animation,
-      heart bounce, server-side `currentUserReactions` seeding, socket-delta wiring.
+      + live total-count badge in `StoryViewerScreen`; **realtime socket-delta wiring done**
+      — `SocialSocketManager.storyReacted`/`storyUnreacted` flows decoded from
+      `story:reacted`/`story:unreacted`, `StoryViewerViewModel` collects both and folds
+      them through `applyDelta` (own-echo de-duped vs the optimistic bump, unknown/non-current
+      slides handled). Pending: full categorised picker, big floating animation,
+      heart bounce, server-side `currentUserReactions` seeding, social-socket `attach()`
+      lifecycle wiring (app-wide, separate slice).
 - [ ] Story comments overlay: live-chat panel, 1-level threading, composer with effects/blur,
       per-comment language switcher, optimistic posting + reaction likes
 - [ ] Story actions: reply privately (DM with context), forward/send, reshare-as-story,
