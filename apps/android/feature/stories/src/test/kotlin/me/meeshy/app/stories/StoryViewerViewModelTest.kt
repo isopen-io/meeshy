@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketStoryReactedData
 import me.meeshy.sdk.model.SocketStoryUnreactedData
@@ -358,5 +359,40 @@ class StoryViewerViewModelTest {
         vm.advance() // → group b (someone else's story)
 
         assertThat(vm.state.value.isOwnStory).isFalse()
+    }
+
+    private fun imagePost(id: String, authorId: String, hoursAgo: Long, imageUrl: String) =
+        storyPost(id, authorId, hoursAgo).copy(
+            media = listOf(ApiPostMedia(id = "m-$id", fileUrl = imageUrl)),
+        )
+
+    @Test
+    fun `prefetchUrls warms the upcoming slide images of the current author`() = runTest {
+        val posts = listOf(
+            imagePost("a1", "a", hoursAgo = 3, imageUrl = "http://img/a1.jpg"),
+            imagePost("a2", "a", hoursAgo = 2, imageUrl = "http://img/a2.jpg"),
+            imagePost("a3", "a", hoursAgo = 1, imageUrl = "http://img/a3.jpg"),
+        )
+        val vm = viewModel(startUserId = "a", posts = posts)
+
+        // At a1, the next two upcoming images are warmed.
+        assertThat(vm.state.value.prefetchUrls)
+            .containsExactly("http://img/a2.jpg", "http://img/a3.jpg").inOrder()
+    }
+
+    @Test
+    fun `prefetchUrls shrinks as the viewer advances toward the end`() = runTest {
+        val posts = listOf(
+            imagePost("a1", "a", hoursAgo = 3, imageUrl = "http://img/a1.jpg"),
+            imagePost("a2", "a", hoursAgo = 2, imageUrl = "http://img/a2.jpg"),
+            imagePost("a3", "a", hoursAgo = 1, imageUrl = "http://img/a3.jpg"),
+        )
+        val vm = viewModel(startUserId = "a", posts = posts)
+
+        vm.advance() // → a2, only a3 remains ahead
+        assertThat(vm.state.value.prefetchUrls).containsExactly("http://img/a3.jpg")
+
+        vm.advance() // → a3, the last slide, nothing to warm
+        assertThat(vm.state.value.prefetchUrls).isEmpty()
     }
 }

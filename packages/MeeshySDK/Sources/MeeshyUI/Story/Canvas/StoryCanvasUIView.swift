@@ -135,6 +135,19 @@ public final class StoryCanvasUIView: UIView {
         }
     }
 
+    /// Opt-in du **composer** (`StoryComposerCanvasView`) pour faire JOUER et
+    /// boucler les vidéos (fond + foreground) sur le canvas d'édition — live
+    /// preview. Le mode `.edit` est aussi celui du prefetcher hors-écran, qui
+    /// DOIT rester silencieux ; ce drapeau (défaut `false`) garantit que seul
+    /// le canvas composer déclenche la lecture en édition. Sans effet en
+    /// `.play` (le reader joue toujours, une fois pour le foreground).
+    public var playsVideoInEditMode: Bool = false {
+        didSet {
+            guard oldValue != playsVideoInEditMode else { return }
+            applyEditPlayback()
+        }
+    }
+
     // MARK: - Reader context (Task 5)
 
     private var readerContext: StoryReaderContext = .empty
@@ -1413,6 +1426,9 @@ public final class StoryCanvasUIView: UIView {
         // qui passent immédiatement à backgroundContentReady=true via le path sync).
         recomputeContentProgress()
         reapplyInlineEditingIfNeeded()
+        // Composer live preview : (re)démarre la lecture/boucle des vidéos en
+        // `.edit` sur des layers fraîchement reconstruits. No-op hors composer.
+        applyEditPlayback()
     }
 
     /// Trace un cadre autour des médias foreground (images / vidéos non-bg).
@@ -2199,6 +2215,33 @@ public final class StoryCanvasUIView: UIView {
             if let media = sub as? StoryMediaLayer {
                 block(media)
             }
+        }
+    }
+
+    /// Composer live preview : démarre (et fait boucler) la lecture des vidéos
+    /// du canvas en mode `.edit` quand `playsVideoInEditMode` est levé. No-op en
+    /// `.play` (le reader gère sa propre lecture) et quand le drapeau est bas
+    /// (prefetcher hors-écran → reste silencieux). Idempotent : appelé à chaque
+    /// `rebuildLayers()` (les layers `.edit` sont reconstruits à neuf à chaque
+    /// mutation) et au flip du drapeau.
+    private func applyEditPlayback() {
+        guard mode == .edit, playsVideoInEditMode else { return }
+        // Éditeur sonore (choix produit) : pose la session `.playback` pour que
+        // l'audio des vidéos qui bouclent soit audible même silent-switch ON.
+        // Idempotent / call-aware via la source unique.
+        if AVAudioSession.sharedInstance().category != .playback {
+            MediaSessionCoordinator.shared.activatePlaybackSync(options: [.mixWithOthers, .duckOthers])
+        }
+        // Fond : `isPlaybackActive` joue le player (qui boucle déjà via son
+        // `AVPlayerLooper`). Audio inclus (choix produit : éditeur sonore).
+        backgroundLayer.isPlaybackActive = true
+        // Foreground : marque chaque layer pour qu'elle (re)joue — y compris
+        // après un swap d'URL async (cache local résolu) — et démarre le
+        // player déjà attaché. Le loop est armé par `attachPlayer` (loop en
+        // `.edit`).
+        forEachMediaLayer { layer in
+            layer.playsInEditMode = true
+            layer.avPlayer?.play()
         }
     }
 

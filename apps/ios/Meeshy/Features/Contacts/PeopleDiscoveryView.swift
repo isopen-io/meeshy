@@ -28,7 +28,7 @@ struct PeopleDiscoveryView: View {
     @State private var scrollOffset: CGFloat = 0
     @State private var subTab: DiscoveryTab
 
-    init(initialTab: DiscoveryTab = .requests) {
+    init(initialTab: DiscoveryTab = .discover) {
         _subTab = State(initialValue: initialTab)
     }
 
@@ -40,10 +40,13 @@ struct PeopleDiscoveryView: View {
                 onBack: { router.pop() },
                 titleColor: theme.textPrimary,
                 backArrowColor: MeeshyColors.indigo500,
-                backgroundColor: theme.backgroundPrimary
+                backgroundColor: theme.backgroundPrimary,
+                // The sub-tab bar lives *inside* the header surface (accessory
+                // slot) so it rides up with the collapsing header and the
+                // content scrolls under it — same pattern as the Feed.
+                accessory: { AnyView(subTabBar) }
             )
 
-            subTabBar
             subContent
         }
         .background(theme.backgroundPrimary.ignoresSafeArea())
@@ -56,22 +59,19 @@ struct PeopleDiscoveryView: View {
         }
     }
 
-    // MARK: - Sticky Sub-tab Bar
+    // MARK: - Sub-tab Bar (fine underline tabs, integrated in the header)
 
     private var subTabBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(DiscoveryTab.allCases, id: \.self) { tab in
-                    subTabChip(tab)
-                }
+        HStack(spacing: 0) {
+            ForEach(DiscoveryTab.allCases, id: \.self) { tab in
+                subTabButton(tab)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
         }
-        .overlay(alignment: .bottom) { Divider().opacity(0.2) }
+        .padding(.horizontal, 8)
+        .overlay(alignment: .bottom) { Divider().opacity(0.3) }
     }
 
-    private func subTabChip(_ tab: DiscoveryTab) -> some View {
+    private func subTabButton(_ tab: DiscoveryTab) -> some View {
         let isSelected = subTab == tab
         let badge = subBadge(for: tab)
 
@@ -80,24 +80,35 @@ struct PeopleDiscoveryView: View {
                 subTab = tab
             }
         } label: {
-            HStack(spacing: 5) {
-                Text(tab.rawValue)
-                    .font(.footnote.weight(.semibold))
-                if badge > 0 {
-                    Text("\(badge)")
-                        .font(.caption2.weight(.bold))
-                        .foregroundColor(isSelected ? MeeshyColors.indigo500 : .white)
-                        .frame(minWidth: 15, minHeight: 15)
-                        .background(Circle().fill(isSelected ? Color.white : MeeshyColors.indigo500))
+            VStack(spacing: 6) {
+                HStack(spacing: 4) {
+                    Image(systemName: tab.icon)
+                        .font(.footnote.weight(.medium))
+
+                    Text(tab.rawValue)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+
+                    if badge > 0 {
+                        Text("\(badge)")
+                            .font(.caption2.weight(.bold))
+                            .foregroundColor(.white)
+                            .frame(minWidth: 16, minHeight: 16)
+                            .background(Circle().fill(MeeshyColors.indigo500))
+                    }
                 }
+                .foregroundColor(isSelected ? MeeshyColors.indigo500 : theme.textMuted)
+
+                Rectangle()
+                    .fill(isSelected ? MeeshyColors.indigo500 : Color.clear)
+                    .frame(height: 2)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: subTab)
             }
-            .foregroundColor(isSelected ? .white : MeeshyColors.indigo500)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-            .background(Capsule().fill(isSelected ? MeeshyColors.indigo500 : Color.clear))
-            .overlay(Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1))
+            .frame(maxWidth: .infinity)
+            .padding(.top, 10)
         }
         .accessibilityLabel(tab.rawValue)
+        .accessibilityValue(badge > 0 ? "\(badge)" : "")
     }
 
     private func subBadge(for tab: DiscoveryTab) -> Int {

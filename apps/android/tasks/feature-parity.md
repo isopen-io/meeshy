@@ -376,7 +376,13 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       axis, dispatched through `StoryViewerViewModel.onSwipe` into the engine's
       `jumpToNext/PreviousGroup` + new `StoryPlayback.dismissed()`). Pending:
       cross-dissolve transitions, per-story opening/closing effects.
-- [ ] Timed auto-advance gated on media-load readiness; adjacent-slide prefetch (sliding window)
+- [~] Timed auto-advance gated on media-load readiness; adjacent-slide prefetch (sliding window)
+      — done: **adjacent-slide prefetch**. Pure `StoryPrefetchPlanner.plan(playback, lookahead=2)`
+      returns the next N distinct image URLs ahead of the current slide in viewing order,
+      continuing across author-group boundaries and skipping text-only slides; exposed as
+      `StoryViewerUiState.prefetchUrls`, enqueued through the shared Coil `ImageLoader` in
+      `StoryViewerScreen` so the next slide paints from cache (Instant-App — surpasses iOS's
+      single-next preload). Pending: auto-advance gated on actual media-load readiness.
 - [ ] Story content rendering: text/positioning/background/filters/media overlays
 - [~] Story reactions: emoji quick-strip + full picker, big floating animation, heart bounce, count
       — done: pure **`StoryReactionState`** reducer (optimistic local tap + idempotent

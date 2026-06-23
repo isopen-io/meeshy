@@ -25,16 +25,17 @@ enum PeopleTab: String, CaseIterable, Hashable {
 ///
 /// Moved out of the contact directory so the Contacts tab stays an exploitable
 /// annuaire. Reachable from the floating menu ladder and from deep links
-/// (`Route.peopleDiscovery(DiscoveryTab)`).
+/// (`Route.peopleDiscovery(DiscoveryTab)`). Order is the on-screen order:
+/// Decouvrir (the search landing) first, then Demandes, then Bloques.
 enum DiscoveryTab: String, CaseIterable, Hashable {
-    case requests = "Demandes"
     case discover = "Decouvrir"
+    case requests = "Demandes"
     case blocked = "Bloques"
 
     var icon: String {
         switch self {
-        case .requests: return "person.badge.plus"
         case .discover: return "magnifyingglass"
+        case .requests: return "person.badge.plus"
         case .blocked: return "hand.raised.fill"
         }
     }
