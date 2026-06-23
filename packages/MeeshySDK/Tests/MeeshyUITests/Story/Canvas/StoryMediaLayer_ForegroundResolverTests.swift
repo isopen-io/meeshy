@@ -136,7 +136,7 @@ final class StoryMediaLayer_ForegroundResolverTests: XCTestCase {
         }
         layer.configure(with: media, geometry: makeGeometry(),
                         mode: .edit, resolver: resolver)
-        XCTAssertEqual(layer.avPlayer?.actionAtItemEnd, .none,
+        XCTAssertEqual(layer.avPlayer?.actionAtItemEnd, AVPlayerActionAtItemEnd.none,
                        "A foreground video in .edit must loop for live preview")
     }
 }
