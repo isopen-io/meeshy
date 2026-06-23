@@ -1144,6 +1144,10 @@ struct StoryCommentsOverlayView: View {
     let storyCommentLoadingReplies: Set<String>
     let isLoadingComments: Bool
     let userLang: String
+    /// Vrai quand la story consultée est expirée. Affiche une bannière au-dessus
+    /// de la liste pour que les commentaires/réactions restent visibles tout en
+    /// indiquant que la story n'est plus accessible (spec 2026-06-23).
+    var isStoryExpired: Bool = false
 
     @Binding var showCommentsOverlay: Bool
     /// Réservation visuelle. Quand non-nil, le composer principal (un
@@ -1210,9 +1214,31 @@ struct StoryCommentsOverlayView: View {
     /// « enlève le fond dégradé noir sur le composant de listing »). The
     /// `listFadeMask` keeps fading rows out at the top so older comments
     /// dissolve into the story above as the user scrolls up.
+    /// Bannière « story expirée » : les commentaires/réactions restent
+    /// consultables, mais on signale que la story n'est plus accessible.
+    private var expiredStoryBanner: some View {
+        Label {
+            Text("Story expirée — les commentaires restent visibles")
+                .font(.system(size: 11, weight: .semibold))
+                .lineLimit(1)
+        } icon: {
+            Image(systemName: "clock.badge.xmark")
+                .font(.system(size: 11, weight: .semibold))
+        }
+        .foregroundColor(.white.opacity(0.85))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(Capsule().fill(Color(hex: "F87171").opacity(0.32)))
+        .padding(.bottom, 6)
+        .transition(.opacity)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
+            if isStoryExpired {
+                expiredStoryBanner
+            }
             commentsList
                 .frame(maxHeight: listMaxHeight)
                 .mask(listFadeMask)
@@ -1428,6 +1454,10 @@ extension StoryViewerView {
                 if comment.parentId != nil, let username = comment.authorUsername, !username.isEmpty {
                     emojiToInject = "@\(username) "
                 }
+                // Faire APPARAÎTRE l'universal composer bar : on déclenche le focus
+                // pour ouvrir le clavier immédiatement (spec 2026-06-23) — l'auteur
+                // (et tout viewer) peut répondre sans tap supplémentaire.
+                composerFocusTrigger = true
                 HapticFeedback.light()
             },
             onToggleLike: {

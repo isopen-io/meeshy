@@ -296,7 +296,11 @@ struct StoryActionSidebarView: View {
             // (côté +Content) qui réconcilie le payload feed avec un fetch réseau
             // autoritatif quand le payload annonce 0 — sinon une story AVEC
             // commentaires mais au compteur stale 0 masquait à tort ce bouton.
-            if storyCommentCount > 0 {
+            //
+            // L'AUTEUR voit toujours le bouton commentaire sur SA story (même à 0),
+            // pour pouvoir consulter à tout moment les commentaires reçus — y
+            // compris sur une story expirée qu'il revisite (spec 2026-06-23).
+            if storyCommentCount > 0 || isOwnStory {
                 StoryActionButton(
                     icon: "bubble.left.fill",
                     label: "\(storyCommentCount)",
