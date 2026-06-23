@@ -381,7 +381,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       per-comment language switcher, optimistic posting + reaction likes
 - [ ] Story actions: reply privately (DM with context), forward/send, reshare-as-story,
       repost-as-post (direct + edit), mute/unmute, translate, report
-- [ ] Story viewers sheet (who-viewed list with reaction/reshare indicators)
+- [~] Story viewers sheet (who-viewed list with reaction/reshare indicators)
+      — done: `StoryRepository.viewers()` (`GET posts/{id}/interactions` → wire
+      `StoryViewersResponse` mapped to domain `StoryViewer` via pure
+      `toStoryViewer()`, displayName/avatar/reaction blank-collapse > iOS nil-only
+      check); pure `StoryViewersPresentation.order()` (most-recent-first, null
+      timestamps last, defensive dedup-by-id > iOS raw order); `StoryViewersViewModel`
+      (cold-only skeleton, refresh keeps the list & swallows refresh failures,
+      error only on cold, re-entrancy-guarded) + `StoryViewersSheet` (ModalBottomSheet,
+      accent-coherent, avatar rows, empty/error/loading states) reachable via an
+      author-only "Views" button in `StoryViewerScreen` (timer pauses while open).
+      Pending: reaction/reshare indicators richness, realtime `story:viewed` append
+      (socket payload lacks viewer name/avatar to render a row — needs API or a
+      user lookup), reshare indicator.
 - [ ] Reader Prisme: text overlays in viewer's preferred language; composer shows source language
 - [ ] **Author-only Story → MP4 export** (bit-exact render, language picker, system share, never uploaded)
 - [ ] Single shared renderer feeds composer canvas + reader canvas + export compositor (WYSIWYG)

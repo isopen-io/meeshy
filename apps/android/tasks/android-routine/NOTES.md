@@ -81,6 +81,27 @@ Append-only log of gotchas and decisions that save time next run.
   (extraBufferCapacity) and read `vm.state.value` synchronously — same pattern as
   the existing intent-driven tests.
 
+## Decisions (cont.)
+- **MockK `coAnswers` is a member infix, NOT a top-level import.** `import
+  io.mockk.coAnswers` is unresolved in this mockk version — use `coEvery { … }
+  coAnswers { … }` directly (it resolves as a member of `MockKStubScope`). To test
+  a "cold skeleton then content" transition, gate the suspending stub on a
+  `CompletableDeferred` and assert via Turbine `state.test {}` (initial idle →
+  isLoading=true → completed).
+- **Viewers sheet ≫ load-once.** iOS `StoryViewersSheet` loads once in raw gateway
+  order. Android: pure `StoryViewersPresentation.order()` sorts most-recent-first
+  (ISO `viewedAt` desc, nulls last via `compareByDescending { it.viewedAt != null }
+  .thenByDescending { it.viewedAt.orEmpty() }`, stable → ties keep input order) +
+  dedups by id; the VM applies Instant-App SWR (cold-only skeleton, refresh keeps
+  the stale list and swallows refresh failures, error only on cold). The "order /
+  when-skeleton / author-only affordance" rules are product UX → `:feature:stories`,
+  while the wire model + `toStoryViewer()` mapper + `StoryRepository.viewers()` are
+  building blocks → `core/model`/`sdk-core`.
+- **`story:viewed` realtime can't append a viewer row yet.** Socket payload is
+  `{storyId, viewerId, viewedAt}` — no display name/avatar, so a live append would
+  render an empty row. Left as a one-shot load (iOS parity); realtime append needs
+  a richer gateway event or a user lookup. Tracked follow-up.
+
 ## Open follow-ups (cross-slice)
 - Wire **Kover** with a 90% per-module verification rule.
 - Add a dedicated **Android CI workflow** (touches `.github/` → separate run).
@@ -89,7 +110,8 @@ Append-only log of gotchas and decisions that save time next run.
   in-app until attach is wired to the socket lifecycle. Affects ALL social events,
   touches `:app` → its own slice.
 - Story viewer richness: **swipe gestures done**, **reactions strip done**,
-  **realtime reaction socket-delta done**; remaining: comments overlay, viewers
-  sheet, media prefetch, SWR/Room backing, cross-dissolve transitions.
+  **realtime reaction socket-delta done**, **viewers sheet done**; remaining:
+  comments overlay, media prefetch, SWR/Room backing, cross-dissolve transitions,
+  realtime `story:viewed` append (needs richer event payload).
 - Reaction `mine` still seeded empty on load — needs server `currentUserReactions`
   exposed by the stories API to pre-fill the user's own emojis.
