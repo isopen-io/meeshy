@@ -53,6 +53,7 @@ data class StoryViewerUiState(
     val quickReactions: List<String> = EmojiCatalog.defaultQuickReactions,
     val isOwnStory: Boolean = false,
     val currentStoryId: String? = null,
+    val prefetchUrls: List<String> = emptyList(),
 ) {
     val current: StorySlideView? get() = slides.getOrNull(index)
     val hasNext: Boolean get() = index < slides.lastIndex
@@ -219,6 +220,7 @@ class StoryViewerViewModel @Inject constructor(
             myReactions = reaction.mine,
             isOwnStory = playback.currentGroup?.userId == sessionRepository.currentUserId,
             currentStoryId = playback.currentSlide?.id,
+            prefetchUrls = StoryPrefetchPlanner.plan(playback),
         )
     }
 

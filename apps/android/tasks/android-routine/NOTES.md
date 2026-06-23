@@ -120,6 +120,18 @@ Append-only log of gotchas and decisions that save time next run.
   for VM-level fixtures; pass an explicit `nowMillis` only to the pure builder/
   grouping tests.
 
+## Decisions (cont.)
+- **Adjacent-slide prefetch = pure planner + shared Coil loader.** The "which
+  images to warm / how far ahead / skip text-only / stop at the end" decision is
+  a pure `StoryPrefetchPlanner.plan(playback, lookahead)` in `:feature:stories`
+  (product UX rule, not an SDK atom) returning distinct URLs in forward viewing
+  order across group boundaries. The VM derives `prefetchUrls` in `emit()`; the
+  Composable enqueues them through `context.imageLoader` — the SAME Coil
+  singleton `AsyncImage` resolves against, so the warmed disk/memory entry is
+  reused (do NOT build a second `ImageLoader`, that would defeat the cache).
+  Coil 2.x prefetch = `loader.enqueue(ImageRequest.Builder(ctx).data(url).build())`
+  with no target. Surpasses iOS (single-next) with a windowed cross-group warm.
+
 ## Open follow-ups (cross-slice)
 - Wire **Kover** with a 90% per-module verification rule.
 - Add a dedicated **Android CI workflow** (touches `.github/` → separate run).

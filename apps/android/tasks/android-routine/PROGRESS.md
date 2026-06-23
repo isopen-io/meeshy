@@ -6,18 +6,22 @@
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
-who-viewed sheet + Room-backed tray SWR shipped earlier loops; this loop adds the
-**comments overlay** — an Instant-App, optimistic comments panel on the open story
-(`StoryComment` domain + Prisme mapper, `StoryRepository.comments`, pure
-`StoryCommentsReducer`, `StoryCommentsViewModel`, `StoryCommentsSheet`) wired to
-the realtime `comment:added` socket event.
+who-viewed sheet + Room-backed tray SWR + comments overlay + segmented
+count-dots shipped earlier loops; this loop adds **adjacent-slide media
+prefetch** — a pure `StoryPrefetchPlanner` that warms the next N image-bearing
+slides' URLs (across author groups) into the shared Coil cache via
+`StoryViewerUiState.prefetchUrls`, so the next slide paints instantly
+(Instant-App, surpassing iOS's single-next preload).
 
 ## Next slice (pick one for the next run)
 
 Ordered by value within the Stories area:
 1. `story-composer` — publish flow (text/media) via the outbox/WorkManager chain.
-2. `story-media-prefetch` — warm the next slide's media before it shows.
+2. `story-autoadvance-media-gate` — gate the auto-advance timer on actual
+   media-load readiness (the prefetch window is in place; this closes the loop so
+   a slow image never auto-advances before it paints).
 
+(`story-media-prefetch` ✅ shipped 2026-06-23 — see run log.)
 (`story-tray-count-dots` ✅ shipped 2026-06-23 — see run log.)
 
 After these, advance to the **Calls** area (`feature-parity.md` §"Calls").
@@ -32,6 +36,49 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-23 — slice `story-media-prefetch` ✅
+- **Branch:** `claude/apps/android/story-media-prefetch`
+- **What:** **adjacent-slide media prefetch** for the story viewer — warm the
+  next slides' images into the shared Coil cache so they paint instantly
+  (Instant-App: "no spinner for media we could have prefetched"). Surpasses iOS,
+  which preloads only the single immediate next item; Android warms a sliding
+  window of the next N distinct image-bearing slides, continuing across author
+  groups.
+- **Added (production):**
+  - `feature:stories` — pure `StoryPrefetchPlanner.plan(playback, lookahead=2)`:
+    returns the next up-to-N **distinct** image URLs strictly ahead of the
+    current slide, in forward viewing order (remaining-in-current-group then
+    later groups flattened), skipping text-only slides; empty when dismissed,
+    no groups, non-positive lookahead, or at the last slide of the last group.
+  - `StoryViewerUiState.prefetchUrls` derived in `StoryViewerViewModel.emit()`
+    from the live `StoryPlayback` via the planner.
+  - `StoryViewerScreen` — a `LaunchedEffect(state.prefetchUrls)` enqueues each
+    URL through `context.imageLoader` (the same singleton `AsyncImage` uses, so
+    the warmed entry is reused) — exempt Composable glue.
+- **Tests (+12):**
+  - `StoryPrefetchPlannerTest` (pure) +10 — immediate-next; lookahead window in
+    order; group-boundary continuation; skip text-only; dedupe repeated URLs;
+    empty at last-slide-last-group; empty when dismissed; empty when no groups;
+    empty for non-positive lookahead (0 and negative); fewer-than-lookahead when
+    not enough remain.
+  - `StoryViewerViewModelTest` +2 — `prefetchUrls` warms the current author's
+    upcoming images on load; shrinks to empty as the viewer advances to the end.
+- **Edge cases covered:** empty/single collections; boundary (last slide of last
+  group → nothing ahead); group roll-over; idempotent/inert (dismissed →
+  empty); text-only slides skipped; dedupe; non-positive lookahead guard;
+  fewer-than-window remaining.
+- **Verify:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 2m45s**
+  (full `assembleDebug` + all module JVM unit tests; 836 tasks). Targeted
+  `:feature:stories:testDebugUnitTest` (planner + VM) green.
+- **Reviewer:** PASS — scope `apps/android` only; behavioural tests through the
+  public API, no tautologies; SDK purity (the "which images to warm / how far
+  ahead / when nothing" product rule is a pure unit in `:feature:stories`, not
+  the SDK; the screen only enqueues); single source of truth (reuses the shared
+  Coil `ImageLoader`, no second cache; URLs derived from the existing
+  `StoryPlayback`/`StorySlideView`); Instant-App (proactive cache warming, no new
+  blocking spinner); UDF + immutable `UiState`, pure planner; no dead end.
+  Surpasses iOS (windowed cross-group prefetch vs single-next).
 
 ### 2026-06-23 — slice `story-tray-count-dots` ✅
 - **Branch:** `claude/apps/android/story-tray-count-dots`
