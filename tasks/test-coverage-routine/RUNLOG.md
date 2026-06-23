@@ -1900,5 +1900,5 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   - regionalLanguage null fallback test, success=false response for save handlers, modal participant error tests
 - Production files changed: istanbul ignore annotations only — no logic changes
 - Branch: claude/coverage/p2-admin-web-8
-- CI: pending
-- Squash-merge: pending
+- CI: All checks passed — Security✅ Quality(bun)✅
+- Squash-merge: PR #895 → main sha `e885a18c7438387f2118ac8ca2cd87e955a261b4` (2026-06-23T06:03:40Z)
