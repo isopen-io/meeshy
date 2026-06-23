@@ -2002,4 +2002,5 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   - `__tests__/types/preferences-notification.test.ts` (14 tests) — valid full object, empty object defaults, invalid dndStartTime '25:00' rejected, invalid dndEndTime '24:00' rejected, valid boundary '23:59', invalid dndDays 'monday' rejected, valid all 7 days, non-boolean rejection, NOTIFICATION_PREFERENCE_DEFAULTS structure, defaults passes schema parse
 - Reviewer: PASS (rounds: 1) — vi.useFakeTimers/setSystemTime pattern correct for isDNDActive; factory functions used; no production code changes; all edge cases covered
 - Thresholds: floor unchanged (branches:96, functions:93, lines:99, statements:99) — measurements already above floor
-- Commit: (see below after push)
+- Commit: bd03e69a (branch); squash-merge SHA on main: 9afdf594
+- PR: #916 — squash-merged to main 2026-06-23T21:30Z, CI 15/15 checks green (13 success, 1 neutral Trivy, 1 skipped Voice E2E Benchmark)
