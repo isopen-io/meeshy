@@ -25,4 +25,5 @@
     <string name="stories_comments_send">Enviar</string>
     <string name="stories_comments_open">Comentarios</string>
     <string name="stories_comments_failed">Error: toca para reintentar</string>
+    <string name="stories_count_dots">%1$d nuevas de %2$d historias</string>
 </resources>

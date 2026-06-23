@@ -332,8 +332,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [~] Story tray carousel : carrousel d'anneaux + bouton « ma story » (badge +) +
       ring non-vu (dégradé accent) / vu (gris) done ; **cache-first SWR/Room backing**
       (`StoryEntity`/`StoryDao` v5 + `StoryCacheSource` + `storiesStream`, skeleton
-      cold-only) done ; count dots, progression d'upload + retry/cancel pending
-      (`:feature:stories` `StoryTray`)
+      cold-only) done ; **segmented unviewed-count dots** done (pure `StoryCountDots`
+      — surpasses iOS group-level all-or-nothing dimming by activating the precise
+      trailing unseen dots, cap 5 + overflow "+", hidden for single-story rings,
+      accent active / muted inactive, `StoryRing.unviewedCount`) ;
+      progression d'upload + retry/cancel pending (`:feature:stories` `StoryTray`)
 - [ ] Multi-slide composer (≤10 slides; add/remove/duplicate/reorder; slide mini-preview strip)
 - [ ] 9:16 canvas with pinch-zoom + drag-pan; FAB + bottom-band toolbar (Contenu/Effets)
 - [ ] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,

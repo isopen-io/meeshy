@@ -14,6 +14,7 @@ data class StoryRing(
     val accentHex: String,
     val hasUnviewed: Boolean,
     val storyCount: Int,
+    val unviewedCount: Int,
     val isMine: Boolean,
 )
 
@@ -54,6 +55,7 @@ object StoryTrayBuilder {
             accentHex = avatarColor,
             hasUnviewed = hasUnviewed(),
             storyCount = stories.size,
+            unviewedCount = stories.count { !it.isViewed },
             isMine = currentUserId != null && id == currentUserId,
         )
 }

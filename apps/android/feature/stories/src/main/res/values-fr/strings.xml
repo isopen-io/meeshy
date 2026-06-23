@@ -25,4 +25,5 @@
     <string name="stories_comments_send">Envoyer</string>
     <string name="stories_comments_open">Commentaires</string>
     <string name="stories_comments_failed">Échec — appuyez pour réessayer</string>
+    <string name="stories_count_dots">%1$d nouvelles sur %2$d stories</string>
 </resources>
