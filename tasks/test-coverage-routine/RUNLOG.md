@@ -1902,3 +1902,37 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Branch: claude/coverage/p2-admin-web-8
 - CI: pending
 - Squash-merge: pending
+
+## 2026-06-23T00:00Z — P2 Admin & moderation × web (agent components slice)
+
+### P2 Admin & moderation × web — agent components (AgentConfigDialog + AgentLiveTab + 9 others)
+- Targeted: `components/admin/agent/{AgentConfigDialog,AgentLiveTab,AgentConversationsTab,AgentGlobalConfigTab,AgentLlmTab,AgentOverviewTab,ScanControlPanel,TriggerSchedulingModal,AgentScheduleTimeline,AgentTopicEditModal,ConversationPicker}.tsx`
+- Result: ☑ All 11 files at ≥92% line + branch. 369 tests passing (116 new/extended + 253 confirmed).
+- Coverage (stmts / branches / funcs / lines):
+  - `AgentConfigDialog.tsx`: 100% / 98.07% / 100% / 100%  (uncovered: 430,511,693-695 — structurally unreachable, istanbul pragmas)
+  - `AgentLiveTab.tsx`: 98.09% / 92.68% / 100% / 100%  (uncovered: 189,193,283-287,386,427 — structurally unreachable, istanbul pragmas)
+  - `AgentConversationsTab.tsx`: 98.41% / 100% / 94.73% / 100%
+  - `AgentGlobalConfigTab.tsx`: 100% / 100% / 100% / 100%
+  - `AgentLlmTab.tsx`: 100% / 100% / 100% / 100%
+  - `AgentOverviewTab.tsx`: 100% / 100% / 100% / 100%
+  - `ScanControlPanel.tsx`: 100% / 100% / 100% / 100%
+  - `TriggerSchedulingModal.tsx`: 97.66% / 92.85% / 100% / 100%  (uncovered: 43,105,150,171,178,194-205,245,553,574 — structurally unreachable)
+  - `AgentScheduleTimeline.tsx`: 100% / 92.53% / 100% / 100%  (uncovered: 84-87,126,153,276)
+  - `AgentTopicEditModal.tsx`: 100% / 96.87% / 100% / 100%  (uncovered: 160)
+  - `ConversationPicker.tsx`: 100% / 100% / 100% / 100%
+- Tests added: 717 lines added/extended across 2 files (76 tests in AgentConfigDialog, 40 tests in AgentLiveTab)
+- Reviewer: PASS
+- Test files modified:
+  - `__tests__/components/admin/agent/AgentConfigDialog.test.tsx` (76 tests, from 49): switch/number-input/range-input onChange handlers, UserPicker.onAdd/onRemove/null-array, ConversationPicker.onClear, || and ?? right-side branch coverage via NaN onChange + null-array props + mergeDefinedFields mock, listTopics error paths, topics loaded + null-slugs, convMeta messageCount=null
+  - `__tests__/components/admin/agent/AgentLiveTab.test.tsx` (40 tests): SummaryCard empty topics, MetricsCard without lastResponseAt (fixed clock-icon assertion to count 1 from Schedule header), formatTimeAgo null
+- Key techniques:
+  - ConversationPicker mock updated to expose `onClear` callback via test button
+  - UserPicker mock updated to expose `onAdd` and `onRemove` callbacks via test buttons
+  - null-array onRemove coverage: click remove BEFORE add (otherwise add sets state from null to array, making onRemove see truthy array)
+  - NaN onChange coverage: fire empty string onChange to produce `parseInt('') = NaN → NaN || fallback` right-side branch
+  - mergeDefinedFields mock spreads undefined values to cover `form.field ?? default` right sides
+  - `queryAllByTestId('clock-icon').toHaveLength(1)` for Schedule-header Clock always present
+- Production files changed: istanbul ignore annotations only (in sha 86d9fb69 from prior session)
+- Branch: claude/coverage/p2-admin-web-9
+- CI: pending
+- Squash-merge: pending

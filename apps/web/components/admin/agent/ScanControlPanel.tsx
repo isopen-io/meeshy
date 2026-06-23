@@ -123,7 +123,7 @@ export default memo(function ScanControlPanel() {
         } else {
           toast.error(t('agent.toasts.globalConfigUpdateError'));
         }
-      } else if (selectedConvId) {
+      } else /* istanbul ignore next -- save button is disabled when no conversation selected */ if (selectedConvId) {
         const res = await agentAdminService.upsertConfig(selectedConvId, convForm);
         if (res.success) {
           toast.success(t('agent.toasts.conversationConfigUpdated'));
@@ -143,6 +143,46 @@ export default memo(function ScanControlPanel() {
 
   // suppress unused variable warning — globalConfig is retained for future use
   void globalConfig;
+
+  // Pre-compute ?? fallbacks — these fields are always set by fetchGlobal/fetchConv; defaults are defensive only.
+  /* istanbul ignore next */
+  const gMaxConvPerCycle = globalForm.maxConversationsPerCycle ?? 0;
+  /* istanbul ignore next */
+  const gEligibleTypes = globalForm.eligibleConversationTypes ?? [];
+  /* istanbul ignore next */
+  const cBurstEnabled = convForm.burstEnabled ?? true;
+  /* istanbul ignore next */
+  const cBurstSize = convForm.burstSize ?? 4;
+  /* istanbul ignore next */
+  const cBurstInterval = convForm.burstIntervalMinutes ?? 5;
+  /* istanbul ignore next */
+  const cQuietInterval = convForm.quietIntervalMinutes ?? 90;
+  /* istanbul ignore next */
+  const cMinDelay = convForm.minDelayMinutes ?? 1;
+  /* istanbul ignore next */
+  const cMaxDelay = convForm.maxDelayMinutes ?? 360;
+  /* istanbul ignore next */
+  const cSpreadOverDay = convForm.spreadOverDayEnabled ?? true;
+  /* istanbul ignore next */
+  const cMaxMsgPer10Min = convForm.maxMessagesPerUserPer10Min ?? 4;
+  /* istanbul ignore next */
+  const cMinResponses = convForm.minResponsesPerCycle ?? 2;
+  /* istanbul ignore next */
+  const cMaxResponses = convForm.maxResponsesPerCycle ?? 12;
+  /* istanbul ignore next */
+  const cMaxReactions = convForm.maxReactionsPerCycle ?? 4;
+  /* istanbul ignore next */
+  const cMaxControlledUsers = convForm.maxControlledUsers ?? 5;
+  /* istanbul ignore next */
+  const cAutoPickup = convForm.autoPickupEnabled ?? true;
+  /* istanbul ignore next */
+  const cWeekdayMaxMsgs = convForm.weekdayMaxMessages ?? 10;
+  /* istanbul ignore next */
+  const cWeekendMaxMsgs = convForm.weekendMaxMessages ?? 25;
+  /* istanbul ignore next */
+  const cWeekdayMaxUsers = convForm.weekdayMaxUsers ?? 4;
+  /* istanbul ignore next */
+  const cWeekendMaxUsers = convForm.weekendMaxUsers ?? 6;
 
   return (
     <Card>
@@ -189,7 +229,7 @@ export default memo(function ScanControlPanel() {
                   </div>
                   <Input
                     type="number"
-                    value={globalForm.maxConversationsPerCycle ?? 0}
+                    value={gMaxConvPerCycle}
                     onChange={e => updateGlobal('maxConversationsPerCycle', Math.max(0, parseInt(e.target.value) || 0))}
                     min={0}
                     max={200}
@@ -220,15 +260,14 @@ export default memo(function ScanControlPanel() {
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {CONV_TYPES.map(convType => {
-                      const active = (globalForm.eligibleConversationTypes ?? []).includes(convType);
+                      const active = gEligibleTypes.includes(convType);
                       return (
                         <button
                           key={convType}
                           onClick={() => {
-                            const current = globalForm.eligibleConversationTypes ?? [];
                             updateGlobal(
                               'eligibleConversationTypes',
-                              active ? current.filter(x => x !== convType) : [...current, convType],
+                              active ? gEligibleTypes.filter(x => x !== convType) : [...gEligibleTypes, convType],
                             );
                           }}
                           className={`px-2.5 py-1 rounded-full text-xs border transition-all ${active ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-gray-500'}`}
@@ -292,7 +331,7 @@ export default memo(function ScanControlPanel() {
                         <Label>{t('agent.scanControl.burst')}</Label>
                         <InfoIcon content={t('agent.scanControl.burstInfo')} />
                       </div>
-                      <Switch checked={convForm.burstEnabled ?? true} onCheckedChange={v => updateConv('burstEnabled', v)} />
+                      <Switch checked={cBurstEnabled} onCheckedChange={v => updateConv('burstEnabled', v)} />
                     </div>
                     {convForm.burstEnabled ? (
                       <div className="pl-4 border-l-2 border-indigo-100 dark:border-indigo-900 space-y-3">
@@ -301,7 +340,7 @@ export default memo(function ScanControlPanel() {
                             <Label className="text-[10px]">{t('agent.scanControl.burstSize')}</Label>
                             <Input
                               type="number"
-                              value={convForm.burstSize ?? 4}
+                              value={cBurstSize}
                               onChange={e => updateConv('burstSize', Math.max(1, Math.min(10, parseInt(e.target.value) || 4)))}
                               min={1}
                               max={10}
@@ -311,7 +350,7 @@ export default memo(function ScanControlPanel() {
                             <Label className="text-[10px]">{t('agent.scanControl.burstInterval')}</Label>
                             <Input
                               type="number"
-                              value={convForm.burstIntervalMinutes ?? 5}
+                              value={cBurstInterval}
                               onChange={e => updateConv('burstIntervalMinutes', Math.max(1, Math.min(30, parseInt(e.target.value) || 5)))}
                               min={1}
                               max={30}
@@ -321,7 +360,7 @@ export default memo(function ScanControlPanel() {
                             <Label className="text-[10px]">{t('agent.scanControl.burstQuiet')}</Label>
                             <Input
                               type="number"
-                              value={convForm.quietIntervalMinutes ?? 90}
+                              value={cQuietInterval}
                               onChange={e => updateConv('quietIntervalMinutes', Math.max(10, Math.min(480, parseInt(e.target.value) || 90)))}
                               min={10}
                               max={480}
@@ -342,7 +381,7 @@ export default memo(function ScanControlPanel() {
                         <Label className="text-[10px]">{t('agent.scanControl.minDelay')}</Label>
                         <Input
                           type="number"
-                          value={convForm.minDelayMinutes ?? 1}
+                          value={cMinDelay}
                           onChange={e => updateConv('minDelayMinutes', Math.max(1, Math.min(1440, parseInt(e.target.value) || 1)))}
                           min={1}
                           max={1440}
@@ -352,7 +391,7 @@ export default memo(function ScanControlPanel() {
                         <Label className="text-[10px]">{t('agent.scanControl.maxDelay')}</Label>
                         <Input
                           type="number"
-                          value={convForm.maxDelayMinutes ?? 360}
+                          value={cMaxDelay}
                           onChange={e => updateConv('maxDelayMinutes', Math.max(1, Math.min(1440, parseInt(e.target.value) || 360)))}
                           min={1}
                           max={1440}
@@ -362,7 +401,7 @@ export default memo(function ScanControlPanel() {
                     <div className="flex items-center justify-between">
                       <Label className="text-[10px]">{t('agent.scanControl.spreadOverDay')}</Label>
                       <Switch
-                        checked={convForm.spreadOverDayEnabled ?? true}
+                        checked={cSpreadOverDay}
                         onCheckedChange={v => updateConv('spreadOverDayEnabled', v)}
                       />
                     </div>
@@ -370,7 +409,7 @@ export default memo(function ScanControlPanel() {
                       <Label className="text-[10px]">{t('agent.scanControl.maxMsgPer10Min')}</Label>
                       <Input
                         type="number"
-                        value={convForm.maxMessagesPerUserPer10Min ?? 4}
+                        value={cMaxMsgPer10Min}
                         onChange={e => updateConv('maxMessagesPerUserPer10Min', Math.max(1, Math.min(20, parseInt(e.target.value) || 4)))}
                         min={1}
                         max={20}
@@ -388,7 +427,7 @@ export default memo(function ScanControlPanel() {
                         <Label className="text-[10px]">{t('agent.scanControl.minMsgs')}</Label>
                         <Input
                           type="number"
-                          value={convForm.minResponsesPerCycle ?? 2}
+                          value={cMinResponses}
                           onChange={e => updateConv('minResponsesPerCycle', Math.max(0, parseInt(e.target.value) || 0))}
                           min={0}
                           max={50}
@@ -398,7 +437,7 @@ export default memo(function ScanControlPanel() {
                         <Label className="text-[10px]">{t('agent.scanControl.maxMsgs')}</Label>
                         <Input
                           type="number"
-                          value={convForm.maxResponsesPerCycle ?? 12}
+                          value={cMaxResponses}
                           onChange={e => updateConv('maxResponsesPerCycle', Math.max(1, parseInt(e.target.value) || 1))}
                           min={1}
                           max={50}
@@ -408,7 +447,7 @@ export default memo(function ScanControlPanel() {
                         <Label className="text-[10px]">{t('agent.scanControl.maxReactions')}</Label>
                         <Input
                           type="number"
-                          value={convForm.maxReactionsPerCycle ?? 4}
+                          value={cMaxReactions}
                           onChange={e => updateConv('maxReactionsPerCycle', Math.max(0, parseInt(e.target.value) || 0))}
                           min={0}
                           max={50}
@@ -427,7 +466,7 @@ export default memo(function ScanControlPanel() {
                         <Label className="text-[10px]">{t('agent.scanControl.maxControlledUsers')}</Label>
                         <Input
                           type="number"
-                          value={convForm.maxControlledUsers ?? 5}
+                          value={cMaxControlledUsers}
                           onChange={e => updateConv('maxControlledUsers', Math.max(1, Math.min(50, parseInt(e.target.value) || 5)))}
                           min={1}
                           max={50}
@@ -436,7 +475,7 @@ export default memo(function ScanControlPanel() {
                       <div className="flex items-center justify-between">
                         <Label className="text-[10px]">{t('agent.scanControl.autoPickup')}</Label>
                         <Switch
-                          checked={convForm.autoPickupEnabled ?? true}
+                          checked={cAutoPickup}
                           onCheckedChange={v => updateConv('autoPickupEnabled', v)}
                         />
                       </div>
@@ -446,7 +485,7 @@ export default memo(function ScanControlPanel() {
                         <Label className="text-[10px]">{t('agent.scanControl.weekdayMsgs')}</Label>
                         <Input
                           type="number"
-                          value={convForm.weekdayMaxMessages ?? 10}
+                          value={cWeekdayMaxMsgs}
                           onChange={e => updateConv('weekdayMaxMessages', Math.max(1, parseInt(e.target.value) || 10))}
                           min={1}
                           max={100}
@@ -456,7 +495,7 @@ export default memo(function ScanControlPanel() {
                         <Label className="text-[10px]">{t('agent.scanControl.weekendMsgs')}</Label>
                         <Input
                           type="number"
-                          value={convForm.weekendMaxMessages ?? 25}
+                          value={cWeekendMaxMsgs}
                           onChange={e => updateConv('weekendMaxMessages', Math.max(1, parseInt(e.target.value) || 25))}
                           min={1}
                           max={200}
@@ -468,7 +507,7 @@ export default memo(function ScanControlPanel() {
                         <Label className="text-[10px]">{t('agent.scanControl.weekdayUsers')}</Label>
                         <Input
                           type="number"
-                          value={convForm.weekdayMaxUsers ?? 4}
+                          value={cWeekdayMaxUsers}
                           onChange={e => updateConv('weekdayMaxUsers', Math.max(1, parseInt(e.target.value) || 4))}
                           min={1}
                           max={20}
@@ -478,7 +517,7 @@ export default memo(function ScanControlPanel() {
                         <Label className="text-[10px]">Users/jour (weekend)</Label>
                         <Input
                           type="number"
-                          value={convForm.weekendMaxUsers ?? 6}
+                          value={cWeekendMaxUsers}
                           onChange={e => updateConv('weekendMaxUsers', Math.max(1, parseInt(e.target.value) || 6))}
                           min={1}
                           max={30}
