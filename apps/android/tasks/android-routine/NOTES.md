@@ -129,7 +129,14 @@ Append-only log of gotchas and decisions that save time next run.
   touches `:app` → its own slice.
 - Story viewer richness: **swipe gestures done**, **reactions strip done**,
   **realtime reaction socket-delta done**, **viewers sheet done**, **tray SWR/Room
-  backing done**; remaining: comments overlay, media prefetch, cross-dissolve
-  transitions, realtime `story:viewed` append (needs richer event payload).
+  backing done**, **comments overlay done** (optimistic post + `comment:added`
+  delta — but realtime echo only flows once `SocialSocketManager.attach()` is
+  wired, see above); remaining: media prefetch, cross-dissolve transitions,
+  realtime `story:viewed` append (needs richer event payload).
+- **Cross-module smart-cast.** A nullable `public` property declared in another
+  Gradle module (e.g. `StoryComment.clientId` from `:core:model`) cannot be
+  smart-cast after a `!= null` check inside `:feature:*` — Kotlin can't prove it
+  is stable across the module boundary. Bind it to a local `val` first, then
+  null-check the local. Bit us in `StoryCommentsSheet` (compile error).
 - Reaction `mine` still seeded empty on load — needs server `currentUserReactions`
   exposed by the stories API to pre-fill the user's own emojis.

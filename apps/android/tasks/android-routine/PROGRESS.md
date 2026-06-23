@@ -6,18 +6,20 @@
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
-who-viewed sheet shipped earlier loops; this loop gives the **tray a Room-backed
-SWR backing** so it is genuinely cache-first (paints from Room on a warm start,
-cold skeleton only on an `Empty`/dataless-`Syncing` cache) — `StoryEntity`/
-`StoryDao` (DB v5), `StoryCacheSource`, `StoryRepository.storiesStream`, and the
-pure `StoryTrayReducer`.
+who-viewed sheet + Room-backed tray SWR shipped earlier loops; this loop adds the
+**comments overlay** — an Instant-App, optimistic comments panel on the open story
+(`StoryComment` domain + Prisme mapper, `StoryRepository.comments`, pure
+`StoryCommentsReducer`, `StoryCommentsViewModel`, `StoryCommentsSheet`) wired to
+the realtime `comment:added` socket event.
 
 ## Next slice (pick one for the next run)
 
 Ordered by value within the Stories area:
 1. `story-composer` — publish flow (text/media) via the outbox/WorkManager chain.
-2. `story-comments-overlay` — live-chat comments panel + optimistic posting.
-3. `story-media-prefetch` — warm the next slide's media before it shows.
+2. `story-media-prefetch` — warm the next slide's media before it shows.
+3. `story-tray-count-dots` — segmented unviewed-count dots on the tray rings.
+
+After these, advance to the **Calls** area (`feature-parity.md` §"Calls").
 
 Note: server-side `currentUserReactions` seeding of `mine` on load, the
 app-wide `SocialSocketManager.attach()` lifecycle wiring (no caller yet — affects
@@ -29,6 +31,66 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-23 — slice `story-comments-overlay` ✅
+- **Branch:** `claude/apps/android/story-comments-overlay`
+- **What:** the **comments overlay** on the open story — parity with iOS
+  `StoryCommentsView` + `StoryInteractionService` comments, surpassing it with
+  Instant-App discipline (cold-only skeleton, stale-kept refresh) and **optimistic
+  posting** (instant Pending row → server-ACK swap → Failed + tap-to-retry; iOS
+  posts fire-and-forget), plus realtime `comment:added` deltas appended live.
+- **Added (production):**
+  - `core:model` — `StoryComment` domain + `StoryCommentStatus {Pending,Sent,Failed}`
+    + pure `ApiPostComment.toStoryComment(prefs)` mapper: Prisme-resolved body
+    (Rule 1 — original on no preferred-language match), author name display→username
+    fallback (blank-guarded), blank avatar→`null`, wire comments always `Sent`.
+  - `core:network` — `StoryApi.comments(id, cursor, limit)` → `GET posts/{id}/comments`.
+  - `sdk-core` — `StoryRepository.comments(storyId, cursor, limit)`.
+  - `feature:stories` — pure `StoryCommentsReducer` (`merged` server-page fold:
+    dedupe-by-id, oldest-first, keep in-flight optimistic rows at tail; `posting`;
+    `confirmed` clientId→server swap with echo-already-present de-dup + unknown-id
+    append/inert; `failed` mark; `received` socket append deduped by id);
+    `StoryCommentsViewModel` (Instant-App load + optimistic post/retry + filtered
+    `commentAdded` collection); `StoryCommentsSheet` (`ModalBottomSheet`: count
+    title, comment rows with dimmed-pending + tap-to-retry-failed, accent-tinted
+    input + send, `imePadding`). Wired into `StoryViewerScreen` via a comment
+    `IconButton` (everyone, gated on `currentStoryId`); the auto-advance timer
+    pauses while the sheet is open. Strings `stories_comments_*` in en/fr/es/pt.
+- **Tests (+39):**
+  - `StoryCommentMappingTest` (core:model, pure) +8 — preferred-language
+    translation applied / no-match keeps original / blank-translation keeps
+    original; displayName preferred / blank→username / null author→empty;
+    blank avatar→null; mapped always Sent + non-optimistic.
+  - `StoryCommentsReducerTest` (feature, pure) +16 — `merged` empty/sort/dedupe/
+    keep-pending-tail/drop-once-server-delivers/null-createdAt-sinks; `posting`
+    appends; `confirmed` swap / echo-present-drop-dup / unknown-append /
+    unknown-inert-when-present; `failed` mark / unknown-inert; `received`
+    append / inert-when-present / into-empty.
+  - `StoryCommentsViewModelTest` (feature) +15 — cold success oldest-first;
+    empty→isEmpty; cold failure→error; cold exception→message; refresh-failure
+    keeps list no error; cold skeleton→list (Turbine); re-entrancy = 1 repo call;
+    optimistic Pending→Sent on ACK; failure→Failed; blank ignored (0 repo calls);
+    retry failed→Sent; retry unknown inert; socket this-story appends; socket
+    other-story ignored; socket echo of shown comment deduped.
+- **Edge cases covered:** empty/single lists; null createdAt sort; cold vs warm
+  (refresh) load; cold failure vs refresh failure (keep stale); exception
+  (non-cancellation) path; re-entrant load; optimistic post + rollback-to-Failed
+  + retry; blank/whitespace post (no-op); own-echo de-dup (socket-before-ACK and
+  ACK-before-socket both converge, no dup); foreign-story socket ignored;
+  Prisme Rule-1 original-on-no-match; blank wire fields.
+- **Verify:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 2m55s**
+  (full `assembleDebug` + all module JVM unit tests; 836 tasks). Targeted:
+  `:core:model`, `:sdk-core`, `:feature:stories` testDebugUnitTest all green.
+- **Reviewer:** PASS — scope `apps/android` only; behavioural tests through the
+  public API, no tautologies; SDK purity (domain model + Prisme mapper + repository
+  method are building blocks in `core:model`/`core:network`/`sdk-core`; the
+  "merge/reconcile/when-skeleton/optimistic" product rules live in
+  `:feature:stories`'s `StoryCommentsReducer`/`StoryCommentsViewModel`); single
+  source of truth (Prisme via `LanguageResolver`, avatar colour via
+  `DynamicColorGenerator`, accent via `accentHex`); Instant-App (cold-only
+  skeleton, stale-kept refresh, optimistic post); UDF + immutable `UiState`, pure
+  reducer; no dead end (button → sheet → dismiss returns to a coherent viewer,
+  timer paused while open).
 
 ### 2026-06-23 — slice `story-tray-swr` ✅
 - **Branch:** `claude/apps/android/story-tray-swr`

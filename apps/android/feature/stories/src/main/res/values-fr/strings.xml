@@ -15,4 +15,14 @@
     <string name="stories_viewers_loading">Chargement des vues…</string>
     <string name="stories_viewers_error">Impossible de charger les vues</string>
     <string name="stories_viewer_open_viewers">Voir qui a regardé cette story</string>
+    <string name="stories_comments_title">Commentaires</string>
+    <string name="stories_comments_count">%1$d commentaires</string>
+    <string name="stories_comments_empty_title">Aucun commentaire</string>
+    <string name="stories_comments_empty_subtitle">Soyez le premier à commenter.</string>
+    <string name="stories_comments_loading">Chargement des commentaires…</string>
+    <string name="stories_comments_error">Impossible de charger les commentaires</string>
+    <string name="stories_comments_input_hint">Ajouter un commentaire…</string>
+    <string name="stories_comments_send">Envoyer</string>
+    <string name="stories_comments_open">Commentaires</string>
+    <string name="stories_comments_failed">Échec — appuyez pour réessayer</string>
 </resources>

@@ -15,4 +15,14 @@
     <string name="stories_viewers_loading">Loading views…</string>
     <string name="stories_viewers_error">Couldn\'t load views</string>
     <string name="stories_viewer_open_viewers">See who viewed this story</string>
+    <string name="stories_comments_title">Comments</string>
+    <string name="stories_comments_count">%1$d comments</string>
+    <string name="stories_comments_empty_title">No comments yet</string>
+    <string name="stories_comments_empty_subtitle">Be the first to comment.</string>
+    <string name="stories_comments_loading">Loading comments…</string>
+    <string name="stories_comments_error">Couldn\'t load comments</string>
+    <string name="stories_comments_input_hint">Add a comment…</string>
+    <string name="stories_comments_send">Send</string>
+    <string name="stories_comments_open">Comments</string>
+    <string name="stories_comments_failed">Failed — tap to retry</string>
 </resources>
