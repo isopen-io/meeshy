@@ -304,6 +304,100 @@ describe('AgentLlmTab', () => {
     });
   });
 
+  describe('model select independent change', () => {
+    it('changing model select directly without changing provider updates model', async () => {
+      (agentAdminService.getLlmConfig as jest.Mock).mockResolvedValue({
+        success: true,
+        data: makeLlmConfig({ provider: 'openai', model: 'gpt-4o-mini' }),
+      });
+      render(<AgentLlmTab />);
+      await waitFor(() => screen.getByText('llm.cardTitle'));
+      const selects = screen.getAllByTestId('select');
+      // selects[1] is the model select
+      fireEvent.change(selects[1], { target: { value: 'gpt-4o' } });
+      await waitFor(() => expect(selects[1]).toHaveValue('gpt-4o'));
+    });
+  });
+
+  describe('budget field interactions', () => {
+    it('updating dailyBudgetUsd input changes the form value', async () => {
+      (agentAdminService.getLlmConfig as jest.Mock).mockResolvedValue({
+        success: true,
+        data: makeLlmConfig({ dailyBudgetUsd: 20 }),
+      });
+      (agentAdminService.updateLlmConfig as jest.Mock).mockResolvedValue({ success: true, data: makeLlmConfig() });
+      render(<AgentLlmTab />);
+      await waitFor(() => screen.getByText('llm.cardTitle'));
+      const inputs = screen.getAllByTestId('input');
+      // Find the dailyBudgetUsd input (type=number, not password, not maxTokens)
+      const budgetInput = inputs.find(i => i.getAttribute('type') === 'number' && (i as HTMLInputElement).value === '20');
+      expect(budgetInput).toBeTruthy();
+      fireEvent.change(budgetInput!, { target: { value: '50' } });
+      // Trigger save and verify the updated value is in the payload
+      fireEvent.click(screen.getByTestId('button'));
+      await waitFor(() => {
+        const payload = (agentAdminService.updateLlmConfig as jest.Mock).mock.calls[0][0];
+        expect(payload.dailyBudgetUsd).toBe(50);
+      });
+    });
+
+    it('updating maxCostPerCall input changes the form value', async () => {
+      (agentAdminService.getLlmConfig as jest.Mock).mockResolvedValue({
+        success: true,
+        data: makeLlmConfig({ maxCostPerCall: 0.05 }),
+      });
+      (agentAdminService.updateLlmConfig as jest.Mock).mockResolvedValue({ success: true, data: makeLlmConfig() });
+      render(<AgentLlmTab />);
+      await waitFor(() => screen.getByText('llm.cardTitle'));
+      const inputs = screen.getAllByTestId('input');
+      const costInput = inputs.find(i => i.getAttribute('type') === 'number' && (i as HTMLInputElement).value === '0.05');
+      expect(costInput).toBeTruthy();
+      fireEvent.change(costInput!, { target: { value: '0.1' } });
+      fireEvent.click(screen.getByTestId('button'));
+      await waitFor(() => {
+        const payload = (agentAdminService.updateLlmConfig as jest.Mock).mock.calls[0][0];
+        expect(payload.maxCostPerCall).toBe(0.1);
+      });
+    });
+
+    it('updating maxTokens input changes the form value', async () => {
+      (agentAdminService.getLlmConfig as jest.Mock).mockResolvedValue({
+        success: true,
+        data: makeLlmConfig({ maxTokens: 1024 }),
+      });
+      (agentAdminService.updateLlmConfig as jest.Mock).mockResolvedValue({ success: true, data: makeLlmConfig() });
+      render(<AgentLlmTab />);
+      await waitFor(() => screen.getByText('llm.cardTitle'));
+      const inputs = screen.getAllByTestId('input');
+      const tokensInput = inputs.find(i => i.getAttribute('type') === 'number' && (i as HTMLInputElement).value === '1024');
+      expect(tokensInput).toBeTruthy();
+      fireEvent.change(tokensInput!, { target: { value: '2048' } });
+      fireEvent.click(screen.getByTestId('button'));
+      await waitFor(() => {
+        const payload = (agentAdminService.updateLlmConfig as jest.Mock).mock.calls[0][0];
+        expect(payload.maxTokens).toBe(2048);
+      });
+    });
+
+    it('setting dailyBudgetUsd to invalid value falls back to 20', async () => {
+      (agentAdminService.getLlmConfig as jest.Mock).mockResolvedValue({
+        success: true,
+        data: makeLlmConfig({ dailyBudgetUsd: 20 }),
+      });
+      (agentAdminService.updateLlmConfig as jest.Mock).mockResolvedValue({ success: true, data: makeLlmConfig() });
+      render(<AgentLlmTab />);
+      await waitFor(() => screen.getByText('llm.cardTitle'));
+      const inputs = screen.getAllByTestId('input');
+      const budgetInput = inputs.find(i => i.getAttribute('type') === 'number' && (i as HTMLInputElement).value === '20');
+      fireEvent.change(budgetInput!, { target: { value: 'invalid' } });
+      fireEvent.click(screen.getByTestId('button'));
+      await waitFor(() => {
+        const payload = (agentAdminService.updateLlmConfig as jest.Mock).mock.calls[0][0];
+        expect(payload.dailyBudgetUsd).toBe(20);
+      });
+    });
+  });
+
   describe('load error', () => {
     it('calls toast.error when getLlmConfig throws', async () => {
       const { toast } = require('sonner');
@@ -316,6 +410,120 @@ describe('AgentLlmTab', () => {
       (agentAdminService.getLlmConfig as jest.Mock).mockRejectedValue(new Error('fail'));
       render(<AgentLlmTab />);
       await waitFor(() => expect(screen.queryAllByTestId('skeleton')).toHaveLength(0));
+    });
+
+    it('does not update form when getLlmConfig returns success=true but no data', async () => {
+      (agentAdminService.getLlmConfig as jest.Mock).mockResolvedValue({ success: true, data: null });
+      render(<AgentLlmTab />);
+      await waitFor(() => expect(screen.queryAllByTestId('skeleton')).toHaveLength(0));
+      // Form should show defaults (no crash)
+      expect(screen.getByTestId('card')).toBeInTheDocument();
+    });
+  });
+
+  describe('save with no data returned', () => {
+    it('does not show success toast when updateLlmConfig returns success=true but data=null', async () => {
+      const { toast } = require('sonner');
+      (agentAdminService.getLlmConfig as jest.Mock).mockResolvedValue({ success: true, data: makeLlmConfig() });
+      (agentAdminService.updateLlmConfig as jest.Mock).mockResolvedValue({ success: true, data: null });
+      render(<AgentLlmTab />);
+      await waitFor(() => screen.getByText('llm.cardTitle'));
+      fireEvent.click(screen.getByTestId('button'));
+      await waitFor(() => expect(agentAdminService.updateLlmConfig).toHaveBeenCalled());
+      // No success toast since response.data is null
+      expect(toast.success).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('unknown provider fallback', () => {
+    it('falls back to MODELS.openai when provider is not in MODELS', async () => {
+      (agentAdminService.getLlmConfig as jest.Mock).mockResolvedValue({
+        success: true,
+        data: makeLlmConfig({ provider: 'unknown-provider', model: 'some-model' }),
+      });
+      render(<AgentLlmTab />);
+      await waitFor(() => screen.getByText('llm.cardTitle'));
+      // The component should not crash and should render select elements
+      expect(screen.getAllByTestId('select').length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('falls back to gpt-4o-mini when new provider has no models', async () => {
+      (agentAdminService.getLlmConfig as jest.Mock).mockResolvedValue({
+        success: true,
+        data: makeLlmConfig({ provider: 'openai', model: 'gpt-4o' }),
+      });
+      render(<AgentLlmTab />);
+      await waitFor(() => screen.getByText('llm.cardTitle'));
+      const selects = screen.getAllByTestId('select');
+      // Change to unknown provider to trigger fallback
+      fireEvent.change(selects[0], { target: { value: 'unknown-xyz' } });
+      // Should not crash; form state updated
+      expect(screen.getByTestId('card')).toBeInTheDocument();
+    });
+  });
+
+  describe('temperature null fallback', () => {
+    it('falls back to 0.7 when form.temperature is null/undefined', async () => {
+      (agentAdminService.getLlmConfig as jest.Mock).mockResolvedValue({
+        success: true,
+        data: makeLlmConfig({ temperature: null }),
+      });
+      render(<AgentLlmTab />);
+      await waitFor(() => screen.getByText('llm.cardTitle'));
+      // Temperature display should show fallback value (no crash)
+      const slider = screen.getByTestId('slider');
+      expect(slider).toHaveValue('0.7');
+    });
+
+    it('falls back to null provider ?? openai for form.provider', async () => {
+      (agentAdminService.getLlmConfig as jest.Mock).mockResolvedValue({
+        success: true,
+        data: makeLlmConfig({ provider: null }),
+      });
+      render(<AgentLlmTab />);
+      await waitFor(() => screen.getByText('llm.cardTitle'));
+      // With provider=null, MODELS[null ?? 'openai'] = MODELS.openai → no crash
+      expect(screen.getByTestId('card')).toBeInTheDocument();
+    });
+
+    it('falls back to 1024 when maxTokens input cleared', async () => {
+      (agentAdminService.getLlmConfig as jest.Mock).mockResolvedValue({
+        success: true,
+        data: makeLlmConfig({ maxTokens: 1024 }),
+      });
+      (agentAdminService.updateLlmConfig as jest.Mock).mockResolvedValue({ success: true, data: makeLlmConfig() });
+      render(<AgentLlmTab />);
+      await waitFor(() => screen.getByText('llm.cardTitle'));
+      const inputs = screen.getAllByTestId('input');
+      const tokensInput = inputs.find(i => i.getAttribute('type') === 'number' && (i as HTMLInputElement).value === '1024');
+      expect(tokensInput).toBeTruthy();
+      fireEvent.change(tokensInput!, { target: { value: '' } });
+      fireEvent.click(screen.getByTestId('button'));
+      await waitFor(() => {
+        const payload = (agentAdminService.updateLlmConfig as jest.Mock).mock.calls[0][0];
+        expect(payload.maxTokens).toBe(1024);
+      });
+    });
+  });
+
+  describe('maxCostPerCall invalid value fallback', () => {
+    it('falls back to 0.05 when maxCostPerCall input is cleared', async () => {
+      (agentAdminService.getLlmConfig as jest.Mock).mockResolvedValue({
+        success: true,
+        data: makeLlmConfig({ maxCostPerCall: 0.05 }),
+      });
+      (agentAdminService.updateLlmConfig as jest.Mock).mockResolvedValue({ success: true, data: makeLlmConfig() });
+      render(<AgentLlmTab />);
+      await waitFor(() => screen.getByText('llm.cardTitle'));
+      const inputs = screen.getAllByTestId('input');
+      const costInput = inputs.find(i => i.getAttribute('type') === 'number' && (i as HTMLInputElement).value === '0.05');
+      expect(costInput).toBeTruthy();
+      fireEvent.change(costInput!, { target: { value: '' } });
+      fireEvent.click(screen.getByTestId('button'));
+      await waitFor(() => {
+        const payload = (agentAdminService.updateLlmConfig as jest.Mock).mock.calls[0][0];
+        expect(payload.maxCostPerCall).toBe(0.05);
+      });
     });
   });
 });

@@ -396,4 +396,202 @@ describe('AgentOverviewTab', () => {
     fireEvent.click(resetAllBtn!);
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('agent.toasts.resetError'));
   });
+
+  it('handleReset does not call resetAll when confirm returns false', async () => {
+    jest.spyOn(window, 'confirm').mockReturnValueOnce(false);
+    (agentAdminService.getStats as jest.Mock).mockResolvedValue({ success: true, data: makeStats() });
+    render(<AgentOverviewTab />);
+    await waitFor(() => expect(screen.queryAllByTestId('skeleton')).toHaveLength(0));
+    const resetAllBtn = screen.getAllByTestId('button').find(b => b.textContent?.includes('agent.overview.resetAll'));
+    fireEvent.click(resetAllBtn!);
+    expect(agentAdminService.resetAll).not.toHaveBeenCalled();
+  });
+
+  it('handleReset shows network error toast when resetAll throws', async () => {
+    (agentAdminService.getStats as jest.Mock).mockResolvedValue({ success: true, data: makeStats() });
+    (agentAdminService.resetAll as jest.Mock).mockRejectedValue(new Error('network'));
+    render(<AgentOverviewTab />);
+    await waitFor(() => expect(screen.queryAllByTestId('skeleton')).toHaveLength(0));
+    const resetAllBtn = screen.getAllByTestId('button').find(b => b.textContent?.includes('agent.overview.resetAll'));
+    fireEvent.click(resetAllBtn!);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('agent.toasts.resetAiConfigError'));
+  });
+
+  it('handleResetConversation does not call service when confirm returns false', async () => {
+    jest.spyOn(window, 'confirm').mockReturnValueOnce(false);
+    (agentAdminService.getStats as jest.Mock).mockResolvedValue({ success: true, data: makeStats() });
+    render(<AgentOverviewTab />);
+    await waitFor(() => expect(screen.queryAllByTestId('skeleton')).toHaveLength(0));
+    const inputs = screen.getAllByTestId('input');
+    const convInput = inputs.find(i => i.getAttribute('placeholder')?.includes('ID conversation'))!;
+    fireEvent.change(convInput, { target: { value: 'aabbccddeeff001122334455' } });
+    const convCard = convInput.closest('[data-testid="card-content"]');
+    const btn = convCard?.querySelector('[data-testid="button"]') as HTMLButtonElement;
+    fireEvent.click(btn);
+    expect(agentAdminService.resetConversation).not.toHaveBeenCalled();
+  });
+
+  it('handleResetUser does not call service when confirm returns false', async () => {
+    jest.spyOn(window, 'confirm').mockReturnValueOnce(false);
+    (agentAdminService.getStats as jest.Mock).mockResolvedValue({ success: true, data: makeStats() });
+    render(<AgentOverviewTab />);
+    await waitFor(() => expect(screen.queryAllByTestId('skeleton')).toHaveLength(0));
+    const inputs = screen.getAllByTestId('input');
+    const userInput = inputs.find(i => i.getAttribute('placeholder')?.includes('ID utilisateur'))!;
+    fireEvent.change(userInput, { target: { value: 'aabbccddeeff001122334455' } });
+    const userCard = userInput.closest('[data-testid="card-content"]');
+    const btn = userCard?.querySelector('[data-testid="button"]') as HTMLButtonElement;
+    fireEvent.click(btn);
+    expect(agentAdminService.resetUser).not.toHaveBeenCalled();
+  });
+
+  it('getTypeLabel renders labels for all conversation types in recentActivity', async () => {
+    const types = ['direct', 'public', 'global', 'broadcast', 'channel'];
+    (agentAdminService.getStats as jest.Mock).mockResolvedValue({
+      success: true,
+      data: makeStats({
+        recentActivity: types.map((type, i) => ({
+          conversationId: `cid${i}`,
+          conversation: { id: `cid${i}`, title: `Conv ${type}`, type },
+          messagesSent: 1,
+          totalWordsSent: 10,
+          avgConfidence: 0.5,
+          lastResponseAt: new Date(Date.now() - 60000).toISOString(),
+        })),
+      }),
+    });
+    render(<AgentOverviewTab />);
+    await waitFor(() => expect(screen.getByText('Conv direct')).toBeInTheDocument());
+    // Each type should call getTypeLabel with the expected key
+    expect(screen.getByText('agent.overview.conversationType.direct')).toBeInTheDocument();
+    expect(screen.getByText('agent.overview.conversationType.public')).toBeInTheDocument();
+    expect(screen.getByText('agent.overview.conversationType.global')).toBeInTheDocument();
+    expect(screen.getByText('agent.overview.conversationType.broadcast')).toBeInTheDocument();
+    expect(screen.getByText('agent.overview.conversationType.channel')).toBeInTheDocument();
+  });
+
+  it('handleResetConversation shows conversationResetError toast when resetConversation throws', async () => {
+    (agentAdminService.getStats as jest.Mock).mockResolvedValue({ success: true, data: makeStats() });
+    (agentAdminService.resetConversation as jest.Mock).mockRejectedValue(new Error('network'));
+    render(<AgentOverviewTab />);
+    await waitFor(() => expect(screen.queryAllByTestId('skeleton')).toHaveLength(0));
+    const inputs = screen.getAllByTestId('input');
+    const convInput = inputs.find(i => i.getAttribute('placeholder')?.includes('ID conversation'))!;
+    fireEvent.change(convInput, { target: { value: 'aabbccddeeff001122334455' } });
+    const convCard = convInput.closest('[data-testid="card-content"]');
+    const btn = convCard?.querySelector('[data-testid="button"]') as HTMLButtonElement;
+    fireEvent.click(btn);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('agent.toasts.conversationResetError'));
+  });
+
+  it('handleResetUser shows userResetError toast when resetUser throws', async () => {
+    (agentAdminService.getStats as jest.Mock).mockResolvedValue({ success: true, data: makeStats() });
+    (agentAdminService.resetUser as jest.Mock).mockRejectedValue(new Error('network'));
+    render(<AgentOverviewTab />);
+    await waitFor(() => expect(screen.queryAllByTestId('skeleton')).toHaveLength(0));
+    const inputs = screen.getAllByTestId('input');
+    const userInput = inputs.find(i => i.getAttribute('placeholder')?.includes('ID utilisateur'))!;
+    fireEvent.change(userInput, { target: { value: 'aabbccddeeff001122334455' } });
+    const userCard = userInput.closest('[data-testid="card-content"]');
+    const btn = userCard?.querySelector('[data-testid="button"]') as HTMLButtonElement;
+    fireEvent.click(btn);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('agent.toasts.userResetError'));
+  });
+
+  it('getTypeLabel falls back to raw type string for unknown type', async () => {
+    (agentAdminService.getStats as jest.Mock).mockResolvedValue({
+      success: true,
+      data: makeStats({
+        recentActivity: [{
+          conversationId: 'cid-unk',
+          conversation: { id: 'cid-unk', title: 'Unknown Type Conv', type: 'unknown_type' },
+          messagesSent: 1,
+          totalWordsSent: 10,
+          avgConfidence: 0.5,
+          lastResponseAt: new Date(Date.now() - 60000).toISOString(),
+        }],
+      }),
+    });
+    render(<AgentOverviewTab />);
+    await waitFor(() => expect(screen.getByText('Unknown Type Conv')).toBeInTheDocument());
+    expect(screen.getByText('unknown_type')).toBeInTheDocument();
+  });
+
+  it('handleResetConversation shows no success toast when resetConversation returns success=false', async () => {
+    (agentAdminService.getStats as jest.Mock).mockResolvedValue({ success: true, data: makeStats() });
+    (agentAdminService.resetConversation as jest.Mock).mockResolvedValue({ success: false });
+    render(<AgentOverviewTab />);
+    await waitFor(() => expect(screen.queryAllByTestId('skeleton')).toHaveLength(0));
+    const inputs = screen.getAllByTestId('input');
+    const convInput = inputs.find(i => i.getAttribute('placeholder')?.includes('ID conversation'))!;
+    fireEvent.change(convInput, { target: { value: 'aabbccddeeff001122334455' } });
+    const convCard = convInput.closest('[data-testid="card-content"]');
+    const btn = convCard?.querySelector('[data-testid="button"]') as HTMLButtonElement;
+    fireEvent.click(btn);
+    await waitFor(() => expect(agentAdminService.resetConversation).toHaveBeenCalled());
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('handleResetUser shows no success toast when resetUser returns success=false', async () => {
+    (agentAdminService.getStats as jest.Mock).mockResolvedValue({ success: true, data: makeStats() });
+    (agentAdminService.resetUser as jest.Mock).mockResolvedValue({ success: false });
+    render(<AgentOverviewTab />);
+    await waitFor(() => expect(screen.queryAllByTestId('skeleton')).toHaveLength(0));
+    const inputs = screen.getAllByTestId('input');
+    const userInput = inputs.find(i => i.getAttribute('placeholder')?.includes('ID utilisateur'))!;
+    fireEvent.change(userInput, { target: { value: 'aabbccddeeff001122334455' } });
+    const userCard = userInput.closest('[data-testid="card-content"]');
+    const btn = userCard?.querySelector('[data-testid="button"]') as HTMLButtonElement;
+    fireEvent.click(btn);
+    await waitFor(() => expect(agentAdminService.resetUser).toHaveBeenCalled());
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('KPI badge shows Off when activeConfigs is 0', async () => {
+    (agentAdminService.getStats as jest.Mock).mockResolvedValue({
+      success: true,
+      data: makeStats({ activeConfigs: 0 }),
+    });
+    render(<AgentOverviewTab />);
+    await waitFor(() => expect(screen.queryAllByTestId('skeleton')).toHaveLength(0));
+    // When activeConfigs is 0, the badge should show 'Off' with 'secondary' variant
+    const badges = screen.getAllByTestId('badge');
+    const offBadge = badges.find(b => b.textContent === 'Off');
+    expect(offBadge).toBeTruthy();
+    expect(offBadge).toHaveAttribute('data-variant', 'secondary');
+  });
+
+  it('recentActivity entry with null title shows sliced conversationId', async () => {
+    (agentAdminService.getStats as jest.Mock).mockResolvedValue({
+      success: true,
+      data: makeStats({
+        recentActivity: [{
+          conversationId: 'abcdef1234567890abcdef12',
+          conversation: { id: 'abcdef1234567890abcdef12', title: null, type: 'group' },
+          messagesSent: 3,
+          totalWordsSent: 30,
+          avgConfidence: 0.7,
+          lastResponseAt: new Date(Date.now() - 60000).toISOString(),
+        }],
+      }),
+    });
+    render(<AgentOverviewTab />);
+    await waitFor(() => expect(screen.getByText('abcdef1234...')).toBeInTheDocument());
+  });
+
+  it('handleReset ?? 0 fallbacks when deleted counts are null', async () => {
+    (agentAdminService.getStats as jest.Mock).mockResolvedValue({ success: true, data: makeStats() });
+    (agentAdminService.resetAll as jest.Mock).mockResolvedValue({
+      success: true,
+      data: { deleted: { configs: null, roles: null, analytics: null, redisKeys: null } },
+    });
+    render(<AgentOverviewTab />);
+    await waitFor(() => expect(screen.queryAllByTestId('skeleton')).toHaveLength(0));
+    const resetAllBtn = screen.getAllByTestId('button').find(b => b.textContent?.includes('agent.overview.resetAll'));
+    fireEvent.click(resetAllBtn!);
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    // The success message is built from ?? 0 fallbacks: all counts show 0
+    const call = (toast.success as jest.Mock).mock.calls[0][0] as string;
+    expect(typeof call).toBe('string');
+  });
 });

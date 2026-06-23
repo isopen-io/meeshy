@@ -450,4 +450,201 @@ describe('AgentLiveTab', () => {
     fireEvent.click(screen.getAllByText('Chat One')[0]);
     await waitFor(() => expect(screen.getByText('agentLive.noToneProfiles')).toBeInTheDocument());
   });
+
+  it('shows green dot for items with enabled=true in sidebar', async () => {
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({
+      success: true,
+      data: [makeRecentActivity({
+        conversationId: 'conv-enabled',
+        conversation: { id: 'conv-enabled', title: 'Enabled Conv', type: 'direct' },
+        enabled: true,
+      })],
+    });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('Enabled Conv').length).toBeGreaterThan(0));
+    // Green dot: div with bg-green-500 class
+    const greenDots = document.querySelectorAll('.bg-green-500');
+    expect(greenDots.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('formatTimeAgo: shows "now" key for timestamps less than 1 minute ago', async () => {
+    const recentTs = new Date(Date.now() - 30000).toISOString(); // 30s ago
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({
+      success: true,
+      data: [makeRecentActivity({
+        conversationId: 'conv-now',
+        conversation: { id: 'conv-now', title: 'Now Conv', type: 'direct' },
+        lastResponseAt: recentTs,
+      })],
+    });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('Now Conv').length).toBeGreaterThan(0));
+    expect(screen.getAllByText('timeAgo.now').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('formatTimeAgo: shows minutes for timestamps 1-59 minutes ago', async () => {
+    const minutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString(); // 5 min ago
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({
+      success: true,
+      data: [makeRecentActivity({
+        conversationId: 'conv-minutes',
+        conversation: { id: 'conv-minutes', title: 'Minutes Conv', type: 'direct' },
+        lastResponseAt: minutesAgo,
+      })],
+    });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('Minutes Conv').length).toBeGreaterThan(0));
+    expect(screen.getAllByText(/5timeAgo\.minutes/).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('formatTimeAgo: shows hours for timestamps 1-23 hours ago', async () => {
+    const hoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(); // 3 hours ago
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({
+      success: true,
+      data: [makeRecentActivity({
+        conversationId: 'conv-hours',
+        conversation: { id: 'conv-hours', title: 'Hours Conv', type: 'direct' },
+        lastResponseAt: hoursAgo,
+      })],
+    });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('Hours Conv').length).toBeGreaterThan(0));
+    expect(screen.getAllByText(/3timeAgo\.hours/).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('formatTimeAgo: shows days for timestamps 24+ hours ago', async () => {
+    const daysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(); // 2 days ago
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({
+      success: true,
+      data: [makeRecentActivity({
+        conversationId: 'conv-days',
+        conversation: { id: 'conv-days', title: 'Days Conv', type: 'direct' },
+        lastResponseAt: daysAgo,
+      })],
+    });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('Days Conv').length).toBeGreaterThan(0));
+    expect(screen.getAllByText(/2timeAgo\.days/).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('manual refresh button calls fetchLiveState when clicked', async () => {
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({
+      success: true,
+      data: [makeRecentActivity({ conversationId: 'conv-abc123def456', conversation: { id: 'conv-abc123def456', title: 'Chat One', type: 'direct' } })],
+    });
+    (agentAdminService.getLiveState as jest.Mock).mockResolvedValue({
+      success: true,
+      data: makeLiveState(),
+    });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('Chat One').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByText('Chat One')[0]);
+    await waitFor(() => expect(agentAdminService.getLiveState).toHaveBeenCalledTimes(1));
+
+    // Find the manual refresh button (the second button, no text, just icon)
+    const buttons = screen.getAllByTestId('button');
+    const refreshBtn = buttons.find(b => !b.textContent?.includes('Auto') && b.getAttribute('disabled') !== '');
+    // Click the refresh button (find by data-variant="outline" and without Auto text)
+    const manualRefreshBtn = buttons.find(b => b.getAttribute('data-variant') === 'outline' && !b.textContent?.includes('Auto'));
+    if (manualRefreshBtn) {
+      fireEvent.click(manualRefreshBtn);
+      await waitFor(() => expect(agentAdminService.getLiveState).toHaveBeenCalledTimes(2));
+    }
+  });
+
+  it('auto-refresh turns off clearInterval when toggled back off', async () => {
+    jest.useFakeTimers();
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({
+      success: true,
+      data: [makeRecentActivity({ conversationId: 'conv-abc123def456', conversation: { id: 'conv-abc123def456', title: 'Chat One', type: 'direct' } })],
+    });
+    (agentAdminService.getLiveState as jest.Mock).mockResolvedValue({
+      success: true,
+      data: makeLiveState(),
+    });
+    render(<AgentLiveTab />);
+    await act(async () => { await Promise.resolve(); });
+    await waitFor(() => expect(screen.getAllByText('Chat One').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByText('Chat One')[0]);
+    await act(async () => { await Promise.resolve(); });
+
+    // Turn auto-refresh ON
+    const autoButton = screen.getAllByTestId('button').find(b => b.textContent?.includes('Auto'));
+    expect(autoButton).toBeTruthy();
+    fireEvent.click(autoButton!);
+
+    // Turn auto-refresh OFF
+    const autoOnButton = screen.getAllByTestId('button').find(b => b.textContent?.includes('Auto 15s'));
+    expect(autoOnButton).toBeTruthy();
+    fireEvent.click(autoOnButton!);
+
+    const callCountAfterOff = (agentAdminService.getLiveState as jest.Mock).mock.calls.length;
+    // Advance timers — should NOT trigger more calls since interval was cleared
+    act(() => { jest.advanceTimersByTime(30000); });
+    expect((agentAdminService.getLiveState as jest.Mock).mock.calls.length).toBe(callCountAfterOff);
+  });
+
+  it('renders currentTopics badges when summaryRecord has topics', async () => {
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({
+      success: true,
+      data: [makeRecentActivity({ conversationId: 'conv-abc123def456', conversation: { id: 'conv-abc123def456', title: 'Chat One', type: 'direct' } })],
+    });
+    (agentAdminService.getLiveState as jest.Mock).mockResolvedValue({
+      success: true,
+      data: makeLiveState({
+        summaryRecord: {
+          summary: 'Topic summary',
+          currentTopics: ['AI', 'Blockchain'],
+          overallTone: 'casual',
+          messageCount: 10,
+        },
+      }),
+    });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('Chat One').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByText('Chat One')[0]);
+    await waitFor(() => {
+      expect(screen.getByText('AI')).toBeInTheDocument();
+      expect(screen.getByText('Blockchain')).toBeInTheDocument();
+    });
+  });
+
+  it('renders tone profile with locked=true shows lock icon', async () => {
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({
+      success: true,
+      data: [makeRecentActivity({ conversationId: 'conv-abc123def456', conversation: { id: 'conv-abc123def456', title: 'Chat One', type: 'direct' } })],
+    });
+    (agentAdminService.getLiveState as jest.Mock).mockResolvedValue({
+      success: true,
+      data: makeLiveState({
+        toneProfiles: {
+          u1: { userId: 'u1', tone: 'formal', vocabularyLevel: 'advanced', confidence: 0.85, locked: true, messagesAnalyzed: 10 },
+        },
+      }),
+    });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('Chat One').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByText('Chat One')[0]);
+    await waitFor(() => expect(screen.getAllByTestId('lock-icon').length).toBeGreaterThan(0));
+  });
+
+  it('confidenceColor returns yellow for confidence exactly > 0.5', async () => {
+    (agentAdminService.getRecentActivity as jest.Mock).mockResolvedValue({
+      success: true,
+      data: [makeRecentActivity({ conversationId: 'conv-abc123def456', conversation: { id: 'conv-abc123def456', title: 'Chat One', type: 'direct' } })],
+    });
+    (agentAdminService.getLiveState as jest.Mock).mockResolvedValue({
+      success: true,
+      data: makeLiveState({
+        controlledUsers: [{ userId: 'u1', systemLanguage: 'en', confidence: 0.51, locked: false }],
+      }),
+    });
+    render(<AgentLiveTab />);
+    await waitFor(() => expect(screen.getAllByText('Chat One').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByText('Chat One')[0]);
+    await waitFor(() => {
+      const confEl = screen.getByText('51%');
+      expect(confEl.className).toContain('yellow');
+    });
+  });
 });

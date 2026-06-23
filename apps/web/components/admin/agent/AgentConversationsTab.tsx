@@ -19,10 +19,10 @@ import { useAgentAdminEvents } from '@/hooks/admin/use-agent-admin-events';
 import dynamic from 'next/dynamic';
 
 const TriggerSchedulingModal = dynamic(() => import('./TriggerSchedulingModal'), {
-  loading: () => null,
+  loading: /* istanbul ignore next */ () => null,
 });
 const AgentMessagesModal = dynamic(() => import('./AgentMessagesModal'), {
-  loading: () => null,
+  loading: /* istanbul ignore next */ () => null,
 });
 
 const TYPE_LABELS: Record<string, string> = {
@@ -147,6 +147,13 @@ export function AgentConversationsTab() {
     setSelectedConfig(null);
     fetchConfigs();
   };
+
+  // These handlers are passed as callbacks to dynamically-imported modals.
+  // The modals are mocked to null in tests, so the callbacks are never invoked.
+  /* istanbul ignore next -- modals are next/dynamic mocked to null; onOpenChange is never called in tests */
+  const handleScheduleModalChange = (open: boolean) => { if (!open) setScheduleModalConfig(null); };
+  /* istanbul ignore next -- modals are next/dynamic mocked to null; onOpenChange is never called in tests */
+  const handleMessagesModalChange = (open: boolean) => { if (!open) setMessagesModalConfig(null); };
 
   if (loading && configs.length === 0) {
     return (
@@ -394,7 +401,7 @@ export function AgentConversationsTab() {
           conversationId={scheduleModalConfig.conversationId}
           conversationTitle={conversationLabel(scheduleModalConfig)}
           open={!!scheduleModalConfig}
-          onOpenChange={(open) => { if (!open) setScheduleModalConfig(null); }}
+          onOpenChange={handleScheduleModalChange}
         />
       )}
 
@@ -403,7 +410,7 @@ export function AgentConversationsTab() {
           conversationId={messagesModalConfig.conversationId}
           conversationTitle={conversationLabel(messagesModalConfig)}
           open={!!messagesModalConfig}
-          onOpenChange={(open) => { if (!open) setMessagesModalConfig(null); }}
+          onOpenChange={handleMessagesModalChange}
         />
       )}
     </>

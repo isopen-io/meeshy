@@ -306,4 +306,82 @@ describe('AgentScheduleTimeline', () => {
     render(<AgentScheduleTimeline conversationId="conv-123" />);
     await waitFor(() => expect(screen.getByText('Off')).toBeInTheDocument());
   });
+
+  it('shows Prêt badge when burst is enabled and cooldown is not active', async () => {
+    (agentAdminService.getSchedule as jest.Mock).mockResolvedValue({
+      success: true,
+      data: makeSchedule({
+        burst: { enabled: true, lastBurst: 0, cooldownEndsAt: 0, cooldownActive: false, quietIntervalMinutes: 10 },
+      }),
+    });
+    render(<AgentScheduleTimeline conversationId="conv-123" />);
+    await waitFor(() => expect(screen.getByText('Prêt')).toBeInTheDocument());
+  });
+
+  it('shows cooldown badge when burst is enabled and cooldown is active', async () => {
+    const now = Date.now();
+    (agentAdminService.getSchedule as jest.Mock).mockResolvedValue({
+      success: true,
+      data: makeSchedule({
+        burst: {
+          enabled: true,
+          lastBurst: now - 5 * 60 * 1000,
+          cooldownEndsAt: now + 5 * 60 * 1000,
+          cooldownActive: true,
+          quietIntervalMinutes: 10,
+        },
+      }),
+    });
+    render(<AgentScheduleTimeline conversationId="conv-123" />);
+    await waitFor(() => expect(screen.getAllByTestId('pausecircle-icon').length).toBeGreaterThanOrEqual(1));
+  });
+
+  it('shows -- badge when no upcoming scans (timeUntilNext is null)', async () => {
+    (agentAdminService.getSchedule as jest.Mock).mockResolvedValue({
+      success: true,
+      data: makeSchedule({ upcomingScans: [] }),
+    });
+    render(<AgentScheduleTimeline conversationId="conv-123" />);
+    await waitFor(() => {
+      const badges = screen.getAllByTestId('badge');
+      const dashBadge = badges.find(b => b.textContent === '--');
+      expect(dashBadge).toBeTruthy();
+    });
+  });
+
+  it('handleVisibility updates component when document becomes visible', async () => {
+    (agentAdminService.getSchedule as jest.Mock).mockResolvedValue({
+      success: true,
+      data: makeSchedule(),
+    });
+    render(<AgentScheduleTimeline conversationId="conv-123" />);
+    await waitFor(() => screen.getByText('Trigger'));
+
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true, writable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    // Component should still render without crashing
+    expect(screen.getByText('Trigger')).toBeInTheDocument();
+  });
+
+  it('does not render last scan info when lastScan is 0', async () => {
+    (agentAdminService.getSchedule as jest.Mock).mockResolvedValue({
+      success: true,
+      data: makeSchedule({ lastScan: 0 }),
+    });
+    render(<AgentScheduleTimeline conversationId="conv-123" />);
+    await waitFor(() => screen.getByText('Trigger'));
+    expect(screen.queryByText(/Dernier scan/)).not.toBeInTheDocument();
+  });
+
+  it('renders last scan info when lastScan is non-zero', async () => {
+    const now = Date.now();
+    (agentAdminService.getSchedule as jest.Mock).mockResolvedValue({
+      success: true,
+      data: makeSchedule({ lastScan: now - 10 * 60 * 1000 }),
+    });
+    render(<AgentScheduleTimeline conversationId="conv-123" />);
+    await waitFor(() => expect(screen.getByText(/Dernier scan/)).toBeInTheDocument());
+  });
 });

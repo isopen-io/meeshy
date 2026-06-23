@@ -375,6 +375,144 @@ describe('ConversationPicker', () => {
     });
   });
 
+  describe('fetchSelected edge cases', () => {
+    it('clears selectedConversation when selectedId changes to null', async () => {
+      const conv = makeConversation({ title: 'Will Disappear' });
+      (conversationsCrudService.getConversation as jest.Mock).mockResolvedValue(conv);
+
+      const { rerender } = render(
+        <ConversationPicker {...defaultProps({ selectedId: conv.id })} />
+      );
+      await waitFor(() => expect(screen.getByText('Will Disappear')).toBeInTheDocument());
+
+      rerender(<ConversationPicker {...defaultProps({ selectedId: null })} />);
+      await waitFor(() => {
+        expect(screen.queryByText('Will Disappear')).not.toBeInTheDocument();
+        expect(screen.getByText('Search a conversation...')).toBeInTheDocument();
+      });
+    });
+
+    it('handles error in fetchSelected gracefully without crashing', async () => {
+      (conversationsCrudService.getConversation as jest.Mock).mockRejectedValue(new Error('fetch failed'));
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      render(<ConversationPicker {...defaultProps({ selectedId: 'bad-id' })} />);
+      await act(async () => { await Promise.resolve(); });
+
+      // Component should still be in an operable state (popover trigger or empty state)
+      expect(screen.getByText('Search a conversation...')).toBeInTheDocument();
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('search error handling', () => {
+    it('handles searchConversations error without crashing', async () => {
+      (conversationsCrudService.searchConversations as jest.Mock).mockRejectedValue(new Error('search failed'));
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      render(<ConversationPicker {...defaultProps()} />);
+      fireEvent.click(screen.getByText('Search a conversation...'));
+
+      await waitFor(() => expect(screen.getByTestId('picker-input')).toBeInTheDocument());
+
+      fireEvent.change(screen.getByTestId('picker-input'), { target: { value: 'ab' } });
+
+      await waitFor(() => {
+        expect(conversationsCrudService.searchConversations).toHaveBeenCalledWith('ab');
+      });
+      // Should not crash; loading should have been set back to false
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('selected conversation card details', () => {
+    it('renders avatar img when conversation has avatar', async () => {
+      const conv = makeConversation({ avatar: 'https://example.com/avatar.jpg' });
+      (conversationsCrudService.getConversation as jest.Mock).mockResolvedValue(conv);
+
+      render(<ConversationPicker {...defaultProps({ selectedId: conv.id })} />);
+      await waitFor(() => expect(screen.getByText('Test Conversation')).toBeInTheDocument());
+
+      // Image has empty alt="" so role is 'presentation', use querySelector
+      const img = document.querySelector('img[src="https://example.com/avatar.jpg"]');
+      expect(img).not.toBeNull();
+      expect(img).toHaveAttribute('src', 'https://example.com/avatar.jpg');
+    });
+
+    it('renders banner when conversation has banner url', async () => {
+      const conv = makeConversation({ banner: 'https://example.com/banner.jpg' });
+      (conversationsCrudService.getConversation as jest.Mock).mockResolvedValue(conv);
+
+      render(<ConversationPicker {...defaultProps({ selectedId: conv.id })} />);
+      await waitFor(() => expect(screen.getByText('Test Conversation')).toBeInTheDocument());
+
+      // Banner div has inline background-image style
+      const container = document.querySelector('[style*="background-image"]');
+      expect(container).not.toBeNull();
+    });
+
+    it('does not render member count when memberCount is 0', async () => {
+      const conv = makeConversation({ memberCount: 0 });
+      (conversationsCrudService.getConversation as jest.Mock).mockResolvedValue(conv);
+
+      render(<ConversationPicker {...defaultProps({ selectedId: conv.id })} />);
+      await waitFor(() => expect(screen.getByText('Test Conversation')).toBeInTheDocument());
+
+      // memberCount 0 means the members section is not shown
+      expect(screen.queryByText('0')).not.toBeInTheDocument();
+    });
+
+    it('does not render calendar date when createdAt is null', async () => {
+      const conv = makeConversation({ createdAt: null });
+      (conversationsCrudService.getConversation as jest.Mock).mockResolvedValue(conv);
+
+      render(<ConversationPicker {...defaultProps({ selectedId: conv.id })} />);
+      await waitFor(() => expect(screen.getByText('Test Conversation')).toBeInTheDocument());
+
+      expect(screen.queryByTestId('calendar-icon')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('search results details', () => {
+    it('shows lastMessageAt date in results when conv has lastMessageAt', async () => {
+      const conv = makeConversation({ lastMessageAt: '2024-06-15T00:00:00Z' });
+      (conversationsCrudService.searchConversations as jest.Mock).mockResolvedValue([conv]);
+
+      render(<ConversationPicker {...defaultProps()} />);
+      fireEvent.click(screen.getByText('Search a conversation...'));
+      await waitFor(() => expect(screen.getByTestId('picker-input')).toBeInTheDocument());
+      fireEvent.change(screen.getByTestId('picker-input'), { target: { value: 'te' } });
+
+      await waitFor(() => expect(screen.getByText('Test Conversation')).toBeInTheDocument());
+      // The separator dot for date is rendered
+      expect(screen.getByText('•')).toBeInTheDocument();
+    });
+
+    it('shows lastMessage content in results when conv has lastMessage.content', async () => {
+      const conv = makeConversation({ lastMessage: { content: 'Preview text here', sender: null } });
+      (conversationsCrudService.searchConversations as jest.Mock).mockResolvedValue([conv]);
+
+      render(<ConversationPicker {...defaultProps()} />);
+      fireEvent.click(screen.getByText('Search a conversation...'));
+      await waitFor(() => expect(screen.getByTestId('picker-input')).toBeInTheDocument());
+      fireEvent.change(screen.getByTestId('picker-input'), { target: { value: 'te' } });
+
+      await waitFor(() => expect(screen.getByText('Preview text here')).toBeInTheDocument());
+    });
+
+    it('shows member count in results when conv.memberCount > 0', async () => {
+      const conv = makeConversation({ memberCount: 7 });
+      (conversationsCrudService.searchConversations as jest.Mock).mockResolvedValue([conv]);
+
+      render(<ConversationPicker {...defaultProps()} />);
+      fireEvent.click(screen.getByText('Search a conversation...'));
+      await waitFor(() => expect(screen.getByTestId('picker-input')).toBeInTheDocument());
+      fireEvent.change(screen.getByTestId('picker-input'), { target: { value: 'te' } });
+
+      await waitFor(() => expect(screen.getByText('7')).toBeInTheDocument());
+    });
+  });
+
   describe('getIcon', () => {
     it('renders MessageSquare icon for direct type conversations', async () => {
       const conv = makeConversation({ type: 'direct' });
@@ -420,6 +558,107 @@ describe('ConversationPicker', () => {
       });
 
       expect(screen.getByTestId('globe-icon')).toBeInTheDocument();
+    });
+  });
+
+  describe('fallback branches', () => {
+    it('shows untitled fallback when selected conversation has no title', async () => {
+      const conv = makeConversation({ title: null });
+      (conversationsCrudService.getConversation as jest.Mock).mockResolvedValue(conv);
+
+      render(<ConversationPicker {...defaultProps({ selectedId: conv.id })} />);
+      await waitFor(() => {
+        expect(screen.getByText('agent.conversationPicker.untitled')).toBeInTheDocument();
+      });
+    });
+
+    it('shows conv.id when selected conversation has no identifier', async () => {
+      const conv = makeConversation({ identifier: null });
+      (conversationsCrudService.getConversation as jest.Mock).mockResolvedValue(conv);
+
+      render(<ConversationPicker {...defaultProps({ selectedId: conv.id })} />);
+      await waitFor(() => {
+        // When identifier is null, falls back to id
+        expect(screen.getByText(conv.id)).toBeInTheDocument();
+      });
+    });
+
+    it('shows Utilisateur fallback when lastMessage sender has no displayName', async () => {
+      const conv = makeConversation({
+        lastMessage: {
+          content: 'Hello world',
+          sender: { displayName: null },
+        },
+      });
+      (conversationsCrudService.getConversation as jest.Mock).mockResolvedValue(conv);
+
+      render(<ConversationPicker {...defaultProps({ selectedId: conv.id })} />);
+      await waitFor(() => {
+        expect(screen.getByText('Hello world')).toBeInTheDocument();
+        expect(screen.getByText(/Utilisateur/)).toBeInTheDocument();
+      });
+    });
+
+    it('shows Utilisateur fallback when lastMessage has no sender at all', async () => {
+      const conv = makeConversation({
+        lastMessage: {
+          content: 'No sender here',
+          sender: null,
+        },
+      });
+      (conversationsCrudService.getConversation as jest.Mock).mockResolvedValue(conv);
+
+      render(<ConversationPicker {...defaultProps({ selectedId: conv.id })} />);
+      await waitFor(() => {
+        expect(screen.getByText('No sender here')).toBeInTheDocument();
+        expect(screen.getByText(/Utilisateur/)).toBeInTheDocument();
+      });
+    });
+
+    it('shows untitled fallback in search results when conv has no title', async () => {
+      const conv = makeConversation({ title: null });
+      (conversationsCrudService.searchConversations as jest.Mock).mockResolvedValue([conv]);
+
+      render(<ConversationPicker {...defaultProps()} />);
+      fireEvent.click(screen.getByText('Search a conversation...'));
+      await waitFor(() => expect(screen.getByTestId('picker-input')).toBeInTheDocument());
+      fireEvent.change(screen.getByTestId('picker-input'), { target: { value: 'te' } });
+
+      await waitFor(() => {
+        expect(screen.getByText('agent.conversationPicker.untitled')).toBeInTheDocument();
+      });
+    });
+
+    it('shows conv.id in search results when conv has no identifier', async () => {
+      const conv = makeConversation({ identifier: null });
+      (conversationsCrudService.searchConversations as jest.Mock).mockResolvedValue([conv]);
+
+      render(<ConversationPicker {...defaultProps()} />);
+      fireEvent.click(screen.getByText('Search a conversation...'));
+      await waitFor(() => expect(screen.getByTestId('picker-input')).toBeInTheDocument());
+      fireEvent.change(screen.getByTestId('picker-input'), { target: { value: 'te' } });
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Conversation')).toBeInTheDocument();
+      });
+      // The identifier fallback shows the id
+      expect(screen.getByText(conv.id)).toBeInTheDocument();
+    });
+
+    it('setResults falls back to empty array when searchConversations returns null/undefined', async () => {
+      // searchConversations returns null → setResults(null || []) → []
+      (conversationsCrudService.searchConversations as jest.Mock).mockResolvedValue(null);
+
+      render(<ConversationPicker {...defaultProps()} />);
+      fireEvent.click(screen.getByText('Search a conversation...'));
+      await waitFor(() => expect(screen.getByTestId('picker-input')).toBeInTheDocument());
+      fireEvent.change(screen.getByTestId('picker-input'), { target: { value: 'te' } });
+
+      await waitFor(() => {
+        expect(conversationsCrudService.searchConversations).toHaveBeenCalledWith('te');
+      });
+      // No crash, no results shown
+      expect(screen.queryByText('Test Conversation')).not.toBeInTheDocument();
     });
   });
 });

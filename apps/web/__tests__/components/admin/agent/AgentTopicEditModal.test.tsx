@@ -202,6 +202,69 @@ describe('AgentTopicEditModal — create mode (topic=null)', () => {
   });
 });
 
+describe('AgentTopicEditModal — create mode success calls onSaved', () => {
+  it('calls onSaved when createTopic succeeds', async () => {
+    mockCreateTopic.mockResolvedValue({ success: true });
+    const onSaved = jest.fn();
+    render(
+      <AgentTopicEditModal topic={null} onClose={jest.fn()} onSaved={onSaved} />,
+    );
+    fireEvent.change(screen.getByPlaceholderText('agent.topicEditModal.placeholderSlug'), {
+      target: { value: 'valid-slug' },
+    });
+    const textareas = screen.getAllByRole('textbox');
+    const patternsTextarea = textareas[3];
+    fireEvent.change(patternsTextarea, { target: { value: '\\btest\\b' } });
+    fireEvent.change(screen.getByPlaceholderText('agent.topicEditModal.placeholderInstruction'), {
+      target: { value: 'This is a valid instruction template with enough characters.' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('agent.topicEditModal.save'));
+    });
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AgentTopicEditModal — null description fallback', () => {
+  it('uses empty string when topic.description is null (line 35 ?? branch)', () => {
+    render(
+      <AgentTopicEditModal topic={makeTopic({ description: null })} onClose={jest.fn()} onSaved={jest.fn()} />,
+    );
+    // description textarea should have value '' (not "null")
+    const textareas = screen.getAllByRole('textbox');
+    const descTextarea = textareas.find(t => (t as HTMLTextAreaElement).name === 'description' || (t as HTMLTextAreaElement).placeholder?.includes('Description'));
+    // The description textarea renders with value='' when null — no "null" text visible
+    // Checking that the textarea exists with empty value via form.description ?? '' (line 160)
+    const allTextareas = document.querySelectorAll('textarea');
+    const descTA = Array.from(allTextareas).find(ta => ta.value === '');
+    expect(descTA).toBeTruthy();
+  });
+
+  it('shows errorSave fallback when res.error is undefined and success is false', async () => {
+    mockUpdateTopic.mockResolvedValue({ success: false }); // no error field → hits res.error ?? t('agent.topicEditModal.errorSave')
+    render(
+      <AgentTopicEditModal topic={makeTopic()} onClose={jest.fn()} onSaved={jest.fn()} />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByText('agent.topicEditModal.save'));
+    });
+    // The error message should be the fallback translation key
+    expect(screen.getByText('agent.topicEditModal.errorSave')).toBeInTheDocument();
+  });
+
+  it('shows errorUnknown when a non-Error value is thrown during save', async () => {
+    // Throw a non-Error to hit the `err instanceof Error ? ... : t('agent.topicEditModal.errorUnknown')` branch
+    mockUpdateTopic.mockImplementation(() => { throw 'string error'; });
+    render(
+      <AgentTopicEditModal topic={makeTopic()} onClose={jest.fn()} onSaved={jest.fn()} />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByText('agent.topicEditModal.save'));
+    });
+    expect(screen.getByText('agent.topicEditModal.errorUnknown')).toBeInTheDocument();
+  });
+});
+
 describe('AgentTopicEditModal — edit mode (topic provided)', () => {
   it('renders edit title with topic label', () => {
     render(
@@ -259,5 +322,83 @@ describe('AgentTopicEditModal — edit mode (topic provided)', () => {
       fireEvent.keyDown(document, { key: 'Escape' });
     });
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('allows editing label field in edit mode', async () => {
+    mockUpdateTopic.mockResolvedValue({ success: true });
+    const onSaved = jest.fn();
+    render(
+      <AgentTopicEditModal topic={makeTopic()} onClose={jest.fn()} onSaved={onSaved} />,
+    );
+    const labelInput = screen.getByDisplayValue('Astronomy');
+    fireEvent.change(labelInput, { target: { value: 'Updated Astronomy' } });
+    expect(screen.getByDisplayValue('Updated Astronomy')).toBeInTheDocument();
+  });
+
+  it('allows editing description textarea in edit mode', async () => {
+    mockUpdateTopic.mockResolvedValue({ success: true });
+    render(
+      <AgentTopicEditModal topic={makeTopic()} onClose={jest.fn()} onSaved={jest.fn()} />,
+    );
+    const textareas = screen.getAllByRole('textbox');
+    const descriptionTextarea = textareas.find(t => (t as HTMLTextAreaElement).value === 'Space topics');
+    expect(descriptionTextarea).toBeTruthy();
+    fireEvent.change(descriptionTextarea!, { target: { value: 'Updated space description' } });
+    expect(screen.getByDisplayValue('Updated space description')).toBeInTheDocument();
+  });
+
+  it('allows changing cooldownMinutes in edit mode', async () => {
+    mockUpdateTopic.mockResolvedValue({ success: true });
+    render(
+      <AgentTopicEditModal topic={makeTopic({ cooldownMinutes: 60 })} onClose={jest.fn()} onSaved={jest.fn()} />,
+    );
+    const cooldownInput = screen.getByDisplayValue('60');
+    fireEvent.change(cooldownInput, { target: { value: '120' } });
+    expect(screen.getByDisplayValue('120')).toBeInTheDocument();
+  });
+
+  it('allows toggling isActive checkbox in edit mode', async () => {
+    mockUpdateTopic.mockResolvedValue({ success: true });
+    render(
+      <AgentTopicEditModal topic={makeTopic({ isActive: true })} onClose={jest.fn()} onSaved={jest.fn()} />,
+    );
+    const checkbox = screen.getByRole('checkbox');
+    expect(checkbox).toBeChecked();
+    fireEvent.click(checkbox);
+    expect(checkbox).not.toBeChecked();
+  });
+
+  it('allows editing searchHintTemplate field in edit mode', async () => {
+    mockUpdateTopic.mockResolvedValue({ success: true });
+    render(
+      <AgentTopicEditModal topic={makeTopic({ searchHintTemplate: 'astronomy news' })} onClose={jest.fn()} onSaved={jest.fn()} />,
+    );
+    const searchHintInput = screen.getByPlaceholderText('agent.topicEditModal.placeholderSearchHint');
+    expect(searchHintInput).toHaveValue('astronomy news');
+    fireEvent.change(searchHintInput, { target: { value: 'updated search hint' } });
+    expect(searchHintInput).toHaveValue('updated search hint');
+  });
+
+  it('calls onSaved on valid save in edit mode', async () => {
+    mockUpdateTopic.mockResolvedValue({ success: true });
+    const onSaved = jest.fn();
+    render(
+      <AgentTopicEditModal topic={makeTopic()} onClose={jest.fn()} onSaved={onSaved} />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByText('agent.topicEditModal.save'));
+    });
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows error when updateTopic returns success=false', async () => {
+    mockUpdateTopic.mockResolvedValue({ success: false, error: 'Update failed' });
+    render(
+      <AgentTopicEditModal topic={makeTopic()} onClose={jest.fn()} onSaved={jest.fn()} />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByText('agent.topicEditModal.save'));
+    });
+    expect(screen.getByText('Update failed')).toBeInTheDocument();
   });
 });

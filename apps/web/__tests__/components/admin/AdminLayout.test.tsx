@@ -302,5 +302,126 @@ describe('AdminLayout', () => {
       render(<AdminLayout currentPage="/admin/monitoring"><div>content</div></AdminLayout>);
       expect(screen.getByText('layout.pageMonitoring')).toBeInTheDocument();
     });
+
+    it('renders moderation page title when currentPage is /admin/moderation', () => {
+      render(<AdminLayout currentPage="/admin/moderation"><div>content</div></AdminLayout>);
+      expect(screen.getByText('layout.pageModeration')).toBeInTheDocument();
+    });
+
+    it('renders audit page title when currentPage is /admin/audit', () => {
+      render(<AdminLayout currentPage="/admin/audit"><div>content</div></AdminLayout>);
+      expect(screen.getByText('layout.pageAuditLogs')).toBeInTheDocument();
+    });
+
+    it('renders analytics page title when currentPage is /admin/analytics', () => {
+      render(<AdminLayout currentPage="/admin/analytics"><div>content</div></AdminLayout>);
+      expect(screen.getByText('layout.pageAnalytics')).toBeInTheDocument();
+    });
+
+    it('renders ranking page title when currentPage is /admin/ranking', () => {
+      render(<AdminLayout currentPage="/admin/ranking"><div>content</div></AdminLayout>);
+      expect(screen.getByText('layout.pageRanking')).toBeInTheDocument();
+    });
+
+    it('renders settings page title when currentPage is /admin/settings', () => {
+      render(<AdminLayout currentPage="/admin/settings"><div>content</div></AdminLayout>);
+      expect(screen.getByText('layout.pageSettings')).toBeInTheDocument();
+    });
+
+    it('renders broadcasts page title when currentPage is /admin/broadcasts', () => {
+      render(<AdminLayout currentPage="/admin/broadcasts"><div>content</div></AdminLayout>);
+      expect(screen.getByText('layout.pageBroadcasts')).toBeInTheDocument();
+    });
+
+    it('renders tracking-links page title when currentPage is /admin/tracking-links', () => {
+      render(<AdminLayout currentPage="/admin/tracking-links"><div>content</div></AdminLayout>);
+      expect(screen.getByText('layout.pageTrackingLinks')).toBeInTheDocument();
+    });
+
+    it('renders audit-logs page title when currentPage is /admin/audit-logs', () => {
+      render(<AdminLayout currentPage="/admin/audit-logs"><div>content</div></AdminLayout>);
+      expect(screen.getByText('layout.pageAuditLogs')).toBeInTheDocument();
+    });
+  });
+
+  describe('getRoleIcon and getRoleColor', () => {
+    const roleCases = [
+      { role: 'BIGBOSS', icon: '👑', colorClass: 'bg-purple-600' },
+      { role: 'MODO', icon: '🛡️', colorClass: 'bg-orange-600' },
+      { role: 'AUDIT', icon: '📊', colorClass: 'bg-blue-600' },
+      { role: 'ANALYST', icon: '📈', colorClass: 'bg-green-600' },
+    ];
+
+    roleCases.forEach(({ role, icon, colorClass }) => {
+      it(`shows ${icon} icon and ${colorClass} badge for role ${role}`, () => {
+        mockUserValue = makeUser({ role });
+        render(<AdminLayout><div>content</div></AdminLayout>);
+        const badges = screen.getAllByTestId('badge');
+        const roleBadge = badges.find(b => b.textContent?.includes(role));
+        expect(roleBadge).toBeTruthy();
+        expect(roleBadge!.textContent).toContain(icon);
+        expect(roleBadge!.className).toContain(colorClass);
+      });
+    });
+
+    it('shows 👤 icon and bg-gray-600 badge for unknown role', () => {
+      mockUserValue = makeUser({ role: 'USER' });
+      render(<AdminLayout><div>content</div></AdminLayout>);
+      const badges = screen.getAllByTestId('badge');
+      const roleBadge = badges.find(b => b.textContent?.includes('USER'));
+      expect(roleBadge).toBeTruthy();
+      expect(roleBadge!.textContent).toContain('👤');
+      expect(roleBadge!.className).toContain('bg-gray-600');
+    });
+  });
+
+  describe('mobile menu', () => {
+    it('opens mobile menu when mobile menu button is clicked', () => {
+      render(<AdminLayout><div>content</div></AdminLayout>);
+      const buttons = screen.getAllByTestId('button');
+      const mobileMenuBtn = buttons.find(b => b.getAttribute('aria-label') === 'layout.openMenu');
+      expect(mobileMenuBtn).toBeTruthy();
+      fireEvent.click(mobileMenuBtn!);
+      // Mobile overlay should appear (fixed inset-0 with bg-black/50)
+      const overlay = document.querySelector('.bg-black\\/50');
+      expect(overlay).toBeInTheDocument();
+    });
+
+    it('closes mobile menu when overlay is clicked', () => {
+      render(<AdminLayout><div>content</div></AdminLayout>);
+      const buttons = screen.getAllByTestId('button');
+      const mobileMenuBtn = buttons.find(b => b.getAttribute('aria-label') === 'layout.openMenu');
+      fireEvent.click(mobileMenuBtn!);
+      const overlay = document.querySelector('.bg-black\\/50') as HTMLElement;
+      expect(overlay).toBeInTheDocument();
+      fireEvent.click(overlay);
+      expect(document.querySelector('.bg-black\\/50')).not.toBeInTheDocument();
+    });
+
+    it('closes mobile menu when close button is clicked', () => {
+      render(<AdminLayout><div>content</div></AdminLayout>);
+      const buttons = screen.getAllByTestId('button');
+      const mobileMenuBtn = buttons.find(b => b.getAttribute('aria-label') === 'layout.openMenu');
+      fireEvent.click(mobileMenuBtn!);
+      // Find the close button (aria-label is layout.closeMenu)
+      const updatedButtons = screen.getAllByTestId('button');
+      const closeBtn = updatedButtons.find(b => b.getAttribute('aria-label') === 'layout.closeMenu');
+      expect(closeBtn).toBeTruthy();
+      fireEvent.click(closeBtn!);
+      expect(document.querySelector('.bg-black\\/50')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('nav item click', () => {
+    it('calls router.push with item href when a nav item is clicked', () => {
+      mockHasPermission.mockReturnValue(true);
+      render(<AdminLayout><div>content</div></AdminLayout>);
+      const buttons = screen.getAllByTestId('button');
+      // Find a nav button (not logout, not sidebar toggle, not mobile)
+      const navBtn = buttons.find(b => b.textContent?.includes('layout.navDashboard'));
+      expect(navBtn).toBeTruthy();
+      fireEvent.click(navBtn!);
+      expect(mockPush).toHaveBeenCalled();
+    });
   });
 });
