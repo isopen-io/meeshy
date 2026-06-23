@@ -263,7 +263,7 @@ export function errorHandler(error: Error, request: any, reply: any) {
   if (error.name === 'ZodError') {
     const zodError = error as any;
     const errors: Record<string, string> = {};
-    zodError.errors?.forEach((err: any) => {
+    zodError.issues?.forEach((err: any) => {
       const path = err.path.join('.');
       errors[path] = err.message;
     });

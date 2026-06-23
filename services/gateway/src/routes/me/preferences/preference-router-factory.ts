@@ -203,7 +203,7 @@ export function createPreferenceRouter<T>(
               success: false,
               error: 'VALIDATION_ERROR',
               message: 'Invalid preference data',
-              details: error.errors
+              details: error.issues
             });
           }
 
@@ -322,7 +322,7 @@ export function createPreferenceRouter<T>(
               success: false,
               error: 'VALIDATION_ERROR',
               message: 'Invalid preference data',
-              details: error.errors
+              details: error.issues
             });
           }
 
