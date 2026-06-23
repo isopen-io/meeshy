@@ -105,6 +105,8 @@ export function registerInteractionRoutes(
           emoji,
           postType: post.type,
           postPreview: (post as { content?: string | null }).content?.slice(0, 80) ?? undefined,
+          postCreatedAt: (post as { createdAt?: Date | string | null }).createdAt ?? undefined,
+          postExpiresAt: (post as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
         }).catch(() => {});
       }
 
@@ -702,6 +704,8 @@ export function registerInteractionRoutes(
             repostId: repost.id,
             postType: (original as { type?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' }).type,
             postPreview: (original as { content?: string | null }).content?.slice(0, 80) ?? undefined,
+            postCreatedAt: (original as { createdAt?: Date | string | null }).createdAt ?? undefined,
+            postExpiresAt: (original as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
           }).catch(() => {});
         }
       }

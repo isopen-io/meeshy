@@ -2165,6 +2165,10 @@ export class NotificationService {
     postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
     /** Aperçu du contenu réagi (≤ ~80 chars) — identifie QUELLE entité. */
     postPreview?: string;
+    /** Date de publication ISO du contenu réagi (contexte expiry côté client). */
+    postCreatedAt?: string | Date;
+    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
+    postExpiresAt?: string | Date;
   }): Promise<Notification | null> {
     // Don't notify yourself
     if (params.actorId === params.postAuthorId) return null;
@@ -2205,6 +2209,8 @@ export class NotificationService {
 
       context: {
         postId: params.postId,
+        ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
+        ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
       },
 
       metadata: {
@@ -2302,6 +2308,10 @@ export class NotificationService {
     postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
     /** Extrait du post partagé pour identifier LE contenu repris. */
     postPreview?: string;
+    /** Date de publication ISO du contenu partagé (contexte expiry côté client). */
+    postCreatedAt?: string | Date;
+    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
+    postExpiresAt?: string | Date;
   }): Promise<Notification | null> {
     if (params.actorId === params.postAuthorId) return null;
 
@@ -2335,6 +2345,8 @@ export class NotificationService {
 
       context: {
         postId: params.originalPostId,
+        ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
+        ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
       },
 
       metadata: {

@@ -659,21 +659,28 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
     /// (« Story · « aperçu » », « En réponse à « … » ») and its lifecycle
     /// (« publiée il y a 2 j · expirée ») so an expired story is self-explanatory.
     public var formattedContext: String? {
-        // Push-path subtitle wins — already localized & entity-aware.
-        if let subtitle, !subtitle.isEmpty { return subtitle }
+        // Social / story types compute their OWN entity + lifecycle line so the
+        // expiry marker (« · expirée ») and publication date always render — even
+        // when the gateway also sent a `subtitle` (push path). For every other
+        // type the gateway `subtitle` (group conversation title, etc.) is the
+        // context line.
         switch notificationType {
         case .postComment, .legacyPostComment, .storyNewComment, .friendStoryComment, .storyThreadReply,
              .postLike, .legacyPostLike, .storyReaction, .statusReaction, .postRepost:
             return socialEntityContext(preview: metadata?.postPreview)
+        case .commentLike, .commentReaction:
+            // Body already shows the comment text — context is just the kind +
+            // expiry, no duplicate preview.
+            return socialEntityContext(preview: nil)
         case .commentReply:
             if let parent = metadata?.parentCommentPreview, !parent.isEmpty {
                 return "En réponse à « \(parent) »"
             }
-            return "En réponse à votre commentaire"
+            return Self.firstNonEmpty(subtitle, "En réponse à votre commentaire")
         case .friendNewStory, .friendNewPost, .friendNewMood:
             return socialLifecycleContext()
         default:
-            return nil
+            return (subtitle?.isEmpty == false) ? subtitle : nil
         }
     }
 
@@ -751,7 +758,10 @@ extension APINotification {
     func socialLifecycleContext() -> String? {
         var parts: [String] = [socialKindLabel]
         if let created = context?.postCreatedAt, let date = Self.parseISODate(created) {
-            parts.append(Self.frenchRelativePast(date))
+            // Reuse the canonical, localized, thread-safe formatter (SDK core)
+            // rather than a bespoke ad-hoc one — keeps notification timestamps in
+            // lockstep with feed / comments / stories wording.
+            parts.append(RelativeTimeFormatter.longString(for: date))
         }
         if let expiry = expiryLabel {
             parts.append(expiry)
@@ -788,29 +798,9 @@ extension APINotification {
         f.formatOptions = [.withInternetDateTime]
         return f
     }()
-    private static let absoluteDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "fr_FR")
-        f.dateFormat = "d MMM yyyy"
-        return f
-    }()
 
     static func parseISODate(_ string: String) -> Date? {
         isoFractional.date(from: string) ?? isoPlain.date(from: string)
-    }
-
-    /// Rendu relatif court en français pour une date passée (publication).
-    static func frenchRelativePast(_ date: Date) -> String {
-        switch RelativeTime.classify(date) {
-        case .now: return "à l'instant"
-        case .seconds: return "il y a quelques secondes"
-        case .minutes(let m): return "il y a \(m) min"
-        case .hours(let h): return "il y a \(h) h"
-        case .days(let d): return "il y a \(d) j"
-        case .weeks(let w): return "il y a \(w) sem"
-        case .months(let mo): return "il y a \(mo) mois"
-        case .date(let d): return absoluteDateFormatter.string(from: d)
-        }
     }
 }
 
