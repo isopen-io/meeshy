@@ -13,6 +13,11 @@ name: iOS Release
 #     and the local toolchain meeshy.sh uses. Xcode 16 cannot resolve the
 #     swift-tools-version 6.2 package graph.
 
+# Trigger: a `v*` tag push (cut by release.yml's changesets job) OR a manual
+# workflow_dispatch. NOTE: release.yml must push that tag with a PAT
+# (secrets.RELEASE_PAT) for the push to fire this workflow — a tag pushed with
+# the default GITHUB_TOKEN is intentionally ignored by GitHub. Without the PAT,
+# trigger this release manually via "Run workflow" (workflow_dispatch) below.
 on:
   push:
     tags:
