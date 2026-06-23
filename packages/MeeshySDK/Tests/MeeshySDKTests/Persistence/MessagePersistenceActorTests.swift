@@ -133,17 +133,18 @@ final class MessagePersistenceActorTests: XCTestCase {
         )
         try await actor.upsertFromAPIMessages([canonical])
 
-        let row = try actor.messages(for: "conv_offline", limit: 10)
-            .first { $0.serverId == "srv_offline" }
-        XCTAssertNotNil(row)
+        let row = try XCTUnwrap(
+            try actor.messages(for: "conv_offline", limit: 10)
+                .first { $0.serverId == "srv_offline" }
+        )
         XCTAssertEqual(
-            row?.createdAt.timeIntervalSince1970,
+            row.createdAt.timeIntervalSince1970,
             trueSendTime.timeIntervalSince1970,
             accuracy: 1.0,
             "createdAt must be corrected to the authoritative server send time, not the push-receipt placeholder"
         )
         XCTAssertEqual(
-            row?.cachedTimeString,
+            row.cachedTimeString,
             MessageRecord.computeTimeString(for: trueSendTime),
             "the cached time-string the bubble renders must be recomputed from the corrected createdAt"
         )
