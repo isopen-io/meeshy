@@ -111,7 +111,7 @@ jobs:
       has_changes: ${{ steps.services.outputs.has_changes }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -237,7 +237,7 @@ jobs:
           swap-storage: true
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up QEMU (for ARM64 emulation if needed)
         if: contains(github.event.inputs.platforms || env.PLATFORMS, 'arm64')
