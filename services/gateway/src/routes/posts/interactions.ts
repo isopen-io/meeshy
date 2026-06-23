@@ -104,6 +104,7 @@ export function registerInteractionRoutes(
           postAuthorId: post.authorId,
           emoji,
           postType: post.type,
+          postPreview: (post as { content?: string | null }).content?.slice(0, 80) ?? undefined,
         }).catch(() => {});
       }
 
