@@ -16,6 +16,7 @@ nonisolated enum NSEDataSync {
 
     private static let appGroupId = "group.me.meeshy.apps"
     private static let pendingDirName = "nse_pending_messages"
+    private static let pendingPostsDirName = "nse_pending_posts"
     private static let snapshotsKey = "conversation_snapshots"
 
     // MARK: - Local-First conversation snapshot (App Group)
@@ -122,6 +123,54 @@ nonisolated enum NSEDataSync {
         task.resume()
     }
 
+    /// Fetch a post (with its inline comments) from the API and persist it to the
+    /// shared container, so that tapping a SOCIAL notification (post_comment,
+    /// comment_reply, story_new_comment, …) on cold start opens the post detail
+    /// with data already local — no blank screen waiting on a network round-trip.
+    /// Same trust model as `syncMessage`: token from the shared Keychain, base URL
+    /// from the allowlist (never from the push payload).
+    static func syncPost(
+        postId: String,
+        completion: @escaping @Sendable (Bool) -> Void
+    ) {
+        guard let token = readAuthToken() else {
+            completion(false)
+            return
+        }
+
+        let apiBaseURL = resolveApiBaseURL()
+        let urlString = "\(apiBaseURL)/api/v1/posts/\(postId)"
+        guard let url = URL(string: urlString) else {
+            completion(false)
+            return
+        }
+
+        var request = URLRequest(url: url, timeoutInterval: 15)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let task = URLSession.shared.dataTask(with: request) { data, response, _ in
+            guard let data,
+                  let http = response as? HTTPURLResponse,
+                  http.statusCode == 200 else {
+                completion(false)
+                return
+            }
+
+            // Envelope: { "success": true, "data": { ...post... } }
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let postData = json["data"],
+                  let postJSON = try? JSONSerialization.data(withJSONObject: postData) else {
+                completion(false)
+                return
+            }
+
+            let saved = writePendingPost(postId: postId, data: postJSON)
+            completion(saved)
+        }
+        task.resume()
+    }
+
     // MARK: - Shared container I/O
 
     private static func pendingDirectory() -> URL? {
@@ -168,6 +217,49 @@ nonisolated enum NSEDataSync {
             let parts = name.split(separator: "_", maxSplits: 1)
             guard parts.count == 2, let data = try? Data(contentsOf: file) else { continue }
             results.append((String(parts[0]), data))
+            try? fm.removeItem(at: file)
+        }
+        return results
+    }
+
+    private static func pendingPostsDirectory() -> URL? {
+        guard let container = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupId
+        ) else { return nil }
+
+        let dir = container.appendingPathComponent(pendingPostsDirName, isDirectory: true)
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        return dir
+    }
+
+    private static func writePendingPost(postId: String, data: Data) -> Bool {
+        guard let dir = pendingPostsDirectory() else { return false }
+        let fileURL = dir.appendingPathComponent("\(postId).json")
+        do {
+            try data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Called by the main app (post-detail open + foreground resume) to consume
+    /// posts prefetched by the NSE. Returns the raw `APIPost` JSON blobs; the
+    /// caller decodes with the SDK and merges into the feed cache.
+    static func consumePendingPosts() -> [Data] {
+        guard let dir = pendingPostsDirectory() else { return [] }
+
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else {
+            return []
+        }
+
+        var results: [Data] = []
+        for file in files where file.pathExtension == "json" {
+            guard let data = try? Data(contentsOf: file) else { continue }
+            results.append(data)
             try? fm.removeItem(at: file)
         }
         return results

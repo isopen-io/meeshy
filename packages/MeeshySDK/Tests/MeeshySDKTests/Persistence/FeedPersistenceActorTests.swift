@@ -36,6 +36,45 @@ final class FeedPersistenceActorTests: XCTestCase {
         XCTAssertTrue(fetched[0].isLikedByMe)
     }
 
+    func test_updatePostReactionSummary_setsAndMergesEmojiCounts() async throws {
+        try await actor.insertPost(PostRecordFactory.make(id: "post_rx"))
+
+        try await actor.updatePostReactionSummary(postId: "post_rx", emoji: "👍", count: 3)
+        try await actor.updatePostReactionSummary(postId: "post_rx", emoji: "🔥", count: 2)
+
+        let summary = try reactionSummary(forPostId: "post_rx")
+        XCTAssertEqual(summary["👍"], 3)
+        XCTAssertEqual(summary["🔥"], 2)
+    }
+
+    func test_updatePostReactionSummary_isIdempotentUnderDuplicateDelivery() async throws {
+        try await actor.insertPost(PostRecordFactory.make(id: "post_rx_dup"))
+
+        // Same absolute count delivered twice (feed room + post room) must not double.
+        try await actor.updatePostReactionSummary(postId: "post_rx_dup", emoji: "👍", count: 4)
+        try await actor.updatePostReactionSummary(postId: "post_rx_dup", emoji: "👍", count: 4)
+
+        let summary = try reactionSummary(forPostId: "post_rx_dup")
+        XCTAssertEqual(summary["👍"], 4)
+    }
+
+    func test_updatePostReactionSummary_zeroCountRemovesEmoji() async throws {
+        try await actor.insertPost(PostRecordFactory.make(id: "post_rx_zero"))
+        try await actor.updatePostReactionSummary(postId: "post_rx_zero", emoji: "👍", count: 1)
+
+        // Last reactor removes their reaction → count drops to 0 → key removed.
+        try await actor.updatePostReactionSummary(postId: "post_rx_zero", emoji: "👍", count: 0)
+
+        let summary = try reactionSummary(forPostId: "post_rx_zero")
+        XCTAssertNil(summary["👍"])
+    }
+
+    private func reactionSummary(forPostId postId: String) throws -> [String: Int] {
+        let post = try actor.posts(limit: 50).first { $0.id == postId }
+        guard let data = post?.reactionSummaryJson else { return [:] }
+        return (try? JSONDecoder().decode([String: Int].self, from: data)) ?? [:]
+    }
+
     func test_deletePost() async throws {
         try await actor.insertPost(PostRecordFactory.make(id: "post_del"))
         try await actor.deletePost(id: "post_del")

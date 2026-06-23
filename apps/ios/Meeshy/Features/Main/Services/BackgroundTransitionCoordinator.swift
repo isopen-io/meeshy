@@ -102,6 +102,9 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         await withBudget("nse.consumePending") {
             await NSEPendingMessageConsumer.shared.consumeAll()
         }
+        await withBudget("nse.consumePendingPosts") {
+            await NSEPendingPostConsumer.shared.consumeAll()
+        }
         await withBudget("sockets.resume") {
             // CALL-FIX 2026-06-05 — if a call kept the sockets alive (see the
             // enterBackground guard), do NOT force-reconnect on resume: that would
