@@ -100,4 +100,36 @@ final class StoryMediaLayer_ForegroundResolverTests: XCTestCase {
         XCTAssertNil(layer.avPlayer,
                      "An unresolvable video URL must not build a player")
     }
+
+    /// Reader (`.play`) — a foreground video is a timeline component: it plays
+    /// exactly ONCE then stops (it must NOT loop like the background video).
+    /// `actionAtItemEnd == .pause` is the deterministic marker that the loop
+    /// path was not armed; the end-of-item observer then hides the layer.
+    func test_configure_foregroundVideoPlayMode_doesNotLoop() {
+        let media = StoryMediaObject(id: "v3", postMediaId: "post-vid",
+                                     kind: .video, aspectRatio: 1.0)
+        let layer = StoryMediaLayer()
+        let resolver: @Sendable (String) -> URL? = { id in
+            id == "post-vid" ? URL(string: "https://cdn.example.test/clip.mp4") : nil
+        }
+        layer.configure(with: media, geometry: makeGeometry(),
+                        mode: .play, resolver: resolver)
+        XCTAssertEqual(layer.avPlayer?.actionAtItemEnd, .pause,
+                       "A foreground video in .play must play once (no loop)")
+    }
+
+    /// Composer (`.edit`) — the foreground video loops for the live preview,
+    /// like the background. `actionAtItemEnd == .none` marks the loop path.
+    func test_configure_foregroundVideoEditMode_loops() {
+        let media = StoryMediaObject(id: "v4", postMediaId: "post-vid",
+                                     kind: .video, aspectRatio: 1.0)
+        let layer = StoryMediaLayer()
+        let resolver: @Sendable (String) -> URL? = { id in
+            id == "post-vid" ? URL(string: "https://cdn.example.test/clip.mp4") : nil
+        }
+        layer.configure(with: media, geometry: makeGeometry(),
+                        mode: .edit, resolver: resolver)
+        XCTAssertEqual(layer.avPlayer?.actionAtItemEnd, .none,
+                       "A foreground video in .edit must loop for live preview")
+    }
 }
