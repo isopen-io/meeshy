@@ -94,6 +94,22 @@ public struct NotificationRowView: View {
                     .lineLimit(2)
             }
 
+            // Social entity context + lifecycle (« Story · « aperçu » · expirée »,
+            // « En réponse à « … » »). Surfaces WHICH content the notification
+            // concerns and why it may no longer be accessible (expired story).
+            if let context = notification.formattedContext, !context.isEmpty {
+                Label {
+                    Text(context).lineLimit(1)
+                } icon: {
+                    if notification.isLinkedContentExpired {
+                        Image(systemName: "clock.badge.xmark")
+                    }
+                }
+                .font(.system(size: 11))
+                .foregroundColor(notification.isLinkedContentExpired ? Color(hex: "F87171") : theme.textMuted)
+                .padding(.top, 1)
+            }
+
             if let conversationTitle = notification.context?.conversationTitle,
                notification.context?.conversationType != "direct" {
                 Label(conversationTitle, systemImage: "bubble.left.and.bubble.right")
@@ -114,122 +130,6 @@ public struct NotificationRowView: View {
     }
 
     // MARK: - Computed
-
-    private var messageText: String {
-        if let message = notification.message, !message.isEmpty {
-            return message
-        }
-        return contextualMessage
-    }
-
-    private var contextualMessage: String {
-        switch notifType {
-        case .newMessage, .legacyNewMessage, .messageReply:
-            return notification.data?.preview ?? "Nouveau message"
-        case .messageReaction, .reaction, .legacyMessageReaction:
-            return "A reagi a votre message"
-        case .userMentioned, .mention, .legacyMention:
-            return "Vous a mentionne"
-        case .friendRequest, .contactRequest, .legacyFriendRequest:
-            return "Demande d'ami"
-        case .friendAccepted, .contactAccepted, .legacyFriendAccepted:
-            return "A accepte votre demande"
-        case .communityInvite, .legacyGroupInvite:
-            return "Invitation de groupe"
-        case .communityJoined, .memberJoined, .legacyGroupJoined:
-            return "\(notification.senderName ?? "Quelqu'un") a rejoint le groupe"
-        case .communityLeft, .memberLeft, .legacyGroupLeft:
-            return "A quitte le groupe"
-        case .missedCall, .callDeclined, .legacyCallMissed:
-            return "Appel manque"
-        case .incomingCall, .callEnded, .legacyCallIncoming:
-            return "Appel entrant"
-        case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike:
-            if let content = notification.content, !content.isEmpty {
-                return content
-            }
-            return "A aime votre publication"
-        case .postComment, .commentReply, .legacyPostComment:
-            return "A commente votre publication"
-        case .legacyStoryReply:
-            return "A repondu a votre story"
-        case .legacyAffiliateSignup:
-            return "Inscription via votre lien"
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
-            return "Nouveau badge debloque !"
-        case .securityAlert, .legacySystemAlert:
-            return "Alerte systeme"
-        case .loginNewDevice:
-            let device = notification.metadata?.deviceName ?? notification.metadata?.deviceOS ?? "appareil inconnu"
-            let location = notification.metadata?.location
-                ?? [notification.metadata?.city, notification.metadata?.countryName].compactMap { $0 }.joined(separator: ", ")
-            if !location.isEmpty {
-                return "Connexion depuis \(device) — \(location)"
-            }
-            return "Connexion depuis \(device)"
-        case .passwordChanged:
-            return "Mot de passe modifie"
-        case .twoFactorEnabled:
-            return "Verification en 2 etapes activee"
-        case .twoFactorDisabled:
-            return "Verification en 2 etapes desactivee"
-        case .legacyStatusUpdate:
-            return "Mise a jour de statut"
-        case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted:
-            return "Traduction disponible"
-        case .system, .maintenance, .updateAvailable:
-            return "Notification systeme"
-        case .voiceCloneReady:
-            return "Clone vocal pret"
-        case .postRepost:
-            return "A repartage votre publication"
-        case .newConversationDirect:
-            // Direct DM — surface the sender name so the row reads like
-            // "Jean / Nouvelle conversation" instead of an opaque
-            // "Ajouté à une conversation".
-            return "Nouvelle conversation avec \(notification.senderName ?? "un contact")"
-        case .newConversationGroup:
-            // Group invite — title is the meaningful label.
-            if let title = notification.context?.conversationTitle, !title.isEmpty {
-                return "Invitation au groupe \(title)"
-            }
-            return "Invitation a un nouveau groupe"
-        case .addedToConversation, .newConversation:
-            return "Ajoute a une conversation"
-        case .removedFromConversation, .memberRemoved:
-            return "Retire de la conversation"
-        case .memberPromoted:
-            return "Promu dans le groupe"
-        case .memberDemoted:
-            return "Retrogade dans le groupe"
-        case .memberRoleChanged:
-            return "Role modifie"
-        case .messageEdited:
-            return "Message modifie"
-        case .messageDeleted:
-            return "Message supprime"
-        case .messagePinned:
-            return "Message epingle"
-        case .messageForwarded:
-            return "Message transfere"
-        case .reply:
-            return notification.data?.preview ?? "A repondu a votre message"
-        case .commentReaction:
-            return "A reagi a votre commentaire"
-        case .storyNewComment:
-            return "A commente votre story"
-        case .friendStoryComment:
-            return "A commente une story"
-        case .storyThreadReply:
-            return "A repondu a un commentaire"
-        case .friendNewStory:
-            return "A publie une nouvelle story"
-        case .friendNewPost:
-            return "A publie une nouvelle publication"
-        case .friendNewMood:
-            return "A partage une humeur"
-        }
-    }
 
     // ISO8601DateFormatters memoises : `relativeTime` est lu a chaque rendu de
     // ligne dans une liste de notifications qui scrolle. Allouer (puis muter

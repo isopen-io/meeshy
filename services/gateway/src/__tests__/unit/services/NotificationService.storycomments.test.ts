@@ -419,6 +419,55 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       expect(selfCall).toBeUndefined();
     });
 
+    it('test_storyComment_persistsPostExpiryInContext_forExpiredStoryAwareness', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.notification.create.mockResolvedValue(makeNotif('story_new_comment'));
+      const createdAt = new Date('2026-06-20T08:00:00.000Z');
+      const expiresAt = new Date('2026-06-21T08:00:00.000Z');
+
+      await service.createStoryCommentNotificationsBatch({
+        ...baseParams,
+        postCreatedAt: createdAt,
+        postExpiresAt: expiresAt,
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<
+        [{ data: { userId: string; context: { postCreatedAt?: string; postExpiresAt?: string } } }]
+      >;
+      const authorCall = calls.find((c) => c[0].data.userId === AUTHOR_ID);
+      expect(authorCall![0].data.context.postCreatedAt).toBe(createdAt.toISOString());
+      expect(authorCall![0].data.context.postExpiresAt).toBe(expiresAt.toISOString());
+    });
+
+    it('test_storyComment_persistsPostTypeInMetadata', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.notification.create.mockResolvedValue(makeNotif('story_new_comment'));
+
+      await service.createStoryCommentNotificationsBatch(baseParams);
+
+      const calls = prisma.notification.create.mock.calls as Array<
+        [{ data: { userId: string; metadata: { postType?: string } } }]
+      >;
+      const authorCall = calls.find((c) => c[0].data.userId === AUTHOR_ID);
+      expect(authorCall![0].data.metadata.postType).toBe('STORY');
+    });
+
+    it('test_storyComment_REEL_authorBucketSkipped_handledByPostCommentRoute', async () => {
+      // REEL author is notified via post_comment (route), so the author bucket
+      // (story_new_comment) must be skipped to avoid a double notification.
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.notification.create.mockResolvedValue(makeNotif('story_thread_reply'));
+
+      await service.createStoryCommentNotificationsBatch({ ...baseParams, postType: 'REEL' });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
+      const authorCall = calls.find((c) => c[0].data.userId === AUTHOR_ID);
+      expect(authorCall).toBeUndefined();
+    });
+
     it('user who is BOTH friend AND prior commenter gets ONLY STORY_THREAD_REPLY, not both', async () => {
       prisma.postComment.findMany.mockResolvedValue([{ authorId: FRIEND_1 }]);
       prisma.friendRequest.findMany.mockResolvedValue([

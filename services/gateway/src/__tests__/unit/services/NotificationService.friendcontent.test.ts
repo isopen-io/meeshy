@@ -678,4 +678,113 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       expect(call![0].data.priority).toBe('normal');
     });
   });
+
+  // =====================================================
+  // REEL distinction (réel vs post/story/mood)
+  // =====================================================
+
+  describe('REEL content type', () => {
+    it('test_createFriendContentNotificationsBatch_REEL_mapsToFriendNewPostType', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'REEL',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { type: string; userId: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call![0].data.type).toBe('friend_new_post');
+    });
+
+    it('test_createFriendContentNotificationsBatch_REEL_preservesContentTypeInMetadata', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'REEL',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { metadata: { contentType?: string }; userId: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call![0].data.metadata.contentType).toBe('REEL');
+    });
+  });
+
+  // =====================================================
+  // Post publication / expiry context (story expirée)
+  // =====================================================
+
+  describe('post timestamps in context', () => {
+    it('test_createFriendContentNotificationsBatch_storyExpiry_persistedInContext', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+      const createdAt = new Date('2026-06-20T10:00:00.000Z');
+      const expiresAt = new Date('2026-06-21T10:00:00.000Z');
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'STORY',
+        postCreatedAt: createdAt,
+        postExpiresAt: expiresAt,
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { context: { postCreatedAt?: string; postExpiresAt?: string }; userId: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call![0].data.context.postCreatedAt).toBe(createdAt.toISOString());
+      expect(call![0].data.context.postExpiresAt).toBe(expiresAt.toISOString());
+    });
+
+    it('test_createFriendContentNotificationsBatch_noTimestamps_contextOmitsThem', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'POST',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { context: Record<string, unknown>; userId: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call![0].data.context).not.toHaveProperty('postExpiresAt');
+      expect(call![0].data.context).not.toHaveProperty('postCreatedAt');
+    });
+
+    it('test_createFriendContentNotificationsBatch_mediaType_persistedInMetadata', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'STORY',
+        mediaType: 'image',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { metadata: { mediaType?: string }; userId: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call![0].data.metadata.mediaType).toBe('image');
+    });
+  });
 });
