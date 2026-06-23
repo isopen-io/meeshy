@@ -302,12 +302,17 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `apps/web/components/admin/settings/SettingsStats.tsx`
 - [x] `apps/web/components/admin/settings/UploadsSettingsSection.tsx`
 - [x] `apps/web/components/admin/settings/index.ts`
-- [ ] `apps/web/components/admin/user-detail/UserActivitySection.tsx`
-- [ ] `apps/web/components/admin/user-detail/UserContactInfoSection.tsx`
-- [ ] `apps/web/components/admin/user-detail/UserGeolocationSection.tsx`
-- [ ] `apps/web/components/admin/user-detail/UserLanguageSection.tsx`
-- [ ] `apps/web/components/admin/user-detail/UserPersonalInfoSection.tsx`
-- [ ] `apps/web/components/admin/user-detail/UserSecuritySection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserActivitySection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserContactInfoSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserConversationsSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserGeolocationSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserLanguageSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserMediaSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserPersonalInfoSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserPostsSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserReportedMessagesSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserReportsSection.tsx`
+- [x] `apps/web/components/admin/user-detail/UserSecuritySection.tsx`
 
 ## components/affiliate  (0/2 have a test)
 

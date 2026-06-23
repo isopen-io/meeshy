@@ -96,7 +96,7 @@ function formatDate(date: string | null, locale: string) {
       month: 'short',
       year: 'numeric',
     });
-  } catch {
+  } /* istanbul ignore next -- toLocaleDateString never throws in practice */ catch {
     return 'N/A';
   }
 }

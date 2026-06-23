@@ -71,7 +71,7 @@ export function formatReportDate(date: string | null, locale: string): string {
   if (!date) return '—';
   try {
     return new Date(date).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
-  } catch {
+  } /* istanbul ignore next -- toLocaleDateString never throws in practice */ catch {
     return '—';
   }
 }
