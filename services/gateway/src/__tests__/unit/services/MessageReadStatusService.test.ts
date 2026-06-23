@@ -731,6 +731,49 @@ describe('MessageReadStatusService', () => {
       expect(result.readBy[0].readAt).toEqual(frozenRead);
     });
 
+    // Edge case: `cleanupObsoleteCursors` deletes a participant's cursor when its
+    // `lastReadMessageId` points at a now-deleted message. The write-once frozen
+    // `MessageStatusEntry` for OTHER (still-live) messages survives that cleanup.
+    // The receipt must still surface from the frozen entry — enumerating only via
+    // cursors would silently drop it.
+    it('should still surface a frozen receipt when the participant cursor was deleted by cleanup', async () => {
+      const messageCreatedAt = new Date('2025-01-01T10:00:00Z');
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: messageCreatedAt,
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId,
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId, displayName: 'User1', avatar: null, user: null },
+        { id: testParticipantId2, displayName: 'User2', avatar: 'av2.jpg', user: null },
+      ]);
+      // Cursor removed by cleanupObsoleteCursors — none remain.
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      // But the frozen write-once receipt for THIS message survived.
+      const frozenDelivered = new Date('2025-01-01T10:05:00Z');
+      const frozenRead = new Date('2025-01-01T10:10:00Z');
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        {
+          participantId: testParticipantId2,
+          deliveredAt: frozenDelivered,
+          receivedAt: frozenDelivered,
+          readAt: frozenRead,
+        },
+      ]);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      expect(result.receivedBy).toHaveLength(1);
+      expect(result.receivedBy[0].participantId).toBe(testParticipantId2);
+      expect(result.receivedBy[0].receivedAt).toEqual(frozenDelivered);
+      expect(result.readBy).toHaveLength(1);
+      expect(result.readBy[0].readAt).toEqual(frozenRead);
+      // The participant is accounted as seen, not "not seen".
+      expect(result.notSeenCount).toBe(0);
+    });
+
     it('should expose per-participant media consumption positions for the message attachments', async () => {
       const messageCreatedAt = new Date('2025-01-01T10:00:00Z');
       mockPrisma.message.findUnique.mockResolvedValue({
@@ -2512,6 +2555,37 @@ describe('MessageReadStatusService', () => {
       expect(result.statuses[0].readAt).toEqual(frozenReadAt);
       expect(result.statuses[0].deliveredAt).toEqual(frozenDeliveredAt);
       expect(result.statuses[0].readDevice).toBe('ios');
+    });
+
+    // Mirror of getMessageReadStatus: a cursor deleted by cleanupObsoleteCursors
+    // must not erase a surviving frozen receipt. The participant row is resolved
+    // from the frozen entry's id (not only from cursor ids).
+    it('still surfaces a frozen receipt when the participant cursor was deleted by cleanup', async () => {
+      const msgCreatedAt = new Date('2024-06-01T10:00:00Z');
+      const frozenDeliveredAt = new Date('2024-06-01T10:01:00Z');
+      const frozenReadAt = new Date('2024-06-01T10:02:00Z');
+
+      mockPrisma.message.findUnique.mockResolvedValue({
+        createdAt: msgCreatedAt,
+        conversationId: testConversationId,
+      });
+      // No cursors remain (deleted by cleanup).
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      // Participant row still active, resolved via the frozen-entry id.
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p1', displayName: 'Alice', avatar: null },
+      ]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        { participantId: 'p1', deliveredAt: frozenDeliveredAt, receivedAt: frozenDeliveredAt, readAt: frozenReadAt, readDevice: 'ios' },
+      ]);
+
+      const result = await service.getMessageStatusDetails(testMessageId);
+
+      expect(result.statuses).toHaveLength(1);
+      expect(result.statuses[0].participantId).toBe('p1');
+      expect(result.statuses[0].deliveredAt).toEqual(frozenDeliveredAt);
+      expect(result.statuses[0].readAt).toEqual(frozenReadAt);
+      expect(result.pagination.total).toBe(1);
     });
 
     it('skips orphan cursors (participant not found)', async () => {
