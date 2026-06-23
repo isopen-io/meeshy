@@ -107,6 +107,33 @@ public actor FeedPersistenceActor {
         postFeedStoreRefresh()
     }
 
+    /// Met à jour le compteur d'UNE réaction emoji d'un post dans le cache local
+    /// (`reactionSummaryJson`, un dict `[emoji: count]`). Reçu via
+    /// `post:reaction-added` / `post:reaction-removed` : le payload porte le compte
+    /// ABSOLU de cet emoji après l'action, donc l'écriture est idempotente — une
+    /// double livraison réécrit exactement la même valeur. `count <= 0` retire
+    /// l'emoji du dict. Sans ce write, le compteur de réactions revenait à sa
+    /// valeur cache au redémarrage de l'app. Miroir de `upsertPostTranslation`.
+    public func updatePostReactionSummary(postId: String, emoji: String, count: Int) throws {
+        try dbWriter.write { db in
+            let existingData = try Data.fetchOne(db, sql: "SELECT reactionSummaryJson FROM feed_posts WHERE id = ?", arguments: [postId])
+            var summary: [String: Int] = [:]
+            if let existingData {
+                summary = (try? JSONDecoder().decode([String: Int].self, from: existingData)) ?? [:]
+            }
+            if count > 0 { summary[emoji] = count } else { summary.removeValue(forKey: emoji) }
+            let updatedData = try? JSONEncoder().encode(summary)
+            try db.execute(
+                sql: """
+                    UPDATE feed_posts SET reactionSummaryJson = ?,
+                    changeVersion = changeVersion + 1 WHERE id = ?
+                    """,
+                arguments: [updatedData, postId]
+            )
+        }
+        postFeedStoreRefresh()
+    }
+
     public func upsertPostTranslation(postId: String, language: String, translatedText: String) throws {
         try dbWriter.write { db in
             let existingData = try Data.fetchOne(db, sql: "SELECT translationsJson FROM feed_posts WHERE id = ?", arguments: [postId])

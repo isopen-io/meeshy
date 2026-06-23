@@ -97,6 +97,22 @@ final class FeedSocketHandler {
             }
             .store(in: &cancellables)
 
+        // Reaction events (emoji, non-heart) — persist to GRDB so the count
+        // survives an app restart. The live UI already updates in-session via
+        // FeedViewModel / PostDetailViewModel; without this bridge the cached
+        // count was stale on cold start.
+        socialSocket.postReactionAdded
+            .sink { [weak self] event in
+                Task { await self?.handlePostReaction(event) }
+            }
+            .store(in: &cancellables)
+
+        socialSocket.postReactionRemoved
+            .sink { [weak self] event in
+                Task { await self?.handlePostReaction(event) }
+            }
+            .store(in: &cancellables)
+
         // Translation events
         socialSocket.postTranslationUpdated
             .sink { [weak self] data in
@@ -144,6 +160,18 @@ final class FeedSocketHandler {
         try? await persistence.updateCommentLikeCount(
             commentId: data.commentId,
             count: data.likeCount
+        )
+    }
+
+    // MARK: - Reaction Handlers
+
+    /// Both `post:reaction-added` and `post:reaction-removed` carry the ABSOLUTE
+    /// per-emoji count in `aggregation`, so a single idempotent write covers both.
+    private func handlePostReaction(_ event: SocketPostReactionUpdateEvent) async {
+        try? await persistence.updatePostReactionSummary(
+            postId: event.postId,
+            emoji: event.aggregation.emoji,
+            count: event.aggregation.count
         )
     }
 
