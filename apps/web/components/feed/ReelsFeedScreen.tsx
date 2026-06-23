@@ -24,6 +24,7 @@ import {
 } from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 import { useI18n } from '@/hooks/use-i18n';
 import { useAuthStore } from '@/stores/auth-store';
 import type { Post } from '@meeshy/shared/types/post';
@@ -85,6 +86,12 @@ export function ReelsFeedScreen() {
 
   const current = reels[index];
   const currentId = current?.id ?? '';
+
+  // Record an impression for whichever reel is on screen (source: 'feed', as iOS).
+  const { record: recordImpression } = useImpressionTracking({ source: 'feed' });
+  useEffect(() => {
+    if (currentId) recordImpression(currentId);
+  }, [currentId, recordImpression]);
 
   // Comments overlay — scoped to the reel in view; reset when the reel changes.
   useEffect(() => setShowComments(false), [currentId]);

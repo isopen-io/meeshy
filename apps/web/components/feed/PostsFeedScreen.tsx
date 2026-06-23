@@ -25,6 +25,7 @@ import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useS
 import { useCreateCommentMutation } from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 
 import { useAuthStore } from '@/stores/auth-store';
 import { TusUploadService } from '@/services/tusUploadService';
@@ -163,6 +164,10 @@ export function PostsFeedScreen() {
   }, [feedQuery.data, feedQuery.dataUpdatedAt]);
 
   usePostSocketCacheSync();
+
+  // Impression reporting: each post card that scrolls into view is recorded
+  // once per session and batched to the gateway (source: 'feed').
+  const { observe: observeImpression } = useImpressionTracking({ source: 'feed' });
 
   // Post mutations
   const createPostMutation = useCreatePostMutation();
@@ -654,7 +659,11 @@ export function PostsFeedScreen() {
               const isBookmarked = !!post.bookmarkedAt;
               const userReaction = postReactions[0];
               return (
-                <article key={post.id} onMouseEnter={() => prefetchPost(post.id)}>
+                <article
+                  key={post.id}
+                  ref={(el) => observeImpression(el, post.id)}
+                  onMouseEnter={() => prefetchPost(post.id)}
+                >
                   <PostCard
                     author={{
                       name: post.author?.displayName ?? post.author?.username ?? t('unknownAuthor', 'Unknown'),
