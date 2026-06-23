@@ -63,7 +63,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `packages/shared/types/messages.ts`
 - [ ] `packages/shared/types/messaging.ts`
 - [ ] `packages/shared/types/migration-utils.ts`
-- [ ] `packages/shared/types/notification.ts`
+- [x] `packages/shared/types/notification.ts`
 - [~] `packages/shared/types/participant.ts`
 - [ ] `packages/shared/types/post.ts`
 - [ ] `packages/shared/types/push-notification.ts`
@@ -89,7 +89,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `packages/shared/types/preferences/document.ts`
 - [ ] `packages/shared/types/preferences/index.ts`
 - [ ] `packages/shared/types/preferences/message.ts`
-- [ ] `packages/shared/types/preferences/notification.ts`
+- [x] `packages/shared/types/preferences/notification.ts`
 - [ ] `packages/shared/types/preferences/privacy.ts`
 - [ ] `packages/shared/types/preferences/video.ts`
 

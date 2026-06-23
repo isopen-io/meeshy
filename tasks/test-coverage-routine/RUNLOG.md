@@ -1982,3 +1982,24 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   2. `vi.setSystemTime()` used without explicit `vi.useFakeTimers()` — Vitest activates fake timers implicitly; `vi.useRealTimers()` tears down after each test. No contamination observed.
   3. MeeshySDK (Swift) portion of P1 Voice/audio × shared/SDK is ⊘ on Linux (no Xcode/macOS). Only TypeScript packages/shared files covered.
 - Commit: (see below after push)
+
+---
+
+## Run 2026-06-23T(continuation) — P2 Notifications × shared
+
+- Slice: P2 Notifications × shared
+- Branch: `claude/coverage/p2-notifications-shared`
+- Targeted files (new to coverage include):
+  - `packages/shared/types/notification.ts` — 2 enums + 14 exported functions
+  - `packages/shared/types/preferences/notification.ts` — Zod schema + defaults constant
+  - `packages/shared/types/push-notification.ts` — ⊘ interfaces only, no runtime code
+- Coverage achieved:
+  - notification.ts: **100% lines / 100% branches** ✓
+  - types/preferences/notification.ts: **100% lines / 100% branches** ✓
+  - shared global: 99.70% lines / 96.85% branches / 93.75% funcs — all thresholds met (functions floor unchanged at 93)
+- Tests added: 91 tests across 2 new files:
+  - `__tests__/types/notification.test.ts` (77 tests) — all 8 type guards (true+false cases), isNotificationExpired (unexpired/expired/no-expiry), isNotificationUnread (read/unread states), isDNDActive (overnight DND with vi.useFakeTimers: 23:00 active, 07:00 active, 12:00 inactive, 22:00 exact start active; specific days active/inactive; disabled DND), isNotificationTypeEnabled (all 14 switch cases + unknown type returns true), shouldSendNotification (push disabled, type disabled, DND bypass for security_alert, all enabled, email channel checks), getDefaultNotificationPreferences (returns all expected fields with correct defaults)
+  - `__tests__/types/preferences-notification.test.ts` (14 tests) — valid full object, empty object defaults, invalid dndStartTime '25:00' rejected, invalid dndEndTime '24:00' rejected, valid boundary '23:59', invalid dndDays 'monday' rejected, valid all 7 days, non-boolean rejection, NOTIFICATION_PREFERENCE_DEFAULTS structure, defaults passes schema parse
+- Reviewer: PASS (rounds: 1) — vi.useFakeTimers/setSystemTime pattern correct for isDNDActive; factory functions used; no production code changes; all edge cases covered
+- Thresholds: floor unchanged (branches:96, functions:93, lines:99, statements:99) — measurements already above floor
+- Commit: (see below after push)
