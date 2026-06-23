@@ -144,4 +144,61 @@ describe('buildNotificationDisplay — titre + sous-titre', () => {
     const r = buildNotificationDisplay('fr', { type: 'post_comment', actorName: 'Z', postType: 'WEIRD' });
     expect(r.title).toBe('Z a commenté votre publication');
   });
+
+  it('couvre toutes les branches sociales (titre + sous-titre)', () => {
+    // Réactions sur contenu — avec et sans postType (branche kind undefined).
+    expect(buildNotificationDisplay('fr', { type: 'post_like', actorName: 'A', emoji: '❤️', postType: 'POST' }))
+      .toEqual({ title: 'A a réagi ❤️ à votre publication', subtitle: 'Votre publication' });
+    expect(buildNotificationDisplay('fr', { type: 'post_like', actorName: 'A', emoji: '❤️' }))
+      .toEqual({ title: 'A a réagi ❤️ à votre publication', subtitle: null });
+    expect(buildNotificationDisplay('fr', { type: 'status_reaction', actorName: 'A', emoji: '🔥', postType: 'STATUS' }).title)
+      .toBe('A a réagi 🔥 à votre statut');
+
+    // Commentaire sur votre contenu (story_new_comment défaut STORY).
+    expect(buildNotificationDisplay('fr', { type: 'story_new_comment', actorName: 'B' }))
+      .toEqual({ title: 'B a commenté votre story', subtitle: 'Votre story' });
+
+    // Fil / engagement sur le contenu d'un ami.
+    expect(buildNotificationDisplay('fr', { type: 'story_thread_reply', actorName: 'C', postType: 'POST' }))
+      .toEqual({ title: 'C a répondu dans une publication', subtitle: 'Publication' });
+
+    // Réponse à votre commentaire sans aperçu parent ET sans postType → fallback comment.reply.
+    expect(buildNotificationDisplay('fr', { type: 'comment_reply', actorName: 'D' }))
+      .toEqual({ title: 'D a répondu à votre commentaire', subtitle: 'En réponse à votre commentaire' });
+
+    // Réaction sur votre commentaire (emoji absent → couvre la branche sans emoji).
+    const commentReaction = buildNotificationDisplay('fr', { type: 'comment_reaction', actorName: 'E', postType: 'POST' });
+    expect(commentReaction.title).toContain('E ');
+    expect(commentReaction.title).toContain('à votre commentaire');
+    expect(commentReaction.subtitle).toBe('Publication');
+
+    // Repost — avec et sans entité.
+    expect(buildNotificationDisplay('fr', { type: 'post_repost', actorName: 'F', postType: 'STORY' }))
+      .toEqual({ title: 'F a partagé votre story', subtitle: 'Votre story' });
+    expect(buildNotificationDisplay('fr', { type: 'post_repost', actorName: 'F' }).subtitle).toBeNull();
+
+    // Nouveau contenu d'un ami (post / réel / humeur).
+    expect(buildNotificationDisplay('fr', { type: 'friend_new_post', actorName: 'G' }))
+      .toEqual({ title: 'G a publié un nouveau post', subtitle: 'Nouvelle publication' });
+    expect(buildNotificationDisplay('fr', { type: 'friend_new_post', actorName: 'G', postType: 'REEL' }).subtitle)
+      .toBe('Nouveau réel');
+    expect(buildNotificationDisplay('fr', { type: 'friend_new_mood', actorName: 'G' }).title)
+      .toBe('G a publié une nouvelle humeur');
+
+    // Mention (conversation/commentaire).
+    expect(buildNotificationDisplay('fr', { type: 'user_mentioned', actorName: 'H' }).title)
+      .toBe('H vous a mentionné');
+  });
+
+  it('replie sur « Quelqu’un » même quand actorName est une chaîne d’espaces', () => {
+    expect(buildNotificationDisplay('fr', { type: 'post_like', actorName: '   ', emoji: '❤️', postType: 'POST' }).title)
+      .toBe('Quelqu’un a réagi ❤️ à votre publication');
+  });
+
+  it('normalise les variantes de casse / valeurs nulles de postType', () => {
+    expect(buildNotificationDisplay('fr', { type: 'post_comment', actorName: 'I', postType: 'story' }).title)
+      .toBe('I a commenté votre story');
+    expect(buildNotificationDisplay('fr', { type: 'comment_reply', actorName: 'I', postType: null }).subtitle)
+      .toBe('En réponse à votre commentaire');
+  });
 });
