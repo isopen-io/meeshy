@@ -43,6 +43,32 @@ Le build utilise le dossier `Build/` relatif au workspace (`apps/ios/Build/`). X
 - Simulator: iPhone 16 Pro (UDID: 30BFD3A6-C80B-489D-825E-5D14D6FCCAB5)
 - Bundle ID: `me.meeshy.app`
 
+## Gestion de projet Xcode — XcodeGen (source de vérité)
+**`apps/ios/project.yml` est la source de vérité du projet** (XcodeGen). Le `Meeshy.xcodeproj/project.pbxproj` et les `xcshareddata/xcschemes/*.xcscheme` committés sont des **artefacts générés**, potentiellement périmés par rapport à `project.yml` et aux fichiers sur disque.
+
+- **Sources en globbing récursif** : `sources: - path: Meeshy` avec `excludes: "**/*.md"`. Tout nouveau `.swift` sous `Meeshy/` est **auto-inclus** par `xcodegen generate` — **jamais d'édition manuelle du pbxproj** (le projet a migré du pbxproj hand-edité vers XcodeGen). Les `.md` sont exclus du build (mais matchent quand même le filtre de chemins CI `apps/ios/**` → un edit de ce CLAUDE.md retrigge « iOS Tests »).
+- **CI régénère le projet** : les workflows iOS lancent `cd apps/ios && xcodegen generate` AVANT de builder → CI compile toujours le vrai jeu de fichiers issu de `project.yml`. **`meeshy.sh` ne lance PAS xcodegen** → il build le pbxproj committé (potentiellement périmé). C'est la cause racine des « passe en local, casse en CI » (et l'inverse).
+- Le scheme partagé `Meeshy` provient de la clé `scheme.testTargets` du target (une clé `scheme:` top-level est silencieusement ignorée par XcodeGen et ferait disparaître le scheme à la régénération).
+
+### Reproduire la CI « iOS Tests » fidèlement en local
+`meeshy.sh` suffit pour le dev courant. Pour **reproduire un échec CI de compile/tests**, répliquer la CI exactement (NE PAS se fier à `meeshy.sh` seul) :
+```bash
+cd apps/ios && xcodegen generate && cd -                              # 1. régénérer comme CI (sinon divergence)
+xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
+  -destination "generic/platform=iOS Simulator" -derivedDataPath apps/ios/Build   # 2. compile app + tests
+SIM=$(xcrun simctl create tmp182 "iPhone 16 Pro" com.apple.CoreSimulator.SimRuntime.iOS-18-2)
+xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
+  -destination "platform=iOS Simulator,id=$SIM" -only-testing:MeeshyTests \
+  -derivedDataPath apps/ios/Build                                     # 3. run sur 18.2 (réutilise la compile)
+```
+- **Compile = Xcode 26.1.1 (Swift 6.2)**, **run = simu iOS 18.2** (18.5+/26.x crashent au teardown xctest `swift_task_deinitOnExecutorMainActorBackDeploy` ; baselines snapshot enregistrées sur 18.2).
+- `build-for-testing` puis `test-without-building` = compile une fois, exécute sans recompiler (réutilise `apps/ios/Build`, plus rapide que `meeshy.sh test`).
+- **Nettoyer après** : `xcodegen generate` réécrit `project.pbxproj` + `Meeshy.xcscheme` ; la résolution SPM réécrit `Package.resolved` (tracké malgré `.gitignore`). Ce sont des artefacts → `git checkout --` dessus. **Ne jamais committer ce churn** depuis une repro locale (worktree partagé).
+
+### « TEST FAILED » / exit 65 = échec de COMPILE, pas un test flaky
+`** TEST FAILED **` + `Testing cancelled because the build failed` (exit 65) = le bundle de tests n'a pas compilé/linké. Lire la ligne `error:` juste au-dessus et corriger la compile — ne pas fouiller la logique des tests.
+- **Piège accès cross-file** : un `@State private var` d'une `View` SwiftUI est **inaccessible depuis un fichier d'extension `View+Xxx.swift`** (même module). Symptôme CI : `'<prop>' is inaccessible due to 'private' protection level`. Fix : retirer `private` (internal par défaut) sur toute propriété stockée touchée par un fichier extension frère. Cas vécu `composerFocusTrigger` (StoryViewerView ↔ StoryViewerView+Content.swift), corrigé 2026-06-23.
+
 ## Naming Conventions
 
 Based on [Swift.org API Design Guidelines](https://www.swift.org/documentation/api-design-guidelines/):

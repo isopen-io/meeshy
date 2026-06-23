@@ -287,20 +287,17 @@ struct StoryActionSidebarView: View {
                 )
             }
 
-            // 5. Comments toggle — visible only when count > 0. Below the
-            // sidebar the composer pill already gives an obvious affordance
-            // to write the first comment, so an extra empty button would just
-            // be visual noise (user spec 2026-05-28: « Inutile d'afficher à
-            // 0 […] la zone d'écriture en bas permet déjà de commenter »).
+            // 5. Comments toggle — visible UNIQUEMENT quand au moins un
+            // commentaire existe sur la story (pour TOUS, auteur inclus). Sous
+            // la sidebar, la zone d'écriture en bas permet déjà de laisser le
+            // premier commentaire, donc un bouton à 0 ne serait que du bruit
+            // visuel (user spec 2026-05-28 + 2026-06-23 : ne pas afficher
+            // l'icône commentaire si aucun commentaire n'est laissé).
             // La fiabilité du compteur est garantie par `loadStoryCommentCount()`
             // (côté +Content) qui réconcilie le payload feed avec un fetch réseau
             // autoritatif quand le payload annonce 0 — sinon une story AVEC
             // commentaires mais au compteur stale 0 masquait à tort ce bouton.
-            //
-            // L'AUTEUR voit toujours le bouton commentaire sur SA story (même à 0),
-            // pour pouvoir consulter à tout moment les commentaires reçus — y
-            // compris sur une story expirée qu'il revisite (spec 2026-06-23).
-            if storyCommentCount > 0 || isOwnStory {
+            if storyCommentCount > 0 {
                 StoryActionButton(
                     icon: "bubble.left.fill",
                     label: "\(storyCommentCount)",

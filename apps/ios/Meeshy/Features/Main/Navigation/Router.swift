@@ -9,7 +9,7 @@ enum Route: Hashable {
     case settings
     case profile
     case contacts
-    case peopleDiscovery(DiscoveryTab = .requests)
+    case peopleDiscovery(DiscoveryTab = .discover)
     case communityList
     case communityDetail(String)
     case communityCreate
