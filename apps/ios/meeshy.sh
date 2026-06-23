@@ -811,14 +811,25 @@ do_release() {
         return 1
     fi
 
-    if ! command -v bundle >/dev/null 2>&1; then
-        err "Bundler missing. Install with: gem install bundler"
-        return 1
-    fi
-
-    if [ ! -f "Gemfile.lock" ]; then
+    # Prefer `bundle exec` for reproducibility (CI parity). Fall back to a
+    # globally installed fastlane when bundler can't resolve the locked gems on
+    # this machine — e.g. macOS system Ruby against a Gemfile.lock pinned for
+    # another platform (the global fastlane/cocoapods already match the lock).
+    # NB: `bundle check` is a false positive here (a binary gem present for the
+    # wrong arch satisfies it), so we probe the real `bundle exec` resolution.
+    local -a fastlane_runner
+    if command -v bundle >/dev/null 2>&1 && [ ! -f "Gemfile.lock" ]; then
         log "Bundle install (first-time setup)…"
         bundle install || return 1
+        fastlane_runner=(bundle exec fastlane)
+    elif command -v bundle >/dev/null 2>&1 && bundle exec ruby -e 'exit 0' >/dev/null 2>&1; then
+        fastlane_runner=(bundle exec fastlane)
+    elif command -v fastlane >/dev/null 2>&1; then
+        warn "Bundler can't resolve the locked gems here → using the global fastlane."
+        fastlane_runner=(fastlane)
+    else
+        err "No usable fastlane. Fix bundler (cd apps/ios && bundle install) or run: gem install fastlane"
+        return 1
     fi
 
     # Match needs MATCH_PASSWORD to decrypt the certificates Git repo. The password
@@ -858,7 +869,7 @@ do_release() {
     ASC_KEY_FILEPATH="${ASC_KEY_FILEPATH:-$key_file}" \
     ASC_KEY_ID="${ASC_KEY_ID:-5542B6LVNL}" \
     ASC_ISSUER_ID="${ASC_ISSUER_ID:-69a6de89-ae7a-47e3-e053-5b8c7c11a4d1}" \
-        bundle exec fastlane "$lane" "${fastlane_args[@]}"
+        "${fastlane_runner[@]}" "$lane" "${fastlane_args[@]}"
     local rc=$?
 
     echo ""
