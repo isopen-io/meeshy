@@ -1619,6 +1619,7 @@ public struct StoryComposerView: View {
             }
         }
         .overlay { audioForegroundOverlay }
+        .overlay { videoMuteOverlay }
     }
 
     /// Chip glass posé sur le canvas pour chaque audio foreground (i.e.
@@ -1637,14 +1638,96 @@ public struct StoryComposerView: View {
                         canvasSize: geo.size,
                         mode: .composer,
                         isSelected: viewModel.selectedElementId == binding.wrappedValue.id,
+                        isUserMuted: binding.wrappedValue.volume <= 0,
                         onDragEnd: { HapticFeedback.light() },
                         onTap: {
                             HapticFeedback.light()
                             viewModel.selectedElementId = binding.wrappedValue.id
+                        },
+                        onToggleMute: {
+                            HapticFeedback.light()
+                            var obj = binding.wrappedValue
+                            obj.volume = obj.volume > 0 ? 0 : 1
+                            binding.wrappedValue = obj
                         }
                     )
                 }
             }
+        }
+    }
+
+    /// Bouton mute (icône au touché) posé sur chaque vidéo foreground du canvas
+    /// d'édition. Tap → coupe / réactive le son de la vidéo (persisté via le
+    /// `volume` du modèle : 0 = muet). L'aperçu live, le reader et l'export
+    /// respectent tous ce `volume`. Posé dans le MÊME espace de coordonnées que
+    /// les chips audio (overlay sur le canvas) pour un placement cohérent.
+    @ViewBuilder
+    private var videoMuteOverlay: some View {
+        if !viewModel.isDrawingActive {
+            GeometryReader { geo in
+                ForEach(foregroundVideoBindings, id: \.wrappedValue.id) { binding in
+                    videoMuteButton(for: binding, canvasSize: geo.size)
+                }
+            }
+        }
+    }
+
+    private func videoMuteButton(for binding: Binding<StoryMediaObject>,
+                                 canvasSize: CGSize) -> some View {
+        let media = binding.wrappedValue
+        let muted = media.volume <= 0
+        // Coin haut-droit de la vidéo : centre normalisé + demi-taille projetée
+        // (même convention que `StoryMediaLayer.configure`). La rotation n'est
+        // pas appliquée à l'icône (affordance, tolérance suffisante).
+        let scaleFactor = canvasSize.width / CanvasGeometry.designWidth
+        let base = StoryMediaLayer.baseMediaDesignSize(aspectRatio: media.aspectRatio)
+        let halfW = base.width * CGFloat(media.scale) * scaleFactor / 2
+        let halfH = base.height * CGFloat(media.scale) * scaleFactor / 2
+        let cx = CGFloat(media.x) * canvasSize.width
+        let cy = CGFloat(media.y) * canvasSize.height
+        let inset: CGFloat = 18
+        let px = min(canvasSize.width - inset, max(inset, cx + halfW - inset))
+        let py = min(canvasSize.height - inset, max(inset, cy - halfH + inset))
+
+        return Button {
+            HapticFeedback.light()
+            var obj = binding.wrappedValue
+            obj.volume = obj.volume > 0 ? 0 : 1
+            binding.wrappedValue = obj
+        } label: {
+            Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 30, height: 30)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .position(x: px, y: py)
+        .accessibilityLabel(muted ? "Activer le son de la vidéo" : "Couper le son de la vidéo")
+    }
+
+    /// Bindings vers chaque vidéo foreground (`isBackground == false`, kind
+    /// `.video`) de la slide courante — pour le bouton mute. Écrit en retour
+    /// dans `viewModel.currentEffects`, ce qui resync la slide et l'aperçu.
+    private var foregroundVideoBindings: [Binding<StoryMediaObject>] {
+        let medias = viewModel.currentEffects.mediaObjects ?? []
+        return medias.enumerated().compactMap { idx, obj -> Binding<StoryMediaObject>? in
+            guard obj.isBackground == false, obj.kind == .video else { return nil }
+            return Binding<StoryMediaObject>(
+                get: {
+                    let list = viewModel.currentEffects.mediaObjects ?? []
+                    return list.indices.contains(idx) ? list[idx] : obj
+                },
+                set: { newValue in
+                    var effects = viewModel.currentEffects
+                    guard var list = effects.mediaObjects,
+                          list.indices.contains(idx) else { return }
+                    list[idx] = newValue
+                    effects.mediaObjects = list
+                    viewModel.currentEffects = effects
+                }
+            )
         }
     }
 
