@@ -102,6 +102,24 @@ Append-only log of gotchas and decisions that save time next run.
   render an empty row. Left as a one-shot load (iOS parity); realtime append needs
   a richer gateway event or a user lookup. Tracked follow-up.
 
+## Decisions (cont.)
+- **Tray cache-first = Room-backed SWR, not in-memory.** The Feed still uses an
+  in-memory L1 cache (`PostRepository`, Room deferred to "Phase 3"); the stories
+  tray instead got a real `StoryCacheSource` (port of `ConversationCacheSource`)
+  so it survives process death and paints instantly on a cold launch — the
+  Instant-App "no spinner when cache has data" rule. Reuse the existing
+  `cacheFirstFlow`/`SwrCacheSource`/`CachePolicy`/`sync_meta` primitives; do NOT
+  re-implement the SWR state machine (Feed did, inline — don't copy that).
+- **Adding a Room entity bumps `MeeshyDatabase.version`.** `StoryEntity` took it
+  4 → 5. `fallbackToDestructiveMigration()` is already set, so no migration test
+  is needed yet (tracked: `exportSchema`/migration tests follow-up).
+- **Story tray fixtures must be LIVE.** `StoryTrayBuilder.build` drops
+  fully-expired groups against `System.currentTimeMillis()` (21h fallback TTL),
+  and the VM calls it with the default wall-clock `nowMillis`. A fixed past
+  `createdAt` makes the tray empty → VM tests fail. Use `Instant.now().toString()`
+  for VM-level fixtures; pass an explicit `nowMillis` only to the pure builder/
+  grouping tests.
+
 ## Open follow-ups (cross-slice)
 - Wire **Kover** with a 90% per-module verification rule.
 - Add a dedicated **Android CI workflow** (touches `.github/` → separate run).
@@ -110,8 +128,8 @@ Append-only log of gotchas and decisions that save time next run.
   in-app until attach is wired to the socket lifecycle. Affects ALL social events,
   touches `:app` → its own slice.
 - Story viewer richness: **swipe gestures done**, **reactions strip done**,
-  **realtime reaction socket-delta done**, **viewers sheet done**; remaining:
-  comments overlay, media prefetch, SWR/Room backing, cross-dissolve transitions,
-  realtime `story:viewed` append (needs richer event payload).
+  **realtime reaction socket-delta done**, **viewers sheet done**, **tray SWR/Room
+  backing done**; remaining: comments overlay, media prefetch, cross-dissolve
+  transitions, realtime `story:viewed` append (needs richer event payload).
 - Reaction `mine` still seeded empty on load — needs server `currentUserReactions`
   exposed by the stories API to pre-fill the user's own emojis.

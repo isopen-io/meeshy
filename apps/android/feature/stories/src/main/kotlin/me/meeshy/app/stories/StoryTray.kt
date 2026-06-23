@@ -61,7 +61,10 @@ fun StoryTray(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val tray = state.tray
-    if (tray.isEmpty) return
+    if (tray.isEmpty) {
+        if (state.showSkeleton) StoryTraySkeleton(modifier)
+        return
+    }
 
     LazyRow(
         modifier = modifier,
@@ -93,6 +96,33 @@ fun StoryTray(
         }
     }
 }
+
+/**
+ * Cold-start placeholder shown only when the cache is genuinely empty (no rows
+ * yet). A warm start paints the real tray straight from Room, so this never
+ * flashes over cached data (Instant-App principles).
+ */
+@Composable
+private fun StoryTraySkeleton(modifier: Modifier = Modifier) {
+    LazyRow(
+        modifier = modifier.semantics { contentDescription = "" },
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        contentPadding = PaddingValues(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+        userScrollEnabled = false,
+    ) {
+        items(SKELETON_PLACEHOLDER_COUNT) {
+            Box(
+                modifier = Modifier
+                    .width(ITEM_WIDTH)
+                    .size(RING_SIZE)
+                    .clip(CircleShape)
+                    .background(MeeshyTheme.tokens.backgroundTertiary),
+            )
+        }
+    }
+}
+
+private const val SKELETON_PLACEHOLDER_COUNT = 4
 
 @Composable
 private fun StoryRingItem(

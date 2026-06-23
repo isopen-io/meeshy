@@ -1,5 +1,13 @@
 package me.meeshy.sdk.story
 
+import kotlinx.coroutines.flow.Flow
+import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.core.database.dao.StoryDao
+import me.meeshy.core.database.dao.SyncMetaDao
+import me.meeshy.sdk.cache.CachePolicy
+import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.cache.SystemCacheClock
+import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.StoryViewer
@@ -17,7 +25,35 @@ import javax.inject.Singleton
 @Singleton
 class StoryRepository @Inject constructor(
     private val storyApi: StoryApi,
+    database: MeeshyDatabase,
+    storyDao: StoryDao,
+    syncMetaDao: SyncMetaDao,
 ) {
+    private val cacheSource = StoryCacheSource(
+        database = database,
+        storyDao = storyDao,
+        syncMetaDao = syncMetaDao,
+        storyApi = storyApi,
+        clock = SystemCacheClock,
+    )
+
+    /**
+     * Cache-first stories tray stream (ARCHITECTURE.md §4): the cached feed is
+     * served immediately (no cold spinner when rows exist) and revalidated in
+     * the background. [onSyncError] surfaces a failed background revalidation so
+     * the UI can leave its cold skeleton.
+     */
+    fun storiesStream(
+        policy: CachePolicy = CachePolicy.Stories,
+        onSyncError: (Throwable) -> Unit = {},
+    ): Flow<CacheResult<List<ApiPost>>> =
+        cacheFirstFlow(policy, cacheSource, onRevalidateError = onSyncError)
+
+    /** Explicit refresh (pull-to-refresh / retry). Throws on failure. */
+    suspend fun refresh() {
+        cacheSource.revalidate()
+    }
+
     suspend fun list(cursor: String? = null, limit: Int = 50): NetworkResult<List<ApiPost>> =
         apiCall { storyApi.list(cursor, limit) }
 
