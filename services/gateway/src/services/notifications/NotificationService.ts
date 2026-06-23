@@ -629,16 +629,23 @@ export class NotificationService {
       // côté serveur (langue du destinataire) puis persistés. Source unique pour
       // la liste in-app (iOS/iPadOS/macOS) et le web ; corrige les libellés
       // imprécis/non localisés historiquement reconstruits côté client.
-      const displayLang = params.lang ?? await this.resolveRecipientLang(params.userId);
       const meta = (params.metadata ?? {}) as Record<string, unknown>;
-      const display = buildNotificationDisplay(displayLang, {
+      const displayInput = {
         type: params.type,
         actorName: sanitizedActor?.displayName ?? params.actor?.username ?? null,
         postType: typeof meta.postType === 'string' ? meta.postType : null,
         emoji: (typeof meta.reactionEmoji === 'string' ? meta.reactionEmoji
           : typeof meta.emoji === 'string' ? meta.emoji : null),
         parentCommentPreview: (typeof meta.parentCommentPreview === 'string' ? meta.parentCommentPreview : null),
-      });
+      };
+      // On ne touche la base pour la langue du destinataire QUE si le type
+      // produit réellement un titre localisé ET que l'appelant ne l'a pas déjà
+      // fournie — évite une requête inutile pour les types non gérés (messages,
+      // appels, sécurité…), qui retombent sur le rendu client.
+      let display = buildNotificationDisplay(params.lang ?? 'fr', displayInput);
+      if (display.title !== null && params.lang === undefined) {
+        display = buildNotificationDisplay(await this.resolveRecipientLang(params.userId), displayInput);
+      }
       // Sous-titre persisté : l'override explicite riche d'une méthode `create*`
       // (ex. « Votre publication : « aperçu » ») prime, sinon la base localisée
       // du builder. SANS date — le client append la date locale.
@@ -704,10 +711,15 @@ export class NotificationService {
       // can render sender + conversation context without having to re-derive
       // them client-side. `formatted` already contains the raw `actor`/`context`
       // so this is purely additive.
+      // Cadrage TOAST : acteur en title + sous-titre push (nom de groupe /
+      // aperçu de commentaire). On surcharge explicitement le title/subtitle que
+      // `formatted` porte désormais (titre headline + sous-titre entité persistés
+      // pour la LISTE/REST) afin que les messages directs restent sans sous-titre
+      // et que le toast garde le nom de l'expéditeur comme title.
       const socketPayload = {
         ...formatted,
         title: pushTitle,
-        ...(pushSubtitle ? { subtitle: pushSubtitle } : {}),
+        subtitle: pushSubtitle,
       };
 
       // Émettre via Socket.IO
