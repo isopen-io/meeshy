@@ -1934,5 +1934,5 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   - `queryAllByTestId('clock-icon').toHaveLength(1)` for Schedule-header Clock always present
 - Production files changed: istanbul ignore annotations only (in sha 86d9fb69 from prior session)
 - Branch: claude/coverage/p2-admin-web-9
-- CI: pending
-- Squash-merge: pending
+- CI: ✅ all green (Security, Quality, Test web, Test gateway, Test shared, Test agent, Test Python, Build, Audio Pipeline, Voice API, TTS/STT, Prisma)
+- Squash-merge: ✅ merged to main @ b9ae0749 (PR #903)
