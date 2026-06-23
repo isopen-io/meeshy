@@ -474,7 +474,6 @@
 		MVPS0001000100010001001 /* MockVoiceProfileService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MVPS0001000100010001000 /* MockVoiceProfileService.swift */; };
 		NEWCONV002A3B4C5D6E7F8901 /* NewConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NEWCONV001A3B4C5D6E7F8901 /* NewConversationView.swift */; };
 		NPHT002 /* NotificationPayloadHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = NPHX001 /* NotificationPayloadHelpers.swift */; };
-		NPHT004 /* NotificationPayloadHelpersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = NPHT003 /* NotificationPayloadHelpersTests.swift */; };
 		NPHX002 /* NotificationPayloadHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = NPHX001 /* NotificationPayloadHelpers.swift */; };
 		NRST0001000100010001001 /* NavigationStateRestorationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = NRST0001000100010001000 /* NavigationStateRestorationTests.swift */; };
 		NSE0SDK0000000001 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = NSE0SDK0000000002 /* MeeshySDK */; };
@@ -1106,7 +1105,6 @@
 		MUIEXP001A001A001A001A01 /* MeeshyUIExports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyUIExports.swift; sourceTree = "<group>"; };
 		MVPS0001000100010001000 /* MockVoiceProfileService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockVoiceProfileService.swift; sourceTree = "<group>"; };
 		NEWCONV001A3B4C5D6E7F8901 /* NewConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewConversationView.swift; sourceTree = "<group>"; };
-		NPHT003 /* NotificationPayloadHelpersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPayloadHelpersTests.swift; sourceTree = "<group>"; };
 		NPHX001 /* NotificationPayloadHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPayloadHelpers.swift; sourceTree = "<group>"; };
 		NRST0001000100010001000 /* NavigationStateRestorationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateRestorationTests.swift; sourceTree = "<group>"; };
 		NSEDC001 /* NSEDecryptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEDecryptor.swift; sourceTree = "<group>"; };
@@ -2222,7 +2220,6 @@
 				5F682CF63D510A2E111E7BD1 /* PresenceManagerTests.swift */,
 				F96C9A03A8540DCCEB3528A8 /* AuthServiceTests.swift */,
 				NTFY0001000100010001000 /* NotificationTests.swift */,
-				NPHT003 /* NotificationPayloadHelpersTests.swift */,
 				1C90BB2C475926F97226B943 /* ConversationLockManagerTests.swift */,
 				A0340CB5A3610F80C0D53F08 /* MediaCompressorTests.swift */,
 				OAA0000000000001F02 /* OptimisticAttachmentAdopterTests.swift */,
@@ -2941,7 +2938,6 @@
 				TDTH0001000100010001001 /* TypingDotTimerHarness.swift in Sources */,
 				NTFY0001000100010001001 /* NotificationTests.swift in Sources */,
 				NPHT002 /* NotificationPayloadHelpers.swift in Sources */,
-				NPHT004 /* NotificationPayloadHelpersTests.swift in Sources */,
 				DLNK0001000100010001001 /* DeepLinkTests.swift in Sources */,
 				8343E26FB2A5EB5EE38821C6 /* MediaCompressorTests.swift in Sources */,
 				OAA0000000000002F02 /* OptimisticAttachmentAdopterTests.swift in Sources */,
