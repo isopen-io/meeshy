@@ -686,6 +686,51 @@ describe('MessageReadStatusService', () => {
       expect(result.receivedBy[0].avatarURL).toBe('av2.jpg');
     });
 
+    // Regression — "status-management-inconsistency" (2026-06).
+    // The cursor `lastReadAt`/`lastDeliveredAt` re-advances to "now" every time
+    // a participant re-opens the conversation, so deriving per-message receipt
+    // times from it shows the participant's LAST VISIT, not when they actually
+    // read THIS message. The frozen write-once `MessageStatusEntry` is the
+    // precise per-message time and MUST win — matching getMessageStatusDetails.
+    it('should prefer frozen per-message status times over the drifted cursor', async () => {
+      const messageCreatedAt = new Date('2025-01-01T10:00:00Z');
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: messageCreatedAt,
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId,
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId, displayName: 'User1', avatar: null, user: null },
+        { id: testParticipantId2, displayName: 'User2', avatar: 'av2.jpg', user: null },
+      ]);
+      // Cursor has drifted forward to a later re-open of the conversation.
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        {
+          participantId: testParticipantId2,
+          lastDeliveredAt: new Date('2025-01-01T15:00:00Z'),
+          lastReadAt: new Date('2025-01-01T15:30:00Z'),
+        },
+      ]);
+      // But User2 actually received/read THIS message much earlier — frozen.
+      const frozenDelivered = new Date('2025-01-01T10:05:00Z');
+      const frozenRead = new Date('2025-01-01T10:10:00Z');
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        {
+          participantId: testParticipantId2,
+          deliveredAt: frozenDelivered,
+          receivedAt: frozenDelivered,
+          readAt: frozenRead,
+        },
+      ]);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      expect(result.receivedBy[0].receivedAt).toEqual(frozenDelivered);
+      expect(result.readBy[0].readAt).toEqual(frozenRead);
+    });
+
     it('should expose per-participant media consumption positions for the message attachments', async () => {
       const messageCreatedAt = new Date('2025-01-01T10:00:00Z');
       mockPrisma.message.findUnique.mockResolvedValue({

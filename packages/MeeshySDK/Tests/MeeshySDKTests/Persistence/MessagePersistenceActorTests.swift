@@ -94,6 +94,61 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(withServerId.first?.content, "Hello", "the surviving row holds the reconciled server content")
     }
 
+    /// Regression — "status-management-inconsistency" (2026-06).
+    ///
+    /// The Notification Service Extension pre-persists an offline-push message
+    /// with a PLACEHOLDER `createdAt` = the push-receipt time (when the device
+    /// came back online), because the push payload doesn't carry the real send
+    /// time. The canonical REST fetch then reconciles the row and MUST correct
+    /// `createdAt` to the authoritative server value — otherwise the bubble +
+    /// detail sheet display the data-reactivation time as the "sent" time,
+    /// contradicting the message's notification ("4h ago") and read receipts.
+    func test_upsertFromAPIMessages_correctsPlaceholderCreatedAtFromCanonicalPayload() async throws {
+        let trueSendTime = Date(timeIntervalSince1970: 1_700_000_000)         // real send
+        let pushReceiptTime = trueSendTime.addingTimeInterval(4 * 3600)        // +4h (data re-enabled)
+
+        // Simulate the NSE pre-persist: server-keyed row stamped with the
+        // push-receipt placeholder, including the derived time-string cache the
+        // bubble renders.
+        var nsePlaceholder = MessageRecordFactory.make(
+            localId: "srv_offline",
+            conversationId: "conv_offline",
+            senderId: "sender_1",
+            content: "Le Sprint 10 a ete defini",
+            state: .delivered,
+            createdAt: pushReceiptTime
+        )
+        nsePlaceholder.serverId = "srv_offline"
+        nsePlaceholder.cachedTimeString = MessageRecord.computeTimeString(for: pushReceiptTime)
+        try await actor.insertOptimistic(nsePlaceholder)
+
+        // The canonical payload (REST/socket, DB-authoritative) carries the real
+        // send time.
+        let canonical = makeAPIMessage(
+            id: "srv_offline",
+            conversationId: "conv_offline",
+            senderId: "sender_1",
+            content: "Le Sprint 10 a ete defini",
+            createdAt: trueSendTime
+        )
+        try await actor.upsertFromAPIMessages([canonical])
+
+        let row = try actor.messages(for: "conv_offline", limit: 10)
+            .first { $0.serverId == "srv_offline" }
+        XCTAssertNotNil(row)
+        XCTAssertEqual(
+            row?.createdAt.timeIntervalSince1970,
+            trueSendTime.timeIntervalSince1970,
+            accuracy: 1.0,
+            "createdAt must be corrected to the authoritative server send time, not the push-receipt placeholder"
+        )
+        XCTAssertEqual(
+            row?.cachedTimeString,
+            MessageRecord.computeTimeString(for: trueSendTime),
+            "the cached time-string the bubble renders must be recomputed from the corrected createdAt"
+        )
+    }
+
     func test_applyEvent_invalidTransition_returnsNil() async throws {
         let record = MessageRecordFactory.make(localId: "temp_003", state: .read)
         try await actor.insertOptimistic(record)

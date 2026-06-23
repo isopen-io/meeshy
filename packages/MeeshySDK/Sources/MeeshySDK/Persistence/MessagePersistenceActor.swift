@@ -48,6 +48,11 @@ fileprivate func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord
     let contentAndState = a.content == b.content && a.serverId == b.serverId
         && a.state == b.state && a.isEdited == b.isEdited
         && a.editedAt == b.editedAt && a.deletedAt == b.deletedAt
+        // `createdAt` is the immutable server send time, but a row first
+        // written by the Notification Service Extension pre-persist carries a
+        // PLACEHOLDER value (the push-receipt time). Comparing it here lets the
+        // canonical reconcile detect — and persist — the correction.
+        && a.createdAt == b.createdAt && a.cachedTimeString == b.cachedTimeString
     let attachmentsAndReactions = a.attachmentsJson == b.attachmentsJson
         && a.reactionsJson == b.reactionsJson && a.reactionCount == b.reactionCount
     let encryptionAndDelivery = a.isEncrypted == b.isEncrypted && a.encryptionMode == b.encryptionMode
@@ -1534,6 +1539,21 @@ public actor MessagePersistenceActor {
                     // the row via the serverId column or PendingIdRecord even
                     // if applyEvent(.serverAck) didn't run for some reason.
                     existing.serverId = api.id
+                    // Authoritative send time. A row first written by the
+                    // Notification Service Extension pre-persist (offline push,
+                    // cold cache) only knows WHEN THE PUSH ARRIVED — i.e. when
+                    // the device came back online — not the real send time,
+                    // which it stamps as a `now` placeholder. The canonical
+                    // REST/socket payload IS the source of truth, so adopt its
+                    // `createdAt` here (and refresh the derived time-string the
+                    // bubble renders) instead of treating the placeholder as
+                    // immutable. Without this, a message received while offline
+                    // is permanently branded with the data-reactivation time,
+                    // contradicting its own notification timestamp and read
+                    // receipts (status-management-inconsistency, 2026-06).
+                    existing.createdAt = api.createdAt
+                    existing.sentAt = api.createdAt
+                    existing.cachedTimeString = timeString
                     if !pendingEdit {
                         existing.isEdited = api.isEdited ?? false
                         existing.editedAt = nil

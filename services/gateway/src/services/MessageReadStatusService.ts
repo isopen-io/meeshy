@@ -669,6 +669,21 @@ export class MessageReadStatusService {
         participants.map(p => [p.id, p])
       );
 
+      // Précision absolue : les dates FIGÉES par message (write-once) priment
+      // sur la dérivation curseur — exactement comme `getMessageStatusDetails`.
+      // Le curseur `lastDeliveredAt`/`lastReadAt` ré-avance à chaque ouverture
+      // de conversation : l'utiliser ici afficherait la DERNIÈRE visite du
+      // participant, pas le moment où il a réellement reçu / lu CE message
+      // (incohérence de gestion de statut). Le fallback curseur ne sert que
+      // pour les messages franchis AVANT l'introduction du gel (legacy).
+      const frozenEntries = await this.prisma.messageStatusEntry.findMany({
+        where: { messageId },
+        select: { participantId: true, deliveredAt: true, receivedAt: true, readAt: true },
+      });
+      const frozenByParticipant = new Map(
+        frozenEntries.map(e => [e.participantId, e])
+      );
+
       const receivedBy: Array<{
         participantId: string;
         displayName: string;
@@ -684,24 +699,34 @@ export class MessageReadStatusService {
 
         const avatarURL = participant.avatar ?? participant.user?.avatar ?? null;
 
-        if (
-          cursor.lastDeliveredAt &&
-          cursor.lastDeliveredAt >= message.createdAt
-        ) {
+        const cursorDelivered =
+          cursor.lastDeliveredAt && cursor.lastDeliveredAt >= message.createdAt
+            ? cursor.lastDeliveredAt
+            : null;
+        const cursorRead =
+          cursor.lastReadAt && cursor.lastReadAt >= message.createdAt
+            ? cursor.lastReadAt
+            : null;
+
+        const frozen = frozenByParticipant.get(cursor.participantId);
+        const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
+        const readAt = frozen?.readAt ?? cursorRead;
+
+        if (receivedAt) {
           receivedBy.push({
             participantId: cursor.participantId,
             displayName: participant.displayName,
             avatarURL,
-            receivedAt: cursor.lastDeliveredAt,
+            receivedAt,
           });
         }
 
-        if (cursor.lastReadAt && cursor.lastReadAt >= message.createdAt) {
+        if (readAt) {
           readBy.push({
             participantId: cursor.participantId,
             displayName: participant.displayName,
             avatarURL,
-            readAt: cursor.lastReadAt,
+            readAt,
           });
         }
       }
