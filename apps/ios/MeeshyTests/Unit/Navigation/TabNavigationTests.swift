@@ -43,10 +43,10 @@ final class TabNavigationTests: XCTestCase {
 
     // MARK: - PeopleDiscovery Routing
 
-    func test_peopleDiscovery_defaultTab_isRequests() {
+    func test_peopleDiscovery_defaultTab_isDiscover() {
         let route = Route.peopleDiscovery()
         if case .peopleDiscovery(let tab) = route {
-            XCTAssertEqual(tab, .requests)
+            XCTAssertEqual(tab, .discover)
         } else {
             XCTFail("Expected .peopleDiscovery route")
         }

@@ -63,6 +63,20 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
 
     private nonisolated(unsafe) var loopObserver: NSObjectProtocol?
 
+    /// Levé par le canvas composer (`StoryCanvasUIView.playsVideoInEditMode`)
+    /// pour que les vidéos foreground JOUENT et bouclent en mode `.edit` (live
+    /// preview de l'éditeur). Hors composer (prefetcher hors-écran, défaut),
+    /// reste `false` → en `.edit` la vidéo se cale sur sa frame 0 sans jouer,
+    /// comme avant. En `.play` (reader/preview) ce drapeau est ignoré : la
+    /// lecture y est toujours active et joue une seule fois.
+    @MainActor
+    public var playsInEditMode: Bool = false {
+        didSet {
+            guard oldValue != playsInEditMode, playsInEditMode else { return }
+            avPlayer?.play()
+        }
+    }
+
     /// Image loader used by `configureImage`. Defaults to a shim that calls
     /// `CacheCoordinator.shared.images.image(for:)`. Override in tests via
     /// `_setImageLoaderForTesting(_:)` to inject a deterministic stub.
@@ -144,6 +158,10 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
                           resolver: (@Sendable (String) -> URL?)? = nil,
                           imageCache: ImageCacheReader? = nil) {
         self.media = media
+        // Un layer fraîchement configuré démarre visible : la disparition d'une
+        // vidéo foreground terminée (`.play`) est posée par l'observer de fin,
+        // pas héritée d'un état masqué d'une précédente configuration.
+        isHidden = false
 
         // Design-space frame (1080-référentiel) → render-space via geometry.
         let baseDesignSize = Self.baseMediaDesignSize(aspectRatio: media.aspectRatio)
@@ -354,7 +372,10 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
             currentVideoLoadTask?.cancel()
             videoLoadGeneration &+= 1
             // Pas de placeholder — le bitmap réel est instantané.
-            attachPlayer(url: immediateLocalURL, mode: mode, loop: true)
+            // Loop UNIQUEMENT hors lecture reader : en `.play` une vidéo
+            // foreground est un composant de timeline qui joue UNE fois puis
+            // disparaît (cf. `attachPlayer`). Seul le composer (`.edit`) boucle.
+            attachPlayer(url: immediateLocalURL, mode: mode, loop: mode != .play)
             return
         }
 
@@ -374,7 +395,7 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         // arrière-plan et swap vers un fichier local s'il devient
         // disponible — c'est une optimisation, pas une condition
         // préalable à l'existence du player.
-        attachPlayer(url: remoteURL, mode: mode, loop: true)
+        attachPlayer(url: remoteURL, mode: mode, loop: mode != .play)
 
         currentVideoLoadTask = Task { @MainActor [weak self] in
             // Garantit une URL file:// avant de toucher AVURLAsset — sinon
@@ -391,7 +412,7 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
             // différente — sinon le player déjà attaché continue de jouer
             // l'URL distante sans re-trigger un cold start.
             if localURL != remoteURL {
-                self.attachPlayer(url: localURL, mode: mode, loop: true)
+                self.attachPlayer(url: localURL, mode: mode, loop: mode != .play)
             }
         }
     }
@@ -458,9 +479,11 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         // entre les deux — auquel cas il joue sous catégorie `.ambient`, donc
         // silencieux en simulator silent mode et sur device avec le switch
         // physique. Forcer la catégorie ici est idempotent et coûte ~0 ms.
-        if mode == .play, AVAudioSession.sharedInstance().category != .playback {
+        if (mode == .play || playsInEditMode), AVAudioSession.sharedInstance().category != .playback {
             // Pose la session de lecture via la source UNIQUE (call-aware) : idempotent,
-            // no-op pendant un appel (micro de l'appel préservé).
+            // no-op pendant un appel (micro de l'appel préservé). Couvre aussi le
+            // composer live preview (`.edit` + `playsInEditMode`) → audio des
+            // vidéos qui bouclent dans l'éditeur.
             MediaSessionCoordinator.shared.activatePlaybackSync(options: [.mixWithOthers, .duckOthers])
         }
 
@@ -469,14 +492,21 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
             player.play()
         case .edit:
             player.seek(to: .zero)
+            // Composer live preview : la vidéo joue (et boucle, cf. `loop`
+            // ci-dessous) tant que `playsInEditMode` est levé par le canvas.
+            if playsInEditMode { player.play() }
         }
 
+        // Retire l'éventuel observer de fin précédent (changement d'item /
+        // reconfigure d'un layer recyclé) avant d'en réarmer un.
+        if let token = loopObserver {
+            NotificationCenter.default.removeObserver(token)
+            loopObserver = nil
+        }
         if loop {
+            // Composer (`.edit`) : la vidéo reboucle indéfiniment pour la
+            // prévisualisation live — comme le fond.
             player.actionAtItemEnd = .none
-            // Retire l'éventuel observer précédent (changement d'item).
-            if let token = loopObserver {
-                NotificationCenter.default.removeObserver(token)
-            }
             loopObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: player.currentItem,
@@ -484,6 +514,27 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
             ) { [weak player] _ in
                 player?.seek(to: .zero)
                 player?.play()
+            }
+        } else {
+            // Reader / preview (`.play`) : une vidéo foreground est un composant
+            // de timeline. Elle joue UNE seule fois puis s'arrête et DISPARAÎT
+            // du canvas (le layer se masque), tout comme les autres composants
+            // foreground apparaissent/disparaissent selon leur fenêtre. Seule la
+            // vidéo de FOND boucle pour remplir la durée de la slide.
+            player.actionAtItemEnd = .pause
+            loopObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: player.currentItem,
+                queue: .main
+            ) { [weak self, weak player] _ in
+                player?.pause()
+                // Masque sans animation implicite (le rebuild 60 Hz réutilise
+                // ce même layer via le StoryRendererCache, donc l'état masqué
+                // persiste jusqu'au changement de slide).
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                self?.isHidden = true
+                CATransaction.commit()
             }
         }
 
