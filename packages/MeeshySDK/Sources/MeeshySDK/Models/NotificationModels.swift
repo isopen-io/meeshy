@@ -504,6 +504,15 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
     // MARK: - Formatted title for display
 
     public var formattedTitle: String {
+        // Source unique : le gateway calcule le titre « acteur + action »
+        // localisé et conscient de l'entité (story / réel / publication…) puis
+        // le persiste. On l'affiche tel quel — identique au push et au web.
+        // Le switch ci-dessous n'est qu'un REPLI pour les anciennes notifications
+        // ou les types non gérés côté serveur (messages, appels, système…).
+        if let title, !title.trimmingCharacters(in: .whitespaces).isEmpty {
+            return title
+        }
+
         let actorName = actor?.displayedName ?? "Quelqu'un"
         let conversationTitle = context?.conversationTitle ?? "la conversation"
 
@@ -573,7 +582,9 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
                 return "\(actorName) a reagi \(emoji) a votre commentaire"
             }
             return "\(actorName) a reagi a votre commentaire"
-        case .postComment, .commentReply, .legacyPostComment:
+        case .commentReply:
+            return "\(actorName) a repondu a votre commentaire"
+        case .postComment, .legacyPostComment:
             return "\(actorName) a commente votre publication"
         case .storyNewComment:
             return "\(actorName) a commente votre story"
@@ -659,29 +670,63 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
     /// (« Story · « aperçu » », « En réponse à « … » ») and its lifecycle
     /// (« publiée il y a 2 j · expirée ») so an expired story is self-explanatory.
     public var formattedContext: String? {
-        // Social / story types compute their OWN entity + lifecycle line so the
-        // expiry marker (« · expirée ») and publication date always render — even
-        // when the gateway also sent a `subtitle` (push path). For every other
-        // type the gateway `subtitle` (group conversation title, etc.) is the
-        // context line.
+        // Types sociaux : base d'entité (sous-titre serveur localisé préféré,
+        // sinon repli client) + date de PUBLICATION du contenu lié (locale
+        // appareil — « du 23/06/2026 14:30 ») + état d'expiration. Pour les
+        // autres types, le sous-titre serveur (nom du groupe, etc.) est la ligne.
         switch notificationType {
         case .postComment, .legacyPostComment, .storyNewComment, .friendStoryComment, .storyThreadReply,
-             .postLike, .legacyPostLike, .storyReaction, .statusReaction, .postRepost:
-            return socialEntityContext(preview: metadata?.postPreview)
-        case .commentLike, .commentReaction:
-            // Body already shows the comment text — context is just the kind +
-            // expiry, no duplicate preview.
-            return socialEntityContext(preview: nil)
+             .postLike, .legacyPostLike, .storyReaction, .statusReaction, .postRepost,
+             .commentLike, .commentReaction, .commentReply,
+             .friendNewStory, .friendNewPost, .friendNewMood:
+            return decoratedSocialContext
+        default:
+            return (subtitle?.isEmpty == false) ? subtitle : nil
+        }
+    }
+
+    /// Base d'entité + date du contenu + expiry, jointes par « · ». La date
+    /// n'est ajoutée que si le contenu lié porte une `postCreatedAt` — elle est
+    /// distincte de l'horodatage d'arrivée de la notif (affiché à droite).
+    private var decoratedSocialContext: String? {
+        let base = serverSubtitleBase ?? legacySocialEntityBase
+        let parts = [base, contentPublishedLabel, expiryLabel]
+            .compactMap { value -> String? in (value?.isEmpty == false) ? value : nil }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// Sous-titre serveur (localisé, conscient de l'entité) s'il est présent.
+    private var serverSubtitleBase: String? {
+        guard let subtitle, !subtitle.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return subtitle
+    }
+
+    /// Repli client (anciennes notifs / sous-titre serveur absent) : libellé
+    /// d'entité + aperçu, SANS date ni expiry (ajoutés par `decoratedSocialContext`).
+    private var legacySocialEntityBase: String? {
+        switch notificationType {
         case .commentReply:
             if let parent = metadata?.parentCommentPreview, !parent.isEmpty {
                 return "En réponse à « \(parent) »"
             }
-            return Self.firstNonEmpty(subtitle, "En réponse à votre commentaire")
-        case .friendNewStory, .friendNewPost, .friendNewMood:
-            return socialLifecycleContext()
+            return "En réponse à votre commentaire"
+        case .commentLike, .commentReaction, .friendNewStory, .friendNewPost, .friendNewMood:
+            // Le body montre déjà le commentaire/extrait — pas d'aperçu dupliqué ici.
+            return socialKindLabel
         default:
-            return (subtitle?.isEmpty == false) ? subtitle : nil
+            var line = socialKindLabel
+            if let preview = metadata?.postPreview, !preview.isEmpty {
+                line += " · « \(preview) »"
+            }
+            return line
         }
+    }
+
+    /// Date de publication du contenu lié (« il y a 6 min » / « hier 14:30 » /
+    /// « 23/06/2026 14:30 »), formatée pour l'appareil. `nil` si absente.
+    private var contentPublishedLabel: String? {
+        guard let iso = context?.postCreatedAt, let date = Self.parseISODate(iso) else { return nil }
+        return NotificationDateFormatter.string(for: date)
     }
 
     private var loginDeviceBody: String? {
@@ -737,36 +782,6 @@ extension APINotification {
         case "audio": return "🎵 Audio"
         default: return nil
         }
-    }
-
-    /// Ligne contexte pour réactions / commentaires / partages : type d'entité +
-    /// aperçu + état (expirée le cas échéant).
-    func socialEntityContext(preview: String?) -> String? {
-        var line = socialKindLabel
-        if let preview, !preview.isEmpty {
-            line += " · « \(preview) »"
-        }
-        if let expiry = expiryLabel {
-            line += " · \(expiry)"
-        }
-        return line
-    }
-
-    /// Ligne cycle de vie pour le nouveau contenu d'un ami : type + date de
-    /// publication relative + état d'expiration. Une story expirée affiche ainsi
-    /// « Story · il y a 2 j · expirée » → l'utilisateur comprend la perte d'accès.
-    func socialLifecycleContext() -> String? {
-        var parts: [String] = [socialKindLabel]
-        if let created = context?.postCreatedAt, let date = Self.parseISODate(created) {
-            // Reuse the canonical, localized, thread-safe formatter (SDK core)
-            // rather than a bespoke ad-hoc one — keeps notification timestamps in
-            // lockstep with feed / comments / stories wording.
-            parts.append(RelativeTimeFormatter.longString(for: date))
-        }
-        if let expiry = expiryLabel {
-            parts.append(expiry)
-        }
-        return parts.joined(separator: " · ")
     }
 
     /// « expirée » quand la date d'expiration de l'entité liée est dépassée.

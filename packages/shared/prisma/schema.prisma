@@ -1217,12 +1217,18 @@ model NotificationPreference {
 }
 
 /// Notification pour un utilisateur - Structure groupée
-/// IMPORTANT: Le titre est construit dynamiquement côté frontend via i18n
+/// `title`/`subtitle` sont calculés côté serveur (langue du destinataire,
+/// conscients de l'entité) via buildNotificationDisplay puis persistés —
+/// source unique pour push, liste in-app (iOS/iPadOS/macOS) et web.
 model Notification {
   id       String   @id @default(auto()) @map("_id") @db.ObjectId
   userId   String   @db.ObjectId
-  /// Type de notification (new_message, missed_call, etc.) - utilisé pour construire le titre via i18n
+  /// Type de notification (new_message, missed_call, etc.)
   type     String
+  /// Titre « acteur + action » localisé, conscient de l'entité (null → repli client)
+  title    String?
+  /// Base de sous-titre localisée, SANS date (le client append la date locale)
+  subtitle String?
   /// Contenu principal ou preview du message
   content  String
   priority String   @default("normal")

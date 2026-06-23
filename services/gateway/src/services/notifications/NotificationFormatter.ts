@@ -67,7 +67,9 @@ export class NotificationFormatter {
       type: raw.type,
       priority: raw.priority || 'normal',
 
-      // CONTENT
+      // CONTENT — title/subtitle localisés & persistés côté serveur (source unique)
+      title: raw.title ?? null,
+      subtitle: raw.subtitle ?? null,
       content: raw.content,
 
       // ACTOR (cast car Prisma Json type)

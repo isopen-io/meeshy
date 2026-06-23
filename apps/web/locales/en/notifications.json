@@ -115,7 +115,8 @@
       "now": "just now",
       "minute": "{count} min ago",
       "hour": "{count}h ago",
-      "day": "{count}d ago"
+      "day": "{count}d ago",
+      "yesterdayAt": "yesterday {time}"
     },
     "actions": {
       "accept": "Accept",
@@ -328,6 +329,9 @@
       "reconnecting": "Reconnecting...",
       "disconnected": "Disconnected"
     },
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "context": {
+      "expired": "expired"
+    }
   }
 }

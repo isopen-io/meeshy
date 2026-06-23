@@ -229,6 +229,59 @@ export function formatNotificationTimeAgo(
 }
 
 /**
+ * Formate la date de publication d'un contenu social en libellé « intelligent » :
+ * relatif quand récent (« à l'instant » / « il y a 6 min » / « il y a 2h »),
+ * « hier 14:30 » la veille, puis date + heure absolues locales au-delà
+ * (« 23/06/2026 14:30 »). Locale et fuseau gérés par le navigateur — aucun
+ * format en dur. Utilisé pour décorer le sous-titre serveur côté appareil.
+ */
+export function formatContentPublishedAt(
+  iso: string | null | undefined,
+  t: TranslateFunction,
+  locale?: string
+): string {
+  if (!iso) return '';
+
+  const date = new Date(iso);
+  if (isNaN(date.getTime())) return '';
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+
+  if (diffMinutes < 0) {
+    return date.toLocaleDateString(locale, {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }) + ' ' + date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  }
+
+  if (diffMinutes < 1) return t('timeAgo.now');
+  if (diffMinutes < 60) return t('timeAgo.minute').replace('{count}', String(diffMinutes));
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday.getTime() - 86400000);
+  const time = date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+
+  if (date.getTime() >= startOfToday.getTime()) {
+    return t('timeAgo.hour').replace('{count}', String(diffHours));
+  }
+
+  if (date.getTime() >= startOfYesterday.getTime()) {
+    return t('timeAgo.yesterdayAt').replace('{time}', time);
+  }
+
+  const absoluteDate = date.toLocaleDateString(locale, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  return `${absoluteDate} ${time}`;
+}
+
+/**
  * Groups notifications by date period.
  * Returns entries in order: today, yesterday, this week, this month, older.
  */
@@ -307,6 +360,14 @@ export function buildNotificationTitle(
   notification: Notification,
   t?: TranslateFunction
 ): string {
+  // Le serveur est la source unique : `title` est déjà localisé et conscient de
+  // l'entité. On le retourne tel quel, ne tombant sur le repli client que
+  // lorsqu'il est null/vide (types non gérés par le builder serveur).
+  const serverTitle = notification.title;
+  if (typeof serverTitle === 'string' && serverTitle.trim().length > 0) {
+    return serverTitle;
+  }
+
   const actorName = getActorDisplayName(notification.actor);
   const conversationTitle = notification.context?.conversationTitle || (t ? t('content.defaultConversation') : 'la conversation');
 
@@ -409,6 +470,62 @@ export function buildNotificationTitle(
     default:
       return t('titles.default');
   }
+}
+
+/**
+ * Types de notifications « sociales » (post/story/réel/mood/commentaire) pour
+ * lesquels on affiche le sous-titre serveur enrichi de la date de publication.
+ */
+const SOCIAL_NOTIFICATION_TYPES = new Set<string>([
+  NotificationTypeEnum.POST_LIKE,
+  NotificationTypeEnum.POST_COMMENT,
+  NotificationTypeEnum.POST_REPOST,
+  NotificationTypeEnum.COMMENT_LIKE,
+  NotificationTypeEnum.COMMENT_REPLY,
+  NotificationTypeEnum.COMMENT_REACTION,
+  NotificationTypeEnum.STORY_REACTION,
+  NotificationTypeEnum.STATUS_REACTION,
+  NotificationTypeEnum.STORY_NEW_COMMENT,
+  NotificationTypeEnum.FRIEND_STORY_COMMENT,
+  NotificationTypeEnum.STORY_THREAD_REPLY,
+  NotificationTypeEnum.FRIEND_NEW_STORY,
+  NotificationTypeEnum.FRIEND_NEW_POST,
+  NotificationTypeEnum.FRIEND_NEW_MOOD,
+]);
+
+/**
+ * Construit la ligne « contexte » secondaire pour une notification sociale :
+ * le sous-titre serveur (entité/contexte localisé, sans date) décoré de la date
+ * de publication locale (`context.postCreatedAt`). Retourne `null` quand il n'y
+ * a pas de sous-titre serveur ou que le type n'est pas social — le client
+ * conserve alors son rendu existant.
+ */
+export function buildNotificationContextLine(
+  notification: Notification,
+  t: TranslateFunction,
+  locale?: string
+): string | null {
+  if (typeof notification.type !== 'string' || !SOCIAL_NOTIFICATION_TYPES.has(notification.type)) {
+    return null;
+  }
+
+  const subtitle = notification.subtitle;
+  if (typeof subtitle !== 'string' || subtitle.trim().length === 0) {
+    return null;
+  }
+
+  const publishedAt = formatContentPublishedAt(notification.context?.postCreatedAt, t, locale);
+
+  // Marqueur d'expiration (parité iOS) : une story/statut éphémère dont la date
+  // d'expiration est dépassée affiche « · expirée » → l'utilisateur comprend la
+  // perte d'accès au contenu lié.
+  const expiresAt = notification.context?.postExpiresAt;
+  const expired = typeof expiresAt === 'string' && !Number.isNaN(Date.parse(expiresAt))
+    && Date.parse(expiresAt) <= Date.now();
+
+  return [subtitle, publishedAt || null, expired ? t('context.expired') : null]
+    .filter((part): part is string => typeof part === 'string' && part.length > 0)
+    .join(' · ');
 }
 
 /**

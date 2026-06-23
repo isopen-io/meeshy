@@ -182,6 +182,10 @@ export function registerCommentRoutes(
               commentId: comment.id,
               replyPreview: parsed.data.content,
               parentCommentPreview: parentComment.content?.slice(0, 80),
+              // Précise « sur votre story/réel/… » + date côté client (du JJ/MM/AAAA HH:MM).
+              postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
+              postCreatedAt: post?.createdAt ?? undefined,
+              postExpiresAt: post?.expiresAt ?? undefined,
             }).catch(() => {});
           }
         } else if (post?.authorId && post.type !== 'STORY') {
@@ -198,6 +202,8 @@ export function registerCommentRoutes(
             commentPreview: parsed.data.content,
             postType: post.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
             postPreview: post.content?.slice(0, 80),
+            postCreatedAt: post.createdAt ?? undefined,
+            postExpiresAt: post.expiresAt ?? undefined,
           }).catch(() => {});
         }
       }

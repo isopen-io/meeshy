@@ -437,6 +437,62 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertEqual(n.formattedContext, "Story · « Soleil »")
     }
 
+    // MARK: - Server-built title/subtitle (single source) + content date
+
+    func test_formattedTitle_prefersServerTitle() throws {
+        // Le titre serveur (localisé, conscient de l'entité) prime sur le repli client.
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"comment_reply","title":"Belva Tano a répondu à votre commentaire",
+         "content":"Mon premier combat",
+         "actor":{"id":"a","username":"belva","displayName":"Belva Tano"},
+         "context":{"postId":"p1"},
+         "metadata":{"commentPreview":"Mon premier combat","postType":"STORY"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedTitle, "Belva Tano a répondu à votre commentaire")
+    }
+
+    func test_formattedTitle_fallsBackWhenNoServerTitle() throws {
+        // Anciennes notifs sans `title` serveur → repli client (commentReply corrigé).
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"comment_reply","content":"ok",
+         "actor":{"id":"a","username":"jo","displayName":"Jo"},
+         "context":{"postId":"p1"},
+         "metadata":{"commentPreview":"ok"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedTitle, "Jo a repondu a votre commentaire")
+    }
+
+    func test_formattedContext_prefersServerSubtitle() throws {
+        // Le sous-titre serveur (entité localisée) devient la base de la ligne contexte.
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"comment_reply","title":"Belva a répondu à votre commentaire",
+         "subtitle":"Story","content":"ok",
+         "actor":{"id":"a","username":"belva"},
+         "context":{"postId":"p1"},
+         "metadata":{"commentPreview":"ok","postType":"STORY"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedContext, "Story")
+    }
+
+    func test_formattedContext_appendsContentPublishedDate() throws {
+        // Complaint #3 : « a commenté une story du JJ/MM/AAAA HH:MM » — la date de
+        // publication du contenu (postCreatedAt, ancienne) est ajoutée au sous-titre.
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"friend_story_comment","title":"Belva a commenté une story",
+         "subtitle":"Story","content":"Magnifique",
+         "actor":{"id":"a","username":"belva"},
+         "context":{"postId":"p1","postCreatedAt":"2020-01-01T09:00:00.000Z"},
+         "metadata":{"commentPreview":"Magnifique","postType":"STORY"},
+         "state":{"isRead":false,"createdAt":"2020-01-02T10:00:00.000Z"}}
+        """)
+        let context = try XCTUnwrap(n.formattedContext)
+        XCTAssertTrue(context.hasPrefix("Story · "), "entity base then date: \(context)")
+        XCTAssertTrue(context.contains("2020"), "absolute content date expected: \(context)")
+    }
+
     func test_message_attachmentDetails_decoded() throws {
         let n = try decodeNotification("""
         {"id":"n","userId":"u","type":"new_message","content":"🎵 Audio · 0:34",

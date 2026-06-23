@@ -10,6 +10,7 @@ import type { Notification } from '@/types/notification';
 import {
   buildNotificationTitle,
   buildNotificationContent,
+  buildNotificationContextLine,
   getNotificationIcon,
   getNotificationLink,
   NOTIFICATION_ACCENT,
@@ -25,6 +26,8 @@ type NotificationItemProps = {
   onClick: (notification: Notification) => void;
   formatTimeAgo: (date: Date | string | null) => string;
   t: TranslateFunction;
+  /** Locale de l'appareil — décore la date locale de publication du contenu social. */
+  locale?: string;
   compact?: boolean;
   index?: number;
 };
@@ -36,12 +39,14 @@ export const NotificationItem = memo(function NotificationItem({
   onClick,
   formatTimeAgo,
   t,
+  locale,
   compact = false,
   index = 0,
 }: NotificationItemProps) {
   const isUnread = !notification.state.isRead;
   const title = buildNotificationTitle(notification, t);
   const body = buildNotificationContent(notification, t);
+  const contextLine = buildNotificationContextLine(notification, t, locale);
   const href = getNotificationLink(notification);
 
   const activate = () => onClick(notification);
@@ -107,6 +112,12 @@ export const NotificationItem = memo(function NotificationItem({
             {body}
           </p>
         ) : null}
+
+        {contextLine && (
+          <p className="mt-1 truncate text-xs text-muted-foreground">
+            {contextLine}
+          </p>
+        )}
 
         {!compact && notification.context?.conversationTitle && (
           <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
