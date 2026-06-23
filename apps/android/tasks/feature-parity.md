@@ -376,13 +376,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       axis, dispatched through `StoryViewerViewModel.onSwipe` into the engine's
       `jumpToNext/PreviousGroup` + new `StoryPlayback.dismissed()`). Pending:
       cross-dissolve transitions, per-story opening/closing effects.
-- [~] Timed auto-advance gated on media-load readiness; adjacent-slide prefetch (sliding window)
-      — done: **adjacent-slide prefetch**. Pure `StoryPrefetchPlanner.plan(playback, lookahead=2)`
+- [x] Timed auto-advance gated on media-load readiness; adjacent-slide prefetch (sliding window).
+      **Adjacent-slide prefetch**: pure `StoryPrefetchPlanner.plan(playback, lookahead=2)`
       returns the next N distinct image URLs ahead of the current slide in viewing order,
       continuing across author-group boundaries and skipping text-only slides; exposed as
       `StoryViewerUiState.prefetchUrls`, enqueued through the shared Coil `ImageLoader` in
       `StoryViewerScreen` so the next slide paints from cache (Instant-App — surpasses iOS's
-      single-next preload). Pending: auto-advance gated on actual media-load readiness.
+      single-next preload). **Media-load gate** (closes the loop): pure
+      `StoryAutoAdvanceGate.shouldCountdown(slide, resolvedImageUrls)` — text-only slides count
+      down at once, an image slide waits until its URL has resolved (load *or* error → never
+      hangs). `StoryViewerViewModel` tracks resolved URLs from `AsyncImage` `onSuccess`/`onError`
+      and exposes `canAutoAdvance`; the screen's countdown `LaunchedEffect` holds at empty until
+      the gate opens. Surpasses iOS, which starts its 5s timer on appearance regardless of paint.
 - [ ] Story content rendering: text/positioning/background/filters/media overlays
 - [~] Story reactions: emoji quick-strip + full picker, big floating animation, heart bounce, count
       — done: pure **`StoryReactionState`** reducer (optimistic local tap + idempotent

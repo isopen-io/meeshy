@@ -7,24 +7,24 @@
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
 who-viewed sheet + Room-backed tray SWR + comments overlay + segmented
-count-dots shipped earlier loops; this loop adds **adjacent-slide media
-prefetch** — a pure `StoryPrefetchPlanner` that warms the next N image-bearing
-slides' URLs (across author groups) into the shared Coil cache via
-`StoryViewerUiState.prefetchUrls`, so the next slide paints instantly
-(Instant-App, surpassing iOS's single-next preload).
+count-dots + adjacent-slide media prefetch shipped earlier loops; this loop adds
+the **auto-advance media-load gate** — a pure `StoryAutoAdvanceGate` that holds
+the 5s countdown until the current slide's image has resolved (load or error),
+so a slow image never auto-advances before it paints. This closes the loop the
+prefetch window opened (Instant-App, surpassing iOS which starts its timer on
+slide appearance regardless of paint).
 
 ## Next slice (pick one for the next run)
 
 Ordered by value within the Stories area:
 1. `story-composer` — publish flow (text/media) via the outbox/WorkManager chain.
-2. `story-autoadvance-media-gate` — gate the auto-advance timer on actual
-   media-load readiness (the prefetch window is in place; this closes the loop so
-   a slow image never auto-advances before it paints).
 
+(`story-autoadvance-media-gate` ✅ shipped 2026-06-23 — see run log.)
 (`story-media-prefetch` ✅ shipped 2026-06-23 — see run log.)
 (`story-tray-count-dots` ✅ shipped 2026-06-23 — see run log.)
 
-After these, advance to the **Calls** area (`feature-parity.md` §"Calls").
+After `story-composer` (Stories richness will then be sufficient), advance to the
+**Calls** area (`feature-parity.md` §"Calls").
 
 Note: server-side `currentUserReactions` seeding of `mine` on load, the
 app-wide `SocialSocketManager.attach()` lifecycle wiring (no caller yet — affects
@@ -36,6 +36,56 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-23 — slice `story-autoadvance-media-gate` ✅
+- **Branch:** `claude/apps/android/story-autoadvance-media-gate`
+- **Housekeeping:** closed PR #877 (`claude/wonderful-goldberg-8xtr6s`,
+  conversation swipe pin/mute/archive) as **superseded** — `main` already carries
+  a more complete implementation (`togglePin/toggleMute/toggleArchive`,
+  `set{Pinned,Muted,Archived}Optimistic` + `UPDATE_CONVERSATION_PREFS`,
+  `SwipeToDismissBox` + long-press menu, plus mark-read and pinned/muted row
+  badges the PR lacked). That branch was also far behind `main` (ancient
+  merge-base); re-merging would regress unrelated areas. Nothing needed to land.
+- **What:** gates the story viewer's 5s auto-advance countdown on actual
+  media-load readiness — closing the loop the prefetch window opened. A slow
+  image can no longer auto-advance before it has painted. Surpasses iOS, which
+  starts its timer on slide appearance regardless of paint state.
+- **Added (production):**
+  - `feature:stories` — pure `StoryAutoAdvanceGate.shouldCountdown(slide,
+    resolvedImageUrls)`: `null` slide → no countdown; text-only slide (no image)
+    → count down at once; image slide → count down only once its URL is in the
+    resolved set (a load **or** error resolves it, so the viewer never hangs).
+  - `StoryViewerViewModel` — `resolvedImageUrls` set + `onImageResolved(url)`
+    (re-emits only when the just-resolved URL is the current slide's image; off-
+    screen prefetch resolutions are recorded silently); `StoryViewerUiState
+    .canAutoAdvance` derived in `emit()` via the gate.
+  - `StoryViewerScreen` (exempt Composable glue) — `AsyncImage`
+    `onSuccess`/`onError` → `viewModel.onImageResolved(url)`; the countdown
+    `LaunchedEffect` now keys on `state.canAutoAdvance` and holds progress at
+    empty (`snapTo(0f)`, early return) until the gate opens.
+- **Tests (+9):**
+  - `StoryAutoAdvanceGateTest` (pure) +4 — null slide → false; text-only → true;
+    image waits then opens on resolve; a different resolved URL doesn't unblock.
+  - `StoryViewerViewModelTest` +5 — text-only slide can auto-advance immediately;
+    image slide blocked until `onImageResolved`; off-screen resolution leaves the
+    current gate closed; advancing to a new image slide re-closes the gate until
+    resolved; revisiting an already-resolved image keeps the gate open.
+- **Edge cases covered:** null/empty slide; text-only vs image; first-load
+  blocked; resolve-other-url inert for current; slide transition re-closes gate
+  (no carry-over readiness for a fresh URL); back-navigation to a resolved slide
+  stays open (no re-wait); idempotent resolve (set add guard).
+- **Verify:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 3m22s**
+  (full `assembleDebug` + all module JVM unit tests). Targeted
+  `:feature:stories:testDebugUnitTest` → gate 4/4, viewer-VM 29/29 green.
+- **Reviewer:** PASS — scope `apps/android` only; behavioural tests through the
+  public API, no tautologies; SDK purity (the "when may the countdown run /
+  what counts as ready" product rule is a pure unit in `:feature:stories`, not
+  the SDK; the screen only reports resolution + reads the flag); single source of
+  truth (reuses the existing `StorySlideView`/`StoryPlayback`; no second cache —
+  readiness is derived from the live `AsyncImage` callbacks); Instant-App
+  (proactive: never skips an unpainted image, complements the prefetch window);
+  UDF + immutable `UiState`, pure gate; colour/UX coherence (progress bar holds
+  at empty while waiting, no jarring skip); no dead end. Surpasses iOS.
 
 ### 2026-06-23 — slice `story-media-prefetch` ✅
 - **Branch:** `claude/apps/android/story-media-prefetch`

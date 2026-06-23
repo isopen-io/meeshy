@@ -395,4 +395,73 @@ class StoryViewerViewModelTest {
         vm.advance() // → a3, the last slide, nothing to warm
         assertThat(vm.state.value.prefetchUrls).isEmpty()
     }
+
+    @Test
+    fun `a text-only slide can auto-advance immediately`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        assertThat(vm.state.value.current?.imageUrl).isNull()
+        assertThat(vm.state.value.canAutoAdvance).isTrue()
+    }
+
+    @Test
+    fun `an image slide cannot auto-advance until its image resolves`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(imagePost("a1", "a", hoursAgo = 1, imageUrl = "http://img/a1.jpg")),
+        )
+        assertThat(vm.state.value.canAutoAdvance).isFalse()
+
+        vm.onImageResolved("http://img/a1.jpg")
+
+        assertThat(vm.state.value.canAutoAdvance).isTrue()
+    }
+
+    @Test
+    fun `resolving an off-screen image leaves the current slide's gate closed`() = runTest {
+        val posts = listOf(
+            imagePost("a1", "a", hoursAgo = 2, imageUrl = "http://img/a1.jpg"),
+            imagePost("a2", "a", hoursAgo = 1, imageUrl = "http://img/a2.jpg"),
+        )
+        val vm = viewModel(startUserId = "a", posts = posts)
+        assertThat(vm.state.value.current?.id).isEqualTo("a1")
+
+        vm.onImageResolved("http://img/a2.jpg") // prefetched, not the current slide
+
+        assertThat(vm.state.value.canAutoAdvance).isFalse()
+    }
+
+    @Test
+    fun `advancing to a new image slide re-closes the gate until that image resolves`() = runTest {
+        val posts = listOf(
+            imagePost("a1", "a", hoursAgo = 2, imageUrl = "http://img/a1.jpg"),
+            imagePost("a2", "a", hoursAgo = 1, imageUrl = "http://img/a2.jpg"),
+        )
+        val vm = viewModel(startUserId = "a", posts = posts)
+        vm.onImageResolved("http://img/a1.jpg")
+        assertThat(vm.state.value.canAutoAdvance).isTrue()
+
+        vm.advance() // → a2, not yet loaded
+        assertThat(vm.state.value.current?.id).isEqualTo("a2")
+        assertThat(vm.state.value.canAutoAdvance).isFalse()
+
+        vm.onImageResolved("http://img/a2.jpg")
+        assertThat(vm.state.value.canAutoAdvance).isTrue()
+    }
+
+    @Test
+    fun `revisiting an already-resolved image keeps the gate open`() = runTest {
+        val posts = listOf(
+            imagePost("a1", "a", hoursAgo = 2, imageUrl = "http://img/a1.jpg"),
+            imagePost("a2", "a", hoursAgo = 1, imageUrl = "http://img/a2.jpg"),
+        )
+        val vm = viewModel(startUserId = "a", posts = posts)
+        vm.onImageResolved("http://img/a1.jpg")
+        vm.advance() // → a2
+        vm.onImageResolved("http://img/a2.jpg")
+
+        vm.back() // → a1, already resolved earlier
+
+        assertThat(vm.state.value.current?.id).isEqualTo("a1")
+        assertThat(vm.state.value.canAutoAdvance).isTrue()
+    }
 }

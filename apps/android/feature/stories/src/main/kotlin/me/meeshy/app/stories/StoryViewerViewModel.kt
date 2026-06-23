@@ -54,6 +54,7 @@ data class StoryViewerUiState(
     val isOwnStory: Boolean = false,
     val currentStoryId: String? = null,
     val prefetchUrls: List<String> = emptyList(),
+    val canAutoAdvance: Boolean = false,
 ) {
     val current: StorySlideView? get() = slides.getOrNull(index)
     val hasNext: Boolean get() = index < slides.lastIndex
@@ -75,6 +76,14 @@ class StoryViewerViewModel @Inject constructor(
 
     /** Optimistic reaction state per slide id, seeded lazily from the slide's count. */
     private val reactionStates = mutableMapOf<String, StoryReactionState>()
+
+    /**
+     * Image URLs whose load has resolved (succeeded or failed) on screen. Feeds
+     * [StoryAutoAdvanceGate] so the countdown waits for the current slide's media
+     * to paint. Persists across slides so revisiting an already-seen image never
+     * re-waits.
+     */
+    private val resolvedImageUrls = mutableSetOf<String>()
 
     private val _state = MutableStateFlow(StoryViewerUiState())
     val state: StateFlow<StoryViewerUiState> = _state.asStateFlow()
@@ -166,6 +175,17 @@ class StoryViewerViewModel @Inject constructor(
         emit()
     }
 
+    /**
+     * Report that an image URL has resolved on screen (load succeeded or failed).
+     * Re-emits only when the just-resolved URL is the current slide's image, so
+     * the gate flips and the countdown can start; resolutions for off-screen
+     * (prefetched) slides are recorded silently.
+     */
+    fun onImageResolved(url: String) {
+        if (!resolvedImageUrls.add(url)) return
+        if (playback.currentSlide?.imageUrl == url) emit()
+    }
+
     fun markCurrentViewed() {
         val slideId = playback.currentSlide?.id ?: return
         viewModelScope.launch {
@@ -221,6 +241,7 @@ class StoryViewerViewModel @Inject constructor(
             isOwnStory = playback.currentGroup?.userId == sessionRepository.currentUserId,
             currentStoryId = playback.currentSlide?.id,
             prefetchUrls = StoryPrefetchPlanner.plan(playback),
+            canAutoAdvance = StoryAutoAdvanceGate.shouldCountdown(playback.currentSlide, resolvedImageUrls),
         )
     }
 
