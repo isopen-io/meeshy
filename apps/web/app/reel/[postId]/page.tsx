@@ -15,6 +15,7 @@ import {
 } from '@/hooks/queries/use-post-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 import { useI18n } from '@/hooks/useI18n';
 import type { Post } from '@meeshy/shared/types/post';
 
@@ -86,6 +87,13 @@ export default function ReelPage() {
   }, [index, thread.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const current = thread[index];
+  const currentId = current?.id ?? '';
+
+  // Record an impression for whichever reel is on screen (source: 'feed', as iOS).
+  const { record: recordImpression } = useImpressionTracking({ source: 'feed' });
+  useEffect(() => {
+    if (currentId) recordImpression(currentId);
+  }, [currentId, recordImpression]);
 
   const close = useCallback(() => {
     if (window.history.length > 1) router.back();

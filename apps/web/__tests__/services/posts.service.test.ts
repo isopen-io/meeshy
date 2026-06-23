@@ -218,6 +218,53 @@ describe('postsService', () => {
     });
   });
 
+  // ── Impressions ───────────────────────────────────────────────────────
+
+  describe('recordImpressions', () => {
+    it('calls POST /posts/impressions/batch with ids and default source feed', async () => {
+      mockApi.post.mockResolvedValue({ success: true, data: { recorded: 2 } });
+      await postsService.recordImpressions(['p1', 'p2']);
+      expect(mockApi.post).toHaveBeenCalledWith('/posts/impressions/batch', { postIds: ['p1', 'p2'], source: 'feed' });
+    });
+
+    it('forwards an explicit source', async () => {
+      mockApi.post.mockResolvedValue({ success: true, data: { recorded: 1 } });
+      await postsService.recordImpressions(['p1'], 'profile');
+      expect(mockApi.post).toHaveBeenCalledWith('/posts/impressions/batch', { postIds: ['p1'], source: 'profile' });
+    });
+
+    it('is a no-op when the id list is empty (never hits the network)', async () => {
+      await postsService.recordImpressions([]);
+      expect(mockApi.post).not.toHaveBeenCalled();
+    });
+
+    it('chunks ids past the 50-per-request server cap', async () => {
+      mockApi.post.mockResolvedValue({ success: true, data: { recorded: 50 } });
+      const ids = Array.from({ length: 120 }, (_, i) => `p${i}`);
+
+      await postsService.recordImpressions(ids);
+
+      expect(mockApi.post).toHaveBeenCalledTimes(3);
+      expect(mockApi.post).toHaveBeenNthCalledWith(1, '/posts/impressions/batch', { postIds: ids.slice(0, 50), source: 'feed' });
+      expect(mockApi.post).toHaveBeenNthCalledWith(2, '/posts/impressions/batch', { postIds: ids.slice(50, 100), source: 'feed' });
+      expect(mockApi.post).toHaveBeenNthCalledWith(3, '/posts/impressions/batch', { postIds: ids.slice(100, 120), source: 'feed' });
+    });
+  });
+
+  describe('recordImpression', () => {
+    it('calls POST /posts/:postId/impression with default source detail', async () => {
+      mockApi.post.mockResolvedValue({ success: true, data: { recorded: true } });
+      await postsService.recordImpression('post-1');
+      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/impression', { source: 'detail' });
+    });
+
+    it('forwards an explicit source', async () => {
+      mockApi.post.mockResolvedValue({ success: true, data: { recorded: true } });
+      await postsService.recordImpression('post-1', 'notification');
+      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/impression', { source: 'notification' });
+    });
+  });
+
   // ── Comments ──────────────────────────────────────────────────────────
 
   describe('getComments', () => {

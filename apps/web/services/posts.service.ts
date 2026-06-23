@@ -57,6 +57,23 @@ export interface RepostRequest {
   readonly isQuote?: boolean;
 }
 
+/**
+ * Surface a post impression originates from. Mirrors the gateway's accepted
+ * `source` enum (`/posts/:postId/impression` + `/posts/impressions/batch`) and
+ * iOS `PostService.recordImpression(s)`. `feed` is used for both the posts feed
+ * and the reels thread; `detail` additionally bumps `postOpenCount` server-side.
+ */
+export type ImpressionSource =
+  | 'feed'
+  | 'profile'
+  | 'search'
+  | 'shared_link'
+  | 'notification'
+  | 'detail';
+
+/** Max post ids the gateway accepts per `/posts/impressions/batch` call. */
+const IMPRESSION_BATCH_LIMIT = 50;
+
 export interface FeedFilters {
   readonly cursor?: string;
   readonly limit?: number;
@@ -249,6 +266,24 @@ export const postsService = {
       `/posts/${postId}/views?limit=${limit}&offset=${offset}`,
     );
     return unwrap(response);
+  },
+
+  // ── Impressions ─────────────────────────────────────────────────────────
+  // A lightweight "this post entered the viewport" reach signal feeding
+  // `impressionCount`, distinct from `viewPost` (`viewCount`). Mirrors iOS
+  // `PostService.recordImpressions` / `recordImpression`. The batch endpoint
+  // caps at IMPRESSION_BATCH_LIMIT ids, so longer runs are chunked here.
+
+  async recordImpressions(postIds: readonly string[], source: ImpressionSource = 'feed'): Promise<void> {
+    if (postIds.length === 0) return;
+    for (let i = 0; i < postIds.length; i += IMPRESSION_BATCH_LIMIT) {
+      const chunk = postIds.slice(i, i + IMPRESSION_BATCH_LIMIT);
+      await apiService.post('/posts/impressions/batch', { postIds: chunk, source });
+    }
+  },
+
+  async recordImpression(postId: string, source: ImpressionSource = 'detail'): Promise<void> {
+    await apiService.post(`/posts/${postId}/impression`, { source });
   },
 
   // ── Translation ─────────────────────────────────────────────────────────
