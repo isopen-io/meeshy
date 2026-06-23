@@ -1820,6 +1820,23 @@ public final class StoryCanvasUIView: UIView {
             pendingBackgroundActivation = false
             if mode == .play {
                 backgroundLayer.isPlaybackActive = true
+                // Aligne l'OUVERTURE sur la REPRISE (long-press → tap) et le
+                // retour d'app : ces deux chemins (`setStoryPlaybackPaused(false)`,
+                // `handleDidBecomeActive`) font `forEachAVPlayer { $0.play() }`
+                // EN PLUS de (ré)activer la vidéo bg + l'audio. Sans ce play() au
+                // moment « GO » (content-ready), une vidéo foreground attachée
+                // tôt (avant content-ready, cf. `StoryMediaLayer.attachPlayer`)
+                // mais stallée/pausée par une course session/buffer restait figée
+                // jusqu'à un pause/resume manuel — symptôme user « quand ça bogue,
+                // je long-press puis touche et ça joue mieux ». Idempotent (play()
+                // sur un player déjà en lecture = no-op) et respecte le mute
+                // (`player.isMuted`). Gardé sur `window != nil` comme
+                // `handleDidBecomeActive` : un canvas `.play` retenu hors écran
+                // (préemption / cross-fade sortant) ne doit pas relancer ses
+                // foreground players.
+                if window != nil {
+                    forEachAVPlayer { $0.play() }
+                }
                 startAudioPlayback()
             }
         }
