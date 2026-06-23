@@ -8,4 +8,11 @@
     <string name="stories_viewer_previous">Historia anterior</string>
     <string name="stories_translated">Traducido</string>
     <string name="stories_empty">No hay ninguna historia</string>
+    <string name="stories_viewers_title">Vistas</string>
+    <string name="stories_viewers_count">%1$d vistas</string>
+    <string name="stories_viewers_empty_title">Aún no hay vistas</string>
+    <string name="stories_viewers_empty_subtitle">Las personas que vean tu historia aparecerán aquí.</string>
+    <string name="stories_viewers_loading">Cargando vistas…</string>
+    <string name="stories_viewers_error">No se pudieron cargar las vistas</string>
+    <string name="stories_viewer_open_viewers">Ver quién vio esta historia</string>
 </resources>

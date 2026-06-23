@@ -5,9 +5,10 @@
 `Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → **Stories (in progress)** → Calls → rest`
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
-quick-reaction strip + swipe gestures shipped earlier loops; this loop wires the
-**realtime reaction socket deltas** (`story:reacted`/`story:unreacted`) into the
-open viewer so other users' reactions update the live count.
+quick-reaction strip + swipe gestures + realtime reaction socket deltas shipped
+earlier loops; this loop ships the **who-viewed sheet** (author-only viewers
+list): `StoryRepository.viewers()`, a pure ordering rule, a cold-skeleton SWR
+ViewModel and a `ModalBottomSheet` reachable from a "Views" button in the viewer.
 
 ## Next slice (pick one for the next run)
 
@@ -15,17 +16,76 @@ Ordered by value within the Stories area:
 1. `story-tray-swr` — Room/SWR backing for the tray so it is genuinely
    cache-first (skeleton only on cold empty), per Instant-App principles.
 2. `story-composer` — publish flow (text/media) via the outbox/WorkManager chain.
-3. `story-viewers-sheet` — who-viewed list (uses `story:viewed` flow already on
-   `SocialSocketManager`).
+3. `story-comments-overlay` — live-chat comments panel + optimistic posting.
 
-Note: server-side `currentUserReactions` seeding of `mine` on load, and the
+Note: server-side `currentUserReactions` seeding of `mine` on load, the
 app-wide `SocialSocketManager.attach()` lifecycle wiring (no caller yet — affects
-ALL social events, touches `:app`), remain tracked follow-ups.
+ALL social events, touches `:app`), and realtime `story:viewed` append to the
+viewers list (socket payload lacks the viewer's name/avatar to render a row —
+needs a richer gateway event or a user lookup) all remain tracked follow-ups.
 
 After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-23 — slice `story-viewers-sheet` ✅
+- **Branch:** `claude/apps/android/story-viewers-sheet`
+- **What:** the author-only **who-viewed sheet** for a story — parity with iOS
+  `StoryViewersSheet` + `StoryInteractionService.loadViewers`, surpassing it with
+  most-recent-first ordering, blank-field hardening and Instant-App SWR behaviour.
+- **Added (production):**
+  - `StoryViewer` (domain) + `StoryViewersResponse`/`StoryViewerWire` (wire) +
+    pure `StoryViewerWire.toStoryViewer()` in `core/model` — wire shape mirrors
+    iOS `StoryViewersWireResponse` (`{ viewers: [{id, username, displayName?,
+    avatarUrl?, viewedAt?, reaction?}] }`). The mapper falls back display name to
+    username on null **or blank** (iOS only nil-checks) and collapses blank
+    avatar/reaction/viewedAt to `null`.
+  - `StoryApi.viewers(id)` → `GET posts/{id}/interactions`; `StoryRepository
+    .viewers(storyId): NetworkResult<List<StoryViewer>>` (apiCall + `.map` of the
+    wire list through `toStoryViewer()`).
+  - `StoryViewersPresentation.order()` (`:feature:stories`, pure) — most-recent
+    first (ISO `viewedAt` desc, nulls sink last, stable for ties), defensive
+    dedup-by-id keeping the most-recent row. (iOS renders raw gateway order.)
+  - `StoryViewersViewModel` — `load(storyId)` with Instant-App discipline:
+    skeleton only on a cold empty load, a refresh keeps the existing list on
+    screen and **swallows** a refresh failure, an error surfaces only on a cold
+    failure; re-entrancy-guarded against a duplicate in-flight load for the same id.
+  - `StoryViewersSheet` (`ModalBottomSheet`) — accent-coherent title/count,
+    avatar rows (`MeeshyAvatar` + `DynamicColorGenerator.colorForName`), distinct
+    loading / empty / error states. Reachable via an **author-only** "Views"
+    button added to `StoryViewerScreen`'s top bar (gated on `isOwnStory &&
+    currentStoryId != null`); the auto-advance timer pauses while the sheet is open.
+  - `StoryViewerUiState` gains `isOwnStory` + `currentStoryId`, derived in `emit()`
+    from `playback.currentGroup?.userId == currentUserId` and the current slide id.
+  - Strings (`stories_viewers_*`, `stories_viewer_open_viewers`) in en/fr/es/pt.
+- **Tests (+22):**
+  - `StoryViewerMappingTest` +6 (display-name present / null-fallback / blank-fallback;
+    blank avatar+reaction → null; all-present passthrough; blank viewedAt → null).
+  - `StoryRepositoryTest` (new) +3 (wire→domain mapping incl. displayName default;
+    empty payload → empty list; network error → Failure).
+  - `StoryViewersPresentationTest` +6 (recent-first sort; nulls last; null-tie input
+    order preserved; dedup keeps most-recent; empty; single unchanged).
+  - `StoryViewersViewModelTest` +7 (ordered success; empty → isEmpty no error; cold
+    failure → error; cold exception → message; refresh failure keeps list no error;
+    cold skeleton→list; re-entrancy guard = 1 repo call).
+  - `StoryViewerViewModelTest` +2 (`currentStoryId` tracks the visible slide;
+    `isOwnStory` true only on the current user's own group).
+- **Edge cases covered:** empty/single/duplicate viewer lists; null & blank wire
+  fields; null timestamps; cold vs warm (refresh) load; cold failure vs refresh
+  failure (keep stale); exception (non-cancellation) path; re-entrant load; own
+  vs foreign group authorship; absent current story id.
+- **Verify:** `./apps/android/meeshy.sh check` → BUILD SUCCESSFUL (full
+  `assembleDebug` + all module JVM unit tests). Targeted: `:core:model`,
+  `:sdk-core`, `:feature:stories` testDebugUnitTest all green.
+- **Reviewer:** PASS — scope `apps/android` only; behavioural tests, no
+  tautologies; SDK purity (wire model + mapper + repository method = building
+  blocks in `core/model`/`sdk-core`; the "order most-recent-first / when to show
+  skeleton vs keep stale / author-only affordance" product rules live in
+  `:feature:stories`); single source of truth (avatar colour via
+  `DynamicColorGenerator`, accent via `accentHex`); Instant-App (cold-only
+  skeleton, stale-kept refresh); UDF + immutable `UiState`; no dead end (button →
+  sheet → dismiss returns to a coherent viewer).
 
 ### 2026-06-23 — slice `story-reaction-socket-delta` ✅
 - **Branch:** `claude/apps/android/story-reaction-socket-delta`

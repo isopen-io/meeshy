@@ -51,6 +51,8 @@ data class StoryViewerUiState(
     val reactionCount: Int = 0,
     val myReactions: Set<String> = emptySet(),
     val quickReactions: List<String> = EmojiCatalog.defaultQuickReactions,
+    val isOwnStory: Boolean = false,
+    val currentStoryId: String? = null,
 ) {
     val current: StorySlideView? get() = slides.getOrNull(index)
     val hasNext: Boolean get() = index < slides.lastIndex
@@ -215,6 +217,8 @@ class StoryViewerViewModel @Inject constructor(
             isDismissed = playback.isDismissed,
             reactionCount = reaction.count,
             myReactions = reaction.mine,
+            isOwnStory = playback.currentGroup?.userId == sessionRepository.currentUserId,
+            currentStoryId = playback.currentSlide?.id,
         )
     }
 

@@ -2,6 +2,8 @@ package me.meeshy.sdk.story
 
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.StoryViewer
+import me.meeshy.sdk.model.toStoryViewer
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateCommentRequest
 import me.meeshy.sdk.net.api.RepostPostRequest
@@ -36,4 +38,12 @@ class StoryRepository @Inject constructor(
 
     suspend fun fetchPost(id: String): NetworkResult<ApiPost> =
         apiCall { storyApi.fetchPost(id) }
+
+    /**
+     * Fetches the viewers of a story (with their optional reaction), mapping the
+     * wire payload to domain [StoryViewer]s. Port of iOS
+     * `StoryInteractionService.loadViewers`.
+     */
+    suspend fun viewers(storyId: String): NetworkResult<List<StoryViewer>> =
+        apiCall { storyApi.viewers(storyId) }.map { it.viewers.map { wire -> wire.toStoryViewer() } }
 }

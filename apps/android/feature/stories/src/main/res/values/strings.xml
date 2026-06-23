@@ -8,4 +8,11 @@
     <string name="stories_viewer_previous">Previous story</string>
     <string name="stories_translated">Translated</string>
     <string name="stories_empty">No story to show</string>
+    <string name="stories_viewers_title">Views</string>
+    <string name="stories_viewers_count">%1$d views</string>
+    <string name="stories_viewers_empty_title">No views yet</string>
+    <string name="stories_viewers_empty_subtitle">People who watch your story will appear here.</string>
+    <string name="stories_viewers_loading">Loading views…</string>
+    <string name="stories_viewers_error">Couldn\'t load views</string>
+    <string name="stories_viewer_open_viewers">See who viewed this story</string>
 </resources>

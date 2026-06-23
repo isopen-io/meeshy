@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.StoryViewersResponse
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -55,4 +56,7 @@ interface StoryApi {
 
     @GET("posts/{id}")
     suspend fun fetchPost(@Path("id") postId: String): ApiResponse<ApiPost>
+
+    @GET("posts/{id}/interactions")
+    suspend fun viewers(@Path("id") storyId: String): ApiResponse<StoryViewersResponse>
 }

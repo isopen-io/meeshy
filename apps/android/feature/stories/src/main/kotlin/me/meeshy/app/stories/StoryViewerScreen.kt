@@ -27,7 +27,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,14 +67,16 @@ fun StoryViewerScreen(
     val slide = state.current
     val accent = remember(slide?.accentHex) { slide?.accentHex ?: "1A1A2E" }
 
+    var showViewers by remember { mutableStateOf(false) }
+
     val progress = remember { Animatable(0f) }
 
     androidx.compose.runtime.LaunchedEffect(state.isDismissed) {
         if (state.isDismissed) onClose()
     }
 
-    androidx.compose.runtime.LaunchedEffect(state.groupIndex, state.index, state.slides.size) {
-        if (state.slides.isEmpty() || state.isDismissed) return@LaunchedEffect
+    androidx.compose.runtime.LaunchedEffect(state.groupIndex, state.index, state.slides.size, showViewers) {
+        if (state.slides.isEmpty() || state.isDismissed || showViewers) return@LaunchedEffect
         viewModel.markCurrentViewed()
         progress.snapTo(0f)
         progress.animateTo(1f, tween(durationMillis = SLIDE_DURATION_MS, easing = LinearEasing))
@@ -178,6 +182,19 @@ fun StoryViewerScreen(
                 if (slide?.isTranslated == true) {
                     TranslatedBadge()
                 }
+                if (state.isOwnStory && state.currentStoryId != null) {
+                    Text(
+                        text = stringResource(R.string.stories_viewers_title),
+                        color = MeeshyPalette.White,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.4f))
+                            .clickable { showViewers = true }
+                            .padding(horizontal = MeeshySpacing.sm, vertical = 2.dp),
+                    )
+                }
                 IconButton(onClick = onClose) {
                     Icon(
                         Icons.Filled.Close,
@@ -208,6 +225,15 @@ fun StoryViewerScreen(
                 modifier = Modifier.align(Alignment.Center),
             )
         }
+    }
+
+    val viewersStoryId = state.currentStoryId
+    if (showViewers && viewersStoryId != null) {
+        StoryViewersSheet(
+            storyId = viewersStoryId,
+            accentHex = accent,
+            onDismiss = { showViewers = false },
+        )
     }
 }
 

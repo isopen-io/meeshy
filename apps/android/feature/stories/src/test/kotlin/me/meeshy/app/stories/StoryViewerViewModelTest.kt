@@ -333,4 +333,30 @@ class StoryViewerViewModelTest {
         assertThat(vm.state.value.isDismissed).isFalse()
         assertThat(vm.state.value.slides).isEmpty()
     }
+
+    @Test
+    fun `currentStoryId tracks the visible slide`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        assertThat(vm.state.value.currentStoryId).isEqualTo("a1")
+
+        vm.advance() // → group b, b1
+
+        assertThat(vm.state.value.currentStoryId).isEqualTo("b1")
+    }
+
+    @Test
+    fun `isOwnStory is true only on the current user's own group`() = runTest {
+        every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
+        every { session.currentUserId } returns "a"
+        coEvery { storyRepository.list(any(), any()) } returns NetworkResult.Success(twoAuthors())
+        coEvery { storyRepository.markViewed(any()) } returns NetworkResult.Success(Unit)
+        val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to "a"))
+        val vm = StoryViewerViewModel(storyRepository, session, socialSocket, config, handle)
+
+        assertThat(vm.state.value.isOwnStory).isTrue() // group a, author == current user
+
+        vm.advance() // → group b (someone else's story)
+
+        assertThat(vm.state.value.isOwnStory).isFalse()
+    }
 }
