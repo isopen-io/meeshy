@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.toStoryGroups
 import javax.inject.Inject
@@ -60,6 +61,7 @@ data class StoryViewerUiState(
 class StoryViewerViewModel @Inject constructor(
     private val storyRepository: StoryRepository,
     private val sessionRepository: SessionRepository,
+    private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -76,6 +78,43 @@ class StoryViewerViewModel @Inject constructor(
 
     init {
         load()
+        observeReactionDeltas()
+    }
+
+    /**
+     * Reconcile other users' realtime reactions into the open viewer. A
+     * `story:reacted` is a +1 and `story:unreacted` a -1 on the targeted slide;
+     * the pure [StoryReactionState.applyDelta] keeps the user's OWN echo from
+     * double-counting the optimistic bump from [react].
+     */
+    private fun observeReactionDeltas() {
+        viewModelScope.launch {
+            socialSocket.storyReacted.collect {
+                onReactionDelta(it.storyId, it.emoji, delta = 1, actorId = it.userId)
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.storyUnreacted.collect {
+                onReactionDelta(it.storyId, it.emoji, delta = -1, actorId = it.userId)
+            }
+        }
+    }
+
+    private fun onReactionDelta(storyId: String, emoji: String, delta: Int, actorId: String) {
+        val current = seededReactionState(storyId) ?: return
+        val isOwn = actorId == sessionRepository.currentUserId
+        val next = current.applyDelta(emoji, delta, isOwn)
+        if (next == current) return
+        reactionStates[storyId] = next
+        emit()
+    }
+
+    private fun seededReactionState(storyId: String): StoryReactionState? {
+        reactionStates[storyId]?.let { return it }
+        val slide = playback.groups.firstNotNullOfOrNull { group ->
+            group.slides.firstOrNull { it.id == storyId }
+        } ?: return null
+        return StoryReactionState(count = slide.reactionCount)
     }
 
     private fun load() {
