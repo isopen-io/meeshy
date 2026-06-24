@@ -16,7 +16,7 @@ Conséquences sur web :
 - [x] It.1 — Hook `usePostRoom(postId)` (post:join/leave) + wiring post detail, reel detail, story, reels-feed inline comments (8 tests)
 - [x] It.2 — Bug `handleCommentReactionSync` (clé cache commentId→postId, +postId au payload shared+gateway) + helper `patchCommentInPostCaches` (match préfixe → live sur top-level ET replies pour like/reaction/translation) + routing `comment:added` reply→replies cache (+replyCount) + `comment:deleted` purge tous caches
 - [x] It.3 — Statuses/moods réels : `use-statuses.ts` (feed query keyée posts.statuses() + create mutation STATUS) + `status-transforms.ts` (postToStatusItem) + PostsFeedScreen câblé (mock retiré). Temps réel via usePostSocketCacheSync (invalide la même clé). 12 tests.
-- [ ] It.4 — UI liste des viewers de story (API getViewers existe déjà)
+- [x] It.4 — UI liste des viewers de story : `use-story-viewers.ts` (query getViewers, gate auteur) + `StoryViewersSheet.tsx` + StoryViewer (compteur de vues cliquable pour l'auteur, pause timeline, panneau slide-up). 4 tests.
 
 ## Méthode
 TDD RED-GREEN-REFACTOR, 1 commit/push par itération sur `claude/festive-faraday-m9u3s4`.
