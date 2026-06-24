@@ -359,6 +359,40 @@ describe('SocialEventsHandler', () => {
     });
   });
 
+  describe('post broadcasts — visibility filtering (rights of diffusion, C1-bis)', () => {
+    it('broadcastPostCreated for a PRIVATE post reaches only the author feed', async () => {
+      const post = createMockPost({ id: 'p-priv', visibility: 'PRIVATE' });
+
+      await handler.broadcastPostCreated(post, AUTHOR_ID);
+
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
+      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_1));
+      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
+    });
+
+    it('broadcastPostCreated for an ONLY post reaches only the allow-listed friend', async () => {
+      const post = createMockPost({ id: 'p-only', visibility: 'ONLY', visibilityUserIds: [FRIEND_1] });
+
+      await handler.broadcastPostCreated(post, AUTHOR_ID);
+
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(FRIEND_1));
+      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
+    });
+
+    it('broadcastPostLiked for an EXCEPT post skips the excluded friend feed (post room still reached)', async () => {
+      await handler.broadcastPostLiked(
+        { postId: 'p-exc', userId: VIEWER_ID, emoji: '❤️', likeCount: 1, reactionSummary: { '❤️': 1 } },
+        AUTHOR_ID,
+        'EXCEPT',
+        [FRIEND_1],
+      );
+
+      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_1));
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.post('p-exc'));
+    });
+  });
+
   describe('broadcastStatusReacted', () => {
     it('should emit STATUS_REACTED to the status author AND to the post room', () => {
       const data: StatusReactedEventData = {

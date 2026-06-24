@@ -228,7 +228,7 @@ export class PostTranslationService {
 
       const post = await this.prisma.post.findUnique({
         where: { id: postId },
-        select: { authorId: true },
+        select: { authorId: true, visibility: true, visibilityUserIds: true },
       });
 
       if (post) {
@@ -241,7 +241,7 @@ export class PostTranslationService {
             confidenceScore: confidenceScore ?? 1,
             createdAt: new Date().toISOString(),
           },
-        }, post.authorId).catch(() => {});
+        }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch(() => {});
       }
     } catch (err) {
       log.error('PostTranslation: persist failed', err, { postId, targetLanguage });

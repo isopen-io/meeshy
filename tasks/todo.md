@@ -23,7 +23,7 @@ TDD RED-GREEN-REFACTOR, 1 commit/push par itération sur `claude/festive-faraday
 
 ## Audit expert — cohérence événements sociaux & droits de diffusion
 - [x] **C1 CRITIQUE (corrigé)** : `comment:added/deleted/translation-updated/media-updated` fuyaient vers TOUS les amis de l'auteur sans filtrage → contenu de commentaire sur post ONLY/EXCEPT/PRIVATE/COMMUNITY exposé. Fix : `broadcast*` filtrent via `getVisibilityFilteredRecipients` (défaut PUBLIC rétro-compat) ; appelants passent `post.visibility`/`visibilityUserIds`.
-- [ ] **C1-bis (post-level, même classe)** : `post:created/updated/liked/unliked/translation-updated` fan-out amis non filtré → fuite pour un post ONLY/EXCEPT/PRIVATE. À traiter.
+- [x] **C1-bis (post-level, corrigé)** : `post:created/updated/liked/unliked/reposted/translation-updated` filtrent désormais par visibilité (created/updated/reposted lisent depuis l'objet post ; liked/unliked/translation reçoivent visibility des appelants). Post room (join-gated) conservée.
 - [ ] H1 : iOS `SocketCommentReactionSyncEvent` manque `postId` (ajouté côté shared/gateway/web). 
 - [ ] H2 : `*:reaction-sync` jamais broadcast (ACK-only) → listeners morts web+iOS (supprimer ou câbler).
 - [ ] H3 : `comment:liked` n'atteint que l'auteur du commentaire → like de commentaire non live pour les autres viewers.
