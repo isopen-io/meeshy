@@ -280,7 +280,7 @@ export class PostTranslationService {
       if (comment) {
         const post = await this.prisma.post.findUnique({
           where: { id: comment.postId },
-          select: { authorId: true },
+          select: { authorId: true, visibility: true, visibilityUserIds: true },
         });
 
         if (post) {
@@ -294,7 +294,7 @@ export class PostTranslationService {
               confidenceScore: confidenceScore ?? 1,
               createdAt: new Date().toISOString(),
             },
-          }, post.authorId).catch(() => {});
+          }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch(() => {});
         }
       }
     } catch (err) {

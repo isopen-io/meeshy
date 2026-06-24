@@ -455,6 +455,57 @@ describe('SocialEventsHandler', () => {
     });
   });
 
+  // C1 — comment events must respect the POST's visibility, NOT fan out to all
+  // the author's friends regardless of who may see the post.
+  describe('broadcastCommentAdded — visibility filtering (rights of diffusion)', () => {
+    const makeData = (postId = 'post-1'): CommentAddedEventData => ({
+      postId,
+      comment: { id: 'comment-1', content: 'secret', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() },
+      commentCount: 1,
+    });
+
+    it('PRIVATE: reaches ONLY the author feed and the (join-gated) post room — never friend feeds', async () => {
+      await handler.broadcastCommentAdded(makeData(), AUTHOR_ID, 'PRIVATE', []);
+
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual([ROOMS.feed(AUTHOR_ID), ROOMS.post('post-1')]);
+      expect(rooms).not.toContain(ROOMS.feed(FRIEND_1));
+      expect(rooms).not.toContain(ROOMS.feed(FRIEND_2));
+    });
+
+    it('ONLY: reaches only the allow-listed friend (+ author + post room)', async () => {
+      await handler.broadcastCommentAdded(makeData(), AUTHOR_ID, 'ONLY', [FRIEND_1]);
+
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(expect.arrayContaining([ROOMS.feed(FRIEND_1), ROOMS.feed(AUTHOR_ID), ROOMS.post('post-1')]));
+      expect(rooms).not.toContain(ROOMS.feed(FRIEND_2));
+    });
+
+    it('EXCEPT: excludes the listed friend but keeps the others', async () => {
+      await handler.broadcastCommentAdded(makeData(), AUTHOR_ID, 'EXCEPT', [FRIEND_1]);
+
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toContain(ROOMS.feed(FRIEND_2));
+      expect(rooms).not.toContain(ROOMS.feed(FRIEND_1));
+    });
+
+    it('defaults to PUBLIC friend fan-out when visibility is omitted (back-compat)', async () => {
+      await handler.broadcastCommentAdded(makeData(), AUTHOR_ID);
+
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(expect.arrayContaining([ROOMS.feed(FRIEND_1), ROOMS.feed(FRIEND_2)]));
+    });
+  });
+
+  describe('broadcastCommentDeleted — visibility filtering', () => {
+    it('PRIVATE: does not reach friend feeds', async () => {
+      await handler.broadcastCommentDeleted({ postId: 'post-1', commentId: 'c1', commentCount: 0 }, AUTHOR_ID, 'PRIVATE', []);
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).not.toContain(ROOMS.feed(FRIEND_1));
+      expect(rooms).toEqual(expect.arrayContaining([ROOMS.feed(AUTHOR_ID), ROOMS.post('post-1')]));
+    });
+  });
+
   describe('broadcastCommentDeleted', () => {
     it('should emit COMMENT_DELETED to the friend feeds, the author feed AND the post room', async () => {
       const data: CommentDeletedEventData = {

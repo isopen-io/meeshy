@@ -323,20 +323,41 @@ export class SocialEventsHandler {
    * compteur de réponses côté client ne sont PAS idempotents en cas de double
    * livraison (contrairement au payload absolu de `post:liked`).
    */
-  private commentBroadcastRooms(friendIds: string[], postAuthorId: string, postId: string): string[] {
-    const feedRooms = [...friendIds, postAuthorId].map((id) => ROOMS.feed(id));
+  private commentBroadcastRooms(recipientIds: string[], postAuthorId: string, postId: string): string[] {
+    const feedRooms = [...recipientIds, postAuthorId].map((id) => ROOMS.feed(id));
     return [...feedRooms, ROOMS.post(postId)];
   }
 
-  async broadcastCommentAdded(data: CommentAddedEventData, postAuthorId: string): Promise<void> {
-    const friendIds = await this.getFriendIds(postAuthorId);
-    const rooms = this.commentBroadcastRooms(friendIds, postAuthorId, data.postId);
+  /**
+   * Recipients of a comment-scoped event = the feed rooms allowed by the POST's
+   * visibility (NOT the author's full friend list) + the post author + the
+   * join-gated post room. Without the visibility filter, a comment on an
+   * `ONLY` / `EXCEPT` / `PRIVATE` / `COMMUNITY` post leaked its content to every
+   * friend of the author, including friends not permitted to see the post.
+   * Mirrors `getVisibilityFilteredRecipients` already used by story/status
+   * creation. `visibility` defaults to `PUBLIC` (legacy friend fan-out) so a
+   * caller that cannot resolve the post's visibility degrades to the previous
+   * behaviour rather than dropping delivery.
+   */
+  async broadcastCommentAdded(
+    data: CommentAddedEventData,
+    postAuthorId: string,
+    visibility: string = 'PUBLIC',
+    visibilityUserIds: string[] = [],
+  ): Promise<void> {
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
     this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_ADDED, data);
   }
 
-  async broadcastCommentDeleted(data: CommentDeletedEventData, postAuthorId: string): Promise<void> {
-    const friendIds = await this.getFriendIds(postAuthorId);
-    const rooms = this.commentBroadcastRooms(friendIds, postAuthorId, data.postId);
+  async broadcastCommentDeleted(
+    data: CommentDeletedEventData,
+    postAuthorId: string,
+    visibility: string = 'PUBLIC',
+    visibilityUserIds: string[] = [],
+  ): Promise<void> {
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
     this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_DELETED, data);
   }
 
@@ -353,20 +374,31 @@ export class SocialEventsHandler {
     this.emitToFriends(friendIds, postAuthorId, SERVER_EVENTS.POST_TRANSLATION_UPDATED, data);
   }
 
-  async broadcastCommentTranslationUpdated(data: CommentTranslationUpdatedEventData, postAuthorId: string): Promise<void> {
-    const friendIds = await this.getFriendIds(postAuthorId);
-    const rooms = this.commentBroadcastRooms(friendIds, postAuthorId, data.postId);
+  async broadcastCommentTranslationUpdated(
+    data: CommentTranslationUpdatedEventData,
+    postAuthorId: string,
+    visibility: string = 'PUBLIC',
+    visibilityUserIds: string[] = [],
+  ): Promise<void> {
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
     this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, data);
   }
 
   /**
    * Diffuse `comment:media-updated` (transcription/traductions audio d'un média de
-   * commentaire prêtes) à la même audience que `comment:translation-updated` :
-   * l'auteur du post et ses amis.
+   * commentaire prêtes) à la même audience filtrée par visibilité que
+   * `comment:translation-updated` : les destinataires autorisés par la visibilité
+   * du post + l'auteur + la post room (join-gated).
    */
-  async broadcastCommentMediaUpdated(data: CommentMediaUpdatedEventData, postAuthorId: string): Promise<void> {
-    const friendIds = await this.getFriendIds(postAuthorId);
-    const rooms = this.commentBroadcastRooms(friendIds, postAuthorId, data.postId);
+  async broadcastCommentMediaUpdated(
+    data: CommentMediaUpdatedEventData,
+    postAuthorId: string,
+    visibility: string = 'PUBLIC',
+    visibilityUserIds: string[] = [],
+  ): Promise<void> {
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
     this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, data);
   }
 

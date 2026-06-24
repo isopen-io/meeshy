@@ -290,7 +290,7 @@ export class PostAudioService {
 
     const post = await this.prisma.post.findFirst({
       where: { id: comment.postId, deletedAt: NOT_DELETED },
-      select: { authorId: true },
+      select: { authorId: true, visibility: true, visibilityUserIds: true },
     });
     if (!post) {
       log.warn('Post not found for comment media broadcast — skipping', { commentId, postId: comment.postId });
@@ -304,6 +304,8 @@ export class PostAudioService {
         comment: comment as unknown as Parameters<SocialEventsHandler['broadcastCommentMediaUpdated']>[0]['comment'],
       },
       post.authorId,
+      post.visibility,
+      post.visibilityUserIds ?? [],
     );
     log.info('comment:media-updated broadcast sent', { commentId, postId: comment.postId });
   }
