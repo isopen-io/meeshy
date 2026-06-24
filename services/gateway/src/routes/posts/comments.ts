@@ -153,14 +153,14 @@ export function registerCommentRoutes(
       const socialEvents = fastify.socialEvents;
       const post = await fastify.prisma?.post?.findUnique({
         where: { id: postId },
-        select: { authorId: true, commentCount: true, type: true, content: true, createdAt: true, expiresAt: true },
+        select: { authorId: true, commentCount: true, type: true, content: true, createdAt: true, expiresAt: true, visibility: true, visibilityUserIds: true },
       });
       if (socialEvents && post) {
         socialEvents.broadcastCommentAdded({
           postId,
           comment: hoistCommentTrackingLinks(comment as unknown as Record<string, unknown>) as unknown as typeof comment,
           commentCount: post.commentCount,
-        }, post.authorId).catch(() => {});
+        }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch(() => {});
       }
 
       // Notify post author (or parent comment author for replies)
@@ -422,14 +422,14 @@ export function registerCommentRoutes(
       if (socialEvents) {
         const post = await fastify.prisma?.post?.findUnique({
           where: { id: postId },
-          select: { authorId: true, commentCount: true },
+          select: { authorId: true, commentCount: true, visibility: true, visibilityUserIds: true },
         });
         if (post) {
           socialEvents.broadcastCommentDeleted({
             postId,
             commentId,
             commentCount: post.commentCount,
-          }, post.authorId).catch(() => {});
+          }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch(() => {});
         }
       }
 

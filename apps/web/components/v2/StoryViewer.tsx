@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { Avatar } from './Avatar';
 import { TranslationToggle } from './TranslationToggle';
 import { CommentList } from './CommentList';
+import { StoryViewersSheet } from './StoryViewersSheet';
 import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-comments-query';
 import { useCreateCommentMutation, useLikeCommentMutation, useUnlikeCommentMutation, useDeleteCommentMutation } from '@/hooks/queries/use-comment-mutations';
 import { useAuthStore } from '@/stores/auth-store';
@@ -332,6 +333,7 @@ function StoryViewer({
   const [replyText, setReplyText] = useState('');
   const [isPaused, setIsPaused] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [showViewers, setShowViewers] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const viewedRef = useRef<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
@@ -465,10 +467,11 @@ function StoryViewer({
     [goPrev, goNext]
   );
 
-  // Reset reply text and close comments panel on story change
+  // Reset reply text and close comments / viewers panels on story change
   useEffect(() => {
     setReplyText('');
     setShowComments(false);
+    setShowViewers(false);
   }, [currentIndex]);
 
   // Comments handlers
@@ -479,6 +482,18 @@ function StoryViewer({
 
   const handleCloseComments = useCallback(() => {
     setShowComments(false);
+    setIsPaused(false);
+  }, []);
+
+  // Viewers list (author only) — pause the timeline while it's open, mirroring
+  // the comments panel.
+  const handleOpenViewers = useCallback(() => {
+    setShowViewers(true);
+    setIsPaused(true);
+  }, []);
+
+  const handleCloseViewers = useCallback(() => {
+    setShowViewers(false);
     setIsPaused(false);
   }, []);
 
@@ -791,9 +806,24 @@ function StoryViewer({
           {/* View count & actions */}
           <div className="px-4 pb-1 flex items-center justify-between pointer-events-auto">
             <div className="flex items-center gap-3">
-              <span className="text-xs text-white/50">
-                {story.viewCount} vue{story.viewCount !== 1 ? 's' : ''}
-              </span>
+              {currentUserId && story.authorId === currentUserId ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (showViewers) handleCloseViewers();
+                    else handleOpenViewers();
+                  }}
+                  className="text-xs text-white/60 hover:text-white transition-colors duration-300 underline-offset-2 hover:underline"
+                  aria-label={t('viewers.open', 'See who viewed')}
+                  aria-expanded={showViewers}
+                >
+                  {story.viewCount} vue{story.viewCount !== 1 ? 's' : ''}
+                </button>
+              ) : (
+                <span className="text-xs text-white/50">
+                  {story.viewCount} vue{story.viewCount !== 1 ? 's' : ''}
+                </span>
+              )}
               {story.expiresAt && (() => {
                 const diff = new Date(story.expiresAt).getTime() - Date.now();
                 if (diff <= 0) return null;
@@ -822,6 +852,15 @@ function StoryViewer({
 
           {/* Reply / Comments row */}
           <div className="px-3 pb-4 pt-1 pointer-events-auto flex flex-col gap-2">
+            {/* Viewers panel (author only) — slide up above the input */}
+            {showViewers && currentUserId && story.authorId === currentUserId && (
+              <StoryViewersSheet
+                storyId={story.id}
+                open={showViewers}
+                onClose={handleCloseViewers}
+              />
+            )}
+
             {/* Comments panel — slide up above the input */}
             {enableComments && showComments && (
               <div

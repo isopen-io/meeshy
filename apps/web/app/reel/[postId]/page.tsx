@@ -14,6 +14,7 @@ import {
   useSharePostMutation,
 } from '@/hooks/queries/use-post-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
+import { usePostRoom } from '@/hooks/social/use-post-room';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 import { useI18n } from '@/hooks/useI18n';
@@ -88,6 +89,11 @@ export default function ReelPage() {
 
   const current = thread[index];
   const currentId = current?.id ?? '';
+
+  // Join the room of the reel currently on screen so live comments / reactions
+  // broadcast to `ROOMS.post(currentId)` reach the viewer. Re-joins as the
+  // thread advances (leave previous reel, join next).
+  usePostRoom(currentId || null);
 
   // Record an impression for whichever reel is on screen (source: 'feed', as iOS).
   const { record: recordImpression } = useImpressionTracking({ source: 'feed' });

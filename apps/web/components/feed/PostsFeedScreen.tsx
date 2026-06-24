@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useI18n } from '@/hooks/use-i18n';
 import { Button, useToast, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer, StatusComposer } from '@/components/v2';
-import type { StatusItem, StoryVisibility } from '@/components/v2';
+import type { StoryVisibility } from '@/components/v2';
 import { PostComposer } from '@/components/v2/PostComposer';
 import { PostEditor } from '@/components/v2/PostEditor';
 import { RepostModal } from '@/components/v2/RepostModal';
@@ -18,6 +18,10 @@ import { useStoriesFeedQuery, useCreateStoryMutation, useDeleteStoryMutation, us
 import { useStoriesRealtime } from '@/hooks/social/use-stories-realtime';
 import { postToStoryData, groupStoriesByAuthor, groupToStoryItem } from '@/lib/story-transforms';
 import { useStoryPreferences } from '@/stores/user-preferences-store';
+
+// Statuses / moods (real API — STATUS posts, real-time via usePostSocketCacheSync)
+import { useStatusesFeedQuery, useStatusesList, useCreateStatusMutation } from '@/hooks/social/use-statuses';
+import { postToStatusItem } from '@/lib/status-transforms';
 
 // Posts (real API integration — same hooks as v2)
 import { useFeedQuery, useFeedPosts, usePrefetchPost } from '@/hooks/queries/use-feed-query';
@@ -58,27 +62,6 @@ function postToTranslations(post: Post) {
       content: v.text!,
     }));
 }
-
-// ─── Mock Data (Statuses - to be replaced in future phase) ──────────────
-//
-// Mood/status entries are still mocked client-side because the gateway
-// surface for ephemeral statuses isn't wired into the web composer yet.
-// Stories and Posts below are 100% real.
-
-const mockStatuses: StatusItem[] = [
-  {
-    id: 'st1', author: { name: 'Marie D.' }, moodEmoji: '🎉', content: 'Trop contente !',
-    originalLanguage: 'fr',
-    translations: [{ languageCode: 'en', languageName: 'English', content: 'So happy!' }],
-    expiresAt: new Date(Date.now() + 2400000).toISOString(), isOwn: true,
-  },
-  {
-    id: 'st2', author: { name: 'Yuki T.' }, moodEmoji: '☕', content: 'コーヒータイム',
-    originalLanguage: 'ja',
-    translations: [{ languageCode: 'fr', languageName: 'Francais', content: "C'est l'heure du café" }],
-    expiresAt: new Date(Date.now() + 1800000).toISOString(), isOwn: false,
-  },
-];
 
 // ─── Feed tabs ───────────────────────────────────────────────────────────────
 
@@ -223,6 +206,13 @@ export function PostsFeedScreen() {
   const { recordView } = useRecordStoryViewMutation();
   useStoriesRealtime();
 
+  // Statuses / moods — real STATUS posts. Real-time refresh is handled by
+  // usePostSocketCacheSync (mounted below), which invalidates the same key on
+  // status:created / updated / deleted / reacted.
+  const statusesQuery = useStatusesFeedQuery();
+  const statuses = useStatusesList(statusesQuery);
+  const createStatusMutation = useCreateStatusMutation();
+
   const [storyViewerOpen, setStoryViewerOpen] = useState(false);
   const [storyViewerIndex, setStoryViewerIndex] = useState(0);
   const [activeStoryAuthorId, setActiveStoryAuthorId] = useState<string | null>(null);
@@ -239,6 +229,11 @@ export function PostsFeedScreen() {
   const storyItems = useMemo(
     () => storyGroups.map((group) => groupToStoryItem(group, currentUserId, viewedStoryIdsRef.current)),
     [storyGroups, currentUserId],
+  );
+
+  const statusItems = useMemo(
+    () => statuses.map((status) => postToStatusItem(status, currentUserId)),
+    [statuses, currentUserId],
   );
 
   // The viewer is scoped to the tapped author's stories only.
@@ -525,7 +520,7 @@ export function PostsFeedScreen() {
     [createPostMutation, showToast, t],
   );
 
-  // ─── Status (mock) ────────────────────────────────────────────────────
+  // ─── Status / mood ────────────────────────────────────────────────────
   const [statusComposerOpen, setStatusComposerOpen] = useState(false);
 
   const handleStatusPress = useCallback(
@@ -536,9 +531,16 @@ export function PostsFeedScreen() {
   const handleStatusPublish = useCallback(
     (status: { moodEmoji: string; content?: string }) => {
       setStatusComposerOpen(false);
-      showToast(t('toast.moodPublished', 'Mood published!'), 'success', `${status.moodEmoji} ${status.content || ''}`);
+      createStatusMutation.mutate(
+        { moodEmoji: status.moodEmoji, content: status.content, originalLanguage: userLanguage },
+        {
+          onSuccess: () =>
+            showToast(t('toast.moodPublished', 'Mood published!'), 'success', `${status.moodEmoji} ${status.content || ''}`),
+          onError: () => showToast(t('toast.moodPublishError', "Couldn't publish your mood"), 'error'),
+        },
+      );
     },
-    [showToast, t],
+    [createStatusMutation, showToast, t, userLanguage],
   );
 
   // ─── Render ──────────────────────────────────────────────────────────
@@ -565,10 +567,11 @@ export function PostsFeedScreen() {
         <section aria-label={t('sections.moods', 'Moods')}>
           <h2 className="sr-only">{t('sections.moods', 'Moods')}</h2>
           <StatusBar
-            statuses={mockStatuses}
+            statuses={statusItems}
             onStatusPress={handleStatusPress}
             onAddStatus={() => setStatusComposerOpen(true)}
             userLanguage={userLanguage}
+            isLoading={statusesQuery.isLoading}
             className="mb-6"
           />
         </section>

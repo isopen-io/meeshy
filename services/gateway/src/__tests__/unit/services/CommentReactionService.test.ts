@@ -431,6 +431,19 @@ describe('CommentReactionService', () => {
       expect(result.reactions.length).toBe(2);
     });
 
+    it('should include the owning postId so clients can locate the comment cache', async () => {
+      mockPrisma.postComment.findUnique.mockResolvedValue(createMockPostComment());
+      mockPrisma.commentReaction.findMany.mockResolvedValue([
+        createMockCommentReaction({ emoji: '👍', userId: 'user1' })
+      ]);
+
+      const result = await service.getCommentReactions({
+        commentId: testCommentId
+      });
+
+      expect(result.postId).toBe(testPostId);
+    });
+
     it('should correctly aggregate reactions by emoji', async () => {
       mockPrisma.commentReaction.findMany.mockResolvedValue([
         createMockCommentReaction({ emoji: '👍', userId: 'user1' }),

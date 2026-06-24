@@ -23,6 +23,7 @@ import {
   useDeleteCommentMutation,
 } from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
+import { usePostRoom } from '@/hooks/social/use-post-room';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 import { useI18n } from '@/hooks/use-i18n';
@@ -86,6 +87,10 @@ export function ReelsFeedScreen() {
 
   const current = reels[index];
   const currentId = current?.id ?? '';
+
+  // Join the room of the reel on screen so live comments / reactions broadcast
+  // to `ROOMS.post(currentId)` surface in the inline comments overlay.
+  usePostRoom(currentId || null);
 
   // Record an impression for whichever reel is on screen (source: 'feed', as iOS).
   const { record: recordImpression } = useImpressionTracking({ source: 'feed' });

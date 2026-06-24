@@ -285,7 +285,11 @@ describe('PostReactionHandler', () => {
           likeCount: 7,
           reactionSummary: { '❤️': 7 },
         }),
-        ANOTHER_USER_ID
+        ANOTHER_USER_ID,
+        // Visibility-aware fan-out (audit C1-bis): the post's visibility is
+        // forwarded so a non-PUBLIC post never leaks the like to all friends.
+        expect.anything(),
+        expect.anything(),
       );
       // Pas de double-émission par-emoji pour le ❤️ (sinon double-comptage client).
       expect(mockIO._toEmit).not.toHaveBeenCalledWith(
