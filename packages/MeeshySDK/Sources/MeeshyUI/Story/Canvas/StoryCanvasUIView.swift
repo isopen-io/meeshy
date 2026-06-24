@@ -290,6 +290,20 @@ public final class StoryCanvasUIView: UIView {
     /// joue sans son image fixed → désynchro UX inacceptable.
     private var pendingBackgroundActivation: Bool = false
 
+    /// Intention de lecture des vidéos FOREGROUND — source de vérité unique,
+    /// tenue EN PHASE avec `backgroundLayer.isPlaybackActive` et le mixer audio
+    /// pour que le démarrage des vidéos foreground soit synchronisé avec la
+    /// vidéo de fond + le son (au lieu de démarrer dès l'attach, en avance).
+    /// Sticky : `rebuildLayers()` le propage aux layers fraîchement attachées,
+    /// et `StoryMediaLayer.attachPlayer` le consulte pour qu'une vidéo dont les
+    /// octets arrivent APRÈS le « GO » (content-ready) démarre immédiatement.
+    private var foregroundVideosPlaybackActive: Bool = false {
+        didSet {
+            guard oldValue != foregroundVideosPlaybackActive else { return }
+            forEachMediaLayer { $0.isPlaybackActive = foregroundVideosPlaybackActive }
+        }
+    }
+
     /// KVO token watching `backgroundLayer.contentLayer.contents` while an
     /// image background is loading. Held until the real bytes land or the
     /// background is replaced. `NSKeyValueObservation` invalidates on deinit
@@ -536,7 +550,7 @@ public final class StoryCanvasUIView: UIView {
     /// coupe juste les sources sonores et visuelles immédiatement.
     fileprivate func preemptMediaPlayback() {
         backgroundLayer.isPlaybackActive = false
-        forEachAVPlayer { $0.pause() }
+        foregroundVideosPlaybackActive = false
         audioMixer.stop()
     }
 
@@ -1426,7 +1440,14 @@ public final class StoryCanvasUIView: UIView {
         // au moment de créer le layer ; sans cette passe, une vidéo (foreground
         // OU background) attachée après que l'utilisateur a tapé Mute en
         // sidebar jouerait son audio jusqu'au prochain toggle.
-        forEachMediaLayer { $0.isMuted = isAudioMuted }
+        // Re-stamp aussi l'intention de lecture foreground : une vidéo
+        // foreground (re)créée pendant ce rebuild hérite de l'état « GO » courant
+        // (`foregroundVideosPlaybackActive`) — elle ne démarre donc qu'en phase
+        // avec la vidéo de fond + l'audio, jamais en avance dès l'attach.
+        forEachMediaLayer {
+            $0.isMuted = isAudioMuted
+            $0.isPlaybackActive = foregroundVideosPlaybackActive
+        }
         backgroundLayer.isMuted = isAudioMuted
 
         // Prune le cache des layers dont l'id n'est plus présent dans la
@@ -1871,22 +1892,16 @@ public final class StoryCanvasUIView: UIView {
             pendingBackgroundActivation = false
             if mode == .play {
                 backgroundLayer.isPlaybackActive = true
-                // Aligne l'OUVERTURE sur la REPRISE (long-press → tap) et le
-                // retour d'app : ces deux chemins (`setStoryPlaybackPaused(false)`,
-                // `handleDidBecomeActive`) font `forEachAVPlayer { $0.play() }`
-                // EN PLUS de (ré)activer la vidéo bg + l'audio. Sans ce play() au
-                // moment « GO » (content-ready), une vidéo foreground attachée
-                // tôt (avant content-ready, cf. `StoryMediaLayer.attachPlayer`)
-                // mais stallée/pausée par une course session/buffer restait figée
-                // jusqu'à un pause/resume manuel — symptôme user « quand ça bogue,
-                // je long-press puis touche et ça joue mieux ». Idempotent (play()
-                // sur un player déjà en lecture = no-op) et respecte le mute
-                // (`player.isMuted`). Gardé sur `window != nil` comme
-                // `handleDidBecomeActive` : un canvas `.play` retenu hors écran
-                // (préemption / cross-fade sortant) ne doit pas relancer ses
-                // foreground players.
+                // « GO » synchronisé : la vidéo de fond, les vidéos foreground
+                // et le mixer audio démarrent ensemble une fois tous les médias
+                // chargeables prêts. `foregroundVideosPlaybackActive` lève le
+                // gate des `StoryMediaLayer` (démarre celles déjà attachées et
+                // autorise celles qui attacheront plus tard). Gardé sur
+                // `window != nil` comme `handleDidBecomeActive` : un canvas
+                // `.play` retenu hors écran (préemption / cross-fade sortant) ne
+                // doit pas relancer ses foreground players.
                 if window != nil {
-                    forEachAVPlayer { $0.play() }
+                    foregroundVideosPlaybackActive = true
                 }
                 startAudioPlayback()
             }
@@ -2046,6 +2061,7 @@ public final class StoryCanvasUIView: UIView {
                     // slide visuellement gelée.
                     displayLink?.isPaused = true
                     backgroundLayer.isPlaybackActive = false
+                    foregroundVideosPlaybackActive = false
                 } else {
                     // Miroir de `setMode(.play)` : willMove a stoppé le mixer
                     // et rendu la session — sans cette restauration le slide
@@ -2177,17 +2193,19 @@ public final class StoryCanvasUIView: UIView {
 
         if paused {
             // Freeze every media clock — mais ON GARDE le displayLink et
-            // les players vivants pour un resume instantané.
-            forEachAVPlayer { $0.pause() }
+            // les players vivants pour un resume instantané. Vidéo de fond ET
+            // vidéos foreground gèlent ensemble via leur gate respectif.
+            foregroundVideosPlaybackActive = false
             backgroundLayer.isPlaybackActive = false
             audioMixer.pause()
             displayLink?.isPaused = true
         } else {
             // Resume in place. Réveille le displayLink et les players
-            // depuis leur dernière position — pas de re-init coûteuse.
+            // depuis leur dernière position — pas de re-init coûteuse. Fond,
+            // foreground et audio repartent en phase.
             displayLink?.isPaused = false
             backgroundLayer.isPlaybackActive = true
-            forEachAVPlayer { $0.play() }
+            foregroundVideosPlaybackActive = true
             if window != nil, !completionFired {
                 startAudioPlayback()
             }
@@ -2209,7 +2227,10 @@ public final class StoryCanvasUIView: UIView {
     }
 
     @objc private func handleWillResignActive() {
-        forEachAVPlayer { $0.pause() }
+        // Pause transitoire SANS effacer l'intention `isPlaybackActive` —
+        // symétrique au `backgroundLayer.handleAppLifecycle`. Le retour
+        // foreground ne relancera que les vidéos que le canvas autorisait.
+        forEachMediaLayer { $0.handleAppLifecycle(active: false) }
         backgroundLayer.handleAppLifecycle(active: false)
         // RC4.5 — cut the reader audio engine the moment the app leaves the
         // foreground so no sound leaks behind a backgrounded app. Releasing
@@ -2226,7 +2247,10 @@ public final class StoryCanvasUIView: UIView {
         // foreground + le fond vidéo rejouaient à la réouverture de l'app
         // alors qu'aucun viewer n'était visible (bug user 2026-06-11).
         guard mode == .play, window != nil else { return }
-        forEachAVPlayer { $0.play() }
+        // Reprise gated par layer : ne relance que les vidéos foreground dont
+        // le canvas avait levé `isPlaybackActive` (slide à l'écran, non pausée),
+        // en phase avec la reprise de la vidéo de fond.
+        forEachMediaLayer { $0.handleAppLifecycle(active: true) }
         backgroundLayer.handleAppLifecycle(active: true)
         // Resume reader audio (re-acquires the session via startAudioPlayback)
         // only while the slide has not finished.
@@ -2339,6 +2363,7 @@ public final class StoryCanvasUIView: UIView {
         // slide n'est pas visuellement complète.
         if contentReadyFired {
             backgroundLayer.isPlaybackActive = true
+            foregroundVideosPlaybackActive = true
         } else {
             pendingBackgroundActivation = true
         }
@@ -2347,10 +2372,11 @@ public final class StoryCanvasUIView: UIView {
     private func stopPlayback() {
         displayLink?.invalidate()
         displayLink = nil
-        // Pause symétrique du player vidéo de fond. Une slide qui sort du
-        // mode `.play` (changement de mode, dismiss du viewer, transition
+        // Pause symétrique des players vidéo (fond + foreground). Une slide qui
+        // sort du mode `.play` (changement de mode, dismiss du viewer, transition
         // vers prefetch off-screen) ne doit plus émettre ni vidéo ni audio.
         backgroundLayer.isPlaybackActive = false
+        foregroundVideosPlaybackActive = false
     }
 
     @objc private func displayLinkTick(_ link: CADisplayLink) {

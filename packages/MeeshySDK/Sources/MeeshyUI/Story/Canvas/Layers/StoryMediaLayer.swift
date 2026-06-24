@@ -61,6 +61,28 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         }
     }
 
+    /// Drapeau de lecture levé par le canvas (`StoryCanvasUIView`) en mode
+    /// `.play` pour autoriser le démarrage de la vidéo foreground — EXACT
+    /// pendant du `StoryBackgroundLayer.isPlaybackActive`. Sans ce gate,
+    /// `attachPlayer` appelait `play()` inconditionnellement dès que l'URL
+    /// était résolue : une vidéo foreground attachée AVANT que la slide soit
+    /// prête (« GO » / content-ready) démarrait donc EN AVANCE sur la vidéo de
+    /// fond + l'audio, désynchronisant le démarrage (user 2026-06-24). Le
+    /// canvas pose ce drapeau au content-ready, en phase avec la vidéo de fond
+    /// et le mixer audio ; il est sticky pour qu'une vidéo attachée APRÈS le GO
+    /// (octets arrivés plus tard) démarre immédiatement à son tour.
+    @MainActor
+    public var isPlaybackActive: Bool = false {
+        didSet {
+            guard oldValue != isPlaybackActive else { return }
+            if isPlaybackActive {
+                avPlayer?.play()
+            } else {
+                avPlayer?.pause()
+            }
+        }
+    }
+
     private nonisolated(unsafe) var loopObserver: NSObjectProtocol?
 
     /// Levé par le canvas composer (`StoryCanvasUIView.playsVideoInEditMode`)
@@ -489,7 +511,13 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
 
         switch mode {
         case .play:
-            player.play()
+            // Démarrage GATÉ — symétrique à `StoryBackgroundLayer`. La vidéo
+            // foreground ne démarre PAS à l'instant où ses octets arrivent (ce
+            // qui la faisait jouer en avance sur la vidéo de fond + le mixer
+            // audio) : elle attend le « GO » du canvas (content-ready), propagé
+            // via `isPlaybackActive`. Un layer attaché APRÈS le GO voit déjà le
+            // drapeau levé et démarre immédiatement à son tour.
+            if isPlaybackActive { player.play() }
         case .edit:
             player.seek(to: .zero)
             // Composer live preview : la vidéo joue (et boucle, cf. `loop`
@@ -541,6 +569,23 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         // Fade out du placeholder une fois la lecture lancée. Best-effort —
         // la vidéo peut encore buffer mais l'utilisateur perçoit la transition.
         fadeOutPlaceholder(duration: 0.2)
+    }
+
+    /// Reprise/pause transitoire sur lifecycle d'app (foreground/background),
+    /// EXACT pendant du `StoryBackgroundLayer.handleAppLifecycle`. Ne touche
+    /// PAS au drapeau d'intention `isPlaybackActive` : un retour foreground ne
+    /// relance la vidéo QUE si le canvas l'avait autorisée (slide à l'écran,
+    /// non pausée). Sans ce gate, une vidéo foreground d'une slide non visible
+    /// (canvas retenu / préempté) rejouait à la réouverture de l'app.
+    @MainActor
+    public func handleAppLifecycle(active: Bool) {
+        guard let player = avPlayer else { return }
+        if active {
+            guard isPlaybackActive else { return }
+            player.play()
+        } else {
+            player.pause()
+        }
     }
 
     // MARK: - ThumbHash placeholder
