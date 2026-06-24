@@ -500,6 +500,10 @@ final class ConversationSocketHandler {
                         editedAt: Date()
                     ) }
                 }
+                // Keep the (frozen) starred snapshot's preview in sync with the edit.
+                StarredMessagesStore.shared.updatePreview(
+                    messageId: apiMsg.id, contentPreview: apiMsg.content ?? ""
+                )
             }
             .store(in: &cancellables)
 
@@ -514,6 +518,9 @@ final class ConversationSocketHandler {
                     let now = Date()
                     Task { try? await persistence.markDeleted(localId: event.messageId, deletedAt: now) }
                 }
+                // A delete-for-everyone broadcast must also evict the starred
+                // snapshot so the Starred Messages list stops showing a tombstone.
+                StarredMessagesStore.shared.remove(messageId: event.messageId)
             }
             .store(in: &cancellables)
 

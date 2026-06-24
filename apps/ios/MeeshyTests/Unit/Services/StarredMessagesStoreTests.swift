@@ -73,6 +73,35 @@ final class StarredMessagesStoreTests: XCTestCase {
         XCTAssertTrue(sut.snapshots.isEmpty)
     }
 
+    // MARK: - updatePreview
+
+    @MainActor
+    func test_updatePreview_starredMessage_updatesContentPreview() {
+        let sut = makeSUT()
+        sut.toggle(makeSnapshot(id: "msg1", content: "Original"))
+        sut.updatePreview(messageId: "msg1", contentPreview: "Edited")
+        XCTAssertEqual(sut.snapshot(for: "msg1")?.contentPreview, "Edited")
+    }
+
+    @MainActor
+    func test_updatePreview_persistsAcrossReload() {
+        let defaults = UserDefaults(suiteName: "StarredMessagesStoreTests")!
+        let sut = StarredMessagesStore(userDefaults: defaults)
+        sut.clearAll()
+        sut.toggle(makeSnapshot(id: "msg1", content: "Original"))
+        sut.updatePreview(messageId: "msg1", contentPreview: "Edited")
+
+        let reloaded = StarredMessagesStore(userDefaults: defaults)
+        XCTAssertEqual(reloaded.snapshot(for: "msg1")?.contentPreview, "Edited")
+    }
+
+    @MainActor
+    func test_updatePreview_unknownMessage_doesNothing() {
+        let sut = makeSUT()
+        sut.updatePreview(messageId: "nonexistent", contentPreview: "Edited")
+        XCTAssertTrue(sut.snapshots.isEmpty)
+    }
+
     // MARK: - snapshot
 
     @MainActor

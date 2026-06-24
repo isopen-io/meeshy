@@ -35,6 +35,17 @@ final class StoryMediaLayer_ForegroundResolverTests: XCTestCase {
         return url
     }
 
+    /// Writes a placeholder `file://` video. `AVPlayer.rate` reflects the
+    /// requested rate for a local URL regardless of decodability, so this is
+    /// enough to assert the play/pause gate deterministically — same approach
+    /// as `StoryBackgroundLayerVideoTests`.
+    private func writeTempVideo() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fg-video-\(UUID().uuidString).mp4")
+        try Data([0x00, 0x00, 0x00, 0x18]).write(to: url)
+        return url
+    }
+
     func test_configure_foregroundImageWithResolver_setsContents() throws {
         let fileURL = try writeTempPNG(.red)
         let media = StoryMediaObject(id: "m1", postMediaId: "post-1",
@@ -123,6 +134,70 @@ final class StoryMediaLayer_ForegroundResolverTests: XCTestCase {
     /// `.edit`) starting playback.
     func test_playsInEditMode_defaultsFalse() {
         XCTAssertFalse(StoryMediaLayer().playsInEditMode)
+    }
+
+    /// The synchronized-start gate defaults OFF — a foreground video must NOT
+    /// begin the instant its bytes resolve.
+    func test_isPlaybackActive_defaultsFalse() {
+        XCTAssertFalse(StoryMediaLayer().isPlaybackActive)
+    }
+
+    /// Reader (`.play`) — a foreground video must NOT start at attach. It waits
+    /// for the canvas to raise `isPlaybackActive` at the slide « GO »
+    /// (content-ready) so it begins in phase with the background video + audio,
+    /// instead of running ahead the moment its URL resolves (start desync,
+    /// user 2026-06-24). `rate` is the deterministic marker — same approach as
+    /// `StoryBackgroundLayerVideoTests`.
+    func test_configure_foregroundVideoPlayMode_doesNotStartUntilPlaybackActive() throws {
+        let fileURL = try writeTempVideo()
+        let media = StoryMediaObject(id: "v5", postMediaId: "post-vid",
+                                     kind: .video, aspectRatio: 1.0)
+        let layer = StoryMediaLayer()
+        let resolver: @Sendable (String) -> URL? = { id in
+            id == "post-vid" ? fileURL : nil
+        }
+        layer.configure(with: media, geometry: makeGeometry(),
+                        mode: .play, resolver: resolver)
+        XCTAssertEqual(layer.avPlayer?.rate, 0,
+                       "A foreground video must stay paused at attach until the canvas GO (isPlaybackActive)")
+
+        layer.isPlaybackActive = true
+        XCTAssertEqual(layer.avPlayer?.rate, 1,
+                       "Raising isPlaybackActive must start the foreground video in sync with the background")
+    }
+
+    /// A video whose bytes land AFTER the GO already fired — the canvas raises
+    /// `isPlaybackActive` on the layer first, then `configure` attaches the
+    /// player, which must start immediately (no second GO needed).
+    func test_configure_foregroundVideo_playbackActiveBeforeAttach_startsImmediately() throws {
+        let fileURL = try writeTempVideo()
+        let media = StoryMediaObject(id: "v6", postMediaId: "post-vid",
+                                     kind: .video, aspectRatio: 1.0)
+        let layer = StoryMediaLayer()
+        layer.isPlaybackActive = true   // canvas already past content-ready
+        let resolver: @Sendable (String) -> URL? = { id in
+            id == "post-vid" ? fileURL : nil
+        }
+        layer.configure(with: media, geometry: makeGeometry(),
+                        mode: .play, resolver: resolver)
+        XCTAssertEqual(layer.avPlayer?.rate, 1,
+                       "A foreground video attaching after the GO must start at once")
+    }
+
+    /// Pausing the canvas drops `isPlaybackActive` — a playing foreground video
+    /// must stop, in phase with the background pause.
+    func test_isPlaybackActive_falseAfterActive_pausesForegroundVideo() throws {
+        let fileURL = try writeTempVideo()
+        let media = StoryMediaObject(id: "v7", postMediaId: "post-vid",
+                                     kind: .video, aspectRatio: 1.0)
+        let layer = StoryMediaLayer()
+        layer.isPlaybackActive = true
+        layer.configure(with: media, geometry: makeGeometry(),
+                        mode: .play, resolver: { _ in fileURL })
+        XCTAssertEqual(layer.avPlayer?.rate, 1)
+        layer.isPlaybackActive = false
+        XCTAssertEqual(layer.avPlayer?.rate, 0,
+                       "Lowering isPlaybackActive must pause the foreground video")
     }
 
     /// Composer (`.edit`) — the foreground video loops for the live preview,

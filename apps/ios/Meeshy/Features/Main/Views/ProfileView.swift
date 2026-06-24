@@ -876,16 +876,10 @@ struct ProfileView: View {
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return iso
     }()
-    private static let mediumDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        f.locale = Locale.current
-        return f
-    }()
 
     private func parseAndFormatDate(_ dateString: String) -> String? {
         guard let date = Self.isoParser.date(from: dateString) else { return nil }
-        return Self.mediumDateFormatter.string(from: date)
+        return date.formatted(date: .abbreviated, time: .omitted)
     }
 }
 
