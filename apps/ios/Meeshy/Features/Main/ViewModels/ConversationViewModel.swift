@@ -717,7 +717,6 @@ class ConversationViewModel: ObservableObject {
     private let commandHandler: ConversationCommandHandler
     private let mediaHandler: ConversationMediaHandler
     private let searchHandler: ConversationSearchHandler
-    private let translationResolver: TranslationResolver
 
     // MARK: - GRDB Persistence (additive — parallel data source alongside @Published messages)
 
@@ -907,18 +906,15 @@ class ConversationViewModel: ObservableObject {
         // Built before MessageStore/socket so subsequent delegations always
         // have a non-nil handler to call. The handlers don't drive any state
         // yet; they mirror the legacy @Published values via the messages
-        // sink below so `searchHandler` / `mediaHandler` / `translationResolver`
-        // can read off `stateStore.messages` without forking the source of truth.
+        // sink below so `searchHandler` / `mediaHandler` can read off
+        // `stateStore.messages` without forking the source of truth.
         let stateStore = ConversationStateStore()
         self.stateStore = stateStore
         self.commandHandler = ConversationCommandHandler(
             state: stateStore,
             conversationId: conversationId,
             messageService: messageService,
-            persistence: dependencies.persistence,
-            authManager: authManager,
-            messageSocket: messageSocket,
-            reportService: reportService
+            persistence: dependencies.persistence
         )
         self.mediaHandler = ConversationMediaHandler(state: stateStore)
         self.searchHandler = ConversationSearchHandler(
@@ -927,7 +923,6 @@ class ConversationViewModel: ObservableObject {
             messageService: messageService,
             persistence: dependencies.persistence
         )
-        self.translationResolver = TranslationResolver(state: stateStore, authManager: authManager)
         let store = MessageStore(
             conversationId: conversationId,
             persistence: dependencies.persistence
@@ -1215,7 +1210,7 @@ class ConversationViewModel: ObservableObject {
 
     /// Mirror the legacy `@Published var messages` into the new
     /// `ConversationStateStore.messages` so the split handlers
-    /// (`searchHandler`, `mediaHandler`, `translationResolver`) can read
+    /// (`searchHandler`, `mediaHandler`) can read
     /// off the shared store while the legacy ViewModel still owns the
     /// canonical source. Removed once the migration of the message
     /// pipeline (init/load/send/edit/delete) into `commandHandler` is

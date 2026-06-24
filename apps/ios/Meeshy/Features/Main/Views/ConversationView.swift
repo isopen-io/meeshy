@@ -400,113 +400,6 @@ struct ConversationView: View {
         _typingObserver = ObservedObject(wrappedValue: vm.stateStore)
     }
 
-    // MARK: - Date Sections
-
-    private func shouldShowDateSection(currentDate: Date, previousDate: Date?) -> Bool {
-        guard let previous = previousDate else { return true }
-        return currentDate.timeIntervalSince(previous) > 3600
-    }
-
-    private static let dateSectionDayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale.current
-        f.dateFormat = "EEEE"
-        return f
-    }()
-
-    private static let dateSectionDayMonthFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale.current
-        f.dateFormat = "EEEE d MMM"
-        return f
-    }()
-
-    private static let dateSectionFullFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale.current
-        f.dateFormat = "EEEE d MMM yyyy"
-        return f
-    }()
-
-    private func formatDateSection(for date: Date) -> String {
-        let calendar = Calendar.current
-        let now = Date()
-        let hour = calendar.component(.hour, from: date)
-        let minute = calendar.component(.minute, from: date)
-        let timeStr = minute == 0 ? "\(hour)h" : String(format: "%dh%02d", hour, minute)
-
-        if calendar.isDateInToday(date) {
-            return "\(String(localized: "date.today")) \(timeStr)"
-        }
-        if calendar.isDateInYesterday(date) {
-            return "\(String(localized: "date.yesterday")) \(timeStr)"
-        }
-        if let sevenDaysAgo = calendar.date(byAdding: .day, value: -7, to: now), date > sevenDaysAgo {
-            return "\(Self.dateSectionDayFormatter.string(from: date).capitalized) \(timeStr)"
-        }
-        if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
-            return Self.dateSectionDayMonthFormatter.string(from: date).capitalized
-        }
-        return Self.dateSectionFullFormatter.string(from: date).capitalized
-    }
-
-    private func joinedBanner(date: Date) -> some View {
-        HStack(spacing: 6) {
-            Spacer()
-            Image(systemName: "person.badge.plus")
-                .font(MeeshyFont.relative(10, weight: .semibold))
-            Text(String(localized: "conversation.view.joined_on", bundle: .main))
-                .font(MeeshyFont.relative(11, weight: .medium))
-            Spacer()
-        }
-        .foregroundColor(Color(hex: accentColor).opacity(0.7))
-        .padding(.vertical, 10)
-    }
-
-    private static let joinedDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .long
-        f.timeStyle = .none
-        f.locale = Locale.current
-        return f
-    }()
-
-    private func dateSectionView(for date: Date) -> some View {
-        HStack {
-            Spacer()
-            Text(formatDateSection(for: date))
-                .font(MeeshyFont.relative(11, weight: .semibold))
-                .foregroundColor(
-                    isDark
-                        ? Color(hex: accentColor).opacity(0.85)
-                        : Color(hex: accentColor)
-                )
-                .lineLimit(1)
-                .fixedSize()
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(
-                            isDark
-                                ? Color(hex: accentColor).opacity(0.12)
-                                : Color(hex: accentColor).opacity(0.08)
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(
-                                    Color(hex: accentColor).opacity(isDark ? 0.2 : 0.15),
-                                    lineWidth: 0.5
-                                )
-                        )
-                )
-            Spacer()
-        }
-        .padding(.vertical, 6)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
-    }
-
     // MARK: - Encryption Disclaimer
 
     @ViewBuilder
@@ -590,66 +483,6 @@ struct ConversationView: View {
         .padding(.vertical, 16)
         .padding(.horizontal, 24)
         .background(.ultraThinMaterial)
-    }
-
-    // MARK: - Empty Conversation State
-
-    private var conversationEmptyState: some View {
-        VStack(spacing: 12) {
-            Spacer()
-
-            Image(systemName: conversation?.type == .direct ? "person.crop.circle" : "bubble.left.and.bubble.right")
-                .font(MeeshyFont.relative(36, weight: .light))
-                .foregroundColor(Color(hex: accentColor).opacity(0.5))
-
-            Button {
-                isTyping = true
-            } label: {
-                Text(String(localized: "empty.send_first"))
-                    .font(MeeshyFont.relative(13, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(Color(hex: accentColor)))
-            }
-
-            Text(conversation?.type == .direct
-                 ? String(localized: "empty.direct_hint")
-                 : String(localized: "empty.group_hint"))
-                .font(MeeshyFont.relative(12))
-                .foregroundColor(theme.textMuted)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, minHeight: 200)
-    }
-
-    // MARK: - Unread Separator
-
-    private var unreadSeparator: some View {
-        HStack(spacing: 10) {
-            Rectangle()
-                .fill(MeeshyColors.error.opacity(0.5))
-                .frame(height: 1)
-                .accessibilityHidden(true)
-            Text(String(localized: "conversation.view.new_messages", bundle: .main))
-                .font(MeeshyFont.relative(11, weight: .semibold))
-                .foregroundColor(MeeshyColors.error)
-                .lineLimit(1)
-                .fixedSize()
-            Rectangle()
-                .fill(MeeshyColors.error.opacity(0.5))
-                .frame(height: 1)
-                .accessibilityHidden(true)
-        }
-        .padding(.vertical, 4)
-        .id("unread_separator")
-        .transition(.opacity)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "conversation.view.new_messages_unread", bundle: .main))
-        .accessibilityAddTraits(.isHeader)
     }
 
     // MARK: - Body
@@ -739,7 +572,6 @@ struct ConversationView: View {
                     .presentationDetents([.medium, .large])
             }
             .overlay { overlayMenuContent }
-            .overlay { replyThreadOverlayContent }
             .onPreferenceChange(MessageFramePreferenceKey.self) { frames in
                 frameTracker.update(frames)
             }
@@ -1604,14 +1436,6 @@ struct ConversationView: View {
                 .shadow(color: Color(hex: accentColor).opacity(0.2), radius: 8, y: 2)
                 .transition(.scale(scale: 0.1, anchor: .trailing).combined(with: .opacity))
         }
-    }
-
-    // MARK: - Reply Thread Overlay
-
-    @ViewBuilder
-    private var replyThreadOverlayContent: some View {
-        // Deactivated in favor of ThreadView sheet presentation
-        EmptyView()
     }
 
     // MARK: - Overlay Menu Content (extracted to help type-checker)

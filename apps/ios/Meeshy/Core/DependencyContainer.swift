@@ -31,7 +31,6 @@ final class DependencyContainer {
     let dbPool: DatabasePool
     let messagePersistence: MessagePersistenceActor
     let feedPersistence: FeedPersistenceActor
-    let retryEngine: RetryEngine
     let thumbnailPrefetcher: ThumbnailPrefetcher
     let mediaSnapshotStore: MediaSnapshotStore
 
@@ -74,20 +73,14 @@ final class DependencyContainer {
         self.feedPersistence = FeedPersistenceActor(dbWriter: pool)
         self.thumbnailPrefetcher = ThumbnailPrefetcher.shared
         self.mediaSnapshotStore = MediaSnapshotStore.shared
-        self.retryEngine = RetryEngine(
-            persistence: messagePersistence,
-            dbWriter: pool,
-            sender: MessageRESTSender()
-        )
         self.initDiagnostics = diagnostics
 
         Task {
             await messagePersistence.start()
-            await retryEngine.start()
         }
 
-        // Q3 (P1 hotfix) — au logout, quiesce le RetryEngine PUIS purge la
-        // table outbox. Sans ça, des messages enqueued par user A pourraient
+        // Q3 (P1 hotfix) — au logout, purge TOUTES les tables messages
+        // on-device. Sans ça, des messages enqueued par user A pourraient
         // être envoyés sous l'identité du user B après un logout+login rapide
         // sur le même device. Hook côté app car le SDK AuthManager ne connaît
         // pas DependencyContainer (qui est app-side).
@@ -124,16 +117,13 @@ final class DependencyContainer {
     // MARK: - Q3 — Outbox session quiesce hook
 
     /// Pattern calqué sur `ConversationAudioCoordinator.wireAuthLogoutHook` :
-    /// observe la transition `isAuthenticated true→false`, stop le retry
-    /// engine PUIS purge TOUTES les tables messages on-device (outbox +
-    /// `messages` autoritaire + translations/transcriptions/audio/attachments/
-    /// pending_ids via `clearAllMessagesForLogout`). Sans la purge de `messages`,
-    /// user B verrait le contenu de user A au prochain login (table non
-    /// namespacée par userId, lue par `MessageStore.loadInitialSnapshot`).
-    /// Ordre strict (D-13 du design doc) : stopper le RetryEngine empêche un
-    /// flush concurrent avec le delete (sinon race entre `SELECT` et `DELETE`).
+    /// observe la transition `isAuthenticated true→false` et purge TOUTES les
+    /// tables messages on-device (outbox + `messages` autoritaire +
+    /// translations/transcriptions/audio/attachments/pending_ids via
+    /// `clearAllMessagesForLogout`). Sans la purge de `messages`, user B verrait
+    /// le contenu de user A au prochain login (table non namespacée par userId,
+    /// lue par `MessageStore.loadInitialSnapshot`).
     private func wireOutboxLogoutHook() {
-        let engine = retryEngine
         let persistence = messagePersistence
         AuthManager.shared.$isAuthenticated
             .removeDuplicates()
@@ -142,7 +132,6 @@ final class DependencyContainer {
             .receive(on: DispatchQueue.main)
             .sink { _ in
                 Task {
-                    await engine.stop()
                     do {
                         try await persistence.clearAllMessagesForLogout()
                     } catch {
@@ -302,17 +291,3 @@ final class DependencyContainer {
     }
 }
 
-// MARK: - Stub REST sender (TODO: wire to actual REST API)
-
-private struct MessageRESTSender: MessageSending {
-    func send(
-        conversationId: String,
-        content: String?,
-        contentType: String,
-        encryptedPayload: Data?,
-        attachments: Data?
-    ) async throws -> SendMessageResponse {
-        throw NSError(domain: "NotImplemented", code: 0,
-                      userInfo: [NSLocalizedDescriptionKey: "MessageRESTSender not yet wired"])
-    }
-}
