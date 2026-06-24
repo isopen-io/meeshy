@@ -110,12 +110,22 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
         didSet {
             guard oldValue != isPlaybackActive else { return }
             if isPlaybackActive {
-                avPlayer?.play()
+                alignToTimelineThenPlay()
             } else {
                 avPlayer?.pause()
             }
         }
     }
+
+    /// Playhead unifié de la slide (secondes), poussé par le canvas. Sert au
+    /// CALAGE timeline de la vidéo de fond quand elle (re)démarre — symétrique au
+    /// foreground. Pour une ouverture/scrub à `t>0`, la frame de fond se cale sur
+    /// le playhead au lieu de repartir de zéro. JAMAIS appliqué par frame : seul
+    /// `alignToTimelineThenPlay()` seek, et uniquement au-delà du seuil de dérive
+    /// (resume en place / bascule plein écran = aucun saut).
+    @MainActor public var slidePlayheadSeconds: Double = 0
+
+    private static let timelineSeekDriftThreshold: Double = 0.30
 
     nonisolated(unsafe) var contentLayer: CALayer?
     nonisolated(unsafe) var avPlayer: AVPlayer?
@@ -833,7 +843,7 @@ extension StoryBackgroundLayer {
         // La vidéo prefetchée reste prête à jouer instantanément sans
         // gaspiller le décodeur audio.
         if isPlaybackActive {
-            self.avPlayer?.play()
+            alignToTimelineThenPlay()
         }
 
         // Background loop observer — ensures the video repeats until the slide
@@ -855,6 +865,30 @@ extension StoryBackgroundLayer {
         }
 
         onPlayerAttached?()
+    }
+
+    /// Cale la vidéo de fond sur le playhead unifié puis lance la lecture.
+    ///
+    /// On ne cale QUE les fonds **non loopés** (`avPlayerLooper == nil`, clip ≥
+    /// durée du slide) : leur temps interne doit suivre le playhead, donc une
+    /// ouverture/scrub à `t>0` les positionne correctement. Un fond **loopé**
+    /// remplit la durée du slide et sa phase exacte n'a aucun sens timeline — le
+    /// recaler risquerait un saut visible sur un resume en place, donc on le
+    /// laisse boucler librement. `seek` uniquement au-delà du seuil de dérive
+    /// (resume déjà aligné / bascule plein écran = aucun saut).
+    @MainActor
+    private func alignToTimelineThenPlay() {
+        guard let player = avPlayer else { return }
+        if avPlayerLooper == nil {
+            let target = max(0, slidePlayheadSeconds)
+            let current = player.currentTime().seconds
+            if target.isFinite, current.isFinite,
+               abs(current - target) > Self.timelineSeekDriftThreshold {
+                player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                            toleranceBefore: .zero, toleranceAfter: .zero)
+            }
+        }
+        player.play()
     }
 
     @MainActor

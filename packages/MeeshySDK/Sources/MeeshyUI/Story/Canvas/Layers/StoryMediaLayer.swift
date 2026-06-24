@@ -76,12 +76,28 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         didSet {
             guard oldValue != isPlaybackActive else { return }
             if isPlaybackActive {
-                avPlayer?.play()
+                alignToTimelineThenPlay()
             } else {
                 avPlayer?.pause()
             }
         }
     }
+
+    /// Playhead unifié de la slide (secondes), poussé par le canvas à chaque
+    /// rebuild + aux transitions de lecture (GO, resume). Sert au CALAGE
+    /// timeline : quand la vidéo foreground (re)démarre, on la positionne à
+    /// `max(0, slidePlayheadSeconds − startTime)`. Corrige une vidéo arrivée en
+    /// retard (réseau) ou une ouverture/scrub à `t > 0`, qui sinon démarraient à
+    /// leur frame 0 — décalées du playhead et de l'audio. JAMAIS appliqué par
+    /// frame : seul `alignToTimelineThenPlay()` (au démarrage du player) seek, et
+    /// uniquement si la dérive dépasse le seuil — un resume en place (long-press)
+    /// ou une bascule plein écran ne provoque donc aucun saut.
+    @MainActor public var slidePlayheadSeconds: Double = 0
+
+    /// Au-delà de cette dérive (secondes) entre la position du player et la cible
+    /// timeline, on seek ; en-deçà on lance la lecture telle quelle (pas de
+    /// hoquet sur un resume déjà aligné).
+    private static let timelineSeekDriftThreshold: Double = 0.30
 
     private nonisolated(unsafe) var loopObserver: NSObjectProtocol?
 
@@ -516,8 +532,9 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
             // qui la faisait jouer en avance sur la vidéo de fond + le mixer
             // audio) : elle attend le « GO » du canvas (content-ready), propagé
             // via `isPlaybackActive`. Un layer attaché APRÈS le GO voit déjà le
-            // drapeau levé et démarre immédiatement à son tour.
-            if isPlaybackActive { player.play() }
+            // drapeau levé et démarre immédiatement à son tour — calé sur le
+            // playhead (rattrapage d'une arrivée tardive / ouverture à t>0).
+            if isPlaybackActive { alignToTimelineThenPlay() }
         case .edit:
             player.seek(to: .zero)
             // Composer live preview : la vidéo joue (et boucle, cf. `loop`
@@ -569,6 +586,25 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         // Fade out du placeholder une fois la lecture lancée. Best-effort —
         // la vidéo peut encore buffer mais l'utilisateur perçoit la transition.
         fadeOutPlaceholder(duration: 0.2)
+    }
+
+    /// Cale le player foreground sur le playhead unifié de la slide puis lance
+    /// la lecture. `seek` UNIQUEMENT si la dérive entre la position courante et
+    /// la cible (`max(0, slidePlayheadSeconds − startTime)`) dépasse le seuil :
+    /// un resume en place (long-press) ou un démarrage déjà aligné ne provoque
+    /// aucun saut. Une vidéo arrivée en retard (réseau) ou une ouverture à `t>0`
+    /// est en revanche recalée pour rester en phase avec le reste de la slide.
+    @MainActor
+    private func alignToTimelineThenPlay() {
+        guard let player = avPlayer else { return }
+        let target = max(0, slidePlayheadSeconds - (media?.startTime ?? 0))
+        let current = player.currentTime().seconds
+        if target.isFinite, current.isFinite,
+           abs(current - target) > Self.timelineSeekDriftThreshold {
+            player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                        toleranceBefore: .zero, toleranceAfter: .zero)
+        }
+        player.play()
     }
 
     /// Reprise/pause transitoire sur lifecycle d'app (foreground/background),
