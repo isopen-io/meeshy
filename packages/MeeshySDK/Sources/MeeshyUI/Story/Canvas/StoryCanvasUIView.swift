@@ -1444,10 +1444,17 @@ public final class StoryCanvasUIView: UIView {
         // foreground (re)créée pendant ce rebuild hérite de l'état « GO » courant
         // (`foregroundVideosPlaybackActive`) — elle ne démarre donc qu'en phase
         // avec la vidéo de fond + l'audio, jamais en avance dès l'attach.
+        // `slidePlayheadSeconds` AVANT `isPlaybackActive` : si ce dernier flippe
+        // true (didSet → calage timeline), le player se cale sur le playhead à
+        // jour. Mis à jour à chaque rebuild (≈60 Hz en lecture) pour qu'un layer
+        // qui attache/démarre tard rattrape la bonne position.
+        let playheadSeconds = currentTime.seconds
         forEachMediaLayer {
+            $0.slidePlayheadSeconds = playheadSeconds
             $0.isMuted = isAudioMuted
             $0.isPlaybackActive = foregroundVideosPlaybackActive
         }
+        backgroundLayer.slidePlayheadSeconds = playheadSeconds
         backgroundLayer.isMuted = isAudioMuted
 
         // Prune le cache des layers dont l'id n'est plus présent dans la
@@ -1891,6 +1898,11 @@ public final class StoryCanvasUIView: UIView {
         if pendingBackgroundActivation {
             pendingBackgroundActivation = false
             if mode == .play {
+                // Cale les players sur le playhead courant AVANT de lever les
+                // gates : au GO `currentTime` vaut ~0 (slide fraîche) mais peut
+                // être > 0 sur une ouverture à position (cover dismiss). Garantit
+                // que `alignToTimelineThenPlay()` voie la bonne cible.
+                pushSlidePlayheadToLayers()
                 backgroundLayer.isPlaybackActive = true
                 // « GO » synchronisé : la vidéo de fond, les vidéos foreground
                 // et le mixer audio démarrent ensemble une fois tous les médias
@@ -2202,8 +2214,11 @@ public final class StoryCanvasUIView: UIView {
         } else {
             // Resume in place. Réveille le displayLink et les players
             // depuis leur dernière position — pas de re-init coûteuse. Fond,
-            // foreground et audio repartent en phase.
+            // foreground et audio repartent en phase. `pushSlidePlayheadToLayers`
+            // rafraîchit la cible timeline ; comme le playhead n'a pas bougé
+            // pendant la pause, la dérive est ~0 → aucun seek (pas de hoquet).
             displayLink?.isPaused = false
+            pushSlidePlayheadToLayers()
             backgroundLayer.isPlaybackActive = true
             foregroundVideosPlaybackActive = true
             if window != nil, !completionFired {
@@ -2302,6 +2317,16 @@ public final class StoryCanvasUIView: UIView {
                 block(media)
             }
         }
+    }
+
+    /// Pousse le playhead unifié courant (`currentTime`) sur la vidéo de fond et
+    /// toutes les `StoryMediaLayer`, afin que `alignToTimelineThenPlay()` cale le
+    /// player sur la bonne position au prochain démarrage. Appelé aux transitions
+    /// de lecture (GO, resume) où aucun rebuild ne vient rafraîchir la valeur.
+    private func pushSlidePlayheadToLayers() {
+        let playheadSeconds = currentTime.seconds
+        backgroundLayer.slidePlayheadSeconds = playheadSeconds
+        forEachMediaLayer { $0.slidePlayheadSeconds = playheadSeconds }
     }
 
     /// Composer live preview : démarre (et fait boucler) la lecture des vidéos
