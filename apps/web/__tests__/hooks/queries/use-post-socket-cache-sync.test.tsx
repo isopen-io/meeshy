@@ -64,6 +64,7 @@ jest.mock('@/lib/react-query/query-keys', () => ({
       detail: (id: string) => ['posts', 'detail', id],
       comments: (postId: string) => ['posts', 'detail', postId, 'comments'],
       commentsInfinite: (postId: string) => ['posts', 'detail', postId, 'comments', 'infinite'],
+      commentReplies: (postId: string, commentId: string) => ['posts', 'detail', postId, 'comments', 'replies', commentId],
       bookmarks: () => ['posts', 'list', 'bookmarks'],
       stories: () => ['posts', 'list', 'stories'],
       statuses: () => ['posts', 'list', 'statuses'],
@@ -919,14 +920,14 @@ describe('usePostSocketCacheSync', () => {
   });
 
   describe('comment:reaction-sync', () => {
-    // NOTE: handleCommentReactionSync uses data.commentId as the key arg to
-    // commentsInfinite(), so the cache is keyed as ['posts', 'detail', commentId, 'comments', 'infinite']
+    // handleCommentReactionSync keys the cache by data.postId (the comment id
+    // alone is NOT a cache key) and patches the matching comment in BOTH the
+    // top-level list and any replies sub-cache.
     it('replaces likeCount, reactionSummary, and currentUserReactions on matching comment', () => {
       const qc = createQueryClient();
       const commentId = 'c-1';
       const comment = { id: commentId, content: 'Hi', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString(), reactionSummary: {} as Record<string, number>, currentUserReactions: [] as string[] };
-      // Key uses commentId (not postId) because handler does commentsInfinite(data.commentId)
-      qc.setQueryData(['posts', 'detail', commentId, 'comments', 'infinite'], {
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
         pages: [{ data: [comment], meta: {} }],
         pageParams: [undefined],
       });
@@ -934,53 +935,169 @@ describe('usePostSocketCacheSync', () => {
 
       act(() => emit('comment:reaction-sync', {
         commentId,
+        postId: 'post-1',
         reactions: [{ emoji: '👍', count: 3 }, { emoji: '❤️', count: 2 }],
         totalCount: 5,
         userReactions: ['👍'],
       }));
 
-      const data = qc.getQueryData<{ pages: { data: { likeCount: number; reactionSummary: Record<string, number>; currentUserReactions: string[] }[] }[] }>(['posts', 'detail', commentId, 'comments', 'infinite']);
+      const data = qc.getQueryData<{ pages: { data: { likeCount: number; reactionSummary: Record<string, number>; currentUserReactions: string[] }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
       expect(data?.pages[0].data[0].likeCount).toBe(5);
       expect(data?.pages[0].data[0].reactionSummary).toEqual({ '👍': 3, '❤️': 2 });
       expect(data?.pages[0].data[0].currentUserReactions).toEqual(['👍']);
     });
 
+    it('patches a reply living in the replies sub-cache', () => {
+      const qc = createQueryClient();
+      const reply = { id: 'r-1', parentId: 'c-1', content: 'reply', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString(), reactionSummary: {} as Record<string, number>, currentUserReactions: [] as string[] };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'replies', 'c-1'], {
+        pages: [{ data: [reply], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-sync', {
+        commentId: 'r-1',
+        postId: 'post-1',
+        reactions: [{ emoji: '🔥', count: 4 }],
+        totalCount: 4,
+        userReactions: ['🔥'],
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { likeCount: number; reactionSummary: Record<string, number> }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'replies', 'c-1']);
+      expect(data?.pages[0].data[0].likeCount).toBe(4);
+      expect(data?.pages[0].data[0].reactionSummary).toEqual({ '🔥': 4 });
+    });
+
     it('no-op when comment id does not match data in cache', () => {
       const qc = createQueryClient();
-      const commentId = 'c-OTHER';
       const comment = { id: 'c-1', content: 'Hi', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString(), reactionSummary: {} as Record<string, number>, currentUserReactions: [] as string[] };
-      // Cache keyed by commentId = 'c-OTHER', data has comment with id 'c-1' → no match
-      qc.setQueryData(['posts', 'detail', commentId, 'comments', 'infinite'], {
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
         pages: [{ data: [comment], meta: {} }],
         pageParams: [undefined],
       });
       renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
 
       act(() => emit('comment:reaction-sync', {
-        commentId,
+        commentId: 'c-OTHER',
+        postId: 'post-1',
         reactions: [{ emoji: '👍', count: 3 }],
         totalCount: 3,
         userReactions: [],
       }));
 
-      // The comment 'c-1' is NOT the same as commentId 'c-OTHER', so no patch
-      const data = qc.getQueryData<{ pages: { data: { likeCount: number }[] }[] }>(['posts', 'detail', commentId, 'comments', 'infinite']);
+      const data = qc.getQueryData<{ pages: { data: { likeCount: number }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
       expect(data?.pages[0].data[0].likeCount).toBe(0);
     });
 
-    it('no-op when commentsInfinite cache undefined', () => {
+    it('no-op when comments cache undefined', () => {
       const qc = createQueryClient();
       renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
 
       act(() => emit('comment:reaction-sync', {
         commentId: 'c-1',
+        postId: 'post-1',
         reactions: [],
         totalCount: 0,
         userReactions: [],
       }));
 
-      // Cache key is ['posts', 'detail', 'c-1', 'comments', 'infinite']
-      expect(qc.getQueryData(['posts', 'detail', 'c-1', 'comments', 'infinite'])).toBeUndefined();
+      expect(qc.getQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'])).toBeUndefined();
+    });
+  });
+
+  describe('threaded replies (comment:added / comment:deleted / comment:reaction-added on replies)', () => {
+    function seedComments(qc: QueryClient, comments: unknown[]) {
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: comments, meta: {} }],
+        pageParams: [undefined],
+      });
+    }
+    function seedReplies(qc: QueryClient, parentId: string, replies: unknown[]) {
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'replies', parentId], {
+        pages: [{ data: replies, meta: {} }],
+        pageParams: [undefined],
+      });
+    }
+    function topLevel(qc: QueryClient): { id: string; replyCount: number }[] {
+      const d = qc.getQueryData<{ pages: { data: { id: string; replyCount: number }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      return d?.pages.flatMap((p) => p.data) ?? [];
+    }
+    function repliesOf(qc: QueryClient, parentId: string): { id: string }[] {
+      const d = qc.getQueryData<{ pages: { data: { id: string }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'replies', parentId]);
+      return d?.pages.flatMap((p) => p.data) ?? [];
+    }
+
+    const parent = { id: 'c-1', parentId: null, content: 'parent', likeCount: 0, replyCount: 0, createdAt: '2026-01-01T00:00:00Z', reactionSummary: {} as Record<string, number>, currentUserReactions: [] as string[] };
+
+    it('routes a reply (parentId set) into the replies sub-cache, not the top-level list', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      seedComments(qc, [parent]);
+      seedReplies(qc, 'c-1', []);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      const reply = { id: 'r-1', parentId: 'c-1', content: 'a reply', likeCount: 0, replyCount: 0, createdAt: '2026-01-02T00:00:00Z' };
+      act(() => emit('comment:added', { postId: 'post-1', comment: reply, commentCount: 3 }));
+
+      expect(repliesOf(qc, 'c-1').map((c) => c.id)).toEqual(['r-1']);
+      expect(topLevel(qc).map((c) => c.id)).toEqual(['c-1']);
+    });
+
+    it('bumps the parent replyCount when a reply arrives', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      seedComments(qc, [parent]);
+      seedReplies(qc, 'c-1', []);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      const reply = { id: 'r-1', parentId: 'c-1', content: 'a reply', likeCount: 0, replyCount: 0, createdAt: '2026-01-02T00:00:00Z' };
+      act(() => emit('comment:added', { postId: 'post-1', comment: reply, commentCount: 3 }));
+
+      expect(topLevel(qc).find((c) => c.id === 'c-1')?.replyCount).toBe(1);
+    });
+
+    it('still prepends a top-level comment (no parentId) to the top-level list', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      seedComments(qc, [parent]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      const c2 = { id: 'c-2', parentId: null, content: 'second', likeCount: 0, replyCount: 0, createdAt: '2026-01-03T00:00:00Z' };
+      act(() => emit('comment:added', { postId: 'post-1', comment: c2, commentCount: 3 }));
+
+      expect(topLevel(qc).map((c) => c.id)).toEqual(['c-2', 'c-1']);
+    });
+
+    it('removes a deleted reply from the replies sub-cache', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      seedComments(qc, [parent]);
+      seedReplies(qc, 'c-1', [{ id: 'r-1', parentId: 'c-1', content: 'a reply', likeCount: 0, replyCount: 0, createdAt: '2026-01-02T00:00:00Z' }]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:deleted', { postId: 'post-1', commentId: 'r-1', commentCount: 2 }));
+
+      expect(repliesOf(qc, 'c-1').map((c) => c.id)).toEqual([]);
+    });
+
+    it('patches a reaction on a reply living in the replies sub-cache', () => {
+      const qc = createQueryClient();
+      seedReplies(qc, 'c-1', [{ id: 'r-1', parentId: 'c-1', content: 'a reply', likeCount: 0, replyCount: 0, reactionSummary: {} as Record<string, number>, currentUserReactions: [] as string[], createdAt: '2026-01-02T00:00:00Z' }]);
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-added', {
+        commentId: 'r-1',
+        postId: 'post-1',
+        userId: 'user-1',
+        emoji: '❤️',
+        action: 'add',
+        aggregation: { emoji: '❤️', count: 1 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const reply = repliesOf(qc, 'c-1')[0] as unknown as { reactionSummary: Record<string, number> };
+      expect(reply.reactionSummary).toEqual({ '❤️': 1 });
     });
   });
 

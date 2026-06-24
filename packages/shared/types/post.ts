@@ -346,6 +346,12 @@ export interface CommentReactionUpdateEventData {
 
 export interface CommentReactionSyncEventData {
   readonly commentId: string;
+  /**
+   * Owning post id. Required so a client can locate the comment in the
+   * post-scoped comment caches (`comments(postId)` → both the top-level list
+   * and any `replies` sub-caches). The comment id alone is NOT a cache key.
+   */
+  readonly postId: string;
   readonly reactions: readonly CommentReactionAggregation[];
   readonly totalCount: number;
   readonly userReactions: readonly string[];

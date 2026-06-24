@@ -20,6 +20,7 @@ export interface CommentReactionData {
 
 export interface CommentReactionSync {
   readonly commentId: string;
+  readonly postId: string;
   readonly reactions: readonly CommentReactionAggregationWithUsers[];
   readonly totalCount: number;
   readonly userReactions: readonly string[];
@@ -180,6 +181,11 @@ export class CommentReactionService {
 
     this.validateCommentId(commentId);
 
+    const comment = await this.prisma.postComment.findUnique({
+      where: { id: commentId },
+      select: { postId: true }
+    });
+
     const reactions = await this.prisma.commentReaction.findMany({
       where: { commentId },
       orderBy: { createdAt: 'asc' }
@@ -251,6 +257,7 @@ export class CommentReactionService {
 
     return {
       commentId,
+      postId: comment?.postId ?? '',
       reactions: enrichedReactions,
       totalCount: reactions.length,
       userReactions: Array.from(new Set(userReactions))
