@@ -271,6 +271,29 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertEqual(resolved, "Bonjour")
     }
 
+    /// Prisme règle #1 — la langue active n'a aucune traduction correspondante et
+    /// la `preferredTranslation` vise une AUTRE langue : on doit retomber sur
+    /// l'ORIGINAL, jamais sur la traduction préférée.
+    func test_resolveEffectiveContent_returnsOriginalWhenNoTranslationMatchesActive() {
+        let msg = makeMessage(content: "Bonjour") // originalLanguage = fr
+        let preferred = MessageTranslation(
+            id: "t1",
+            messageId: "m1",
+            sourceLanguage: "fr",
+            targetLanguage: "es",
+            translatedContent: "Hola",
+            translationModel: "nllb",
+            confidenceScore: nil
+        )
+        let resolved = BubbleContent.resolveEffectiveContent(
+            message: msg,
+            translations: [],
+            preferredTranslation: preferred,
+            activeLangCode: "en"
+        )
+        XCTAssertEqual(resolved, "Bonjour")
+    }
+
     // MARK: - Reply routing (audioHostsReply / visualHostsReply)
 
     /// Un audio seul en reply doit héberger la citation dans son widget — pas

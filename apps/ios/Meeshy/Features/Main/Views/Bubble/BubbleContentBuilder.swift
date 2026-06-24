@@ -229,13 +229,12 @@ extension BubbleContent {
            pref.targetLanguage.lowercased() == active {
             return pref.translatedContent
         }
-        // TODO(prisme): the last-resort fallback to `preferredTranslation?.translatedContent`
-        // diverges from the Prisme rule #1 ("if no translation matches the preferred
-        // language, return the original content — never tomber sur translations.first").
-        // We mirror legacy ThemedMessageBubble.effectiveContent for visual fidelity
-        // during the bubble-decompose refactor; align with `resolveUserLanguage()`
-        // in a separate audit. Source: apps/ios/CLAUDE.md "Régles critiques du Prisme".
-        return preferredTranslation?.translatedContent ?? message.content
+        // Prisme rule #1 — no translation matches the active language, which means
+        // the content is already in that language (or no translation exists for it):
+        // return the ORIGINAL. Never fall back to the preferred-language translation,
+        // which would show content in a language the user did not select.
+        // Source: apps/ios/CLAUDE.md "Régles critiques du Prisme".
+        return message.content
     }
 
     static func buildAvailableFlags(

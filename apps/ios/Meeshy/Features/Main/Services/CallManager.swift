@@ -2962,13 +2962,22 @@ extension CallManager: VideoSurvivalActuating {
             }
             hasLocalVideoTrack = webRTCService.hasLocalVideoTrack
 
+            // The upgrade/downgrade above is a suspension point — the call may have
+            // ended while we were awaiting. Re-check before signalling so we never
+            // toggle video or emit a renegotiation offer for a call that is gone.
+            guard currentCallId == callId else {
+                Logger.calls.info("[CALL] survival A/V switch aborted: call ended mid-flight")
+                return false
+            }
+
             // Tell the peer so it shows our avatar placeholder (suspend) or
             // restores our video (resume) — a track flip alone never reaches it.
             MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: enabled)
 
             if needsRenegotiation,
                let userId = remoteUserId,
-               let offer = await webRTCService.createOffer() {
+               let offer = await webRTCService.createOffer(),
+               currentCallId == callId {
                 emitCallOffer(callId: callId, toUserId: userId, isVideo: enabled, sdp: offer)
                 Logger.calls.info("[CALL] survival A/V switch offer sent (video=\(enabled))")
             }

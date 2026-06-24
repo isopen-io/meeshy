@@ -23,7 +23,7 @@ final class NSEPendingPostConsumer {
     private init() {}
 
     func consumeAll() async {
-        let pending = readAndDeletePending()
+        let pending = readPending()
         guard !pending.isEmpty else { return }
 
         logger.info("Consuming \(pending.count) NSE-prefetched posts")
@@ -43,15 +43,29 @@ final class NSEPendingPostConsumer {
 
         let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
 
+        let fm = FileManager.default
         var merged = 0
-        for data in pending {
-            guard let apiPost = try? decoder.decode(APIPost.self, from: data) else { continue }
+        for item in pending {
+            guard let apiPost = try? decoder.decode(APIPost.self, from: item.data) else {
+                // Corrupt/undecodable payload — it will never decode, so drop it
+                // instead of re-reading it every launch.
+                try? fm.removeItem(at: item.url)
+                continue
+            }
             let feedPost = apiPost.toFeedPost(preferredLanguages: langs)
             // PostDetailViewModel.loadPost keys the feed store by postId and reads
             // `.first`, so seed exactly that key. A `.fresh` hit then renders the
             // post from local data instead of a blank state on a cold-start tap.
-            try? await CacheCoordinator.shared.feed.save([feedPost], for: apiPost.id)
-            merged += 1
+            do {
+                try await CacheCoordinator.shared.feed.save([feedPost], for: apiPost.id)
+                // Only drop the prefetch file once the post is safely cached, so a
+                // transient save failure leaves it on disk to retry next launch
+                // instead of silently losing the post.
+                try? fm.removeItem(at: item.url)
+                merged += 1
+            } catch {
+                logger.error("Failed to seed NSE post \(apiPost.id): \(error.localizedDescription)")
+            }
         }
 
         if merged > 0 {
@@ -59,7 +73,10 @@ final class NSEPendingPostConsumer {
         }
     }
 
-    private func readAndDeletePending() -> [Data] {
+    /// Reads (without deleting) every prefetched post blob. Deletion is deferred
+    /// to ``consumeAll`` and happens only after a successful decode + cache save,
+    /// so a transient failure never drops a prefetched post off disk.
+    private func readPending() -> [(url: URL, data: Data)] {
         guard let container = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: Self.appGroupId
         ) else { return [] }
@@ -70,11 +87,10 @@ final class NSEPendingPostConsumer {
             return []
         }
 
-        var results: [Data] = []
+        var results: [(url: URL, data: Data)] = []
         for file in files where file.pathExtension == "json" {
             guard let data = try? Data(contentsOf: file) else { continue }
-            results.append(data)
-            try? fm.removeItem(at: file)
+            results.append((url: file, data: data))
         }
         return results
     }

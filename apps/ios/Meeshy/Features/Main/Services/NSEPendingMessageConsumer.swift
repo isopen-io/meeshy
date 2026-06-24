@@ -13,7 +13,7 @@ final class NSEPendingMessageConsumer {
     private init() {}
 
     func consumeAll() async {
-        let pending = readAndDeletePending()
+        let pending = readPending()
         guard !pending.isEmpty else { return }
 
         logger.info("Consuming \(pending.count) NSE-prefetched messages")
@@ -34,15 +34,22 @@ final class NSEPendingMessageConsumer {
         let userId = AuthManager.shared.currentUser?.id ?? ""
         let username = AuthManager.shared.currentUser?.username
 
+        let fm = FileManager.default
         var decodedAPIMessages: [APIMessage] = []
-        for (conversationId, data) in pending {
-            guard let apiMsg = try? decoder.decode(APIMessage.self, from: data) else { continue }
+        var consumedFiles: [URL] = []
+        for item in pending {
+            guard let apiMsg = try? decoder.decode(APIMessage.self, from: item.data) else {
+                // Corrupt payload — drop it instead of re-reading it every launch.
+                try? fm.removeItem(at: item.url)
+                continue
+            }
             decodedAPIMessages.append(apiMsg)
+            consumedFiles.append(item.url)
             let message = apiMsg.toMessage(currentUserId: userId, currentUsername: username)
 
             await CacheCoordinator.shared.messages.upsert(
                 item: message,
-                for: conversationId
+                for: item.conversationId
             ) { existing, newItem in
                 guard !existing.contains(where: { $0.id == newItem.id }) else { return existing }
                 return (existing + [newItem]).sorted { $0.createdAt < $1.createdAt }
@@ -60,17 +67,24 @@ final class NSEPendingMessageConsumer {
         // right before reading its GRDB snapshot: only an awaited commit
         // guarantees the just-consumed push message is in that snapshot, so it
         // renders INSTANTLY from local data with no network round-trip.
-        if !decodedAPIMessages.isEmpty {
-            try? await DependencyContainer.shared.messagePersistence
+        guard !decodedAPIMessages.isEmpty else { return }
+        do {
+            try await DependencyContainer.shared.messagePersistence
                 .upsertFromAPIMessages(decodedAPIMessages)
-        }
-
-        if !pending.isEmpty {
-            logger.info("Merged \(pending.count) NSE messages into cache")
+            // Only drop the prefetch files once the messages are committed to GRDB,
+            // so a persist failure leaves them on disk to retry next launch instead
+            // of silently dropping the push-prefetched message.
+            for url in consumedFiles { try? fm.removeItem(at: url) }
+            logger.info("Merged \(decodedAPIMessages.count) NSE messages into cache")
+        } catch {
+            logger.error("NSE message persist failed, keeping \(consumedFiles.count) file(s) for retry: \(error.localizedDescription)")
         }
     }
 
-    private func readAndDeletePending() -> [(conversationId: String, data: Data)] {
+    /// Reads (without deleting) every prefetched message blob. Deletion is deferred
+    /// to ``consumeAll`` and happens only after the GRDB commit succeeds, so a
+    /// transient failure never drops a push-prefetched message off disk.
+    private func readPending() -> [(conversationId: String, url: URL, data: Data)] {
         guard let container = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: Self.appGroupId
         ) else { return [] }
@@ -81,13 +95,12 @@ final class NSEPendingMessageConsumer {
             return []
         }
 
-        var results: [(String, Data)] = []
+        var results: [(conversationId: String, url: URL, data: Data)] = []
         for file in files where file.pathExtension == "json" {
             let name = file.deletingPathExtension().lastPathComponent
             let parts = name.split(separator: "_", maxSplits: 1)
             guard parts.count == 2, let data = try? Data(contentsOf: file) else { continue }
-            results.append((String(parts[0]), data))
-            try? fm.removeItem(at: file)
+            results.append((conversationId: String(parts[0]), url: file, data: data))
         }
         return results
     }
