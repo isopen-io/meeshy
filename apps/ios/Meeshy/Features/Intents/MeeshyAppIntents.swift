@@ -1,10 +1,11 @@
 import AppIntents
 import UIKit
+import SwiftUI
 
 // MARK: - App Shortcuts
 /// App Shortcuts are available on iOS 16+
 /// These appear in Spotlight, Siri, and Shortcuts app
-@available(iOS 16.0, *)
+@available(iOS 18.0, *)
 struct MeeshyAppShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
@@ -34,7 +35,7 @@ struct MeeshyAppShortcuts: AppShortcutsProvider {
             phrases: [
                 "Translate on \(.applicationName)",
                 "Translate this to \(\.$targetLanguage) on \(.applicationName)",
-                "Translate \(\.$text) on \(.applicationName)"
+                "Translate text on \(.applicationName)"
             ],
             shortTitle: "Translate",
             systemImageName: "translate"
@@ -65,11 +66,11 @@ struct MeeshyAppShortcuts: AppShortcutsProvider {
 }
 
 // MARK: - Send Message Intent
-@available(iOS 16.0, *)
+@available(iOS 18.0, *)
 struct SendMessageIntent: AppIntent {
-    static var title: LocalizedStringResource = "Send Message"
-    static var description = IntentDescription("Send a message to a contact")
-    static var openAppWhenRun: Bool = true
+    static let title: LocalizedStringResource = "Send Message"
+    static let description = IntentDescription("Send a message to a contact")
+    static let openAppWhenRun: Bool = true
 
     @Parameter(title: "Contact", requestValueDialog: "Who would you like to message?")
     var contact: ContactEntity?
@@ -103,16 +104,16 @@ struct SendMessageIntent: AppIntent {
         // Build deep link
         let urlString = "meeshy://send?contactId=\(selectedContact.id)&message=\(messageText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
 
-        return .result(opensIntent: OpenURLIntent(url: URL(string: urlString)!))
+        return .result(opensIntent: OpenURLIntent(URL(string:urlString)!))
     }
 }
 
 // MARK: - Call Contact Intent
-@available(iOS 16.0, *)
+@available(iOS 18.0, *)
 struct CallContactIntent: AppIntent {
-    static var title: LocalizedStringResource = "Call Contact"
-    static var description = IntentDescription("Start a call with a contact")
-    static var openAppWhenRun: Bool = true
+    static let title: LocalizedStringResource = "Call Contact"
+    static let description = IntentDescription("Start a call with a contact")
+    static let openAppWhenRun: Bool = true
 
     @Parameter(title: "Contact", requestValueDialog: "Who would you like to call?")
     var contact: ContactEntity?
@@ -124,8 +125,8 @@ struct CallContactIntent: AppIntent {
         case audio
         case video
 
-        static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Call Type")
-        static var caseDisplayRepresentations: [CallType: DisplayRepresentation] = [
+        static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Call Type")
+        static let caseDisplayRepresentations: [CallType: DisplayRepresentation] = [
             .audio: "Audio Call",
             .video: "Video Call"
         ]
@@ -147,16 +148,16 @@ struct CallContactIntent: AppIntent {
         let type = callType == .video ? "video" : "audio"
         let urlString = "meeshy://call?contactId=\(selectedContact.id)&type=\(type)"
 
-        return .result(opensIntent: OpenURLIntent(url: URL(string: urlString)!))
+        return .result(opensIntent: OpenURLIntent(URL(string:urlString)!))
     }
 }
 
 // MARK: - Translate Text Intent
-@available(iOS 16.0, *)
+@available(iOS 18.0, *)
 struct TranslateTextIntent: AppIntent {
-    static var title: LocalizedStringResource = "Translate Text"
-    static var description = IntentDescription("Translate text to another language")
-    static var openAppWhenRun: Bool = true
+    static let title: LocalizedStringResource = "Translate Text"
+    static let description = IntentDescription("Translate text to another language")
+    static let openAppWhenRun: Bool = true
 
     @Parameter(title: "Text", requestValueDialog: "What would you like to translate?")
     var text: String?
@@ -176,8 +177,8 @@ struct TranslateTextIntent: AppIntent {
         case arabic = "ar"
         case russian = "ru"
 
-        static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Language")
-        static var caseDisplayRepresentations: [LanguageOption: DisplayRepresentation] = [
+        static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Language")
+        static let caseDisplayRepresentations: [LanguageOption: DisplayRepresentation] = [
             .spanish: "Spanish",
             .french: "French",
             .german: "German",
@@ -206,29 +207,29 @@ struct TranslateTextIntent: AppIntent {
 
         let urlString = "meeshy://translate?text=\(textToTranslate.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&target=\(targetLanguage.rawValue)"
 
-        return .result(opensIntent: OpenURLIntent(url: URL(string: urlString)!))
+        return .result(opensIntent: OpenURLIntent(URL(string:urlString)!))
     }
 }
 
 // MARK: - Open Recent Conversation Intent
-@available(iOS 16.0, *)
+@available(iOS 18.0, *)
 struct OpenRecentConversationIntent: AppIntent {
-    static var title: LocalizedStringResource = "Open Recent Conversation"
-    static var description = IntentDescription("Open your most recent conversation")
-    static var openAppWhenRun: Bool = true
+    static let title: LocalizedStringResource = "Open Recent Conversation"
+    static let description = IntentDescription("Open your most recent conversation")
+    static let openAppWhenRun: Bool = true
 
     @MainActor
     func perform() async throws -> some IntentResult & OpensIntent {
-        return .result(opensIntent: OpenURLIntent(url: URL(string: "meeshy://conversations/recent")!))
+        return .result(opensIntent: OpenURLIntent(URL(string:"meeshy://conversations/recent")!))
     }
 }
 
 // MARK: - Check Notifications Intent
 @available(iOS 16.0, *)
 struct CheckNotificationsIntent: AppIntent {
-    static var title: LocalizedStringResource = "Check Notifications"
-    static var description = IntentDescription("Check for unread messages")
-    static var openAppWhenRun: Bool = false
+    static let title: LocalizedStringResource = "Check Notifications"
+    static let description = IntentDescription("Check for unread messages")
+    static let openAppWhenRun: Bool = false
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
@@ -301,8 +302,8 @@ struct NotificationCheckView: View {
 // MARK: - Contact Entity
 @available(iOS 16.0, *)
 struct ContactEntity: AppEntity {
-    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Contact")
-    static var defaultQuery = ContactQuery()
+    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Contact")
+    static let defaultQuery = ContactQuery()
 
     var id: String
     var displayString: String

@@ -424,10 +424,19 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
 - `apps/ios/.../Features/Stories/Notifications/*` (independant story-specific)
 
 ## App Extensions
-- MeeshyNotificationExtension (rich push)
-- MeeshyShareExtension (share to Meeshy)
-- MeeshyWidgets (home screen)
-- MeeshyIntents (Siri/Shortcuts)
+- **MeeshyNotificationExtension** (rich push) — cible `app-extension` dans `project.yml`.
+- **MeeshyWidgets** (home screen) — cible `app-extension` (iOS 17+).
+- **MeeshyShareExtension** (« Share to Meeshy ») — cible `app-extension` recâblée 2026-06-24
+  (était sur disque mais absente de `project.yml` → jamais compilée). `ShareViewController`
+  est programmatique (héberge SwiftUI), Info.plist via `NSExtensionPrincipalClass` (pas de
+  storyboard), auto-contenu (frameworks système + App Group `group.me.meeshy.apps`,
+  entitlements `MeeshyShareExtension/MeeshyShareExtension.entitlements`).
+- **App Intents (Siri/Shortcuts)** — `Meeshy/Features/Intents/MeeshyAppIntents.swift`,
+  compilé **dans le target app** (pas d'extension séparée : les `AppIntent` définis par
+  l'app sont exposés à Siri/Shortcuts automatiquement). Recâblé 2026-06-24 depuis l'ancien
+  dossier orphelin `MeeshyIntents/` (Info.plist SiriKit legacy incohérent, supprimé). Les 4
+  intents deep-link (`meeshy://`) + `MeeshyAppShortcuts` sont gatés `@available(iOS 18.0, *)`
+  car ils utilisent `OpenURLIntent` (iOS 18+) ; l'app garde son plancher iOS 16.
 
 ## Configuration (xcconfig)
 | Config | API URL | Features |

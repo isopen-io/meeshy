@@ -61,6 +61,7 @@ targets:
     dependencies:
       - target: MeeshyWidgets
       - target: MeeshyNotificationExtension
+      - target: MeeshyShareExtension
       - package: MeeshySDK
         product: MeeshySDK
       - package: MeeshySDK
@@ -111,6 +112,23 @@ targets:
       # NotificationService.swift imports MeeshySDK (and GRDB transitively).
       - package: MeeshySDK
         product: MeeshySDK
+
+  # Share Extension — "Share to Meeshy" depuis d'autres apps. ShareViewController
+  # est auto-contenu (frameworks système + container App Group group.me.meeshy.apps) ;
+  # aucune dépendance SDK. Recâblé 2026-06-24 (présent sur disque mais absent de
+  # project.yml → jamais compilé). Info.plist : NSExtensionPrincipalClass
+  # (ShareViewController programmatique, pas de storyboard).
+  MeeshyShareExtension:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: MeeshyShareExtension
+    settings:
+      INFOPLIST_FILE: MeeshyShareExtension/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.share-extension
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_ENTITLEMENTS: MeeshyShareExtension/MeeshyShareExtension.entitlements
 
   # P4.3 step 1 — MeeshyTests is the unit-test bundle that previously was
   # only declared inside Meeshy.xcodeproj/project.pbxproj (via 20+ Ruby
