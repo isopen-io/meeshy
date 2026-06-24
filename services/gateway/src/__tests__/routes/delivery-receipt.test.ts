@@ -130,6 +130,24 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
       participantId: PARTICIPANT_ID,
       type: 'received'
     });
+    // Per-actor read-sync fields (multi-device). No cursor yet → null
+    // frontier; no unread messages mocked → 0.
+    expect(payload).toHaveProperty('lastReadAt', null);
+    expect(payload).toHaveProperty('unreadCount', 0);
+  });
+
+  it('carries the actor read frontier and unread count in the broadcast', async () => {
+    const frontier = new Date('2026-06-24T10:00:00.000Z');
+    mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: frontier });
+    mockPrisma.message.count.mockResolvedValue(3);
+
+    const response = await app.inject({ method: 'POST', url: url() });
+
+    expect(response.statusCode).toBe(200);
+    expect(emitMock).toHaveBeenCalledTimes(1);
+    const [, payload] = emitMock.mock.calls[0];
+    expect(payload.lastReadAt).toEqual(frontier);
+    expect(payload.unreadCount).toBe(3);
   });
 
   it('returns 404 when the conversation identifier cannot be resolved', async () => {

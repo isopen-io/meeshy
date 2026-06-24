@@ -3,6 +3,7 @@ import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/a
 import { MessageReadStatusService } from '../services/MessageReadStatusService.js';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService.js';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import type { ReadStatusUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { validateParams, validateQuery } from '../validation/helpers.js';
 import { MessageIdParamSchema, ConversationIdParamSchema, ReadStatusesQuerySchema, DeliveryReceiptParamsSchema } from '../validation/message-read-status-schemas.js';
 import { resolveConversationId } from '../utils/conversation-id-cache.js';
@@ -427,21 +428,37 @@ async function broadcastReadStatusUpdate(
   const socketIOManager = socketIOHandler?.getManager?.();
   if (!socketIOManager) return;
 
-  const [summary, activeParticipants] = await Promise.all([
+  const [summary, activeParticipants, actorCursor, actorUnreadCount] = await Promise.all([
     readStatusService.getLatestMessageSummary(args.conversationId),
     prisma.participant.findMany({
       where: { conversationId: args.conversationId, isActive: true },
       select: { userId: true }
-    })
+    }),
+    // Read frontier + unread count of the ACTOR (args.userId), scoped to
+    // their participant row. These let the actor's OTHER devices sync their
+    // own read cursor without a refetch (multi-device read sync). Recipients
+    // whose id differs from args.userId ignore them client-side.
+    prisma.conversationReadCursor.findUnique({
+      where: {
+        conversation_participant_cursor: {
+          participantId: args.participantId,
+          conversationId: args.conversationId
+        }
+      },
+      select: { lastReadAt: true }
+    }),
+    readStatusService.getUnreadCount(args.participantId, args.conversationId)
   ]);
 
-  const payload = {
+  const payload: ReadStatusUpdatedEventData = {
     conversationId: args.conversationId,
     participantId: args.participantId,
     userId: args.userId,
     type: args.type,
     updatedAt: new Date(),
-    summary
+    summary,
+    lastReadAt: actorCursor?.lastReadAt ?? null,
+    unreadCount: actorUnreadCount
   };
 
   const io = socketIOManager.getIO();

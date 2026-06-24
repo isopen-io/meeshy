@@ -625,6 +625,30 @@ export interface ReadStatusUpdatedEventData {
   readonly type: 'read' | 'received';
   readonly updatedAt: Date;
   readonly summary: ReadStatusSummary;
+  /**
+   * Read frontier of `userId` (the actor) AT broadcast time, read from
+   * `ConversationReadCursor.lastReadAt`. Scoped to `userId`: it lets that
+   * user's OTHER devices sync their own read cursor (multi-device read
+   * sync). Recipients whose id differs from `userId` MUST ignore it — a
+   * peer reading does not move your own cursor. Read receipts are monotone,
+   * so a client applies it only when strictly newer than its local cursor.
+   * `null` when the actor has no read cursor yet.
+   *
+   * Emitted by the dedicated mark-read / mark-received / delivery-receipt
+   * routes. ABSENT (`undefined`) on the bulk auto-deliver broadcast
+   * (`MessageHandler._autoDeliverToOnlineRecipients`), which fans out on
+   * every new message and carries only the aggregate `summary` for sender
+   * checkmarks — it never advances a read cursor, so it omits these fields
+   * to stay off the per-message hot path.
+   */
+  readonly lastReadAt?: Date | null;
+  /**
+   * Server-authoritative unread count for `userId` in this conversation
+   * after the read/receive action. Same `userId` scoping and same
+   * present-on-dedicated-routes / absent-on-auto-deliver semantics as
+   * `lastReadAt`; applied as-is by the actor's devices when accepted.
+   */
+  readonly unreadCount?: number;
 }
 
 /**

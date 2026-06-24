@@ -141,6 +141,36 @@ public struct UserPreferencesUpdatedEvent: Decodable, Sendable {
     }
 }
 
+/// `user:preferences-updated` — **conversation scope**. Mirrors the gateway's
+/// `UserPreferencesConversationUpdatedEventData` (versioned per-conversation
+/// preferences). The same socket event name also carries a flat **category
+/// scope** (`{ userId, category }`) decoded by `UserPreferencesUpdatedEvent`;
+/// the decode site discriminates on the presence of `conversationId`.
+///
+/// `version` drives optimistic-vs-socket resolution in `ConversationStore`
+/// (drop when `version <= local`). `reset == true` (DELETE) carries
+/// `preferences == nil` — the client restores its local defaults.
+public struct UserPreferencesConversationUpdatedSocketEvent: Decodable, Sendable {
+    public struct Preferences: Decodable, Sendable {
+        public let isPinned: Bool
+        public let isMuted: Bool
+        public let mentionsOnly: Bool
+        public let isArchived: Bool
+        public let tags: [String]
+        public let categoryId: String?
+        public let orderInCategory: Int?
+        public let customName: String?
+        public let reaction: String?
+        public let deletedForUserAt: Date?
+        public let clearHistoryBefore: Date?
+    }
+    public let userId: String
+    public let conversationId: String
+    public let version: Int
+    public let reset: Bool
+    public let preferences: Preferences?
+}
+
 /// `conversation:deleted` — per-user soft delete broadcast to the user's room.
 /// Named `…SocketEvent` to avoid clashing with `ConversationDeletedEvent`
 /// (the store input type, same module).
@@ -340,6 +370,36 @@ public struct ReadStatusUpdateEvent: Decodable, Sendable {
     public let type: String
     public let updatedAt: Date
     public let summary: ReadStatusSummary
+    /// Read frontier of `userId` (the actor) at broadcast time. Lets that
+    /// user's OTHER devices sync their own read cursor (multi-device read
+    /// sync). `nil` from a pre-rollout gateway or when the actor has no
+    /// cursor yet. Scoped to `userId` — a recipient whose id differs MUST
+    /// ignore it. Read receipts are monotone, so a client applies it only
+    /// when strictly newer than its local cursor.
+    public let lastReadAt: Date?
+    /// Server-authoritative unread count for `userId` after the action.
+    /// Same `userId` scoping as `lastReadAt`. `nil` from a pre-rollout gateway.
+    public let unreadCount: Int?
+
+    public init(
+        conversationId: String,
+        participantId: String,
+        userId: String?,
+        type: String,
+        updatedAt: Date,
+        summary: ReadStatusSummary,
+        lastReadAt: Date? = nil,
+        unreadCount: Int? = nil
+    ) {
+        self.conversationId = conversationId
+        self.participantId = participantId
+        self.userId = userId
+        self.type = type
+        self.updatedAt = updatedAt
+        self.summary = summary
+        self.lastReadAt = lastReadAt
+        self.unreadCount = unreadCount
+    }
 }
 
 // MARK: - Attachment Status Updated Event Data
@@ -865,6 +925,10 @@ public protocol MessageSocketProviding: Sendable {
     var participantUnbanned: PassthroughSubject<ParticipantUnbannedEvent, Never> { get }
     var conversationClosed: PassthroughSubject<ConversationClosedEvent, Never> { get }
     var userPreferencesUpdated: PassthroughSubject<UserPreferencesUpdatedEvent, Never> { get }
+    /// Conversation-scope variant of `user:preferences-updated` (versioned).
+    /// Routed separately from `userPreferencesUpdated` (category scope) so the
+    /// `ConversationStore` bridge can apply it with version semantics.
+    var userPreferencesConversationUpdated: PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never> { get }
     var conversationStatsReceived: PassthroughSubject<ConversationStatsEvent, Never> { get }
     var messageConsumed: PassthroughSubject<MessageConsumedEvent, Never> { get }
     var locationShared: PassthroughSubject<LocationSharedEvent, Never> { get }
@@ -1032,6 +1096,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — user preferences
     public let userPreferencesUpdated = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+    public let userPreferencesConversationUpdated = PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never>()
     public let userPreferencesReordered = PassthroughSubject<UserPreferencesReorderedSocketEvent, Never>()
     public let conversationDeleted = PassthroughSubject<ConversationDeletedSocketEvent, Never>()
 
@@ -2371,8 +2436,20 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         socket.on("user:preferences-updated") { [weak self] data, _ in
             guard let self else { return }
-            self.decode(UserPreferencesUpdatedEvent.self, from: data) { [weak self] event in
-                self?.userPreferencesUpdated.send(event)
+            // One event name, two payload scopes (the gateway emits a union):
+            //   conversation scope: { userId, conversationId, version, reset, preferences }
+            //   category scope:     { userId, category }
+            // Discriminate on `conversationId` so each lands on the right
+            // publisher — the conversation scope feeds the versioned
+            // `ConversationStore` path, the category scope the legacy flat path.
+            if let dict = data.first as? [String: Any], dict["conversationId"] is String {
+                self.decode(UserPreferencesConversationUpdatedSocketEvent.self, from: data) { [weak self] event in
+                    self?.userPreferencesConversationUpdated.send(event)
+                }
+            } else {
+                self.decode(UserPreferencesUpdatedEvent.self, from: data) { [weak self] event in
+                    self?.userPreferencesUpdated.send(event)
+                }
             }
         }
 
