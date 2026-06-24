@@ -15,7 +15,7 @@ Conséquences sur web :
 ## Itérations
 - [x] It.1 — Hook `usePostRoom(postId)` (post:join/leave) + wiring post detail, reel detail, story, reels-feed inline comments (8 tests)
 - [x] It.2 — Bug `handleCommentReactionSync` (clé cache commentId→postId, +postId au payload shared+gateway) + helper `patchCommentInPostCaches` (match préfixe → live sur top-level ET replies pour like/reaction/translation) + routing `comment:added` reply→replies cache (+replyCount) + `comment:deleted` purge tous caches
-- [ ] It.3 — Statuses/moods réels (remplacer mock PostsFeedScreen par API + temps réel)
+- [x] It.3 — Statuses/moods réels : `use-statuses.ts` (feed query keyée posts.statuses() + create mutation STATUS) + `status-transforms.ts` (postToStatusItem) + PostsFeedScreen câblé (mock retiré). Temps réel via usePostSocketCacheSync (invalide la même clé). 12 tests.
 - [ ] It.4 — UI liste des viewers de story (API getViewers existe déjà)
 
 ## Méthode
