@@ -29,5 +29,7 @@ TDD RED-GREEN-REFACTOR, 1 commit/push par itération sur `claude/festive-faraday
 - [x] **H3 (corrigé)** : `broadcastCommentLiked` atteint aussi `ROOMS.post` (payload absolu, idempotent).
 - [x] **M1 (corrigé)** : web câble `story:updated/deleted/unreacted`, `status:unreacted`, `comment:media-updated`.
 - [x] **M2 (corrigé)** : `post:liked/unliked` unifiés en un seul emit dédoublonné (`emitToFeedsAndPostRoom`).
-- ⚠️ iOS/SDK : pas de toolchain Swift dans l'env → `./apps/ios/meeshy.sh test` / `xcodebuild` à lancer sur macOS pour valider H1+H2 iOS.
+- [x] **Re-audit mineur (corrigé)** : `status:unreacted` était émis par le gateway + consommé web mais **droppé en silence par iOS** (asymétrie vs `statusReacted`/`storyUnreacted`). Ajout struct `SocketStatusUnreactedData` + subject + listener + 2 mocks + test décodage.
+- [x] **Intégration `main`** : merge `origin/main` (4 commits iOS UI/story) dans la branche — propre, aucun conflit (fichiers disjoints).
+- ⚠️ iOS/SDK : pas de toolchain Swift dans l'env → `./apps/ios/meeshy.sh test` / `xcodebuild` à lancer sur macOS pour valider H1 + H2 iOS + `status:unreacted`.
 - Détail complet : voir le rapport d'audit dans la conversation.
