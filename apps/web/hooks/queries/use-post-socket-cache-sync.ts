@@ -18,19 +18,22 @@ import type {
   StoryCreatedEventData,
   StoryViewedEventData,
   StoryReactedEventData,
+  StoryUpdatedEventData,
+  StoryDeletedEventData,
+  StoryUnreactedEventData,
   StatusCreatedEventData,
   StatusUpdatedEventData,
   StatusDeletedEventData,
   StatusReactedEventData,
+  StatusUnreactedEventData,
   CommentAddedEventData,
   CommentDeletedEventData,
   CommentLikedEventData,
+  CommentMediaUpdatedEventData,
   PostTranslationUpdatedEventData,
   CommentTranslationUpdatedEventData,
   PostReactionUpdateEventData,
-  PostReactionSyncEventData,
   CommentReactionUpdateEventData,
-  CommentReactionSyncEventData,
 } from '@meeshy/shared/types/post';
 import type { InfiniteFeedData, InfiniteCommentsData } from './types';
 
@@ -150,6 +153,32 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
         commentCount: data.commentCount,
       }));
 
+      const parentId = data.comment.parentId;
+      if (parentId) {
+        // A reply belongs in its parent's `replies` sub-cache — NOT the
+        // top-level list (otherwise it surfaces as a root comment). Bump the
+        // parent's replyCount so the "N replies" affordance updates live.
+        queryClient.setQueryData<InfiniteCommentsData>(
+          queryKeys.posts.commentReplies(data.postId, parentId),
+          (old) => {
+            if (!old) return old;
+            if (old.pages.some((p) => p.data.some((c) => c.id === data.comment.id))) return old;
+            const lastIndex = old.pages.length - 1;
+            return {
+              ...old,
+              pages: old.pages.map((page, i) =>
+                i === lastIndex ? { ...page, data: [...page.data, data.comment] } : page,
+              ),
+            };
+          },
+        );
+        patchCommentInPostCaches(queryClient, data.postId, parentId, (c) => ({
+          ...c,
+          replyCount: c.replyCount + 1,
+        }));
+        return;
+      }
+
       queryClient.setQueryData<InfiniteCommentsData>(
         queryKeys.posts.commentsInfinite(data.postId),
         (old) => {
@@ -171,10 +200,12 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
         commentCount: data.commentCount,
       }));
 
-      queryClient.setQueryData<InfiniteCommentsData>(
-        queryKeys.posts.commentsInfinite(data.postId),
+      // The delete payload doesn't say whether it was a reply, so drop the id
+      // from every post-scoped comment cache (top-level list AND replies subs).
+      queryClient.setQueriesData<InfiniteCommentsData>(
+        { queryKey: queryKeys.posts.comments(data.postId) },
         (old) => {
-          if (!old) return old;
+          if (!old?.pages) return old;
           return {
             ...old,
             pages: old.pages.map((page) => ({
@@ -187,23 +218,10 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
     }
 
     function handleCommentLiked(data: CommentLikedEventData) {
-      queryClient.setQueryData<InfiniteCommentsData>(
-        queryKeys.posts.commentsInfinite(data.postId),
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              data: page.data.map((c) =>
-                c.id === data.commentId
-                  ? { ...c, likeCount: data.likeCount }
-                  : c,
-              ),
-            })),
-          };
-        },
-      );
+      patchCommentInPostCaches(queryClient, data.postId, data.commentId, (c) => ({
+        ...c,
+        likeCount: data.likeCount,
+      }));
     }
 
     // ── Post reaction events (Phase 3B) ─────────────────────────────────
@@ -247,114 +265,43 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       });
     }
 
-    function handlePostReactionSync(data: PostReactionSyncEventData) {
-      const summaryFromSync: Record<string, number> = {};
-      for (const agg of data.reactions) {
-        summaryFromSync[agg.emoji] = agg.count;
-      }
-      patchPostInAllCaches(queryClient, data.postId, (p) => ({
-        ...p,
-        reactionCount: data.totalCount,
-        likeCount: data.totalCount,
-        reactionSummary: summaryFromSync,
-        currentUserReactions: data.userReactions as string[],
-      }));
-    }
-
     // ── Comment reaction events ─────────────────────────────────────────
 
     function handleCommentReactionAdded(data: CommentReactionUpdateEventData) {
-      queryClient.setQueryData<InfiniteCommentsData>(
-        queryKeys.posts.commentsInfinite(data.postId),
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              data: page.data.map((c) => {
-                if (c.id !== data.commentId) return c;
-                const newSummary = {
-                  ...c.reactionSummary,
-                  [data.emoji]: data.aggregation.count,
-                };
-                return {
-                  ...c,
-                  likeCount: c.likeCount + 1,
-                  reactionSummary: newSummary,
-                  currentUserReactions:
-                    data.userId === currentUserId
-                      ? (c.currentUserReactions ?? []).includes(data.emoji)
-                        ? c.currentUserReactions
-                        : [...(c.currentUserReactions ?? []), data.emoji]
-                      : c.currentUserReactions,
-                };
-              }),
-            })),
-          };
+      patchCommentInPostCaches(queryClient, data.postId, data.commentId, (c) => ({
+        ...c,
+        likeCount: c.likeCount + 1,
+        reactionSummary: {
+          ...c.reactionSummary,
+          [data.emoji]: data.aggregation.count,
         },
-      );
+        currentUserReactions:
+          data.userId === currentUserId
+            ? (c.currentUserReactions ?? []).includes(data.emoji)
+              ? c.currentUserReactions
+              : [...(c.currentUserReactions ?? []), data.emoji]
+            : c.currentUserReactions,
+      }));
     }
 
     function handleCommentReactionRemoved(data: CommentReactionUpdateEventData) {
-      queryClient.setQueryData<InfiniteCommentsData>(
-        queryKeys.posts.commentsInfinite(data.postId),
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              data: page.data.map((c) => {
-                if (c.id !== data.commentId) return c;
-                const newSummary = { ...c.reactionSummary };
-                if (data.aggregation.count === 0) {
-                  delete newSummary[data.emoji];
-                } else {
-                  newSummary[data.emoji] = data.aggregation.count;
-                }
-                return {
-                  ...c,
-                  likeCount: Math.max(0, c.likeCount - 1),
-                  reactionSummary: newSummary,
-                  currentUserReactions:
-                    data.userId === currentUserId
-                      ? (c.currentUserReactions ?? []).filter((e) => e !== data.emoji)
-                      : c.currentUserReactions,
-                };
-              }),
-            })),
-          };
-        },
-      );
-    }
-
-    function handleCommentReactionSync(data: CommentReactionSyncEventData) {
-      queryClient.setQueryData<InfiniteCommentsData>(
-        queryKeys.posts.commentsInfinite(data.commentId),
-        (old) => {
-          if (!old) return old;
-          const summaryFromSync: Record<string, number> = {};
-          for (const agg of data.reactions) {
-            summaryFromSync[agg.emoji] = agg.count;
-          }
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              data: page.data.map((c) => {
-                if (c.id !== data.commentId) return c;
-                return {
-                  ...c,
-                  likeCount: data.totalCount,
-                  reactionSummary: summaryFromSync,
-                  currentUserReactions: data.userReactions as string[],
-                };
-              }),
-            })),
-          };
-        },
-      );
+      patchCommentInPostCaches(queryClient, data.postId, data.commentId, (c) => {
+        const newSummary = { ...c.reactionSummary };
+        if (data.aggregation.count === 0) {
+          delete newSummary[data.emoji];
+        } else {
+          newSummary[data.emoji] = data.aggregation.count;
+        }
+        return {
+          ...c,
+          likeCount: Math.max(0, c.likeCount - 1),
+          reactionSummary: newSummary,
+          currentUserReactions:
+            data.userId === currentUserId
+              ? (c.currentUserReactions ?? []).filter((e) => e !== data.emoji)
+              : c.currentUserReactions,
+        };
+      });
     }
 
     // ── Translation events ──────────────────────────────────────────────
@@ -374,30 +321,26 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
     }
 
     function handleCommentTranslationUpdated(data: CommentTranslationUpdatedEventData) {
-      queryClient.setQueryData<InfiniteCommentsData>(
-        queryKeys.posts.commentsInfinite(data.postId),
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              data: page.data.map((c) => {
-                if (c.id !== data.commentId) return c;
-                const existing = (c.translations as Record<string, unknown>) ?? {};
-                return {
-                  ...c,
-                  translations: {
-                    /* istanbul ignore next */
-                    ...(/* istanbul ignore next */ typeof existing === 'object' ? existing : {}),
-                    [data.language]: data.translation,
-                  },
-                };
-              }),
-            })),
-          };
-        },
-      );
+      patchCommentInPostCaches(queryClient, data.postId, data.commentId, (c) => {
+        const existing = (c.translations as Record<string, unknown>) ?? {};
+        return {
+          ...c,
+          translations: {
+            /* istanbul ignore next */
+            ...(/* istanbul ignore next */ typeof existing === 'object' ? existing : {}),
+            [data.language]: data.translation,
+          },
+        };
+      });
+    }
+
+    function handleCommentMediaUpdated(data: CommentMediaUpdatedEventData) {
+      // Audio transcription/translations for a comment's media are ready —
+      // merge the refreshed comment (media + translations) into the caches.
+      patchCommentInPostCaches(queryClient, data.postId, data.commentId, (c) => ({
+        ...c,
+        ...data.comment,
+      }));
     }
 
     // ── Story events ────────────────────────────────────────────────────
@@ -411,6 +354,18 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
     }
 
     function handleStoryReacted(_data: StoryReactedEventData) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.stories() });
+    }
+
+    function handleStoryUpdated(_data: StoryUpdatedEventData) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.stories() });
+    }
+
+    function handleStoryDeleted(_data: StoryDeletedEventData) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.stories() });
+    }
+
+    function handleStoryUnreacted(_data: StoryUnreactedEventData) {
       queryClient.invalidateQueries({ queryKey: queryKeys.posts.stories() });
     }
 
@@ -432,6 +387,10 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       queryClient.invalidateQueries({ queryKey: queryKeys.posts.statuses() });
     }
 
+    function handleStatusUnreacted(_data: StatusUnreactedEventData) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.statuses() });
+    }
+
     // ── Register listeners ──────────────────────────────────────────────
 
     socket.on(SERVER_EVENTS.POST_CREATED, handlePostCreated);
@@ -446,21 +405,24 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
     socket.on(SERVER_EVENTS.COMMENT_LIKED, handleCommentLiked);
     socket.on(SERVER_EVENTS.POST_TRANSLATION_UPDATED, handlePostTranslationUpdated);
     socket.on(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, handleCommentTranslationUpdated);
+    socket.on(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, handleCommentMediaUpdated);
 
     socket.on(SERVER_EVENTS.STORY_CREATED, handleStoryCreated);
     socket.on(SERVER_EVENTS.STORY_VIEWED, handleStoryViewed);
     socket.on(SERVER_EVENTS.STORY_REACTED, handleStoryReacted);
+    socket.on(SERVER_EVENTS.STORY_UPDATED, handleStoryUpdated);
+    socket.on(SERVER_EVENTS.STORY_DELETED, handleStoryDeleted);
+    socket.on(SERVER_EVENTS.STORY_UNREACTED, handleStoryUnreacted);
     socket.on(SERVER_EVENTS.STATUS_CREATED, handleStatusCreated);
     socket.on(SERVER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
     socket.on(SERVER_EVENTS.STATUS_DELETED, handleStatusDeleted);
     socket.on(SERVER_EVENTS.STATUS_REACTED, handleStatusReacted);
+    socket.on(SERVER_EVENTS.STATUS_UNREACTED, handleStatusUnreacted);
 
     socket.on(SERVER_EVENTS.POST_REACTION_ADDED, handlePostReactionAdded);
     socket.on(SERVER_EVENTS.POST_REACTION_REMOVED, handlePostReactionRemoved);
-    socket.on(SERVER_EVENTS.POST_REACTION_SYNC, handlePostReactionSync);
     socket.on(SERVER_EVENTS.COMMENT_REACTION_ADDED, handleCommentReactionAdded);
     socket.on(SERVER_EVENTS.COMMENT_REACTION_REMOVED, handleCommentReactionRemoved);
-    socket.on(SERVER_EVENTS.COMMENT_REACTION_SYNC, handleCommentReactionSync);
 
     return () => {
       socket.off(SERVER_EVENTS.POST_CREATED, handlePostCreated);
@@ -475,21 +437,24 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       socket.off(SERVER_EVENTS.COMMENT_LIKED, handleCommentLiked);
       socket.off(SERVER_EVENTS.POST_TRANSLATION_UPDATED, handlePostTranslationUpdated);
       socket.off(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, handleCommentTranslationUpdated);
+      socket.off(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, handleCommentMediaUpdated);
 
       socket.off(SERVER_EVENTS.STORY_CREATED, handleStoryCreated);
       socket.off(SERVER_EVENTS.STORY_VIEWED, handleStoryViewed);
       socket.off(SERVER_EVENTS.STORY_REACTED, handleStoryReacted);
+      socket.off(SERVER_EVENTS.STORY_UPDATED, handleStoryUpdated);
+      socket.off(SERVER_EVENTS.STORY_DELETED, handleStoryDeleted);
+      socket.off(SERVER_EVENTS.STORY_UNREACTED, handleStoryUnreacted);
       socket.off(SERVER_EVENTS.STATUS_CREATED, handleStatusCreated);
       socket.off(SERVER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
       socket.off(SERVER_EVENTS.STATUS_DELETED, handleStatusDeleted);
       socket.off(SERVER_EVENTS.STATUS_REACTED, handleStatusReacted);
+      socket.off(SERVER_EVENTS.STATUS_UNREACTED, handleStatusUnreacted);
 
       socket.off(SERVER_EVENTS.POST_REACTION_ADDED, handlePostReactionAdded);
       socket.off(SERVER_EVENTS.POST_REACTION_REMOVED, handlePostReactionRemoved);
-      socket.off(SERVER_EVENTS.POST_REACTION_SYNC, handlePostReactionSync);
       socket.off(SERVER_EVENTS.COMMENT_REACTION_ADDED, handleCommentReactionAdded);
       socket.off(SERVER_EVENTS.COMMENT_REACTION_REMOVED, handleCommentReactionRemoved);
-      socket.off(SERVER_EVENTS.COMMENT_REACTION_SYNC, handleCommentReactionSync);
     };
   }, [enabled, currentUserId, queryClient]);
 }
@@ -526,6 +491,45 @@ function patchPostInAllCaches(
     return old;
   });
 
+  patchReelCaches(queryClient, postId, patcher);
+}
+
+// ---------------------------------------------------------------------------
+// Shared helper: patch a single comment wherever it lives under a post.
+//
+// `comments(postId)` is the common prefix of BOTH the top-level comments cache
+// (`commentsInfinite`) and every `replies` sub-cache. A prefix-matched
+// setQueriesData therefore reaches a comment whether it is a root comment or a
+// nested reply — so likes / reactions / translations surface live on replies
+// too, not only top-level comments.
+// ---------------------------------------------------------------------------
+
+function patchCommentInPostCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  postId: string,
+  commentId: string,
+  patcher: (comment: PostComment) => PostComment,
+) {
+  queryClient.setQueriesData<InfiniteCommentsData>(
+    { queryKey: queryKeys.posts.comments(postId) },
+    (old) => {
+      if (!old?.pages) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          data: page.data.map((c) => (c.id === commentId ? patcher(c) : c)),
+        })),
+      };
+    },
+  );
+}
+
+function patchReelCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  postId: string,
+  patcher: (post: Post) => Post,
+) {
   // Reels affinity threads (`/feed/reels`, `/reel/:id`) live under a separate
   // key family the two patchers above never reach; mirror the patch there so
   // like / comment / bookmark counts stay live on the reel surfaces too.

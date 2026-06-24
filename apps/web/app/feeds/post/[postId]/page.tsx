@@ -22,6 +22,7 @@ import {
   useUnlikeCommentMutation,
 } from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
+import { usePostRoom } from '@/hooks/social/use-post-room';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { PostDetail } from '@/components/v2/PostDetail';
 import { PostEditor } from '@/components/v2/PostEditor';
@@ -58,7 +59,11 @@ export default function PostDetailPage() {
   const commentsQuery = useCommentsInfiniteQuery({ postId, enabled: !!postId });
   const comments = useCommentsList(commentsQuery);
 
-  usePostSocketCacheSync();
+  usePostSocketCacheSync({ currentUserId: currentUser?.id });
+  // Join the post room so comment / reaction events broadcast to
+  // `ROOMS.post(postId)` reach this viewer even when they are not a friend of
+  // the author (PUBLIC post). Without it, real-time comments never surface.
+  usePostRoom(postId);
 
   // Mutations
   const likeMutation = useLikePostMutation();

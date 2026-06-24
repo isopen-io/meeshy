@@ -91,7 +91,10 @@ export function registerInteractionRoutes(
             emoji,
             likeCount: post.likeCount,
             reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
-          }, post.authorId).catch(() => {});
+          }, post.authorId,
+            (post as { visibility?: string }).visibility ?? 'PUBLIC',
+            (post as { visibilityUserIds?: string[] }).visibilityUserIds ?? [],
+          ).catch(() => {});
         }
       }
 
@@ -176,7 +179,10 @@ export function registerInteractionRoutes(
             emoji: '❤️',
             likeCount: post.likeCount,
             reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
-          }, post.authorId).catch(() => {});
+          }, post.authorId,
+            (post as { visibility?: string }).visibility ?? 'PUBLIC',
+            (post as { visibilityUserIds?: string[] }).visibilityUserIds ?? [],
+          ).catch(() => {});
         }
       }
 

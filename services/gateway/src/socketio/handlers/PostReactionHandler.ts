@@ -99,7 +99,7 @@ export class PostReactionHandler {
     if (emoji === HEART_EMOJI) {
       const post = await this.prisma.post.findUnique({
         where: { id: postId },
-        select: { authorId: true, type: true, likeCount: true, reactionSummary: true },
+        select: { authorId: true, type: true, likeCount: true, reactionSummary: true, visibility: true, visibilityUserIds: true },
       });
       if (post && post.authorId && (post.type === 'POST' || post.type === 'REEL')) {
         const payload = {
@@ -110,9 +110,9 @@ export class PostReactionHandler {
           reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
         };
         if (action === 'add') {
-          await this.socialEvents.broadcastPostLiked(payload, post.authorId);
+          await this.socialEvents.broadcastPostLiked(payload, post.authorId, post.visibility, post.visibilityUserIds ?? []);
         } else {
-          await this.socialEvents.broadcastPostUnliked(payload, post.authorId);
+          await this.socialEvents.broadcastPostUnliked(payload, post.authorId, post.visibility, post.visibilityUserIds ?? []);
         }
         return;
       }

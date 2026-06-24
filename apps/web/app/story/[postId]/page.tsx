@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { StoryViewer, useToast } from '@/components/v2';
 import { usePostQuery } from '@/hooks/queries/use-post-query';
 import { useDeleteStoryMutation, useRecordStoryViewMutation } from '@/hooks/social/use-stories';
+import { usePostRoom } from '@/hooks/social/use-post-room';
+import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { postToStoryData } from '@/lib/story-transforms';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { useAuthStore } from '@/stores/auth-store';
@@ -30,6 +32,12 @@ export default function StoryPage() {
   const { data: post, isLoading, isError } = usePostQuery(postId);
   const { recordView } = useRecordStoryViewMutation();
   const deleteStoryMutation = useDeleteStoryMutation();
+
+  // Join the story room + consume its real-time events (reactions, comments)
+  // broadcast to `ROOMS.post(postId)`. Mirrors the post detail page so a viewer
+  // of someone else's story sees live updates without a reload.
+  usePostSocketCacheSync({ currentUserId });
+  usePostRoom(postId);
 
   // Only a STORY drives the ephemeral viewer; any other post type (stale link)
   // is treated as unavailable rather than forced into the 24h-story chrome.
