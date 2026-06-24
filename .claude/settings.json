@@ -5,7 +5,8 @@
       "Bash(./apps/ios/meeshy.sh build *)",
       "Bash(git fetch *)",
       "Bash(git merge *)",
-      "Bash(agvtool what-version *)"
+      "Bash(agvtool what-version *)",
+      "Bash(./apps/ios/meeshy.sh release *)"
     ]
   }
 }
