@@ -257,6 +257,19 @@ final class SocialSocketEventTests: XCTestCase {
         XCTAssertEqual(data.emoji, "\u{1F602}")
     }
 
+    // MARK: - SocketStatusUnreactedData
+
+    func testSocketStatusUnreactedDataDecoding() throws {
+        let json = """
+        {"statusId": "st1", "userId": "u1", "emoji": "\u{1F602}"}
+        """.data(using: .utf8)!
+
+        let data = try decoder.decode(SocketStatusUnreactedData.self, from: json)
+        XCTAssertEqual(data.statusId, "st1")
+        XCTAssertEqual(data.userId, "u1")
+        XCTAssertEqual(data.emoji, "\u{1F602}")
+    }
+
     // MARK: - SocketCommentAddedData
 
     func testSocketCommentAddedDataDecoding() throws {

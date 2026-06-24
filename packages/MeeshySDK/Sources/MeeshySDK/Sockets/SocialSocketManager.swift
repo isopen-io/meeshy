@@ -99,6 +99,17 @@ public struct SocketStatusReactedData: Decodable, Sendable {
     public let emoji: String
 }
 
+public struct SocketStatusUnreactedData: Decodable, Sendable {
+    public let statusId: String
+    public let userId: String
+    public let emoji: String
+    public init(statusId: String, userId: String, emoji: String) {
+        self.statusId = statusId
+        self.userId = userId
+        self.emoji = emoji
+    }
+}
+
 public struct SocketConversationDeletedData: Decodable, Sendable {
     public let conversationId: String
 }
@@ -237,6 +248,7 @@ public protocol SocialSocketProviding: Sendable {
     var statusDeleted: PassthroughSubject<String, Never> { get }
     var statusUpdated: PassthroughSubject<APIPost, Never> { get }
     var statusReacted: PassthroughSubject<SocketStatusReactedData, Never> { get }
+    var statusUnreacted: PassthroughSubject<SocketStatusUnreactedData, Never> { get }
     var conversationDeleted: PassthroughSubject<String, Never> { get }
     var commentAdded: PassthroughSubject<SocketCommentAddedData, Never> { get }
     var commentDeleted: PassthroughSubject<SocketCommentDeletedData, Never> { get }
@@ -294,6 +306,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public let statusDeleted = PassthroughSubject<String, Never>()
     public let statusUpdated = PassthroughSubject<APIPost, Never>()
     public let statusReacted = PassthroughSubject<SocketStatusReactedData, Never>()
+    public let statusUnreacted = PassthroughSubject<SocketStatusUnreactedData, Never>()
     public let conversationDeleted = PassthroughSubject<String, Never>()
     public let commentAdded = PassthroughSubject<SocketCommentAddedData, Never>()
     public let commentDeleted = PassthroughSubject<SocketCommentDeletedData, Never>()
@@ -960,6 +973,13 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             guard let self else { return }
             self.decode(SocketStatusReactedData.self, from: data) { [weak self] payload in
                 self?.statusReacted.send(payload)
+            }
+        }
+
+        socket.on("status:unreacted") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(SocketStatusUnreactedData.self, from: data) { [weak self] payload in
+                self?.statusUnreacted.send(payload)
             }
         }
 
