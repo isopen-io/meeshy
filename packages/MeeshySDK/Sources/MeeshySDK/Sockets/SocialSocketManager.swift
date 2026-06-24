@@ -141,6 +141,11 @@ public struct SocketCommentReactionUpdateEvent: Codable, Sendable {
 
 public struct SocketCommentReactionSyncEvent: Codable, Sendable {
     public let commentId: String
+    // postId is required so a sync (request-sync ACK) can locate the comment in
+    // a post-scoped cache — the gateway's getCommentReactions returns it and the
+    // shared CommentReactionSyncEventData declares it required. Without it iOS
+    // could not key the comment to its post.
+    public let postId: String
     public let reactions: [SocketCommentReactionAggregation]
     public let totalCount: Int
     public let userReactions: [String]
@@ -1019,12 +1024,9 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             }
         }
 
-        socket.on("comment:reaction-sync") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketCommentReactionSyncEvent.self, from: data) { [weak self] payload in
-                self?.commentReactionSync.send(payload)
-            }
-        }
+        // NOTE: there is no `socket.on("comment:reaction-sync")` — the gateway
+        // never broadcasts that event; comment reaction sync data is returned via
+        // the `comment:reaction-request-sync` ACK (see requestCommentReactionSync).
 
         socket.on("post:reaction-added") { [weak self] data, _ in
             guard let self else { return }
@@ -1040,12 +1042,9 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             }
         }
 
-        socket.on("post:reaction-sync") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketPostReactionSyncEvent.self, from: data) { [weak self] payload in
-                self?.postReactionSync.send(payload)
-            }
-        }
+        // NOTE: there is no `socket.on("post:reaction-sync")` — the gateway never
+        // broadcasts that event; post reaction sync data is returned via the
+        // `post:reaction-request-sync` ACK (see requestPostReactionSync).
 
         // --- Story translation events ---
 

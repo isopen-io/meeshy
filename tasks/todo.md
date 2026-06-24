@@ -24,9 +24,10 @@ TDD RED-GREEN-REFACTOR, 1 commit/push par itération sur `claude/festive-faraday
 ## Audit expert — cohérence événements sociaux & droits de diffusion
 - [x] **C1 CRITIQUE (corrigé)** : `comment:added/deleted/translation-updated/media-updated` fuyaient vers TOUS les amis de l'auteur sans filtrage → contenu de commentaire sur post ONLY/EXCEPT/PRIVATE/COMMUNITY exposé. Fix : `broadcast*` filtrent via `getVisibilityFilteredRecipients` (défaut PUBLIC rétro-compat) ; appelants passent `post.visibility`/`visibilityUserIds`.
 - [x] **C1-bis (post-level, corrigé)** : `post:created/updated/liked/unliked/reposted/translation-updated` filtrent désormais par visibilité (created/updated/reposted lisent depuis l'objet post ; liked/unliked/translation reçoivent visibility des appelants). Post room (join-gated) conservée.
-- [ ] H1 : iOS `SocketCommentReactionSyncEvent` manque `postId` (ajouté côté shared/gateway/web). 
-- [ ] H2 : `*:reaction-sync` jamais broadcast (ACK-only) → listeners morts web+iOS (supprimer ou câbler).
-- [ ] H3 : `comment:liked` n'atteint que l'auteur du commentaire → like de commentaire non live pour les autres viewers.
-- [ ] M1 : web sans consumer pour `story:updated/deleted`, `comment:media-updated`, `status:unreacted`, `story:unreacted`.
-- [ ] M2 : double-emit `post:liked` (feed + post room) — sûr car payload absolu, à unifier.
+- [x] **H1 (corrigé)** : `postId` ajouté à `SocketCommentReactionSyncEvent` iOS (type de l'ACK live `request-sync`, pas le broadcast mort) + fixture/test SDK MAJ.
+- [x] **H2 (corrigé, vérifiable)** : listeners morts `*:reaction-sync` supprimés web (+ test 25→28) ET iOS (`socket.on` retirés). Différé : suppression des subjects publics `commentReactionSync`/`postReactionSync` + constantes shared `*_REACTION_SYNC` (référencés par `StoryViewModel`/mocks/test SDK → refacto iOS à compiler sur macOS).
+- [x] **H3 (corrigé)** : `broadcastCommentLiked` atteint aussi `ROOMS.post` (payload absolu, idempotent).
+- [x] **M1 (corrigé)** : web câble `story:updated/deleted/unreacted`, `status:unreacted`, `comment:media-updated`.
+- [x] **M2 (corrigé)** : `post:liked/unliked` unifiés en un seul emit dédoublonné (`emitToFeedsAndPostRoom`).
+- ⚠️ iOS/SDK : pas de toolchain Swift dans l'env → `./apps/ios/meeshy.sh test` / `xcodebuild` à lancer sur macOS pour valider H1+H2 iOS.
 - Détail complet : voir le rapport d'audit dans la conversation.
