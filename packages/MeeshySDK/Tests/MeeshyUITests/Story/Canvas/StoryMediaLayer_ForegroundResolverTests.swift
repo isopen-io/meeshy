@@ -142,6 +142,28 @@ final class StoryMediaLayer_ForegroundResolverTests: XCTestCase {
         XCTAssertFalse(StoryMediaLayer().isPlaybackActive)
     }
 
+    /// The timeline-alignment playhead defaults to 0 (slide origin).
+    func test_slidePlayheadSeconds_defaultsZero() {
+        XCTAssertEqual(StoryMediaLayer().slidePlayheadSeconds, 0, accuracy: 0.0001)
+    }
+
+    /// Timeline alignment must not break the gated start: a foreground video that
+    /// resolves while the playhead is already advanced (late arrival / open at
+    /// t>0) still starts (`rate == 1`). The seek itself is best-effort — this
+    /// pins that `alignToTimelineThenPlay()` always reaches `play()`.
+    func test_alignToTimeline_playsWhenPlaybackActiveWithAdvancedPlayhead() throws {
+        let fileURL = try writeTempVideo()
+        let media = StoryMediaObject(id: "v8", postMediaId: "post-vid",
+                                     kind: .video, aspectRatio: 1.0)
+        let layer = StoryMediaLayer()
+        layer.slidePlayheadSeconds = 3.0   // playhead avancé (arrivée tardive)
+        layer.isPlaybackActive = true
+        layer.configure(with: media, geometry: makeGeometry(),
+                        mode: .play, resolver: { _ in fileURL })
+        XCTAssertEqual(layer.avPlayer?.rate, 1,
+                       "A late-arriving foreground video must still start (timeline-aligned)")
+    }
+
     /// Reader (`.play`) — a foreground video must NOT start at attach. It waits
     /// for the canvas to raise `isPlaybackActive` at the slide « GO »
     /// (content-ready) so it begins in phase with the background video + audio,

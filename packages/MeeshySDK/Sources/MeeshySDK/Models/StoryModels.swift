@@ -1047,12 +1047,15 @@ extension StorySlide {
             return ceil(target / m) * m                // sinon loop jusqu'à ≥ cible
         }()
 
-        // Foreground media (vidéos non-bg) : le slide doit au moins couvrir leur durée
-        // naturelle, sinon leur queue serait coupée (start=0 supposé ; un décalage précis
-        // se règle via le timeline, qui pose alors un pin `timelineDuration`).
+        // Foreground media (vidéos non-bg) : le slide doit au moins couvrir leur
+        // FENÊTRE complète `startTime + duration`, sinon leur queue serait coupée.
+        // Auparavant on ne comptait que `duration` (start=0 supposé) : une vidéo fg
+        // décalée (`startTime > 0`) voyait sa fin tronquée par la durée du slide.
+        // On replie maintenant `startTime` dans le calcul pour que la timeline
+        // s'étende jusqu'à la fin de la fenêtre fg la plus tardive.
         let fgMediaMax = (effects.mediaObjects ?? [])
             .filter { !$0.isBackground }
-            .compactMap { $0.duration }
+            .compactMap { media in media.duration.map { (media.startTime ?? 0) + $0 } }
             .max() ?? 0
 
         return max(bgResult, fgMediaMax)
