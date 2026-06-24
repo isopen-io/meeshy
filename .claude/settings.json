@@ -4,7 +4,8 @@
       "Bash(xcodegen generate *)",
       "Bash(./apps/ios/meeshy.sh build *)",
       "Bash(git fetch *)",
-      "Bash(git merge *)"
+      "Bash(git merge *)",
+      "Bash(agvtool what-version *)"
     ]
   }
 }
