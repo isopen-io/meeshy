@@ -13,7 +13,7 @@ struct StarredMessageSnapshot: Codable, Identifiable, Equatable, Sendable {
     let conversationAccentColor: String?
     let senderUserId: String?
     let senderName: String?
-    let contentPreview: String
+    var contentPreview: String
     let attachmentKind: String?  // "image" / "video" / "audio" / "file" / "location"
     let starredAt: Date
     let sentAt: Date
@@ -73,6 +73,18 @@ final class StarredMessagesStore: ObservableObject {
     func remove(messageId: String) {
         guard let idx = snapshots.firstIndex(where: { $0.id == messageId }) else { return }
         snapshots.remove(at: idx)
+        persist()
+    }
+
+    /// Keep the starred snapshot's preview in sync after the source message is
+    /// edited. The snapshot is a frozen copy (so the Starred list renders
+    /// without the conversation being cached), so an edit elsewhere would
+    /// otherwise leave the row showing stale content. No-op when the message
+    /// isn't starred.
+    func updatePreview(messageId: String, contentPreview: String) {
+        guard let idx = snapshots.firstIndex(where: { $0.id == messageId }),
+              snapshots[idx].contentPreview != contentPreview else { return }
+        snapshots[idx].contentPreview = contentPreview
         persist()
     }
 

@@ -654,6 +654,47 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(sut.messages.first?.attachments.first?.reactionSummary?["👍"], 3)
     }
 
+    // Regression guard (GAP #1): an attachment reaction must be written through
+    // GRDB so it survives a cold reload. Before the fix the pill lived only in
+    // the in-memory `messages` array and was lost on the next conversation load.
+    func test_toggleAttachmentReaction_persistsReactionSummaryToGRDB() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+
+        // Seed a delivered message row carrying the image attachment so the row
+        // exists for `updateAttachmentsJson` to update and surfaces in the VM.
+        let record = MessageStoreObservationHelper.makeRecord(
+            localId: "m1", conversationId: testConversationId, senderId: testUserId
+        )
+        try await persistence.insertOptimistic(record)
+        let attachment = MeeshyMessageAttachment(
+            id: "a1", mimeType: "image/jpeg", fileUrl: "file:///x.jpg", uploadedBy: testUserId
+        )
+        try await persistence.updateAttachmentsJson(
+            localId: "m1", attachmentsJson: try JSONEncoder().encode([attachment])
+        )
+        _ = await MessageStoreObservationHelper.awaitMessage(in: sut) {
+            $0.id == "m1" && !$0.attachments.isEmpty
+        }
+
+        sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
+
+        // The write-through runs in a fire-and-forget Task; poll GRDB until it lands.
+        var persistedSummary: [String: Int]?
+        let deadline = Date().addingTimeInterval(1.5)
+        while Date() < deadline {
+            if let json = try await MessageStoreObservationHelper.fetchRecord(localId: "m1", from: pool)?.attachmentsJson,
+               let atts = try? JSONDecoder().decode([MeeshyMessageAttachment].self, from: json),
+               let summary = atts.first?.reactionSummary {
+                persistedSummary = summary
+                break
+            }
+            try? await Task.sleep(nanoseconds: 30_000_000)
+        }
+        XCTAssertEqual(persistedSummary?["❤️"], 1, "Attachment reaction must be persisted to GRDB to survive a reload")
+    }
+
     func test_insertOptimisticMediaMessage_surfacesBubbleInViewModel() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
