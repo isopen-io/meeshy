@@ -53,7 +53,7 @@ public struct AchievementBadge: View {
 
             // Icon
             Image(systemName: achievement.icon)
-                .font(.system(size: 24, weight: .semibold))
+                .font(MeeshyFont.relative(24, weight: .semibold))
                 .foregroundColor(.white)
                 .opacity(achievement.isUnlocked ? 1.0 : 0.4)
 
@@ -68,7 +68,7 @@ public struct AchievementBadge: View {
                             .frame(width: 20, height: 20)
                             .overlay(
                                 Image(systemName: "checkmark")
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(MeeshyFont.relative(10, weight: .bold))
                                     .foregroundColor(.white)
                             )
                             .shadow(color: MeeshyColors.pink.opacity(0.4), radius: 4)

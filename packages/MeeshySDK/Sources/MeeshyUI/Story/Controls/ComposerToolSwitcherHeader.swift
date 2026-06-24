@@ -34,8 +34,8 @@ struct ComposerToolSwitcherHeader: View {
         Button(action: onBack) {
             HStack(spacing: 4) {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 14, weight: .semibold))
-                Text(Self.title(for: currentTool)).font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
+                Text(Self.title(for: currentTool)).font(MeeshyFont.relative(14, weight: .semibold))
             }
         }
         .foregroundColor(primaryText)
@@ -54,9 +54,9 @@ struct ComposerToolSwitcherHeader: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: Self.icon(for: other))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                 Text(Self.title(for: other))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
             }
             .foregroundColor(secondaryText)
             .padding(.horizontal, 10)

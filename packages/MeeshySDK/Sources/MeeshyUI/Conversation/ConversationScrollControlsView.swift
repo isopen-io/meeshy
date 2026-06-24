@@ -119,9 +119,9 @@ public struct ConversationScrollControlsView: View {
                     // Offline indicator when no unread/typing
                     HStack(spacing: 8) {
                         Image(systemName: "wifi.slash")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(MeeshyFont.relative(13, weight: .bold))
                         Text("Hors ligne")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MeeshyFont.relative(13, weight: .semibold))
                     }
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
@@ -129,7 +129,7 @@ public struct ConversationScrollControlsView: View {
                 } else {
                     // Simple chevron-only pill
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(MeeshyFont.relative(13, weight: .bold))
                         .foregroundColor(.white)
                         .padding(12)
                 }
@@ -161,12 +161,12 @@ public struct ConversationScrollControlsView: View {
     private var quotedMessageSearchContent: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .bold))
+                .font(MeeshyFont.relative(14, weight: .bold))
                 .scaleEffect(searchPulse ? 1.15 : 0.85)
                 .opacity(searchPulse ? 1.0 : 0.6)
 
             Text("Recherche…")
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .lineLimit(1)
 
             Spacer(minLength: 0)
@@ -238,7 +238,7 @@ public struct ConversationScrollControlsView: View {
                     HStack(spacing: 4) {
                         typingDotsView
                         Text(typingLabel)
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(MeeshyFont.relative(11, weight: .semibold))
                             .lineLimit(1)
                     }
                 }
@@ -246,7 +246,7 @@ public struct ConversationScrollControlsView: View {
                 // Count headline — only when more than one message is pending.
                 if unreadCount > 1 {
                     Text("\(unreadCount) messages")
-                        .font(.system(size: 13, weight: .heavy))
+                        .font(MeeshyFont.relative(13, weight: .heavy))
                         .lineLimit(1)
                 }
 
@@ -261,10 +261,10 @@ public struct ConversationScrollControlsView: View {
             // Right: chevron / offline glyph.
             if isOffline {
                 Image(systemName: "wifi.slash")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(MeeshyFont.relative(11, weight: .bold))
             } else {
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(MeeshyFont.relative(11, weight: .bold))
             }
         }
         .foregroundColor(.white)
@@ -280,17 +280,17 @@ public struct ConversationScrollControlsView: View {
     private var lastMessageLine: some View {
         if let content = lastUnreadMessageContent, !content.isEmpty {
             Text(content)
-                .font(.system(size: 12, weight: .regular))
+                .font(MeeshyFont.relative(12, weight: .regular))
                 .lineLimit(1)
                 .opacity(0.95)
         } else if let label = unreadAttachmentTypeLabel {
             HStack(spacing: 4) {
                 if let symbol = unreadAttachmentSymbol {
                     Image(systemName: symbol)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(MeeshyFont.relative(10, weight: .semibold))
                 }
                 Text(attachmentSummary(label: label))
-                    .font(.system(size: 12, weight: .regular))
+                    .font(MeeshyFont.relative(12, weight: .regular))
                     .lineLimit(1)
                     .opacity(0.95)
             }
@@ -307,7 +307,7 @@ public struct ConversationScrollControlsView: View {
     private var unreadAttachmentPreview: some View {
         if unreadAttachmentIsAudio {
             Image(systemName: isAudioPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 14, weight: .bold))
+                .font(MeeshyFont.relative(14, weight: .bold))
                 .frame(width: 36, height: 36)
                 .background(Circle().fill(Color.white.opacity(isAudioPlaying ? 0.4 : 0.25)))
                 .contentShape(Circle())
@@ -327,7 +327,7 @@ public struct ConversationScrollControlsView: View {
                     .frame(width: 36, height: 36)
                     .overlay(
                         Image(systemName: unreadAttachmentTypeLabel == "Video" ? "video.fill" : "photo.fill")
-                            .font(.system(size: 14))
+                            .font(MeeshyFont.relative(14))
                             .foregroundColor(.white.opacity(0.6))
                     )
             }
@@ -338,7 +338,7 @@ public struct ConversationScrollControlsView: View {
             // Media without a thumbnail (file, location, thumbnail-less video):
             // render the type glyph so the preview still reads as media.
             Image(systemName: symbol)
-                .font(.system(size: 15, weight: .semibold))
+                .font(MeeshyFont.relative(15, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(width: 36, height: 36)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.2)))

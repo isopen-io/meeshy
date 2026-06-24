@@ -211,7 +211,7 @@ public struct StoryAudioPlayerView: View {
                             .frame(width: 36, height: 36)
                     }
                     Image(systemName: buttonIcon)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(MeeshyFont.relative(16, weight: .bold))
                         .foregroundColor(.white.opacity(isEditing ? 1.0 : (isMuted ? 0.6 : 1.0)))
                 }
                 .frame(width: 44, height: 44)

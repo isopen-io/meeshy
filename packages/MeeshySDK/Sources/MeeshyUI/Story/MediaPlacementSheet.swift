@@ -27,10 +27,10 @@ public struct AudioSourceSheet: View {
         VStack(spacing: 16) {
             HStack {
                 Image(systemName: "waveform")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundStyle(MeeshyColors.brandGradient)
                 Text(String(localized: "story.audioSource.title", defaultValue: "Source audio", bundle: .module))
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                     .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
                 Spacer()
             }
@@ -60,7 +60,7 @@ public struct AudioSourceSheet: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 28))
+                    .font(MeeshyFont.relative(28))
                     .foregroundStyle(MeeshyColors.brandGradient)
                 Text(label)
                     .font(.subheadline).fontWeight(.semibold)

@@ -544,7 +544,7 @@ public struct ProTimelineView: View {
                 .frame(width: 3, height: 12)
                 .clipShape(Capsule())
             Text(String(localized: String.LocalizationValue(key), bundle: .module))
-                .font(.system(size: 11, weight: .semibold))
+                .font(MeeshyFont.relative(11, weight: .semibold))
                 .textCase(.uppercase)
                 .tracking(0.4)
                 .foregroundStyle(.secondary)

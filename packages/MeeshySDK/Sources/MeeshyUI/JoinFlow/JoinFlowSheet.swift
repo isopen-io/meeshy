@@ -86,7 +86,7 @@ public struct JoinFlowSheet: View {
     private var headerBar: some View {
         HStack {
             Text(String(localized: "joinFlow.header.title", defaultValue: "Rejoindre", bundle: .module))
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(17, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -96,7 +96,7 @@ public struct JoinFlowSheet: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(theme.textMuted.opacity(0.12)))
@@ -119,7 +119,7 @@ public struct JoinFlowSheet: View {
                 .tint(MeeshyColors.indigo400)
 
             Text(String(localized: "joinFlow.loading.message", defaultValue: "Chargement du lien...", bundle: .module))
-                .font(.system(size: 15, weight: .medium))
+                .font(MeeshyFont.relative(15, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
             Spacer()
@@ -139,17 +139,17 @@ public struct JoinFlowSheet: View {
                     .frame(width: 100, height: 100)
 
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 56))
+                    .font(MeeshyFont.relative(56))
                     .foregroundColor(MeeshyColors.success)
             }
 
             Text(String(localized: "joinFlow.success.title", defaultValue: "Bienvenue !", bundle: .module))
-                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(24, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             if let result = viewModel.joinResult {
                 Text("Vous avez rejoint \(result.conversation.title ?? "la conversation") en tant que \(result.participant.username)")
-                    .font(.system(size: 15, weight: .medium))
+                    .font(MeeshyFont.relative(15, weight: .medium))
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
@@ -163,9 +163,9 @@ public struct JoinFlowSheet: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(.system(size: 16))
+                        .font(MeeshyFont.relative(16))
                     Text(String(localized: "joinFlow.success.openConversation", defaultValue: "Ouvrir la conversation", bundle: .module))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(MeeshyFont.relative(16, weight: .bold))
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -192,16 +192,16 @@ public struct JoinFlowSheet: View {
                     .frame(width: 100, height: 100)
 
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 48))
+                    .font(MeeshyFont.relative(48))
                     .foregroundColor(MeeshyColors.error)
             }
 
             Text(String(localized: "joinFlow.error.title", defaultValue: "Lien indisponible", bundle: .module))
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(22, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Text(message)
-                .font(.system(size: 15, weight: .medium))
+                .font(MeeshyFont.relative(15, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
@@ -212,7 +212,7 @@ public struct JoinFlowSheet: View {
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.clockwise")
                     Text(String(localized: "joinFlow.error.retry", defaultValue: "Reessayer", bundle: .module))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(MeeshyFont.relative(15, weight: .semibold))
                 }
                 .foregroundColor(MeeshyColors.indigo400)
                 .padding(.horizontal, 24)
@@ -227,7 +227,7 @@ public struct JoinFlowSheet: View {
             Button(String(localized: "joinFlow.error.close", defaultValue: "Fermer", bundle: .module)) {
                 dismiss()
             }
-            .font(.system(size: 14, weight: .medium))
+            .font(MeeshyFont.relative(14, weight: .medium))
             .foregroundColor(theme.textMuted)
             .padding(.top, 4)
 

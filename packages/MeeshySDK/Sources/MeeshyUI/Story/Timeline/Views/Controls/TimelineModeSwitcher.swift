@@ -54,9 +54,9 @@ public struct TimelineModeSwitcher: View, Equatable {
         Button { onSelect(target) } label: {
             HStack(spacing: 5) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                 Text(label)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)

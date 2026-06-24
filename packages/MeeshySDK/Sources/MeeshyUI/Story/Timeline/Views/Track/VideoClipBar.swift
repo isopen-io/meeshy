@@ -155,7 +155,7 @@ public struct VideoClipBar: View, Equatable {
         if width >= 44 && !title.isEmpty {
             HStack(spacing: 4) {
                 Text(title)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MeeshyFont.relative(10, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -173,7 +173,7 @@ public struct VideoClipBar: View, Equatable {
             HStack {
                 Spacer()
                 Image(systemName: "lock.fill")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(MeeshyFont.relative(9, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(4)
                     .background(

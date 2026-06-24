@@ -106,10 +106,10 @@ public struct StoryAudioPanel: View {
     private var panelHeader: some View {
         HStack {
             Image(systemName: "music.note.list")
-                .font(.system(size: 16, weight: .semibold))
+                .font(MeeshyFont.relative(16, weight: .semibold))
                 .foregroundStyle(MeeshyColors.brandGradient)
             Text(String(localized: "story.audioPanel.title", defaultValue: "Audio", bundle: .module))
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                 .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
             Spacer()
         }
@@ -127,7 +127,7 @@ public struct StoryAudioPanel: View {
                     }
                 } label: {
                     Text(tab.displayName)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(activeTab == tab ? .white : .white.opacity(0.45))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
@@ -183,7 +183,7 @@ public struct StoryAudioPanel: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if items.isEmpty {
                 Text(String(localized: "story.audioPanel.noSound", defaultValue: "Aucun son disponible", bundle: .module))
-                    .font(.system(size: 13))
+                    .font(MeeshyFont.relative(13))
                     .foregroundColor(.white.opacity(0.4))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -205,10 +205,10 @@ public struct StoryAudioPanel: View {
     private var searchBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(.white.opacity(0.4))
             TextField("", text: $searchQuery, prompt: Text(String(localized: "story.audioPanel.searchSound", defaultValue: "Rechercher un son...", bundle: .module)).foregroundColor(.white.opacity(0.3)))
-                .font(.system(size: 13))
+                .font(MeeshyFont.relative(13))
                 .foregroundColor(.white)
                 .submitLabel(.search)
                 .onSubmit { fetchLibrary(query: searchQuery) }
@@ -224,12 +224,12 @@ public struct StoryAudioPanel: View {
     private var volumeRow: some View {
         HStack(spacing: 10) {
             Image(systemName: "speaker.wave.1.fill")
-                .font(.system(size: 12))
+                .font(MeeshyFont.relative(12))
                 .foregroundColor(.white.opacity(0.5))
             Slider(value: $audioVolume, in: 0...1)
                 .tint(MeeshyColors.indigo500)
             Image(systemName: "speaker.wave.3.fill")
-                .font(.system(size: 12))
+                .font(MeeshyFont.relative(12))
                 .foregroundColor(.white.opacity(0.5))
         }
         .padding(.horizontal, 16)
@@ -250,11 +250,11 @@ public struct StoryAudioPanel: View {
                         .fill(Color.white.opacity(0.08))
                         .frame(width: 36, height: 36)
                     Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundColor(.white.opacity(0.6))
                 }
                 Text(String(localized: "story.audioPanel.noAudio", defaultValue: "Aucun son", bundle: .module))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
                 Spacer()
             }
@@ -281,7 +281,7 @@ public struct StoryAudioPanel: View {
                             .fill(isSelected ? MeeshyColors.brandPrimary : Color.white.opacity(0.1))
                             .frame(width: 36, height: 36)
                         Image(systemName: isPreviewing ? "pause.fill" : "play.fill")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MeeshyFont.relative(13, weight: .semibold))
                             .foregroundColor(isSelected ? .white : .white.opacity(0.7))
                     }
                 }
@@ -289,17 +289,17 @@ public struct StoryAudioPanel: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.title)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(MeeshyFont.relative(13, weight: .medium))
                         .foregroundColor(isSelected ? MeeshyColors.brandPrimary : .white)
                         .lineLimit(1)
                     HStack(spacing: 4) {
                         if let uploader = item.uploaderName {
                             Text(uploader)
-                                .font(.system(size: 11))
+                                .font(MeeshyFont.relative(11))
                                 .foregroundColor(.white.opacity(0.4))
                         }
                         Text(formatDuration(item.duration))
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(MeeshyFont.relative(11, design: .monospaced))
                             .foregroundColor(.white.opacity(0.35))
                     }
                 }
@@ -309,7 +309,7 @@ public struct StoryAudioPanel: View {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(MeeshyColors.brandPrimary)
-                        .font(.system(size: 16))
+                        .font(MeeshyFont.relative(16))
                 }
             }
             .padding(.horizontal, 16)

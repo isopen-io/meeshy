@@ -79,15 +79,15 @@ public struct VoiceProfileWizardView: View {
                 Spacer().frame(height: 20)
 
                 Image(systemName: "waveform.and.mic")
-                    .font(.system(size: 48))
+                    .font(MeeshyFont.relative(48))
                     .foregroundColor(Color(hex: accentColor))
 
                 Text(String(localized: "voiceProfile.consent.title", defaultValue: "Clonage vocal", bundle: .module))
-                    .font(.system(size: 22, weight: .bold))
+                    .font(MeeshyFont.relative(22, weight: .bold))
                     .foregroundColor(.primary)
 
                 Text(String(localized: "voiceProfile.consent.description", defaultValue: "Meeshy peut cloner votre voix pour traduire vos messages audio dans d'autres langues avec votre propre voix.", bundle: .module))
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
@@ -105,7 +105,7 @@ public struct VoiceProfileWizardView: View {
 
                 Toggle(isOn: $viewModel.consentGiven) {
                     Text(String(localized: "voiceProfile.consent.toggle", defaultValue: "J'accepte que mes echantillons vocaux soient utilises pour creer un profil vocal", bundle: .module))
-                        .font(.system(size: 13))
+                        .font(MeeshyFont.relative(13))
                         .foregroundColor(.primary)
                 }
                 .tint(Color(hex: accentColor))
@@ -115,7 +115,7 @@ public struct VoiceProfileWizardView: View {
                     viewModel.advanceFromConsent()
                 } label: {
                     Text(String(localized: "voiceProfile.consent.continue", defaultValue: "Continuer", bundle: .module))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(MeeshyFont.relative(15, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
@@ -135,11 +135,11 @@ public struct VoiceProfileWizardView: View {
     private func consentPoint(icon: String, text: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(Color(hex: accentColor))
                 .frame(width: 24)
             Text(text)
-                .font(.system(size: 13))
+                .font(MeeshyFont.relative(13))
                 .foregroundColor(.secondary)
         }
     }
@@ -151,14 +151,14 @@ public struct VoiceProfileWizardView: View {
             Spacer()
 
             Image(systemName: "person.badge.shield.checkmark.fill")
-                .font(.system(size: 48))
+                .font(MeeshyFont.relative(48))
                 .foregroundColor(Color(hex: accentColor))
 
             Text(String(localized: "voiceProfile.age.title", defaultValue: "Verification d'age", bundle: .module))
-                .font(.system(size: 22, weight: .bold))
+                .font(MeeshyFont.relative(22, weight: .bold))
 
             Text(String(localized: "voiceProfile.age.description", defaultValue: "Le clonage vocal est reserve aux personnes de 18 ans et plus.", bundle: .module))
-                .font(.system(size: 14))
+                .font(MeeshyFont.relative(14))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
@@ -172,7 +172,7 @@ public struct VoiceProfileWizardView: View {
                 viewModel.advanceFromAgeVerification()
             } label: {
                 Text(String(localized: "voiceProfile.age.verify", defaultValue: "Verifier", bundle: .module))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
@@ -195,10 +195,10 @@ public struct VoiceProfileWizardView: View {
             Spacer()
 
             Text(String(localized: "voiceProfile.recording.title", defaultValue: "Enregistrez votre voix", bundle: .module))
-                .font(.system(size: 22, weight: .bold))
+                .font(MeeshyFont.relative(22, weight: .bold))
 
             Text(String(localized: "voiceProfile.recording.description", defaultValue: "Lisez le texte ci-dessous a voix haute. Enregistrez au moins 3 echantillons de 10 secondes chacun.", bundle: .module))
-                .font(.system(size: 13))
+                .font(MeeshyFont.relative(13))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
@@ -228,10 +228,10 @@ public struct VoiceProfileWizardView: View {
                 .tint(Color(hex: accentColor))
 
             Text(String(localized: "voiceProfile.processing.title", defaultValue: "Creation du profil vocal...", bundle: .module))
-                .font(.system(size: 18, weight: .semibold))
+                .font(MeeshyFont.relative(18, weight: .semibold))
 
             Text(String(localized: "voiceProfile.processing.description", defaultValue: "Vos echantillons sont en cours de traitement. Cela peut prendre quelques minutes.", bundle: .module))
-                .font(.system(size: 13))
+                .font(MeeshyFont.relative(13))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 30)
@@ -250,14 +250,14 @@ public struct VoiceProfileWizardView: View {
             Spacer()
 
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 60))
+                .font(MeeshyFont.relative(60))
                 .foregroundColor(Color(hex: "2ECC71"))
 
             Text(String(localized: "voiceProfile.complete.title", defaultValue: "Profil vocal cree !", bundle: .module))
-                .font(.system(size: 22, weight: .bold))
+                .font(MeeshyFont.relative(22, weight: .bold))
 
             Text(String(localized: "voiceProfile.complete.description", defaultValue: "Vos traductions audio utiliseront desormais votre voix clonee.", bundle: .module))
-                .font(.system(size: 14))
+                .font(MeeshyFont.relative(14))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
@@ -267,7 +267,7 @@ public struct VoiceProfileWizardView: View {
                 dismiss()
             } label: {
                 Text(String(localized: "voiceProfile.complete.finish", defaultValue: "Terminer", bundle: .module))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)

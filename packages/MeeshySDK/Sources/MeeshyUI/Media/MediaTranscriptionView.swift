@@ -148,7 +148,7 @@ public struct MediaTranscriptionView: View {
             HapticFeedback.light()
         } label: {
             Text(segment.text + " ")
-                .font(.system(size: fontSize, weight: isActive ? .bold : .regular))
+                .font(MeeshyFont.relative(fontSize, weight: isActive ? .bold : .regular))
                 .foregroundColor(segmentColor(isActive: isActive, isPast: isPast))
                 .padding(.horizontal, isActive ? 3 : 0)
                 .padding(.vertical, isActive ? 1 : 0)

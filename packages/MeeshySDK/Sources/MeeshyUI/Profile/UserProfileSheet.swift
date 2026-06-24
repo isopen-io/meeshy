@@ -465,7 +465,7 @@ public struct UserProfileSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background(theme.surfaceGradient(tint: resolvedAccent))
-        .glassCard(cornerRadius: 16)
+        .glassCard(cornerRadius: MeeshyRadius.lg)
     }
 
     // MARK: - Info Chip
@@ -475,15 +475,15 @@ public struct UserProfileSheet: View {
             if icon.count > 1 {
                 // Emoji flag
                 Text(icon)
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
             } else {
                 // SF Symbol
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(Color(hex: resolvedAccent))
             }
             Text(text)
-                .font(.system(size: 12, weight: .medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
         .padding(.horizontal, 12)
@@ -500,11 +500,11 @@ public struct UserProfileSheet: View {
     var e2eeBadge: some View {
         HStack(spacing: 8) {
             Image(systemName: "lock.shield.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(Color(hex: "2ECC71"))
 
             Text(String(localized: "profile.e2ee.enabled", defaultValue: "Chiffrement de bout en bout activé", bundle: .module))
-                .font(.system(size: 12, weight: .medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundColor(Color(hex: "2ECC71"))
         }
         .padding(.horizontal, 14)
@@ -539,9 +539,9 @@ public struct UserProfileSheet: View {
     func languagePill(_ lang: LanguageDisplay) -> some View {
         HStack(spacing: 4) {
             Text(lang.flag)
-                .font(.system(size: 14))
+                .font(MeeshyFont.relative(14))
             Text(lang.name)
-                .font(.system(size: 12, weight: .medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
         .padding(.horizontal, 12)
@@ -580,9 +580,9 @@ public struct UserProfileSheet: View {
         } label: {
             HStack(spacing: compact ? 6 : 8) {
                 Image(systemName: "paperplane.fill")
-                    .font(.system(size: compact ? 12 : 14, weight: .semibold))
+                    .font(MeeshyFont.relative(compact ? 12 : 14, weight: .semibold))
                 Text(String(localized: "profile.action.sendMessage", defaultValue: "Envoyer un message", bundle: .module))
-                    .font(.system(size: compact ? 13 : 15, weight: .semibold))
+                    .font(MeeshyFont.relative(compact ? 13 : 15, weight: .semibold))
             }
             .foregroundColor(.white)
             .frame(maxWidth: compact ? nil : .infinity)
@@ -627,22 +627,22 @@ public struct UserProfileSheet: View {
     private var blockedByTargetCard: some View {
         VStack(spacing: 8) {
             Image(systemName: "lock.fill")
-                .font(.system(size: 20))
+                .font(MeeshyFont.relative(20))
                 .foregroundColor(theme.error)
 
             Text(String(localized: "profile.blocked.restrictedProfile", defaultValue: "Profil restreint", bundle: .module))
-                .font(.system(size: 15, weight: .semibold))
+                .font(MeeshyFont.relative(15, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
             Text(String(localized: "profile.blocked.restrictedDescription", defaultValue: "Cet utilisateur a restreint l'acces a son profil.", bundle: .module))
-                .font(.system(size: 13))
+                .font(MeeshyFont.relative(13))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(20)
         .background(theme.surfaceGradient(tint: "FF6B6B"))
-        .glassCard(cornerRadius: 16)
+        .glassCard(cornerRadius: MeeshyRadius.lg)
     }
 
     // MARK: - Blocked By Me
@@ -650,7 +650,7 @@ public struct UserProfileSheet: View {
     private var blockedByMeCard: some View {
         VStack(spacing: 12) {
             Text(String(localized: "profile.blocked.byMe", defaultValue: "Vous avez bloque cet utilisateur", bundle: .module))
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textSecondary)
 
             Button {
@@ -658,7 +658,7 @@ public struct UserProfileSheet: View {
                 Task { await unblockUser() }
             } label: {
                 Text(String(localized: "profile.blocked.unblock", defaultValue: "Debloquer", bundle: .module))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 10)
@@ -675,7 +675,7 @@ public struct UserProfileSheet: View {
         .frame(maxWidth: .infinity)
         .padding(20)
         .background(theme.surfaceGradient(tint: "888888"))
-        .glassCard(cornerRadius: 16)
+        .glassCard(cornerRadius: MeeshyRadius.lg)
     }
 
     // MARK: - Helpers
@@ -689,10 +689,7 @@ public struct UserProfileSheet: View {
     }
 
     func formatRegistrationDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .long
-        formatter.locale = Locale(identifier: "fr_FR")
-        return formatter.string(from: date)
+        date.formatted(date: .long, time: .omitted)
     }
 
     func openFullscreenImage(url: String?, fallback: String) {

@@ -249,7 +249,7 @@ public struct SmartContextZone: View {
     public var body: some View {
         VStack(spacing: isCompact ? 0 : 2) {
             Text(analyzer.sentiment.emoji)
-                .font(.system(size: isCompact ? 20 : 18))
+                .font(MeeshyFont.relative(isCompact ? 20 : 18))
                 .scaleEffect(analyzer.sentiment == .neutral ? 1.0 : 1.1)
                 .animation(.spring(response: 0.3, dampingFraction: 0.5), value: analyzer.sentiment)
 
@@ -258,7 +258,7 @@ public struct SmartContextZone: View {
                     analyzer.showLanguagePicker = true
                     HapticFeedback.light()
                 } label: {
-                    Text(lang.flag).font(.system(size: 16))
+                    Text(lang.flag).font(MeeshyFont.relative(16))
                 }
                 .transition(.scale.combined(with: .opacity))
             }

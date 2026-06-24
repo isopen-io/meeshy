@@ -28,15 +28,15 @@ public struct CategoryPickerView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "folder.fill")
-                                .font(.system(size: 14))
+                                .font(MeeshyFont.relative(14))
                                 .foregroundColor(Color(hex: "3B82F6"))
                             Text(category.name)
-                                .font(.system(size: 15))
+                                .font(MeeshyFont.relative(15))
                                 .foregroundColor(theme.textPrimary)
                             Spacer()
                             if selectedCategoryId == category.id {
                                 Image(systemName: "checkmark")
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(MeeshyFont.relative(14, weight: .semibold))
                                     .foregroundColor(Color(hex: "3B82F6"))
                             }
                         }
@@ -49,10 +49,10 @@ public struct CategoryPickerView: View {
                 if isCreating {
                     HStack(spacing: 12) {
                         Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 14))
+                            .font(MeeshyFont.relative(14))
                             .foregroundColor(Color(hex: "3B82F6"))
                         TextField("Nom de la catégorie", text: $newCategoryName)
-                            .font(.system(size: 15))
+                            .font(MeeshyFont.relative(15))
                             .foregroundColor(theme.textPrimary)
                             .onSubmit { Task { await createCategory() } }
                         Button {
@@ -71,10 +71,10 @@ public struct CategoryPickerView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 14))
+                                .font(MeeshyFont.relative(14))
                                 .foregroundColor(Color(hex: "3B82F6"))
                             Text("Nouvelle catégorie")
-                                .font(.system(size: 15))
+                                .font(MeeshyFont.relative(15))
                                 .foregroundColor(Color(hex: "3B82F6"))
                             Spacer()
                         }

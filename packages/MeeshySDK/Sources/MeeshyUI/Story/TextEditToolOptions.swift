@@ -81,7 +81,7 @@ struct TextEditToolOptions: View {
                         HapticFeedback.light()
                     } label: {
                         Text(weight.displayName)
-                            .font(.system(size: 14, weight: weight.swiftUIWeight))
+                            .font(MeeshyFont.relative(14, weight: weight.swiftUIWeight))
                             .foregroundStyle(isSel ? Color.white : Color.primary)
                             .frame(minWidth: 54)
                             .padding(.horizontal, 6)
@@ -124,15 +124,15 @@ struct TextEditToolOptions: View {
     private var sizeOptions: some View {
         HStack(spacing: 10) {
             Image(systemName: "textformat.size.smaller")
-                .font(.system(size: 12))
+                .font(MeeshyFont.relative(12))
                 .foregroundStyle(.secondary)
             Slider(value: $textObject.fontSize, in: 14...160, step: 1)
                 .tint(MeeshyColors.brandPrimary)
             Image(systemName: "textformat.size.larger")
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundStyle(.secondary)
             Text("\(Int(textObject.fontSize))")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .frame(width: 34)
         }
@@ -155,7 +155,7 @@ struct TextEditToolOptions: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: symbol)
-                .font(.system(size: 15, weight: .semibold))
+                .font(MeeshyFont.relative(15, weight: .semibold))
                 .foregroundStyle(isSel ? Color.white : Color.primary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 38)
@@ -216,7 +216,7 @@ struct TextEditToolOptions: View {
                         HapticFeedback.light()
                     } label: {
                         Text(shape.displayName)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(MeeshyFont.relative(12, weight: .semibold))
                             .foregroundStyle(isSel ? Color.white : Color.primary)
                             .padding(.horizontal, 14)
                             .frame(height: 38)
@@ -263,7 +263,7 @@ struct TextEditToolOptions: View {
             HapticFeedback.light()
         } label: {
             Text(label)
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundStyle(isSel ? Color.white : Color.primary)
                 .padding(.horizontal, 14)
                 .frame(height: 38)
@@ -288,7 +288,7 @@ struct TextEditToolOptions: View {
                     .fill(Color(hex: hex))
                     .frame(width: 16, height: 16)
                     .overlay(Circle().stroke(.white.opacity(0.4), lineWidth: 0.5))
-                Text(label).font(.system(size: 12, weight: .semibold))
+                Text(label).font(MeeshyFont.relative(12, weight: .semibold))
             }
             .foregroundStyle(isSel ? Color.white : Color.primary)
             .padding(.horizontal, 12)
@@ -321,7 +321,7 @@ struct TextEditToolOptions: View {
             // Couleur conservée → utilisateur peut remonter le slider sans re-choisir une couleur.
             HStack(spacing: 10) {
                 Image(systemName: "textformat.size.smaller")
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundStyle(.secondary)
                 Slider(
                     value: Binding(
@@ -336,10 +336,10 @@ struct TextEditToolOptions: View {
                 )
                 .tint(MeeshyColors.brandPrimary)
                 Image(systemName: "bold")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(MeeshyFont.relative(14, weight: .bold))
                     .foregroundStyle(.secondary)
                 Text(String(format: "%.1f", textObject.borderWidth ?? 0))
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .frame(width: 34)
             }

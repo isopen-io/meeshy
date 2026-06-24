@@ -55,7 +55,7 @@ public struct TransitionBadge: View, Equatable {
                 .overlay(Diamond().stroke(Color.black.opacity(0.6), lineWidth: 1))
                 .shadow(color: MeeshyColors.warning.opacity(0.65), radius: isSelected ? 8 : 3)
             Image(systemName: kind == .crossfade ? "arrow.triangle.2.circlepath" : "drop.fill")
-                .font(.system(size: 8, weight: .bold))
+                .font(MeeshyFont.relative(8, weight: .bold))
                 .foregroundStyle(.black)
                 .accessibilityHidden(true)
         }

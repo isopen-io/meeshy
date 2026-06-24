@@ -34,18 +34,18 @@ public struct StatsCard: View {
                     .frame(width: 40, height: 40)
 
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(MeeshyFont.relative(16, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
             }
 
             // Label and value
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(theme.textMuted)
 
                 Text(value)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
             }
 

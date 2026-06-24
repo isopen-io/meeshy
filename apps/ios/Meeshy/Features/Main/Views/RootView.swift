@@ -1438,6 +1438,8 @@ struct RootView: View {
                 ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationManager.unreadCount)
                 : nil,
             rightA11yActionName: String(localized: "a11y.floating.menu.profile-action", defaultValue: "Modifier le profil", bundle: .main),
+            leftA11yID: MeeshyA11yID.floatingFeed,
+            rightA11yID: MeeshyA11yID.floatingMenu,
             leftContent: {
                 // Feed button content
                 ZStack {

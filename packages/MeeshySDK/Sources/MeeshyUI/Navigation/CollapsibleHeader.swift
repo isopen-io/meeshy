@@ -134,7 +134,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
 
     private func makeSubtitleText(_ text: String, size: CGFloat, opacity: Double) -> Text {
         Text(text)
-            .font(.system(size: size))
+            .font(MeeshyFont.relative(size))
             .foregroundColor(titleColor.opacity(opacity))
     }
 
@@ -157,7 +157,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                             .scaleEffect(lerp(1.0, 0.65, progress), anchor: .leading)
                     } else {
                         Text(title)
-                            .font(.system(size: titleSize, weight: titleWeight, design: .rounded))
+                            .font(MeeshyFont.relative(titleSize, weight: titleWeight, design: .rounded))
                             .foregroundColor(titleColor)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -256,7 +256,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
             onBack?()
         } label: {
             Image(systemName: "chevron.left")
-                .font(.system(size: backArrowSize, weight: .semibold))
+                .font(MeeshyFont.relative(backArrowSize, weight: .semibold))
                 .foregroundColor(backArrowColor)
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())

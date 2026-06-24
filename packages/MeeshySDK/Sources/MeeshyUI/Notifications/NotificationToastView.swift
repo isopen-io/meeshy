@@ -55,20 +55,20 @@ public struct NotificationToastView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(event.toastTitle)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
                     if let subtitle = NotificationToastManager.shared.resolvedToastSubtitle(for: event) {
                         Text(subtitle)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(MeeshyFont.relative(11, weight: .medium))
                             .foregroundColor(theme.textMuted)
                             .lineLimit(1)
                     }
 
                     if let body = event.toastBody {
                         Text(body)
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(1)
                     }
@@ -77,16 +77,16 @@ public struct NotificationToastView: View {
                 Spacer(minLength: 4)
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MeeshyFont.relative(10, weight: .semibold))
                     .foregroundColor(theme.textMuted)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .fill(.ultraThinMaterial)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                             .stroke(accentColor.opacity(0.3), lineWidth: 1)
                     )
                     .shadow(color: .black.opacity(0.18), radius: 16, y: 6)

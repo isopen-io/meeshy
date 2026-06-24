@@ -58,7 +58,7 @@ public struct LocationFullscreenView: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(MeeshyFont.relative(14, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(Color.black.opacity(0.5)))
@@ -76,7 +76,7 @@ public struct LocationFullscreenView: View {
                     }
                 } label: {
                     Image(systemName: isHybridMap ? "map" : "map.fill")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(MeeshyFont.relative(14, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(Color.black.opacity(0.5)))
@@ -92,10 +92,10 @@ public struct LocationFullscreenView: View {
             if let name = senderName {
                 HStack(spacing: 6) {
                     Image(systemName: "person.fill")
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                         .foregroundColor(Color(hex: accentColor))
                     Text(name)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(.primary)
                     Spacer()
                 }
@@ -103,20 +103,20 @@ public struct LocationFullscreenView: View {
 
             HStack(spacing: 8) {
                 Image(systemName: "mappin.and.ellipse")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(MeeshyFont.relative(16, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(placeName ?? String(localized: "location.fullscreen.sharedPosition", defaultValue: "Position partagee", bundle: .module))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(MeeshyFont.relative(15, weight: .semibold))
                         .foregroundColor(.primary)
                     if let addr = address {
                         Text(addr)
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(.secondary)
                     }
                     Text(String(format: "%.5f, %.5f", latitude, longitude))
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(MeeshyFont.relative(10, design: .monospaced))
                         .foregroundColor(.secondary.opacity(0.7))
                 }
 
@@ -129,9 +129,9 @@ public struct LocationFullscreenView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "map.fill")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MeeshyFont.relative(13, weight: .semibold))
                         Text(String(localized: "location.fullscreen.openInMaps", defaultValue: "Ouvrir dans Plans", bundle: .module))
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MeeshyFont.relative(13, weight: .semibold))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -147,9 +147,9 @@ public struct LocationFullscreenView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MeeshyFont.relative(13, weight: .semibold))
                         Text(String(localized: "location.fullscreen.directions", defaultValue: "Itineraire", bundle: .module))
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MeeshyFont.relative(13, weight: .semibold))
                     }
                     .foregroundColor(Color(hex: accentColor))
                     .frame(maxWidth: .infinity)

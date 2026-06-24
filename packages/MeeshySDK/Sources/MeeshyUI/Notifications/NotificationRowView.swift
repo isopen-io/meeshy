@@ -42,16 +42,24 @@ public struct NotificationRowView: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if let onDelete {
                 Button(role: .destructive) { onDelete() } label: {
-                    Label("Supprimer", systemImage: "trash")
+                    Label(
+                        String(localized: "notification.action.delete", defaultValue: "Supprimer", bundle: .main),
+                        systemImage: "trash"
+                    )
                 }
+                .accessibilityIdentifier("notification.row.delete")
             }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             if !notification.isRead, let onMarkRead {
                 Button { onMarkRead() } label: {
-                    Label("Lu", systemImage: "envelope.open")
+                    Label(
+                        String(localized: "notification.action.markRead", defaultValue: "Lu", bundle: .main),
+                        systemImage: "envelope.open"
+                    )
                 }
                 .tint(Color(hex: "4338CA"))
+                .accessibilityIdentifier("notification.row.markRead")
             }
         }
         .accessibilityElement(children: .combine)
@@ -83,13 +91,13 @@ public struct NotificationRowView: View {
     private var contentView: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(notification.formattedTitle)
-                .font(.system(size: 14, weight: notification.isRead ? .medium : .semibold))
+                .font(MeeshyFont.relative(14, weight: notification.isRead ? .medium : .semibold))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(2)
 
             if let body = notification.formattedBody, !body.isEmpty {
                 Text(body)
-                    .font(.system(size: 13))
+                    .font(MeeshyFont.relative(13))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(2)
             }
@@ -97,7 +105,7 @@ public struct NotificationRowView: View {
             if let conversationTitle = notification.context?.conversationTitle,
                notification.context?.conversationType != "direct" {
                 Label(conversationTitle, systemImage: "bubble.left.and.bubble.right")
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
                     .padding(.top, 1)
@@ -109,7 +117,7 @@ public struct NotificationRowView: View {
 
     private var timestampView: some View {
         Text(relativeTime)
-            .font(.system(size: 11, weight: .medium))
+            .font(MeeshyFont.relative(11, weight: .medium))
             .foregroundColor(theme.textMuted)
     }
 

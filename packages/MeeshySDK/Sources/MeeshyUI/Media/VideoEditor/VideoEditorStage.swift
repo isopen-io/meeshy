@@ -53,7 +53,7 @@ struct VideoEditorStage: View {
                 .stroke(.white.opacity(0.14), lineWidth: 1)
                 .frame(width: 74, height: 74)
             Image(systemName: viewModel.isPlaying ? "play.fill" : "pause.fill")
-                .font(.system(size: 27, weight: .bold))
+                .font(MeeshyFont.relative(27, weight: .bold))
                 .foregroundStyle(.white)
                 .offset(x: viewModel.isPlaying ? 2 : 0)
         }
@@ -64,7 +64,7 @@ struct VideoEditorStage: View {
         VStack {
             Spacer()
             Text(text)
-                .font(.system(size: 15, weight: .semibold))
+                .font(MeeshyFont.relative(15, weight: .semibold))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 12)

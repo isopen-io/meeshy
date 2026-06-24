@@ -124,7 +124,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                 ZStack {
                     Circle().fill(Color.white.opacity(0.07)).frame(width: 38, height: 38)
                     Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundColor(.white.opacity(0.75))
                 }
             }
@@ -134,9 +134,9 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
 
             HStack(spacing: 6) {
                 Image(systemName: context.contextIcon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                 Text(context.contextLabel)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
             }
             .foregroundColor(Color(hex: accentColor))
             .padding(.horizontal, 12)
@@ -168,7 +168,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
 
             if let maxDur = settings.maxDuration {
                 Text("\(Int(maxDur))s max")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(.white.opacity(0.3))
             }
         }
@@ -194,7 +194,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     private var durationDisplay: some View {
         VStack(spacing: 4) {
             Text(formatDuration(recorder.duration))
-                .font(.system(size: 48, weight: .light, design: .monospaced))
+                .font(MeeshyFont.relative(48, weight: .light, design: .monospaced))
                 .foregroundColor(.white)
                 .contentTransition(.numericText())
 
@@ -205,7 +205,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                     .opacity(recorder.duration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0.3)
 
                 Text(String(localized: "audio.recorder.recording", defaultValue: "Enregistrement", bundle: .module))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(Color(hex: "EF4444"))
             }
         }
@@ -218,12 +218,12 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                     .fill(Color(hex: accentColor).opacity(0.08))
                     .frame(width: 100, height: 100)
                 Image(systemName: "mic.fill")
-                    .font(.system(size: 36, weight: .medium))
+                    .font(MeeshyFont.relative(36, weight: .medium))
                     .foregroundColor(Color(hex: accentColor).opacity(0.5))
             }
 
             Text(String(localized: "audio.recorder.tapToRecord", defaultValue: "Appuyez pour enregistrer", bundle: .module))
-                .font(.system(size: 15, weight: .medium))
+                .font(MeeshyFont.relative(15, weight: .medium))
                 .foregroundColor(.white.opacity(0.4))
         }
     }
@@ -252,7 +252,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                         .fill(Color.white.opacity(0.08))
                         .frame(width: 56, height: 56)
                     Image(systemName: "trash.fill")
-                        .font(.system(size: 20, weight: .medium))
+                        .font(MeeshyFont.relative(20, weight: .medium))
                         .foregroundColor(Color(hex: "EF4444"))
                 }
             }
@@ -307,14 +307,14 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                         .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 16)
 
                     Image(systemName: "mic.fill")
-                        .font(.system(size: 30, weight: .semibold))
+                        .font(MeeshyFont.relative(30, weight: .semibold))
                         .foregroundColor(.white)
                 }
             }
             .buttonStyle(.plain)
 
             Text(String(localized: "audio.recorder.record", defaultValue: "Enregistrer", bundle: .module))
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(.white.opacity(0.4))
         }
     }

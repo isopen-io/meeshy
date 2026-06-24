@@ -43,7 +43,7 @@ public struct CommunityCreateView: View {
                 dismiss()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .frame(width: 36, height: 36)
                     .background(.ultraThinMaterial)
@@ -53,7 +53,7 @@ public struct CommunityCreateView: View {
             Spacer()
 
             Text(String(localized: "community.create.title", defaultValue: "Nouvelle communaute", bundle: .module))
-                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(17, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -95,7 +95,7 @@ public struct CommunityCreateView: View {
 
             if !viewModel.selectedEmoji.isEmpty {
                 Text(viewModel.selectedEmoji)
-                    .font(.system(size: 44))
+                    .font(MeeshyFont.relative(44))
                     .rotationEffect(.degrees(-8))
                     .offset(x: 8, y: 6)
                     .opacity(0.85)
@@ -112,22 +112,22 @@ public struct CommunityCreateView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(viewModel.name.isEmpty ? String(localized: "community.create.preview.placeholder", defaultValue: "Ma communaute", bundle: .module) : viewModel.name)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(18, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                     .lineLimit(2)
 
                 if !viewModel.description.isEmpty {
                     Text(viewModel.description)
-                        .font(.system(size: 12, design: .rounded))
+                        .font(MeeshyFont.relative(12, design: .rounded))
                         .foregroundColor(.white.opacity(0.8))
                         .lineLimit(2)
                 }
 
                 HStack(spacing: 6) {
                     Image(systemName: viewModel.isPrivate ? "lock.fill" : "globe")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(MeeshyFont.relative(10, weight: .semibold))
                     Text(viewModel.isPrivate ? String(localized: "community.privacy.private", defaultValue: "Privee", bundle: .module) : String(localized: "community.privacy.public", defaultValue: "Publique", bundle: .module))
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MeeshyFont.relative(11, weight: .semibold))
                 }
                 .foregroundColor(.white.opacity(0.9))
                 .padding(.top, 2)
@@ -148,18 +148,18 @@ public struct CommunityCreateView: View {
             fieldGroup(label: String(localized: "community.create.field.name", defaultValue: "Nom", bundle: .module), required: true) {
                 TextField(String(localized: "community.create.field.name.placeholder", defaultValue: "Nom de la communaute", bundle: .module), text: $viewModel.name)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 16, design: .rounded))
+                    .font(MeeshyFont.relative(16, design: .rounded))
                     .foregroundColor(theme.textPrimary)
             }
 
             fieldGroup(label: String(localized: "community.create.field.identifier", defaultValue: "Identifiant", bundle: .module), required: false) {
                 HStack(spacing: 4) {
                     Text("mshy_")
-                        .font(.system(size: 14, weight: .medium, design: .monospaced))
+                        .font(MeeshyFont.relative(14, weight: .medium, design: .monospaced))
                         .foregroundColor(theme.textMuted)
                     TextField(String(localized: "community.create.field.identifier.placeholder", defaultValue: "mon-groupe", bundle: .module), text: $viewModel.identifier)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 16, design: .rounded))
+                        .font(MeeshyFont.relative(16, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
@@ -169,7 +169,7 @@ public struct CommunityCreateView: View {
             fieldGroup(label: String(localized: "community.create.field.description", defaultValue: "Description", bundle: .module), required: false) {
                 TextField(String(localized: "community.create.field.description.placeholder", defaultValue: "De quoi parle cette communaute ?", bundle: .module), text: $viewModel.description, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 16, design: .rounded))
+                    .font(MeeshyFont.relative(16, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(3...6)
             }
@@ -180,11 +180,11 @@ public struct CommunityCreateView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 2) {
                 Text(label)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textSecondary)
                 if required {
                     Text("*")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(MeeshyFont.relative(13, weight: .bold))
                         .foregroundColor(MeeshyColors.error)
                 }
             }
@@ -201,7 +201,7 @@ public struct CommunityCreateView: View {
     private var emojiPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(String(localized: "community.create.field.emoji", defaultValue: "Emoji", bundle: .module))
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textSecondary)
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -213,7 +213,7 @@ public struct CommunityCreateView: View {
                             }
                         } label: {
                             Text(emoji)
-                                .font(.system(size: 28))
+                                .font(MeeshyFont.relative(28))
                                 .frame(width: 44, height: 44)
                                 .background(
                                     viewModel.selectedEmoji == emoji
@@ -243,7 +243,7 @@ public struct CommunityCreateView: View {
     private var privacyToggle: some View {
         HStack {
             Image(systemName: viewModel.isPrivate ? "lock.shield.fill" : "eye.fill")
-                .font(.system(size: 18))
+                .font(MeeshyFont.relative(18))
                 .foregroundStyle(
                     LinearGradient(
                         colors: viewModel.isPrivate
@@ -257,10 +257,10 @@ public struct CommunityCreateView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(String(localized: "community.create.privacy.title", defaultValue: "Communaute privee", bundle: .module))
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                 Text(viewModel.isPrivate ? String(localized: "community.create.privacy.private.description", defaultValue: "Seuls les membres invites peuvent rejoindre", bundle: .module) : String(localized: "community.create.privacy.public.description", defaultValue: "Tout le monde peut decouvrir et rejoindre", bundle: .module))
-                    .font(.system(size: 12, design: .rounded))
+                    .font(MeeshyFont.relative(12, design: .rounded))
                     .foregroundColor(theme.textSecondary)
             }
 
@@ -281,16 +281,16 @@ public struct CommunityCreateView: View {
     private var memberSearchSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(String(localized: "community.create.members.title", defaultValue: "Ajouter des membres", bundle: .module))
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textSecondary)
 
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .foregroundColor(theme.textMuted)
                 TextField(String(localized: "community.create.members.search.placeholder", defaultValue: "Rechercher par nom ou username...", bundle: .module), text: $viewModel.memberSearch)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 15, design: .rounded))
+                    .font(MeeshyFont.relative(15, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .autocapitalization(.none)
 
@@ -299,7 +299,7 @@ public struct CommunityCreateView: View {
                         viewModel.memberSearch = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
+                            .font(MeeshyFont.relative(14))
                             .foregroundColor(theme.textMuted)
                     }
                 }
@@ -342,7 +342,7 @@ public struct CommunityCreateView: View {
     private func selectedMemberBadge(_ user: UserSearchResult) -> some View {
         HStack(spacing: 4) {
             Text(user.displayName ?? user.username)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(12, weight: .semibold, design: .rounded))
                 .foregroundColor(.white)
             Button {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -350,7 +350,7 @@ public struct CommunityCreateView: View {
                 }
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(MeeshyFont.relative(8, weight: .bold))
                     .foregroundColor(.white.opacity(0.8))
             }
         }
@@ -387,10 +387,10 @@ public struct CommunityCreateView: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(user.displayName ?? user.username)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(MeeshyFont.relative(14, weight: .semibold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                     Text("@\(user.username)")
-                        .font(.system(size: 12, design: .rounded))
+                        .font(MeeshyFont.relative(12, design: .rounded))
                         .foregroundColor(theme.textMuted)
                 }
 
@@ -398,7 +398,7 @@ public struct CommunityCreateView: View {
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 20))
+                        .font(MeeshyFont.relative(20))
                         .foregroundColor(Color(hex: "10B981"))
                         .transition(.scale.combined(with: .opacity))
                 }
@@ -433,7 +433,7 @@ public struct CommunityCreateView: View {
                 }
                 Text(String(localized: "community.create.button", defaultValue: "Creer la communaute", bundle: .module))
             }
-            .font(.system(size: 16, weight: .semibold, design: .rounded))
+            .font(MeeshyFont.relative(16, weight: .semibold, design: .rounded))
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)

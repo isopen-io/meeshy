@@ -64,10 +64,10 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
             // Panel header
             HStack {
                 Image(systemName: "mic.fill")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundStyle(MeeshyColors.brandGradient)
                 Text(String(localized: "story.voiceRecorder.title", defaultValue: "Enregistrement", bundle: .module))
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                     .foregroundColor(primaryTextColor)
                 Spacer()
             }
@@ -76,7 +76,7 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
             VStack(spacing: 20) {
                 if let error = errorMessage {
                     Text(error)
-                        .font(.system(size: 13))
+                        .font(MeeshyFont.relative(13))
                         .foregroundColor(MeeshyColors.error)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 20)
@@ -92,7 +92,7 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
                 Text(recorder.isRecording
                      ? recordingTimeLabel
                      : String(localized: "story.voiceRecorder.holdToRecord", defaultValue: "Appuyez pour enregistrer", bundle: .module))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(MeeshyFont.relative(13, weight: .medium, design: .monospaced))
                     .foregroundColor(recorder.isRecording ? MeeshyColors.brandPrimary : secondaryTextColor)
 
                 languageStrip
@@ -113,7 +113,7 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
                                     .fill(controlFill)
                                     .frame(width: 50, height: 50)
                                 Image(systemName: "xmark")
-                                    .font(.system(size: 18, weight: .medium))
+                                    .font(MeeshyFont.relative(18, weight: .medium))
                                     .foregroundColor(controlIcon)
                             }
                         }
@@ -180,7 +180,7 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
                         HStack(spacing: 5) {
                             Text(language.flag)
                             Text(language.nativeName)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(MeeshyFont.relative(12, weight: .medium))
                                 .lineLimit(1)
                         }
                         .foregroundColor(isActive ? .white : secondaryTextColor)
@@ -225,7 +225,7 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: recorder.isRecording)
 
             Image(systemName: recorder.isRecording ? "stop.fill" : "mic.fill")
-                .font(.system(size: 26, weight: .semibold))
+                .font(MeeshyFont.relative(26, weight: .semibold))
                 .foregroundColor(recorder.isRecording ? .white : controlIcon)
         }
         .shadow(color: recorder.isRecording ? MeeshyColors.brandPrimary.opacity(0.5) : .clear, radius: 16)

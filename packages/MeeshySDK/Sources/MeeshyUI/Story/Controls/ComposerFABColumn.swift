@@ -67,7 +67,7 @@ struct ComposerFABColumn: View, Equatable {
                         Circle().stroke(accent.opacity(0.4), lineWidth: 1)
                     }
                     Image(systemName: icon)
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(MeeshyFont.relative(22, weight: .semibold))
                         .foregroundStyle(isActive ? .white : accent)
                         .accessibilityHidden(true)
                 }
@@ -75,7 +75,7 @@ struct ComposerFABColumn: View, Equatable {
                 .overlay(alignment: .topTrailing) {
                     if badge > 0 {
                         Text("\(badge)")
-                            .font(.system(size: 9, weight: .bold))
+                            .font(MeeshyFont.relative(9, weight: .bold))
                             .foregroundStyle(.white)
                             .frame(minWidth: 16, minHeight: 16)
                             .background(accent)

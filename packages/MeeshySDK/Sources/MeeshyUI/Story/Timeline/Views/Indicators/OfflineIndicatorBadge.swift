@@ -36,10 +36,10 @@ public struct OfflineIndicatorBadge: View, Equatable {
                         bundle: .module
                     )
                 )
-                .font(.system(size: 11, weight: .medium))
+                .font(MeeshyFont.relative(11, weight: .medium))
             } icon: {
                 Image(systemName: "airplane")
-                    .font(.system(size: 10))
+                    .font(MeeshyFont.relative(10))
             }
             .foregroundStyle(MeeshyColors.indigo300.opacity(0.8))
             .padding(.horizontal, 8)

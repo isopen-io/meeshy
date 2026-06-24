@@ -115,11 +115,11 @@ public struct AudioClipBar: View, Equatable {
         if width >= 44 && !title.isEmpty {
             HStack(spacing: 4) {
                 Image(systemName: "waveform")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(MeeshyFont.relative(9, weight: .semibold))
                     .foregroundStyle(.white)
                     .accessibilityHidden(true)
                 Text(title)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MeeshyFont.relative(10, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .truncationMode(.tail)

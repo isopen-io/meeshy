@@ -99,7 +99,7 @@ public struct MeeshyForgotPasswordView: View {
         if emailSent {
             VStack(spacing: 16) {
                 Image(systemName: "envelope.badge.fill")
-                    .font(.system(size: 48))
+                    .font(MeeshyFont.relative(48))
                     .foregroundStyle(MeeshyColors.brandPrimary)
 
                 Text(String(localized: "auth.forgotPassword.emailSent", defaultValue: "Email envoye !", bundle: .module))
@@ -232,7 +232,7 @@ public struct MeeshyForgotPasswordView: View {
                 VStack(spacing: 20) {
                     if resetSuccess {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 48))
+                            .font(MeeshyFont.relative(48))
                             .foregroundStyle(.green)
 
                         Text(String(localized: "auth.forgotPassword.resetSuccess", defaultValue: "Mot de passe reinitialise !", bundle: .module))

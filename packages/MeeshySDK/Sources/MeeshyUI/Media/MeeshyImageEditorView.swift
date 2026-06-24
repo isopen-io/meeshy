@@ -209,7 +209,7 @@ public struct MeeshyImageEditorView: View {
     private var compareBadge: some View {
         if isComparing {
             Text(String(localized: "media.editor.before", defaultValue: "Original", bundle: .module))
-                .font(.system(size: 11, weight: .bold))
+                .font(MeeshyFont.relative(11, weight: .bold))
                 .foregroundColor(.white)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
@@ -291,9 +291,9 @@ public struct MeeshyImageEditorView: View {
         Button(action: finish) {
             HStack(spacing: 5) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(MeeshyFont.relative(12, weight: .bold))
                 Text(String(localized: "media.editor.done", defaultValue: "Termin\u{00E9}", bundle: .module))
-                    .font(.system(size: 15, weight: .bold))
+                    .font(MeeshyFont.relative(15, weight: .bold))
             }
             .foregroundColor(.white)
             .padding(.horizontal, 16)
@@ -364,7 +364,7 @@ public struct MeeshyImageEditorView: View {
             action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: size * 0.36, weight: .semibold))
+                .font(MeeshyFont.relative(size * 0.36, weight: .semibold))
                 .foregroundColor(active ? .white : (enabled ? theme.textPrimary : theme.textMuted))
                 .frame(width: size, height: size)
                 .background(
@@ -451,7 +451,7 @@ public struct MeeshyImageEditorView: View {
             if !isActive { selectTool(tool) }
         } label: {
             Image(systemName: tool.icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundColor(isActive ? .white : theme.textSecondary)
                 .frame(width: 38, height: 34)
                 .background(
@@ -473,7 +473,7 @@ public struct MeeshyImageEditorView: View {
             action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .bold))
+                .font(MeeshyFont.relative(12, weight: .bold))
                 .foregroundColor(enabled ? theme.textPrimary : theme.textMuted)
                 .frame(width: 32, height: 32)
                 .background(Circle().fill(theme.inputBackground.opacity(enabled ? 1 : 0.5)))
@@ -529,7 +529,7 @@ public struct MeeshyImageEditorView: View {
             Text(String(localized: "media.editor.cropHint",
                          defaultValue: "Faites glisser les poign\u{00E9}es pour recadrer",
                          bundle: .module))
-                .font(.system(size: 11))
+                .font(MeeshyFont.relative(11))
                 .foregroundColor(theme.textMuted)
         }
     }
@@ -550,7 +550,7 @@ public struct MeeshyImageEditorView: View {
             }
         } label: {
             Text(ratio.label)
-                .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                .font(MeeshyFont.relative(13, weight: isSelected ? .bold : .medium))
                 .foregroundColor(isSelected ? .white : theme.textSecondary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 9)
@@ -566,7 +566,7 @@ public struct MeeshyImageEditorView: View {
     private func geometryButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .medium))
+                .font(MeeshyFont.relative(15, weight: .medium))
                 .foregroundColor(theme.textPrimary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 42)
@@ -620,7 +620,7 @@ public struct MeeshyImageEditorView: View {
                 )
 
                 Text(filter.displayName)
-                    .font(.system(size: 10, weight: isSelected ? .bold : .medium))
+                    .font(MeeshyFont.relative(10, weight: isSelected ? .bold : .medium))
                     .foregroundColor(isSelected ? accent : theme.textSecondary)
             }
         }
@@ -643,7 +643,7 @@ public struct MeeshyImageEditorView: View {
                         HapticFeedback.light()
                     } label: {
                         Text(String(localized: "media.editor.reset", defaultValue: "R\u{00E9}initialiser", bundle: .module))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(MeeshyFont.relative(12, weight: .semibold))
                             .foregroundColor(accent)
                     }
                     .buttonStyle(.plain)
@@ -664,12 +664,12 @@ public struct MeeshyImageEditorView: View {
         let isActive = abs(value - kind.neutralValue) > 0.0001
         return HStack(spacing: 10) {
             Image(systemName: kind.icon)
-                .font(.system(size: 12))
+                .font(MeeshyFont.relative(12))
                 .foregroundColor(isActive ? accent : theme.textMuted)
                 .frame(width: 18)
 
             Text(kind.label)
-                .font(.system(size: 12, weight: .medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .frame(width: 78, alignment: .leading)
 
@@ -725,9 +725,9 @@ public struct MeeshyImageEditorView: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: effect.iconName)
-                    .font(.system(size: 17))
+                    .font(MeeshyFont.relative(17))
                 Text(effect.displayName)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MeeshyFont.relative(10, weight: .semibold))
             }
             .foregroundColor(isSelected ? accent : theme.textSecondary)
             .frame(maxWidth: .infinity)
@@ -757,14 +757,14 @@ public struct MeeshyImageEditorView: View {
             VStack(spacing: 0) {
                 HStack {
                     Text(String(localized: "media.editor.history", defaultValue: "Historique", bundle: .module))
-                        .font(.system(size: 15, weight: .bold))
+                        .font(MeeshyFont.relative(15, weight: .bold))
                         .foregroundColor(theme.textPrimary)
                     Spacer()
                     Button {
                         withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { showHistory = false }
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(MeeshyFont.relative(12, weight: .bold))
                             .foregroundColor(theme.textSecondary)
                             .frame(width: 30, height: 30)
                             .background(Circle().fill(theme.inputBackground))
@@ -806,16 +806,16 @@ public struct MeeshyImageEditorView: View {
                         .fill(isCurrent ? AnyShapeStyle(theme.buttonGradient(color: accentColor)) : AnyShapeStyle(theme.inputBackground))
                         .frame(width: 30, height: 30)
                     Text("\(index)")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(MeeshyFont.relative(12, weight: .bold))
                         .foregroundColor(isCurrent ? .white : theme.textSecondary)
                 }
                 Text(step.label)
-                    .font(.system(size: 13, weight: isCurrent ? .semibold : .regular))
+                    .font(MeeshyFont.relative(13, weight: isCurrent ? .semibold : .regular))
                     .foregroundColor(isCurrent ? theme.textPrimary : theme.textSecondary)
                 Spacer()
                 if isCurrent {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(MeeshyFont.relative(11, weight: .bold))
                         .foregroundColor(accent)
                 }
             }
@@ -834,7 +834,7 @@ public struct MeeshyImageEditorView: View {
     private func glassCircleButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .semibold))
+                .font(MeeshyFont.relative(15, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .frame(width: 40, height: 40)
                 .background(Circle().fill(.ultraThinMaterial))

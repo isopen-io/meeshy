@@ -23,17 +23,17 @@ public struct LiveLocationBadge: View {
                 .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: isPulsing)
 
             Image(systemName: "location.fill")
-                .font(.system(size: 11, weight: .semibold))
+                .font(MeeshyFont.relative(11, weight: .semibold))
                 .foregroundColor(Color(hex: accentColor))
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(username) partage sa position")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(.primary)
                     .lineLimit(1)
 
                 Text(formattedRemaining)
-                    .font(.system(size: 9, weight: .medium))
+                    .font(MeeshyFont.relative(9, weight: .medium))
                     .foregroundColor(.secondary)
             }
 
@@ -44,7 +44,7 @@ public struct LiveLocationBadge: View {
                     onStop()
                 } label: {
                     Text(String(localized: "location.live.stop", defaultValue: "Arreter", bundle: .module))
-                        .font(.system(size: 10, weight: .bold))
+                        .font(MeeshyFont.relative(10, weight: .bold))
                         .foregroundColor(Color(hex: "FF6B6B"))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -103,10 +103,10 @@ public struct LiveLocationDurationPicker: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "timer")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
                 Text(String(localized: "location.live.shareDuration", defaultValue: "Duree du partage", bundle: .module))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundColor(.primary)
             }
 
@@ -116,7 +116,7 @@ public struct LiveLocationDurationPicker: View {
                         selectedDuration = duration
                     } label: {
                         Text(duration.displayText)
-                            .font(.system(size: 11, weight: selectedDuration == duration ? .bold : .medium))
+                            .font(MeeshyFont.relative(11, weight: selectedDuration == duration ? .bold : .medium))
                             .foregroundColor(selectedDuration == duration ? .white : Color(hex: accentColor))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)

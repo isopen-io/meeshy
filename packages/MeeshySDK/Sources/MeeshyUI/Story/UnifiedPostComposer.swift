@@ -202,7 +202,7 @@ public struct UnifiedPostComposer: View {
                 }
                 ToolbarItem(placement: .principal) {
                     Text(String(localized: "story.post.create", defaultValue: "Create", bundle: .module))
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(MeeshyFont.relative(17, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -279,9 +279,9 @@ public struct UnifiedPostComposer: View {
             VStack(spacing: 4) {
                 HStack(spacing: 4) {
                     Image(systemName: type.icon)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(MeeshyFont.relative(14, weight: .medium))
                     Text(type.displayName)
-                        .font(.system(size: 14, weight: isSelected ? .bold : .medium))
+                        .font(MeeshyFont.relative(14, weight: isSelected ? .bold : .medium))
                 }
                 .foregroundColor(isSelected ? Color(hex: "6366F1") : theme.textMuted)
 
@@ -316,7 +316,7 @@ public struct UnifiedPostComposer: View {
         let mediaPickerColor = theme.textSecondary
         return VStack(spacing: 12) {
             TextField(String(localized: "story.post.whatOnYourMind", defaultValue: "What's on your mind?", bundle: .module), text: $content, axis: .vertical)
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(3...12)
                 .padding(16)
@@ -351,7 +351,7 @@ public struct UnifiedPostComposer: View {
                 HStack(spacing: 16) {
                     PhotosPicker(selection: $selectedPhotoItem, matching: .any(of: [.images, .videos])) {
                         Label(mediaPickerLabel, systemImage: "photo.on.rectangle")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(MeeshyFont.relative(14, weight: .medium))
                             .foregroundColor(mediaPickerColor)
                     }
 
@@ -370,13 +370,13 @@ public struct UnifiedPostComposer: View {
         if !reprojectionWarnings.isEmpty {
             HStack(spacing: 8) {
                 Image(systemName: "rectangle.and.text.magnifyingglass")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(MeeshyColors.warning)
                 Text(String(format: String(localized: "story.repost.reprojected",
                                            defaultValue: "%d item(s) repositioned for the new aspect ratio",
                                            bundle: .module),
                            reprojectionWarnings.count))
-                    .font(.system(size: 13))
+                    .font(MeeshyFont.relative(13))
                     .foregroundColor(theme.textSecondary)
                 Spacer()
             }
@@ -408,7 +408,7 @@ public struct UnifiedPostComposer: View {
         VStack(spacing: 16) {
             moodEmojiPicker
             TextField(String(localized: "story.post.howFeeling", defaultValue: "How are you feeling?", bundle: .module), text: $content, axis: .vertical)
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(2...4)
                 .padding(.horizontal, 16)
@@ -421,10 +421,10 @@ public struct UnifiedPostComposer: View {
     private var storyPlaceholder: some View {
         VStack(spacing: 12) {
             Image(systemName: "camera.fill")
-                .font(.system(size: 40))
+                .font(MeeshyFont.relative(40))
                 .foregroundColor(.white.opacity(0.3))
             Text(String(localized: "story.post.tapStoryEditor", defaultValue: "Tap to open Story Editor", bundle: .module))
-                .font(.system(size: 15, weight: .medium))
+                .font(MeeshyFont.relative(15, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -454,7 +454,7 @@ public struct UnifiedPostComposer: View {
                 selectedPhotoItem = nil
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 22))
+                    .font(MeeshyFont.relative(22))
                     .foregroundColor(.white)
                     .shadow(radius: 4)
             }
@@ -474,7 +474,7 @@ public struct UnifiedPostComposer: View {
                         HapticFeedback.light()
                     } label: {
                         Text(emoji)
-                            .font(.system(size: 32))
+                            .font(MeeshyFont.relative(32))
                             .scaleEffect(moodEmoji == emoji ? 1.2 : 1)
                             .background(
                                 Circle()
@@ -503,9 +503,9 @@ public struct UnifiedPostComposer: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: visibilityIcon)
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                 Text(visibility.capitalized)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
             }
             .foregroundColor(theme.textSecondary)
             .padding(.horizontal, 10)
@@ -561,7 +561,7 @@ public struct UnifiedPostComposer: View {
             }
         } label: {
             Text(String(localized: "story.post.publish", defaultValue: "Post", bundle: .module))
-                .font(.system(size: 15, weight: .bold))
+                .font(MeeshyFont.relative(15, weight: .bold))
                 .foregroundColor(canPublish ? .white : .white.opacity(0.5))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
@@ -592,7 +592,7 @@ public struct UnifiedPostComposer: View {
                     .fill(Color.white.opacity(0.05))
                     .frame(height: 200)
                 Image(systemName: "play.circle.fill")
-                    .font(.system(size: 48))
+                    .font(MeeshyFont.relative(48))
                     .foregroundColor(.white.opacity(0.7))
             }
             .padding(.horizontal, 16)
@@ -606,7 +606,7 @@ public struct UnifiedPostComposer: View {
                 selectedPhotoItem = nil
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 22))
+                    .font(MeeshyFont.relative(22))
                     .foregroundColor(.white)
                     .shadow(radius: 4)
             }

@@ -17,10 +17,10 @@ public struct FontStylePicker: View {
         VStack(spacing: 12) {
             HStack {
                 Image(systemName: "textformat")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundStyle(MeeshyColors.brandGradient)
                 Text(String(localized: "story.fontPicker.title", defaultValue: "Style de texte", bundle: .module))
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                     .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
                 Spacer()
             }

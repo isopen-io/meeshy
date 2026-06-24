@@ -82,13 +82,13 @@ private struct ProfilePostRow: View, Equatable {
         VStack(alignment: .leading, spacing: 6) {
             if let content = post.content, !content.isEmpty {
                 Text(content)
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(4)
                     .multilineTextAlignment(.leading)
             } else {
                 Text(String(localized: "profile.posts.noText", defaultValue: "Publication sans texte", bundle: .module))
-                    .font(.system(size: 13))
+                    .font(MeeshyFont.relative(13))
                     .foregroundColor(theme.textMuted)
                     .italic()
             }
@@ -97,7 +97,7 @@ private struct ProfilePostRow: View, Equatable {
                 Label("\(post.likeCount ?? 0)", systemImage: "heart")
                 Label("\(post.commentCount ?? 0)", systemImage: "bubble.right")
             }
-            .font(.system(size: 11, weight: .medium))
+            .font(MeeshyFont.relative(11, weight: .medium))
             .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -114,11 +114,11 @@ private struct ProfilePostsEmpty: View {
     var body: some View {
         VStack(spacing: 10) {
             Image(systemName: "square.text.square")
-                .font(.system(size: 28))
+                .font(MeeshyFont.relative(28))
                 .foregroundColor(theme.textMuted.opacity(0.5))
                 .accessibilityHidden(true)
             Text(String(localized: "profile.posts.empty", defaultValue: "Aucun poste", bundle: .module))
-                .font(.system(size: 12, weight: .medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundColor(theme.textMuted.opacity(0.7))
         }
         .frame(maxWidth: .infinity)

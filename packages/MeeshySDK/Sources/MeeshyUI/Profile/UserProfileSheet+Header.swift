@@ -136,7 +136,7 @@ extension UserProfileSheet {
                 .foregroundColor(theme.textPrimary)
 
             Text("@\(displayUser.username)")
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(Color(hex: resolvedAccent))
         }
         .padding(.top, 4)
@@ -207,7 +207,7 @@ extension UserProfileSheet {
             dismiss()
         } label: {
             Image(systemName: "xmark")
-                .font(.system(size: 14, weight: .semibold))
+                .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .frame(width: 36, height: 36)
                 .adaptiveGlass(in: Circle())
@@ -228,9 +228,9 @@ extension UserProfileSheet {
             VStack(spacing: 4) {
                 HStack(spacing: 4) {
                     Image(systemName: tab.icon)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(MeeshyFont.relative(12, weight: .semibold))
                     Text(tab.title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                 }
                 .foregroundColor(selectedTab == tab ? Color(hex: resolvedAccent) : theme.textMuted)
                 .padding(.vertical, 10)
@@ -265,11 +265,11 @@ extension UserProfileSheet {
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(displayUser.resolvedDisplayName)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(15, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
                 Text("@\(displayUser.username)")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(Color(hex: resolvedAccent))
                     .lineLimit(1)
             }

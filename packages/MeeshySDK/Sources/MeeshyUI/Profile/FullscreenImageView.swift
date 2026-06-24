@@ -75,7 +75,7 @@ public struct FullscreenImageView: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 28, weight: .semibold))
+                            .font(MeeshyFont.relative(28, weight: .semibold))
                             .foregroundColor(.white.opacity(0.8))
                             .shadow(color: .black.opacity(0.3), radius: 4)
                     }

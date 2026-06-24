@@ -89,7 +89,7 @@ struct StoryAudioCell: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                .font(.system(size: 26, weight: .medium))
+                .font(MeeshyFont.relative(26, weight: .medium))
                 .foregroundColor(MeeshyColors.indigo500)
                 .frame(width: 28, height: 28)
         }
@@ -120,7 +120,7 @@ struct StoryAudioCell: View {
 
     private var durationLabel: some View {
         Text(formatDuration(playback.duration))
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .font(MeeshyFont.relative(10, weight: .medium, design: .monospaced))
             .foregroundColor(secondaryText)
             .frame(minWidth: 32)
     }
@@ -131,7 +131,7 @@ struct StoryAudioCell: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: isBackground ? "speaker.wave.2.circle.fill" : "speaker.wave.2.circle")
-                .font(.system(size: 18, weight: .medium))
+                .font(MeeshyFont.relative(18, weight: .medium))
                 .foregroundColor(isBackground ? MeeshyColors.indigo400 : secondaryText)
                 .frame(width: 28, height: 28)
         }
@@ -167,7 +167,7 @@ struct StoryAudioCell: View {
             HapticFeedback.medium()
         } label: {
             Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 16, weight: .medium))
+                .font(MeeshyFont.relative(16, weight: .medium))
                 .foregroundColor(.red.opacity(0.85))
                 .frame(width: 22, height: 22)
         }

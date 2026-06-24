@@ -166,7 +166,7 @@ struct VideoEditorTimeline: View {
 
     private func speedBadge(_ speed: Double) -> some View {
         Text(speedLabel(speed))
-            .font(.system(size: 9, weight: .bold, design: .rounded))
+            .font(MeeshyFont.relative(9, weight: .bold, design: .rounded))
             .foregroundStyle(.white)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
@@ -188,7 +188,7 @@ struct VideoEditorTimeline: View {
                         .fill(theme.textMuted.opacity(0.6))
                         .frame(width: 1, height: 6)
                     Text(formatTime(time))
-                        .font(.system(size: 8, weight: .medium, design: .monospaced))
+                        .font(MeeshyFont.relative(8, weight: .medium, design: .monospaced))
                         .foregroundStyle(theme.textMuted)
                 }
                 .offset(x: x - 12, y: 4)
@@ -223,7 +223,7 @@ struct VideoEditorTimeline: View {
                     .overlay(Circle().stroke(.white.opacity(0.85), lineWidth: 1.5))
                 if accentTint {
                     Image(systemName: "scissors")
-                        .font(.system(size: 7, weight: .black))
+                        .font(MeeshyFont.relative(7, weight: .black))
                         .foregroundStyle(.white)
                 }
             }
@@ -283,7 +283,7 @@ struct VideoEditorTimeline: View {
             .frame(width: bracketWidth, height: trackHeight + 8)
             .overlay(
                 Image(systemName: systemImage)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(MeeshyFont.relative(13, weight: .bold))
                     .foregroundStyle(.white)
             )
             .shadow(color: .black.opacity(0.35), radius: 3)
@@ -446,7 +446,7 @@ struct VideoEditorTimeline: View {
             Text(formatTime(viewModel.editedDuration))
                 .foregroundStyle(theme.textMuted)
         }
-        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+        .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
         .background(Capsule().fill(theme.backgroundPrimary.opacity(0.8)))

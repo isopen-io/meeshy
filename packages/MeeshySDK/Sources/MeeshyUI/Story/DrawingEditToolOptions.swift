@@ -79,7 +79,7 @@ struct DrawingEditToolOptions: View {
                     HapticFeedback.light()
                 } label: {
                     Image(systemName: Self.symbol(for: t))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(MeeshyFont.relative(15, weight: .semibold))
                         .foregroundStyle(isSel ? Color.white : Color.primary)
                         .frame(maxWidth: .infinity)
                         .frame(height: 38)
@@ -120,7 +120,7 @@ struct DrawingEditToolOptions: View {
     private var thicknessOptions: some View {
         HStack(spacing: 10) {
             Image(systemName: "minus")
-                .font(.system(size: 12))
+                .font(MeeshyFont.relative(12))
                 .foregroundStyle(.secondary)
             Slider(
                 value: Binding(get: { currentWidth }, set: { applyWidth($0) }),
@@ -128,10 +128,10 @@ struct DrawingEditToolOptions: View {
             )
             .tint(MeeshyColors.brandPrimary)
             Image(systemName: "plus")
-                .font(.system(size: 14, weight: .bold))
+                .font(MeeshyFont.relative(14, weight: .bold))
                 .foregroundStyle(.secondary)
             Text("\(Int(currentWidth))")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .frame(width: 30)
         }
@@ -154,8 +154,8 @@ struct DrawingEditToolOptions: View {
             HapticFeedback.light()
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: symbol).font(.system(size: 13, weight: .semibold))
-                Text(label).font(.system(size: 12, weight: .semibold))
+                Image(systemName: symbol).font(MeeshyFont.relative(13, weight: .semibold))
+                Text(label).font(MeeshyFont.relative(12, weight: .semibold))
             }
             .foregroundStyle(isSel ? Color.white : Color.primary)
             .frame(maxWidth: .infinity)

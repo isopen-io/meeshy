@@ -204,14 +204,14 @@ public struct LanguagePickerSheet: View {
 
             HStack {
                 Text(String(localized: "languagePicker.title", defaultValue: "Langue de traduction", bundle: .module))
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(MeeshyFont.relative(17, weight: .semibold))
                     .foregroundColor(style == .dark ? .white : .primary)
                 Spacer()
                 Button {
                     onDismiss?()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 22))
+                        .font(MeeshyFont.relative(22))
                         .foregroundColor(style == .dark ? .white.opacity(0.5) : Color.gray.opacity(0.5))
                 }
             }
@@ -226,10 +226,10 @@ public struct LanguagePickerSheet: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(style == .dark ? .white.opacity(0.5) : .gray)
-                .font(.system(size: 15))
+                .font(MeeshyFont.relative(15))
 
             TextField(String(localized: "languagePicker.search", defaultValue: "Rechercher une langue…", bundle: .module), text: $searchText)
-                .font(.system(size: 15))
+                .font(MeeshyFont.relative(15))
                 .foregroundColor(style == .dark ? .white : .primary)
                 .tint(MeeshyColors.brandPrimary)
         }
@@ -275,12 +275,12 @@ public struct LanguagePickerSheet: View {
         } label: {
             VStack(spacing: 6) {
                 Text(lang.flag)
-                    .font(.system(size: 28))
+                    .font(MeeshyFont.relative(28))
                     .scaleEffect(isSelected ? 1.15 : 1.0)
                     .animation(.spring(response: 0.25, dampingFraction: 0.6), value: isSelected)
 
                 Text(lang.name)
-                    .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
+                    .font(MeeshyFont.relative(10, weight: isSelected ? .semibold : .medium))
                     .foregroundColor(
                         isSelected
                             ? accent

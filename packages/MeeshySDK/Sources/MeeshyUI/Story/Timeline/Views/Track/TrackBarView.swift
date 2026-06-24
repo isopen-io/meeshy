@@ -79,7 +79,7 @@ public struct TrackBarView<Content: View>: View {
                         .fill(Color(hex: tintHex).opacity(isDark ? 0.30 : 0.18))
                         .frame(width: 18, height: 18)
                     Image(systemName: iconName)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(MeeshyFont.relative(10, weight: .semibold))
                         .foregroundStyle(Color(hex: tintHex))
                 }
                 .accessibilityHidden(true)

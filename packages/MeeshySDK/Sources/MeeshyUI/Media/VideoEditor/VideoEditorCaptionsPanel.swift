@@ -36,7 +36,7 @@ struct VideoEditorCaptionsPanel: View {
     private var languageRow: some View {
         HStack {
             Text("Langue parlée")
-                .font(.system(size: 12, weight: .medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundStyle(theme.textSecondary)
             Spacer()
             Menu {
@@ -52,9 +52,9 @@ struct VideoEditorCaptionsPanel: View {
                 HStack(spacing: 6) {
                     Text(language?.flag ?? "🌐")
                     Text(language?.nativeName ?? languageCode.uppercased())
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(MeeshyFont.relative(12, weight: .semibold))
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(MeeshyFont.relative(9, weight: .bold))
                 }
                 .foregroundStyle(theme.textPrimary)
                 .padding(.horizontal, 12)
@@ -85,14 +85,14 @@ struct VideoEditorCaptionsPanel: View {
             ProgressView()
                 .tint(accent)
             Text("Analyse de l'audio…")
-                .font(.system(size: 12))
+                .font(MeeshyFont.relative(12))
                 .foregroundStyle(theme.textSecondary)
             Spacer()
             Button {
                 viewModel.cancelTranscription()
             } label: {
                 Text("Annuler")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundStyle(theme.error)
             }
             .buttonStyle(.plain)
@@ -104,21 +104,21 @@ struct VideoEditorCaptionsPanel: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label("\(viewModel.document.captions.count) sous-titres", systemImage: "captions.bubble.fill")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundStyle(accent)
                 Spacer()
                 Button {
                     viewModel.clearCaptions()
                 } label: {
                     Text("Effacer")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MeeshyFont.relative(11, weight: .semibold))
                         .foregroundStyle(theme.error)
                 }
                 .buttonStyle(.plain)
             }
             ScrollView(.vertical, showsIndicators: false) {
                 Text(viewModel.document.transcriptionText ?? "")
-                    .font(.system(size: 13))
+                    .font(MeeshyFont.relative(13))
                     .foregroundStyle(theme.textPrimary.opacity(0.9))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -133,7 +133,7 @@ struct VideoEditorCaptionsPanel: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(theme.warning)
                 Text(message)
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundStyle(theme.textSecondary)
                     .lineLimit(2)
             }
@@ -149,7 +149,7 @@ struct VideoEditorCaptionsPanel: View {
                 Image(systemName: icon)
                 Text(title)
             }
-            .font(.system(size: 13, weight: .semibold))
+            .font(MeeshyFont.relative(13, weight: .semibold))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 11)

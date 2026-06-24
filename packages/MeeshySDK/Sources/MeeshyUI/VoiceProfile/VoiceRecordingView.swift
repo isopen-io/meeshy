@@ -64,19 +64,19 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
         VStack(spacing: 8) {
             HStack {
                 Image(systemName: "text.quote")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
                 Text(String(localized: "voiceProfile.recording.readAloud", defaultValue: "Lisez ce texte a voix haute", bundle: .module))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(.secondary)
                 Spacer()
                 Text("\(recordedSamples.count + 1)/\(minimumSamples)")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(MeeshyFont.relative(11, weight: .bold, design: .monospaced))
                     .foregroundColor(Color(hex: accentColor))
             }
 
             Text(sampleTexts[min(recordedSamples.count, sampleTexts.count - 1)])
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(.primary)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -99,7 +99,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
             HStack(spacing: 20) {
                 if recorder.isRecording {
                     Text(formattedDuration(recorder.duration))
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(14, weight: .bold, design: .monospaced))
                         .foregroundColor(Color(hex: "FF6B6B"))
 
                     Spacer()
@@ -119,7 +119,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
                             .shadow(color: (recorder.isRecording ? Color(hex: "FF6B6B") : Color(hex: accentColor)).opacity(0.3), radius: 8, y: 2)
 
                         Image(systemName: recorder.isRecording ? "stop.fill" : "mic.fill")
-                            .font(.system(size: 24, weight: .bold))
+                            .font(MeeshyFont.relative(24, weight: .bold))
                             .foregroundColor(.white)
                     }
                 }
@@ -128,7 +128,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
                     Spacer()
 
                     Text("min \(minimumDurationSeconds)s")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                         .foregroundColor(.secondary)
                 }
             }
@@ -158,24 +158,24 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
             ForEach(Array(recordedSamples.enumerated()), id: \.element.id) { index, sample in
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 16))
+                        .font(MeeshyFont.relative(16))
                         .foregroundColor(Color(hex: "2ECC71"))
 
                     Text("Echantillon \(index + 1)")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(MeeshyFont.relative(13, weight: .medium))
                         .foregroundColor(.primary)
 
                     Spacer()
 
                     Text(formattedDuration(sample.duration))
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .font(MeeshyFont.relative(12, weight: .medium, design: .monospaced))
                         .foregroundColor(.secondary)
 
                     Button {
                         recordedSamples.remove(at: index)
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16))
+                            .font(MeeshyFont.relative(16))
                             .foregroundColor(Color(hex: "FF6B6B").opacity(0.7))
                     }
                 }
@@ -198,9 +198,9 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.right.circle.fill")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                 Text(String(localized: "voiceProfile.recording.createProfile", defaultValue: "Creer le profil vocal", bundle: .module))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)

@@ -110,7 +110,7 @@ public struct ImageViewerView: View {
                     Spacer()
                     Button { onDelete(); HapticFeedback.light() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 18))
+                            .font(MeeshyFont.relative(18))
                             .foregroundColor(Color(hex: "FF6B6B"))
                             .background(Circle().fill(.ultraThinMaterial).frame(width: 14, height: 14))
                     }
@@ -127,9 +127,9 @@ public struct ImageViewerView: View {
                     Button { onEdit(); HapticFeedback.light() } label: {
                         HStack(spacing: 3) {
                             Image(systemName: "pencil")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(MeeshyFont.relative(10, weight: .bold))
                             Text(String(localized: "media.image.edit", defaultValue: "\u{00C9}diter", bundle: .module))
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(MeeshyFont.relative(10, weight: .semibold))
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, 8)
@@ -148,7 +148,7 @@ public struct ImageViewerView: View {
                 HStack {
                     Spacer()
                     Text(attachment.fileSizeFormatted)
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(MeeshyFont.relative(9, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
@@ -165,7 +165,7 @@ public struct ImageViewerView: View {
             .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
             .overlay(
                 Image(systemName: icon)
-                    .font(.system(size: context.isCompact ? 22 : 28))
+                    .font(MeeshyFont.relative(context.isCompact ? 22 : 28))
                     .foregroundColor(isDark ? .white.opacity(0.2) : .black.opacity(0.12))
             )
             .frame(height: context == .composerAttachment ? 80 : (context.isCompact ? 160 : 200))
@@ -257,7 +257,7 @@ public struct ImageFullscreen: View {
                     HStack {
                         Button { dismiss() } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 28))
+                                .font(MeeshyFont.relative(28))
                                 .foregroundColor(.white.opacity(0.8))
                                 .padding()
                         }
@@ -276,7 +276,7 @@ public struct ImageFullscreen: View {
                                     Image(systemName: "xmark")
                                 }
                             }
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(MeeshyFont.relative(18, weight: .semibold))
                             .foregroundColor(.white.opacity(0.9))
                             .frame(width: 40, height: 40)
                             .background(Circle().fill(Color.white.opacity(0.2)))

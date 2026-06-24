@@ -105,11 +105,11 @@ public struct CommunityMembersView: View {
     private func sectionHeader(role: CommunityRole, count: Int) -> some View {
         HStack(spacing: 6) {
             Image(systemName: role.icon)
-                .font(.system(size: 11))
+                .font(MeeshyFont.relative(11))
             Text("\(role.displayName)s")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(12, weight: .bold, design: .rounded))
             Text("\(count)")
-                .font(.system(size: 11, weight: .medium))
+                .font(MeeshyFont.relative(11, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .foregroundColor(theme.textSecondary)
@@ -147,15 +147,15 @@ struct MemberRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(displayName)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 HStack(spacing: 4) {
                     Image(systemName: member.communityRole.icon)
-                        .font(.system(size: 9))
+                        .font(MeeshyFont.relative(9))
                     Text(member.communityRole.displayName)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                 }
                 .foregroundColor(roleColor)
             }
@@ -182,7 +182,7 @@ struct MemberRow: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                         .frame(width: 32, height: 32)
                         .contentShape(Circle())

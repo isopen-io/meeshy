@@ -250,28 +250,28 @@ internal struct _InlineRenderer: View {
         switch player.availability {
         case .ready:
             Image(systemName: "play.fill")
-                .font(.system(size: 22, weight: .bold))
+                .font(MeeshyFont.relative(22, weight: .bold))
                 .foregroundColor(.white)
                 .offset(x: 2)
         case .needsDownload:
             VStack(spacing: 2) {
                 Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(MeeshyFont.relative(22, weight: .bold))
                     .foregroundColor(.white)
                 if player.attachment.fileSize > 0 {
                     Text(formatSize(Int64(player.attachment.fileSize)))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(MeeshyFont.relative(9, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white.opacity(0.9))
                 }
             }
         case .downloading(let progress):
             VStack(spacing: 2) {
                 Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(MeeshyFont.relative(16, weight: .bold))
                     .foregroundColor(.white.opacity(0.6))
                 if progress > 0 {
                     Text("\(Int(progress * 100))%")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(10, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                 } else {
                     ProgressView().tint(.white).scaleEffect(0.6)
@@ -506,7 +506,7 @@ internal struct _FullscreenRenderer: View {
             Spacer()
             if let caption = player.caption, !caption.isEmpty {
                 Text(caption)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(.white)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
@@ -538,7 +538,7 @@ internal struct _FullscreenRenderer: View {
                     .clipShape(Circle())
                 }
                 Text(author.displayName)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(.white)
             }
             .padding(.horizontal, 8)
@@ -587,7 +587,7 @@ internal struct _FullscreenRenderer: View {
                 }())
 
                 Text(downloadOverlayMessage)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(MeeshyFont.relative(14, weight: .medium))
                     .foregroundColor(.white.opacity(0.85))
                     .multilineTextAlignment(.center)
 
@@ -596,7 +596,7 @@ internal struct _FullscreenRenderer: View {
                     HapticFeedback.light()
                 } label: {
                     Text(String(localized: "media.video.close", defaultValue: "Fermer", bundle: .module))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundColor(.white.opacity(0.7))
                         .padding(.horizontal, 18)
                         .padding(.vertical, 8)
@@ -614,7 +614,7 @@ internal struct _FullscreenRenderer: View {
             EmptyView()
         case .needsDownload:
             Image(systemName: "arrow.down.to.line")
-                .font(.system(size: 30, weight: .bold))
+                .font(MeeshyFont.relative(30, weight: .bold))
                 .foregroundColor(.white)
         case .downloading(let progress):
             if progress > 0 {

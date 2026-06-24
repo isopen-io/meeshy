@@ -85,8 +85,8 @@ struct ComposerToolPanelHost: View {
         Button(action: { onBack() }) {
             HStack(spacing: 4) {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 14, weight: .semibold))
-                Text(toolTitle).font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
+                Text(toolTitle).font(MeeshyFont.relative(14, weight: .semibold))
             }
         }
         .foregroundColor(primaryText)
@@ -109,9 +109,9 @@ struct ComposerToolPanelHost: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: Self.icon(for: other))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                 Text(Self.title(for: other))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
             }
             .foregroundColor(secondaryText)
             .padding(.horizontal, 10)
@@ -298,11 +298,11 @@ struct ComposerToolPanelHost: View {
                                     // de la row avec juste le nom du media et son rôle.
                                     HStack(spacing: 6) {
                                         Image(systemName: media.kind == .image ? "photo.fill" : "video.fill")
-                                            .font(.system(size: 14))
+                                            .font(MeeshyFont.relative(14))
                                         Text(media.kind == .image
                                              ? String(localized: "story.media.image", defaultValue: "Image", bundle: .module)
                                              : String(localized: "story.media.video", defaultValue: "Vidéo", bundle: .module))
-                                            .font(.system(size: 13, weight: .semibold))
+                                            .font(MeeshyFont.relative(13, weight: .semibold))
                                     }
                                     .foregroundColor(primaryText)
                                     .padding(.horizontal, 12)
@@ -369,7 +369,7 @@ struct ComposerToolPanelHost: View {
                     ZStack {
                         (colorScheme == .dark ? Color.white.opacity(0.1) : MeeshyColors.indigo950.opacity(0.08))
                         Image(systemName: isImage ? "photo" : "video")
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(mutedText)
                     }
                 }
@@ -382,12 +382,12 @@ struct ComposerToolPanelHost: View {
                 Text(isImage
                      ? String(localized: "story.media.image", defaultValue: "Image", bundle: .module)
                      : String(localized: "story.media.video", defaultValue: "Vidéo", bundle: .module))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(primaryText)
                 Text(isBg
                      ? String(localized: "story.media.background", defaultValue: "Fond", bundle: .module)
                      : String(localized: "story.media.foreground", defaultValue: "Premier plan", bundle: .module))
-                    .font(.system(size: 9, weight: .medium))
+                    .font(MeeshyFont.relative(9, weight: .medium))
                     .foregroundColor(isBg ? MeeshyColors.indigo400 : secondaryText)
             }
 
@@ -446,7 +446,7 @@ struct ComposerToolPanelHost: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(color)
                 .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
@@ -486,9 +486,9 @@ struct ComposerToolPanelHost: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(MeeshyFont.relative(14, weight: .medium))
                             Text(String(localized: "story.composer.addText", defaultValue: "Ajouter du texte", bundle: .module))
-                                .font(.system(size: 13, weight: .medium))
+                                .font(MeeshyFont.relative(13, weight: .medium))
                         }
                         .foregroundColor(MeeshyColors.brandPrimary)
                         .padding(.horizontal, 12)
@@ -563,7 +563,7 @@ struct ComposerToolPanelHost: View {
                 RoundedRectangle(cornerRadius: 5)
                     .fill(Color(hex: textHex))
                 Text("Aa")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(13, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: textHex).luminance > 0.6 ? .black : .white)
             }
             .frame(width: 32, height: 32)
@@ -575,11 +575,11 @@ struct ComposerToolPanelHost: View {
             // Aperçu + style
             VStack(alignment: .leading, spacing: 1) {
                 Text(preview)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(primaryText)
                     .lineLimit(1)
                 Text((text.textStyle ?? "classic").capitalized)
-                    .font(.system(size: 9, weight: .medium))
+                    .font(MeeshyFont.relative(9, weight: .medium))
                     .foregroundColor(secondaryText)
             }
 
@@ -628,7 +628,7 @@ struct ComposerToolPanelHost: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(color)
                 .frame(width: 28, height: 28)
                 .contentShape(Rectangle())

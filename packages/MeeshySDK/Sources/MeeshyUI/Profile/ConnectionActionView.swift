@@ -96,10 +96,10 @@ public struct ConnectionActionView: View {
         HStack(spacing: 4) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
             }
             Text(text)
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
         }
         .foregroundColor(color)
         .padding(.horizontal, 10)
@@ -116,7 +116,7 @@ public struct ConnectionActionView: View {
                 Task { await decline(requestId: requestId) }
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(MeeshyFont.relative(11, weight: .bold))
                     .foregroundColor(MeeshyColors.error)
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(MeeshyColors.error.opacity(0.15)))
@@ -128,7 +128,7 @@ public struct ConnectionActionView: View {
                 Task { await accept(requestId: requestId) }
             } label: {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(MeeshyFont.relative(11, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(MeeshyColors.success))
@@ -146,9 +146,9 @@ public struct ConnectionActionView: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "clock")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                 Text(pendingLabel)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
             }
             .foregroundColor(MeeshyColors.warning)
             .padding(.horizontal, 10)
@@ -167,9 +167,9 @@ public struct ConnectionActionView: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "person.badge.plus")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                 Text(addLabel)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
             }
             .foregroundColor(.white)
             .padding(.horizontal, 12)

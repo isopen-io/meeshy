@@ -29,14 +29,14 @@ public struct TextBackgroundStylePicker: View {
         VStack(spacing: 12) {
             HStack {
                 Image(systemName: "square.dashed.inset.filled")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundStyle(MeeshyColors.brandGradient)
                 Text(String(
                     localized: "story.textBackground.title",
                     defaultValue: "Fond du texte",
                     bundle: .module
                 ))
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                     .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
                 Spacer()
             }
@@ -91,9 +91,9 @@ public struct TextBackgroundStylePicker: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                 Text(label)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
             }
             .foregroundColor(isSelected ? .white : (colorScheme == .dark ? .white.opacity(0.7) : MeeshyColors.indigo700))
             .padding(.horizontal, 12)

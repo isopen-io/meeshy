@@ -86,11 +86,11 @@ struct VideoEditorTileGrid: View {
                 ZStack {
                     Circle().fill(accent.opacity(0.22)).frame(width: 38, height: 38)
                     Image(systemName: tool.icon)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(MeeshyFont.relative(17, weight: .semibold))
                         .foregroundStyle(accent)
                 }
                 Text(tool.title)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(11, weight: .semibold, design: .rounded))
                     .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
             }
@@ -122,9 +122,9 @@ struct VideoEditorToolHeader: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(MeeshyFont.relative(12, weight: .bold))
                     Text(tool.title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                 }
                 .foregroundStyle(theme.textPrimary)
                 .padding(.horizontal, 12)
@@ -139,7 +139,7 @@ struct VideoEditorToolHeader: View {
                 viewModel.dismissPanel()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(MeeshyFont.relative(11, weight: .bold))
                     .foregroundStyle(theme.textMuted)
                     .frame(width: 26, height: 26)
                     .background(theme.glassMaterial, in: Circle())
@@ -190,10 +190,10 @@ struct EditorChip: View {
             HStack(spacing: 5) {
                 if let systemImage {
                     Image(systemName: systemImage)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MeeshyFont.relative(11, weight: .semibold))
                 }
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
             }
             .foregroundStyle(isActive ? Color.white : theme.textPrimary)
             .padding(.horizontal, 13)
@@ -228,11 +228,11 @@ struct EditorSliderRow: View {
         VStack(spacing: 2) {
             HStack {
                 Text(label)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundStyle(theme.textSecondary)
                 Spacer()
                 Text(valueText)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .font(MeeshyFont.relative(12, weight: .semibold, design: .monospaced))
                     .foregroundStyle(theme.textPrimary)
             }
             Slider(value: $value, in: range) { editing in
@@ -308,7 +308,7 @@ struct TrimController: View {
 
             if !viewModel.mode.isPro {
                 Text("Astuce : poignées disponibles sur la timeline principale.")
-                    .font(.system(size: 10))
+                    .font(MeeshyFont.relative(10))
                     .foregroundStyle(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
@@ -330,10 +330,10 @@ struct TrimController: View {
     private func readoutCell(label: String, value: Double, color: Color? = nil) -> some View {
         VStack(spacing: 2) {
             Text(label)
-                .font(.system(size: 9, weight: .semibold))
+                .font(MeeshyFont.relative(9, weight: .semibold))
                 .foregroundStyle(theme.textMuted)
             Text(timeString(value))
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .font(MeeshyFont.relative(13, weight: .semibold, design: .monospaced))
                 .foregroundStyle(color ?? theme.textPrimary)
         }
         .frame(maxWidth: .infinity)
@@ -349,9 +349,9 @@ struct TrimController: View {
         Button(action: action) {
             HStack(spacing: 5) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
@@ -381,7 +381,7 @@ struct TrimController: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: "arrow.counterclockwise")
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .frame(width: 42, height: 38)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -416,7 +416,7 @@ struct SplitController: View {
                     Image(systemName: "scissors")
                     Text("Diviser au point de lecture")
                 }
-                .font(.system(size: 14, weight: .semibold))
+                .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
@@ -437,7 +437,7 @@ struct SplitController: View {
                 }
             } else {
                 Text("Placez la tête de lecture puis divisez la vidéo en segments.")
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundStyle(theme.textMuted)
                     .frame(maxWidth: .infinity)
             }
@@ -450,10 +450,10 @@ struct SplitController: View {
         let count = viewModel.document.segments.count
         return VStack(spacing: 5) {
             Text("Segment \(index + 1)")
-                .font(.system(size: 10, weight: .semibold))
+                .font(MeeshyFont.relative(10, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
             Text(String(format: "%.1fs", segment.playbackDuration))
-                .font(.system(size: 10, design: .monospaced))
+                .font(MeeshyFont.relative(10, design: .monospaced))
                 .foregroundStyle(theme.textMuted)
             HStack(spacing: 11) {
                 if index > 0 {
@@ -495,7 +495,7 @@ struct SplitController: View {
     private func cardButton(_ icon: String, tint: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
+                .font(MeeshyFont.relative(11, weight: .semibold))
                 .foregroundStyle(tint)
         }
         .buttonStyle(.plain)
@@ -524,7 +524,7 @@ struct SpeedController: View {
                 Text(viewModel.selectedSegment == nil
                      ? "Toute la vidéo"
                      : "Segment sélectionné")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MeeshyFont.relative(10, weight: .semibold))
                     .foregroundStyle(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -589,7 +589,7 @@ struct CropController: View {
             }
             if let recommended = viewModel.context.preferredCropRatio {
                 Text("Recommandé pour \(viewModel.context.contextLabel) : \(recommended.label)")
-                    .font(.system(size: 10))
+                    .font(MeeshyFont.relative(10))
                     .foregroundStyle(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -633,10 +633,10 @@ struct RotateController: View {
             }
             VStack(spacing: 2) {
                 Text("\(viewModel.document.rotationQuarterTurns * 90)°")
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(18, weight: .bold, design: .rounded))
                     .foregroundStyle(theme.textPrimary)
                 Text("Rotation")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(MeeshyFont.relative(9, weight: .semibold))
                     .foregroundStyle(theme.textMuted)
             }
             .frame(maxWidth: .infinity)
@@ -652,9 +652,9 @@ struct RotateController: View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(MeeshyFont.relative(20, weight: .semibold))
                 Text(label)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MeeshyFont.relative(10, weight: .semibold))
             }
             .foregroundStyle(accent)
             .frame(width: 84, height: 60)
@@ -730,7 +730,7 @@ struct FilterController: View {
                             .strokeBorder(accent, lineWidth: isActive ? 2 : 0)
                     )
                 Text(preset.displayName)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(MeeshyFont.relative(10, weight: .medium))
                     .foregroundStyle(isActive ? theme.textPrimary : theme.textMuted)
             }
         }
@@ -758,7 +758,7 @@ struct FilterController: View {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(accent.opacity(isActive ? 0.3 : 0.12))
                 Image(systemName: preset.iconName)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundStyle(isActive ? accent : theme.textSecondary)
             }
         }
@@ -827,7 +827,7 @@ struct AudioController: View {
         VStack(spacing: 8) {
             HStack {
                 Text("Son")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundStyle(theme.textSecondary)
                 Spacer()
                 Button {
@@ -837,7 +837,7 @@ struct AudioController: View {
                         Image(systemName: viewModel.document.audio.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                         Text(viewModel.document.audio.isMuted ? "Muet" : "Actif")
                     }
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundStyle(viewModel.document.audio.isMuted ? theme.error : accent)
                 }
                 .buttonStyle(.plain)

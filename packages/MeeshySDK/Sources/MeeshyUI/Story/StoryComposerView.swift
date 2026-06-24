@@ -752,7 +752,7 @@ public struct StoryComposerView: View {
     private var dismissButton: some View {
         Button { handleDismiss() } label: {
             Image(systemName: "xmark")
-                .font(.system(size: 15, weight: .bold))
+                .font(MeeshyFont.relative(15, weight: .bold))
                 .foregroundColor(.white)
                 .frame(width: 36, height: 36)
                 .adaptiveGlass(in: Circle())
@@ -769,7 +769,7 @@ public struct StoryComposerView: View {
             }
         } label: {
             Image(systemName: "play.fill")
-                .font(.system(size: 12, weight: .bold))
+                .font(MeeshyFont.relative(12, weight: .bold))
                 .foregroundColor(.white)
                 .frame(width: 36, height: 36)
                 .adaptiveGlass(in: Circle())
@@ -788,8 +788,8 @@ public struct StoryComposerView: View {
                         .tint(.white)
                         .scaleEffect(0.7)
                 } else {
-                    Text(String(localized: "story.composer.publish", defaultValue: "Publier", bundle: .module)).font(.system(size: 13, weight: .bold)).lineLimit(1)
-                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 13))
+                    Text(String(localized: "story.composer.publish", defaultValue: "Publier", bundle: .module)).font(MeeshyFont.relative(13, weight: .bold)).lineLimit(1)
+                    Image(systemName: "arrow.up.circle.fill").font(MeeshyFont.relative(13))
                 }
             }
             .fixedSize()
@@ -816,9 +816,9 @@ public struct StoryComposerView: View {
             let showCount = current.requiresUserSelection && !visibilityUserIds.isEmpty
             HStack(spacing: 4) {
                 Image(systemName: current.icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                 Text(showCount ? "\(current.label) (\(visibilityUserIds.count))" : current.label)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .lineLimit(1)
             }
             .foregroundStyle(.white)
@@ -877,7 +877,7 @@ public struct StoryComposerView: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 13, weight: .bold))
+                .font(MeeshyFont.relative(13, weight: .bold))
                 .foregroundColor(.white)
                 .frame(width: 36, height: 36)
                 .adaptiveGlass(in: Circle())
@@ -1053,12 +1053,12 @@ public struct StoryComposerView: View {
                 Text(String(localized: "story.composer.empty.title",
                             defaultValue: "Commencez votre story",
                             bundle: .module))
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(17, weight: .bold, design: .rounded))
                     .foregroundStyle(MeeshyColors.brandGradient)
                 Text(String(localized: "story.composer.empty.subtitle",
                             defaultValue: "Choisissez un outil pour démarrer",
                             bundle: .module))
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundColor((colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.7))
             }
             .padding(.top, 8)
@@ -1234,7 +1234,7 @@ public struct StoryComposerView: View {
                         .fill(accent.opacity(isSelected ? 0.55 : 0.30))
                         .frame(width: 44, height: 44)
                     Image(systemName: icon)
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(MeeshyFont.relative(22, weight: .semibold))
                         .foregroundStyle(accent)
                 }
 
@@ -1243,11 +1243,11 @@ public struct StoryComposerView: View {
                     // le blanc sur clair était illisible. On utilise indigo950
                     // en light mode (contraste sur pastel) et blanc en dark.
                     Text(title)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(MeeshyFont.relative(14, weight: .semibold, design: .rounded))
                         .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
                         .lineLimit(1)
                     Text(subtitle)
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                         .foregroundColor((colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.75))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
@@ -1689,12 +1689,12 @@ public struct StoryComposerView: View {
                                 .rotationEffect(.degrees(-90))
                                 .animation(.easeInOut(duration: 0.3), value: mediaLoadProgress)
                             Text("\(Int(mediaLoadProgress * 100))%")
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .font(MeeshyFont.relative(13, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
                         }
                         if !mediaLoadLabel.isEmpty {
                             Text(mediaLoadLabel)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(MeeshyFont.relative(12, weight: .medium))
                                 .foregroundColor(.white.opacity(0.8))
                         }
                     }
@@ -1715,7 +1715,7 @@ public struct StoryComposerView: View {
                 }
             } label: {
                 Image(systemName: "arrow.uturn.backward")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(MeeshyFont.relative(12, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 30, height: 30)
                     .background(Circle().fill(.black.opacity(0.5)))
@@ -2403,16 +2403,16 @@ struct StoryLanguagePickerView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.name)
-                                .font(.system(size: 16, weight: selectedLanguage == item.code ? .semibold : .regular))
+                                .font(MeeshyFont.relative(16, weight: selectedLanguage == item.code ? .semibold : .regular))
                                 .foregroundColor(.primary)
                             Text(item.code)
-                                .font(.system(size: 12))
+                                .font(MeeshyFont.relative(12))
                                 .foregroundColor(.secondary)
                         }
                         Spacer()
                         if selectedLanguage == item.code {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
+                                .font(MeeshyFont.relative(14, weight: .bold))
                                 .foregroundColor(MeeshyColors.indigo500)
                         }
                     }
@@ -2457,8 +2457,8 @@ struct MediaPillLabel: View {
             : fgBase.opacity(0.18)
 
         return HStack(spacing: 5) {
-            Image(systemName: icon).font(.system(size: 12, weight: .medium))
-            Text(text).font(.system(size: 11, weight: .medium))
+            Image(systemName: icon).font(MeeshyFont.relative(12, weight: .medium))
+            Text(text).font(MeeshyFont.relative(11, weight: .medium))
         }
         .foregroundColor(foreground)
         .padding(.horizontal, 10).padding(.vertical, 7)

@@ -16,7 +16,7 @@ struct DrawingStrokeList: View {
         if !viewModel.drawingStrokes.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 Text("\(viewModel.drawingStrokes.count) trait\(viewModel.drawingStrokes.count > 1 ? "s" : "")")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundStyle(.secondary)
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 6) {
@@ -108,7 +108,7 @@ struct DrawingStrokeList: View {
             toggle(tool, for: stroke, currentlyExpanded: expanded)
         } label: {
             Image(systemName: symbol)
-                .font(.system(size: 14, weight: .semibold))
+                .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundStyle(active ? Color.white : Color.primary)
                 .frame(width: 30, height: 30)
                 .background(
@@ -126,7 +126,7 @@ struct DrawingStrokeList: View {
             HapticFeedback.medium()
         } label: {
             Image(systemName: "trash")
-                .font(.system(size: 14, weight: .semibold))
+                .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundStyle(MeeshyColors.error)
                 .frame(width: 30, height: 30)
                 .background(Circle().fill(MeeshyColors.error.opacity(0.12)))

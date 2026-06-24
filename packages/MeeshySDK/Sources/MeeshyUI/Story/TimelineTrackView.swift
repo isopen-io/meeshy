@@ -163,10 +163,10 @@ struct TimelineTrackBar: View {
                 } else {
                     HStack(spacing: 3) {
                         Image(systemName: track.type.icon)
-                            .font(.system(size: 8, weight: .medium))
+                            .font(MeeshyFont.relative(8, weight: .medium))
                             .foregroundStyle(theme.textMuted)
                         Text(track.name)
-                            .font(.system(size: 10, weight: .medium))
+                            .font(MeeshyFont.relative(10, weight: .medium))
                             .foregroundStyle(theme.textPrimary)
                             .lineLimit(1)
                     }
@@ -178,10 +178,10 @@ struct TimelineTrackBar: View {
             if track.type == .drawing {
                 HStack(spacing: 3) {
                     Image(systemName: track.type.icon)
-                        .font(.system(size: 8, weight: .medium))
+                        .font(MeeshyFont.relative(8, weight: .medium))
                         .foregroundStyle(theme.textMuted)
                     Text(track.name)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(MeeshyFont.relative(10, weight: .medium))
                         .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
                 }
@@ -200,10 +200,10 @@ struct TimelineTrackBar: View {
             if track.type == .text {
                 HStack(spacing: 3) {
                     Image(systemName: "clock")
-                        .font(.system(size: 8, weight: .medium))
+                        .font(MeeshyFont.relative(8, weight: .medium))
                         .foregroundStyle(theme.textMuted)
                     Text(track.name)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(MeeshyFont.relative(10, weight: .medium))
                         .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
                 }
@@ -240,7 +240,7 @@ struct TimelineTrackBar: View {
             onEditTap?()
         } label: {
             Image(systemName: "pencil.circle.fill")
-                .font(.system(size: 16, weight: .medium))
+                .font(MeeshyFont.relative(16, weight: .medium))
                 .foregroundStyle(MeeshyColors.brandPrimary)
                 .background(
                     Circle()
@@ -379,10 +379,10 @@ struct TrackLabel: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: track.type.icon)
-                .font(.system(size: 10, weight: isSelected ? .bold : .semibold))
+                .font(MeeshyFont.relative(10, weight: isSelected ? .bold : .semibold))
                 .foregroundStyle(isSelected ? track.type.color : track.type.color.opacity(0.6))
             Text(track.name)
-                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                .font(MeeshyFont.relative(11, weight: isSelected ? .bold : .medium))
                 .foregroundStyle(isSelected ? track.type.color : theme.textSecondary)
                 .lineLimit(1)
         }

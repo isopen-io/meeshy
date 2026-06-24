@@ -34,11 +34,11 @@ public struct ErrorBannerView: View {
     private func bannerContent(for currentError: MeeshyError) -> some View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: currentError.iconName)
-                .font(.system(size: MeeshyFont.headlineSize, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
                 .foregroundColor(.white)
 
             Text(currentError.errorDescription ?? "")
-                .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(.white)
                 .lineLimit(2)
 
@@ -48,7 +48,7 @@ public struct ErrorBannerView: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: MeeshyFont.footnoteSize, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
                     .foregroundColor(.white.opacity(0.8))
                     .frame(width: 24, height: 24)
             }

@@ -76,13 +76,13 @@ public struct CategoryPickerField: View {
         return HStack(spacing: 6) {
             Circle().fill(chipColor).frame(width: 8, height: 8)
             Text(category.name)
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(chipColor)
             Button {
                 selectedId = nil
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(MeeshyFont.relative(9, weight: .bold))
                     .foregroundColor(chipColor.opacity(0.7))
             }
             .buttonStyle(.plain)
@@ -99,7 +99,7 @@ public struct CategoryPickerField: View {
             TextField(placeholder, text: $editing)
                 .focused($focused)
                 .textFieldStyle(.plain)
-                .font(.system(size: 15, weight: .medium))
+                .font(MeeshyFont.relative(15, weight: .medium))
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.words)
                 .onSubmit { submit() }
@@ -141,7 +141,7 @@ public struct CategoryPickerField: View {
                 } label: {
                     HStack(spacing: 8) {
                         Circle().fill(Color(hex: cat.color ?? "6366F1")).frame(width: 8, height: 8)
-                        Text(cat.name).font(.system(size: 14, weight: .medium))
+                        Text(cat.name).font(MeeshyFont.relative(14, weight: .medium))
                         Spacer()
                     }
                     .padding(.horizontal, 12).padding(.vertical, 8)
@@ -162,7 +162,7 @@ public struct CategoryPickerField: View {
                             Image(systemName: "plus.circle.fill").foregroundColor(accentColor)
                         }
                         Text("Créer \"\(trimmedQuery)\"")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MeeshyFont.relative(13, weight: .semibold))
                             .foregroundColor(accentColor)
                         Spacer()
                     }

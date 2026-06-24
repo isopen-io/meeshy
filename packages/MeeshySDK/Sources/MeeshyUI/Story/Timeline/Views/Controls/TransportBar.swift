@@ -116,7 +116,7 @@ public struct TransportBar: View {
                     .shadow(color: MeeshyColors.indigo500.opacity(0.35),
                             radius: 6, x: 0, y: 2)
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 13, weight: .heavy))
+                    .font(MeeshyFont.relative(13, weight: .heavy))
                     .foregroundStyle(.white)
                     .offset(x: isPlaying ? 0 : 1)   // optical centring of play triangle
             }

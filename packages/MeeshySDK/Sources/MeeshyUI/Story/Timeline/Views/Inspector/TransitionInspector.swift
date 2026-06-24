@@ -97,7 +97,7 @@ public struct TransitionInspector: View {
     private var durationSlider: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(String(localized: "story.timeline.transition.duration", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .font(MeeshyFont.relative(9, weight: .semibold))
                 .foregroundStyle(.secondary)
             Slider(value: $duration, in: Self.durationRange, step: 0.05) { editing in
                 if !editing { onDurationChanged(duration) }

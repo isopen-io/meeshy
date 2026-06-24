@@ -24,7 +24,7 @@ struct TextEditFloatingBubbles: View {
 
     private func bubble(tool: TextEditTool, isActive: Bool) -> some View {
         Image(systemName: tool.sfSymbol)
-            .font(.system(size: 14, weight: .semibold))
+            .font(MeeshyFont.relative(14, weight: .semibold))
             .foregroundStyle(isActive ? Color.white : (colorScheme == .dark ? .white : MeeshyColors.indigo950))
             .frame(width: 36, height: 36)
             .background(
@@ -43,7 +43,7 @@ struct TextEditFloatingBubbles: View {
     /// funnel `keyboardFocus = false`, donc le clavier descend toujours.
     private func dismissBubble() -> some View {
         Image(systemName: "xmark")
-            .font(.system(size: 12, weight: .bold))
+            .font(MeeshyFont.relative(12, weight: .bold))
             .foregroundStyle(.white)
             .frame(width: 36, height: 36)
             .background(Circle().fill(MeeshyColors.error.opacity(0.9)))

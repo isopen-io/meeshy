@@ -42,10 +42,10 @@ public struct StickerPickerView: View {
     private var panelHeader: some View {
         HStack {
             Image(systemName: "face.smiling")
-                .font(.system(size: 16, weight: .semibold))
+                .font(MeeshyFont.relative(16, weight: .semibold))
                 .foregroundStyle(MeeshyColors.brandGradient)
             Text(String(localized: "story.sticker.title", defaultValue: "Stickers", bundle: .module))
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                 .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
             Spacer()
         }
@@ -62,7 +62,7 @@ public struct StickerPickerView: View {
                         HapticFeedback.light()
                     } label: {
                         Text(category.icon)
-                            .font(.system(size: 22))
+                            .font(MeeshyFont.relative(22))
                             .frame(width: 40, height: 36)
                             .background(
                                 RoundedRectangle(cornerRadius: 8)
@@ -87,7 +87,7 @@ public struct StickerPickerView: View {
                         HapticFeedback.medium()
                     } label: {
                         Text(emoji)
-                            .font(.system(size: 30))
+                            .font(MeeshyFont.relative(30))
                             .frame(width: 44, height: 44)
                     }
                     .accessibilityLabel("Sticker \(emoji)")

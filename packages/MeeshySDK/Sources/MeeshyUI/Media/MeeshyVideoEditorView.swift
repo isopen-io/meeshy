@@ -110,7 +110,7 @@ public struct MeeshyVideoEditorView: View {
                 viewModel.cancelEditing()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(MeeshyFont.relative(13, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
                     .frame(width: 38, height: 38)
                     .background(theme.glassMaterial, in: Circle())
@@ -133,9 +133,9 @@ public struct MeeshyVideoEditorView: View {
             } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(MeeshyFont.relative(12, weight: .bold))
                     Text("Terminer")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(MeeshyFont.relative(14, weight: .bold))
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 16)
@@ -168,7 +168,7 @@ public struct MeeshyVideoEditorView: View {
                         Image(systemName: "arrow.counterclockwise")
                         Text("Réinitialiser")
                     }
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundStyle(theme.textSecondary)
                 }
                 .buttonStyle(.plain)
@@ -181,7 +181,7 @@ public struct MeeshyVideoEditorView: View {
     private func historyButton(icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundStyle(enabled ? theme.textPrimary : theme.textMuted.opacity(0.5))
                 .frame(width: 32, height: 32)
                 .background(theme.glassMaterial, in: Circle())
@@ -221,7 +221,7 @@ public struct MeeshyVideoEditorView: View {
             HStack(spacing: 8) {
                 Image(systemName: banner.isError ? "exclamationmark.triangle.fill" : "info.circle.fill")
                 Text(banner.message)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .lineLimit(2)
                 Spacer(minLength: 0)
             }
@@ -263,13 +263,13 @@ public struct MeeshyVideoEditorView: View {
             VStack(spacing: 16) {
                 if case .failed(let message) = viewModel.exportPhase {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 34))
+                        .font(MeeshyFont.relative(34))
                         .foregroundStyle(theme.warning)
                     Text("Export impossible")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(MeeshyFont.relative(16, weight: .bold))
                         .foregroundStyle(.white)
                     Text(message)
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                         .foregroundStyle(.white.opacity(0.7))
                         .multilineTextAlignment(.center)
                     HStack(spacing: 12) {
@@ -279,7 +279,7 @@ public struct MeeshyVideoEditorView: View {
                 } else {
                     progressRing
                     Text(viewModel.exportPhase == .preparing ? "Préparation…" : "Export \(Int(exportProgress * 100)) %")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundStyle(.white)
                     overlayButton("Annuler", filled: false) { viewModel.cancelExport() }
                 }
@@ -303,7 +303,7 @@ public struct MeeshyVideoEditorView: View {
                 .stroke(accent, style: StrokeStyle(lineWidth: 6, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             Image(systemName: "film")
-                .font(.system(size: 20))
+                .font(MeeshyFont.relative(20))
                 .foregroundStyle(.white.opacity(0.8))
         }
         .frame(width: 78, height: 78)
@@ -313,7 +313,7 @@ public struct MeeshyVideoEditorView: View {
     private func overlayButton(_ title: String, filled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundStyle(filled ? Color.white : theme.textPrimary)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 9)

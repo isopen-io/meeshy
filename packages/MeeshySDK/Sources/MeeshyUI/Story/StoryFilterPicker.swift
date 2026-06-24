@@ -21,10 +21,10 @@ public struct StoryFilterPicker: View {
         VStack(spacing: 12) {
             HStack {
                 Image(systemName: "camera.filters")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundStyle(MeeshyColors.brandGradient)
                 Text(String(localized: "story.filter.pickerTitle", defaultValue: "Filtres", bundle: .module))
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                     .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
                 Spacer()
             }
@@ -90,7 +90,7 @@ public struct StoryFilterPicker: View {
                     )
 
                 Text(String(localized: "story.filter.original", defaultValue: "Original", bundle: .module))
-                    .font(.system(size: 10, weight: selectedFilter == nil ? .bold : .medium))
+                    .font(MeeshyFont.relative(10, weight: selectedFilter == nil ? .bold : .medium))
                     .foregroundColor(.white.opacity(selectedFilter == nil ? 1 : 0.6))
             }
         }
@@ -110,7 +110,7 @@ public struct StoryFilterPicker: View {
                     )
 
                 Text(filter.displayName)
-                    .font(.system(size: 10, weight: isSelected ? .bold : .medium))
+                    .font(MeeshyFont.relative(10, weight: isSelected ? .bold : .medium))
                     .foregroundColor(.white.opacity(isSelected ? 1 : 0.6))
             }
         }

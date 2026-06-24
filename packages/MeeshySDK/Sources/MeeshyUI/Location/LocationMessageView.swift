@@ -63,19 +63,19 @@ public struct LocationMessageView: View {
     private var locationInfoBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "mappin.and.ellipse")
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(Color(hex: accentColor))
 
             VStack(alignment: .leading, spacing: 1) {
                 if let name = placeName {
                     Text(name)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(.primary)
                         .lineLimit(1)
                 }
                 if let addr = address {
                     Text(addr)
-                        .font(.system(size: 10))
+                        .font(MeeshyFont.relative(10))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
@@ -84,7 +84,7 @@ public struct LocationMessageView: View {
             Spacer()
 
             Image(systemName: "arrow.up.right.square")
-                .font(.system(size: 12, weight: .medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundColor(Color(hex: accentColor).opacity(0.7))
         }
         .padding(.horizontal, 10)
@@ -176,14 +176,14 @@ struct LocationPinView: View {
     var body: some View {
         VStack(spacing: 0) {
             Image(systemName: "location.fill")
-                .font(.system(size: size.iconSize, weight: .bold))
+                .font(MeeshyFont.relative(size.iconSize, weight: .bold))
                 .foregroundColor(.white)
                 .frame(width: size.frameSize, height: size.frameSize)
                 .background(Circle().fill(Color(hex: accentColor)))
                 .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 4, y: 2)
 
             Image(systemName: "triangle.fill")
-                .font(.system(size: size.triangleSize))
+                .font(MeeshyFont.relative(size.triangleSize))
                 .foregroundColor(Color(hex: accentColor))
                 .rotationEffect(.degrees(180))
                 .offset(y: size.triangleOffset)

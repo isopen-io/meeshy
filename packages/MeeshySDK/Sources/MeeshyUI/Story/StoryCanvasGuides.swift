@@ -98,7 +98,7 @@ struct SafeZoneOverlay: View {
                     .position(x: rect.midX, y: rect.midY)
 
                 Text("Safe area")
-                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .font(MeeshyFont.relative(9, weight: .medium, design: .rounded))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -180,9 +180,9 @@ struct OutOfBoundsWarningOverlay: View {
 
                 HStack(spacing: 4) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(MeeshyFont.relative(10, weight: .bold))
                     Text("Hors zone visible")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .font(MeeshyFont.relative(10, weight: .semibold, design: .rounded))
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 8)

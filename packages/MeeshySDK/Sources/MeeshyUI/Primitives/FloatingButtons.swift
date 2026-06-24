@@ -63,6 +63,8 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
     public var rightA11yHint: String? = nil
     public var rightA11yValue: String? = nil
     public var rightA11yActionName: String? = nil
+    public var leftA11yID: String? = nil
+    public var rightA11yID: String? = nil
 
     private let buttonSize: CGFloat = 52
     private let minEdgePadding: CGFloat = 20
@@ -86,6 +88,8 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
         rightA11yHint: String? = nil,
         rightA11yValue: String? = nil,
         rightA11yActionName: String? = nil,
+        leftA11yID: String? = nil,
+        rightA11yID: String? = nil,
         @ViewBuilder leftContent: () -> LeftContent,
         @ViewBuilder rightContent: () -> RightContent
     ) {
@@ -104,6 +108,8 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
         self.rightA11yHint = rightA11yHint
         self.rightA11yValue = rightA11yValue
         self.rightA11yActionName = rightA11yActionName
+        self.leftA11yID = leftA11yID
+        self.rightA11yID = rightA11yID
         self.leftContent = leftContent()
         self.rightContent = rightContent()
     }
@@ -145,7 +151,8 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
                     a11yLabel: leftA11yLabel,
                     a11yHint: leftA11yHint,
                     a11yValue: leftA11yValue,
-                    a11yActionName: leftA11yActionName
+                    a11yActionName: leftA11yActionName,
+                    a11yID: leftA11yID
                 ) {
                     leftContent
                 }
@@ -167,7 +174,8 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
                     a11yLabel: rightA11yLabel,
                     a11yHint: rightA11yHint,
                     a11yValue: rightA11yValue,
-                    a11yActionName: rightA11yActionName
+                    a11yActionName: rightA11yActionName,
+                    a11yID: rightA11yID
                 ) {
                     rightContent
                 }
@@ -194,6 +202,7 @@ public struct FreeFloatingButton<Content: View>: View {
     public var a11yHint: String? = nil
     public var a11yValue: String? = nil
     public var a11yActionName: String? = nil
+    public var a11yID: String? = nil
     public let content: Content
 
     @State private var dragOffset: CGSize = .zero
@@ -214,6 +223,7 @@ public struct FreeFloatingButton<Content: View>: View {
         a11yHint: String? = nil,
         a11yValue: String? = nil,
         a11yActionName: String? = nil,
+        a11yID: String? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self._position = position
@@ -230,6 +240,7 @@ public struct FreeFloatingButton<Content: View>: View {
         self.a11yHint = a11yHint
         self.a11yValue = a11yValue
         self.a11yActionName = a11yActionName
+        self.a11yID = a11yID
         self.content = content()
     }
 
@@ -300,6 +311,7 @@ public struct FreeFloatingButton<Content: View>: View {
                 hint: a11yHint,
                 value: a11yValue,
                 actionName: a11yActionName,
+                identifier: a11yID,
                 onTap: onTap,
                 onLongPress: onLongPress
             )
@@ -361,11 +373,19 @@ private extension View {
         hint: String?,
         value: String?,
         actionName: String?,
+        identifier: String?,
         onTap: @escaping () -> Void,
         onLongPress: (() -> Void)?
     ) -> some View {
+        let element: AnyView = {
+            if let identifier {
+                return AnyView(self.accessibilityIdentifier(identifier))
+            }
+            return AnyView(self)
+        }()
+
         if let label {
-            let base = self
+            let base = element
                 .accessibilityElement(children: .ignore)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel(label)
@@ -402,6 +422,8 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
     public var rightA11yHint: String? = nil
     public var rightA11yValue: String? = nil
     public var rightA11yActionName: String? = nil
+    public var leftA11yID: String? = nil
+    public var rightA11yID: String? = nil
 
     private let buttonSize: CGFloat = 52
     private let horizontalPadding: CGFloat = 44
@@ -425,6 +447,8 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
         rightA11yHint: String? = nil,
         rightA11yValue: String? = nil,
         rightA11yActionName: String? = nil,
+        leftA11yID: String? = nil,
+        rightA11yID: String? = nil,
         @ViewBuilder leftContent: () -> LeftContent,
         @ViewBuilder rightContent: () -> RightContent
     ) {
@@ -443,6 +467,8 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
         self.rightA11yHint = rightA11yHint
         self.rightA11yValue = rightA11yValue
         self.rightA11yActionName = rightA11yActionName
+        self.leftA11yID = leftA11yID
+        self.rightA11yID = rightA11yID
         self.leftContent = leftContent()
         self.rightContent = rightContent()
     }
@@ -470,7 +496,8 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
                     a11yLabel: leftA11yLabel,
                     a11yHint: leftA11yHint,
                     a11yValue: leftA11yValue,
-                    a11yActionName: leftA11yActionName
+                    a11yActionName: leftA11yActionName,
+                    a11yID: leftA11yID
                 ) {
                     leftContent
                 }
@@ -488,7 +515,8 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
                     a11yLabel: rightA11yLabel,
                     a11yHint: rightA11yHint,
                     a11yValue: rightA11yValue,
-                    a11yActionName: rightA11yActionName
+                    a11yActionName: rightA11yActionName,
+                    a11yID: rightA11yID
                 ) {
                     rightContent
                 }
@@ -514,6 +542,7 @@ public struct LegacyFloatingButton<Content: View>: View {
     public var a11yHint: String? = nil
     public var a11yValue: String? = nil
     public var a11yActionName: String? = nil
+    public var a11yID: String? = nil
     public let content: Content
 
     @State private var dragOffset: CGSize = .zero
@@ -533,6 +562,7 @@ public struct LegacyFloatingButton<Content: View>: View {
         a11yHint: String? = nil,
         a11yValue: String? = nil,
         a11yActionName: String? = nil,
+        a11yID: String? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self._corner = corner
@@ -548,6 +578,7 @@ public struct LegacyFloatingButton<Content: View>: View {
         self.a11yHint = a11yHint
         self.a11yValue = a11yValue
         self.a11yActionName = a11yActionName
+        self.a11yID = a11yID
         self.content = content()
     }
 
@@ -598,6 +629,7 @@ public struct LegacyFloatingButton<Content: View>: View {
                 hint: a11yHint,
                 value: a11yValue,
                 actionName: a11yActionName,
+                identifier: a11yID,
                 onTap: onTap,
                 onLongPress: onLongPress
             )
@@ -672,7 +704,7 @@ public struct NotificationBadge: View {
                     .frame(width: isPulsing ? 28 : 18, height: isPulsing ? 28 : 18)
 
                 Text("\(min(count, 99))")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 18, height: 18)
                     .background(

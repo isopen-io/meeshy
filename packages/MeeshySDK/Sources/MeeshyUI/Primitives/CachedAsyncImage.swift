@@ -61,10 +61,10 @@ public struct CachedAsyncImage<Placeholder: View>: View {
                     } label: {
                         VStack(spacing: 4) {
                             Image(systemName: "arrow.clockwise.circle.fill")
-                                .font(.system(size: 22, weight: .medium))
+                                .font(MeeshyFont.relative(22, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.7))
                             Text(String(localized: "common.retry", defaultValue: "Retry", bundle: .module))
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(MeeshyFont.relative(10, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.5))
                         }
                     }
@@ -241,7 +241,7 @@ public struct CachedAvatarImage: View {
         return ZStack {
             LinearGradient(colors: [color, color.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
             Text(initials.isEmpty ? "?" : initials)
-                .font(.system(size: size * 0.38, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(size * 0.38, weight: .semibold, design: .rounded))
                 .foregroundColor(.white)
         }
     }

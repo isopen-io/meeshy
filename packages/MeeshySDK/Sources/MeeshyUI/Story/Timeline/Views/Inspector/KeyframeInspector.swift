@@ -111,7 +111,7 @@ public struct KeyframeInspector: View {
     private var positionSliders: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(String(localized: "story.timeline.keyframe.position", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .font(MeeshyFont.relative(9, weight: .semibold))
                 .foregroundStyle(.secondary)
             HStack(spacing: 12) {
                 axisSlider(label: "X", value: $posX, range: 0...1) {
@@ -138,7 +138,7 @@ public struct KeyframeInspector: View {
     private var scaleSlider: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(String(localized: "story.timeline.keyframe.scale", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .font(MeeshyFont.relative(9, weight: .semibold))
                 .foregroundStyle(.secondary)
             Slider(value: $scale, in: 0.1...4.0, step: 0.05) { editing in
                 if !editing { onScaleChanged(scale) }
@@ -151,7 +151,7 @@ public struct KeyframeInspector: View {
     private var opacitySlider: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(String(localized: "story.timeline.keyframe.opacity", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .font(MeeshyFont.relative(9, weight: .semibold))
                 .foregroundStyle(.secondary)
             Slider(value: $opacity, in: 0...1, step: 0.01) { editing in
                 if !editing { onOpacityChanged(opacity) }

@@ -58,14 +58,14 @@ public struct DocumentViewerView: View {
                     .frame(width: 52, height: 52)
 
                 Image(systemName: docType.icon)
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(MeeshyFont.relative(20, weight: .semibold))
                     .foregroundColor(.white)
             }
             .overlay(alignment: .topTrailing) {
                 if let onDelete = onDelete {
                     Button { onDelete(); HapticFeedback.light() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 15))
+                            .font(MeeshyFont.relative(15))
                             .foregroundColor(Color(hex: "FF6B6B"))
                             .background(Circle().fill(isDark ? Color.black : Color.white).frame(width: 12, height: 12))
                     }
@@ -74,7 +74,7 @@ public struct DocumentViewerView: View {
             }
 
             Text(attachment.originalName.isEmpty ? docType.label : attachment.originalName)
-                .font(.system(size: 10, weight: .medium))
+                .font(MeeshyFont.relative(10, weight: .medium))
                 .foregroundColor(isDark ? .white.opacity(0.7) : .black.opacity(0.6))
                 .lineLimit(1)
                 .frame(width: 60)
@@ -100,32 +100,32 @@ public struct DocumentViewerView: View {
                     .shadow(color: Color(hex: docType.color).opacity(0.3), radius: 4, y: 2)
 
                 Image(systemName: docType.icon)
-                    .font(.system(size: context.isCompact ? 17 : 20, weight: .semibold))
+                    .font(MeeshyFont.relative(context.isCompact ? 17 : 20, weight: .semibold))
                     .foregroundColor(.white)
             }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(attachment.originalName.isEmpty ? docType.label : attachment.originalName)
-                    .font(.system(size: context.isCompact ? 12 : 13, weight: .semibold))
+                    .font(MeeshyFont.relative(context.isCompact ? 12 : 13, weight: .semibold))
                     .foregroundColor(isDark ? .white : .black)
                     .lineLimit(1)
 
                 HStack(spacing: 5) {
                     Text(docType.label)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(MeeshyFont.relative(10, weight: .medium))
                         .foregroundColor(Color(hex: docType.color))
 
                     if attachment.fileSize > 0 {
                         Circle().fill(isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)).frame(width: 3, height: 3)
                         Text(attachment.fileSizeFormatted)
-                            .font(.system(size: 10, weight: .medium))
+                            .font(MeeshyFont.relative(10, weight: .medium))
                             .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                     }
 
                     if let pages = attachment.pageCount {
                         Circle().fill(isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)).frame(width: 3, height: 3)
                         Text("\(pages) pages")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(MeeshyFont.relative(10, weight: .medium))
                             .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                     }
                 }
@@ -134,13 +134,13 @@ public struct DocumentViewerView: View {
             Spacer(minLength: 0)
 
             Image(systemName: "arrow.up.right.square")
-                .font(.system(size: 13))
+                .font(MeeshyFont.relative(13))
                 .foregroundColor(isDark ? .white.opacity(0.25) : .black.opacity(0.18))
 
             if context.showsDeleteButton, let onDelete = onDelete {
                 Button { onDelete(); HapticFeedback.light() } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15))
+                        .font(MeeshyFont.relative(15))
                         .foregroundColor(Color(hex: "FF6B6B"))
                 }
             }
@@ -270,20 +270,20 @@ public struct DocumentFullSheet: View {
     private var noPreviewView: some View {
         VStack(spacing: 16) {
             Image(systemName: docType.icon)
-                .font(.system(size: 48))
+                .font(MeeshyFont.relative(48))
                 .foregroundColor(Color(hex: docType.color))
 
             Text(attachment.originalName.isEmpty ? String(localized: "media.document.defaultName", defaultValue: "Document", bundle: .module) : attachment.originalName)
-                .font(.system(size: 16, weight: .semibold))
+                .font(MeeshyFont.relative(16, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
             Text(String(localized: "media.document.previewUnavailable", defaultValue: "Aper\u{00E7}u non disponible", bundle: .module))
-                .font(.system(size: 14))
+                .font(MeeshyFont.relative(14))
                 .foregroundColor(theme.textMuted)
 
             if attachment.fileSize > 0 {
                 Text(attachment.fileSizeFormatted)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
         }

@@ -67,7 +67,7 @@ public struct VideoTransportControls: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: systemName)
-                .font(.system(size: 26, weight: .semibold))
+                .font(MeeshyFont.relative(26, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(width: 56, height: 56)
                 .background(
@@ -89,7 +89,7 @@ public struct VideoTransportControls: View {
                 Circle().fill(.ultraThinMaterial)
                 Circle().fill(accent.opacity(0.55))
                 Image(systemName: manager.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 32, weight: .bold))
+                    .font(MeeshyFont.relative(32, weight: .bold))
                     .foregroundColor(.white)
                     .offset(x: manager.isPlaying ? 0 : 3)
                     .adaptiveSymbolReplace(id: manager.isPlaying)
@@ -108,11 +108,11 @@ public struct VideoTransportControls: View {
             if controls.contains(.duration) {
                 HStack {
                     Text(formatMediaDuration(isSeeking ? seekValue * manager.duration : manager.currentTime))
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .font(MeeshyFont.relative(12, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white.opacity(0.75))
                     Spacer()
                     Text(formatMediaDuration(manager.duration))
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .font(MeeshyFont.relative(12, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white.opacity(0.75))
                 }
                 .padding(.horizontal, 16)
@@ -185,7 +185,7 @@ public struct VideoTransportControls: View {
 
     private func toolbarIcon(systemName: String, isActive: Bool) -> some View {
         Image(systemName: systemName)
-            .font(.system(size: 14, weight: .semibold))
+            .font(MeeshyFont.relative(14, weight: .semibold))
             .foregroundColor(.white)
             .frame(width: 36, height: 36)
             .background(
@@ -246,7 +246,7 @@ public struct VideoTransportControls: View {
             HapticFeedback.light()
         } label: {
             Text(speed.label)
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
                 .foregroundColor(isActive ? .white : .white.opacity(0.7))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)

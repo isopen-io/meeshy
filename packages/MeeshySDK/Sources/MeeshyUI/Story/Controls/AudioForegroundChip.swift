@@ -187,7 +187,7 @@ public struct AudioForegroundChip: View {
     @ViewBuilder
     private var iconView: some View {
         let icon = Image(systemName: iconName)
-            .font(.system(size: 14, weight: .bold))
+            .font(MeeshyFont.relative(14, weight: .bold))
         if isUserMuted {
             icon.foregroundColor(.white.opacity(0.55))
         } else {

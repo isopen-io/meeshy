@@ -48,16 +48,16 @@ public struct JoinLinkPreviewView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(linkInfo.conversation.title ?? String(localized: "joinFlow.preview.defaultTitle", defaultValue: "Conversation", bundle: .module))
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .font(MeeshyFont.relative(22, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(2)
 
                     HStack(spacing: 6) {
                         Image(systemName: conversationTypeIcon)
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(MeeshyFont.relative(11, weight: .semibold))
                             .foregroundColor(accent)
                         Text(conversationTypeLabel)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(MeeshyFont.relative(12, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
                 }
@@ -80,7 +80,7 @@ public struct JoinLinkPreviewView: View {
                 .frame(width: 60, height: 60)
 
             Text(avatarInitials)
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(22, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         }
         .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 8, x: 0, y: 4)
@@ -93,37 +93,37 @@ public struct JoinLinkPreviewView: View {
             if let name = linkInfo.name, !name.isEmpty {
                 HStack(spacing: 8) {
                     Image(systemName: "link")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(accent)
                     Text(name)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(MeeshyFont.relative(15, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                 }
             }
 
             if let desc = linkInfo.description, !desc.isEmpty {
                 Text(desc)
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(4)
             }
 
             HStack(spacing: 6) {
                 Image(systemName: "person.fill")
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundColor(theme.textMuted)
                 Text("Invite par \(linkInfo.creator.name)")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(theme.textSecondary)
             }
 
             if let expiresAt = linkInfo.expiresAt {
                 HStack(spacing: 6) {
                     Image(systemName: "clock")
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                         .foregroundColor(MeeshyColors.warning)
                     Text("Expire \(relativeDate(expiresAt))")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(MeeshyColors.warning)
                 }
             }
@@ -176,14 +176,14 @@ public struct JoinLinkPreviewView: View {
         VStack(spacing: 4) {
             HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(accent)
                 Text(value)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(18, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
             }
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(MeeshyFont.relative(11, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
@@ -195,7 +195,7 @@ public struct JoinLinkPreviewView: View {
         VStack(alignment: .leading, spacing: 8) {
             if linkInfo.requireAccount || linkInfo.requireNickname || linkInfo.requireEmail || linkInfo.requireBirthday {
                 Text(String(localized: "joinFlow.preview.requiredInfo", defaultValue: "Informations requises", bundle: .module))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundColor(theme.textMuted)
                     .padding(.bottom, 4)
 
@@ -216,10 +216,10 @@ public struct JoinLinkPreviewView: View {
             if !linkInfo.allowedLanguages.isEmpty {
                 HStack(spacing: 6) {
                     Image(systemName: "globe")
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                         .foregroundColor(theme.textMuted)
                     Text("Langues: \(linkInfo.allowedLanguages.joined(separator: ", "))")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -232,10 +232,10 @@ public struct JoinLinkPreviewView: View {
     private func requirementBadge(icon: String, text: String, color: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
+                .font(MeeshyFont.relative(11, weight: .semibold))
                 .foregroundColor(Color(hex: color))
             Text(text)
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
         .padding(.horizontal, 12)
@@ -252,7 +252,7 @@ public struct JoinLinkPreviewView: View {
         VStack(spacing: 12) {
             if linkInfo.requireAccount {
                 Text(String(localized: "joinFlow.preview.accountRequiredMessage", defaultValue: "Un compte Meeshy est requis pour rejoindre cette conversation", bundle: .module))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
@@ -260,9 +260,9 @@ public struct JoinLinkPreviewView: View {
                 Button(action: onJoin) {
                     HStack(spacing: 10) {
                         Image(systemName: "arrow.right.circle.fill")
-                            .font(.system(size: 18))
+                            .font(MeeshyFont.relative(18))
                         Text(String(localized: "joinFlow.preview.joinButton", defaultValue: "Rejoindre la conversation", bundle: .module))
-                            .font(.system(size: 16, weight: .bold))
+                            .font(MeeshyFont.relative(16, weight: .bold))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -276,7 +276,7 @@ public struct JoinLinkPreviewView: View {
 
             if let maxUses = linkInfo.maxUses {
                 Text("\(linkInfo.currentUses)/\(maxUses) utilisations")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
         }
@@ -320,15 +320,16 @@ public struct JoinLinkPreviewView: View {
 
     private func relativeDate(_ date: Date) -> String {
         let interval = date.timeIntervalSince(Date())
-        if interval <= 0 { return String(localized: "joinFlow.preview.expired", defaultValue: "expire", bundle: .module) }
-        let hours = Int(interval / 3600)
-        if hours < 1 { return "dans \(Int(interval / 60))min" }
-        if hours < 24 { return "dans \(hours)h" }
-        let days = hours / 24
-        if days < 7 { return "dans \(days)j" }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "dd MMM"
-        return "le \(formatter.string(from: date))"
+        if interval <= 0 {
+            return String(localized: "joinFlow.preview.expired", defaultValue: "expire", bundle: .module)
+        }
+
+        // Use modern locale-aware relative formatting for intervals under 7 days
+        if interval < 7 * 24 * 3600 {
+            return date.formatted(.relative(presentation: .numeric))
+        }
+
+        // Fallback to absolute date for distant future
+        return date.formatted(.dateTime.day().month())
     }
 }

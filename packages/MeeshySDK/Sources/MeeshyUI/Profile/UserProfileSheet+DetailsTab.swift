@@ -115,10 +115,10 @@ extension UserProfileSheet {
             case .connected:
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 14))
+                        .font(MeeshyFont.relative(14))
                         .foregroundColor(MeeshyColors.success)
                     Text(String(localized: "profile.status.connected", defaultValue: "Connectes", bundle: .module))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundColor(MeeshyColors.success)
                 }
                 .frame(maxWidth: .infinity)
@@ -186,10 +186,10 @@ extension UserProfileSheet {
     private func connectionContextRow(icon: String, text: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundColor(Color(hex: resolvedAccent))
             Text(text)
-                .font(.system(size: 13))
+                .font(MeeshyFont.relative(13))
                 .foregroundColor(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -208,9 +208,9 @@ extension UserProfileSheet {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
                 Text(label)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
             }
             .foregroundColor(color)
             .frame(maxWidth: .infinity)
@@ -269,10 +269,10 @@ extension UserProfileSheet {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Image(systemName: "waveform")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(Color(hex: resolvedAccent))
                     Text(String(localized: "profile.voice.title", defaultValue: "Voix", bundle: .module))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                 }
 
@@ -354,10 +354,10 @@ extension UserProfileSheet {
     private func miniStatChip(icon: String, value: Int, label: String) -> some View {
         VStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(Color(hex: resolvedAccent))
             Text("\(value)")
-                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(15, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
             Text(label)
                 .font(.caption2)
@@ -378,17 +378,17 @@ extension UserProfileSheet {
     func statCard(icon: String, label: String, value: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
+                .font(MeeshyFont.relative(16, weight: .medium))
                 .foregroundColor(Color(hex: resolvedAccent))
                 .frame(width: 28)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(theme.textMuted)
 
                 Text(value)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
             }
 

@@ -145,7 +145,7 @@ public extension MeeshyFont {
     /// Maps the legacy point size to the nearest relative text style so the font
     /// scales with the user's Dynamic Type setting, while preserving the caller's
     /// weight and design. Migration is a mechanical swap:
-    /// `.font(.system(size: 15, weight: .medium))` → `.font(MeeshyFont.relative(15, weight: .medium))`.
+    /// `.font(MeeshyFont.relative(15, weight: .medium))` → `.font(MeeshyFont.relative(15, weight: .medium))`.
     ///
     /// For a custom size that must scale with absolute precision, prefer
     /// `@ScaledMetric` in the view instead.
@@ -187,4 +187,8 @@ public enum MeeshyA11yID {
     // Join / community
     public static let joinSubmit = "join.submit"
     public static let communityCreateSubmit = "community.create.submit"
+
+    // Floating Buttons
+    public static let floatingFeed = "floating.feed"
+    public static let floatingMenu = "floating.menu"
 }

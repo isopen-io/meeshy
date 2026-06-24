@@ -18,7 +18,7 @@ extension UserProfileSheet {
         if effectiveConversations.isEmpty {
             VStack(spacing: 10) {
                 Image(systemName: isInteractionDisabled ? "nosign" : "bubble.left.and.bubble.right")
-                    .font(.system(size: 28))
+                    .font(MeeshyFont.relative(28))
                     .foregroundColor(theme.textMuted.opacity(isInteractionDisabled ? 0.3 : 0.5))
                     .accessibilityHidden(true)
 
@@ -29,7 +29,7 @@ extension UserProfileSheet {
                 Text(isInteractionDisabled
                      ? String(localized: "profile.conversations.interactionsDisabled", defaultValue: "Interactions desactivees", bundle: .module)
                      : String(localized: "profile.conversations.noShared", defaultValue: "Aucune conversation en commun", bundle: .module))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(theme.textSecondary)
             }
             .frame(maxWidth: .infinity)
@@ -55,14 +55,14 @@ extension UserProfileSheet {
                         )
 
                         Text(conv.name)
-                            .font(.system(size: 14, weight: .medium))
+                            .font(MeeshyFont.relative(14, weight: .medium))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(1)
 
                         Spacer()
 
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(MeeshyFont.relative(12, weight: .semibold))
                             .foregroundColor(theme.textMuted)
                     }
                     .padding(.horizontal, 20)

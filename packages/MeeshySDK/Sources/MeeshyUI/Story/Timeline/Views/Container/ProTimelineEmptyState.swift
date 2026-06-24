@@ -19,7 +19,7 @@ public struct ProTimelineEmptyState: View, Equatable {
                     .fill(MeeshyColors.indigo500.opacity(isDark ? 0.20 : 0.14))
                     .frame(width: 56, height: 56)
                 Image(systemName: "rectangle.stack.badge.plus")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(MeeshyFont.relative(22, weight: .semibold))
                     .foregroundStyle(MeeshyColors.indigo500)
             }
             VStack(spacing: 4) {

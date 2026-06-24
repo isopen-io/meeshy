@@ -58,18 +58,18 @@ public struct FeedbackToastView: View {
     public var body: some View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: toast.icon)
-                .font(.system(size: MeeshyFont.headlineSize, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
                 .foregroundColor(.white)
 
             Text(toast.message)
-                .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(.white)
                 .lineLimit(2)
 
             if toast.isTappable {
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(.white.opacity(0.7))
             }
         }

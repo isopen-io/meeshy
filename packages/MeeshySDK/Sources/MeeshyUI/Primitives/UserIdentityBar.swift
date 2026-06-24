@@ -183,14 +183,14 @@ public struct UserIdentityBar: View {
         case .name:
             if let name {
                 Text(name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
             }
 
         case .username(let value):
             Text(value)
-                .font(.system(size: 11))
+                .font(MeeshyFont.relative(11))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
 
@@ -198,17 +198,17 @@ public struct UserIdentityBar: View {
             if role != .member {
                 Label {
                     Text(role.displayName)
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                 } icon: {
                     Image(systemName: role.icon)
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                 }
                 .foregroundColor(roleBadgeColor(for: role))
             }
 
         case .time(let value):
             Text(value)
-                .font(.system(size: 11, weight: .medium))
+                .font(MeeshyFont.relative(11, weight: .medium))
                 .foregroundColor(tintColor ?? theme.textSecondary)
 
         case .delivery(let status):
@@ -219,7 +219,7 @@ public struct UserIdentityBar: View {
 
         case .translateButton(let action):
             Image(systemName: "translate")
-                .font(.system(size: 10, weight: .medium))
+                .font(MeeshyFont.relative(10, weight: .medium))
                 .foregroundColor(MeeshyColors.brandPrimary)
                 .onTapGesture { action() }
                 .accessibilityLabel(String(localized: "userIdentity.translation.available", defaultValue: "Traduction disponible", bundle: .module))
@@ -231,21 +231,21 @@ public struct UserIdentityBar: View {
                         .fill(state == .online ? Color(hex: "2ECC71") : Color(hex: "F39C12"))
                         .frame(width: 6, height: 6)
                     Text(state == .online ? "En ligne" : "Absent")
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                         .foregroundColor(state == .online ? Color(hex: "2ECC71") : Color(hex: "F39C12"))
                 }
             }
 
         case .memberSince(let value):
             Text(value)
-                .font(.system(size: 11))
+                .font(MeeshyFont.relative(11))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
 
         case .actionButton(let label, let action):
             Button(action: action) {
                 Text(label)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(MeeshyColors.indigo500)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
@@ -272,9 +272,9 @@ public struct UserIdentityBar: View {
             } label: {
                 HStack(spacing: 4) {
                     Text(label)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .medium))
+                        .font(MeeshyFont.relative(8, weight: .medium))
                 }
                 .foregroundColor(MeeshyColors.indigo500)
                 .padding(.horizontal, 10)
@@ -287,7 +287,7 @@ public struct UserIdentityBar: View {
 
         case .text(let value, _):
             Text(value)
-                .font(.system(size: 11))
+                .font(MeeshyFont.relative(11))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
         }
@@ -317,7 +317,7 @@ public struct UserIdentityBar: View {
         switch status {
         case .sending:
             Image(systemName: "clock")
-                .font(.system(size: 10))
+                .font(MeeshyFont.relative(10))
                 .foregroundColor(secondaryColor)
         case .invisible:
             // Spec §6.2 — optimistic applied locally, debounced for 200ms before
@@ -327,24 +327,24 @@ public struct UserIdentityBar: View {
         case .clock:
             // 200ms-5s without ACK: subtle clock glyph hinting "still sending".
             Image(systemName: "clock")
-                .font(.system(size: 10))
+                .font(MeeshyFont.relative(10))
                 .foregroundColor(secondaryColor.opacity(0.7))
         case .slow:
             // 5s-30s without ACK: warmer "slow send" indicator using the
             // semantic warning color to nudge the user without alarming them.
             Image(systemName: "clock.badge.exclamationmark")
-                .font(.system(size: 10))
+                .font(MeeshyFont.relative(10))
                 .foregroundColor(MeeshyColors.warning)
         case .sent:
             Image(systemName: "checkmark")
-                .font(.system(size: 10, weight: .semibold))
+                .font(MeeshyFont.relative(10, weight: .semibold))
                 .foregroundColor(secondaryColor)
         case .delivered:
             ZStack(alignment: .leading) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .regular))
+                    .font(MeeshyFont.relative(10, weight: .regular))
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .regular))
+                    .font(MeeshyFont.relative(10, weight: .regular))
                     .offset(x: 4)
             }
             .foregroundColor(secondaryColor)
@@ -352,9 +352,9 @@ public struct UserIdentityBar: View {
         case .read:
             ZStack(alignment: .leading) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .black))
+                    .font(MeeshyFont.relative(11, weight: .black))
                 Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .black))
+                    .font(MeeshyFont.relative(11, weight: .black))
                     .offset(x: 4)
             }
             .foregroundColor(readColor)
@@ -362,7 +362,7 @@ public struct UserIdentityBar: View {
             .accessibilityLabel("Read")
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 10))
+                .font(MeeshyFont.relative(10))
                 .foregroundColor(MeeshyColors.error)
         }
     }
@@ -377,7 +377,7 @@ public struct UserIdentityBar: View {
                 let isActive = code == active
                 VStack(spacing: 1) {
                     Text(display?.flag ?? code.uppercased())
-                        .font(.system(size: isActive ? 12 : 10))
+                        .font(MeeshyFont.relative(isActive ? 12 : 10))
                         .scaleEffect(isActive ? 1.05 : 1.0)
                         .animation(.easeInOut(duration: 0.2), value: isActive)
 

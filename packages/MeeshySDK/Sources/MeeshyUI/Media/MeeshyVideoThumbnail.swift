@@ -117,7 +117,7 @@ public struct MeeshyVideoThumbnail: View {
             )
             .overlay(
                 Image(systemName: "video.fill")
-                    .font(.system(size: 32))
+                    .font(MeeshyFont.relative(32))
                     .foregroundColor(.white.opacity(0.2))
             )
     }
@@ -129,7 +129,7 @@ public struct MeeshyVideoThumbnail: View {
             Circle().fill(.ultraThinMaterial).frame(width: 44, height: 44)
             Circle().fill(Color(hex: accentColor).opacity(0.85)).frame(width: 38, height: 38)
             Image(systemName: "play.fill")
-                .font(.system(size: 16, weight: .bold))
+                .font(MeeshyFont.relative(16, weight: .bold))
                 .foregroundColor(.white)
                 .offset(x: 1.5)
         }
@@ -144,7 +144,7 @@ public struct MeeshyVideoThumbnail: View {
             Spacer()
             HStack {
                 Text(formatted)
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
                     .foregroundColor(.white)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)

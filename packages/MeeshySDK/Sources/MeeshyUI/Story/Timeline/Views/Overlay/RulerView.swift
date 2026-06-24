@@ -99,7 +99,7 @@ public struct RulerView: View, Equatable {
                 .frame(width: 1, height: 6)
                 .position(x: lineX, y: 3)
             Text(label)
-                .font(.system(size: 9, weight: .medium))
+                .font(MeeshyFont.relative(9, weight: .medium))
                 .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.indigo800)
                 .lineLimit(1)
                 .fixedSize()

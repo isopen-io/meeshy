@@ -106,7 +106,7 @@ public struct AudienceUserPickerView: View {
     private var header: some View {
         ZStack {
             Text(title)
-                .font(.system(size: 16, weight: .semibold))
+                .font(MeeshyFont.relative(16, weight: .semibold))
                 .lineLimit(1)
             HStack {
                 Button(String(localized: "common.cancel", defaultValue: "Annuler")) { dismiss() }
@@ -159,10 +159,10 @@ public struct AudienceUserPickerView: View {
                 ForEach(vm.selectedUsers) { user in
                     HStack(spacing: 6) {
                         Text(user.displayName ?? user.username)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(MeeshyFont.relative(13, weight: .medium))
                             .lineLimit(1)
                         Button { vm.toggle(user) } label: {
-                            Image(systemName: "xmark.circle.fill").font(.system(size: 13))
+                            Image(systemName: "xmark.circle.fill").font(MeeshyFont.relative(13))
                         }
                         .buttonStyle(.plain)
                     }
@@ -193,16 +193,16 @@ public struct AudienceUserPickerView: View {
             MeeshyAvatar(name: user.displayName ?? user.username, context: .userListItem)
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.displayName ?? user.username)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(MeeshyFont.relative(15, weight: .medium))
                     .lineLimit(1)
                 Text("@\(user.username)")
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer()
             Image(systemName: vm.isSelected(user.id) ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 20))
+                .font(MeeshyFont.relative(20))
                 .foregroundStyle(vm.isSelected(user.id) ? Color.accentColor : Color.secondary)
         }
         .contentShape(Rectangle())

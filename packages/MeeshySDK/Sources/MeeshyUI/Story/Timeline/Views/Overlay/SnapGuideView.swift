@@ -19,7 +19,7 @@ public struct SnapGuideView: View {
     public var body: some View {
         VStack(spacing: 4) {
             Text(label)
-                .font(.system(size: 9, weight: .bold))
+                .font(MeeshyFont.relative(9, weight: .bold))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(

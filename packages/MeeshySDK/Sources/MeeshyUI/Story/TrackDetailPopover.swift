@@ -36,16 +36,16 @@ struct TrackDetailPopover: View {
     private var header: some View {
         HStack {
             Image(systemName: track.type.icon)
-                .font(.system(size: 16, weight: .semibold))
+                .font(MeeshyFont.relative(16, weight: .semibold))
                 .foregroundStyle(MeeshyColors.brandGradient)
             Text(track.name)
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                 .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
                 .lineLimit(1)
             Spacer()
             Button { onDismiss() } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 16))
+                    .font(MeeshyFont.relative(16))
                     .foregroundStyle(.secondary)
             }
         }
@@ -84,11 +84,11 @@ struct TrackDetailPopover: View {
     private func timingReadout(label: String, value: Float) -> some View {
         VStack(spacing: 2) {
             Text(label)
-                .font(.system(size: 9, weight: .medium))
+                .font(MeeshyFont.relative(9, weight: .medium))
                 .foregroundStyle(theme.textMuted)
                 .textCase(.uppercase)
             Text(formatTimePrecise(value))
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .font(MeeshyFont.relative(12, weight: .semibold, design: .monospaced))
                 .foregroundStyle(MeeshyColors.indigo300)
         }
         .frame(maxWidth: .infinity)
@@ -115,7 +115,7 @@ struct TrackDetailPopover: View {
             )
             HStack {
                 Text(String(localized: "story.trackDetail.loop", defaultValue: "Boucle", bundle: .module))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundStyle(.secondary)
                 Spacer()
                 Toggle("", isOn: Binding(
@@ -137,9 +137,9 @@ struct TrackDetailPopover: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "trash")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                 Text(String(localized: "story.trackDetail.delete", defaultValue: "Supprimer", bundle: .module))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
             }
             .foregroundStyle(MeeshyColors.error)
             .frame(maxWidth: .infinity)
@@ -160,7 +160,7 @@ struct TrackDetailPopover: View {
     private func sectionLabel(_ text: String) -> some View {
         HStack {
             Text(text)
-                .font(.system(size: 9, weight: .bold))
+                .font(MeeshyFont.relative(9, weight: .bold))
                 .foregroundStyle(MeeshyColors.indigo400.opacity(0.6))
                 .tracking(1)
             Spacer()
@@ -178,7 +178,7 @@ struct TrackDetailPopover: View {
     ) -> some View {
         HStack(spacing: 8) {
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(MeeshyFont.relative(11, weight: .medium))
                 .foregroundStyle(.secondary)
                 .frame(width: 56, alignment: .leading)
             ZStack {
@@ -209,7 +209,7 @@ struct TrackDetailPopover: View {
                 .tint(track.type.color)
             }
             Text(formattedValue(value.wrappedValue, unit: unit, multiplier: displayMultiplier))
-                .font(.system(size: 10, design: .monospaced))
+                .font(MeeshyFont.relative(10, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .frame(width: 36, alignment: .trailing)
         }

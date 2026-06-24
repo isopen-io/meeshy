@@ -34,9 +34,9 @@ struct CanvasLayerIndicator: View {
         let isActive = value == layer
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 10, weight: .medium))
+                .font(MeeshyFont.relative(10, weight: .medium))
             Text(label)
-                .font(.system(size: 11, weight: isActive ? .semibold : .medium))
+                .font(MeeshyFont.relative(11, weight: isActive ? .semibold : .medium))
         }
         .foregroundColor(isActive ? .white : mutedText)
         .padding(.horizontal, 8)

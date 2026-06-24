@@ -216,7 +216,7 @@ struct SlideMiniPreview: View {
         // lisible sur les très petites vignettes.
         let fontSize = CGFloat(max(3, text.fontSize * Double(size.width) / Double(CanvasGeometry.designWidth)))
         Text(text.text.isEmpty ? " " : text.text)
-            .font(.system(size: fontSize, weight: .medium))
+            .font(MeeshyFont.relative(fontSize, weight: .medium))
             .foregroundColor(Color(hex: text.textColor ?? "FFFFFF"))
             .lineLimit(1)
             // Fond du texte — parité avec le canvas (`StoryTextLayer`) et le
@@ -272,7 +272,7 @@ struct SlideMiniPreview: View {
             HStack {
                 Spacer()
                 Text("\(index + 1)")
-                    .font(.system(size: 7, weight: .bold))
+                    .font(MeeshyFont.relative(7, weight: .bold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 3)
                     .padding(.vertical, 1)

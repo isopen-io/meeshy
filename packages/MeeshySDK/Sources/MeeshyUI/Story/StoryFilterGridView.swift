@@ -65,7 +65,7 @@ struct StoryFilterGridView: View {
                 )
 
                 Text(label)
-                    .font(.system(size: 10, weight: isSelected ? .bold : .regular))
+                    .font(MeeshyFont.relative(10, weight: isSelected ? .bold : .regular))
                     .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : (colorScheme == .dark ? .white.opacity(0.7) : MeeshyColors.indigo950.opacity(0.7)))
             }
         }
@@ -96,7 +96,7 @@ struct StoryFilterGridView: View {
         let primaryTextColor: Color = colorScheme == .dark ? .white : MeeshyColors.indigo950
         return HStack(spacing: 12) {
             Text(String(localized: "story.filters.intensity", defaultValue: "Intensite", bundle: .module))
-                .font(.system(size: 12, weight: .medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundStyle(primaryTextColor.opacity(0.7))
 
             Slider(value: Binding(
@@ -106,7 +106,7 @@ struct StoryFilterGridView: View {
             .tint(MeeshyColors.brandPrimary)
 
             Text("\(Int(viewModel.filterIntensity * 100))%")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
                 .foregroundStyle(primaryTextColor)
                 .frame(width: 40)
         }

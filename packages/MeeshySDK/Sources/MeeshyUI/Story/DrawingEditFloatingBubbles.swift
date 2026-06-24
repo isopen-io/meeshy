@@ -36,7 +36,7 @@ struct DrawingEditFloatingBubbles: View {
     /// Bulle d'action neutre (undo/redo), grisée + non-tappable quand désactivée.
     private func actionBubble(symbol: String, enabled: Bool, label: String, action: @escaping () -> Void) -> some View {
         Image(systemName: symbol)
-            .font(.system(size: 13, weight: .semibold))
+            .font(MeeshyFont.relative(13, weight: .semibold))
             .foregroundStyle(enabled ? (colorScheme == .dark ? Color.white : MeeshyColors.indigo950)
                                      : (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.3))
             .frame(width: 36, height: 36)
@@ -53,7 +53,7 @@ struct DrawingEditFloatingBubbles: View {
 
     private func bubble(tool: DrawingEditTool, isActive: Bool) -> some View {
         Image(systemName: tool.sfSymbol)
-            .font(.system(size: 14, weight: .semibold))
+            .font(MeeshyFont.relative(14, weight: .semibold))
             .foregroundStyle(isActive ? Color.white : (colorScheme == .dark ? .white : MeeshyColors.indigo950))
             .frame(width: 36, height: 36)
             .background(
@@ -70,7 +70,7 @@ struct DrawingEditFloatingBubbles: View {
 
     private func dismissBubble() -> some View {
         Image(systemName: "xmark")
-            .font(.system(size: 12, weight: .bold))
+            .font(MeeshyFont.relative(12, weight: .bold))
             .foregroundStyle(.white)
             .frame(width: 36, height: 36)
             .background(Circle().fill(MeeshyColors.error.opacity(0.9)))

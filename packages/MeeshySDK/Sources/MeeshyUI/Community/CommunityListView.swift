@@ -69,7 +69,7 @@ public struct CommunityListView: View {
             trailing: {
                 Button { onCreateCommunity?() } label: {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 22))
+                        .font(MeeshyFont.relative(22))
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
@@ -88,12 +88,12 @@ public struct CommunityListView: View {
     private var searchBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14))
+                .font(MeeshyFont.relative(14))
                 .foregroundColor(theme.textMuted)
 
             TextField(String(localized: "community.list.search.placeholder", defaultValue: "Rechercher...", bundle: .module), text: $viewModel.searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 15, design: .rounded))
+                .font(MeeshyFont.relative(15, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             if !viewModel.searchText.isEmpty {
@@ -101,7 +101,7 @@ public struct CommunityListView: View {
                     viewModel.searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
+                        .font(MeeshyFont.relative(14))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -118,7 +118,7 @@ public struct CommunityListView: View {
     private var emptyState: some View {
         VStack(spacing: 16) {
             Image(systemName: "person.3.fill")
-                .font(.system(size: 48))
+                .font(MeeshyFont.relative(48))
                 .foregroundStyle(
                     LinearGradient(
                         colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
@@ -128,11 +128,11 @@ public struct CommunityListView: View {
                 )
 
             Text(String(localized: "community.list.empty.title", defaultValue: "Aucune communaute", bundle: .module))
-                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(18, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Text(String(localized: "community.list.empty.subtitle", defaultValue: "Rejoins ou cree une communaute pour collaborer", bundle: .module))
-                .font(.system(size: 14, design: .rounded))
+                .font(MeeshyFont.relative(14, design: .rounded))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
 
@@ -141,7 +141,7 @@ public struct CommunityListView: View {
                     Image(systemName: "plus.circle.fill")
                     Text(String(localized: "community.list.empty.createButton", defaultValue: "Creer une communaute", bundle: .module))
                 }
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                 .foregroundColor(.white)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 12)
@@ -247,7 +247,7 @@ private struct VibrantCommunityCard: View, Equatable {
 
             HStack(spacing: 3) {
                 Image(systemName: community.isPrivate ? "lock.fill" : "globe")
-                    .font(.system(size: 8, weight: .semibold))
+                    .font(MeeshyFont.relative(8, weight: .semibold))
             }
             .foregroundColor(.white.opacity(0.85))
             .padding(.horizontal, 6)
@@ -266,14 +266,14 @@ private struct VibrantCommunityCard: View, Equatable {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(community.name)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(15, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
 
                 if let desc = community.description, !desc.isEmpty {
                     Text(desc)
-                        .font(.system(size: 11, design: .rounded))
+                        .font(MeeshyFont.relative(11, design: .rounded))
                         .foregroundColor(.white.opacity(0.8))
                         .lineLimit(2)
                 }
@@ -281,16 +281,16 @@ private struct VibrantCommunityCard: View, Equatable {
                 HStack(spacing: 8) {
                     HStack(spacing: 3) {
                         Image(systemName: "person.2.fill")
-                            .font(.system(size: 9))
+                            .font(MeeshyFont.relative(9))
                         Text(formatCount(community.memberCount))
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(MeeshyFont.relative(10, weight: .semibold))
                     }
 
                     HStack(spacing: 3) {
                         Image(systemName: "bubble.left.fill")
-                            .font(.system(size: 9))
+                            .font(MeeshyFont.relative(9))
                         Text(formatCount(community.conversationCount))
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(MeeshyFont.relative(10, weight: .semibold))
                     }
                 }
                 .foregroundColor(.white.opacity(0.9))

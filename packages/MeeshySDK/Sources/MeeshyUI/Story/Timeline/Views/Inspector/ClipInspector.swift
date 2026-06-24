@@ -209,7 +209,7 @@ public struct ClipInspector: View {
     private func metadataField(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title.uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .font(MeeshyFont.relative(9, weight: .semibold))
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.system(.body, design: .monospaced))
@@ -221,7 +221,7 @@ public struct ClipInspector: View {
     private var volumeSlider: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(String(localized: "story.timeline.inspector.volume", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .font(MeeshyFont.relative(9, weight: .semibold))
                 .foregroundStyle(.secondary)
             Slider(value: $volume, in: 0...1, step: 0.01) { editing in
                 if !editing { onVolumeChanged(volume) }
@@ -249,7 +249,7 @@ public struct ClipInspector: View {
     private func fadeSlider(title: String, value: Binding<Float>, onCommit: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title.uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .font(MeeshyFont.relative(9, weight: .semibold))
                 .foregroundStyle(.secondary)
             Slider(value: value, in: Self.fadeRange, step: 0.05) { editing in
                 if !editing { onCommit() }

@@ -391,7 +391,7 @@ public struct MeeshyAvatar: View {
                     ))
                     .frame(width: context.size, height: context.size)
                 Text(initials)
-                    .font(.system(size: context.initialFont, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(context.initialFont, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
             }
             .shadow(color: Color(hex: resolvedAccent).opacity(0.4), radius: context.shadowRadius, y: context.shadowY)
@@ -441,7 +441,7 @@ public struct MeeshyAvatar: View {
         // visuelle complète + la hit area du tap mood.
         GeometryReader { geo in
             Text(emoji)
-                .font(.system(size: context.badgeSize * 0.65))
+                .font(MeeshyFont.relative(context.badgeSize * 0.65))
                 .frame(width: context.badgeSize, height: context.badgeSize)
                 .scaleEffect(moodScale)
                 .contentShape(Circle())

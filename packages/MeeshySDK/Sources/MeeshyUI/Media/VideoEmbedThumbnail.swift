@@ -30,7 +30,7 @@ public struct VideoEmbedThumbnail: View {
                 Color.black.opacity(0.18)
 
                 Image(systemName: "play.fill")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(MeeshyFont.relative(22, weight: .bold))
                     .foregroundColor(.white)
                     .padding(18)
                     .background(.ultraThinMaterial, in: Circle())

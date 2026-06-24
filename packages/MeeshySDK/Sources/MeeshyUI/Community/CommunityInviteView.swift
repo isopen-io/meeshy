@@ -40,7 +40,7 @@ public struct CommunityInviteView: View {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(theme.textMuted)
             TextField(String(localized: "community.invite.search.placeholder", defaultValue: "Search users...", bundle: .module), text: $viewModel.searchText)
-                .font(.system(size: 16, design: .rounded))
+                .font(MeeshyFont.relative(16, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .textFieldStyle(.plain)
                 .autocapitalization(.none)
@@ -84,7 +84,7 @@ public struct CommunityInviteView: View {
         if !viewModel.recentlyInvited.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text(String(localized: "community.invite.recentlyInvited", defaultValue: "Recently Invited", bundle: .module))
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(12, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textMuted)
                     .textCase(.uppercase)
                     .padding(.horizontal, 16)
@@ -123,12 +123,12 @@ public struct CommunityInviteView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.displayName ?? user.username)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(user.username)")
-                    .font(.system(size: 12, weight: .regular))
+                    .font(MeeshyFont.relative(12, weight: .regular))
                     .foregroundColor(theme.textSecondary)
             }
 
@@ -136,14 +136,14 @@ public struct CommunityInviteView: View {
 
             if alreadyInvited {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 20))
+                    .font(MeeshyFont.relative(20))
                     .foregroundColor(MeeshyColors.success)
             } else {
                 Button {
                     Task { await viewModel.inviteUser(userId: user.id) }
                 } label: {
                     Text(String(localized: "community.invite.button", defaultValue: "Invite", bundle: .module))
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 6)

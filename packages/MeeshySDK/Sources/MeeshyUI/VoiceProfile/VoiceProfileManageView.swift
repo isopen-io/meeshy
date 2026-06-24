@@ -53,16 +53,16 @@ public struct VoiceProfileManageView: View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
                 Image(systemName: viewModel.profile?.isReady == true ? "waveform.circle.fill" : "waveform.circle")
-                    .font(.system(size: 36))
+                    .font(MeeshyFont.relative(36))
                     .foregroundColor(Color(hex: viewModel.profile?.isReady == true ? "2ECC71" : accentColor))
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(statusTitle)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(MeeshyFont.relative(16, weight: .bold))
                         .foregroundColor(.primary)
 
                     Text(statusSubtitle)
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                         .foregroundColor(.secondary)
                 }
 
@@ -89,10 +89,10 @@ public struct VoiceProfileManageView: View {
     private func statItem(label: String, value: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.system(size: 16, weight: .bold))
+                .font(MeeshyFont.relative(16, weight: .bold))
                 .foregroundColor(Color(hex: accentColor))
             Text(label)
-                .font(.system(size: 10, weight: .medium))
+                .font(MeeshyFont.relative(10, weight: .medium))
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
@@ -125,7 +125,7 @@ public struct VoiceProfileManageView: View {
     private var cloningToggle: some View {
         HStack(spacing: 12) {
             Image(systemName: "waveform.and.mic")
-                .font(.system(size: 16, weight: .medium))
+                .font(MeeshyFont.relative(16, weight: .medium))
                 .foregroundColor(Color(hex: accentColor))
                 .frame(width: 28, height: 28)
                 .background(
@@ -135,10 +135,10 @@ public struct VoiceProfileManageView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(String(localized: "voiceProfile.manage.cloningActive", defaultValue: "Clonage vocal actif", bundle: .module))
-                    .font(.system(size: 14, weight: .medium))
+                    .font(MeeshyFont.relative(14, weight: .medium))
                     .foregroundColor(.primary)
                 Text(String(localized: "voiceProfile.manage.cloningSubtitle", defaultValue: "Utiliser votre voix pour les traductions", bundle: .module))
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundColor(.secondary)
             }
 
@@ -164,17 +164,17 @@ public struct VoiceProfileManageView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "waveform")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
                 Text(String(localized: "voiceProfile.manage.samplesHeader", defaultValue: "ECHANTILLONS VOCAUX", bundle: .module))
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: accentColor))
                     .tracking(1.0)
             }
 
             if viewModel.samples.isEmpty {
                 Text(String(localized: "voiceProfile.manage.noSamples", defaultValue: "Aucun echantillon enregistre", bundle: .module))
-                    .font(.system(size: 13))
+                    .font(MeeshyFont.relative(13))
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 20)
@@ -182,24 +182,24 @@ public struct VoiceProfileManageView: View {
                 ForEach(viewModel.samples) { sample in
                     HStack(spacing: 10) {
                         Image(systemName: "waveform")
-                            .font(.system(size: 13))
+                            .font(MeeshyFont.relative(13))
                             .foregroundColor(Color(hex: accentColor))
 
                         Text(String(localized: "voiceProfile.manage.sample", defaultValue: "Echantillon", bundle: .module))
-                            .font(.system(size: 13, weight: .medium))
+                            .font(MeeshyFont.relative(13, weight: .medium))
                             .foregroundColor(.primary)
 
                         Spacer()
 
                         Text("\(sample.durationSeconds)s")
-                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .font(MeeshyFont.relative(12, weight: .medium, design: .monospaced))
                             .foregroundColor(.secondary)
 
                         Button {
                             Task { await viewModel.deleteSample(sampleId: sample.id) }
                         } label: {
                             Image(systemName: "trash")
-                                .font(.system(size: 12))
+                                .font(MeeshyFont.relative(12))
                                 .foregroundColor(Color(hex: "FF6B6B"))
                         }
                     }
@@ -223,9 +223,9 @@ public struct VoiceProfileManageView: View {
             } label: {
                 HStack {
                     Image(systemName: "trash.fill")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "voiceProfile.manage.deleteAllData", defaultValue: "Supprimer toutes les donnees vocales", bundle: .module))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                 }
                 .foregroundColor(Color(hex: "EF4444"))
                 .frame(maxWidth: .infinity)
@@ -241,7 +241,7 @@ public struct VoiceProfileManageView: View {
             }
 
             Text(String(localized: "voiceProfile.manage.gdprNotice", defaultValue: "Conforme au RGPD - Vos donnees vocales seront definitivement supprimees de nos serveurs.", bundle: .module))
-                .font(.system(size: 10))
+                .font(MeeshyFont.relative(10))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
         }

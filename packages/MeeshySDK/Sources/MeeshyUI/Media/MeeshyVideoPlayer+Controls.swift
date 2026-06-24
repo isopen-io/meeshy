@@ -73,7 +73,7 @@ internal struct _InlineOverlayControls: View {
                     HapticFeedback.light()
                 } label: {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(width: 28, height: 28)
                         .background(Circle().fill(Color.white.opacity(0.2)))
@@ -86,7 +86,7 @@ internal struct _InlineOverlayControls: View {
                     HapticFeedback.light()
                 } label: {
                     Text(manager.playbackSpeed.label)
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(11, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -117,7 +117,7 @@ internal struct _InlineOverlayControls: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: systemName)
-                .font(.system(size: 18, weight: .semibold))
+                .font(MeeshyFont.relative(18, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(width: 36, height: 36)
                 .background(
@@ -151,7 +151,7 @@ internal struct _InlineOverlayControls: View {
     /// déléguée à `adaptiveSymbolReplace` (cf. `Compatibility/AdaptiveSymbolEffects`).
     private var playPauseIcon: some View {
         Image(systemName: manager.isPlaying ? "pause.fill" : "play.fill")
-            .font(.system(size: 22, weight: .bold))
+            .font(MeeshyFont.relative(22, weight: .bold))
             .foregroundColor(.white)
             .offset(x: manager.isPlaying ? 0 : 2)
             .adaptiveSymbolReplace(id: manager.isPlaying)
@@ -167,11 +167,11 @@ internal struct _InlineOverlayControls: View {
             if controls.contains(.duration) {
                 HStack {
                     Text(formatMediaDuration(isSeeking ? seekValue * manager.duration : manager.currentTime))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(MeeshyFont.relative(9, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white.opacity(0.8))
                     Spacer()
                     Text(formatMediaDuration(manager.duration))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(MeeshyFont.relative(9, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white.opacity(0.8))
                 }
                 .padding(.horizontal, 2)
@@ -274,7 +274,7 @@ internal struct _FullscreenOverlayControls: View {
                     HapticFeedback.light()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(MeeshyFont.relative(16, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(Color.white.opacity(0.2)))
@@ -282,7 +282,7 @@ internal struct _FullscreenOverlayControls: View {
             }
             if let fileName, !fileName.isEmpty {
                 Text(fileName)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(.white.opacity(0.9))
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -294,7 +294,7 @@ internal struct _FullscreenOverlayControls: View {
                     HapticFeedback.light()
                 } label: {
                     Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(MeeshyFont.relative(16, weight: .semibold))
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(Color.white.opacity(0.2)))
@@ -312,7 +312,7 @@ internal struct _FullscreenOverlayControls: View {
                         case .failed: Image(systemName: "xmark")
                         }
                     }
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(.white.opacity(0.9))
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(Color.white.opacity(0.2)))

@@ -179,7 +179,7 @@ public struct NotificationListView: View {
                             Task { await viewModel.markAllRead() }
                         } label: {
                             Text(String(localized: "notifications.markAllRead", defaultValue: "Tout lire", bundle: .module))
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(MeeshyFont.relative(13, weight: .semibold))
                                 .foregroundColor(brandColor)
                         }
                     } else {
@@ -190,7 +190,7 @@ public struct NotificationListView: View {
 
             if viewModel.unreadCount > 0 {
                 Text("\(viewModel.unreadCount) non lue\(viewModel.unreadCount > 1 ? "s" : "")")
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundColor(brandColor)
                     .padding(.bottom, 4)
             }
@@ -223,9 +223,9 @@ public struct NotificationListView: View {
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: category.icon)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                 Text(category.label)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
             }
             .foregroundColor(isSelected ? .white : Color(hex: chipColor))
             .padding(.horizontal, 12)
@@ -305,7 +305,7 @@ public struct NotificationListView: View {
             ProgressView()
                 .tint(brandColor)
             Text(String(localized: "notifications.loading", defaultValue: "Chargement...", bundle: .module))
-                .font(.system(size: 14))
+                .font(MeeshyFont.relative(14))
                 .foregroundColor(theme.textMuted)
             Spacer()
         }
@@ -332,15 +332,15 @@ public struct NotificationListView: View {
         return VStack(spacing: 16) {
             Spacer()
             Image(systemName: category.icon)
-                .font(.system(size: 48))
+                .font(MeeshyFont.relative(48))
                 .foregroundColor(Color(hex: category.color).opacity(0.4))
 
             Text(emptyMessage)
-                .font(.system(size: 16, weight: .semibold))
+                .font(MeeshyFont.relative(16, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
             Text(String(localized: "notifications.empty.subtitle", defaultValue: "Vos notifications apparaitront ici", bundle: .module))
-                .font(.system(size: 13))
+                .font(MeeshyFont.relative(13))
                 .foregroundColor(theme.textMuted)
             Spacer()
         }

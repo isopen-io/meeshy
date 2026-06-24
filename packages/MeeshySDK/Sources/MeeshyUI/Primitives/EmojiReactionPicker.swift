@@ -139,7 +139,7 @@ public struct EmojiReactionPicker: View {
                         .fill(style == .dark ? Color.white.opacity(0.15) : Color.gray.opacity(0.15))
                         .frame(width: 32 * scale, height: 32 * scale)
                     Image(systemName: "plus")
-                        .font(.system(size: 14 * scale, weight: .bold))
+                        .font(MeeshyFont.relative(14 * scale, weight: .bold))
                         .foregroundColor(style == .dark ? .white.opacity(0.8) : .gray)
                 }
             }
@@ -335,7 +335,7 @@ public struct EmojiFullPickerSheet: View {
                 .fill(style == .dark ? Color.white.opacity(0.3) : Color.gray.opacity(0.3))
                 .frame(width: 36, height: 4).padding(.top, 10)
             Text(String(localized: "emoji.picker.title", defaultValue: "Reactions", bundle: .module))
-                .font(.system(size: 15, weight: .semibold))
+                .font(MeeshyFont.relative(15, weight: .semibold))
                 .foregroundColor(style == .dark ? .white.opacity(0.8) : .primary)
                 .padding(.bottom, 4)
         }
@@ -349,9 +349,9 @@ public struct EmojiFullPickerSheet: View {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
                     } label: {
                         VStack(spacing: 2) {
-                            Text(category.icon).font(.system(size: 20))
+                            Text(category.icon).font(MeeshyFont.relative(20))
                             Text(category.name)
-                                .font(.system(size: 9, weight: .medium))
+                                .font(MeeshyFont.relative(9, weight: .medium))
                                 .foregroundColor(selectedCategory == index
                                     ? (style == .dark ? .white : MeeshyColors.brandPrimary)
                                     : (style == .dark ? .white.opacity(0.5) : .gray))
@@ -375,7 +375,7 @@ public struct EmojiFullPickerSheet: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 8), spacing: 10) {
                 ForEach(category.emojis, id: \.self) { emoji in
                     Button { selectEmoji(emoji) } label: {
-                        Text(emoji).font(.system(size: 30)).frame(maxWidth: .infinity)
+                        Text(emoji).font(MeeshyFont.relative(30)).frame(maxWidth: .infinity)
                             .scaleEffect(reactedEmoji == emoji ? 1.35 : 1.0)
                             .animation(.spring(response: 0.2, dampingFraction: 0.5), value: reactedEmoji)
                     }
@@ -449,9 +449,9 @@ public struct EmojiKeyboardPanel: View {
                             withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
                         } label: {
                             VStack(spacing: 2) {
-                                Text(category.icon).font(.system(size: 20))
+                                Text(category.icon).font(MeeshyFont.relative(20))
                                 Text(category.name)
-                                    .font(.system(size: 9, weight: .medium))
+                                    .font(MeeshyFont.relative(9, weight: .medium))
                                     .foregroundColor(selectedCategory == index
                                         ? (style == .dark ? .white : MeeshyColors.brandPrimary)
                                         : (style == .dark ? .white.opacity(0.4) : .gray))
@@ -476,7 +476,7 @@ public struct EmojiKeyboardPanel: View {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { withAnimation { tappedEmoji = nil } }
                             onSelect?(emoji)
                         } label: {
-                            Text(emoji).font(.system(size: 28)).frame(maxWidth: .infinity)
+                            Text(emoji).font(MeeshyFont.relative(28)).frame(maxWidth: .infinity)
                                 .scaleEffect(tappedEmoji == emoji ? 1.3 : 1.0)
                                 .animation(.spring(response: 0.2, dampingFraction: 0.5), value: tappedEmoji)
                         }

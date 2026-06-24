@@ -958,9 +958,9 @@ public struct AudioPlayerView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "text.badge.plus")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(MeeshyFont.relative(10, weight: .medium))
                         Text(String(localized: "media.audio.transcribe", defaultValue: "Transcrire", bundle: .module))
-                            .font(.system(size: 10, weight: .medium))
+                            .font(MeeshyFont.relative(10, weight: .medium))
                     }
                     .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                     .frame(maxWidth: .infinity)
@@ -1016,7 +1016,7 @@ public struct AudioPlayerView: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: isTranscriptionExpanded ? "chevron.up" : "chevron.down")
-                .font(.system(size: 9, weight: .bold))
+                .font(MeeshyFont.relative(9, weight: .bold))
                 .foregroundColor(isDark ? .white.opacity(0.35) : .black.opacity(0.25))
                 .frame(maxWidth: .infinity)
                 .frame(height: 20)
@@ -1038,11 +1038,11 @@ public struct AudioPlayerView: View {
                         ProgressView().scaleEffect(0.6)
                     } else {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(MeeshyFont.relative(10, weight: .medium))
                     }
                     Text(String(localized: "media.audio.retranscribe",
                                  defaultValue: "Re-transcrire", bundle: .module))
-                        .font(.system(size: 10, weight: .medium))
+                        .font(MeeshyFont.relative(10, weight: .medium))
                 }
                 .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                 .frame(maxWidth: .infinity)
@@ -1136,7 +1136,7 @@ public struct AudioPlayerView: View {
                 HapticFeedback.light()
             } label: {
                 Text(single.text)
-                    .font(.system(size: 13, weight: isActive ? .bold : .regular))
+                    .font(MeeshyFont.relative(13, weight: isActive ? .bold : .regular))
                     .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1168,7 +1168,7 @@ public struct AudioPlayerView: View {
                         HapticFeedback.light()
                     } label: {
                         Text(segment.text + " ")
-                            .font(.system(size: 13, weight: isActive ? .bold : .regular))
+                            .font(MeeshyFont.relative(13, weight: isActive ? .bold : .regular))
                             .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
                             .padding(.horizontal, isActive ? 2 : 0)
                             .padding(.vertical, isActive ? 1 : 0)
@@ -1316,13 +1316,13 @@ public struct AudioPlayerView: View {
                             .scaleEffect(0.6)
                     } else {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: context.isCompact ? 13 : 15, weight: .bold))
+                            .font(MeeshyFont.relative(context.isCompact ? 13 : 15, weight: .bold))
                             .foregroundColor(.white)
                             .offset(x: player.isPlaying ? 0 : 1)
                     }
                 case .needsDownload:
                     Image(systemName: "arrow.down.to.line")
-                        .font(.system(size: context.isCompact ? 13 : 15, weight: .bold))
+                        .font(MeeshyFont.relative(context.isCompact ? 13 : 15, weight: .bold))
                         .foregroundColor(.white)
                 case .downloading(let progress, _, _):
                     if progress > 0 {
@@ -1351,7 +1351,7 @@ public struct AudioPlayerView: View {
                 let label = AudioPlayerView.formattedNeedsDownloadLabel(fileSize: attachment.fileSize)
                 if !label.isEmpty {
                     Text(label)
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(MeeshyFont.relative(9, weight: .semibold, design: .monospaced))
                         .foregroundColor(isDark ? .white.opacity(0.65) : .black.opacity(0.55))
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
@@ -1364,7 +1364,7 @@ public struct AudioPlayerView: View {
                 )
                 if !label.isEmpty {
                     Text(label)
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(MeeshyFont.relative(9, weight: .semibold, design: .monospaced))
                         .foregroundColor(isDark ? .white.opacity(0.65) : .black.opacity(0.55))
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
@@ -1441,11 +1441,11 @@ public struct AudioPlayerView: View {
     private var timeRow: some View {
         HStack(spacing: 0) {
             Text(formatMediaDuration(player.currentTime))
-                .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
+                .font(MeeshyFont.relative(context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(isDark ? .white.opacity(0.5) : .black.opacity(0.4))
             Spacer()
             Text(formatMediaDuration(estimatedDuration))
-                .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
+                .font(MeeshyFont.relative(context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(isDark ? .white.opacity(0.3) : .black.opacity(0.25))
         }
     }
@@ -1476,7 +1476,7 @@ public struct AudioPlayerView: View {
             HapticFeedback.light()
         } label: {
             Text(player.speed.label)
-                .font(.system(size: context.isCompact ? 9 : 10, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(context.isCompact ? 9 : 10, weight: .bold, design: .monospaced))
                 .foregroundColor(chipFg)
                 .padding(.horizontal, context.isCompact ? 7 : 8)
                 .padding(.vertical, context.isCompact ? 2 : 3)
@@ -1498,7 +1498,7 @@ public struct AudioPlayerView: View {
             ? .white
             : (isDark ? .white.opacity(0.55) : .black.opacity(0.45))
         let label = Text("\(pct)%")
-            .font(.system(size: context.isCompact ? 9 : 10, weight: .heavy, design: .monospaced))
+            .font(MeeshyFont.relative(context.isCompact ? 9 : 10, weight: .heavy, design: .monospaced))
             .foregroundColor(chipFg)
             .padding(.horizontal, context.isCompact ? 7 : 8)
             .padding(.vertical, context.isCompact ? 2 : 3)
@@ -1533,7 +1533,7 @@ public struct AudioPlayerView: View {
                 if let onEdit = onEdit {
                     Button { onEdit() } label: {
                         Image(systemName: "waveform.and.magnifyingglass")
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                             .frame(width: 26, height: 26)
                     }
@@ -1541,7 +1541,7 @@ public struct AudioPlayerView: View {
                 if let onDelete = onDelete {
                     Button { onDelete() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 15))
+                            .font(MeeshyFont.relative(15))
                             .foregroundColor(Color(hex: "FF6B6B"))
                     }
                 }
@@ -1577,8 +1577,8 @@ public struct AudioPlayerView: View {
             HapticFeedback.light()
         } label: {
             HStack(spacing: 3) {
-                Text(flag).font(.system(size: 12))
-                Text(label).font(.system(size: 10, weight: isSelected ? .bold : .medium))
+                Text(flag).font(MeeshyFont.relative(12))
+                Text(label).font(MeeshyFont.relative(10, weight: isSelected ? .bold : .medium))
             }
             .foregroundColor(isSelected ? .white : (isDark ? .white.opacity(0.55) : .black.opacity(0.45)))
             .padding(.horizontal, 8)
