@@ -18,19 +18,22 @@ import type {
   StoryCreatedEventData,
   StoryViewedEventData,
   StoryReactedEventData,
+  StoryUpdatedEventData,
+  StoryDeletedEventData,
+  StoryUnreactedEventData,
   StatusCreatedEventData,
   StatusUpdatedEventData,
   StatusDeletedEventData,
   StatusReactedEventData,
+  StatusUnreactedEventData,
   CommentAddedEventData,
   CommentDeletedEventData,
   CommentLikedEventData,
+  CommentMediaUpdatedEventData,
   PostTranslationUpdatedEventData,
   CommentTranslationUpdatedEventData,
   PostReactionUpdateEventData,
-  PostReactionSyncEventData,
   CommentReactionUpdateEventData,
-  CommentReactionSyncEventData,
 } from '@meeshy/shared/types/post';
 import type { InfiniteFeedData, InfiniteCommentsData } from './types';
 
@@ -262,20 +265,6 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       });
     }
 
-    function handlePostReactionSync(data: PostReactionSyncEventData) {
-      const summaryFromSync: Record<string, number> = {};
-      for (const agg of data.reactions) {
-        summaryFromSync[agg.emoji] = agg.count;
-      }
-      patchPostInAllCaches(queryClient, data.postId, (p) => ({
-        ...p,
-        reactionCount: data.totalCount,
-        likeCount: data.totalCount,
-        reactionSummary: summaryFromSync,
-        currentUserReactions: data.userReactions as string[],
-      }));
-    }
-
     // ── Comment reaction events ─────────────────────────────────────────
 
     function handleCommentReactionAdded(data: CommentReactionUpdateEventData) {
@@ -315,19 +304,6 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       });
     }
 
-    function handleCommentReactionSync(data: CommentReactionSyncEventData) {
-      const summaryFromSync: Record<string, number> = {};
-      for (const agg of data.reactions) {
-        summaryFromSync[agg.emoji] = agg.count;
-      }
-      patchCommentInPostCaches(queryClient, data.postId, data.commentId, (c) => ({
-        ...c,
-        likeCount: data.totalCount,
-        reactionSummary: summaryFromSync,
-        currentUserReactions: data.userReactions as string[],
-      }));
-    }
-
     // ── Translation events ──────────────────────────────────────────────
 
     function handlePostTranslationUpdated(data: PostTranslationUpdatedEventData) {
@@ -358,6 +334,15 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       });
     }
 
+    function handleCommentMediaUpdated(data: CommentMediaUpdatedEventData) {
+      // Audio transcription/translations for a comment's media are ready —
+      // merge the refreshed comment (media + translations) into the caches.
+      patchCommentInPostCaches(queryClient, data.postId, data.commentId, (c) => ({
+        ...c,
+        ...data.comment,
+      }));
+    }
+
     // ── Story events ────────────────────────────────────────────────────
 
     function handleStoryCreated(_data: StoryCreatedEventData) {
@@ -369,6 +354,18 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
     }
 
     function handleStoryReacted(_data: StoryReactedEventData) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.stories() });
+    }
+
+    function handleStoryUpdated(_data: StoryUpdatedEventData) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.stories() });
+    }
+
+    function handleStoryDeleted(_data: StoryDeletedEventData) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.stories() });
+    }
+
+    function handleStoryUnreacted(_data: StoryUnreactedEventData) {
       queryClient.invalidateQueries({ queryKey: queryKeys.posts.stories() });
     }
 
@@ -390,6 +387,10 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       queryClient.invalidateQueries({ queryKey: queryKeys.posts.statuses() });
     }
 
+    function handleStatusUnreacted(_data: StatusUnreactedEventData) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.statuses() });
+    }
+
     // ── Register listeners ──────────────────────────────────────────────
 
     socket.on(SERVER_EVENTS.POST_CREATED, handlePostCreated);
@@ -404,21 +405,24 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
     socket.on(SERVER_EVENTS.COMMENT_LIKED, handleCommentLiked);
     socket.on(SERVER_EVENTS.POST_TRANSLATION_UPDATED, handlePostTranslationUpdated);
     socket.on(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, handleCommentTranslationUpdated);
+    socket.on(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, handleCommentMediaUpdated);
 
     socket.on(SERVER_EVENTS.STORY_CREATED, handleStoryCreated);
     socket.on(SERVER_EVENTS.STORY_VIEWED, handleStoryViewed);
     socket.on(SERVER_EVENTS.STORY_REACTED, handleStoryReacted);
+    socket.on(SERVER_EVENTS.STORY_UPDATED, handleStoryUpdated);
+    socket.on(SERVER_EVENTS.STORY_DELETED, handleStoryDeleted);
+    socket.on(SERVER_EVENTS.STORY_UNREACTED, handleStoryUnreacted);
     socket.on(SERVER_EVENTS.STATUS_CREATED, handleStatusCreated);
     socket.on(SERVER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
     socket.on(SERVER_EVENTS.STATUS_DELETED, handleStatusDeleted);
     socket.on(SERVER_EVENTS.STATUS_REACTED, handleStatusReacted);
+    socket.on(SERVER_EVENTS.STATUS_UNREACTED, handleStatusUnreacted);
 
     socket.on(SERVER_EVENTS.POST_REACTION_ADDED, handlePostReactionAdded);
     socket.on(SERVER_EVENTS.POST_REACTION_REMOVED, handlePostReactionRemoved);
-    socket.on(SERVER_EVENTS.POST_REACTION_SYNC, handlePostReactionSync);
     socket.on(SERVER_EVENTS.COMMENT_REACTION_ADDED, handleCommentReactionAdded);
     socket.on(SERVER_EVENTS.COMMENT_REACTION_REMOVED, handleCommentReactionRemoved);
-    socket.on(SERVER_EVENTS.COMMENT_REACTION_SYNC, handleCommentReactionSync);
 
     return () => {
       socket.off(SERVER_EVENTS.POST_CREATED, handlePostCreated);
@@ -433,21 +437,24 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       socket.off(SERVER_EVENTS.COMMENT_LIKED, handleCommentLiked);
       socket.off(SERVER_EVENTS.POST_TRANSLATION_UPDATED, handlePostTranslationUpdated);
       socket.off(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, handleCommentTranslationUpdated);
+      socket.off(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, handleCommentMediaUpdated);
 
       socket.off(SERVER_EVENTS.STORY_CREATED, handleStoryCreated);
       socket.off(SERVER_EVENTS.STORY_VIEWED, handleStoryViewed);
       socket.off(SERVER_EVENTS.STORY_REACTED, handleStoryReacted);
+      socket.off(SERVER_EVENTS.STORY_UPDATED, handleStoryUpdated);
+      socket.off(SERVER_EVENTS.STORY_DELETED, handleStoryDeleted);
+      socket.off(SERVER_EVENTS.STORY_UNREACTED, handleStoryUnreacted);
       socket.off(SERVER_EVENTS.STATUS_CREATED, handleStatusCreated);
       socket.off(SERVER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
       socket.off(SERVER_EVENTS.STATUS_DELETED, handleStatusDeleted);
       socket.off(SERVER_EVENTS.STATUS_REACTED, handleStatusReacted);
+      socket.off(SERVER_EVENTS.STATUS_UNREACTED, handleStatusUnreacted);
 
       socket.off(SERVER_EVENTS.POST_REACTION_ADDED, handlePostReactionAdded);
       socket.off(SERVER_EVENTS.POST_REACTION_REMOVED, handlePostReactionRemoved);
-      socket.off(SERVER_EVENTS.POST_REACTION_SYNC, handlePostReactionSync);
       socket.off(SERVER_EVENTS.COMMENT_REACTION_ADDED, handleCommentReactionAdded);
       socket.off(SERVER_EVENTS.COMMENT_REACTION_REMOVED, handleCommentReactionRemoved);
-      socket.off(SERVER_EVENTS.COMMENT_REACTION_SYNC, handleCommentReactionSync);
     };
   }, [enabled, currentUserId, queryClient]);
 }
