@@ -28,6 +28,18 @@ settings:
   SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
   SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT: "YES"
 
+  # Apple-generic versioning — REQUIS par fastlane (get_build_number /
+  # increment_build_number / increment_version_number, qui appellent agvtool).
+  # Le projet n'avait AUCUN système de versioning configuré dans le pbxproj →
+  # `agvtool what-version -terse` sortait en code 6 ("setup your project
+  # properly") au lancement de la lane `beta`/`release`. Les valeurs miroir
+  # Configuration/*.xcconfig (non câblés au projet). Les lanes prennent
+  # max(version locale, dernier build TestFlight) + 1, donc le "1" littéral
+  # n'est qu'un plancher — le build réel reste strictement croissant.
+  VERSIONING_SYSTEM: apple-generic
+  CURRENT_PROJECT_VERSION: "1"
+  MARKETING_VERSION: "1.0.0"
+
 # Swift package graph. Only two packages are referenced directly by the
 # Xcode project: Firebase (remote) and the local MeeshySDK. GRDB, Socket.IO,
 # WebRTC and WhisperKit are transitive dependencies of MeeshySDK
